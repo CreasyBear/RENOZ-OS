@@ -18,33 +18,12 @@ import {
 import type { ActionItem } from "@/components/shared/data-table/cells/actions-cell";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import { cn } from "@/lib/utils";
-import type { OrderStatus, PaymentStatus } from "@/lib/schemas/orders";
+import type { OrderTableItem } from "@/lib/schemas/orders";
 import {
   ORDER_STATUS_CONFIG,
   PAYMENT_STATUS_CONFIG,
   formatDueDateRelative,
 } from "./order-status-config";
-
-/**
- * Order list item type - matches server function response
- */
-export interface OrderTableItem {
-  id: string;
-  orderNumber: string;
-  customerId: string;
-  status: OrderStatus;
-  paymentStatus: PaymentStatus;
-  orderDate: string | null;
-  dueDate: string | null;
-  total: number | null;
-  itemCount?: number;
-  createdAt: Date;
-  updatedAt: Date;
-  customer: {
-    id: string;
-    name: string;
-  } | null;
-}
 
 export interface CreateOrderColumnsOptions {
   /** Handle single item selection */
@@ -65,6 +44,8 @@ export interface CreateOrderColumnsOptions {
   onDuplicateOrder: (id: string) => void;
   /** Delete order handler */
   onDeleteOrder: (id: string) => void;
+  /** When creating RMA from issue - preserve in order detail links */
+  fromIssueId?: string;
 }
 
 /**
@@ -83,6 +64,7 @@ export function createOrderColumns(
     onViewOrder,
     onDuplicateOrder,
     onDeleteOrder,
+    fromIssueId,
   } = options;
 
   return [
@@ -121,6 +103,7 @@ export function createOrderColumns(
         <Link
           to="/orders/$orderId"
           params={{ orderId: row.original.id }}
+          search={fromIssueId ? { fromIssueId } : undefined}
           className="font-medium text-primary hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
@@ -138,15 +121,22 @@ export function createOrderColumns(
       header: "Customer",
       cell: ({ row }) => {
         const customer = row.original.customer;
-        return (
-          <span className="text-sm truncate block max-w-[160px]">
-            {customer?.name ? (
+        if (customer?.id && customer?.name) {
+          return (
+            <Link
+              to="/customers/$customerId"
+              params={{ customerId: customer.id }}
+              search={{}}
+              className="text-sm truncate block max-w-[160px] text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
               <TruncateTooltip text={customer.name} maxLength={20} />
-            ) : (
-              <span className="text-muted-foreground">
-                <TruncateTooltip text={row.original.customerId} maxLength={18} />
-              </span>
-            )}
+            </Link>
+          );
+        }
+        return (
+          <span className="text-sm truncate block max-w-[160px] text-muted-foreground">
+            <TruncateTooltip text={row.original.customerId} maxLength={18} />
           </span>
         );
       },

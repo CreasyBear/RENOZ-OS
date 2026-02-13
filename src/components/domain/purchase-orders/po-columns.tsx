@@ -19,6 +19,7 @@ import type { ActionItem } from "@/components/shared/data-table/cells/actions-ce
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import type { PurchaseOrderTableData } from "@/lib/schemas/purchase-orders";
 import { PO_STATUS_CONFIG, canReceiveGoods, canEditPO, canDeletePO } from "./po-status-config";
+import { FALLBACK_SUPPLIER_NAME } from "@/lib/constants/procurement";
 
 export interface CreatePOColumnsOptions {
   /** Handle single item selection */
@@ -117,12 +118,25 @@ export function createPOColumns(
       ),
       cell: ({ row }) => {
         const supplierName = row.original.supplierName;
+        const supplierId = row.original.supplierId;
+        const display = supplierName ? (
+          <TruncateTooltip text={supplierName} maxLength={24} />
+        ) : (
+          <span className="text-muted-foreground">{FALLBACK_SUPPLIER_NAME}</span>
+        );
         return (
           <span className="text-sm truncate block max-w-[180px]">
-            {supplierName ? (
-              <TruncateTooltip text={supplierName} maxLength={24} />
+            {supplierId ? (
+              <Link
+                to="/suppliers/$supplierId"
+                params={{ supplierId }}
+                className="text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {display}
+              </Link>
             ) : (
-              <span className="text-muted-foreground">Unknown Supplier</span>
+              display
             )}
           </span>
         );
@@ -185,7 +199,7 @@ export function createPOColumns(
         <DataTableColumnHeader column={column} title="Value" className="justify-end" />
       ),
       cell: ({ row }) => (
-        <PriceCell value={row.original.totalAmount} align="right" />
+        <PriceCell value={row.original.totalAmount} currency={row.original.currency} align="right" />
       ),
       enableSorting: true,
       size: 110,

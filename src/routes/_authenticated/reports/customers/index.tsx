@@ -12,9 +12,11 @@ import { createFileRoute } from '@tanstack/react-router'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { ReportDashboardSkeleton } from '@/components/skeletons/reports'
 import { CustomerReportsPage } from '@/components/domain/reports/customer-reports-page'
+import { customerReportsSearchSchema } from '@/lib/schemas/reports/customer-reports'
 
 export const Route = createFileRoute('/_authenticated/reports/customers/')({
-  component: CustomerReportsPage,
+  validateSearch: customerReportsSearchSchema,
+  component: CustomerReportsRoute,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/reports" />
   ),
@@ -30,3 +32,17 @@ export const Route = createFileRoute('/_authenticated/reports/customers/')({
     </PageLayout>
   ),
 })
+
+function CustomerReportsRoute() {
+  return (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Customer Reports"
+        description="Comprehensive analytics and insights for customer management"
+      />
+      <PageLayout.Content>
+        <CustomerReportsPage />
+      </PageLayout.Content>
+    </PageLayout>
+  )
+}

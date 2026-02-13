@@ -4,7 +4,7 @@
  * Desktop table view using DataTable with server-side sorting.
  */
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -110,15 +110,17 @@ export const CustomersTablePresenter = memo(function CustomersTablePresenter({
   );
 
   // Handle sort changes (server-side)
-  const handleSortingChange = (
-    updater: SortingState | ((prev: SortingState) => SortingState)
-  ) => {
-    const newSorting = typeof updater === "function" ? updater(sorting) : updater;
-    if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
-    }
-  };
+  const handleSortingChange = useCallback(
+    (updater: SortingState | ((prev: SortingState) => SortingState)) => {
+      const newSorting = typeof updater === "function" ? updater(sorting) : updater;
+      if (newSorting.length > 0) {
+        onSort(newSorting[0].id);
+      }
+    },
+    [sorting, onSort]
+  );
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable({
     data: customers,
     columns,

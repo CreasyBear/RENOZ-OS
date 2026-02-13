@@ -5,13 +5,22 @@
  * This ensures users always land on the appropriate page.
  */
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { withAuthRetry } from '~/lib/auth/route-auth'
 
 export const Route = createFileRoute('/')({
   beforeLoad: async ({ location }) => {
-    // Avoid SSR redirect loops; handle redirects on client only
     if (typeof window === 'undefined') {
-      return
+      const { getRequest } = await import('@tanstack/react-start/server')
+      const { createServerSupabase } = await import('~/lib/supabase/server')
+      const supabase = createServerSupabase(getRequest())
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        throw redirect({ to: '/dashboard', search: { tab: 'overview' } })
+      }
+      throw redirect({ to: '/login', search: { redirect: undefined } })
     }
 
     // Prevent redirect loops - don't redirect if already navigating to auth pages
@@ -19,33 +28,21 @@ export const Route = createFileRoute('/')({
       return
     }
 
-    let supabase: SupabaseClient
-    if (typeof window === 'undefined') {
-      const { getRequest } = await import('@tanstack/react-start/server')
-      const { createServerSupabase } = await import('~/lib/supabase/server')
-      supabase = createServerSupabase(getRequest())
-    } else {
-      const { supabase: browserSupabase } = await import('~/lib/supabase/client')
-      supabase = browserSupabase
+    const { supabase } = await import('~/lib/supabase/client')
+    const user = await withAuthRetry(async () => {
+      const {
+        data: { user: authUser },
+        error,
+      } = await supabase.auth.getUser()
+      if (error) throw error
+      return authUser
+    }, 1, 250).catch(() => null)
+
+    if (user) {
+      throw redirect({ to: '/dashboard', search: { tab: 'overview' } })
     }
 
-    try {
-      // Use getUser() for reliable auth check (validates JWT with server)
-      const { data: { user }, error } = await supabase.auth.getUser()
-
-      if (user && !error) {
-        throw redirect({ to: '/dashboard' })
-      } else {
-        throw redirect({ to: '/login', search: { redirect: undefined } })
-      }
-    } catch (err) {
-      // If it's a redirect, rethrow it
-      if (err instanceof Response || (err && typeof err === 'object' && 'to' in err)) {
-        throw err
-      }
-      // On any other error, go to login
-      throw redirect({ to: '/login', search: { redirect: undefined } })
-    }
+    throw redirect({ to: '/login', search: { redirect: undefined } })
   },
   component: () => null, // Never rendered due to redirect
 })

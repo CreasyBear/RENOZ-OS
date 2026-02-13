@@ -10,7 +10,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   pgEnum,
   uuid,
   text,
@@ -26,6 +25,10 @@ import {
   timestampColumns,
   softDeleteColumn,
   currencyColumnNullable,
+  standardRlsPolicies,
+  rangeCheck,
+  dateRangeCheck,
+  nonNegativeCheck,
 } from "../_shared/patterns";
 import { suppliers } from "./suppliers";
 import { users } from "../users/users";
@@ -162,25 +165,19 @@ export const priceAgreements = pgTable(
     ),
 
     // Date range validation
-    dateRangeCheck: check(
-      "price_agreements_date_range",
-      sql`${table.expiryDate} IS NULL OR ${table.expiryDate} > ${table.effectiveDate}`
-    ),
+    dateRangeCheckConstraint: dateRangeCheck("price_agreements_date_range", table.effectiveDate, table.expiryDate),
 
     // Discount percent range
-    discountCheck: check(
-      "price_agreements_discount_range",
-      sql`${table.discountPercent} IS NULL OR (${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100)`
-    ),
+    discountCheck: rangeCheck("price_agreements_discount_range", table.discountPercent, 0, 100),
 
-    // Approval consistency
+    // Approval consistency (complex check - keep as raw SQL)
     approvalCheck: check(
       "price_agreements_approval_consistency",
       sql`(${table.approvedAt} IS NULL AND ${table.approvedBy} IS NULL) OR
           (${table.approvedAt} IS NOT NULL AND ${table.approvedBy} IS NOT NULL)`
     ),
 
-    // Rejection consistency
+    // Rejection consistency (complex check - keep as raw SQL)
     rejectionCheck: check(
       "price_agreements_rejection_consistency",
       sql`(${table.rejectedAt} IS NULL AND ${table.rejectedBy} IS NULL) OR
@@ -188,33 +185,10 @@ export const priceAgreements = pgTable(
     ),
 
     // Total items must be non-negative
-    totalItemsCheck: check(
-      "price_agreements_total_items_non_negative",
-      sql`${table.totalItems} >= 0`
-    ),
+    totalItemsCheck: nonNegativeCheck("price_agreements_total_items_non_negative", table.totalItems),
 
     // RLS Policies
-    selectPolicy: pgPolicy("price_agreements_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("price_agreements_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("price_agreements_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("price_agreements_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("price_agreements"),
   })
 );
 

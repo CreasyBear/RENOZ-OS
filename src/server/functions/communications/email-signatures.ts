@@ -19,6 +19,7 @@ import {
 } from '@/lib/schemas/communications'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
+import { NotFoundError } from '@/lib/server/errors'
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -32,32 +33,37 @@ export const createEmailSignature = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update })
 
-    // If setting as default, clear existing default
-    if (data.isDefault) {
-      await db
-        .update(emailSignatures)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(emailSignatures.organizationId, ctx.organizationId),
-            eq(emailSignatures.userId, ctx.user.id),
-            eq(emailSignatures.isDefault, true),
-          ),
-        )
-    }
+    // Wrap clear-default UPDATE + INSERT in transaction for atomicity
+    const signature = await db.transaction(async (tx) => {
+      // If setting as default, clear existing default
+      if (data.isDefault) {
+        await tx
+          .update(emailSignatures)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(emailSignatures.organizationId, ctx.organizationId),
+              eq(emailSignatures.userId, ctx.user.id),
+              eq(emailSignatures.isDefault, true),
+            ),
+          )
+      }
 
-    const [signature] = await db
-      .insert(emailSignatures)
-      .values({
-        organizationId: ctx.organizationId,
-        userId: data.isCompanyWide ? null : ctx.user.id,
-        name: data.name,
-        content: data.content,
-        isDefault: data.isDefault,
-        isCompanyWide: data.isCompanyWide,
-        createdBy: ctx.user.id,
-      })
-      .returning()
+      const [created] = await tx
+        .insert(emailSignatures)
+        .values({
+          organizationId: ctx.organizationId,
+          userId: data.isCompanyWide ? null : ctx.user.id,
+          name: data.name,
+          content: data.content,
+          isDefault: data.isDefault,
+          isCompanyWide: data.isCompanyWide,
+          createdBy: ctx.user.id,
+        })
+        .returning()
+
+      return created
+    })
 
     return signature
   })
@@ -90,6 +96,7 @@ export const getEmailSignatures = createServerFn({ method: 'GET' })
       .select()
       .from(emailSignatures)
       .where(and(...conditions))
+      .limit(50)
 
     return results
   })
@@ -124,38 +131,43 @@ export const updateEmailSignature = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update })
 
-    // If setting as default, clear existing default
-    if (data.isDefault) {
-      await db
+    // Wrap clear-default + UPDATE in transaction for atomicity
+    const updated = await db.transaction(async (tx) => {
+      // If setting as default, clear existing default
+      if (data.isDefault) {
+        await tx
+          .update(emailSignatures)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(emailSignatures.organizationId, ctx.organizationId),
+              eq(emailSignatures.userId, ctx.user.id),
+              eq(emailSignatures.isDefault, true),
+            ),
+          )
+      }
+
+      const [result] = await tx
         .update(emailSignatures)
-        .set({ isDefault: false })
+        .set({
+          name: data.name,
+          content: data.content,
+          isDefault: data.isDefault,
+        })
         .where(
           and(
+            eq(emailSignatures.id, data.id),
             eq(emailSignatures.organizationId, ctx.organizationId),
-            eq(emailSignatures.userId, ctx.user.id),
-            eq(emailSignatures.isDefault, true),
           ),
         )
-    }
+        .returning()
 
-    const [updated] = await db
-      .update(emailSignatures)
-      .set({
-        name: data.name,
-        content: data.content,
-        isDefault: data.isDefault,
-      })
-      .where(
-        and(
-          eq(emailSignatures.id, data.id),
-          eq(emailSignatures.organizationId, ctx.organizationId),
-        ),
-      )
-      .returning()
+      if (!result) {
+        throw new NotFoundError('Signature not found', 'email_signature')
+      }
 
-    if (!updated) {
-      throw new Error('Signature not found')
-    }
+      return result
+    })
 
     return updated
   })
@@ -179,7 +191,7 @@ export const deleteEmailSignature = createServerFn({ method: 'POST' })
       .returning()
 
     if (!deleted) {
-      throw new Error('Signature not found')
+      throw new NotFoundError('Signature not found', 'email_signature')
     }
 
     return { success: true }
@@ -193,34 +205,39 @@ export const setDefaultSignature = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update })
 
-    // Clear existing default
-    await db
-      .update(emailSignatures)
-      .set({ isDefault: false })
-      .where(
-        and(
-          eq(emailSignatures.organizationId, ctx.organizationId),
-          eq(emailSignatures.userId, ctx.user.id),
-          eq(emailSignatures.isDefault, true),
-        ),
-      )
+    // Wrap clear-old + set-new in transaction for atomicity
+    const updated = await db.transaction(async (tx) => {
+      // Clear existing default
+      await tx
+        .update(emailSignatures)
+        .set({ isDefault: false })
+        .where(
+          and(
+            eq(emailSignatures.organizationId, ctx.organizationId),
+            eq(emailSignatures.userId, ctx.user.id),
+            eq(emailSignatures.isDefault, true),
+          ),
+        )
 
-    // Set new default
-    const [updated] = await db
-      .update(emailSignatures)
-      .set({ isDefault: true })
-      .where(
-        and(
-          eq(emailSignatures.id, data.id),
-          eq(emailSignatures.organizationId, ctx.organizationId),
-          eq(emailSignatures.userId, ctx.user.id),
-        ),
-      )
-      .returning()
+      // Set new default
+      const [result] = await tx
+        .update(emailSignatures)
+        .set({ isDefault: true })
+        .where(
+          and(
+            eq(emailSignatures.id, data.id),
+            eq(emailSignatures.organizationId, ctx.organizationId),
+            eq(emailSignatures.userId, ctx.user.id),
+          ),
+        )
+        .returning()
 
-    if (!updated) {
-      throw new Error('Signature not found')
-    }
+      if (!result) {
+        throw new NotFoundError('Signature not found', 'email_signature')
+      }
+
+      return result
+    })
 
     return updated
   })

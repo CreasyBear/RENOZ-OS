@@ -20,6 +20,8 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase, onAuthStateChange } from '../supabase/client'
 import type { User, Session } from '@supabase/supabase-js'
+import { invalidateAuthCache } from './route-auth'
+import { authLogger } from '@/lib/logger'
 
 // Query keys for auth-related queries
 export const authKeys = {
@@ -44,6 +46,7 @@ export function useSession() {
 
       // Invalidate other queries that might depend on auth state
       if (event === 'SIGNED_OUT') {
+        invalidateAuthCache()
         queryClient.clear()
       }
     })
@@ -56,7 +59,7 @@ export function useSession() {
     queryFn: async (): Promise<Session | null> => {
       const { data: { session }, error } = await supabase.auth.getSession()
       if (error) {
-        console.error('Error fetching session:', error.message)
+        authLogger.error('Error fetching session', error)
         return null
       }
       return session
@@ -85,12 +88,13 @@ export function useUser() {
   return useQuery({
     queryKey: authKeys.user(),
     queryFn: async (): Promise<User | null> => {
-      const { data: { user }, error } = await supabase.auth.getUser()
+      // Use session for UI auth state to avoid extra network validation calls.
+      const { data: { session }, error } = await supabase.auth.getSession()
       if (error) {
-        console.error('Error fetching user:', error.message)
+        authLogger.error('Error fetching user', error)
         return null
       }
-      return user
+      return session?.user ?? null
     },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
@@ -185,6 +189,7 @@ export function useSignOut() {
       }
     },
     onSuccess: () => {
+      invalidateAuthCache()
       queryClient.setQueryData(authKeys.session(), null)
       queryClient.setQueryData(authKeys.user(), null)
       queryClient.clear()

@@ -44,20 +44,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { toastSuccess, toastError } from "@/hooks";
+import { toastSuccess, toastError, useConfirmation } from "@/hooks";
+import { confirmations } from "@/hooks/_shared/use-confirmation";
 import {
   useWinLossReasons,
   useCreateWinLossReason,
@@ -66,6 +57,11 @@ import {
   type ReasonForm,
   type WinLossReasonType,
 } from "@/hooks/settings";
+import { winLossReasonTypeValues } from "@/lib/schemas/pipeline/pipeline";
+
+function isWinLossReasonType(v: string): v is WinLossReasonType {
+  return (winLossReasonTypeValues as readonly string[]).includes(v);
+}
 
 // ============================================================================
 // TYPES
@@ -91,10 +87,9 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
 }: WinLossReasonsManagerProps) {
   const [activeTab, setActiveTab] = useState<WinLossReasonType>("win");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState<ReasonForm>(EMPTY_FORM);
+  const confirmation = useConfirmation();
 
   // Fetch reasons using hook
   const { data, isLoading } = useWinLossReasons();
@@ -157,9 +152,28 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
   };
 
   // Handle delete
-  const handleDelete = (id: string) => {
-    setDeletingId(id);
-    setDeleteDialogOpen(true);
+  const handleDelete = async (
+    reason: NonNullable<typeof data>["reasons"][0]
+  ) => {
+    const { confirmed } = await confirmation.confirm(
+      confirmations.delete(reason.name, "reason")
+    );
+    if (!confirmed) return;
+
+    deleteMutation.mutate(reason.id, {
+      onSuccess: (result) => {
+        if (result.deactivated) {
+          toastSuccess(
+            `Reason deactivated (used by ${result.usageCount} opportunities)`
+          );
+        } else {
+          toastSuccess("Reason deleted successfully");
+        }
+      },
+      onError: () => {
+        toastError("Failed to delete reason");
+      },
+    });
   };
 
   // Render reason list
@@ -222,7 +236,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
                 variant="ghost"
                 size="icon"
                 className="text-destructive hover:text-destructive"
-                onClick={() => handleDelete(reason.id)}
+                onClick={() => handleDelete(reason)}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -256,7 +270,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as WinLossReasonType)}>
+        <Tabs value={activeTab} onValueChange={(v) => isWinLossReasonType(v) && setActiveTab(v)}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="win" className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-green-600" />
@@ -307,7 +321,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
               <Label htmlFor="reason-type">Type</Label>
               <Select
                 value={form.type}
-                onValueChange={(v) => setForm({ ...form, type: v as WinLossReasonType })}
+                onValueChange={(v) => isWinLossReasonType(v) && setForm({ ...form, type: v })}
                 disabled={!!editingId}
               >
                 <SelectTrigger>
@@ -369,45 +383,6 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Reason</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this reason? If it&apos;s currently
-              used by any opportunities, it will be deactivated instead.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() =>
-                deletingId &&
-                deleteMutation.mutate(deletingId, {
-                  onSuccess: (result) => {
-                    if (result.deactivated) {
-                      toastSuccess(
-                        `Reason deactivated (used by ${result.usageCount} opportunities)`
-                      );
-                    } else {
-                      toastSuccess("Reason deleted successfully");
-                    }
-                    setDeleteDialogOpen(false);
-                    setDeletingId(null);
-                  },
-                  onError: () => {
-                    toastError("Failed to delete reason");
-                  },
-                })
-              }
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 });

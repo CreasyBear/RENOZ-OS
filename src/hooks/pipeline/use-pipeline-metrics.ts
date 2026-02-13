@@ -11,6 +11,7 @@
  * @see src/server/functions/pipeline/pipeline.ts for server functions
  */
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getPipelineMetrics,
@@ -44,11 +45,22 @@ export interface PipelineMetricsData {
  * Fetch pipeline metrics summary
  */
 export function usePipelineMetrics({ assignedTo, customerId, enabled = true }: UsePipelineMetricsOptions = {}) {
+  const getPipelineMetricsFn = useServerFn(getPipelineMetrics);
+
   return useQuery<PipelineMetricsData>({
     queryKey: queryKeys.pipeline.metrics(),
     queryFn: async () => {
-      const result = await getPipelineMetrics({ data: { assignedTo, customerId } });
-      return result as PipelineMetricsData;
+      const result = await getPipelineMetricsFn({ data: { assignedTo, customerId } });
+      return (
+        (result as PipelineMetricsData) ?? {
+          totalValue: 0,
+          weightedValue: 0,
+          opportunityCount: 0,
+          byStage: {},
+          avgDaysInStage: {},
+          conversionRate: 0,
+        }
+      );
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -101,14 +113,18 @@ export function usePipelineForecast(options: UsePipelineForecastOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.pipelineForecast(startDate, endDate, groupBy),
-    queryFn: () => getPipelineForecast({
-      data: {
-        startDate,
-        endDate,
-        groupBy,
-        includeWeighted,
-      },
-    }),
+    queryFn: async () => {
+      const result = await getPipelineForecast({
+        data: {
+          startDate,
+          endDate,
+          groupBy,
+          includeWeighted,
+        },
+      });
+      if (result == null) throw new Error('Pipeline forecast returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -154,12 +170,13 @@ export function usePipelineVelocity(options: UsePipelineVelocityOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.pipelineVelocity(dateFrom, dateTo),
-    queryFn: () => getPipelineVelocity({
-      data: {
-        dateFrom,
-        dateTo,
-      },
-    }),
+    queryFn: async () => {
+      const result = await getPipelineVelocity({
+        data: { dateFrom, dateTo },
+      });
+      if (result == null) throw new Error('Pipeline velocity returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -208,13 +225,13 @@ export function useRevenueAttribution(options: UseRevenueAttributionOptions = {}
 
   return useQuery({
     queryKey: queryKeys.reports.revenueAttribution(dateFrom, dateTo),
-    queryFn: () => getRevenueAttribution({
-      data: {
-        dateFrom,
-        dateTo,
-        groupBy,
-      },
-    }),
+    queryFn: async () => {
+      const result = await getRevenueAttribution({
+        data: { dateFrom, dateTo, groupBy },
+      });
+      if (result == null) throw new Error('Revenue attribution returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -234,6 +251,7 @@ export function usePipelineCustomers() {
       const result = await getCustomers({
         data: { page: 1, pageSize: 200, sortBy: 'name', sortOrder: 'asc' },
       });
+      if (result == null) throw new Error('Pipeline customers returned no data');
       return result as { items: Array<{ id: string; name: string; email?: string | null }> };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -250,6 +268,7 @@ export function usePipelineProducts() {
       const result = await listProducts({
         data: { page: 1, pageSize: 200, status: 'active', sortBy: 'name', sortOrder: 'asc' },
       });
+      if (result == null) throw new Error('Pipeline products returned no data');
       return result as {
         products: Array<{ id: string; name: string; sku: string; basePrice: number }>;
       };

@@ -6,8 +6,10 @@
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json for specification
  */
 
+'use server';
+
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, gte, ne } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, gte, ne, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
@@ -32,7 +34,6 @@ import {
 // TYPES
 // ============================================================================
 
-type StockCountItemRecord = typeof stockCountItems.$inferSelect;
 
 // ============================================================================
 // STOCK COUNT CRUD
@@ -45,7 +46,7 @@ export const listStockCounts = createServerFn({ method: 'GET' })
   .inputValidator(stockCountListQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-    const { page = 1, pageSize = 20, sortBy, sortOrder, ...filters } = data;
+    const { page = 1, pageSize = 20, sortBy: _sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
     // Build where conditions
@@ -337,8 +338,14 @@ export const startStockCount = createServerFn({ method: 'POST' })
         inventoryConditions.push(eq(inventory.locationId, count.locationId));
       }
 
+      // OPTIMIZED: Only select fields needed for stock count items
       const inventoryItems = await tx
-        .select()
+        .select({
+          id: inventory.id,
+          productId: inventory.productId,
+          locationId: inventory.locationId,
+          quantityOnHand: inventory.quantityOnHand,
+        })
         .from(inventory)
         .where(and(...inventoryConditions));
 
@@ -505,30 +512,63 @@ export const bulkUpdateCountItems = createServerFn({ method: 'POST' })
     }
 
     return await db.transaction(async (tx) => {
-      const updated: StockCountItemRecord[] = [];
-
-      for (const itemData of data.items) {
-        const [updatedItem] = await tx
-          .update(stockCountItems)
-          .set({
-            countedQuantity: itemData.countedQuantity,
-            varianceReason: itemData.varianceReason,
-            countedBy: ctx.user.id,
-            countedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(stockCountItems.id, itemData.itemId),
-              eq(stockCountItems.stockCountId, data.countId)
-            )
-          )
-          .returning();
-
-        if (updatedItem) {
-          updated.push(updatedItem);
-        }
+      // OPTIMIZED: Use bulk update with CASE statement instead of loop
+      // This reduces N sequential updates to a single update query
+      if (data.items.length === 0) {
+        return { updatedCount: 0, items: [] };
       }
+
+      // Build CASE statements for bulk update
+      const itemIds = data.items.map((i) => i.itemId);
+      const caseStatements = {
+        countedQuantity: sql`CASE ${stockCountItems.id}
+          ${sql.join(
+            data.items.map(
+              (item) => sql`WHEN ${item.itemId} THEN ${item.countedQuantity}`
+            ),
+            sql` `
+          )}
+          ELSE ${stockCountItems.countedQuantity}
+        END`,
+        varianceReason: sql`CASE ${stockCountItems.id}
+          ${sql.join(
+            data.items.map(
+              (item) =>
+                sql`WHEN ${item.itemId} THEN ${item.varianceReason ?? sql`NULL`}`
+            ),
+            sql` `
+          )}
+          ELSE ${stockCountItems.varianceReason}
+        END`,
+      };
+
+      // Bulk update all items
+      await tx
+        .update(stockCountItems)
+        .set({
+          countedQuantity: caseStatements.countedQuantity,
+          varianceReason: caseStatements.varianceReason,
+          countedBy: ctx.user.id,
+          countedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(stockCountItems.stockCountId, data.countId),
+            inArray(stockCountItems.id, itemIds)
+          )
+        );
+
+      // Fetch updated items
+      const updated = await tx
+        .select()
+        .from(stockCountItems)
+        .where(
+          and(
+            eq(stockCountItems.stockCountId, data.countId),
+            inArray(stockCountItems.id, itemIds)
+          )
+        );
 
       return {
         updatedCount: updated.length,
@@ -588,37 +628,74 @@ export const completeStockCount = createServerFn({ method: 'POST' })
       const adjustments: (typeof inventoryMovements.$inferSelect)[] = [];
 
       if (data.applyAdjustments && varianceItems.length > 0) {
-        // Create adjustments for variances
-        for (const item of varianceItems) {
-          const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
+        // OPTIMIZED: Fetch all inventory records in one query instead of N queries
+        const inventoryIds = varianceItems.map((item) => item.inventoryId);
+        const inventoryRecords = await tx
+          .select()
+          .from(inventory)
+          .where(
+            and(
+              eq(inventory.organizationId, ctx.organizationId),
+              inArray(inventory.id, inventoryIds)
+            )
+          );
 
-          // Get inventory record
-          const [inv] = await tx
-            .select()
-            .from(inventory)
-            .where(eq(inventory.id, item.inventoryId))
-            .limit(1);
+        // Create map for O(1) lookup
+        const inventoryMap = new Map(inventoryRecords.map((inv) => [inv.id, inv]));
 
-          if (!inv) continue;
+        // Filter to only items with valid inventory records
+        const validVarianceItems = varianceItems.filter((item) => inventoryMap.has(item.inventoryId));
 
-          // Update inventory
-          // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
-          // so we don't set it directly
-          const newQuantity = (inv.quantityOnHand ?? 0) + variance;
+        if (validVarianceItems.length > 0) {
+          // OPTIMIZED: Bulk update inventory using CASE statements
+          const inventoryCaseStatements = {
+            quantityOnHand: sql`CASE ${inventory.id}
+              ${sql.join(
+                validVarianceItems.map((item) => {
+                  const inv = inventoryMap.get(item.inventoryId)!;
+                  const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
+                  const newQuantity = (inv.quantityOnHand ?? 0) + variance;
+                  return sql`WHEN ${item.inventoryId} THEN ${newQuantity}`;
+                }),
+                sql` `
+              )}
+              ELSE ${inventory.quantityOnHand}
+            END`,
+            totalValue: sql`CASE ${inventory.id}
+              ${sql.join(
+                validVarianceItems.map((item) => {
+                  const inv = inventoryMap.get(item.inventoryId)!;
+                  const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
+                  const newQuantity = (inv.quantityOnHand ?? 0) + variance;
+                  return sql`WHEN ${item.inventoryId} THEN ${newQuantity} * COALESCE(${inventory.unitCost}, 0)`;
+                }),
+                sql` `
+              )}
+              ELSE ${inventory.totalValue}
+            END`,
+          };
+
           await tx
             .update(inventory)
             .set({
-              quantityOnHand: newQuantity,
-              totalValue: sql`${newQuantity} * COALESCE(${inventory.unitCost}, 0)`,
+              quantityOnHand: inventoryCaseStatements.quantityOnHand,
+              totalValue: inventoryCaseStatements.totalValue,
               updatedAt: new Date(),
               updatedBy: ctx.user.id,
             })
-            .where(eq(inventory.id, item.inventoryId));
+            .where(
+              and(
+                eq(inventory.organizationId, ctx.organizationId),
+                inArray(inventory.id, validVarianceItems.map((item) => item.inventoryId))
+              )
+            );
 
-          // Create movement
-          const [movement] = await tx
-            .insert(inventoryMovements)
-            .values({
+          // OPTIMIZED: Bulk insert movements
+          const movementValues = validVarianceItems.map((item) => {
+            const inv = inventoryMap.get(item.inventoryId)!;
+            const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
+            const newQuantity = (inv.quantityOnHand ?? 0) + variance;
+            return {
               organizationId: ctx.organizationId,
               inventoryId: item.inventoryId,
               productId: inv.productId,
@@ -627,7 +704,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
               quantity: variance,
               previousQuantity: inv.quantityOnHand ?? 0,
               newQuantity,
-              referenceType: 'count',
+              referenceType: 'count' as const,
               referenceId: data.id,
               metadata: {
                 countCode: count.countCode,
@@ -635,19 +712,32 @@ export const completeStockCount = createServerFn({ method: 'POST' })
               },
               notes: item.varianceReason ?? `Count adjustment from ${count.countCode}`,
               createdBy: ctx.user.id,
-            })
+            };
+          });
+
+          const insertedMovements = await tx
+            .insert(inventoryMovements)
+            .values(movementValues)
             .returning();
 
-          adjustments.push(movement);
+          adjustments.push(...insertedMovements);
 
-          // Mark item as reviewed
+          // OPTIMIZED: Bulk update stock count items
           await tx
             .update(stockCountItems)
             .set({
               reviewedBy: ctx.user.id,
               reviewedAt: new Date(),
             })
-            .where(eq(stockCountItems.id, item.id));
+            .where(
+              and(
+                eq(stockCountItems.stockCountId, data.id),
+                inArray(
+                  stockCountItems.id,
+                  validVarianceItems.map((item) => item.id)
+                )
+              )
+            );
         }
       }
 
@@ -833,34 +923,74 @@ export const getCountHistory = createServerFn({ method: 'GET' })
     }
 
     const counts = await db
-      .select()
+      .select({
+        id: stockCounts.id,
+        organizationId: stockCounts.organizationId,
+        countCode: stockCounts.countCode,
+        countType: stockCounts.countType,
+        locationId: stockCounts.locationId,
+        assignedTo: stockCounts.assignedTo,
+        status: stockCounts.status,
+        varianceThreshold: stockCounts.varianceThreshold,
+        startedAt: stockCounts.startedAt,
+        completedAt: stockCounts.completedAt,
+        approvedBy: stockCounts.approvedBy,
+        approvedAt: stockCounts.approvedAt,
+        notes: stockCounts.notes,
+        metadata: stockCounts.metadata,
+        createdAt: stockCounts.createdAt,
+        updatedAt: stockCounts.updatedAt,
+        createdBy: stockCounts.createdBy,
+        updatedBy: stockCounts.updatedBy,
+        version: stockCounts.version,
+      })
       .from(stockCounts)
       .where(and(...conditions))
       .orderBy(desc(stockCounts.completedAt))
       .limit(data.limit);
 
-    // Get variance stats for each count
-    const historyWithStats = await Promise.all(
-      counts.map(async (count) => {
-        const [stats] = await db
+    // OPTIMIZED: Get variance stats for all counts in a single aggregation query
+    // Instead of N+1 queries (one per count), use GROUP BY with IN clause
+    const countIds = counts.map((c) => c.id);
+    const statsByCountId = countIds.length > 0
+      ? await db
           .select({
+            stockCountId: stockCountItems.stockCountId,
             totalItems: sql<number>`COUNT(*)::int`,
             varianceItems: sql<number>`COUNT(*) FILTER (WHERE ${stockCountItems.countedQuantity} != ${stockCountItems.expectedQuantity})::int`,
           })
           .from(stockCountItems)
-          .where(eq(stockCountItems.stockCountId, count.id));
+          .where(inArray(stockCountItems.stockCountId, countIds))
+          .groupBy(stockCountItems.stockCountId)
+      : [];
 
-        return {
-          ...count,
-          totalItems: stats?.totalItems ?? 0,
-          varianceItems: stats?.varianceItems ?? 0,
+    // Create map for O(1) lookup
+    const statsMap = new Map(
+      statsByCountId.map((s) => [
+        s.stockCountId,
+        {
+          totalItems: s.totalItems ?? 0,
+          varianceItems: s.varianceItems ?? 0,
           accuracyRate:
-            stats && stats.totalItems > 0
-              ? Math.round(((stats.totalItems - stats.varianceItems) / stats.totalItems) * 100)
+            s.totalItems && s.totalItems > 0
+              ? Math.round(((s.totalItems - s.varianceItems) / s.totalItems) * 100)
               : 100,
-        };
-      })
+        },
+      ])
     );
+
+    // Combine counts with stats
+    const historyWithStats = counts.map((count) => {
+      const stats = statsMap.get(count.id) ?? {
+        totalItems: 0,
+        varianceItems: 0,
+        accuracyRate: 100,
+      };
+      return {
+        ...count,
+        ...stats,
+      };
+    });
 
     return { counts: historyWithStats };
   });

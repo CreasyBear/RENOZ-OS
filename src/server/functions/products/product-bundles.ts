@@ -218,24 +218,25 @@ export const setBundleComponents = createServerFn({ method: 'POST' })
       });
     }
 
-    // Delete existing components
-    await db
-      .delete(productBundles)
-      .where(
-        and(
-          eq(productBundles.organizationId, ctx.organizationId),
-          eq(productBundles.bundleProductId, data.bundleProductId)
-        )
-      );
+    return db.transaction(async (tx) => {
+      // Delete existing components
+      await tx
+        .delete(productBundles)
+        .where(
+          and(
+            eq(productBundles.organizationId, ctx.organizationId),
+            eq(productBundles.bundleProductId, data.bundleProductId)
+          )
+        );
 
-    if (data.components.length === 0) {
-      return [];
-    }
+      if (data.components.length === 0) {
+        return [];
+      }
 
-    // Insert new components
-    const newComponents = await db
-      .insert(productBundles)
-      .values(
+      // Insert new components
+      const newComponents = await tx
+        .insert(productBundles)
+        .values(
         data.components.map((c, index) => ({
           organizationId: ctx.organizationId,
           bundleProductId: data.bundleProductId,
@@ -245,27 +246,35 @@ export const setBundleComponents = createServerFn({ method: 'POST' })
           sortOrder: index,
         }))
       )
-      .returning();
+        .returning();
 
-    // Get component product details
-    const componentProducts = await db
-      .select({
-        id: products.id,
-        sku: products.sku,
-        name: products.name,
-        basePrice: products.basePrice,
-        type: products.type,
-        status: products.status,
-      })
-      .from(products)
-      .where(inArray(products.id, componentIds));
+      // Get component product details
+      // SECURITY: Must filter by organizationId to prevent cross-tenant data access
+      const componentProducts = await tx
+        .select({
+          id: products.id,
+          sku: products.sku,
+          name: products.name,
+          basePrice: products.basePrice,
+          type: products.type,
+          status: products.status,
+        })
+        .from(products)
+        .where(
+        and(
+          inArray(products.id, componentIds),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
+      );
 
-    const productMap = new Map(componentProducts.map((p) => [p.id, p]));
+      const productMap = new Map(componentProducts.map((p) => [p.id, p]));
 
-    return newComponents.map((bc) => ({
-      ...bc,
-      componentProduct: productMap.get(bc.componentProductId)!,
-    }));
+      return newComponents.map((bc) => ({
+        ...bc,
+        componentProduct: productMap.get(bc.componentProductId)!,
+      }));
+    });
   });
 
 /**
@@ -517,7 +526,13 @@ export const calculateBundlePrice = createServerFn({ method: 'GET' })
                 basePrice: products.basePrice,
               })
               .from(products)
-              .where(inArray(products.id, componentIds))
+              .where(
+                and(
+                  inArray(products.id, componentIds),
+                  eq(products.organizationId, ctx.organizationId),
+                  isNull(products.deletedAt)
+                )
+              )
           : [];
 
       const productMap = new Map(componentProducts.map((p) => [p.id, p]));

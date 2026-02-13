@@ -7,7 +7,7 @@
  * TODO: Remove this file when real APIs are integrated
  */
 
-import type { PickList } from '../picking';
+import type { PickList } from '../picking-types';
 
 export const MOCK_PICK_LIST: PickList = {
   id: "pick-001",

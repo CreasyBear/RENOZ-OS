@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { quantitySchema, optionalEmailSchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // COMMON TYPES
@@ -91,6 +92,7 @@ export const createShipmentSchema = z.object({
   height: z.number().int().min(0).optional(), // mm
   packageCount: z.number().int().min(1).default(1),
   estimatedDeliveryAt: z.coerce.date().optional(),
+  shippingCost: z.number().int().min(0).optional(), // Actual cost in cents
   notes: z.string().max(2000).optional(),
   // Items to include in shipment
   items: z
@@ -126,6 +128,7 @@ export const updateShipmentSchema = z.object({
   height: z.number().int().min(0).optional(),
   packageCount: z.number().int().min(1).optional(),
   estimatedDeliveryAt: z.coerce.date().optional(),
+  shippingCost: z.number().int().min(0).optional(), // Actual cost in cents
   notes: z.string().max(2000).optional(),
   carrierNotes: z.string().max(2000).optional(),
 });
@@ -156,6 +159,7 @@ export const markShippedSchema = z.object({
   trackingNumber: z.string().max(200).optional(),
   trackingUrl: z.string().url().optional(),
   shippedAt: z.coerce.date().optional(), // Defaults to now
+  shippingCost: z.number().int().min(0).optional(), // Actual cost in cents
 });
 
 export type MarkShipped = z.infer<typeof markShippedSchema>;
@@ -174,6 +178,28 @@ export const confirmDeliverySchema = z.object({
 });
 
 export type ConfirmDelivery = z.infer<typeof confirmDeliverySchema>;
+
+// ============================================================================
+// FULFILLMENT IMPORT SCHEMA
+// ============================================================================
+
+export const fulfillmentImportRowSchema = z.object({
+  orderNumber: z.string().min(1, 'Order number is required').max(50),
+  shipmentNumber: z.string().max(100).optional(),
+  carrier: z.string().min(1, 'Carrier is required').max(100),
+  carrierService: z.string().max(100).optional(),
+  trackingNumber: z.string().min(1, 'Tracking number is required').max(200),
+  trackingUrl: z.string().url().optional(),
+  shippedAt: z.coerce.date().optional(),
+});
+
+export const fulfillmentImportSchema = z.object({
+  rows: z.array(fulfillmentImportRowSchema).min(1, 'At least one row is required'),
+  dryRun: z.boolean().optional().default(false),
+});
+
+export type FulfillmentImportRow = z.infer<typeof fulfillmentImportRowSchema>;
+export type FulfillmentImport = z.infer<typeof fulfillmentImportSchema>;
 
 // ============================================================================
 // SHIPMENT QUERY SCHEMAS
@@ -196,6 +222,18 @@ export const shipmentListQuerySchema = z.object({
 });
 
 export type ShipmentListQuery = z.infer<typeof shipmentListQuerySchema>;
+
+export const shipmentListCursorQuerySchema = cursorPaginationSchema.merge(
+  z.object({
+    orderId: z.string().uuid().optional(),
+    status: shipmentStatusSchema.optional(),
+    carrier: z.string().optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+  })
+);
+
+export type ShipmentListCursorQuery = z.infer<typeof shipmentListCursorQuerySchema>;
 
 // ============================================================================
 // SHIPMENT OUTPUT SCHEMA
@@ -221,6 +259,7 @@ export const shipmentSchema = z.object({
   shippedAt: z.coerce.date().nullable(),
   estimatedDeliveryAt: z.coerce.date().nullable(),
   deliveredAt: z.coerce.date().nullable(),
+  shippingCost: z.number().nullable(), // Actual cost in cents
   deliveryConfirmation: deliveryConfirmationSchema.nullable(),
   trackingEvents: z.array(trackingEventSchema).nullable(),
   shippedBy: z.string().uuid().nullable(),

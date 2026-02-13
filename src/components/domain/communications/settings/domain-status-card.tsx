@@ -26,7 +26,7 @@ import {
   Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks";
+import { toast } from "@/lib/toast";
 import type {
   DomainVerificationStatus,
   DnsRecord,

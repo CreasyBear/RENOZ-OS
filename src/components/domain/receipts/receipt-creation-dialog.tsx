@@ -23,6 +23,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { toastError, toastSuccess } from '@/hooks';
+import { useReceiveGoods } from '@/hooks/suppliers';
 import type {
   ReceiptCreationDialogProps,
   POItemForReceipt,
@@ -137,8 +139,7 @@ export function ReceiptCreationDialog({
   items,
   onSuccess,
 }: ReceiptCreationDialogProps) {
-  // Prefix unused params to satisfy lint
-  void purchaseOrderId;
+  const receiveGoods = useReceiveGoods();
 
   // State for receipt items
   const [itemStates, setItemStates] = useState<Record<string, ReceiptItemState>>(() => {
@@ -159,8 +160,6 @@ export function ReceiptCreationDialog({
   const [trackingNumber, setTrackingNumber] = useState('');
   const [deliveryReference, setDeliveryReference] = useState('');
   const [notes, setNotes] = useState('');
-
-  const [isCreating, setIsCreating] = useState(false);
 
   // Calculate summary
   const summary = useMemo(() => {
@@ -196,8 +195,6 @@ export function ReceiptCreationDialog({
   };
 
   const handleCreate = async () => {
-    setIsCreating(true);
-
     try {
       // Build receipt items
       const receiptItems: CreateReceiptItemInput[] = [];
@@ -217,26 +214,37 @@ export function ReceiptCreationDialog({
         }
       }
 
-      // For now, just log - actual server call would go here
-      console.log('Creating receipt:', {
+      if (receiptItems.length === 0) {
+        toastError('Select at least one item to receive');
+        return;
+      }
+
+      await receiveGoods.mutateAsync({
+        purchaseOrderId,
         carrier: carrier || undefined,
         trackingNumber: trackingNumber || undefined,
         deliveryReference: deliveryReference || undefined,
         notes: notes || undefined,
-        items: receiptItems,
+        items: receiptItems.map((item) => ({
+          poItemId: item.purchaseOrderItemId,
+          quantityReceived: item.quantityReceived,
+          quantityRejected: item.quantityRejected,
+          condition: 'new',
+        })),
       });
 
-      // TODO: Call createReceipt server function when available
-
+      toastSuccess('Receipt recorded successfully');
       onSuccess?.();
       onOpenChange(false);
+    } catch {
+      toastError('Failed to record receipt');
     } finally {
-      setIsCreating(false);
+      // Mutation handles pending state
     }
   };
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!isCreating) {
+    if (!receiveGoods.isPending) {
       if (!newOpen) {
         // Reset form on close
         const initial: Record<string, ReceiptItemState> = {};
@@ -364,11 +372,15 @@ export function ReceiptCreationDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isCreating}>
+          <Button
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={receiveGoods.isPending}
+          >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={!canCreate || isCreating}>
-            {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button onClick={handleCreate} disabled={!canCreate || receiveGoods.isPending}>
+            {receiveGoods.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Record Receipt
           </Button>
         </DialogFooter>

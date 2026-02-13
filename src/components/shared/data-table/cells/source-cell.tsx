@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Cell component exports component + SOURCE_CONFIG */
 import { memo } from "react";
 import type { LucideIcon } from "lucide-react";
 import {

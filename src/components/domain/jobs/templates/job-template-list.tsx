@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table/data-table';
 import { Button } from '@/components/ui/button';
@@ -85,20 +85,21 @@ export function JobTemplateList({
   const { data, isLoading, error, refetch } = useJobTemplates({ includeInactive: false });
 
   // Filter templates by search query
+  const rawTemplates = data?.templates;
   const filteredTemplates = useMemo(() => {
-    if (!data?.templates) return [];
-    if (!searchQuery) return data.templates;
+    if (!rawTemplates) return [];
+    if (!searchQuery) return rawTemplates;
 
     const query = searchQuery.toLowerCase();
-    return data.templates.filter(
+    return rawTemplates.filter(
       (t) =>
         t.name.toLowerCase().includes(query) ||
         (t.description?.toLowerCase().includes(query) ?? false)
     );
-  }, [data?.templates, searchQuery]);
+  }, [rawTemplates, searchQuery]);
 
   // Handle delete
-  const handleDelete = async (template: JobTemplateResponse) => {
+  const handleDelete = useCallback(async (template: JobTemplateResponse) => {
     const confirmed = await confirm.confirm({
       title: 'Delete Job Template',
       description:
@@ -110,11 +111,11 @@ export function JobTemplateList({
     if (confirmed.confirmed) {
       try {
         await deleteMutation.mutateAsync({ templateId: template.id });
-      } catch (err) {
+      } catch {
         // Error toast is handled by the mutation hook
       }
     }
-  };
+  }, [confirm, deleteMutation]);
 
   // Column definitions
   const columns: ColumnDef<JobTemplateResponse>[] = useMemo(
@@ -209,7 +210,7 @@ export function JobTemplateList({
         ),
       },
     ],
-    [onEditTemplate, onDuplicateTemplate]
+    [onEditTemplate, onDuplicateTemplate, handleDelete]
   );
 
   // Loading state

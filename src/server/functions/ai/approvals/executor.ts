@@ -14,6 +14,7 @@ import { aiApprovals, aiApprovalEntities, type ExecutionResult } from 'drizzle/s
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { getActionHandler } from './handlers';
 import type { ExecuteActionResult, RejectActionResult } from '@/lib/ai/approvals/types';
+import { logger } from '@/lib/logger';
 
 // Re-export types
 export type { ExecuteActionResult, RejectActionResult } from '@/lib/ai/approvals/types';
@@ -218,7 +219,7 @@ export async function executeAction(
 
     return result;
   } catch (error) {
-    console.error('[AI Approval Executor] Error executing action:', error);
+    logger.error('[AI Approval Executor] Error executing action', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -304,7 +305,7 @@ export async function rejectAction(
 
     return result;
   } catch (error) {
-    console.error('[AI Approval Executor] Error rejecting action:', error);
+    logger.error('[AI Approval Executor] Error rejecting action', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -421,11 +422,13 @@ export async function getStuckApprovals(
  *
  * @param entityType - The type of entity (e.g., 'customer', 'order', 'quote')
  * @param entityId - The entity's UUID
+ * @param organizationId - The organization ID for tenant isolation
  * @returns List of approvals with the action taken on the entity
  */
 export async function getApprovalsForEntity(
   entityType: string,
-  entityId: string
+  entityId: string,
+  organizationId: string
 ): Promise<
   Array<{
     approval: typeof aiApprovals.$inferSelect;
@@ -442,7 +445,8 @@ export async function getApprovalsForEntity(
     .where(
       and(
         eq(aiApprovalEntities.entityType, entityType),
-        eq(aiApprovalEntities.entityId, entityId)
+        eq(aiApprovalEntities.entityId, entityId),
+        eq(aiApprovals.organizationId, organizationId)
       )
     )
     .orderBy(desc(aiApprovalEntities.createdAt));
@@ -454,13 +458,33 @@ export async function getApprovalsForEntity(
  * Get all entities affected by a specific approval.
  *
  * @param approvalId - The approval's UUID
+ * @param organizationId - The organization ID for tenant isolation
  * @returns List of entity links
  */
 export async function getEntitiesForApproval(
-  approvalId: string
+  approvalId: string,
+  organizationId: string
 ): Promise<Array<typeof aiApprovalEntities.$inferSelect>> {
+  // First verify the approval belongs to the organization
+  const [approval] = await db
+    .select({ id: aiApprovals.id })
+    .from(aiApprovals)
+    .where(
+      and(
+        eq(aiApprovals.id, approvalId),
+        eq(aiApprovals.organizationId, organizationId)
+      )
+    )
+    .limit(1);
+
+  if (!approval) {
+    return [];
+  }
+
+  // Then fetch entities for this approval (limit to avoid unbounded reads)
   return db
     .select()
     .from(aiApprovalEntities)
-    .where(eq(aiApprovalEntities.approvalId, approvalId));
+    .where(eq(aiApprovalEntities.approvalId, approvalId))
+    .limit(100);
 }

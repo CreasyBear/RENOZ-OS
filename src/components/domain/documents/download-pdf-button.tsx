@@ -121,6 +121,7 @@ export const DownloadPdfButton = memo(function DownloadPdfButton({
 }: DownloadPdfButtonProps) {
   const [isPolling, setIsPolling] = useState(false);
   const [toastId, setToastId] = useState<string | number | null>(null);
+  const supportsGeneration = documentType === 'quote' || documentType === 'invoice';
 
   // Generation mutations
   const generateQuote = useGenerateQuote();
@@ -130,7 +131,7 @@ export const DownloadPdfButton = memo(function DownloadPdfButton({
   const { data: pollData } = useDocumentPolling({
     orderId: entityId,
     documentType: documentType as 'quote' | 'invoice',
-    enabled: isPolling && (documentType === 'quote' || documentType === 'invoice'),
+    enabled: supportsGeneration && isPolling,
   });
 
   // Handle polling completion
@@ -205,6 +206,43 @@ export const DownloadPdfButton = memo(function DownloadPdfButton({
 
   const label = getDocumentLabel(documentType);
   const hasExisting = !!existingUrl;
+
+  if (!supportsGeneration) {
+    if (hasExisting) {
+      return (
+        <Button
+          variant={variant}
+          size={size}
+          className={cn('gap-2', className)}
+          onClick={handleDownload}
+        >
+          <ExternalLink className="h-4 w-4" />
+          <span>{label} PDF</span>
+        </Button>
+      );
+    }
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={variant}
+              size={size}
+              className={cn('gap-2', className)}
+              disabled
+            >
+              <FileText className="h-4 w-4" />
+              <span>{label} PDF</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{label} PDF generation is not available yet</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   // If there's an existing URL and we want to show regenerate option
   if (hasExisting && showRegenerateOption) {

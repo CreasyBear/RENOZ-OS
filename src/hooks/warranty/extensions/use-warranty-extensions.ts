@@ -45,7 +45,13 @@ import {
 export function useWarrantyExtensions(warrantyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.list(warrantyId ?? ''),
-    queryFn: () => listWarrantyExtensions({ data: { warrantyId: warrantyId! } }),
+    queryFn: async () => {
+      const result = await listWarrantyExtensions({
+        data: { warrantyId: warrantyId! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!warrantyId,
   });
 }
@@ -72,7 +78,11 @@ export function useExtensionHistory(options?: GetExtensionHistoryInput) {
 
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.historyFiltered(params),
-    queryFn: () => getExtensionHistory({ data: params }),
+    queryFn: async () => {
+      const result = await getExtensionHistory({ data: params });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
   });
 }
 
@@ -88,7 +98,13 @@ export function useExtensionHistory(options?: GetExtensionHistoryInput) {
 export function useExtensionById(extensionId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.detail(extensionId ?? ''),
-    queryFn: () => getExtensionById({ data: { extensionId: extensionId! } }),
+    queryFn: async () => {
+      const result = await getExtensionById({
+        data: { extensionId: extensionId! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!extensionId,
   });
 }

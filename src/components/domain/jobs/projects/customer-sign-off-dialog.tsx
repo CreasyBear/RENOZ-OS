@@ -9,10 +9,8 @@
  * @path src/components/domain/jobs/projects/customer-sign-off-dialog.tsx
  */
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { CheckCircle, Star } from 'lucide-react';
+import { useState } from "react";
+import { CheckCircle, Star } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,39 +18,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/dialog";
+import { useCustomerSignOff } from "@/hooks/jobs";
+import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import {
-  Form,
-  FormControl,
+  customerSignOffFormSchema,
+  type CustomerSignOffFormData,
+} from "@/lib/schemas/jobs/site-visits";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextField,
+  CheckboxField,
+  TextareaField,
   FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useCustomerSignOff } from '@/hooks/jobs';
-import { toast } from '@/lib/toast';
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
-
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const customerSignOffFormSchema = z.object({
-  customerName: z.string().min(1, 'Customer name is required'),
-  confirmed: z.boolean().refine((val) => val === true, {
-    message: 'Customer confirmation is required',
-  }),
-  customerRating: z.number().min(1).max(5).optional(),
-  customerFeedback: z.string().optional(),
-});
-
-type CustomerSignOffFormData = z.infer<typeof customerSignOffFormSchema>;
+  FormActions,
+  extractFieldError,
+} from "@/components/shared/forms";
 
 // ============================================================================
 // TYPES
@@ -81,36 +63,36 @@ export function CustomerSignOffDialog({
   const signOff = useCustomerSignOff();
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
 
-  const form = useForm<CustomerSignOffFormData>({
-    resolver: zodResolver(customerSignOffFormSchema),
+  const form = useTanStackForm<CustomerSignOffFormData>({
+    schema: customerSignOffFormSchema,
     defaultValues: {
-      customerName: '',
+      customerName: "",
       confirmed: false,
       customerRating: undefined,
-      customerFeedback: '',
+      customerFeedback: "",
+    },
+    onSubmit: async (values) => {
+      try {
+        await signOff.mutateAsync({
+          siteVisitId,
+          customerName: values.customerName,
+          customerRating: values.customerRating,
+          customerFeedback: values.customerFeedback,
+        });
+
+        toast.success("Customer sign-off recorded successfully");
+        form.reset();
+        onSuccess?.();
+        onOpenChange(false);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        toast.error(`Failed to record sign-off: ${message}`);
+      }
     },
   });
 
-  const onSubmit = async (data: CustomerSignOffFormData) => {
-    try {
-      await signOff.mutateAsync({
-        siteVisitId,
-        customerName: data.customerName,
-        customerRating: data.customerRating,
-        customerFeedback: data.customerFeedback,
-      });
-      
-      toast.success('Customer sign-off recorded successfully');
-      form.reset();
-      onSuccess?.();
-      onOpenChange(false);
-    } catch (error) {
-      toast.error('Failed to record sign-off');
-      console.error('Sign-off error:', error);
-    }
-  };
-
-  const selectedRating = form.watch('customerRating');
+  const selectedRating = form.useWatch("customerRating");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -125,123 +107,95 @@ export function CustomerSignOffDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Customer Name */}
-            <FormField
-              control={form.control}
-              name="customerName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer Name *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter customer name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-6"
+        >
+          <form.Field name="customerName">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Customer Name"
+                placeholder="Enter customer name"
+                required
+              />
+            )}
+          </form.Field>
 
-            {/* Confirmation Checkbox */}
-            <FormField
-              control={form.control}
-              name="confirmed"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>
-                      Customer confirmed work completed satisfactorily
-                    </FormLabel>
-                    <FormDescription>
-                      The customer has reviewed the work and confirms it meets their expectations.
-                    </FormDescription>
+          <form.Field name="confirmed">
+            {(field) => (
+              <CheckboxField
+                field={field}
+                label="Customer confirmed work completed satisfactorily"
+                description="The customer has reviewed the work and confirms it meets their expectations."
+                required
+                className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"
+              />
+            )}
+          </form.Field>
+
+          <form.Field name="customerRating">
+            {(field) => {
+              const error = extractFieldError(field);
+              return (
+                <FormField
+                  label="Customer Rating (Optional)"
+                  name={field.name}
+                  error={error}
+                  description="How would the customer rate the service?"
+                >
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        className={cn(
+                          "p-1 transition-colors",
+                          (hoveredRating !== null
+                            ? rating <= hoveredRating
+                            : rating <= (selectedRating || 0))
+                            ? "text-yellow-400"
+                            : "text-gray-300"
+                        )}
+                        onMouseEnter={() => setHoveredRating(rating)}
+                        onMouseLeave={() => setHoveredRating(null)}
+                        onClick={() => field.handleChange(rating)}
+                      >
+                        <Star className="h-8 w-8 fill-current" />
+                      </button>
+                    ))}
                   </div>
-                </FormItem>
-              )}
-            />
+                </FormField>
+              );
+            }}
+          </form.Field>
 
-            {/* Customer Rating */}
-            <FormField
-              control={form.control}
-              name="customerRating"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer Rating (Optional)</FormLabel>
-                  <FormDescription>
-                    How would the customer rate the service?
-                  </FormDescription>
-                  <FormControl>
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
-                          key={rating}
-                          type="button"
-                          className={cn(
-                            'p-1 transition-colors',
-                            (hoveredRating !== null 
-                              ? rating <= hoveredRating 
-                              : rating <= (selectedRating || 0)
-                            ) 
-                              ? 'text-yellow-400' 
-                              : 'text-gray-300'
-                          )}
-                          onMouseEnter={() => setHoveredRating(rating)}
-                          onMouseLeave={() => setHoveredRating(null)}
-                          onClick={() => field.onChange(rating)}
-                        >
-                          <Star className="h-8 w-8 fill-current" />
-                        </button>
-                      ))}
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="customerFeedback">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Customer Feedback (Optional)"
+                placeholder="Enter any additional feedback from the customer..."
+                rows={5}
+                className="min-h-[100px]"
+              />
+            )}
+          </form.Field>
 
-            {/* Customer Feedback */}
-            <FormField
-              control={form.control}
-              name="customerFeedback"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer Feedback (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter any additional feedback from the customer..."
-                      className="min-h-[100px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <DialogFooter>
+            <FormActions
+              form={form}
+              submitLabel="Record Sign-off"
+              cancelLabel="Cancel"
+              loadingLabel="Recording..."
+              onCancel={() => onOpenChange(false)}
+              submitDisabled={signOff.isPending}
             />
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={signOff.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={signOff.isPending || !form.formState.isValid}
-              >
-                {signOff.isPending ? 'Recording...' : 'Record Sign-off'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

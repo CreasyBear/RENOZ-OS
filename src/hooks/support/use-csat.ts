@@ -45,7 +45,13 @@ export interface UseIssueFeedbackOptions {
 export function useIssueFeedback({ issueId, enabled = true }: UseIssueFeedbackOptions) {
   return useQuery({
     queryKey: queryKeys.support.csatDetail(issueId),
-    queryFn: () => getIssueFeedback({ data: { issueId } }),
+    queryFn: async () => {
+      const result = await getIssueFeedback({
+        data: { issueId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!issueId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -100,8 +106,8 @@ export function useFeedbackList({
 
   return useQuery({
     queryKey: queryKeys.support.csatListFiltered(filters),
-    queryFn: () =>
-      listFeedback({
+    queryFn: async () => {
+      const result = await listFeedback({
         data: {
           ...filters,
           page: page ?? 1,
@@ -109,7 +115,11 @@ export function useFeedbackList({
           sortBy: sortBy ?? 'submittedAt',
           sortOrder: sortOrder ?? 'desc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -133,7 +143,11 @@ export function useCsatMetrics({ startDate, endDate, enabled = true }: UseCsatMe
 
   return useQuery({
     queryKey: queryKeys.support.csatMetricsWithFilters(filters),
-    queryFn: () => getCsatMetrics({ data: filters }),
+    queryFn: async () => {
+      const result = await getCsatMetrics({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -183,7 +197,13 @@ export function useValidateFeedbackToken({
 }: UseValidateFeedbackTokenOptions) {
   return useQuery({
     queryKey: queryKeys.support.csatToken(token),
-    queryFn: () => validateFeedbackToken({ data: { token } }),
+    queryFn: async () => {
+      const result = await validateFeedbackToken({
+        data: { token } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!token,
     retry: false,
   });

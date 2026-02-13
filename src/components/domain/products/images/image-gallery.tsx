@@ -17,34 +17,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { confirmations, useConfirmation } from "@/hooks";
 import {
-  setPrimaryImage,
-  deleteProductImage,
-  reorderProductImages,
-} from "@/server/functions/products/product-images";
-
-export interface GalleryImage {
-  id: string;
-  imageUrl: string;
-  altText: string | null;
-  caption: string | null;
-  isPrimary: boolean;
-  sortOrder: number;
-  fileSize: number | null;
-  dimensions: { width: number; height: number } | null;
-}
+  useSetPrimaryImage,
+  useDeleteProductImage,
+  useReorderProductImages,
+} from "@/hooks/products";
+import type { GalleryImage } from "@/lib/schemas/products";
 
 interface ImageGalleryProps {
   productId: string;
@@ -59,11 +40,15 @@ export function ImageGallery({
   onImagesChange,
   onEditImage,
 }: ImageGalleryProps) {
-  const [deletingImage, setDeletingImage] = useState<GalleryImage | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const confirmation = useConfirmation();
+
+  // Use mutation hooks
+  const setPrimaryMutation = useSetPrimaryImage();
+  const deleteMutation = useDeleteProductImage();
+  const reorderMutation = useReorderProductImages();
 
   // Sort images by sortOrder, primary first
   const sortedImages = [...images].sort((a, b) => {
@@ -73,30 +58,33 @@ export function ImageGallery({
   });
 
   // Handle setting primary image
-  const handleSetPrimary = async (imageId: string) => {
-    try {
-      await setPrimaryImage({ data: { id: imageId } });
-      onImagesChange?.();
-    } catch (error) {
-      console.error("Failed to set primary image:", error);
-    }
+  const handleSetPrimary = (imageId: string) => {
+    setPrimaryMutation.mutate(imageId, {
+      onSuccess: () => onImagesChange?.(),
+    });
   };
 
   // Handle deleting image
-  const handleDelete = async () => {
-    if (!deletingImage) return;
+  const handleDelete = useCallback(
+    async (image: GalleryImage) => {
+      const baseDescription =
+        "Are you sure you want to delete this image? This action cannot be undone.";
+      const primaryNote = image.isPrimary
+        ? "This is the primary image. Another image will become the new primary."
+        : "";
+      const description = primaryNote ? `${baseDescription}\n\n${primaryNote}` : baseDescription;
 
-    setIsDeleting(true);
-    try {
-      await deleteProductImage({ data: { id: deletingImage.id } });
-      setDeletingImage(null);
-      onImagesChange?.();
-    } catch (error) {
-      console.error("Failed to delete image:", error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+      await confirmation.confirm({
+        ...confirmations.delete(image.altText || image.caption || "this image", "image"),
+        description,
+        onConfirm: async () => {
+          await deleteMutation.mutateAsync(image.id);
+          onImagesChange?.();
+        },
+      });
+    },
+    [confirmation, deleteMutation, onImagesChange]
+  );
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
@@ -110,7 +98,7 @@ export function ImageGallery({
     }
   };
 
-  const handleDragEnd = async () => {
+  const handleDragEnd = () => {
     if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
       // Reorder the array
       const newOrder = [...sortedImages];
@@ -118,17 +106,10 @@ export function ImageGallery({
       newOrder.splice(dragOverIndex, 0, removed);
 
       // Save the new order
-      try {
-        await reorderProductImages({
-          data: {
-            productId,
-            imageIds: newOrder.map((img) => img.id),
-          },
-        });
-        onImagesChange?.();
-      } catch (error) {
-        console.error("Failed to reorder images:", error);
-      }
+      reorderMutation.mutate(
+        { productId, imageIds: newOrder.map((img) => img.id) },
+        { onSuccess: () => onImagesChange?.() }
+      );
     }
 
     setDraggedIndex(null);
@@ -207,6 +188,7 @@ export function ImageGallery({
                 variant="secondary"
                 size="icon"
                 className="h-8 w-8 cursor-grab active:cursor-grabbing"
+                aria-label="Drag to reorder image"
               >
                 <GripVertical className="h-4 w-4" />
               </Button>
@@ -242,6 +224,7 @@ export function ImageGallery({
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => openLightbox(index)}
+                  aria-label="View image in lightbox"
                 >
                   <Maximize2 className="h-4 w-4" />
                 </Button>
@@ -275,7 +258,7 @@ export function ImageGallery({
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => setDeletingImage(image)}
+                  onClick={() => handleDelete(image)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -372,32 +355,6 @@ export function ImageGallery({
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <AlertDialog open={!!deletingImage} onOpenChange={() => setDeletingImage(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Image</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this image? This action cannot be undone.
-              {deletingImage?.isPrimary && (
-                <span className="block mt-2 font-medium text-amber-600">
-                  This is the primary image. Another image will become the new primary.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

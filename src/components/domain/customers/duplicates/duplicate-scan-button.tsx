@@ -9,7 +9,7 @@
  * @see src/hooks/customers/use-duplicate-scan.ts
  * @see src/server/functions/customers/customer-duplicate-scan.ts
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, startTransition } from 'react'
 import { Search, Users, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,7 +20,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/progress'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
@@ -69,7 +68,6 @@ export function DuplicateScanButton({
   className,
 }: DuplicateScanButtonProps) {
   const [status, setStatus] = useState<ScanStatus>('idle')
-  const [progress, setProgress] = useState(0)
   const [threshold, setThreshold] = useState(0.4)
   const [includeArchived, setIncludeArchived] = useState(false)
   const [foundCount, setFoundCount] = useState(0)
@@ -85,51 +83,35 @@ export function DuplicateScanButton({
     enabled: scanEnabled,
   })
 
-  // Simulate progress during scanning
+  // Update status based on scan state (no fake progress)
   useEffect(() => {
-    if (!isScanning) {
-      setProgress(0)
-      return
-    }
-
-    setStatus('scanning')
-    let currentProgress = 0
-    const interval = setInterval(() => {
-      currentProgress += Math.random() * 15
-      if (currentProgress >= 95) {
-        currentProgress = 95 // Hold at 95% until real data arrives
-      }
-      setProgress(Math.min(currentProgress, 95))
-    }, 300)
-
-    return () => clearInterval(interval)
-  }, [isScanning])
-
-  // Handle scan completion
-  useEffect(() => {
-    if (scanResult && !isScanning && status === 'scanning') {
-      setProgress(100)
+    if (isScanning) {
+      startTransition(() => setStatus('scanning'))
+    } else if (scanResult && !isScanning) {
       const count = scanResult.pairs?.length ?? 0
-      setFoundCount(count)
-      setStatus('complete')
-      setScanEnabled(false)
+      startTransition(() => {
+        setFoundCount(count)
+        setStatus('complete')
+        setScanEnabled(false)
+      })
       onScanComplete?.(count)
     }
-  }, [scanResult, isScanning, status, onScanComplete])
+  }, [scanResult, isScanning, onScanComplete])
 
   // Handle scan error
   useEffect(() => {
     if (scanError) {
-      setError(scanError instanceof Error ? scanError.message : 'Scan failed')
-      setStatus('error')
-      setScanEnabled(false)
+      startTransition(() => {
+        setError(scanError instanceof Error ? scanError.message : 'Scan failed')
+        setStatus('error')
+        setScanEnabled(false)
+      })
     }
   }, [scanError])
 
   // Start the scan
   const handleStartScan = async () => {
     setStatus('scanning')
-    setProgress(0)
     setError(null)
     setFoundCount(0)
     setScanEnabled(true)
@@ -137,9 +119,8 @@ export function DuplicateScanButton({
 
   // Reset and close
   const handleClose = () => {
-    if (status !== 'scanning') {
+    if (!isScanning) {
       setStatus('idle')
-      setProgress(0)
       setScanEnabled(false)
       setDialogOpen(false)
     }
@@ -183,7 +164,7 @@ export function DuplicateScanButton({
             {status === 'idle' || status === 'configuring'
               ? 'Scan your customer database for potential duplicates'
               : status === 'scanning'
-                ? 'Scanning for duplicate customers...'
+                ? 'Scanning for duplicate customers…'
                 : status === 'complete'
                   ? `Scan complete - ${foundCount} potential duplicates found`
                   : 'An error occurred during the scan'}
@@ -238,15 +219,14 @@ export function DuplicateScanButton({
             </>
           )}
 
-          {/* Scanning progress */}
+          {/* Scanning state - no fake progress */}
           {status === 'scanning' && (
             <div className="space-y-4">
               <div className="flex items-center justify-center">
                 <Loader2 className="h-12 w-12 text-primary animate-spin" />
               </div>
-              <Progress value={progress} className="w-full" />
               <p className="text-center text-sm text-muted-foreground">
-                Analyzing customer records for similarities...
+                Analyzing customer records for similarities…
               </p>
             </div>
           )}

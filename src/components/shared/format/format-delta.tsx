@@ -50,7 +50,7 @@ export interface FormatDeltaProps {
    */
   locale?: string;
 
-  /** For "amount" type: whether value is in cents */
+  /** For "amount" type: whether value is in cents (default: false) */
   cents?: boolean;
 
   /** Decimal places for percentage (default: 1) */
@@ -101,7 +101,7 @@ export const FormatDelta = memo(function FormatDelta({
   type = "percent",
   currency: currencyProp,
   locale: localeProp,
-  cents = true,
+  cents = false,
   decimals = 1,
   indicator = "arrow",
   size = "base",

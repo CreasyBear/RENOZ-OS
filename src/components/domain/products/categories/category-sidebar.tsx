@@ -13,17 +13,9 @@ import { ChevronRight, ChevronDown, FolderOpen, Folder } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Category with children from getCategoryTree
-// Note: Additional server properties (organizationId, createdAt, etc.) are ignored by this component
-interface CategoryNode {
-  id: string;
-  name: string;
-  description: string | null;
-  parentId: string | null;
-  sortOrder: number;
-  isActive: boolean;
-  children: CategoryNode[];
-}
+import type { CategoryNode } from "@/lib/schemas/products";
+
+// CategoryNode from schemas - accepts CategoryWithChildren (description can be undefined)
 
 interface CategorySidebarProps {
   categories: CategoryNode[];

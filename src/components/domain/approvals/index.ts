@@ -4,8 +4,15 @@
  * Barrel export for approval-related UI components.
  */
 
-// Existing components
-export { ApprovalDashboard } from './approval-dashboard';
+// Main dashboard components
+export { ApprovalDashboard, type ApprovalDashboardProps } from './approval-dashboard';
+// Re-export types from schemas (single source of truth)
+export type { ApprovalItem, ApprovalFilters } from '@/lib/schemas/approvals';
+export { ApprovalStatsCards, type ApprovalStatsCardsProps, type ApprovalStats } from './approval-stats-cards';
+export { ApprovalTable, type ApprovalTableProps } from './approval-table';
+export { ApprovalBulkActions, type ApprovalBulkActionsProps } from './approval-bulk-actions';
+
+// Dialog components
 export { ApprovalDecisionDialog } from './approval-decision-dialog';
 export { BulkApprovalDialog } from './bulk-approval-dialog';
 

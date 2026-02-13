@@ -1,17 +1,18 @@
 /**
  * Reports Index Route
  *
- * Landing page for the Reports domain. Provides navigation to all reports:
- * - Customer Reports
- * - Warranty Reports
- * - Pipeline Forecast
- * - Job Costing
- * - Procurement Reports
- * - Expiring Warranties
+ * DOMAIN-LANDING compliant: Favorites + Scheduled reports list.
+ * Primary CTA: Schedule Report. More dropdown: report links.
+ *
+ * @see docs/design-system/DOMAIN-LANDING-STANDARDS.md
+ * @see reports_domain_remediation plan Phase 3
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
-import { ReportsIndexContent } from '@/components/domain/reports/reports-index-page'
+import {
+  ReportsLandingContent,
+  ReportsLandingHeaderActions,
+} from '@/components/domain/reports/reports-landing-content'
 
 export const Route = createFileRoute('/_authenticated/reports/')({
   component: ReportsIndexRoute,
@@ -26,9 +27,10 @@ function ReportsIndexRoute() {
       <PageLayout.Header
         title="Reports"
         description="Analytics and insights across all domains"
+        actions={<ReportsLandingHeaderActions />}
       />
       <PageLayout.Content>
-        <ReportsIndexContent />
+        <ReportsLandingContent />
       </PageLayout.Content>
     </PageLayout>
   )

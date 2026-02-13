@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -17,24 +17,22 @@ import { Shield } from "lucide-react";
 import { DataTable, DataTablePagination } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
-import {
-  createWarrantyColumns,
-  type WarrantyTableItem,
-  type CreateWarrantyColumnsOptions,
-} from "./warranty-columns";
+import { createWarrantyColumns } from "./warranty-columns";
+import type { CreateWarrantyColumnsOptions } from '@/lib/schemas/warranty';
+import type { WarrantyListItem } from '@/lib/schemas/warranty/warranties';
 
-// Re-export the type for external use
-export type { WarrantyTableItem as WarrantyListItem } from "./warranty-columns";
+// Re-export schema type for external use (per SCHEMA-TRACE.md)
+export type { WarrantyListItem } from '@/lib/schemas/warranty/warranties';
 
 interface WarrantyListTableProps {
-  warranties: WarrantyTableItem[];
+  warranties: WarrantyListItem[];
   total: number;
   page: number;
   pageSize: number;
   isLoading?: boolean;
   error?: Error | null;
   onRetry?: () => void;
-  onRowClick?: (warranty: WarrantyTableItem) => void;
+  onRowClick?: (warranty: WarrantyListItem) => void;
   onPageChange: (page: number) => void;
   className?: string;
   // Selection props
@@ -70,7 +68,7 @@ export function WarrantyListTable({
   onTransferWarranty,
 }: WarrantyListTableProps) {
   // Selection state derived from props
-  const isSelected = (id: string) => selectedIds.has(id);
+  const isSelected = useCallback((id: string) => selectedIds.has(id), [selectedIds]);
   const isAllSelected = warranties.length > 0 && warranties.every((w) => selectedIds.has(w.id));
   const isPartiallySelected =
     warranties.some((w) => selectedIds.has(w.id)) && !isAllSelected;
@@ -84,7 +82,7 @@ export function WarrantyListTable({
       isPartiallySelected,
       onSelectAll,
       isSelected,
-      onViewWarranty: (id) => {
+      onViewWarranty: (id: string) => {
         const warranty = warranties.find((w) => w.id === id);
         if (warranty && onRowClick) {
           onRowClick(warranty);
@@ -115,6 +113,7 @@ export function WarrantyListTable({
   );
 
   // Create table instance for pagination component
+   
   const table = useReactTable({
     data: warranties,
     columns,

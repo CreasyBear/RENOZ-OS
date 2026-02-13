@@ -29,7 +29,6 @@ export function useActiveProjects(limit = 5) {
   return useQuery({
     queryKey: queryKeys.jobs.activeProjects(limit),
     queryFn: async () => {
-      // Fetch in_progress projects
       const result = await getProjects({
         data: {
           status: 'in_progress',
@@ -37,10 +36,9 @@ export function useActiveProjects(limit = 5) {
           sortBy: 'createdAt',
           sortOrder: 'desc',
         },
-      }) as { projects: ProjectItem[] }
+      }) as unknown as { items: ProjectItem[]; pagination: unknown }
 
-      // Transform to simplified format for sidebar
-      const projects: ActiveProject[] = (result.projects || []).map((p) => ({
+      const projects: ActiveProject[] = (result?.items || []).map((p) => ({
         id: p.id,
         title: p.title,
         projectNumber: p.projectNumber,

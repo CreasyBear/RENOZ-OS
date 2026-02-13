@@ -8,18 +8,11 @@
  * @see src/components/domain/orders/containers/order-detail-container.tsx
  */
 
-import { createFileRoute } from '@tanstack/react-router';
-import { useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
-import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { useCallback } from 'react';
+import { RouteErrorFallback, PageLayout, DetailPageBackButton } from '@/components/layout';
 import { AdminDetailSkeleton } from '@/components/skeletons/admin';
-import { Button } from '@/components/ui/button';
-import { toast } from '@/lib/toast';
-import { ReceiptCreationDialog } from '@/components/domain/receipts';
 import { PODetailContainer } from '@/components/domain/purchase-orders';
-import { usePurchaseOrder } from '@/hooks/suppliers';
-import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -27,9 +20,7 @@ import { queryKeys } from '@/lib/query-keys';
 
 export const Route = createFileRoute('/_authenticated/purchase-orders/$poId')({
   component: PurchaseOrderDetailPage,
-  errorComponent: ({ error }) => (
-    <RouteErrorFallback error={error} parentRoute="/purchase-orders" />
-  ),
+  errorComponent: PurchaseOrderDetailError,
   pendingComponent: () => <AdminDetailSkeleton />,
 });
 
@@ -40,11 +31,6 @@ export const Route = createFileRoute('/_authenticated/purchase-orders/$poId')({
 function PurchaseOrderDetailPage() {
   const navigate = Route.useNavigate();
   const { poId } = Route.useParams();
-  const queryClient = useQueryClient();
-  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
-
-  // Fetch purchase order for receipt dialog (container handles its own fetching)
-  const { data: po } = usePurchaseOrder(poId);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -52,71 +38,35 @@ function PurchaseOrderDetailPage() {
   }, [navigate]);
 
   const handleEdit = useCallback(() => {
-    // Navigate to edit page (if it exists)
     navigate({ to: '/purchase-orders/create', search: { editId: poId } });
   }, [navigate, poId]);
 
-  const handleReceiveGoods = useCallback(() => {
-    setShowReceiptDialog(true);
-  }, []);
-
-  const handleReceiptSuccess = useCallback(() => {
-    toast.success('Goods receipt recorded');
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.suppliers.purchaseOrderDetail(poId),
-    });
-    setShowReceiptDialog(false);
-  }, [queryClient, poId]);
-
   return (
     <PageLayout variant="full-width">
-      <PODetailContainer
-        poId={poId}
-        onBack={handleBack}
-        onEdit={handleEdit}
-        onReceiveGoods={handleReceiveGoods}
-      >
-        {({ headerTitle, headerActions, content }) => (
+      <PODetailContainer poId={poId} onBack={handleBack} onEdit={handleEdit}>
+        {({ headerActions, content }) => (
           <>
             <PageLayout.Header
-              title={
-                <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="icon" onClick={handleBack}>
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  {headerTitle}
-                </div>
-              }
+              title={null}
+              leading={<DetailPageBackButton to="/purchase-orders" aria-label="Back to purchase orders" />}
               actions={headerActions}
             />
-            <PageLayout.Content noPadding>{content}</PageLayout.Content>
+            <PageLayout.Content>{content}</PageLayout.Content>
           </>
         )}
       </PODetailContainer>
-
-      {/* Receipt Creation Dialog */}
-      {po && (
-        <ReceiptCreationDialog
-          open={showReceiptDialog}
-          onOpenChange={setShowReceiptDialog}
-          purchaseOrderId={po.id}
-          poNumber={po.poNumber}
-          supplierName={po.supplierName || null}
-          items={(po.items || []).map((item) => ({
-            id: item.id,
-            productName: item.productName || 'Unknown Product',
-            productSku: item.productSku || undefined,
-            unit: item.unitOfMeasure || undefined,
-            quantityOrdered: Number(item.quantity) || 0,
-            quantityAlreadyReceived: Number(item.quantityReceived) || 0,
-            quantityPending: Math.max(
-              0,
-              (Number(item.quantity) || 0) - (Number(item.quantityReceived) || 0)
-            ),
-          }))}
-          onSuccess={handleReceiptSuccess}
-        />
-      )}
     </PageLayout>
+  );
+}
+
+function PurchaseOrderDetailError({ error }: { error: Error }) {
+  const router = useRouter();
+
+  return (
+    <RouteErrorFallback
+      error={error}
+      parentRoute="/purchase-orders"
+      onRetry={() => router.invalidate()}
+    />
   );
 }

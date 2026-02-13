@@ -15,13 +15,13 @@ import {
   timestamp,
   jsonb,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
   softDeleteColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "../users";
@@ -114,49 +114,29 @@ export const issues = pgTable(
     ...auditColumns,
     ...softDeleteColumn,
   },
-  (table) => [
+  (table) => ({
     // Lookup by customer
-    index("idx_issues_customer").on(table.customerId),
+    customerIdx: index("idx_issues_customer").on(table.customerId),
     // Lookup by assignee
-    index("idx_issues_assignee").on(table.assignedToUserId),
+    assigneeIdx: index("idx_issues_assignee").on(table.assignedToUserId),
     // Filter by status
-    index("idx_issues_status").on(table.organizationId, table.status),
+    statusIdx: index("idx_issues_status").on(table.organizationId, table.status),
     // Filter by priority
-    index("idx_issues_priority").on(table.organizationId, table.priority),
+    priorityIdx: index("idx_issues_priority").on(table.organizationId, table.priority),
     // SLA tracking lookup
-    index("idx_issues_sla_tracking").on(table.slaTrackingId),
+    slaTrackingIdx: index("idx_issues_sla_tracking").on(table.slaTrackingId),
     // Escalated issues
-    index("idx_issues_escalated").on(table.organizationId, table.escalatedAt),
+    escalatedIdx: index("idx_issues_escalated").on(table.organizationId, table.escalatedAt),
     // Org + createdAt for listing
-    index("idx_issues_org_created").on(
+    orgCreatedIdx: index("idx_issues_org_created").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("issues_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("issues_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("issues_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("issues_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("issues"),
+  })
 );
 
 // ============================================================================

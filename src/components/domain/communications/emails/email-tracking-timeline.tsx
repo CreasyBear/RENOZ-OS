@@ -8,11 +8,12 @@
  *
  * @see DOM-COMMS-001c
  */
+import { useMemo } from 'react'
 import { Mail, Eye, MousePointerClick, Send, Clock, Monitor, Smartphone, Tablet } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import type { LinkClicks } from 'drizzle/schema'
+import type { LinkClicks } from '@/lib/schemas/communications'
 
 // ============================================================================
 // TYPES
@@ -198,16 +199,21 @@ export function EmailTrackingTimeline({
   isLoading = false,
   className,
 }: EmailTrackingTimelineProps) {
-  const events = buildTimelineEvents({
-    emailId,
-    sentAt,
-    deliveredAt,
-    openedAt,
-    clickedAt,
-    bouncedAt,
-    bounceReason,
-    linkClicks,
-  })
+  // Memoize sorted events to prevent unnecessary re-sorting on re-renders
+  const events = useMemo(
+    () =>
+      buildTimelineEvents({
+        emailId,
+        sentAt,
+        deliveredAt,
+        openedAt,
+        clickedAt,
+        bouncedAt,
+        bounceReason,
+        linkClicks,
+      }),
+    [emailId, sentAt, deliveredAt, openedAt, clickedAt, bouncedAt, bounceReason, linkClicks]
+  )
 
   if (isLoading) {
     return (

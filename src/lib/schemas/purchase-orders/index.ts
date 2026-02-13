@@ -28,25 +28,30 @@ export type PurchaseOrderStatus = z.infer<typeof purchaseOrderStatusEnum>;
 // ============================================================================
 // FILTER STATE
 // ============================================================================
+// Canonical shape aligns with FILTER-STANDARDS and DomainFilterBar (dateRange, totalRange).
+// buildPOQuery maps to server input: dateRange -> startDate/endDate, totalRange -> valueMin/valueMax.
 
-export interface PurchaseOrderFiltersState {
+/**
+ * Filter state for purchase order list.
+ * Index signature satisfies useTransformedFilterUrlState (Record<string, unknown>).
+ */
+export interface PurchaseOrderFiltersState extends Record<string, unknown> {
   search: string;
   status: PurchaseOrderStatus[];
   supplierId: string | null;
-  dateFrom: Date | null;
-  dateTo: Date | null;
-  valueMin: number | null;
-  valueMax: number | null;
+  dateRange: { from: Date | null; to: Date | null } | null;
+  totalRange: { min: number | null; max: number | null } | null;
+  /** Overdue: requiredDate < today, status in approved/ordered/partial_received */
+  overdue?: boolean;
 }
 
 export const defaultPurchaseOrderFilters: PurchaseOrderFiltersState = {
   search: '',
   status: [],
   supplierId: null,
-  dateFrom: null,
-  dateTo: null,
-  valueMin: null,
-  valueMax: null,
+  dateRange: null,
+  totalRange: null,
+  overdue: false,
 };
 
 // ============================================================================
@@ -61,13 +66,34 @@ export const listPurchaseOrdersSchema = z.object({
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   search: z.string().optional(),
-  status: purchaseOrderStatusEnum.optional(),
+  status: z.array(purchaseOrderStatusEnum).optional(),
   supplierId: z.string().uuid().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  valueMin: z.number().optional(),
+  valueMax: z.number().optional(),
+  /** Filter overdue: requiredDate < today, status in approved/ordered/partial_received */
+  requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export type ListPurchaseOrdersInput = z.infer<typeof listPurchaseOrdersSchema>;
+
+/** Valid sort fields for purchase order list */
+export type PurchaseOrderSortField = ListPurchaseOrdersInput['sortBy'];
+
+/** Type guard for sort field validation (avoids `as PurchaseOrderSortField` assertions) */
+export const PO_SORT_FIELDS = [
+  'poNumber',
+  'orderDate',
+  'requiredDate',
+  'totalAmount',
+  'status',
+  'createdAt',
+] as const satisfies readonly PurchaseOrderSortField[];
+
+export function isPurchaseOrderSortField(f: string): f is PurchaseOrderSortField {
+  return (PO_SORT_FIELDS as readonly string[]).includes(f);
+}
 
 // ============================================================================
 // TABLE DATA TYPES
@@ -146,3 +172,28 @@ export interface PurchaseOrderStatusCounts {
   closed: number;
   cancelled: number;
 }
+
+// ============================================================================
+// DETAIL TYPES (from purchase-order-detail.ts)
+// ============================================================================
+
+export type {
+  PurchaseOrderItem,
+  PurchaseOrderWithDetails,
+  PODetailViewProps,
+  PODetailHeaderConfig,
+  PODetailHeaderAction,
+  POAddress,
+  POAlert,
+} from './purchase-order-detail';
+
+export {
+  poCostTypeSchema,
+  poAllocationMethodSchema,
+  type POCostType,
+  type POAllocationMethod,
+  type CostFormData,
+  type AllocationItem,
+  type CostToAllocate,
+  type POCostEntry,
+} from './po-costs';

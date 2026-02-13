@@ -67,7 +67,13 @@ export function useJobTemplates(options?: ListJobTemplatesInput) {
 
   return useQuery({
     queryKey: queryKeys.jobTemplates.templates(),
-    queryFn: () => listFn({ data: options || {} }),
+    queryFn: async () => {
+      const result = await listFn({
+        data: options || {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -80,7 +86,13 @@ export function useJobTemplate(templateId: string | undefined) {
 
   return useQuery({
     queryKey: queryKeys.jobTemplates.template(templateId || ''),
-    queryFn: () => getFn({ data: { templateId: templateId! } }),
+    queryFn: async () => {
+      const result = await getFn({
+        data: { templateId: templateId! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!templateId,
   });
 }
@@ -195,7 +207,11 @@ export function useChecklistTemplates(
 
   return useQuery({
     queryKey: queryKeys.checklists.templateList(input.includeInactive),
-    queryFn: () => listFn({ data: input }),
+    queryFn: async () => {
+      const result = await listFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
   });
 }
 
@@ -207,7 +223,11 @@ export function useChecklistTemplate(input: GetChecklistTemplateInput) {
 
   return useQuery({
     queryKey: queryKeys.checklists.templateDetail(input.templateId),
-    queryFn: () => getFn({ data: input }),
+    queryFn: async () => {
+      const result = await getFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.templateId,
   });
 }
@@ -285,7 +305,11 @@ export function useJobChecklist(input: GetJobChecklistInput) {
 
   return useQuery({
     queryKey: queryKeys.checklists.jobChecklist(input.jobId),
-    queryFn: () => getFn({ data: input }),
+    queryFn: async () => {
+      const result = await getFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.jobId,
   });
 }
@@ -298,7 +322,11 @@ export function useChecklistItem(input: GetChecklistItemInput) {
 
   return useQuery({
     queryKey: queryKeys.checklists.item(input.itemId),
-    queryFn: () => getFn({ data: input }),
+    queryFn: async () => {
+      const result = await getFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.itemId,
   });
 }

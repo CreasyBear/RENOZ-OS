@@ -15,9 +15,8 @@
  * ```
  */
 
-import { redirect } from "@tanstack/react-router";
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Role } from "./permissions";
+import { redirect } from '@tanstack/react-router'
+import type { Role } from './permissions'
 
 // ============================================================================
 // TYPES
@@ -25,11 +24,22 @@ import type { Role } from "./permissions";
 
 interface RouteGuardResult {
   user: {
-    id: string;
-    authId: string;
-    email: string;
-    role: Role;
-  };
+    id: string
+    authId: string
+    email: string
+    role: Role
+  }
+}
+
+type RouteGuardContext = {
+  user?: {
+    id: string
+    email?: string | null
+  }
+  appUser?: {
+    id: string
+    role: string
+  }
 }
 
 // ============================================================================
@@ -45,53 +55,29 @@ interface RouteGuardResult {
  */
 export async function requireRoles(
   allowedRoles: Role[],
-  redirectTo = "/dashboard"
+  redirectTo = '/dashboard',
+  opts?: { context?: RouteGuardContext }
 ): Promise<RouteGuardResult> {
-  let supabase: SupabaseClient;
-  if (typeof window === 'undefined') {
-    const { getRequest } = await import('@tanstack/react-start/server');
-    const { createServerSupabase } = await import('~/lib/supabase/server');
-    supabase = createServerSupabase(getRequest());
-  } else {
-    const { supabase: browserSupabase } = await import('~/lib/supabase/client');
-    supabase = browserSupabase;
-  }
+  const authUser = opts?.context?.user
+  const appUser = opts?.context?.appUser
 
-  // Get current session
-  const {
-    data: { user: authUser },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (!authUser || authError) {
-    throw redirect({ to: "/login", search: { redirect: undefined } });
-  }
-
-  // Fetch user role from users table
-  const { data: appUser, error } = await supabase
-    .from("users")
-    .select("id, auth_id, email, role")
-    .eq("auth_id", authUser.id)
-    .single();
-
-  if (error || !appUser) {
-    console.error("Failed to fetch user for route guard:", error);
-    throw redirect({ to: "/login", search: { redirect: undefined } });
+  if (!authUser || !appUser) {
+    throw redirect({ to: '/login', search: { redirect: undefined } })
   }
 
   // Check if user role is in allowed list
   if (!allowedRoles.includes(appUser.role as Role)) {
-    throw redirect({ to: redirectTo });
+    throw redirect({ to: redirectTo })
   }
 
   return {
     user: {
       id: appUser.id,
-      authId: appUser.auth_id,
-      email: appUser.email,
+      authId: authUser.id,
+      email: authUser.email ?? '',
       role: appUser.role as Role,
     },
-  };
+  }
 }
 
 // ============================================================================
@@ -102,18 +88,19 @@ export async function requireRoles(
  * Require admin or owner role.
  * Use for admin-only routes like analytics, settings, user management.
  */
-export const requireAdmin = () => requireRoles(["owner", "admin"]);
+export const requireAdmin = (opts: { context?: RouteGuardContext }) =>
+  requireRoles(['owner', 'admin'], '/dashboard', opts)
 
 /**
  * Require manager or higher role.
  * Use for routes that need elevated permissions but not full admin.
  */
-export const requireManager = () =>
-  requireRoles(["owner", "admin", "manager"]);
+export const requireManager = (opts: { context?: RouteGuardContext }) =>
+  requireRoles(['owner', 'admin', 'manager'], '/dashboard', opts)
 
 /**
  * Require any staff role (not viewer).
  * Use for routes that should exclude read-only users.
  */
-export const requireStaff = () =>
-  requireRoles(["owner", "admin", "manager", "sales", "operations", "support"]);
+export const requireStaff = (opts: { context?: RouteGuardContext }) =>
+  requireRoles(['owner', 'admin', 'manager', 'sales', 'operations', 'support'], '/dashboard', opts)

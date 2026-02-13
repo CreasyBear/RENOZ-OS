@@ -5,7 +5,7 @@
  * Provides API endpoints for triggering and monitoring calendar syncs.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { z } from 'zod';
 import { CalendarSyncEngine, type SyncResult } from '@/lib/oauth/calendar-sync';
 import { and, eq, sql, desc } from 'drizzle-orm';
@@ -68,7 +68,7 @@ export type SyncCalendarResponse = SyncCalendarResponseSuccess | SyncCalendarRes
  * Can perform full or incremental sync based on configuration.
  */
 export async function syncCalendar(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: SyncCalendarRequest
 ): Promise<SyncCalendarResponse> {
   try {
@@ -95,7 +95,11 @@ export async function syncCalendar(
     const syncEngine = new CalendarSyncEngine(db);
 
     // Parse dates if provided
-    const options: any = {
+    const options: {
+      fullSync?: boolean;
+      startDate?: Date;
+      endDate?: Date;
+    } = {
       fullSync: request.fullSync,
     };
 
@@ -165,7 +169,7 @@ export type BulkCalendarSyncResponse =
  * Useful for background jobs and maintenance operations.
  */
 export async function bulkCalendarSync(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: BulkCalendarSyncRequest
 ): Promise<BulkCalendarSyncResponse> {
   try {
@@ -331,7 +335,7 @@ export type GetCalendarSyncStatusResponse =
  * Get the current sync status for a calendar connection.
  */
 export async function getCalendarSyncStatus(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: GetCalendarSyncStatusRequest
 ): Promise<GetCalendarSyncStatusResponse> {
   try {
@@ -374,12 +378,13 @@ export async function getCalendarSyncStatus(
       }
 
       // Aggregate metrics
-      const metadata = log.metadata as any;
-      eventsSynced += metadata?.eventsProcessed || log.recordCount || 0;
-      eventsCreated += metadata?.eventsCreated || 0;
-      eventsUpdated += metadata?.eventsUpdated || 0;
-      eventsDeleted += metadata?.eventsDeleted || 0;
-      conflictsResolved += metadata?.conflictsResolved || 0;
+      const metadata = log.metadata as Record<string, unknown> | null;
+      eventsSynced +=
+        (metadata?.eventsProcessed as number | undefined) ?? log.recordCount ?? 0;
+      eventsCreated += (metadata?.eventsCreated as number | undefined) ?? 0;
+      eventsUpdated += (metadata?.eventsUpdated as number | undefined) ?? 0;
+      eventsDeleted += (metadata?.eventsDeleted as number | undefined) ?? 0;
+      conflictsResolved += (metadata?.conflictsResolved as number | undefined) ?? 0;
 
       if (log.errorMessage) {
         errors.push(log.errorMessage);
@@ -426,7 +431,7 @@ export async function getCalendarSyncStatus(
  * This would typically be called by a cron job or scheduler.
  */
 export async function scheduleCalendarSyncJobs(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   options: {
     organizationId?: string;
     fullSync?: boolean;

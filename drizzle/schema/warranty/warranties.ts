@@ -19,10 +19,14 @@ import {
   index,
   uniqueIndex,
   pgEnum,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  auditColumns,
+  softDeleteColumn,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { customers } from "../customers/customers";
 import { products } from "../products/products";
@@ -112,70 +116,50 @@ export const warranties = pgTable(
 
     ...auditColumns,
     ...timestampColumns,
+    ...softDeleteColumn,
   },
-  (table) => [
-    // Unique warranty number per org
-    uniqueIndex("idx_warranties_number_org").on(
-      table.organizationId,
-      table.warrantyNumber
-    ),
+  (table) => ({
+    // Unique warranty number per org (scoped to active records)
+    warrantyNumberOrgUnique: uniqueIndex("idx_warranties_number_org")
+      .on(table.organizationId, table.warrantyNumber)
+      .where(sql`deleted_at IS NULL`),
 
-    // Unique serial per org (one warranty per serial)
-    uniqueIndex("idx_warranties_serial_org")
+    // Unique serial per org (one warranty per serial, scoped to active records)
+    serialOrgUnique: uniqueIndex("idx_warranties_serial_org")
       .on(table.organizationId, table.productSerial)
-      .where(sql`product_serial IS NOT NULL`),
+      .where(sql`product_serial IS NOT NULL AND deleted_at IS NULL`),
 
     // Quick lookup by org
-    index("idx_warranties_org").on(table.organizationId),
+    orgIdx: index("idx_warranties_org").on(table.organizationId),
 
     // Customer warranties
-    index("idx_warranties_customer").on(table.customerId),
+    customerIdx: index("idx_warranties_customer").on(table.customerId),
 
     // Product warranties
-    index("idx_warranties_product").on(table.productId),
+    productIdx: index("idx_warranties_product").on(table.productId),
 
     // Policy lookup
-    index("idx_warranties_policy").on(table.warrantyPolicyId),
+    policyIdx: index("idx_warranties_policy").on(table.warrantyPolicyId),
 
     // Order lookup
-    index("idx_warranties_order").on(table.orderId),
+    orderIdx: index("idx_warranties_order").on(table.orderId),
 
     // Status lookup for active warranties
-    index("idx_warranties_status").on(table.organizationId, table.status),
+    statusIdx: index("idx_warranties_status").on(table.organizationId, table.status),
 
     // Expiry date for scheduled alerts (excluding opted-out)
-    index("idx_warranties_expiry").on(
+    expiryIdx: index("idx_warranties_expiry").on(
       table.organizationId,
       table.expiryDate,
       table.expiryAlertOptOut
     ),
 
     // Assigned user for internal alerts
-    index("idx_warranties_assigned").on(table.assignedUserId),
+    assignedIdx: index("idx_warranties_assigned").on(table.assignedUserId),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("warranties_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranties_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranties_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranties_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("warranties"),
+  })
 );
 
 // ============================================================================

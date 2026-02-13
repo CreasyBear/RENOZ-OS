@@ -41,12 +41,21 @@ export function useCreateQuickLog() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.activities.byCustomer(variables.customerId),
         });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.unifiedActivities.entityAudit('customer', variables.customerId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.communications.customerCommunications(variables.customerId),
+        });
       }
 
       // Invalidate opportunity-specific activities if opportunityId provided
       if (variables.opportunityId) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.activities.byOpportunity(variables.opportunityId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.unifiedActivities.entityAudit('opportunity', variables.opportunityId),
         });
       }
     },

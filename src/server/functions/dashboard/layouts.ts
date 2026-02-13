@@ -274,39 +274,41 @@ export const createDashboardLayout = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
-    // If this is marked as default, unset other defaults
-    if (data.isDefault) {
-      await db
-        .update(dashboardLayouts)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(dashboardLayouts.organizationId, ctx.organizationId),
-            eq(dashboardLayouts.userId, ctx.user.id),
-            eq(dashboardLayouts.isDefault, true)
-          )
-        );
-    }
+    return db.transaction(async (tx) => {
+      // If this is marked as default, unset other defaults
+      if (data.isDefault) {
+        await tx
+          .update(dashboardLayouts)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(dashboardLayouts.organizationId, ctx.organizationId),
+              eq(dashboardLayouts.userId, ctx.user.id),
+              eq(dashboardLayouts.isDefault, true)
+            )
+          );
+      }
 
-    const [layout] = await db
-      .insert(dashboardLayouts)
-      .values({
-        organizationId: ctx.organizationId,
-        userId: ctx.user.id,
-        name: data.name,
-        isDefault: data.isDefault ?? false,
-        layout: data.layout,
-        filters: data.filters ?? {
-          dateRangeStart: null,
-          dateRangeEnd: null,
-          dateRangePreset: '30d',
-          comparisonEnabled: false,
-          comparisonType: null,
-        },
-      })
-      .returning();
+      const [layout] = await tx
+        .insert(dashboardLayouts)
+        .values({
+          organizationId: ctx.organizationId,
+          userId: ctx.user.id,
+          name: data.name,
+          isDefault: data.isDefault ?? false,
+          layout: data.layout,
+          filters: data.filters ?? {
+            dateRangeStart: null,
+            dateRangeEnd: null,
+            dateRangePreset: '30d',
+            comparisonEnabled: false,
+            comparisonType: null,
+          },
+        })
+        .returning();
 
-    return layout;
+      return layout!;
+    });
   });
 
 /**
@@ -319,47 +321,49 @@ export const updateDashboardLayout = createServerFn({ method: 'POST' })
 
     const { id, ...updates } = data;
 
-    // If setting as default, unset other defaults first
-    if (updates.isDefault) {
-      await db
+    return db.transaction(async (tx) => {
+      // If setting as default, unset other defaults first
+      if (updates.isDefault) {
+        await tx
+          .update(dashboardLayouts)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(dashboardLayouts.organizationId, ctx.organizationId),
+              eq(dashboardLayouts.userId, ctx.user.id),
+              eq(dashboardLayouts.isDefault, true)
+            )
+          );
+      }
+
+      // Build update object
+      const updateValues: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (updates.name !== undefined) updateValues.name = updates.name;
+      if (updates.isDefault !== undefined) updateValues.isDefault = updates.isDefault;
+      if (updates.layout !== undefined) updateValues.layout = updates.layout;
+      if (updates.filters !== undefined) updateValues.filters = updates.filters;
+
+      const [layout] = await tx
         .update(dashboardLayouts)
-        .set({ isDefault: false })
+        .set(updateValues)
         .where(
           and(
+            eq(dashboardLayouts.id, id),
             eq(dashboardLayouts.organizationId, ctx.organizationId),
-            eq(dashboardLayouts.userId, ctx.user.id),
-            eq(dashboardLayouts.isDefault, true)
+            eq(dashboardLayouts.userId, ctx.user.id)
           )
-        );
-    }
-
-    // Build update object
-    const updateValues: Record<string, unknown> = {
-      updatedAt: new Date(),
-    };
-
-    if (updates.name !== undefined) updateValues.name = updates.name;
-    if (updates.isDefault !== undefined) updateValues.isDefault = updates.isDefault;
-    if (updates.layout !== undefined) updateValues.layout = updates.layout;
-    if (updates.filters !== undefined) updateValues.filters = updates.filters;
-
-    const [layout] = await db
-      .update(dashboardLayouts)
-      .set(updateValues)
-      .where(
-        and(
-          eq(dashboardLayouts.id, id),
-          eq(dashboardLayouts.organizationId, ctx.organizationId),
-          eq(dashboardLayouts.userId, ctx.user.id)
         )
-      )
-      .returning();
+        .returning();
 
-    if (!layout) {
-      throw new NotFoundError('Layout not found', 'DashboardLayout');
-    }
+      if (!layout) {
+        throw new NotFoundError('Layout not found', 'DashboardLayout');
+      }
 
-    return layout;
+      return layout;
+    });
   });
 
 /**
@@ -452,36 +456,38 @@ export const setDefaultDashboardLayout = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
-    // Unset all existing defaults
-    await db
-      .update(dashboardLayouts)
-      .set({ isDefault: false })
-      .where(
-        and(
-          eq(dashboardLayouts.organizationId, ctx.organizationId),
-          eq(dashboardLayouts.userId, ctx.user.id),
-          eq(dashboardLayouts.isDefault, true)
+    return db.transaction(async (tx) => {
+      // Unset all existing defaults
+      await tx
+        .update(dashboardLayouts)
+        .set({ isDefault: false })
+        .where(
+          and(
+            eq(dashboardLayouts.organizationId, ctx.organizationId),
+            eq(dashboardLayouts.userId, ctx.user.id),
+            eq(dashboardLayouts.isDefault, true)
+          )
+        );
+
+      // Set the new default
+      const [layout] = await tx
+        .update(dashboardLayouts)
+        .set({ isDefault: true, updatedAt: new Date() })
+        .where(
+          and(
+            eq(dashboardLayouts.id, data.id),
+            eq(dashboardLayouts.organizationId, ctx.organizationId),
+            eq(dashboardLayouts.userId, ctx.user.id)
+          )
         )
-      );
+        .returning();
 
-    // Set the new default
-    const [layout] = await db
-      .update(dashboardLayouts)
-      .set({ isDefault: true, updatedAt: new Date() })
-      .where(
-        and(
-          eq(dashboardLayouts.id, data.id),
-          eq(dashboardLayouts.organizationId, ctx.organizationId),
-          eq(dashboardLayouts.userId, ctx.user.id)
-        )
-      )
-      .returning();
+      if (!layout) {
+        throw new NotFoundError('Layout not found', 'DashboardLayout');
+      }
 
-    if (!layout) {
-      throw new NotFoundError('Layout not found', 'DashboardLayout');
-    }
-
-    return layout;
+      return layout;
+    });
   });
 
 /**

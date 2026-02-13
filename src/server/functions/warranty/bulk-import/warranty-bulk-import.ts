@@ -9,12 +9,13 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-005a
  */
 
-import { eq, and, sql, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, or, inArray, like } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { warranties, warrantyPolicies, customers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { triggerWarrantyRegistrationNotification } from '../policies/warranty-policies';
+import { warrantyLogger } from '@/lib/logger';
 import { createServerFn } from '@tanstack/react-start';
 import { ValidationError } from '@/lib/server/errors';
 
@@ -249,7 +250,7 @@ async function generateWarrantyNumbers(
     .where(
       and(
         eq(warranties.organizationId, organizationId),
-        sql`${warranties.warrantyNumber} LIKE ${prefix + '%'}`
+        like(warranties.warrantyNumber, `${prefix}%`)
       )
     );
 
@@ -788,10 +789,9 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
           });
         } catch (error) {
           // Log but don't fail the import
-          console.error(
-            `[warranty-bulk-import] Failed to send notification for ${warranty.warrantyNumber}:`,
-            error
-          );
+          warrantyLogger.error('Failed to send post-import notification', error, {
+            warrantyNumber: warranty.warrantyNumber,
+          });
         }
       });
 

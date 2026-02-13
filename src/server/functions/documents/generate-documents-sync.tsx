@@ -10,17 +10,19 @@
  */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { orders, orderLineItems, customers, addresses, organizations } from 'drizzle/schema';
+import { orders, orderLineItems, customers, addresses, generatedDocuments } from 'drizzle/schema';
+import { createActivityLogger } from '@/lib/activity-logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   renderPdfToBuffer,
   generateQRCode,
   QuotePdfDocument,
   InvoicePdfDocument,
+  ProFormaPdfDocument,
   PackingSlipPdfDocument,
   DeliveryNotePdfDocument,
   generateFilename,
@@ -28,8 +30,10 @@ import {
   calculateChecksum,
   type QuoteDocumentData,
   type InvoiceDocumentData,
-  type DocumentOrganization,
 } from '@/lib/documents';
+import type { ProFormaDocumentData } from '@/lib/documents/templates/financial/pro-forma';
+import { buildDocumentViewUrl } from '@/lib/documents/urls';
+import { buildDocumentOrderFromDb } from '@/lib/documents/builders';
 import type {
   PackingSlipDocumentData,
   PackingSlipLineItem,
@@ -37,6 +41,8 @@ import type {
   DeliveryNoteLineItem,
 } from '@/lib/documents/templates/operational';
 import { NotFoundError } from '@/lib/server/errors';
+import { fetchOrganizationForDocument } from './organization-for-pdf';
+import { fetchShipmentSerialsByOrderLineItem } from './fetch-order-line-items-with-serials';
 
 // ============================================================================
 // CONSTANTS
@@ -51,7 +57,7 @@ const QUOTE_VALIDITY_DAYS = 30;
 
 const generateOrderDocumentSchema = z.object({
   orderId: z.string().uuid(),
-  documentType: z.enum(['quote', 'invoice', 'packing-slip', 'delivery-note']),
+  documentType: z.enum(['quote', 'invoice', 'pro-forma', 'packing-slip', 'delivery-note']),
   regenerate: z.boolean().optional().default(false),
   // Optional metadata for specific document types
   dueDate: z.string().datetime().optional(),
@@ -97,7 +103,7 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       and(
         eq(orders.id, orderId),
         eq(orders.organizationId, organizationId),
-        sql`${orders.deletedAt} IS NULL`
+        isNull(orders.deletedAt)
       )
     )
     .limit(1);
@@ -120,6 +126,7 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       taxAmount: orderLineItems.taxAmount,
       lineTotal: orderLineItems.lineTotal,
       notes: orderLineItems.notes,
+      allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
     })
     .from(orderLineItems)
     .where(eq(orderLineItems.orderId, orderId))
@@ -160,7 +167,7 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
       and(
         eq(customers.id, customerId),
         eq(customers.organizationId, organizationId),
-        sql`${customers.deletedAt} IS NULL`
+        isNull(customers.deletedAt)
       )
     )
     .limit(1);
@@ -230,62 +237,8 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
 }
 
 /**
- * Fetch organization with branding
- */
-async function fetchOrganizationData(organizationId: string): Promise<DocumentOrganization> {
-  const [org] = await db
-    .select({
-      id: organizations.id,
-      name: organizations.name,
-      email: organizations.email,
-      phone: organizations.phone,
-      website: organizations.website,
-      abn: organizations.abn,
-      address: organizations.address,
-      currency: organizations.currency,
-      locale: organizations.locale,
-      branding: organizations.branding,
-    })
-    .from(organizations)
-    .where(eq(organizations.id, organizationId))
-    .limit(1);
-
-  if (!org) {
-    throw new NotFoundError('Organization not found', 'organization');
-  }
-
-  const address = org.address as { street1?: string; street2?: string; city?: string; state?: string; postcode?: string; country?: string } | null;
-  const branding = org.branding as { logoUrl?: string; primaryColor?: string; secondaryColor?: string } | null;
-
-  return {
-    id: org.id,
-    name: org.name,
-    email: org.email,
-    phone: org.phone,
-    website: org.website || branding?.logoUrl,
-    taxId: org.abn,
-    currency: org.currency || 'AUD',
-    locale: org.locale || 'en-AU',
-    address: address
-      ? {
-          addressLine1: address.street1,
-          addressLine2: address.street2,
-          city: address.city,
-          state: address.state,
-          postalCode: address.postcode,
-          country: address.country,
-        }
-      : undefined,
-    branding: {
-      logoUrl: branding?.logoUrl,
-      primaryColor: branding?.primaryColor,
-      secondaryColor: branding?.secondaryColor,
-    },
-  };
-}
-
-/**
  * Upload PDF to storage and return signed URL
+ * Uses authenticated user's session with RLS instead of admin client
  */
 async function uploadPdf(
   buffer: Buffer,
@@ -296,8 +249,11 @@ async function uploadPdf(
   const filename = generateFilename(documentType, orderNumber);
   const storagePath = generateStoragePath(organizationId, documentType, filename);
 
+  // Use admin client for storage (service role bypasses RLS)
+  const supabase = createAdminClient();
+
   // Upload to Supabase Storage
-  const { error: uploadError } = await createAdminClient()
+  const { error: uploadError } = await supabase
     .storage.from(STORAGE_BUCKET)
     .upload(storagePath, buffer, {
       contentType: 'application/pdf',
@@ -309,7 +265,7 @@ async function uploadPdf(
   }
 
   // Generate signed URL (valid for 1 year)
-  const { data: signedUrlData, error: signedUrlError } = await createAdminClient()
+  const { data: signedUrlData, error: signedUrlError } = await supabase
     .storage.from(STORAGE_BUCKET)
     .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
 
@@ -340,7 +296,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
     // Fetch all required data
     const [orderData, orgData] = await Promise.all([
       fetchOrderData(orderId, ctx.organizationId),
-      fetchOrganizationData(ctx.organizationId),
+      fetchOrganizationForDocument(ctx.organizationId),
     ]);
 
     const customerData = await fetchCustomerData(orderData.customerId, ctx.organizationId);
@@ -376,7 +332,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
     }
 
     // Generate QR code
-    const documentUrl = `${process.env.APP_URL || 'https://app.renoz.com.au'}/orders/${orderId}`;
+    const documentUrl = buildDocumentViewUrl('order', orderId);
     const qrCodeDataUrl = await generateQRCode(documentUrl, {
       width: 240,
       margin: 0,
@@ -391,42 +347,9 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         ? new Date(orderData.dueDate)
         : new Date(orderDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const baseOrderData = {
-      id: orderData.id,
-      orderNumber: orderData.orderNumber,
-      orderDate,
+    const baseOrderData = buildDocumentOrderFromDb(orderData, customerData, {
       dueDate,
-      customer: {
-        id: customerData.id,
-        name: customerData.name,
-        email: customerData.email,
-        phone: customerData.phone,
-        address: customerData.address,
-      },
-      billingAddress: customerData.address,
-      lineItems: orderData.lineItems.map((item) => ({
-        id: item.id,
-        lineNumber: item.lineNumber,
-        sku: item.sku,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        discountAmount: item.discountAmount,
-        taxAmount: item.taxAmount,
-        total: item.lineTotal,
-        notes: item.notes,
-      })),
-      subtotal: orderData.subtotal,
-      discount: orderData.discountAmount,
-      discountPercent: orderData.discountPercent,
-      discountType: (orderData.discountPercent ? 'percentage' : 'fixed') as 'percentage' | 'fixed',
-      taxRate: orderData.subtotal > 0 ? (orderData.taxAmount / orderData.subtotal) * 100 : 10,
-      taxAmount: orderData.taxAmount,
-      total: orderData.total,
-      customerNotes: orderData.customerNotes,
-      internalNotes: orderData.internalNotes,
-    };
+    });
 
     // Generate PDF based on document type
     let buffer: Buffer;
@@ -448,7 +371,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <QuotePdfDocument organization={orgData} data={quoteData} qrCodeDataUrl={qrCodeDataUrl} />
+          <QuotePdfDocument organization={orgData} data={quoteData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
         );
         buffer = result.buffer;
         filename = generateFilename('quote', orderData.orderNumber);
@@ -470,26 +393,55 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <InvoicePdfDocument organization={orgData} data={invoiceData} qrCodeDataUrl={qrCodeDataUrl} />
+          <InvoicePdfDocument organization={orgData} data={invoiceData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
         );
         buffer = result.buffer;
         filename = generateFilename('invoice', orderData.orderNumber);
         break;
       }
 
+      case 'pro-forma': {
+        const validUntil = new Date(orderDate);
+        validUntil.setDate(validUntil.getDate() + QUOTE_VALIDITY_DAYS);
+
+        const proFormaData: ProFormaDocumentData = {
+          type: 'pro-forma',
+          documentNumber: `PF-${orderData.orderNumber}`,
+          issueDate: orderDate,
+          validUntil,
+          notes: orderData.customerNotes,
+          generatedAt: new Date(),
+          order: baseOrderData,
+        };
+
+        const result = await renderPdfToBuffer(
+          <ProFormaPdfDocument organization={orgData} data={proFormaData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
+        );
+        buffer = result.buffer;
+        filename = generateFilename('pro-forma', orderData.orderNumber);
+        break;
+      }
+
       case 'packing-slip': {
-        // Map line items to PackingSlipLineItem format
-        const packingSlipLineItems: PackingSlipLineItem[] = orderData.lineItems.map((item, index) => ({
-          id: item.id,
-          lineNumber: String(index + 1),
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          notes: item.notes,
-          location: null,
-          isFragile: false,
-          weight: undefined, // Weight not stored in line items schema
-        }));
+        const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+        const packingSlipLineItems: PackingSlipLineItem[] = orderData.lineItems.map((item, index) => {
+          const serialNumbers =
+            shipmentSerialMap.get(item.id) ??
+            (item.allocatedSerialNumbers as string[] | null) ??
+            undefined;
+          return {
+            id: item.id,
+            lineNumber: String(index + 1),
+            sku: item.sku,
+            description: item.description,
+            quantity: item.quantity,
+            notes: item.notes,
+            location: null,
+            isFragile: false,
+            weight: undefined,
+            serialNumbers: serialNumbers && serialNumbers.length > 0 ? serialNumbers : undefined,
+          };
+        });
 
         const packingSlipData: PackingSlipDocumentData = {
           documentNumber: `PS-${orderData.orderNumber}`,
@@ -531,18 +483,27 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       }
 
       case 'delivery-note': {
+        const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+
         // Map line items to DeliveryNoteLineItem format
-        const deliveryNoteLineItems: DeliveryNoteLineItem[] = orderData.lineItems.map((item, index) => ({
-          id: item.id,
-          lineNumber: String(index + 1),
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          notes: item.notes,
-          isFragile: false,
-          weight: undefined, // Weight not stored in line items schema
-          dimensions: null,
-        }));
+        const deliveryNoteLineItems: DeliveryNoteLineItem[] = orderData.lineItems.map((item, index) => {
+          // Use shipment serial numbers if available, otherwise fall back to allocated
+          const serialNumbers = shipmentSerialMap.get(item.id)
+            ?? (item.allocatedSerialNumbers as string[] | null)
+            ?? undefined;
+          return {
+            id: item.id,
+            lineNumber: String(index + 1),
+            sku: item.sku,
+            description: item.description,
+            quantity: item.quantity,
+            notes: item.notes,
+            isFragile: false,
+            weight: undefined, // Weight not stored in line items schema
+            dimensions: null,
+            serialNumbers: serialNumbers && serialNumbers.length > 0 ? serialNumbers : undefined,
+          };
+        });
 
         const deliveryNoteData: DeliveryNoteDocumentData = {
           documentNumber: `DN-${orderData.orderNumber}`,
@@ -587,18 +548,87 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
 
     // Upload to storage
     const { url, storagePath } = await uploadPdf(buffer, ctx.organizationId, documentType, orderData.orderNumber);
+    const checksum = await calculateChecksum(buffer);
+    const fileSize = buffer.length;
 
-    // Update order with PDF URL
+    // Upsert generated_documents: one row per (org, entity, docType)
+    // On regenerate: update metadata + increment regeneration count
+    const [upsertResult] = await db
+      .insert(generatedDocuments)
+      .values({
+        organizationId: ctx.organizationId,
+        documentType,
+        entityType: 'order',
+        entityId: orderId,
+        filename,
+        storageUrl: url,
+        fileSize,
+        generatedById: ctx.user.id,
+        regenerationCount: 0,
+      })
+      .onConflictDoUpdate({
+        target: [
+          generatedDocuments.organizationId,
+          generatedDocuments.entityType,
+          generatedDocuments.entityId,
+          generatedDocuments.documentType,
+        ],
+        set: {
+          filename,
+          storageUrl: url,
+          fileSize,
+          generatedById: ctx.user.id,
+          generatedAt: new Date(),
+          updatedAt: new Date(),
+          regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+        },
+      })
+      .returning({ regenerationCount: generatedDocuments.regenerationCount });
+
+    // Log activity for audit trail (async, non-blocking)
+    const activityLogger = createActivityLogger({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+    });
+    const isRegeneration = (upsertResult?.regenerationCount ?? 0) > 0;
+    activityLogger.logAsync({
+      entityType: 'order',
+      entityId: orderId,
+      action: 'exported',
+      entityName: orderData.orderNumber,
+      description: isRegeneration
+        ? `Regenerated ${documentType} PDF (version ${upsertResult?.regenerationCount ?? 1})`
+        : `Generated ${documentType} PDF`,
+      metadata: {
+        documentType,
+        filename,
+        fileSize,
+        isRegeneration,
+        regenerationCount: upsertResult?.regenerationCount ?? 0,
+      },
+    });
+
+    // Update order with PDF URL (includes orgId check for multi-tenant security)
     if (documentType === 'quote') {
       await db
         .update(orders)
         .set({ quotePdfUrl: url, updatedAt: new Date() })
-        .where(eq(orders.id, orderId));
+        .where(
+          and(
+            eq(orders.id, orderId),
+            eq(orders.organizationId, ctx.organizationId)
+          )
+        );
     } else if (documentType === 'invoice') {
       await db
         .update(orders)
         .set({ invoicePdfUrl: url, updatedAt: new Date() })
-        .where(eq(orders.id, orderId));
+        .where(
+          and(
+            eq(orders.id, orderId),
+            eq(orders.organizationId, ctx.organizationId)
+          )
+        );
     }
 
     return {
@@ -608,8 +638,8 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       url,
       filename,
       storagePath,
-      fileSize: buffer.length,
-      checksum: calculateChecksum(buffer),
+      fileSize,
+      checksum,
     };
   });
 
@@ -642,6 +672,17 @@ export const generateOrderInvoicePdf = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     return generateOrderDocument({
       data: { ...data, documentType: 'invoice' },
+    });
+  });
+
+/**
+ * Generate Pro-Forma Invoice PDF for order
+ */
+export const generateOrderProFormaPdf = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ orderId: z.string().uuid(), regenerate: z.boolean().optional() }))
+  .handler(async ({ data }) => {
+    return generateOrderDocument({
+      data: { ...data, documentType: 'pro-forma' },
     });
   });
 

@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import type {
   CreateTemplateInput,
   UpdateTemplateInput,
@@ -43,9 +44,15 @@ export function useTemplates(options: UseTemplatesOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.communications.templatesList({ type: category, limit: 100 }),
-    queryFn: () => getEmailTemplates({ data: { category, activeOnly } }),
+    queryFn: async () => {
+      const result = await getEmailTemplates({
+        data: { category, activeOnly } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes - templates don't change often
+    staleTime: QUERY_CONFIG.STALE_TIME_LONG,
   });
 }
 
@@ -59,7 +66,13 @@ export function useTemplate(options: UseTemplateOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.templateDetail(templateId),
-    queryFn: () => getEmailTemplate({ data: { id: templateId } }),
+    queryFn: async () => {
+      const result = await getEmailTemplate({
+        data: { id: templateId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!templateId,
     staleTime: 5 * 60 * 1000,
   });
@@ -75,7 +88,13 @@ export function useTemplateVersions(options: UseTemplateVersionsOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.templateVersions(templateId),
-    queryFn: () => getTemplateVersionHistory({ data: { templateId } }),
+    queryFn: async () => {
+      const result = await getTemplateVersionHistory({
+        data: { templateId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!templateId,
     staleTime: 5 * 60 * 1000,
   });

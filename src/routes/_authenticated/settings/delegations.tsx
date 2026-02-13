@@ -4,20 +4,19 @@
  * Allows users to set up out-of-office delegations and manage active delegations.
  * Shows both delegations created by the user and delegations assigned to them.
  *
- * @see src/server/functions/user-delegations.ts for server functions
+ * @see src/hooks/users/use-delegations.ts for data hooks
  */
-import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useServerFn } from '@tanstack/react-start';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsTabsSkeleton } from '@/components/skeletons/settings';
 import {
-  createDelegation,
-  listMyDelegations,
-  listDelegationsToMe,
-  cancelDelegation,
-} from '@/server/functions/users/user-delegations';
-import { listUsers } from '@/server/functions/users/users';
+  useMyDelegations,
+  useDelegationsToMe,
+  useCreateDelegation,
+  useCancelDelegation,
+  useUsers,
+} from '@/hooks/users';
 import { z } from 'zod';
 import { format, isBefore, isAfter, addDays } from 'date-fns';
 
@@ -62,7 +61,9 @@ import {
   ChevronsUpDown,
   X,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
+import { toast } from '@/hooks';
 
 // Types
 interface DelegationUser {
@@ -82,26 +83,8 @@ interface DelegationItem {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  delegator: DelegationUser;
-  delegate: DelegationUser;
-}
-
-interface DelegationsData {
-  items: DelegationItem[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalItems: number;
-    totalPages: number;
-  };
-}
-
-interface UserOption {
-  id: string;
-  email: string;
-  name: string | null;
-  role: string;
-  status: string;
+  delegator?: DelegationUser;
+  delegate?: DelegationUser;
 }
 
 // Search params
@@ -109,8 +92,7 @@ const delegationSearchSchema = z.object({
   tab: z.enum(['my-delegations', 'delegated-to-me']).default('my-delegations'),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = createFileRoute('/_authenticated/settings/delegations' as any)({
+export const Route = createFileRoute('/_authenticated/settings/delegations')({
   validateSearch: delegationSearchSchema,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/settings" />
@@ -123,36 +105,26 @@ export const Route = createFileRoute('/_authenticated/settings/delegations' as a
       </PageLayout.Content>
     </PageLayout>
   ),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  loaderDeps: ({ search }: any) => search,
-  loader: async () => {
-    const [myDelegations, delegationsToMe, usersData] = await Promise.all([
-      listMyDelegations({ data: { page: 1, pageSize: 50 } }),
-      listDelegationsToMe({ data: { page: 1, pageSize: 50 } }),
-      listUsers({ data: { page: 1, pageSize: 100, status: 'active' } }),
-    ]);
-    return { myDelegations, delegationsToMe, availableUsers: usersData.items };
-  },
   component: DelegationsPage,
 });
 
 function DelegationsPage() {
   const confirm = useConfirmation();
   const navigate = useNavigate();
-  const router = useRouter();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const search = Route.useSearch() as any;
-  const loaderData = Route.useLoaderData() as {
-    myDelegations: DelegationsData;
-    delegationsToMe: DelegationsData;
-    availableUsers: UserOption[];
-  };
-  const { myDelegations, delegationsToMe, availableUsers } = loaderData;
-  const tab = search.tab || 'my-delegations';
+  const search = Route.useSearch();
+  const tab = search.tab ?? 'my-delegations';
+
+  // Fetch data using hooks
+  const { data: myDelegationsData, isLoading: isLoadingMyDelegations } = useMyDelegations({ page: 1, pageSize: 50 });
+  const { data: delegationsToMeData, isLoading: isLoadingDelegationsToMe } = useDelegationsToMe({ page: 1, pageSize: 50 });
+  const { data: usersData, isLoading: isLoadingUsers } = useUsers({ page: 1, pageSize: 100, sortOrder: 'asc', status: 'active' });
+
+  // Mutations
+  const createDelegationMutation = useCreateDelegation();
+  const cancelDelegationMutation = useCancelDelegation();
 
   // State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Create form state
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -163,14 +135,15 @@ function DelegationsPage() {
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [endPickerOpen, setEndPickerOpen] = useState(false);
 
-  // Server functions
-  const createDelegationFn = useServerFn(createDelegation);
-  const cancelDelegationFn = useServerFn(cancelDelegation);
+  // Derived data
+  const myDelegations = myDelegationsData ?? { items: [], pagination: { page: 1, pageSize: 50, totalItems: 0, totalPages: 0 } };
+  const delegationsToMe = delegationsToMeData ?? { items: [], pagination: { page: 1, pageSize: 50, totalItems: 0, totalPages: 0 } };
+  const availableUsers = usersData?.items ?? [];
 
-  // Filter out self from available users
-  const filteredUsers = availableUsers;
+  const selectedUser = availableUsers.find((u) => u.id === selectedUserId);
 
-  const selectedUser = filteredUsers.find((u) => u.id === selectedUserId);
+  const isLoading = isLoadingMyDelegations || isLoadingDelegationsToMe || isLoadingUsers;
+  const isSubmitting = createDelegationMutation.isPending || cancelDelegationMutation.isPending;
 
   const handleTabChange = (newTab: string) => {
     navigate({
@@ -183,43 +156,34 @@ function DelegationsPage() {
   const handleCreateDelegation = async () => {
     if (!selectedUserId || !startDate || !endDate) return;
 
-    setIsSubmitting(true);
     try {
-      await createDelegationFn({
-        data: {
-          delegateId: selectedUserId,
-          startDate,
-          endDate,
-          reason: reason || undefined,
-        },
+      await createDelegationMutation.mutateAsync({
+        delegateId: selectedUserId,
+        startDate,
+        endDate,
+        reason: reason || undefined,
       });
       setIsCreateOpen(false);
       resetForm();
-      router.invalidate();
-    } catch (error) {
-      console.error('Failed to create delegation:', error);
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create delegation');
     }
   };
 
   const handleCancelDelegation = async (delegation: DelegationItem) => {
+    const delegateName = delegation.delegate?.name ?? delegation.delegate?.email ?? 'this user';
     const confirmed = await confirm.confirm({
       title: 'Cancel Delegation',
-      description: `Are you sure you want to cancel the delegation to ${delegation.delegate.name}? They will no longer be able to act on your behalf.`,
+      description: `Are you sure you want to cancel the delegation to ${delegateName}? They will no longer be able to act on your behalf.`,
       confirmLabel: 'Cancel Delegation',
       variant: 'destructive',
     });
 
     if (confirmed.confirmed) {
-      setIsSubmitting(true);
       try {
-        await cancelDelegationFn({ data: { id: delegation.id } });
-        router.invalidate();
-      } catch (error) {
-        console.error('Failed to cancel delegation:', error);
-      } finally {
-        setIsSubmitting(false);
+        await cancelDelegationMutation.mutateAsync(delegation.id);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to cancel delegation');
       }
     }
   };
@@ -234,8 +198,19 @@ function DelegationsPage() {
   // Get active delegations count
   const activeDelegations = myDelegations.items.filter((d) => {
     const now = new Date();
-    return d.isActive && isBefore(d.startDate, now) && isAfter(d.endDate, now);
+    return d.isActive && isBefore(new Date(d.startDate), now) && isAfter(new Date(d.endDate), now);
   });
+
+  if (isLoading) {
+    return (
+      <PageLayout variant="full-width">
+        <PageLayout.Header title="Delegation Management" description="Manage your out-of-office delegations" />
+        <PageLayout.Content>
+          <SettingsTabsSkeleton />
+        </PageLayout.Content>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout variant="full-width">
@@ -264,7 +239,7 @@ function DelegationsPage() {
                 {activeDelegations.length !== 1 ? 's' : ''}
               </p>
               <p className="text-sm text-blue-700">
-                {activeDelegations[0].delegate.name || activeDelegations[0].delegate.email} is
+                {activeDelegations[0].delegate?.name || activeDelegations[0].delegate?.email} is
                 handling your tasks until{' '}
                 {format(new Date(activeDelegations[0].endDate), 'MMM d, yyyy')}
               </p>
@@ -303,7 +278,7 @@ function DelegationsPage() {
               <Users className="text-muted-foreground mb-4 h-12 w-12" />
               <h3 className="text-lg font-medium">No delegations yet</h3>
               <p className="text-muted-foreground mt-1 max-w-sm text-center">
-                Create a delegation when you need someone to handle your tasks while you're away.
+                Create a delegation when you need someone to handle your tasks while you&apos;re away.
               </p>
               <Button className="mt-4" onClick={() => setIsCreateOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -315,9 +290,10 @@ function DelegationsPage() {
               {myDelegations.items.map((delegation) => (
                 <DelegationCard
                   key={delegation.id}
-                  delegation={delegation}
+                  delegation={delegation as DelegationItem}
                   type="outgoing"
-                  onCancel={() => handleCancelDelegation(delegation)}
+                  onCancel={() => handleCancelDelegation(delegation as DelegationItem)}
+                  isLoading={cancelDelegationMutation.isPending}
                 />
               ))}
             </div>
@@ -331,13 +307,24 @@ function DelegationsPage() {
               <UserCheck className="text-muted-foreground mb-4 h-12 w-12" />
               <h3 className="text-lg font-medium">No tasks delegated to you</h3>
               <p className="text-muted-foreground mt-1 max-w-sm text-center">
-                When someone delegates their tasks to you, they'll appear here.
+                When someone delegates their tasks to you, they&apos;ll appear here.
               </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => {
+                  setIsCreateOpen(true);
+                  handleTabChange('my-delegations');
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create your own delegation
+              </Button>
             </Card>
           ) : (
             <div className="grid gap-4">
               {delegationsToMe.items.map((delegation) => (
-                <DelegationCard key={delegation.id} delegation={delegation} type="incoming" />
+                <DelegationCard key={delegation.id} delegation={delegation as DelegationItem} type="incoming" />
               ))}
             </div>
           )}
@@ -350,7 +337,7 @@ function DelegationsPage() {
           <DialogHeader>
             <DialogTitle>Create Delegation</DialogTitle>
             <DialogDescription>
-              Delegate your tasks to a colleague while you're away.
+              Delegate your tasks to a colleague while you&apos;re away.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -375,7 +362,7 @@ function DelegationsPage() {
                     <CommandList>
                       <CommandEmpty>No colleagues found.</CommandEmpty>
                       <CommandGroup>
-                        {filteredUsers.map((user) => (
+                        {availableUsers.map((user) => (
                           <CommandItem
                             key={user.id}
                             value={user.email}
@@ -504,7 +491,14 @@ function DelegationsPage() {
                 isSubmitting
               }
             >
-              {isSubmitting ? 'Creating...' : 'Create Delegation'}
+              {createDelegationMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Delegation'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -519,10 +513,12 @@ function DelegationCard({
   delegation,
   type,
   onCancel,
+  isLoading,
 }: {
   delegation: DelegationItem;
   type: 'outgoing' | 'incoming';
   onCancel?: () => void;
+  isLoading?: boolean;
 }) {
   const now = new Date();
   const startDate = new Date(delegation.startDate);
@@ -558,7 +554,7 @@ function DelegationCard({
         {/* User Avatar */}
         <Avatar className="h-10 w-10">
           <AvatarFallback>
-            {(otherUser.name || otherUser.email).charAt(0).toUpperCase()}
+            {(otherUser?.name || otherUser?.email || '?').charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
 
@@ -567,7 +563,7 @@ function DelegationCard({
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">
               {type === 'outgoing' ? 'Delegated to' : 'Delegated by'}{' '}
-              {otherUser.name || otherUser.email}
+              {otherUser?.name || otherUser?.email || 'Unknown User'}
             </span>
             <Badge variant="secondary" className={cn('text-xs', config.color)}>
               <StatusIcon className="mr-1 h-3 w-3" />
@@ -587,8 +583,12 @@ function DelegationCard({
 
         {/* Actions */}
         {type === 'outgoing' && (status === 'upcoming' || status === 'active') && onCancel && (
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <X className="mr-1 h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <X className="mr-1 h-4 w-4" />
+            )}
             Cancel
           </Button>
         )}

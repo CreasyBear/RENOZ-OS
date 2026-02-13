@@ -6,52 +6,31 @@
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json for specification
  */
 
+'use server';
+
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, asc, gte, lte, inArray } from 'drizzle-orm';
+import { eq, and, sql, asc, gte, lte, inArray, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { inventoryForecasts, inventory, products, warehouseLocations } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import { createForecastSchema, forecastListQuerySchema, DEFAULT_LOW_STOCK_THRESHOLD } from '@/lib/schemas/inventory';
+import {
+  createForecastSchema,
+  forecastListQuerySchema,
+  DEFAULT_LOW_STOCK_THRESHOLD,
+  type ReorderRecommendation,
+  type ListForecastsResult,
+} from '@/lib/schemas/inventory';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type ForecastRecord = typeof inventoryForecasts.$inferSelect;
 
 // Period schema (not exported from inventory.ts yet)
 const forecastPeriodSchema = z.enum(['daily', 'weekly', 'monthly', 'quarterly']);
-
-interface ReorderRecommendation {
-  productId: string;
-  productSku: string;
-  productName: string;
-  currentStock: number;
-  reorderPoint: number;
-  safetyStock: number;
-  recommendedQuantity: number;
-  urgency: 'critical' | 'high' | 'medium' | 'low';
-  daysUntilStockout: number | null;
-  locationCount?: number; // Number of locations with this product
-  locations?: Array<{
-    locationId: string;
-    locationName: string;
-    locationCode: string | null;
-    quantityOnHand: number;
-    quantityAvailable: number;
-  }>;
-}
-
-interface ListForecastsResult {
-  forecasts: ForecastRecord[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
 
 // ============================================================================
 // FORECASTS CRUD
@@ -106,8 +85,13 @@ export const listForecasts = createServerFn({ method: 'GET' })
 
     const total = countResult[0]?.count ?? 0;
 
+    // Map forecasts and add updatedAt field (required by type but not in schema)
+    // Note: inventory_forecasts table doesn't have updatedAt, so we use createdAt
     return {
-      forecasts,
+      forecasts: forecasts.map((forecast) => ({
+        ...forecast,
+        updatedAt: forecast.createdAt, // Schema doesn't have updatedAt, use createdAt as fallback
+      })),
       total,
       page,
       limit,
@@ -444,46 +428,66 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
     // Get products with forecasts and current stock
     // Pattern: Match listProducts exactly (products.ts:125-137)
     // Start FROM products, LEFT JOIN inventory on productId only (no orgId filter in JOIN)
+    // OPTIMIZED: Use CTEs with DISTINCT ON and JOINs instead of correlated subqueries
+    // This eliminates N+1 pattern - single query instead of 4 subqueries per product
+    
+    // Create CTE for latest forecast per product using DISTINCT ON (PostgreSQL optimization)
+    const latestForecasts = db.$with('latest_forecasts').as(
+      db
+        .selectDistinctOn([inventoryForecasts.productId], {
+          productId: inventoryForecasts.productId,
+          reorderPoint: inventoryForecasts.reorderPoint,
+          safetyStock: inventoryForecasts.safetyStockLevel,
+          recommendedQuantity: inventoryForecasts.recommendedOrderQuantity,
+        })
+        .from(inventoryForecasts)
+        .where(eq(inventoryForecasts.organizationId, ctx.organizationId))
+        .orderBy(inventoryForecasts.productId, desc(inventoryForecasts.forecastDate))
+    );
+
+    // Create CTE for latest daily forecast per product
+    const latestDailyForecasts = db.$with('latest_daily_forecasts').as(
+      db
+        .selectDistinctOn([inventoryForecasts.productId], {
+          productId: inventoryForecasts.productId,
+          avgDailyDemand: inventoryForecasts.demandQuantity,
+        })
+        .from(inventoryForecasts)
+        .where(
+          and(
+            eq(inventoryForecasts.organizationId, ctx.organizationId),
+            eq(inventoryForecasts.forecastPeriod, 'daily')
+          )
+        )
+        .orderBy(inventoryForecasts.productId, desc(inventoryForecasts.forecastDate))
+    );
+
     const productsWithData = await db
+      .with(latestForecasts, latestDailyForecasts)
       .select({
         productId: products.id,
         productSku: products.sku,
         productName: products.name,
         currentStock: sql<number>`COALESCE(SUM(CASE WHEN ${inventory.organizationId} = ${ctx.organizationId} THEN ${inventory.quantityOnHand} ELSE 0 END), 0)::int`,
-        reorderPoint: sql<number | null>`(
-          SELECT reorder_point FROM inventory_forecasts
-          WHERE product_id = ${products.id}
-          AND organization_id = ${ctx.organizationId}
-          ORDER BY forecast_date DESC
-          LIMIT 1
-        )::int`,
-        safetyStock: sql<number | null>`(
-          SELECT safety_stock_level FROM inventory_forecasts
-          WHERE product_id = ${products.id}
-          AND organization_id = ${ctx.organizationId}
-          ORDER BY forecast_date DESC
-          LIMIT 1
-        )::int`,
-        recommendedQuantity: sql<number | null>`(
-          SELECT recommended_order_quantity FROM inventory_forecasts
-          WHERE product_id = ${products.id}
-          AND organization_id = ${ctx.organizationId}
-          ORDER BY forecast_date DESC
-          LIMIT 1
-        )::int`,
-        avgDailyDemand: sql<number>`COALESCE((
-          SELECT demand_quantity FROM inventory_forecasts
-          WHERE product_id = ${products.id}
-          AND organization_id = ${ctx.organizationId}
-          AND forecast_period = 'daily'
-          ORDER BY forecast_date DESC
-          LIMIT 1
-        ), 0)::numeric`,
+        reorderPoint: sql<number | null>`${latestForecasts.reorderPoint}::int`,
+        safetyStock: sql<number | null>`${latestForecasts.safetyStock}::int`,
+        recommendedQuantity: sql<number | null>`${latestForecasts.recommendedQuantity}::int`,
+        avgDailyDemand: sql<number>`COALESCE(${latestDailyForecasts.avgDailyDemand}::numeric, 0)`,
       })
       .from(products)
       .leftJoin(inventory, eq(inventory.productId, products.id))
+      .leftJoin(latestForecasts, eq(latestForecasts.productId, products.id))
+      .leftJoin(latestDailyForecasts, eq(latestDailyForecasts.productId, products.id))
       .where(and(eq(products.organizationId, ctx.organizationId), eq(products.isActive, true)))
-      .groupBy(products.id, products.sku, products.name);
+      .groupBy(
+        products.id,
+        products.sku,
+        products.name,
+        latestForecasts.reorderPoint,
+        latestForecasts.safetyStock,
+        latestForecasts.recommendedQuantity,
+        latestDailyForecasts.avgDailyDemand
+      );
 
     // Get location breakdown for each product (for recommendations that need reordering)
     // This helps users understand where stock is located

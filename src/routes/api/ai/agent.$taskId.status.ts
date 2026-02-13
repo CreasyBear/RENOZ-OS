@@ -9,16 +9,14 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
+import { createFileRoute } from '@tanstack/react-router';
 import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { aiAgentTasks } from 'drizzle/schema/_ai';
 import { eq, and } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
-// ============================================================================
-// ROUTE HANDLER
-// ============================================================================
-
-export async function GET({ params }: { params: { taskId: string } }) {
+async function handleStatus({ params }: { params: { taskId: string } }) {
   try {
     // Authenticate user
     const ctx = await withAuth();
@@ -96,7 +94,7 @@ export async function GET({ params }: { params: { taskId: string } }) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('[API /ai/agent/:taskId/status] Error:', error);
+    logger.error('[API /ai/agent/:taskId/status] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {
@@ -116,3 +114,11 @@ export async function GET({ params }: { params: { taskId: string } }) {
     );
   }
 }
+
+export const Route = createFileRoute('/api/ai/agent/$taskId/status')({
+  server: {
+    handlers: {
+      GET: handleStatus,
+    },
+  },
+});

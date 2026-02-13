@@ -13,7 +13,8 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobTimeEntries, jobAssignments, users } from 'drizzle/schema';
+import { jobTimeEntries, users } from 'drizzle/schema';
+import { verifyJobExists } from '@/server/functions/_shared/entity-verification';
 import {
   startTimerSchema,
   stopTimerSchema,
@@ -34,24 +35,6 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-/**
- * Verify job belongs to the user's organization.
- * Returns the job if found, throws NotFoundError otherwise.
- */
-async function verifyJobAccess(jobId: string, organizationId: string) {
-  const [job] = await db
-    .select({ id: jobAssignments.id })
-    .from(jobAssignments)
-    .where(and(eq(jobAssignments.id, jobId), eq(jobAssignments.organizationId, organizationId)))
-    .limit(1);
-
-  if (!job) {
-    throw new NotFoundError('Job not found');
-  }
-
-  return job;
-}
 
 /**
  * Verify time entry belongs to the user's organization.
@@ -142,41 +125,47 @@ export const startTimer = createServerFn({ method: 'POST' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
-    // Check if user already has a running timer on this job
-    const [existingTimer] = await db
-      .select({ id: jobTimeEntries.id })
-      .from(jobTimeEntries)
-      .where(
-        and(
-          eq(jobTimeEntries.jobId, data.jobId),
-          eq(jobTimeEntries.userId, ctx.user.id),
-          eq(jobTimeEntries.organizationId, ctx.organizationId),
-          isNull(jobTimeEntries.endTime)
+    // Wrap check-then-insert in transaction with row lock to prevent duplicate timers
+    const result = await db.transaction(async (tx) => {
+      // Check if user already has a running timer on this job (with row lock)
+      const [existingTimer] = await tx
+        .select({ id: jobTimeEntries.id })
+        .from(jobTimeEntries)
+        .where(
+          and(
+            eq(jobTimeEntries.jobId, data.jobId),
+            eq(jobTimeEntries.userId, ctx.user.id),
+            eq(jobTimeEntries.organizationId, ctx.organizationId),
+            isNull(jobTimeEntries.endTime)
+          )
         )
-      )
-      .limit(1);
+        .limit(1)
+        .for('update');
 
-    if (existingTimer) {
-      throw new ValidationError('You already have a running timer on this job');
-    }
+      if (existingTimer) {
+        throw new ValidationError('You already have a running timer on this job');
+      }
 
-    // Create the time entry
-    const [entry] = await db
-      .insert(jobTimeEntries)
-      .values({
-        organizationId: ctx.organizationId,
-        jobId: data.jobId,
-        userId: ctx.user.id,
-        startTime: new Date(),
-        endTime: null,
-        description: data.description ?? null,
-        isBillable: data.isBillable ?? true,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+      // Create the time entry
+      const [entry] = await tx
+        .insert(jobTimeEntries)
+        .values({
+          organizationId: ctx.organizationId,
+          jobId: data.jobId,
+          userId: ctx.user.id,
+          startTime: new Date(),
+          endTime: null,
+          description: data.description ?? null,
+          isBillable: data.isBillable ?? true,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
+
+      return entry;
+    });
 
     // Get user details for response
     const [user] = await db
@@ -187,7 +176,7 @@ export const startTimer = createServerFn({ method: 'POST' })
 
     return {
       entry: toTimeEntryResponse({
-        ...entry,
+        ...result,
         userName: user?.name ?? null,
         userEmail: user?.email ?? '',
       }),
@@ -260,7 +249,7 @@ export const createManualEntry = createServerFn({ method: 'POST' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Create the time entry
     const [entry] = await db
@@ -393,7 +382,7 @@ export const getJobTimeEntries = createServerFn({ method: 'GET' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Get entries with user details
     const entries = await db
@@ -475,7 +464,7 @@ export const calculateJobLaborCost = createServerFn({ method: 'GET' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Get completed entries (with endTime)
     const entries = await db

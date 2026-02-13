@@ -22,6 +22,7 @@ import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import type { RmaLineItemResponse, RmaResponse } from '@/lib/schemas/support/rma';
 import { useCurrency } from '@/lib/pricing-utils';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Package, Calendar, User, FileText, Hash, ClipboardList } from 'lucide-react';
 
@@ -40,6 +41,8 @@ interface RmaDetailCardProps {
   className?: string;
   /** From route container (workflow handlers). */
   workflowActions?: React.ReactNode;
+  /** Hide card header when using EntityHeader (avoids duplicate title) */
+  hideHeader?: boolean;
 }
 
 export function RmaDetailCard({
@@ -50,6 +53,7 @@ export function RmaDetailCard({
   showActions = true,
   className,
   workflowActions,
+  hideHeader = false,
 }: RmaDetailCardProps) {
   const { formatPrice } = useCurrency();
 
@@ -69,24 +73,29 @@ export function RmaDetailCard({
 
   return (
     <Card className={className}>
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              {rma.rmaNumber}
-            </CardTitle>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <RmaStatusBadge status={rma.status} />
-              <RmaReasonBadge reason={rma.reason} />
-              {rma.resolution && <RmaResolutionBadge resolution={rma.resolution} />}
+      {!hideHeader && (
+        <CardHeader className="pb-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                {rma.rmaNumber}
+              </CardTitle>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <RmaStatusBadge status={rma.status} />
+                <RmaReasonBadge reason={rma.reason} />
+                {rma.resolution && <RmaResolutionBadge resolution={rma.resolution} />}
+              </div>
             </div>
+            {showActions && workflowActions}
           </div>
-          {showActions && workflowActions}
-        </div>
-      </CardHeader>
+        </CardHeader>
+      )}
+      {hideHeader && showActions && workflowActions && (
+        <div className="px-6 pt-4 flex justify-end">{workflowActions}</div>
+      )}
 
-      <CardContent className="space-y-6">
+      <CardContent className={cn('space-y-6', hideHeader && 'pt-2')}>
         {/* Details grid */}
         <div className="grid gap-4 sm:grid-cols-2">
           <DetailItem

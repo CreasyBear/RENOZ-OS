@@ -7,7 +7,8 @@
  * @see DOM-COMMS-004b
  */
 import { createServerFn } from '@tanstack/react-start'
-import { eq, and, sql, desc, gte, lte } from 'drizzle-orm'
+import { eq, and, desc, asc, gte, lte, count, isNotNull } from 'drizzle-orm'
+import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination'
 import { db } from '@/lib/db'
 import {
   scheduledCalls,
@@ -18,6 +19,7 @@ import {
   scheduleCallSchema,
   updateScheduledCallSchema,
   getScheduledCallsSchema,
+  getScheduledCallsCursorSchema,
   getScheduledCallByIdSchema,
   cancelScheduledCallSchema,
   rescheduleCallSchema,
@@ -25,6 +27,7 @@ import {
 } from '@/lib/schemas/communications'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
+import { NotFoundError, ConflictError } from '@/lib/server/errors'
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context'
 import { computeChanges } from '@/lib/activity-logger'
 
@@ -124,7 +127,7 @@ export const getScheduledCalls = createServerFn({ method: 'GET' })
       .offset(data.offset)
 
     const [countResult] = await db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: count() })
       .from(scheduledCalls)
       .where(and(...conditions))
 
@@ -132,6 +135,49 @@ export const getScheduledCalls = createServerFn({ method: 'GET' })
       items: results,
       total: Number(countResult?.count ?? 0),
     }
+  })
+
+/**
+ * Get scheduled calls with cursor pagination (recommended for large datasets).
+ * Uses scheduledAt + id for stable sort.
+ */
+export const getScheduledCallsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(getScheduledCallsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', assigneeId, customerId, status, fromDate, toDate } = data
+
+    const conditions = [eq(scheduledCalls.organizationId, ctx.organizationId)]
+    if (assigneeId) conditions.push(eq(scheduledCalls.assigneeId, assigneeId))
+    if (customerId) conditions.push(eq(scheduledCalls.customerId, customerId))
+    if (status) conditions.push(eq(scheduledCalls.status, status))
+    if (fromDate) conditions.push(gte(scheduledCalls.scheduledAt, fromDate))
+    if (toDate) conditions.push(lte(scheduledCalls.scheduledAt, toDate))
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor)
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(scheduledCalls.scheduledAt, scheduledCalls.id, cursorPosition, sortOrder)
+        )
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc
+    const results = await db
+      .select()
+      .from(scheduledCalls)
+      .where(and(...conditions))
+      .orderBy(orderDir(scheduledCalls.scheduledAt), orderDir(scheduledCalls.id))
+      .limit(pageSize + 1)
+
+    return buildCursorResponse(
+      results,
+      pageSize,
+      (r) => r.scheduledAt instanceof Date ? r.scheduledAt.toISOString() : r.scheduledAt,
+      (r) => r.id
+    )
   })
 
 /**
@@ -165,21 +211,27 @@ export const updateScheduledCall = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
     // Verify call exists and is pending
-    const [existing] = await db
+    // Check if scheduled call exists
+    const [existingCheck] = await db
       .select()
       .from(scheduledCalls)
       .where(
         and(
           eq(scheduledCalls.id, data.id),
           eq(scheduledCalls.organizationId, ctx.organizationId),
-          eq(scheduledCalls.status, 'pending'),
         ),
       )
       .limit(1)
 
-    if (!existing) {
-      throw new Error('Scheduled call not found or cannot be updated')
+    if (!existingCheck) {
+      throw new NotFoundError('Scheduled call not found', 'scheduled_call')
     }
+
+    if (existingCheck.status !== 'pending') {
+      throw new ConflictError(`Cannot update scheduled call with status "${existingCheck.status}". Only pending calls can be updated.`)
+    }
+
+    const existing = existingCheck
 
     const updateData: Partial<typeof scheduledCalls.$inferInsert> = {}
 
@@ -191,10 +243,16 @@ export const updateScheduledCall = createServerFn({ method: 'POST' })
     if (data.notes !== undefined) updateData.notes = data.notes
     if (data.assigneeId !== undefined) updateData.assigneeId = data.assigneeId
 
+    // C07: Add orgId to UPDATE WHERE for tenant isolation
     const [updated] = await db
       .update(scheduledCalls)
       .set(updateData)
-      .where(eq(scheduledCalls.id, data.id))
+      .where(
+        and(
+          eq(scheduledCalls.id, data.id),
+          eq(scheduledCalls.organizationId, ctx.organizationId),
+        ),
+      )
       .returning()
 
     // Activity logging
@@ -229,22 +287,29 @@ export const cancelScheduledCall = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
     // Get existing for logging
-    const [existing] = await db
+    // Check if scheduled call exists
+    const [existingCheck] = await db
       .select()
       .from(scheduledCalls)
       .where(
         and(
           eq(scheduledCalls.id, data.id),
           eq(scheduledCalls.organizationId, ctx.organizationId),
-          eq(scheduledCalls.status, 'pending'),
         ),
       )
       .limit(1)
 
-    if (!existing) {
-      throw new Error('Scheduled call not found or cannot be cancelled')
+    if (!existingCheck) {
+      throw new NotFoundError('Scheduled call not found', 'scheduled_call')
     }
 
+    if (existingCheck.status !== 'pending') {
+      throw new ConflictError(`Cannot cancel scheduled call with status "${existingCheck.status}". Only pending calls can be cancelled.`)
+    }
+
+    const existing = existingCheck
+
+    // C08: Add orgId to UPDATE WHERE for tenant isolation
     const [updated] = await db
       .update(scheduledCalls)
       .set({
@@ -252,7 +317,12 @@ export const cancelScheduledCall = createServerFn({ method: 'POST' })
         cancelledAt: new Date(),
         cancelReason: data.reason,
       })
-      .where(eq(scheduledCalls.id, data.id))
+      .where(
+        and(
+          eq(scheduledCalls.id, data.id),
+          eq(scheduledCalls.organizationId, ctx.organizationId),
+        ),
+      )
       .returning()
 
     // Activity logging
@@ -289,45 +359,61 @@ export const rescheduleCall = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
     // Get the original call
-    const [original] = await db
+    // Check if scheduled call exists
+    const [originalCheck] = await db
       .select()
       .from(scheduledCalls)
       .where(
         and(
           eq(scheduledCalls.id, data.id),
           eq(scheduledCalls.organizationId, ctx.organizationId),
-          eq(scheduledCalls.status, 'pending'),
         ),
       )
       .limit(1)
 
-    if (!original) {
-      throw new Error('Scheduled call not found or cannot be rescheduled')
+    if (!originalCheck) {
+      throw new NotFoundError('Scheduled call not found', 'scheduled_call')
     }
 
-    // Create new call
-    const [newCall] = await db
-      .insert(scheduledCalls)
-      .values({
-        organizationId: ctx.organizationId,
-        customerId: original.customerId,
-        assigneeId: original.assigneeId,
-        scheduledAt: data.newScheduledAt,
-        reminderAt: data.reminderAt,
-        purpose: original.purpose,
-        notes: data.notes ?? original.notes,
-        status: 'pending',
-      })
-      .returning()
+    if (originalCheck.status !== 'pending') {
+      throw new ConflictError(`Cannot reschedule scheduled call with status "${originalCheck.status}". Only pending calls can be rescheduled.`)
+    }
 
-    // Mark original as rescheduled
-    await db
-      .update(scheduledCalls)
-      .set({
-        status: 'rescheduled',
-        rescheduledToId: newCall.id,
-      })
-      .where(eq(scheduledCalls.id, data.id))
+    const original = originalCheck
+
+    // Wrap INSERT new + UPDATE original in transaction for atomicity
+    const newCall = await db.transaction(async (tx) => {
+      // Create new call
+      const [created] = await tx
+        .insert(scheduledCalls)
+        .values({
+          organizationId: ctx.organizationId,
+          customerId: original.customerId,
+          assigneeId: original.assigneeId,
+          scheduledAt: data.newScheduledAt,
+          reminderAt: data.reminderAt,
+          purpose: original.purpose,
+          notes: data.notes ?? original.notes,
+          status: 'pending',
+        })
+        .returning()
+
+      // C10: Mark original as rescheduled with orgId for tenant isolation
+      await tx
+        .update(scheduledCalls)
+        .set({
+          status: 'rescheduled',
+          rescheduledToId: created.id,
+        })
+        .where(
+          and(
+            eq(scheduledCalls.id, data.id),
+            eq(scheduledCalls.organizationId, ctx.organizationId),
+          ),
+        )
+
+      return created
+    })
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx)
@@ -363,49 +449,65 @@ export const completeCall = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
     // Get the call
-    const [call] = await db
+    // Check if scheduled call exists
+    const [callCheck] = await db
       .select()
       .from(scheduledCalls)
       .where(
         and(
           eq(scheduledCalls.id, data.id),
           eq(scheduledCalls.organizationId, ctx.organizationId),
-          eq(scheduledCalls.status, 'pending'),
         ),
       )
       .limit(1)
 
-    if (!call) {
-      throw new Error('Scheduled call not found or already completed')
+    if (!callCheck) {
+      throw new NotFoundError('Scheduled call not found', 'scheduled_call')
     }
 
-    // Update call status
-    const [updated] = await db
-      .update(scheduledCalls)
-      .set({
-        status: 'completed',
-        completedAt: new Date(),
-        outcome: data.outcome,
-        outcomeNotes: data.outcomeNotes,
-      })
-      .where(eq(scheduledCalls.id, data.id))
-      .returning()
+    if (callCheck.status !== 'pending') {
+      throw new ConflictError(`Cannot complete scheduled call with status "${callCheck.status}". Only pending calls can be completed.`)
+    }
 
-    // Log to customer activities
-    await db.insert(customerActivities).values({
-      organizationId: ctx.organizationId,
-      customerId: call.customerId,
-      createdBy: ctx.user.id,
-      activityType: 'call',
-      description: `Call completed: ${data.outcome.replace('_', ' ')}`,
-      outcome: data.outcome,
-      completedAt: new Date().toISOString(),
-      metadata: {
-        callId: call.id,
-        purpose: call.purpose,
-        outcomeNotes: data.outcomeNotes,
-        scheduledAt: call.scheduledAt.toISOString(),
-      },
+    const call = callCheck
+
+    // Wrap UPDATE call + INSERT activity in transaction for atomicity
+    const updated = await db.transaction(async (tx) => {
+      // C09: Add orgId to UPDATE WHERE for tenant isolation
+      const [result] = await tx
+        .update(scheduledCalls)
+        .set({
+          status: 'completed',
+          completedAt: new Date(),
+          outcome: data.outcome,
+          outcomeNotes: data.outcomeNotes,
+        })
+        .where(
+          and(
+            eq(scheduledCalls.id, data.id),
+            eq(scheduledCalls.organizationId, ctx.organizationId),
+          ),
+        )
+        .returning()
+
+      // Log to customer activities
+      await tx.insert(customerActivities).values({
+        organizationId: ctx.organizationId,
+        customerId: call.customerId,
+        createdBy: ctx.user.id,
+        activityType: 'call',
+        description: `Call completed: ${data.outcome.replace('_', ' ')}`,
+        outcome: data.outcome,
+        completedAt: new Date().toISOString(),
+        metadata: {
+          callId: call.id,
+          purpose: call.purpose,
+          outcomeNotes: data.outcomeNotes,
+          scheduledAt: call.scheduledAt.toISOString(),
+        },
+      })
+
+      return result
     })
 
     return updated
@@ -430,11 +532,12 @@ export async function getCallsDueForReminder(
     .where(
       and(
         eq(scheduledCalls.status, 'pending'),
-        sql`${scheduledCalls.reminderAt} IS NOT NULL`,
+        isNotNull(scheduledCalls.reminderAt),
         gte(scheduledCalls.reminderAt, now),
         lte(scheduledCalls.reminderAt, cutoff),
       ),
     )
+    .limit(100)
 
   return calls
 }
@@ -456,6 +559,7 @@ export async function getOverdueCalls(): Promise<
         lte(scheduledCalls.scheduledAt, now),
       ),
     )
+    .limit(100)
 
   return calls
 }

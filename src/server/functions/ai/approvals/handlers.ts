@@ -14,6 +14,7 @@ import { orders, quotes, customers } from 'drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import type { HandlerContext, HandlerResult, ActionHandler } from '@/lib/ai/approvals/types';
+import { generateOrderNumber } from '@/server/functions/orders/orders';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -29,14 +30,14 @@ const orderDraftSchema = z.object({
     quantity: z.number().positive(),
     unitPrice: z.number().or(z.string()),
   })).optional(),
-}).passthrough(); // Allow additional fields for flexibility
+});
 
 /** Schema for quote draft data */
 const quoteDraftSchema = z.object({
   customerId: z.string().uuid(),
   validUntil: z.string().or(z.date()).optional(),
   notes: z.string().optional(),
-}).passthrough();
+});
 
 /** Schema for email draft data */
 const emailDraftSchema = z.object({
@@ -87,15 +88,19 @@ async function createOrderHandler(
     }
 
     const draft = parseResult.data;
+    const orderNumber = await generateOrderNumber(context.organizationId);
 
     const [order] = await context.tx
       .insert(orders)
       .values({
-        ...draft,
+        customerId: draft.customerId,
+        orderNumber,
+        orderDate: draft.orderDate ? new Date(draft.orderDate).toISOString().slice(0, 10) : undefined,
+        internalNotes: draft.notes ?? null,
         organizationId: context.organizationId,
         createdBy: context.userId,
         status: 'draft',
-      } as typeof orders.$inferInsert)
+      })
       .returning({ id: orders.id });
 
     return {
@@ -135,7 +140,9 @@ async function createQuoteHandler(
     const [quote] = await context.tx
       .insert(quotes)
       .values({
-        ...draft,
+        customerId: draft.customerId,
+        validUntil: draft.validUntil ? new Date(draft.validUntil) : undefined,
+        notes: draft.notes,
         organizationId: context.organizationId,
         createdBy: context.userId,
         status: 'draft',
@@ -176,7 +183,7 @@ async function sendEmailHandler(
 
     const draft = parseResult.data;
 
-    // TODO: Integrate with Resend email service
+    // TODO(PHASE12-005): Integrate with Resend email service
     // For now, return success with a mock result
     // The actual implementation will use the email library in src/lib/email/
 

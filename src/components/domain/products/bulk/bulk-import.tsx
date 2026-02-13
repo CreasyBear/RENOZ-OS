@@ -42,10 +42,11 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import {
-  parseImportFile,
-  importProducts,
-  getImportTemplate,
-} from "@/server/functions/products/product-bulk-ops";
+  useParseImportFile,
+  useImportProducts,
+  useImportTemplate,
+} from "@/hooks/products";
+import { toastError } from "@/hooks";
 
 interface ProductBulkImportProps {
   open: boolean;
@@ -93,7 +94,6 @@ export function ProductBulkImport({
     headers: string[];
   } | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>("create_or_update");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importResults, setImportResults] = useState<{
     success: boolean;
@@ -104,6 +104,13 @@ export function ProductBulkImport({
     results: ImportResult[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Mutations and queries
+  const parseFile = useParseImportFile();
+  const importProducts = useImportProducts();
+  const { data: templateData } = useImportTemplate();
+
+  const isProcessing = parseFile.isPending || importProducts.isPending;
 
   // Reset state when dialog closes
   const handleClose = () => {
@@ -117,32 +124,31 @@ export function ProductBulkImport({
   };
 
   // Handle file selection
-  const handleFileSelect = useCallback(async (selectedFile: File) => {
+  const handleFileSelect = useCallback((selectedFile: File) => {
     setFile(selectedFile);
     setError(null);
-    setIsProcessing(true);
 
-    try {
-      const content = await selectedFile.text();
-      const result = (await parseImportFile({
-        data: { content, hasHeaders: true },
-      })) as {
-        totalRows: number;
-        validCount: number;
-        invalidCount: number;
-        rows: ParsedRow[];
-        headers: string[];
-      };
-
-      setParsedData(result);
-      setStep("preview");
-    } catch (err) {
-      console.error("Failed to parse file:", err);
-      setError(err instanceof Error ? err.message : "Failed to parse file");
-    } finally {
-      setIsProcessing(false);
-    }
-  }, []);
+    parseFile.mutate(
+      { file: selectedFile, hasHeaders: true },
+      {
+        onSuccess: (result) => {
+          setParsedData(result as {
+            totalRows: number;
+            validCount: number;
+            invalidCount: number;
+            rows: ParsedRow[];
+            headers: string[];
+          });
+          setStep("preview");
+        },
+        onError: (err) => {
+          const errorMessage = err instanceof Error ? err.message : "Failed to parse file";
+          toastError(errorMessage);
+          setError(errorMessage);
+        },
+      }
+    );
+  }, [parseFile]);
 
   // Handle drop zone
   const handleDrop = useCallback(
@@ -170,66 +176,62 @@ export function ProductBulkImport({
   );
 
   // Download template
-  const handleDownloadTemplate = async () => {
-    try {
-      const result = (await getImportTemplate({ data: {} })) as {
-        content: string;
-        filename: string;
-      };
-      const blob = new Blob([result.content], { type: "text/csv" });
+  const handleDownloadTemplate = () => {
+    if (templateData) {
+      const data = templateData as { content: string; filename: string };
+      const blob = new Blob([data.content], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = result.filename;
+      a.download = data.filename;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Failed to download template:", err);
     }
   };
 
   // Start import
-  const handleStartImport = async () => {
+  const handleStartImport = () => {
     if (!parsedData) return;
 
     setStep("importing");
-    setIsProcessing(true);
     setImportProgress(0);
 
-    try {
-      const validRows = parsedData.rows.filter((r) => r.isValid).map((r) => r.data);
+    const validRows = parsedData.rows.filter((r) => r.isValid).map((r) => r.data);
 
-      // Simulate progress (in a real app, this would be streamed)
-      const progressInterval = setInterval(() => {
-        setImportProgress((p) => Math.min(p + 10, 90));
-      }, 200);
+    // Simulate progress (in a real app, this would be streamed)
+    const progressInterval = setInterval(() => {
+      setImportProgress((p) => Math.min(p + 10, 90));
+    }, 200);
 
-      const result = (await importProducts({
-        data: {
-          rows: validRows,
-          mode: importMode,
-          skipErrors: true,
+    importProducts.mutate(
+      {
+        rows: validRows,
+        mode: importMode,
+        skipErrors: true,
+      },
+      {
+        onSuccess: (result) => {
+          clearInterval(progressInterval);
+          setImportProgress(100);
+          setImportResults(result as {
+            success: boolean;
+            created: number;
+            updated: number;
+            skipped: number;
+            errors: number;
+            results: ImportResult[];
+          });
+          setStep("complete");
         },
-      })) as {
-        success: boolean;
-        created: number;
-        updated: number;
-        skipped: number;
-        errors: number;
-        results: ImportResult[];
-      };
-
-      clearInterval(progressInterval);
-      setImportProgress(100);
-      setImportResults(result);
-      setStep("complete");
-    } catch (err) {
-      console.error("Import failed:", err);
-      setError(err instanceof Error ? err.message : "Import failed");
-      setStep("preview");
-    } finally {
-      setIsProcessing(false);
-    }
+        onError: (err) => {
+          clearInterval(progressInterval);
+          const errorMessage = err instanceof Error ? err.message : "Import failed";
+          toastError(errorMessage);
+          setError(errorMessage);
+          setStep("preview");
+        },
+      }
+    );
   };
 
   return (

@@ -9,6 +9,10 @@
  * - Tag assignment
  *
  * Uses TanStack Form with Zod validation.
+ *
+ * @source form state from useTanStackForm hook
+ * @source validation from Zod schemas
+ * @source customer data from props (for edit mode)
  */
 import { z } from 'zod'
 import {
@@ -22,11 +26,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form'
 import {
+  useFormDraft,
+  getCreateDraftKey,
+  getEditDraftKey,
+} from '@/hooks/_shared/use-form-draft'
+import {
   TextField,
   SelectField,
   NumberField,
   CheckboxField,
   FormActions,
+  DraftRestorePrompt,
+  DraftSavingIndicator,
 } from '@/components/shared/forms'
 import {
   customerStatusValues,
@@ -65,6 +76,7 @@ interface CustomerFormProps {
   onCancel?: () => void
   isLoading?: boolean
   mode?: 'create' | 'edit'
+  customerId?: string // Required for edit mode draft key
   availableTags?: Array<{ id: string; name: string; color: string }>
 }
 
@@ -197,7 +209,7 @@ function BusinessDetailsSection({ form }: SectionProps) {
             <TextField
               field={field}
               label="Legal Name"
-              placeholder="e.g., Acme Corporation Pty Ltd"
+              placeholder="e.g., Acme Corporation Pty Ltd…"
               description="Full legal entity name if different from display name"
             />
           )}
@@ -209,7 +221,7 @@ function BusinessDetailsSection({ form }: SectionProps) {
               <TextField
                 field={field}
                 label="ABN / Tax ID"
-                placeholder="e.g., 12 345 678 901"
+                placeholder="e.g., 12 345 678 901…"
               />
             )}
           </form.Field>
@@ -219,7 +231,7 @@ function BusinessDetailsSection({ form }: SectionProps) {
               <TextField
                 field={field}
                 label="Registration Number"
-                placeholder="e.g., ACN 123 456 789"
+                placeholder="e.g., ACN 123 456 789…"
               />
             )}
           </form.Field>
@@ -230,7 +242,7 @@ function BusinessDetailsSection({ form }: SectionProps) {
             <TextField
               field={field}
               label="Industry"
-              placeholder="e.g., Construction, Healthcare, Retail"
+              placeholder="e.g., Construction, Healthcare, Retail…"
             />
           )}
         </form.Field>
@@ -255,7 +267,9 @@ function ContactInfoSection({ form }: SectionProps) {
             <TextField
               field={field}
               label="Email"
+              type="email"
               placeholder="info@company.com"
+              autocomplete="email"
             />
           )}
         </form.Field>
@@ -265,7 +279,10 @@ function ContactInfoSection({ form }: SectionProps) {
             <TextField
               field={field}
               label="Phone"
+              type="tel"
               placeholder="+61 2 1234 5678"
+              autocomplete="tel"
+              inputMode="tel"
             />
           )}
         </form.Field>
@@ -275,7 +292,10 @@ function ContactInfoSection({ form }: SectionProps) {
             <TextField
               field={field}
               label="Website"
+              type="url"
               placeholder="https://www.company.com"
+              autocomplete="url"
+              inputMode="url"
             />
           )}
         </form.Field>
@@ -322,7 +342,7 @@ function CreditManagementSection({ form }: SectionProps) {
             <TextField
               field={field}
               label="Credit Hold Reason"
-              placeholder="Reason for credit hold"
+              placeholder="Reason for credit hold…"
             />
           )}
         </form.Field>
@@ -411,6 +431,12 @@ function TagsSection({ form, availableTags }: TagsSectionProps) {
 }
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const DRAFT_VERSION = 1 // Increment when form schema changes
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -419,30 +445,51 @@ export function CustomerForm({
   onSubmit,
   onCancel,
   mode = 'create',
+  customerId,
   availableTags = [],
 }: CustomerFormProps) {
+  const formDefaults = {
+    name: '',
+    legalName: '',
+    email: '',
+    phone: '',
+    website: '',
+    status: 'prospect' as const,
+    type: 'business' as const,
+    size: undefined,
+    industry: '',
+    taxId: '',
+    registrationNumber: '',
+    creditLimit: undefined,
+    creditHold: false,
+    creditHoldReason: '',
+    tags: [],
+    ...defaultValues,
+  }
+
   const form = useTanStackForm({
     schema: customerFormSchema,
-    defaultValues: {
-      name: '',
-      legalName: '',
-      email: '',
-      phone: '',
-      website: '',
-      status: 'prospect',
-      type: 'business',
-      size: undefined,
-      industry: '',
-      taxId: '',
-      registrationNumber: '',
-      creditLimit: undefined,
-      creditHold: false,
-      creditHoldReason: '',
-      tags: [],
-      ...defaultValues,
-    },
+    defaultValues: formDefaults,
     onSubmit: async (values) => {
       await onSubmit(values)
+      draft.clear() // Clear draft on successful submit
+    },
+  })
+
+  // Auto-save draft functionality
+  const draftKey =
+    mode === 'edit' && customerId
+      ? getEditDraftKey('customer', customerId)
+      : getCreateDraftKey('customer')
+
+  const draft = useFormDraft({
+    key: draftKey,
+    version: DRAFT_VERSION,
+    form,
+    enabled: true,
+    excludeFields: [], // No sensitive fields to exclude
+    onClear: () => {
+      // Draft cleared callback
     },
   })
 
@@ -454,6 +501,14 @@ export function CustomerForm({
       }}
       className="space-y-6"
     >
+      {/* Draft restore prompt */}
+      <DraftRestorePrompt
+        hasDraft={draft.hasDraft}
+        savedAt={draft.savedAt}
+        onRestore={draft.restore}
+        onDiscard={draft.clear}
+        variant="banner"
+      />
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <BasicInfoSection form={form} />
@@ -464,6 +519,11 @@ export function CustomerForm({
           <CreditManagementSection form={form} />
           <TagsSection form={form} availableTags={availableTags} />
         </div>
+      </div>
+
+      {/* Draft saving indicator */}
+      <div className="flex items-center justify-end">
+        <DraftSavingIndicator isSaving={draft.isSaving} savedAt={draft.savedAt} />
       </div>
 
       <FormActions

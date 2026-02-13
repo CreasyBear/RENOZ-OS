@@ -66,8 +66,12 @@ export function useWinLossReasons({
   enabled = true,
 }: UseWinLossReasonsOptions = {}) {
   return useQuery({
-    queryKey: [...queryKeys.settings.winLossReasons(), filters] as const,
-    queryFn: () => listWinLossReasons({ data: filters }),
+    queryKey: queryKeys.settings.winLossReasonsFiltered(filters as Record<string, unknown>),
+    queryFn: async () => {
+      const result = await listWinLossReasons({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });

@@ -41,7 +41,7 @@ export const metricDefinitionSchema = z.object({
   table: z.enum(['orders', 'customers', 'opportunities', 'warranties', 'warrantyClaims', 'slaTracking']),
   field: z.string(),
   dateField: z.string(),
-  baseFilters: z.record(z.unknown()),
+  baseFilters: z.record(z.string(), z.unknown()),
   unit: z.enum(['currency', 'count', 'percentage']),
   requiresDateRange: z.boolean(),
 });
@@ -57,7 +57,7 @@ export const metricCalculationInputSchema = z.object({
   metricId: metricIdSchema,
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  additionalFilters: z.record(z.unknown()).optional(),
+  additionalFilters: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type MetricCalculationInput = z.infer<typeof metricCalculationInputSchema>;
@@ -83,7 +83,7 @@ export const metricsCalculationInputSchema = z.object({
   metricIds: z.array(metricIdSchema).min(1),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  additionalFilters: z.record(z.unknown()).optional(),
+  additionalFilters: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type MetricsCalculationInput = z.infer<typeof metricsCalculationInputSchema>;

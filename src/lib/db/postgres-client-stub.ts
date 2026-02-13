@@ -1,13 +1,37 @@
 /**
  * Postgres Client Stub for Client-Side
- * 
+ *
  * This is a stub module that provides the postgres interface for the client.
  * It throws an error if actually used, since postgres operations should only
  * happen on the server.
- * 
+ *
  * This stub is aliased in vite.config.ts to prevent the real postgres
  * module (which uses Node.js Buffer) from being bundled for the client.
  */
+
+/**
+ * Minimal interface for the postgres client stub.
+ * Matches the shape expected when this module is aliased for client bundles.
+ */
+export interface PostgresClientStub {
+  (connectionString?: string, options?: unknown): never;
+  PostgresError: typeof PostgresError;
+  toPascal: (x: string) => string;
+  pascal: (x: string) => string;
+  toCamel: (x: string) => string;
+  camel: (x: string) => string;
+  toKebab: (x: string) => string;
+  kebab: (x: string) => string;
+  fromPascal: (x: string) => string;
+  fromCamel: (x: string) => string;
+  fromKebab: (x: string) => string;
+  BigInt: {
+    to: number;
+    from: number[];
+    parse: (x: string) => bigint;
+    serialize: (x: bigint) => string;
+  };
+}
 
 export class PostgresError extends Error {
   constructor(message: string) {
@@ -45,4 +69,4 @@ postgresStub.BigInt = {
   serialize: (x: bigint) => x.toString()
 }
 
-export default postgresStub as any
+export default postgresStub as PostgresClientStub

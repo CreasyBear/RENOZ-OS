@@ -39,7 +39,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FormatAmount } from '@/components/shared/format';
-import { FulfillmentCard, type FulfillmentOrder } from './fulfillment-card';
+import { FulfillmentCard } from './fulfillment-card';
+import type { FulfillmentOrder } from '@/lib/schemas/orders';
 import type { InlineEditFormData } from '../../cards/order-card-inline-edit.schema';
 
 // ============================================================================
@@ -167,7 +168,7 @@ export const FulfillmentColumn = memo(function FulfillmentColumn({
   const IconComponent = config.icon;
   const isCurrentlyOver = isOver || dndIsOver;
   const selectedInColumn = orders.filter((order) => selectedOrderIds.has(order.id));
-  const hasSelection = selectedInColumn.length > 0;
+  const hasSelection = selectedInColumn.length >= 2;
   const allSelected = orders.length > 0 && selectedInColumn.length === orders.length;
 
   const orderIds = orders.map((order) => order.id);
@@ -176,6 +177,7 @@ export const FulfillmentColumn = memo(function FulfillmentColumn({
   const useVirtualScrolling = orders.length > 50;
   const parentRef = useRef<HTMLDivElement>(null);
 
+   
   const virtualizer = useVirtualizer({
     count: orders.length,
     getScrollElement: () => parentRef.current,

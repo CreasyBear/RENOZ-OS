@@ -9,13 +9,18 @@
  * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json - DOM-JOBS-001a/b
  */
 
+import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, gte, lte, sql, desc, asc, inArray } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, gte, lte, sql, desc, asc, inArray, or, ilike } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse, cursorPaginationSchema } from '@/lib/db/pagination';
+import { containsPattern } from '@/lib/db/utils';
 import { db } from '@/lib/db';
 import { jobAssignments, jobPhotos, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, AuthError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { logger as appLogger } from '@/lib/logger';
 import { computeChanges } from '@/lib/activity-logger';
 
 // ============================================================================
@@ -37,6 +42,7 @@ const JOB_ASSIGNMENT_EXCLUDED_FIELDS: string[] = [
 import {
   createJobAssignmentSchema,
   listJobAssignmentsSchema,
+  listJobAssignmentsCursorSchema,
   jobAssignmentFiltersSchema,
   getJobAssignmentSchema,
   deleteJobAssignmentSchema,
@@ -44,6 +50,8 @@ import {
   completeJobAssignmentSchema,
   createJobPhotoSchema,
   listJobPhotosSchema,
+  jobLocationSchema,
+  jobAssignmentMetadataSchema,
   type JobAssignmentFilters,
   type UpdateJobAssignmentInput,
   type JobAssignmentResponse,
@@ -54,6 +62,10 @@ import {
   type DeleteJobAssignmentResponse,
   type CreateJobPhotoResponse,
 } from '@/lib/schemas/jobs/job-assignments';
+import { z } from 'zod';
+
+type JobLocation = z.infer<typeof jobLocationSchema>;
+type JobAssignmentMetadata = z.infer<typeof jobAssignmentMetadataSchema>;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -93,13 +105,13 @@ function toJobAssignmentResponse(
     status: job.status,
     startedAt: job.startedAt,
     completedAt: job.completedAt,
-    startLocation: job.startLocation as any,
-    completeLocation: job.completeLocation as any,
+    startLocation: job.startLocation as JobLocation | null,
+    completeLocation: job.completeLocation as JobLocation | null,
     signatureUrl: job.signatureUrl,
     signedByName: job.signedByName,
     confirmationStatus: job.confirmationStatus,
     internalNotes: job.internalNotes,
-    metadata: job.metadata as any,
+    metadata: job.metadata as JobAssignmentMetadata,
     slaTrackingId: job.slaTrackingId,
     version: job.version,
     createdAt: job.createdAt.toISOString(),
@@ -118,7 +130,7 @@ function toJobPhotoResponse(photo: typeof jobPhotos.$inferSelect): JobPhotoRespo
     type: photo.type,
     photoUrl: photo.photoUrl,
     caption: photo.caption,
-    location: photo.location as any,
+    location: photo.location as JobLocation | null,
     createdAt: photo.createdAt.toISOString(),
     updatedAt: photo.updatedAt.toISOString(),
   };
@@ -132,17 +144,17 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(createJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const logger = createActivityLoggerWithContext(ctx);
+    const activityLogger = createActivityLoggerWithContext(ctx);
 
     try {
       // Generate job number if not provided
-      const jobNumber = data.jobNumber || (await generateJobNumber(data.organizationId));
+      const jobNumber = data.jobNumber || (await generateJobNumber(ctx.organizationId));
 
       // Create job assignment
       const [newJob] = await db
         .insert(jobAssignments)
         .values({
-          organizationId: data.organizationId,
+          organizationId: ctx.organizationId,
           orderId: data.orderId,
           customerId: data.customerId,
           installerId: data.installerId,
@@ -181,7 +193,7 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
         .limit(1);
 
       // Log job assignment creation
-      logger.logAsync({
+      activityLogger.logAsync({
         entityType: 'job_assignment',
         entityId: newJob.id,
         action: 'created',
@@ -215,7 +227,7 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
 
       return response;
     } catch (error) {
-      console.error('Failed to create job assignment:', error);
+      appLogger.error('Failed to create job assignment', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to create job assignment',
@@ -227,47 +239,48 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
 // GET JOB ASSIGNMENT
 // ============================================================================
 
+const _getJobAssignmentCached = cache(
+  async (id: string, organizationId: string) => {
+    const [jobWithRelations] = await db
+      .select({
+        job: jobAssignments,
+        installer: { id: users.id, name: users.name, email: users.email },
+        customer: { id: customers.id, name: customers.name },
+      })
+      .from(jobAssignments)
+      .where(
+        and(
+          eq(jobAssignments.id, id),
+          eq(jobAssignments.organizationId, organizationId)
+        )
+      )
+      .innerJoin(users, eq(jobAssignments.installerId, users.id))
+      .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+      .limit(1);
+
+    if (!jobWithRelations) return null;
+    return toJobAssignmentResponse(
+      jobWithRelations.job,
+      jobWithRelations.installer,
+      jobWithRelations.customer
+    );
+  }
+);
+
 export const getJobAssignment = createServerFn({ method: 'GET' })
   .inputValidator(getJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    
     try {
-      const [jobWithRelations] = await db
-        .select({
-          job: jobAssignments,
-          installer: {
-            id: users.id,
-            name: users.name,
-            email: users.email,
-          },
-          customer: {
-            id: customers.id,
-            name: customers.name,
-          },
-        })
-        .from(jobAssignments)
-        .where(
-          and(
-            eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, ctx.organizationId)
-          )
-        )
-        .innerJoin(users, eq(jobAssignments.installerId, users.id))
-        .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
-        .limit(1);
-
-      if (!jobWithRelations) {
+      const result = await _getJobAssignmentCached(data.id, ctx.organizationId);
+      if (!result) {
+        setResponseStatus(404);
         throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
-
-      return toJobAssignmentResponse(
-        jobWithRelations.job,
-        jobWithRelations.installer,
-        jobWithRelations.customer
-      );
+      return result;
     } catch (error) {
-      console.error('Failed to get job assignment:', error);
+      if (error instanceof NotFoundError) throw error;
+      appLogger.error('Failed to get job assignment', error);
       throw error;
     }
   });
@@ -327,12 +340,14 @@ export const listJobAssignments = createServerFn({ method: 'GET' })
         conditions.push(eq(jobAssignments.scheduledDate, filters.scheduledDate));
       }
       if (filters.search) {
-        // Search in title, description, job number, or customer name
-        conditions.push(sql`(
-          ${jobAssignments.title} ILIKE ${`%${filters.search}%`} OR
-          ${jobAssignments.description} ILIKE ${`%${filters.search}%`} OR
-          ${jobAssignments.jobNumber} ILIKE ${`%${filters.search}%`}
-        )`);
+        const searchPattern = containsPattern(filters.search);
+        conditions.push(
+          or(
+            ilike(jobAssignments.title, searchPattern),
+            ilike(jobAssignments.description, searchPattern),
+            ilike(jobAssignments.jobNumber, searchPattern)
+          )!
+        );
       }
 
       // Get total count
@@ -353,10 +368,37 @@ export const listJobAssignments = createServerFn({ method: 'GET' })
 
       const sortOrder = filters.sortOrder === 'desc' ? desc : asc;
 
-      // Get jobs with relations
+      // Get jobs with relations — select only columns used by toJobAssignmentResponse
       const jobsWithRelations = await db
         .select({
-          job: jobAssignments,
+          job: {
+            id: jobAssignments.id,
+            organizationId: jobAssignments.organizationId,
+            orderId: jobAssignments.orderId,
+            customerId: jobAssignments.customerId,
+            installerId: jobAssignments.installerId,
+            jobType: jobAssignments.jobType,
+            jobNumber: jobAssignments.jobNumber,
+            title: jobAssignments.title,
+            description: jobAssignments.description,
+            scheduledDate: jobAssignments.scheduledDate,
+            scheduledTime: jobAssignments.scheduledTime,
+            estimatedDuration: jobAssignments.estimatedDuration,
+            status: jobAssignments.status,
+            startedAt: jobAssignments.startedAt,
+            completedAt: jobAssignments.completedAt,
+            startLocation: jobAssignments.startLocation,
+            completeLocation: jobAssignments.completeLocation,
+            signatureUrl: jobAssignments.signatureUrl,
+            signedByName: jobAssignments.signedByName,
+            confirmationStatus: jobAssignments.confirmationStatus,
+            internalNotes: jobAssignments.internalNotes,
+            metadata: jobAssignments.metadata,
+            slaTrackingId: jobAssignments.slaTrackingId,
+            version: jobAssignments.version,
+            createdAt: jobAssignments.createdAt,
+            updatedAt: jobAssignments.updatedAt,
+          },
           installer: {
             id: users.id,
             name: users.name,
@@ -377,7 +419,7 @@ export const listJobAssignments = createServerFn({ method: 'GET' })
 
       const response: ListJobAssignmentsResponse = {
         jobs: jobsWithRelations.map(({ job, installer, customer }) =>
-          toJobAssignmentResponse(job, installer, customer)
+          toJobAssignmentResponse(job as typeof jobAssignments.$inferSelect, installer, customer)
         ),
         total: count,
         hasMore: filters.offset + filters.limit < count,
@@ -387,9 +429,109 @@ export const listJobAssignments = createServerFn({ method: 'GET' })
 
       return response;
     } catch (error) {
-      console.error('Failed to list job assignments:', error);
+      appLogger.error('Failed to list job assignments', error);
       throw error;
     }
+  });
+
+/**
+ * List job assignments with cursor pagination (recommended for large datasets).
+ */
+export const listJobAssignmentsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listJobAssignmentsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+
+    if (data.organizationId !== ctx.organizationId) {
+      throw new AuthError('Access denied to job assignments');
+    }
+
+    const cursorFiltersSchema = cursorPaginationSchema.merge(
+      jobAssignmentFiltersSchema.omit({ limit: true, offset: true })
+    );
+    const filters = cursorFiltersSchema.parse(data.filters ?? {});
+    const { cursor, pageSize = 20, sortOrder = 'desc', ...rest } = filters;
+    const conditions = [eq(jobAssignments.organizationId, ctx.organizationId)];
+
+    if (rest.status) conditions.push(eq(jobAssignments.status, rest.status));
+    if (rest.statuses?.length) conditions.push(inArray(jobAssignments.status, rest.statuses));
+    if (rest.jobType) conditions.push(eq(jobAssignments.jobType, rest.jobType));
+    if (rest.jobTypes?.length) conditions.push(inArray(jobAssignments.jobType, rest.jobTypes));
+    if (rest.installerId) conditions.push(eq(jobAssignments.installerId, rest.installerId));
+    if (rest.installerIds?.length) conditions.push(inArray(jobAssignments.installerId, rest.installerIds));
+    if (rest.customerId) conditions.push(eq(jobAssignments.customerId, rest.customerId));
+    if (rest.customerIds?.length) conditions.push(inArray(jobAssignments.customerId, rest.customerIds));
+    if (rest.orderId) conditions.push(eq(jobAssignments.orderId, rest.orderId));
+    if (rest.dateFrom) conditions.push(gte(jobAssignments.scheduledDate, rest.dateFrom));
+    if (rest.dateTo) conditions.push(lte(jobAssignments.scheduledDate, rest.dateTo));
+    if (rest.scheduledDate) conditions.push(eq(jobAssignments.scheduledDate, rest.scheduledDate));
+    if (rest.search) {
+      const searchPattern = containsPattern(rest.search);
+      conditions.push(
+        or(
+          ilike(jobAssignments.title, searchPattern),
+          ilike(jobAssignments.description, searchPattern),
+          ilike(jobAssignments.jobNumber, searchPattern)
+        )!
+      );
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(jobAssignments.createdAt, jobAssignments.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const jobsWithRelations = await db
+      .select({
+        job: {
+          id: jobAssignments.id,
+          organizationId: jobAssignments.organizationId,
+          orderId: jobAssignments.orderId,
+          customerId: jobAssignments.customerId,
+          installerId: jobAssignments.installerId,
+          jobType: jobAssignments.jobType,
+          jobNumber: jobAssignments.jobNumber,
+          title: jobAssignments.title,
+          description: jobAssignments.description,
+          scheduledDate: jobAssignments.scheduledDate,
+          scheduledTime: jobAssignments.scheduledTime,
+          estimatedDuration: jobAssignments.estimatedDuration,
+          status: jobAssignments.status,
+          startedAt: jobAssignments.startedAt,
+          completedAt: jobAssignments.completedAt,
+          startLocation: jobAssignments.startLocation,
+          completeLocation: jobAssignments.completeLocation,
+          signatureUrl: jobAssignments.signatureUrl,
+          signedByName: jobAssignments.signedByName,
+          confirmationStatus: jobAssignments.confirmationStatus,
+          internalNotes: jobAssignments.internalNotes,
+          metadata: jobAssignments.metadata,
+          slaTrackingId: jobAssignments.slaTrackingId,
+          version: jobAssignments.version,
+          createdAt: jobAssignments.createdAt,
+          updatedAt: jobAssignments.updatedAt,
+        },
+        installer: { id: users.id, name: users.name, email: users.email },
+        customer: { id: customers.id, name: customers.name },
+      })
+      .from(jobAssignments)
+      .where(and(...conditions))
+      .innerJoin(users, eq(jobAssignments.installerId, users.id))
+      .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+      .orderBy(orderDir(jobAssignments.createdAt), orderDir(jobAssignments.id))
+      .limit(pageSize + 1);
+
+    const items = jobsWithRelations.map(({ job, installer, customer }) =>
+      toJobAssignmentResponse(job as typeof jobAssignments.$inferSelect, installer, customer)
+    );
+
+    return buildStandardCursorResponse(items, pageSize);
   });
 
 // ============================================================================
@@ -413,7 +555,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
       data: { id: string; organizationId: string } & UpdateJobAssignmentInput;
     }) => {
       const ctx = await withAuth();
-      const logger = createActivityLoggerWithContext(ctx);
+      const activityLogger = createActivityLoggerWithContext(ctx);
       const { id, organizationId, ...updateData } = data;
 
       try {
@@ -469,7 +611,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
         });
 
         if (changes.fields && changes.fields.length > 0) {
-          logger.logAsync({
+          activityLogger.logAsync({
             entityType: 'job_assignment',
             entityId: updatedJob.id,
             action: 'updated',
@@ -501,7 +643,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
 
         return response;
       } catch (error) {
-        console.error('Failed to update job assignment:', error);
+        appLogger.error('Failed to update job assignment', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to update job assignment',
@@ -518,7 +660,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(deleteJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const logger = createActivityLoggerWithContext(ctx);
+    const activityLogger = createActivityLoggerWithContext(ctx);
 
     try {
       // Get existing job for activity logging
@@ -553,7 +695,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
         );
 
       // Log job assignment deletion (cancellation)
-      logger.logAsync({
+      activityLogger.logAsync({
         entityType: 'job_assignment',
         entityId: existingJob.id,
         action: 'deleted',
@@ -579,7 +721,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
 
       return response;
     } catch (error) {
-      console.error('Failed to delete job assignment:', error);
+      appLogger.error('Failed to delete job assignment', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to delete job assignment',
@@ -595,7 +737,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(startJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const logger = createActivityLoggerWithContext(ctx);
+    const activityLogger = createActivityLoggerWithContext(ctx);
 
     try {
       // Get existing job for activity logging
@@ -621,7 +763,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
         .set({
           status: 'in_progress',
           startedAt: now,
-          startLocation: data.startLocation as any,
+          startLocation: data.startLocation as JobLocation | undefined,
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
@@ -634,7 +776,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
         .returning();
 
       // Log job start
-      logger.logAsync({
+      activityLogger.logAsync({
         entityType: 'job_assignment',
         entityId: startedJob.id,
         action: 'updated',
@@ -657,7 +799,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
 
       return { success: true };
     } catch (error) {
-      console.error('Failed to start job assignment:', error);
+      appLogger.error('Failed to start job assignment', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to start job assignment',
@@ -673,7 +815,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(completeJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const logger = createActivityLoggerWithContext(ctx);
+    const activityLogger = createActivityLoggerWithContext(ctx);
 
     try {
       // Get existing job for activity logging
@@ -699,7 +841,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
         .set({
           status: 'completed',
           completedAt: now,
-          completeLocation: data.completeLocation as any,
+          completeLocation: data.completeLocation as JobLocation | undefined,
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
@@ -712,7 +854,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
         .returning();
 
       // Log job completion
-      logger.logAsync({
+      activityLogger.logAsync({
         entityType: 'job_assignment',
         entityId: completedJob.id,
         action: 'updated',
@@ -735,7 +877,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
 
       return { success: true };
     } catch (error) {
-      console.error('Failed to complete job assignment:', error);
+      appLogger.error('Failed to complete job assignment', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to complete job assignment',
@@ -751,7 +893,7 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
   .inputValidator(createJobPhotoSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const logger = createActivityLoggerWithContext(ctx);
+    const activityLogger = createActivityLoggerWithContext(ctx);
 
     try {
       // Get job assignment for activity logging context
@@ -769,14 +911,14 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
           type: data.type,
           photoUrl: data.photoUrl,
           caption: data.caption,
-          location: data.location as any,
+          location: data.location as JobLocation | undefined,
           createdBy: ctx.user.id,
           updatedBy: ctx.user.id,
         })
         .returning();
 
       // Log photo creation
-      logger.logAsync({
+      activityLogger.logAsync({
         entityType: 'job_photo',
         entityId: newPhoto.id,
         action: 'created',
@@ -799,7 +941,7 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
 
       return response;
     } catch (error) {
-      console.error('Failed to create job photo:', error);
+      appLogger.error('Failed to create job photo', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to create job photo',
@@ -830,7 +972,7 @@ export const getJobPhotos = createServerFn({ method: 'GET' })
 
       return photos.map(toJobPhotoResponse);
     } catch (error) {
-      console.error('Failed to get job photos:', error);
+      appLogger.error('Failed to get job photos', error);
       throw error;
     }
   });
@@ -842,21 +984,43 @@ export const getJobPhotos = createServerFn({ method: 'GET' })
 /**
  * Generate a unique job number
  */
-async function generateJobNumber(organizationId: string): Promise<string> {
+async function generateJobNumber(organizationId: string, maxRetries = 3): Promise<string> {
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
 
-  // Get the next sequence number for today
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(jobAssignments)
-    .where(
-      and(
-        eq(jobAssignments.organizationId, organizationId),
-        sql`${jobAssignments.createdAt}::date = CURRENT_DATE`
-      )
-    );
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Get the next sequence number for today
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(jobAssignments)
+      .where(
+        and(
+          eq(jobAssignments.organizationId, organizationId),
+          sql`${jobAssignments.createdAt}::date = CURRENT_DATE`
+        )
+      );
 
-  const sequence = (count + 1).toString().padStart(4, '0');
-  return `JOB-${dateStr}-${sequence}`;
+    const sequence = (count + 1 + attempt).toString().padStart(4, '0');
+    const jobNumber = `JOB-${dateStr}-${sequence}`;
+
+    // Check for uniqueness before returning
+    const [existing] = await db
+      .select({ id: jobAssignments.id })
+      .from(jobAssignments)
+      .where(
+        and(
+          eq(jobAssignments.organizationId, organizationId),
+          eq(jobAssignments.jobNumber, jobNumber)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      return jobNumber;
+    }
+  }
+
+  // Fallback: append random suffix to guarantee uniqueness
+  const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `JOB-${dateStr}-${randomSuffix}`;
 }

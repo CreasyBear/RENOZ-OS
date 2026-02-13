@@ -31,9 +31,21 @@ import { createPOColumns } from "./po-columns";
 // ============================================================================
 // TYPES
 // ============================================================================
+// Server sort fields + client-only (supplierName). Used for client-side table sorting.
+const POTABLE_SORT_FIELDS = [
+  'poNumber',
+  'supplierName',
+  'status',
+  'orderDate',
+  'requiredDate',
+  'totalAmount',
+] as const;
+type POTableSortField = (typeof POTABLE_SORT_FIELDS)[number];
+type SortDirection = 'asc' | 'desc';
 
-type SortField = "poNumber" | "supplierName" | "status" | "orderDate" | "requiredDate" | "totalAmount";
-type SortDirection = "asc" | "desc";
+function isPOTableSortField(field: string): field is POTableSortField {
+  return (POTABLE_SORT_FIELDS as readonly string[]).includes(field);
+}
 
 export interface POTableProps {
   orders: PurchaseOrderTableData[];
@@ -61,7 +73,7 @@ export const POTable = memo(function POTable({
   const lastSelectedIndexRef = useRef<number | null>(null);
 
   // Sort state (client-side for backward compatibility)
-  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+  const [sort, setSort] = useState<{ field: POTableSortField; direction: SortDirection }>({
     field: "orderDate",
     direction: "desc",
   });
@@ -169,8 +181,9 @@ export const POTable = memo(function POTable({
 
   // Handle sort changes
   const handleSort = useCallback((field: string) => {
+    if (!isPOTableSortField(field)) return;
     setSort((current) => ({
-      field: field as SortField,
+      field,
       direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
     }));
   }, []);
@@ -221,6 +234,7 @@ export const POTable = memo(function POTable({
     [sorting, handleSort]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable({
     data: sortedOrders,
     columns,

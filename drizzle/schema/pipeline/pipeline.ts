@@ -42,6 +42,12 @@ import {
   currencyColumn,
   currencyColumnNullable,
   percentageColumn,
+  standardRlsPolicies,
+  organizationRlsUsing,
+  organizationRlsWithCheck,
+  positiveCheck,
+  nonNegativeCheck,
+  rangeCheck,
 } from "../_shared/patterns";
 import { customers, contacts } from "../customers/customers";
 import { users } from "../users/users";
@@ -129,27 +135,7 @@ export const winLossReasons = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("win_loss_reasons_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("win_loss_reasons_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("win_loss_reasons_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("win_loss_reasons_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("win_loss_reasons"),
   })
 );
 
@@ -275,33 +261,10 @@ export const opportunities = pgTable(
     ),
 
     // Probability range check
-    probabilityCheck: check(
-      "probability_range",
-      sql`${table.probability} IS NULL OR (${table.probability} >= 0 AND ${table.probability} <= 100)`
-    ),
+    probabilityCheck: rangeCheck("probability_range", table.probability, 0, 100),
 
     // RLS Policies
-    selectPolicy: pgPolicy("opportunities_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("opportunities_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("opportunities_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("opportunities_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("opportunities"),
   })
 );
 
@@ -374,22 +337,22 @@ export const opportunityActivities = pgTable(
       table.createdAt.desc()
     ),
 
-    // RLS Policies
+    // RLS Policies (append-only: select + insert + delete only, no update)
     selectPolicy: pgPolicy("opportunity_activities_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
     insertPolicy: pgPolicy("opportunity_activities_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: organizationRlsWithCheck(),
     }),
     // Activities are immutable - no update policy
     deletePolicy: pgPolicy("opportunity_activities_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
   })
 );
@@ -455,42 +418,13 @@ export const quoteVersions = pgTable(
     ),
 
     // Constraints
-    versionNumberPositive: check(
-      "version_number_positive",
-      sql`${table.versionNumber} > 0`
-    ),
-    subtotalNonNegative: check(
-      "subtotal_non_negative",
-      sql`${table.subtotal} >= 0`
-    ),
-    taxAmountNonNegative: check(
-      "tax_amount_non_negative",
-      sql`${table.taxAmount} >= 0`
-    ),
-    totalNonNegative: check("total_non_negative", sql`${table.total} >= 0`),
+    versionNumberPositive: positiveCheck("version_number_positive", table.versionNumber),
+    subtotalNonNegative: nonNegativeCheck("subtotal_non_negative", table.subtotal),
+    taxAmountNonNegative: nonNegativeCheck("tax_amount_non_negative", table.taxAmount),
+    totalNonNegative: nonNegativeCheck("total_non_negative", table.total),
 
     // RLS Policies
-    selectPolicy: pgPolicy("quote_versions_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("quote_versions_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("quote_versions_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("quote_versions_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("quote_versions"),
     portalSelectPolicy: pgPolicy("quote_versions_portal_select_policy", {
       for: "select",
       to: "authenticated",
@@ -558,13 +492,13 @@ export const quotes = pgTable(
     // Tracking
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
-    // Unique quote number per organization
-    quoteNumberOrgUnique: uniqueIndex("idx_quotes_number_org_unique").on(
-      table.organizationId,
-      table.quoteNumber
-    ),
+    // Unique quote number per organization (scoped to active records)
+    quoteNumberOrgUnique: uniqueIndex("idx_quotes_number_org_unique")
+      .on(table.organizationId, table.quoteNumber)
+      .where(sql`deleted_at IS NULL`),
 
     // Multi-tenant queries
     orgStatusIdx: index("idx_quotes_org_status").on(
@@ -581,27 +515,7 @@ export const quotes = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("quotes_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("quotes_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("quotes_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("quotes_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("quotes"),
     portalSelectPolicy: pgPolicy("quotes_portal_select_policy", {
       for: "select",
       to: "authenticated",

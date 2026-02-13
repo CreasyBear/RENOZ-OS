@@ -71,6 +71,7 @@ export function useJobs(options: UseJobsOptions = {}) {
           },
         },
       });
+      if (result == null) throw new Error('Jobs list returned no data');
       return result;
     },
     enabled: enabled && !!organizationId,
@@ -87,10 +88,13 @@ export function useJob(jobId: string, enabled = true) {
 
   return useQuery({
     queryKey: queryKeys.jobs.detail(jobId),
-    queryFn: () =>
-      getJobAssignment({
+    queryFn: async () => {
+      const result = await getJobAssignment({
         data: { id: jobId, organizationId: organizationId! },
-      }),
+      });
+      if (result == null) throw new Error('Job not found');
+      return result;
+    },
     enabled: enabled && !!jobId && !!organizationId,
     staleTime: 30 * 1000,
   });

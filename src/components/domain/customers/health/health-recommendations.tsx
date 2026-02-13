@@ -19,6 +19,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
+import { getHealthScoreSemanticColor } from '../customer-status-config'
+import { getIconColorClasses, type SemanticColor } from '@/lib/status/colors'
 
 // ============================================================================
 // TYPES
@@ -58,24 +60,78 @@ function getScoreLevel(score: number): 'excellent' | 'good' | 'fair' | 'poor' {
   return 'poor'
 }
 
+/**
+ * Get text color classes for a score level using semantic colors
+ */
 function getScoreColor(level: string): string {
-  switch (level) {
-    case 'excellent': return 'text-green-600'
-    case 'good': return 'text-yellow-600'
-    case 'fair': return 'text-orange-600'
-    case 'poor': return 'text-red-600'
-    default: return 'text-muted-foreground'
+  const scoreMap: Record<string, number | null> = {
+    'excellent': 80,
+    'good': 60,
+    'fair': 40,
+    'poor': 20,
   }
+  const score = scoreMap[level] ?? null
+  const semanticColor = getHealthScoreSemanticColor(score)
+  return getIconColorClasses(semanticColor)
 }
 
-function getProgressColor(level: string): string {
-  switch (level) {
-    case 'excellent': return 'bg-green-500'
-    case 'good': return 'bg-yellow-500'
-    case 'fair': return 'bg-orange-500'
-    case 'poor': return 'bg-red-500'
-    default: return 'bg-muted'
+/**
+ * Get progress bar color class for Progress component indicator
+ * Maps semantic colors to appropriate Tailwind 500-level colors for progress bars
+ */
+function getProgressColorClass(level: string): string {
+  const scoreMap: Record<string, number | null> = {
+    'excellent': 80,
+    'good': 60,
+    'fair': 40,
+    'poor': 20,
   }
+  const score = scoreMap[level] ?? null
+  const semanticColor = getHealthScoreSemanticColor(score)
+  
+  // Map semantic colors to progress bar colors (500 level for visibility)
+  // Using [&>div]: prefix to target Progress component's indicator div
+  const progressColorMap: Record<SemanticColor, string> = {
+    'success': '[&>div]:bg-emerald-500',
+    'warning': '[&>div]:bg-amber-500',
+    'pending': '[&>div]:bg-orange-500',
+    'error': '[&>div]:bg-red-500',
+    'neutral': '[&>div]:bg-gray-500',
+    'info': '[&>div]:bg-blue-500',
+    'progress': '[&>div]:bg-violet-500',
+    'inactive': '[&>div]:bg-slate-500',
+    'draft': '[&>div]:bg-slate-400',
+  }
+  return progressColorMap[semanticColor] ?? '[&>div]:bg-gray-500'
+}
+
+/**
+ * Get background color class with opacity for icon containers
+ * Uses semantic color background classes (100 level) with opacity
+ */
+function getIconBgColor(level: string): string {
+  const scoreMap: Record<string, number | null> = {
+    'excellent': 80,
+    'good': 60,
+    'fair': 40,
+    'poor': 20,
+  }
+  const score = scoreMap[level] ?? null
+  const semanticColor = getHealthScoreSemanticColor(score)
+  
+  // Map to background colors (100 level) - these are already in STATUS_COLORS
+  const bgColorMap: Record<SemanticColor, string> = {
+    'success': 'bg-emerald-100/10',
+    'warning': 'bg-amber-100/10',
+    'pending': 'bg-orange-100/10',
+    'error': 'bg-red-100/10',
+    'neutral': 'bg-gray-100/10',
+    'info': 'bg-blue-100/10',
+    'progress': 'bg-violet-100/10',
+    'inactive': 'bg-slate-100/10',
+    'draft': 'bg-slate-50/10',
+  }
+  return bgColorMap[semanticColor] ?? 'bg-gray-100/10'
 }
 
 function generateRecommendations(metrics: HealthMetrics): Recommendation[] {
@@ -168,7 +224,7 @@ function FactorCard({ icon: Icon, title, score, detail }: FactorCardProps) {
 
   return (
     <div className="flex items-center gap-4 p-3 rounded-lg border">
-      <div className={cn('p-2 rounded-full', `${getProgressColor(level)}/10`)}>
+      <div className={cn('p-2 rounded-full', getIconBgColor(level))}>
         <Icon className={cn('h-5 w-5', getScoreColor(level))} />
       </div>
       <div className="flex-1 min-w-0">
@@ -176,7 +232,7 @@ function FactorCard({ icon: Icon, title, score, detail }: FactorCardProps) {
           <span className="text-sm font-medium">{title}</span>
           <span className={cn('text-sm font-bold', getScoreColor(level))}>{score}</span>
         </div>
-        <Progress value={score} className="h-2" />
+        <Progress value={score} className={cn('h-2', getProgressColorClass(level))} />
         {detail && (
           <p className="text-xs text-muted-foreground mt-1">{detail}</p>
         )}

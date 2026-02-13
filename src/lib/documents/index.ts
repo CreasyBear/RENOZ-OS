@@ -89,6 +89,24 @@ export {
 } from "./schemas";
 
 // ============================================================================
+// URL UTILITIES
+// ============================================================================
+
+export { getAppUrl, buildDocumentViewUrl } from "./urls";
+
+// ============================================================================
+// BUILDERS
+// ============================================================================
+
+export {
+  buildDocumentOrderFromDb,
+  buildDocumentOrderFromPreviewData,
+  type OrderDataFromDb,
+  type CustomerDataFromDb,
+  type PreviewDocumentData,
+} from "./builders";
+
+// ============================================================================
 // RENDERING
 // ============================================================================
 
@@ -201,6 +219,12 @@ export {
   type ProFormaOrder,
   type ProFormaPdfDocumentProps,
   type ProFormaPdfTemplateProps,
+  // Credit Note
+  CreditNotePdfDocument,
+  CreditNotePdfTemplate,
+  type CreditNoteDocumentData,
+  type CreditNotePdfDocumentProps,
+  type CreditNotePdfTemplateProps,
   // Warranty Certificate
   WarrantyCertificatePdfDocument,
   WarrantyCertificatePdfTemplate,
@@ -213,6 +237,12 @@ export {
   type CompletionCertificateData,
   type CompletionCertificatePdfDocumentProps,
   type CompletionCertificatePdfTemplateProps,
+  // Handover Pack
+  HandoverPackPdfDocument,
+  HandoverPackPdfTemplate,
+  type HandoverPackData,
+  type HandoverPackPdfDocumentProps,
+  type HandoverPackPdfTemplateProps,
   // Delivery Note
   DeliveryNotePdfDocument,
   DeliveryNotePdfTemplate,

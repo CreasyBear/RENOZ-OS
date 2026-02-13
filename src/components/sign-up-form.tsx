@@ -4,141 +4,150 @@ import { cn } from '~/lib/utils';
 import { supabase } from '~/lib/supabase/client';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { useTanStackForm } from '~/hooks/_shared/use-tanstack-form';
+import { registerSchema } from '@/lib/schemas/auth';
+import { TextField } from '@/components/shared/forms';
+import { Loader2 } from 'lucide-react';
 
 export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
-  const [name, setName] = useState('');
-  const [organizationName, setOrganizationName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [repeatPassword, setRepeatPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (password !== repeatPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
+  const form = useTanStackForm({
+    schema: registerSchema,
+    defaultValues: {
+      name: '',
+      organizationName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+    onSubmit: async (values) => {
+      setAuthError(null);
       const { error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: values.email,
+        password: values.password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/confirm`,
           data: {
-            name: name || email.split('@')[0],
-            organization_name: organizationName || `${name || email.split('@')[0]}'s Organization`,
+            name: values.name || values.email.split('@')[0],
+            organization_name:
+              values.organizationName ||
+              `${values.name || values.email.split('@')[0]}'s Organization`,
           },
         },
       });
       if (error) throw error;
-      await navigate({ to: '/sign-up-success' });
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
+      await navigate({ to: '/sign-up-success', search: { email: values.email } });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAuthError(null);
+    void form.handleSubmit().catch((err) => {
+      setAuthError(err instanceof Error ? err.message : 'An error occurred');
+    });
   };
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Sign up</CardTitle>
-          <CardDescription>Create a new account</CardDescription>
+      <Card className="border-border/80 shadow-lg">
+        <CardHeader className="space-y-1.5 pb-4">
+          <CardTitle className="text-2xl font-semibold tracking-tight">Create an account</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Enter your details to get started
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignUp}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="John Doe"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="organization">Organization Name</Label>
-                <Input
-                  id="organization"
-                  type="text"
-                  placeholder="Acme Inc"
-                  required
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  minLength={8}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="repeat-password">Repeat Password</Label>
-                </div>
-                <Input
-                  id="repeat-password"
-                  type="password"
-                  minLength={8}
-                  required
-                  value={repeatPassword}
-                  onChange={(e) => setRepeatPassword(e.target.value)}
-                />
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Creating an account...' : 'Sign up'}
+          <form id="sign-up-form" onSubmit={handleSubmit} noValidate>
+            <div className="flex flex-col gap-5">
+              <form.Field name="name">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Full Name"
+                    placeholder="John Doe"
+                    required
+                  />
+                )}
+              </form.Field>
+              <form.Field name="organizationName">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Organization Name"
+                    placeholder="Acme Inc"
+                    required
+                  />
+                )}
+              </form.Field>
+              <form.Field name="email">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Email"
+                    type="email"
+                    placeholder="m@example.com"
+                    required
+                    autocomplete="email"
+                  />
+                )}
+              </form.Field>
+              <form.Field name="password">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Password"
+                    type="password"
+                    required
+                    autocomplete="new-password"
+                  />
+                )}
+              </form.Field>
+              <form.Field name="confirmPassword">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Repeat Password"
+                    type="password"
+                    required
+                    autocomplete="new-password"
+                  />
+                )}
+              </form.Field>
+              {authError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {authError}
+                </p>
+              )}
+              <Button
+                type="submit"
+                className="w-full h-11 font-medium transition-colors duration-200"
+                disabled={form.state.isSubmitting}
+              >
+                {form.state.isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+                    Creating account...
+                  </>
+                ) : (
+                  'Create account'
+                )}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
+            <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{' '}
               <Link
                 to="/login"
                 search={{ redirect: undefined }}
-                className="underline underline-offset-4"
+                className="font-medium text-foreground underline-offset-4 hover:underline transition-colors duration-200 cursor-pointer"
               >
-                Login
+                Sign in
               </Link>
-            </div>
+            </p>
           </form>
         </CardContent>
       </Card>

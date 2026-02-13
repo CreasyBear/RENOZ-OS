@@ -27,7 +27,7 @@ import { queryKeys } from '@/lib/query-keys';
 // TYPES
 // ============================================================================
 
-export type DocumentEntityType = 'order' | 'warranty' | 'job';
+export type DocumentEntityType = 'order' | 'warranty' | 'job' | 'opportunity' | 'project';
 
 export type DocumentType =
   | 'quote'
@@ -137,7 +137,11 @@ async function fetchDocumentHistory(
 export function useDocumentHistory(filters: DocumentHistoryFilters) {
   return useQuery({
     queryKey: queryKeys.documents.history(filters.entityType, filters.entityId, filters.documentType),
-    queryFn: () => fetchDocumentHistory(filters),
+    queryFn: async () => {
+      const result = await fetchDocumentHistory(filters);
+      if (result == null) throw new Error('Document history returned no data');
+      return result;
+    },
     enabled: !!filters.entityId,
     staleTime: 60 * 1000, // 1 minute
   });

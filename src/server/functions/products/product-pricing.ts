@@ -11,7 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, lte, gte, or, isNull, asc, desc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { cache } from 'react';
-import { db } from '@/lib/db';
+import { db, type Database } from '@/lib/db';
 import { products, productPriceTiers, customerProductPrices, priceHistory } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -336,50 +336,51 @@ export const setPriceTiers = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<ProductPriceTier[]> => {
     const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
-    // Verify product exists
-    const [product] = await db
-      .select({ id: products.id })
-      .from(products)
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
+    return db.transaction(async (tx) => {
+      // Verify product exists
+      const [product] = await tx
+        .select({ id: products.id })
+        .from(products)
+        .where(
+          and(
+            eq(products.id, data.productId),
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!product) {
-      throw new NotFoundError('Product not found', 'product');
-    }
+      if (!product) {
+        throw new NotFoundError('Product not found', 'product');
+      }
+      // Delete existing tiers
+      await tx
+        .delete(productPriceTiers)
+        .where(
+          and(
+            eq(productPriceTiers.organizationId, ctx.organizationId),
+            eq(productPriceTiers.productId, data.productId)
+          )
+        );
 
-    // Delete existing tiers
-    await db
-      .delete(productPriceTiers)
-      .where(
-        and(
-          eq(productPriceTiers.organizationId, ctx.organizationId),
-          eq(productPriceTiers.productId, data.productId)
+      if (data.tiers.length === 0) {
+        return [];
+      }
+
+      // Insert new tiers
+      const newTiers = await tx
+        .insert(productPriceTiers)
+        .values(
+          data.tiers.map((tier) => ({
+            ...tier,
+            productId: data.productId,
+            organizationId: ctx.organizationId,
+          }))
         )
-      );
+        .returning();
 
-    if (data.tiers.length === 0) {
-      return [];
-    }
-
-    // Insert new tiers
-    const newTiers = await db
-      .insert(productPriceTiers)
-      .values(
-        data.tiers.map((tier) => ({
-          ...tier,
-          productId: data.productId,
-          organizationId: ctx.organizationId,
-        }))
-      )
-      .returning();
-
-    return newTiers;
+      return newTiers;
+    });
   });
 
 // ============================================================================
@@ -540,20 +541,22 @@ export async function recordPriceChange(params: {
   customerId?: string | null;
   reason?: string | null;
   changedBy: string;
+  executor?: Database; // Accepts both db and transaction (tx cast for compatibility)
 }): Promise<void> {
-  await db.insert(priceHistory).values({
+  const exec = params.executor ?? db;
+  await exec.insert(priceHistory).values({
     organizationId: params.organizationId,
     productId: params.productId,
     changeType: params.changeType,
-    previousPrice: params.previousPrice ?? null,
-    newPrice: params.newPrice ?? null,
+    previousPrice: params.previousPrice ?? 0,
+    newPrice: params.newPrice ?? 0,
     previousDiscountPercent: params.previousDiscountPercent ?? null,
     newDiscountPercent: params.newDiscountPercent ?? null,
     tierId: params.tierId ?? null,
     customerId: params.customerId ?? null,
     reason: params.reason ?? null,
     changedBy: params.changedBy,
-  } as typeof priceHistory.$inferInsert);
+  });
 }
 
 /**
@@ -667,10 +670,9 @@ export const bulkUpdatePrices = createServerFn({ method: 'POST' })
     // Create a Map for O(1) lookups
     const productMap = new Map(allProducts.map((p) => [p.id, p]));
 
-    // Process each update
+    // Process each update (history + product update atomic per product)
     for (const update of data.updates) {
       try {
-        // Get current product from the pre-fetched map
         const product = productMap.get(update.productId);
 
         if (!product) {
@@ -678,40 +680,43 @@ export const bulkUpdatePrices = createServerFn({ method: 'POST' })
           continue;
         }
 
-        // Build update object
         const updateData: Partial<typeof products.$inferInsert> = {};
 
         if (update.basePrice !== undefined && update.basePrice !== product.basePrice) {
-          // Record base price change
-          await recordPriceChange({
-            organizationId: ctx.organizationId,
-            productId: update.productId,
-            changeType: 'bulk_update',
-            previousPrice: product.basePrice,
-            newPrice: update.basePrice,
-            reason: data.reason,
-            changedBy: ctx.user.id,
-          });
           updateData.basePrice = update.basePrice;
         }
-
         if (update.costPrice !== undefined && update.costPrice !== product.costPrice) {
-          // Record cost price change
-          await recordPriceChange({
-            organizationId: ctx.organizationId,
-            productId: update.productId,
-            changeType: 'cost_price',
-            previousPrice: product.costPrice,
-            newPrice: update.costPrice,
-            reason: data.reason,
-            changedBy: ctx.user.id,
-          });
           updateData.costPrice = update.costPrice;
         }
 
-        // Apply update if there are changes
         if (Object.keys(updateData).length > 0) {
-          await db.update(products).set(updateData).where(eq(products.id, update.productId));
+          await db.transaction(async (tx) => {
+            if (update.basePrice !== undefined && update.basePrice !== product.basePrice) {
+              await recordPriceChange({
+                organizationId: ctx.organizationId,
+                productId: update.productId,
+                changeType: 'bulk_update',
+                previousPrice: product.basePrice,
+                newPrice: update.basePrice,
+                reason: data.reason,
+                changedBy: ctx.user.id,
+                executor: tx as unknown as Database,
+              });
+            }
+            if (update.costPrice !== undefined && update.costPrice !== product.costPrice) {
+              await recordPriceChange({
+                organizationId: ctx.organizationId,
+                productId: update.productId,
+                changeType: 'cost_price',
+                previousPrice: product.costPrice,
+                newPrice: update.costPrice,
+                reason: data.reason,
+                changedBy: ctx.user.id,
+                executor: tx as unknown as Database,
+              });
+            }
+            await tx.update(products).set(updateData).where(eq(products.id, update.productId));
+          });
           result.updated++;
         }
       } catch (error) {
@@ -792,49 +797,47 @@ export const applyPriceAdjustment = createServerFn({ method: 'POST' })
         }
 
         const updateData: Partial<typeof products.$inferInsert> = {};
+        const reason =
+          data.reason ??
+          `${data.adjustmentPercent > 0 ? '+' : ''}${data.adjustmentPercent}% adjustment`;
 
-        // Apply to base price
         if ((data.applyTo === 'base' || data.applyTo === 'both') && product.basePrice) {
-          const newBasePrice =
+          updateData.basePrice =
             Math.round(product.basePrice * multiplier * roundFactor) / roundFactor;
-
-          await recordPriceChange({
-            organizationId: ctx.organizationId,
-            productId,
-            changeType: 'bulk_update',
-            previousPrice: product.basePrice,
-            newPrice: newBasePrice,
-            reason:
-              data.reason ??
-              `${data.adjustmentPercent > 0 ? '+' : ''}${data.adjustmentPercent}% adjustment`,
-            changedBy: ctx.user.id,
-          });
-
-          updateData.basePrice = newBasePrice;
         }
-
-        // Apply to cost price
         if ((data.applyTo === 'cost' || data.applyTo === 'both') && product.costPrice) {
-          const newCostPrice =
+          updateData.costPrice =
             Math.round(product.costPrice * multiplier * roundFactor) / roundFactor;
-
-          await recordPriceChange({
-            organizationId: ctx.organizationId,
-            productId,
-            changeType: 'cost_price',
-            previousPrice: product.costPrice,
-            newPrice: newCostPrice,
-            reason:
-              data.reason ??
-              `${data.adjustmentPercent > 0 ? '+' : ''}${data.adjustmentPercent}% adjustment`,
-            changedBy: ctx.user.id,
-          });
-
-          updateData.costPrice = newCostPrice;
         }
 
         if (Object.keys(updateData).length > 0) {
-          await db.update(products).set(updateData).where(eq(products.id, productId));
+          await db.transaction(async (tx) => {
+            if ((data.applyTo === 'base' || data.applyTo === 'both') && product.basePrice) {
+              await recordPriceChange({
+                organizationId: ctx.organizationId,
+                productId,
+                changeType: 'bulk_update',
+                previousPrice: product.basePrice,
+                newPrice: updateData.basePrice!,
+                reason,
+                changedBy: ctx.user.id,
+                executor: tx as unknown as Database,
+              });
+            }
+            if ((data.applyTo === 'cost' || data.applyTo === 'both') && product.costPrice) {
+              await recordPriceChange({
+                organizationId: ctx.organizationId,
+                productId,
+                changeType: 'cost_price',
+                previousPrice: product.costPrice,
+                newPrice: updateData.costPrice!,
+                reason,
+                changedBy: ctx.user.id,
+                executor: tx as unknown as Database,
+              });
+            }
+            await tx.update(products).set(updateData).where(eq(products.id, productId));
+          });
           result.updated++;
         }
       } catch (error) {

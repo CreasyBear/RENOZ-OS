@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { currencySchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
@@ -71,23 +72,46 @@ export const listSuppliersSchema = z.object({
   pageSize: z.number().int().min(1).max(100).default(20),
 });
 
+/** Cursor pagination for list suppliers (uses createdAt + id for stable sort) */
+export const listSuppliersCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    search: z.string().optional(),
+    status: supplierStatusSchema.optional(),
+    supplierType: supplierTypeSchema.optional(),
+    ratingMin: z.number().min(0).max(5).optional(),
+    ratingMax: z.number().min(0).max(5).optional(),
+  })
+);
+export type ListSuppliersCursorInput = z.infer<typeof listSuppliersCursorSchema>;
+
 export const getSupplierSchema = z.object({
   id: z.string().uuid(),
 });
 
+// Optional field helpers: accept '', undefined, or value; output undefined when empty
+const optionalEmail = z
+  .union([z.string().email(), z.literal(''), z.undefined()])
+  .transform((v) => (v === '' || v === undefined ? undefined : v));
+const optionalUrl = z
+  .union([z.string().url(), z.literal(''), z.undefined()])
+  .transform((v) => (v === '' || v === undefined ? undefined : v));
+const optionalString = z
+  .union([z.string(), z.literal(''), z.undefined()])
+  .transform((v) => (v === '' || v === undefined ? undefined : v));
+
 export const createSupplierSchema = z.object({
   name: z.string().min(1, 'Supplier name is required'),
-  legalName: z.string().optional(),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  website: z.string().url('Invalid URL').optional().or(z.literal('')),
+  legalName: z.string().optional().or(z.literal('')).transform((v) => (v === '' ? undefined : v)),
+  email: optionalEmail,
+  phone: optionalString,
+  website: optionalUrl,
   status: supplierStatusSchema.default('active'),
   supplierType: supplierTypeSchema.optional(),
-  taxId: z.string().optional(),
-  registrationNumber: z.string().optional(),
-  primaryContactName: z.string().optional(),
-  primaryContactEmail: z.string().email().optional().or(z.literal('')),
-  primaryContactPhone: z.string().optional(),
+  taxId: optionalString,
+  registrationNumber: optionalString,
+  primaryContactName: optionalString,
+  primaryContactEmail: optionalEmail,
+  primaryContactPhone: optionalString,
   billingAddress: addressSchema.optional(),
   shippingAddress: addressSchema.optional(),
   paymentTerms: paymentTermsSchema.optional(),
@@ -96,7 +120,7 @@ export const createSupplierSchema = z.object({
   minimumOrderValue: currencySchema.optional(),
   maximumOrderValue: currencySchema.optional(),
   tags: z.array(z.string()).optional(),
-  notes: z.string().optional(),
+  notes: optionalString,
 });
 
 export const updateSupplierSchema = createSupplierSchema.partial();
@@ -115,9 +139,53 @@ export const updateSupplierRatingSchema = z.object({
 
 export type ListSuppliersInput = z.infer<typeof listSuppliersSchema>;
 export type GetSupplierInput = z.infer<typeof getSupplierSchema>;
+
+/** Valid sort fields for supplier list */
+export type SupplierSortField = ListSuppliersInput['sortBy'];
+
+/** Type guard for sort field validation (avoids `as SupplierSortField` assertions) */
+export const SUPPLIER_SORT_FIELDS = [
+  'name',
+  'status',
+  'overallRating',
+  'createdAt',
+  'lastOrderDate',
+] as const satisfies readonly SupplierSortField[];
+
+export function isSupplierSortField(f: string): f is SupplierSortField {
+  return (SUPPLIER_SORT_FIELDS as readonly string[]).includes(f);
+}
 export type CreateSupplierInput = z.infer<typeof createSupplierSchema>;
 export type UpdateSupplierInput = z.infer<typeof updateSupplierSchema>;
 export type UpdateSupplierRatingInput = z.infer<typeof updateSupplierRatingSchema>;
+
+// ============================================================================
+// TABLE / LIST TYPES (for DataTable columns and list views)
+// ============================================================================
+
+export interface SupplierTableItem {
+  id: string;
+  supplierCode: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: SupplierStatus;
+  supplierType: SupplierType | null;
+  overallRating: number | null;
+  totalPurchaseOrders: number | null;
+  leadTimeDays: number | null;
+  lastOrderDate: string | null;
+}
+
+export interface ListSuppliersResult {
+  items: SupplierTableItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
 
 // ============================================================================
 // FILTER STATE (for UI components)
@@ -125,21 +193,41 @@ export type UpdateSupplierRatingInput = z.infer<typeof updateSupplierRatingSchem
 
 export interface SupplierFiltersState {
   search: string;
-  status: SupplierStatus[];
-  supplierType: SupplierType[];
+  status: SupplierStatus | null;
+  supplierType: SupplierType | null;
   ratingMin?: number;
   ratingMax?: number;
 }
 
 export const defaultSupplierFilters: SupplierFiltersState = {
   search: '',
-  status: [],
-  supplierType: [],
+  status: null,
+  supplierType: null,
 };
+
+// ============================================================================
+// FILTER BAR STATE (UI)
+// ============================================================================
+
+export interface SupplierFilterBarState extends Record<string, unknown> {
+  search: string;
+  status: SupplierStatus | null;
+  supplierType: SupplierType | null;
+  ratingRange: { min: number | null; max: number | null } | null;
+}
 
 // ============================================================================
 // PRICING SCHEMAS
 // ============================================================================
+
+export const listPriceListsCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    search: z.string().optional(),
+    supplierId: z.string().uuid().optional(),
+    status: z.enum(['active', 'inactive', 'pending', 'expired']).optional(),
+  })
+);
+export type ListPriceListsCursorInput = z.infer<typeof listPriceListsCursorSchema>;
 
 export const listPriceListsSchema = z.object({
   search: z.string().optional(),
@@ -177,6 +265,15 @@ export const updatePriceListSchema = createPriceListSchema.partial().extend({
   id: z.string().uuid(),
   status: z.enum(['active', 'inactive', 'pending']).optional(),
 });
+
+export const listPriceAgreementsCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    search: z.string().optional(),
+    supplierId: z.string().uuid().optional(),
+    status: z.enum(['draft', 'pending', 'approved', 'rejected', 'expired', 'cancelled']).optional(),
+  })
+);
+export type ListPriceAgreementsCursorInput = z.infer<typeof listPriceAgreementsCursorSchema>;
 
 export const listPriceAgreementsSchema = z.object({
   search: z.string().optional(),

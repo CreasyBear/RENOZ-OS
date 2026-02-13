@@ -21,6 +21,7 @@
  * ```
  */
 import { useState, type ReactNode } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
@@ -28,10 +29,15 @@ import { CommandPalette } from './command-palette'
 import { AISidebar } from './ai-sidebar'
 import { KeyboardShortcutsModal } from './keyboard-shortcuts-modal'
 import { SkipLink } from './skip-link'
+import { KeyboardShortcutProvider } from './keyboard-shortcut-provider'
+import { useKeyboardShortcut } from './use-keyboard-shortcut'
 import {
   SidebarProvider,
   useSidebar,
+  SIDEBAR_WIDTH,
+  SIDEBAR_WIDTH_COLLAPSED,
 } from './sidebar-provider'
+import { BreadcrumbOverrideProvider } from './breadcrumb-context'
 
 // ============================================================================
 // TYPES
@@ -44,6 +50,29 @@ interface AppShellProps {
 // ============================================================================
 // INNER COMPONENT (uses sidebar context)
 // ============================================================================
+
+/**
+ * Registers global navigation shortcuts (G+D, G+C, G+O, Cmd+Shift+C/O/Q).
+ * Must be rendered inside KeyboardShortcutProvider.
+ */
+function AppShellShortcuts() {
+  const navigate = useNavigate()
+
+  // Sequential navigation shortcuts
+  useKeyboardShortcut('go-dashboard', () => navigate({ to: '/dashboard', search: { tab: 'overview' } }))
+  useKeyboardShortcut('go-customers', () => navigate({ to: '/customers' }))
+  useKeyboardShortcut('go-orders', () => navigate({ to: '/orders' }))
+  useKeyboardShortcut('go-pipeline', () => navigate({ to: '/pipeline' }))
+  useKeyboardShortcut('go-projects', () => navigate({ to: '/projects' }))
+  useKeyboardShortcut('go-schedule', () => navigate({ to: '/schedule' }))
+  useKeyboardShortcut('go-inbox', () => navigate({ to: '/communications/inbox' }))
+
+  // Create entity shortcuts
+  useKeyboardShortcut('new-customer', () => navigate({ to: '/customers/new' }))
+  useKeyboardShortcut('new-order', () => navigate({ to: '/orders/create' }))
+
+  return null
+}
 
 function AppShellInner({ children }: AppShellProps) {
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false)
@@ -58,15 +87,25 @@ function AppShellInner({ children }: AppShellProps) {
     isMobile,
     openMobile,
     setOpenMobile,
+    isCollapsed,
+    collapsible,
   } = sidebar
 
   // Mobile sidebar width (18rem as per spec)
   const MOBILE_SIDEBAR_WIDTH = '18rem'
 
+  // Desktop: fixed sidebar width (collapsed = icon mode)
+  const desktopSidebarWidth =
+    collapsible === 'icon' && isCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH
+
   return (
-    <div className="flex min-h-screen">
-      {/* Skip link for keyboard accessibility */}
-      <SkipLink />
+    <BreadcrumbOverrideProvider>
+      <div className="flex min-h-screen">
+        {/* Skip link for keyboard accessibility */}
+        <SkipLink />
+
+      {/* Global keyboard shortcuts (G+D, G+C, etc.) */}
+      <AppShellShortcuts />
 
       {/* Command Palette - Cmd+K */}
       <CommandPalette />
@@ -89,25 +128,31 @@ function AppShellInner({ children }: AppShellProps) {
         />
       )}
 
-      {/* Sidebar - desktop: fixed position, mobile: sheet overlay */}
+      {/* Sidebar - desktop: fixed (always visible), mobile: sheet overlay */}
       <div
         className={cn(
-          'fixed inset-y-0 left-0 z-50',
+          'fixed inset-y-0 left-0 z-50 h-screen',
           'transform transition-transform duration-200 ease-in-out',
           // Mobile: slide in/out as sheet
           isMobile && (openMobile ? 'translate-x-0' : '-translate-x-full'),
-          // Desktop: always visible, relative positioning
-          !isMobile && 'md:relative md:z-auto md:translate-x-0'
+          // Desktop: always visible, fixed position
+          !isMobile && 'md:translate-x-0'
         )}
         style={{
-          width: isMobile ? MOBILE_SIDEBAR_WIDTH : undefined,
+          width: isMobile ? MOBILE_SIDEBAR_WIDTH : desktopSidebarWidth,
         }}
       >
         <Sidebar />
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col transition-all duration-200">
+      {/* Main content area - ml offsets for fixed sidebar on desktop */}
+      <div
+        className="flex flex-1 flex-col min-w-0 overflow-x-hidden transition-all duration-200"
+        style={{
+          marginLeft: isMobile ? 0 : desktopSidebarWidth,
+          ['--app-sidebar-width' as string]: isMobile ? undefined : desktopSidebarWidth,
+        }}
+      >
 
         {/* Header */}
         <Header
@@ -118,7 +163,7 @@ function AppShellInner({ children }: AppShellProps) {
         {/* Page content */}
         <main
           id="main-content"
-          className="flex-1 focus:outline-none"
+          className="flex-1 focus:outline-none min-w-0"
           role="main"
           tabIndex={-1}
         >
@@ -126,6 +171,7 @@ function AppShellInner({ children }: AppShellProps) {
         </main>
       </div>
     </div>
+    </BreadcrumbOverrideProvider>
   )
 }
 
@@ -135,8 +181,10 @@ function AppShellInner({ children }: AppShellProps) {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <SidebarProvider defaultCollapsible="icon" defaultState="expanded">
-      <AppShellInner>{children}</AppShellInner>
-    </SidebarProvider>
+    <KeyboardShortcutProvider>
+      <SidebarProvider defaultCollapsible="icon" defaultState="expanded">
+        <AppShellInner>{children}</AppShellInner>
+      </SidebarProvider>
+    </KeyboardShortcutProvider>
   )
 }

@@ -69,7 +69,7 @@ import { useFiles, useDeleteProjectFile } from '@/hooks/jobs';
 import { useUserLookup } from '@/hooks/users';
 
 // Types
-import type { ProjectFile } from 'drizzle/schema';
+import type { ProjectFile } from '@/lib/schemas/jobs';
 
 // Dialogs
 import { FileUploadDialog } from './file-dialogs';
@@ -516,14 +516,15 @@ function FilesSummaryCards({ files }: { files: FileWithUploader[] }) {
     const totalSize = files.reduce((acc, f) => acc + (f.fileSize ?? 0), 0);
 
     // By category
-    const byCategory = files.reduce((acc, file) => {
+    const byCategory = files.reduce<Record<string, number>>((acc, file) => {
       const cat = getFileTypeInfo(file.mimeType, file.fileName).category;
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>);
+    }, {});
 
     // Recent uploads (last 7 days)
     const recent = files.filter(f => {
+      // eslint-disable-next-line react-hooks/purity -- Date.now() for relative time; stable per mount
       const days = (Date.now() - new Date(f.createdAt).getTime()) / (1000 * 60 * 60 * 24);
       return days <= 7;
     }).length;
@@ -756,7 +757,7 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
       try {
         await deleteFile.mutateAsync(file.id);
         toast.success('File deleted');
-      } catch (err) {
+      } catch {
         toast.error('Failed to delete file');
       }
     }

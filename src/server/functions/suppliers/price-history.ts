@@ -8,7 +8,13 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, count, gte, lte, isNotNull } from 'drizzle-orm';
+import {
+  cursorPaginationSchema,
+  decodeCursor,
+  buildCursorCondition,
+  buildStandardCursorResponse,
+} from '@/lib/db/pagination';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { priceChangeHistory, supplierPriceLists } from 'drizzle/schema/suppliers';
@@ -31,6 +37,16 @@ const listPriceChangeHistorySchema = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
 });
+
+const listPriceChangeHistoryCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    priceListId: z.string().uuid().optional(),
+    agreementId: z.string().uuid().optional(),
+    supplierId: z.string().uuid().optional(),
+    status: z.enum(['pending', 'approved', 'rejected', 'applied', 'cancelled']).optional(),
+    requestedBy: z.string().uuid().optional(),
+  })
+);
 
 const createPriceChangeRequestSchema = z.object({
   priceListId: z.string().uuid().optional(),
@@ -169,6 +185,65 @@ export const listPriceChangeHistory = createServerFn({ method: 'GET' })
   });
 
 /**
+ * List price change history with cursor pagination (recommended for large datasets).
+ * Uses createdAt + id for stable sort.
+ */
+export const listPriceChangeHistoryCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listPriceChangeHistoryCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', priceListId, agreementId, supplierId, status, requestedBy } = data;
+
+    const conditions = [eq(priceChangeHistory.organizationId, ctx.organizationId)];
+    if (priceListId) conditions.push(eq(priceChangeHistory.priceListId, priceListId));
+    if (agreementId) conditions.push(eq(priceChangeHistory.agreementId, agreementId));
+    if (supplierId) conditions.push(eq(priceChangeHistory.supplierId, supplierId));
+    if (status) conditions.push(eq(priceChangeHistory.status, status));
+    if (requestedBy) conditions.push(eq(priceChangeHistory.requestedBy, requestedBy));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(priceChangeHistory.createdAt, priceChangeHistory.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const items = await db
+      .select({
+        id: priceChangeHistory.id,
+        priceListId: priceChangeHistory.priceListId,
+        agreementId: priceChangeHistory.agreementId,
+        supplierId: priceChangeHistory.supplierId,
+        previousPrice: priceChangeHistory.previousPrice,
+        newPrice: priceChangeHistory.newPrice,
+        priceChange: priceChangeHistory.priceChange,
+        changePercent: priceChangeHistory.changePercent,
+        changeReason: priceChangeHistory.changeReason,
+        effectiveDate: priceChangeHistory.effectiveDate,
+        status: priceChangeHistory.status,
+        requestedBy: priceChangeHistory.requestedBy,
+        requestedAt: priceChangeHistory.requestedAt,
+        approvedBy: priceChangeHistory.approvedBy,
+        approvedAt: priceChangeHistory.approvedAt,
+        rejectedBy: priceChangeHistory.rejectedBy,
+        rejectedAt: priceChangeHistory.rejectedAt,
+        rejectionReason: priceChangeHistory.rejectionReason,
+        appliedBy: priceChangeHistory.appliedBy,
+        appliedAt: priceChangeHistory.appliedAt,
+        notes: priceChangeHistory.notes,
+        createdAt: priceChangeHistory.createdAt,
+      })
+      .from(priceChangeHistory)
+      .where(and(...conditions))
+      .orderBy(orderDir(priceChangeHistory.createdAt), orderDir(priceChangeHistory.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/**
  * Get a single price change record
  */
 export const getPriceChangeRecord = createServerFn({ method: 'GET' })
@@ -191,7 +266,7 @@ export const getPriceChangeRecord = createServerFn({ method: 'GET' })
       throw new NotFoundError('Price change record not found', 'priceChangeRecord');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -227,7 +302,7 @@ export const createPriceChangeRequest = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -267,7 +342,7 @@ export const approvePriceChange = createServerFn({ method: 'POST' })
       throw new NotFoundError('Price change request not found or not pending', 'priceChangeRequest');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -278,55 +353,60 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    // Get the price change record
-    const changeRecord = await db
-      .select()
-      .from(priceChangeHistory)
-      .where(
-        and(
-          eq(priceChangeHistory.id, data.id),
-          eq(priceChangeHistory.organizationId, ctx.organizationId),
-          eq(priceChangeHistory.status, 'approved')
-        )
-      )
-      .limit(1);
-
-    if (!changeRecord[0]) {
-      throw new NotFoundError('Price change record not found or not approved', 'priceChangeRecord');
-    }
-
-    const record = changeRecord[0];
-
-    // Apply the price change to the price list if applicable
-    if (record.priceListId) {
-      await db
-        .update(supplierPriceLists)
-        .set({
-          price: record.newPrice,
-          effectivePrice: record.newPrice,
-          lastUpdated: new Date(),
-          updatedBy: ctx.user.id,
-        })
+    // Wrap price update + status change in a transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Get the price change record
+      const changeRecord = await tx
+        .select()
+        .from(priceChangeHistory)
         .where(
           and(
-            eq(supplierPriceLists.id, record.priceListId),
-            eq(supplierPriceLists.organizationId, ctx.organizationId)
+            eq(priceChangeHistory.id, data.id),
+            eq(priceChangeHistory.organizationId, ctx.organizationId),
+            eq(priceChangeHistory.status, 'approved')
           )
-        );
-    }
+        )
+        .limit(1);
 
-    // Mark the change as applied
-    const result = await db
-      .update(priceChangeHistory)
-      .set({
-        status: 'applied',
-        appliedBy: ctx.user.id,
-        appliedAt: new Date(),
-      })
-      .where(eq(priceChangeHistory.id, data.id))
-      .returning();
+      if (!changeRecord[0]) {
+        throw new NotFoundError('Price change record not found or not approved', 'priceChangeRecord');
+      }
 
-    return result[0];
+      const record = changeRecord[0];
+
+      // Apply the price change to the price list if applicable
+      if (record.priceListId) {
+        await tx
+          .update(supplierPriceLists)
+          .set({
+            price: record.newPrice,
+            effectivePrice: record.newPrice,
+            lastUpdated: new Date(),
+            updatedBy: ctx.user.id,
+          })
+          .where(
+            and(
+              eq(supplierPriceLists.id, record.priceListId),
+              eq(supplierPriceLists.organizationId, ctx.organizationId)
+            )
+          );
+      }
+
+      // Mark the change as applied
+      const [applied] = await tx
+        .update(priceChangeHistory)
+        .set({
+          status: 'applied',
+          appliedBy: ctx.user.id,
+          appliedAt: new Date(),
+        })
+        .where(eq(priceChangeHistory.id, data.id))
+        .returning();
+
+      return applied;
+    });
+
+    return result;
   });
 
 /**
@@ -356,7 +436,7 @@ export const cancelPriceChangeRequest = createServerFn({ method: 'POST' })
       throw new ValidationError('Price change request not found, not pending, or not owned by you');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -420,11 +500,11 @@ export const getSupplierPriceChangeStats = createServerFn({ method: 'GET' })
     ];
 
     if (data.startDate) {
-      conditions.push(sql`${priceChangeHistory.requestedAt} >= ${new Date(data.startDate)}`);
+      conditions.push(gte(priceChangeHistory.requestedAt, new Date(data.startDate)));
     }
 
     if (data.endDate) {
-      conditions.push(sql`${priceChangeHistory.requestedAt} <= ${new Date(data.endDate)}`);
+      conditions.push(lte(priceChangeHistory.requestedAt, new Date(data.endDate)));
     }
 
     const whereClause = and(...conditions);
@@ -445,7 +525,7 @@ export const getSupplierPriceChangeStats = createServerFn({ method: 'GET' })
         avgChangePercent: sql<string>`AVG(CAST(${priceChangeHistory.changePercent} AS DECIMAL))`,
       })
       .from(priceChangeHistory)
-      .where(and(whereClause, sql`${priceChangeHistory.changePercent} IS NOT NULL`));
+      .where(and(whereClause, isNotNull(priceChangeHistory.changePercent)));
 
     return {
       supplierId: data.supplierId,

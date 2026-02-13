@@ -68,15 +68,18 @@ export function useActivities({
 }: UseActivitiesOptions) {
   return useQuery({
     queryKey: queryKeys.pipeline.activities(opportunityId),
-    queryFn: () =>
-      listActivities({
+    queryFn: async () => {
+      const result = await listActivities({
         data: {
           opportunityId,
           type: types?.[0] as 'call' | 'email' | 'meeting' | 'note' | 'follow_up' | undefined,
           page,
           pageSize,
         },
-      }),
+      });
+      if (result == null) throw new Error('Activities list returned no data');
+      return result;
+    },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -101,8 +104,12 @@ export function useActivityTimeline({
   enabled = true,
 }: UseActivityTimelineOptions) {
   return useQuery({
-    queryKey: [...queryKeys.pipeline.activities(opportunityId), 'timeline', days] as const,
-    queryFn: () => getActivityTimeline({ data: { opportunityId, days } }),
+    queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days }),
+    queryFn: async () => {
+      const result = await getActivityTimeline({ data: { opportunityId, days } });
+      if (result == null) throw new Error('Activity timeline returned no data');
+      return result;
+    },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -126,7 +133,8 @@ export function useFollowUps({ opportunityId, days = 14, enabled = true }: UseFo
     queryKey: queryKeys.pipeline.followUps(opportunityId),
     queryFn: async () => {
       const result = await getUpcomingFollowUps({ data: { opportunityId, days } });
-      return result as { overdue: FollowUpItem[]; upcoming: FollowUpItem[] };
+      if (result == null) throw new Error('Upcoming follow-ups returned no data');
+      return result;
     },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
@@ -159,14 +167,17 @@ export function useActivityAnalytics({
       'activity-analytics',
       { opportunityId, dateFrom, dateTo },
     ] as const,
-    queryFn: () =>
-      getActivityAnalytics({
+    queryFn: async () => {
+      const result = await getActivityAnalytics({
         data: {
           opportunityId,
           dateFrom,
           dateTo,
         },
-      }),
+      });
+      if (result == null) throw new Error('Activity analytics returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

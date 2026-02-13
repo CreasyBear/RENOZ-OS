@@ -4,4 +4,5 @@ export * from './custom-fields';
 export * from './data-exports';
 export * from './holidays';
 export * from './organizations';
+export * from './organization-logo';
 export * from './system-settings';

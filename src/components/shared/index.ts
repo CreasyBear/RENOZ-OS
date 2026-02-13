@@ -174,6 +174,17 @@ export {
   type EntityComboboxProps,
 } from "./entity-combobox"
 
+export {
+  CustomerCombobox,
+  type CustomerComboboxProps,
+} from "./customer-combobox"
+
+export {
+  OrderCombobox,
+  type OrderComboboxProps,
+  type OrderSummary,
+} from "./order-combobox"
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Format Components
 // ─────────────────────────────────────────────────────────────────────────────
@@ -253,6 +264,12 @@ export {
 } from "./metric-card"
 
 export {
+  MetricCardPopover,
+  type MetricCardPopoverProps,
+  type RecentItem,
+} from "./metric-card-popover"
+
+export {
   TrendIndicator,
   type TrendIndicatorProps,
   type TrendStyle,
@@ -273,11 +290,65 @@ export {
   type DetailSectionsProps,
   // Entity header
   EntityHeader,
+  EntityHeaderActions,
   type EntityHeaderProps,
   type EntityHeaderAction,
+  type EntityHeaderActionsProps,
   // Sheet layout
   SheetLayout,
   SheetLayoutWithEntity,
   type SheetLayoutProps,
   type SheetLayoutWithEntityProps,
 } from "./detail-view"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Action Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  DisabledButtonWithTooltip,
+  DisabledMenuItem,
+  type DisabledButtonWithTooltipProps,
+  type DisabledMenuItemProps,
+} from "./disabled-with-tooltip"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile Components
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  MobileSidebarSheet,
+  type MobileSidebarSheetProps,
+} from "./mobile-sidebar-sheet"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calendar (Week View)
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  CalendarWeekView,
+  CalendarWeekHeader,
+  CalendarHoursColumn,
+  CalendarDayColumn,
+  CalendarCurrentTimeIndicator,
+  HOURS_24,
+  HOUR_HEIGHT,
+  INITIAL_SCROLL_OFFSET,
+  getEventTop,
+  getEventHeight,
+  getCurrentTimePosition,
+  getEventDuration,
+  type CalendarWeekViewProps,
+  type CalendarDayColumnProps,
+  type CalendarItemAccessors,
+  type CalendarItemStyle,
+  type CalendarRenderItem,
+} from "./calendar"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline/Schedule (Filter Chips)
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  FilterChip,
+  FilterChipOverflow,
+  type FilterChipProps,
+  type FilterChipOverflowProps,
+  type FilterChipType,
+} from "./timeline-schedule"

@@ -20,6 +20,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 import { StorageConfigError, StorageOperationError, StorageNotFoundError } from './errors';
 
 // ============================================================================
@@ -460,7 +461,7 @@ export async function createSignedUrls(options: {
 
     for (const item of data) {
       if (item.error) {
-        console.warn(`Failed to create signed URL for ${item.path}:`, item.error);
+        logger.warn('Failed to create signed URL', { path: item.path, error: String(item.error) });
         continue;
       }
       if (!item.path) continue;

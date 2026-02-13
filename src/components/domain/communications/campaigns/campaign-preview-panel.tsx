@@ -12,7 +12,11 @@
 import { useEffect } from "react";
 import { Users, Mail, Eye, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { useCampaignPreview } from "@/hooks/communications/use-campaigns";
-import type { RecipientCriteria } from "./recipient-filter-builder";
+import type {
+  PreviewRecipient,
+  PreviewRecipientsResult,
+  CampaignPreviewPanelProps,
+} from "@/lib/schemas/communications";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
@@ -37,22 +41,8 @@ import { cn } from "@/lib/utils";
 // TYPES
 // ============================================================================
 
-export interface CampaignPreviewPanelProps {
-  name: string;
-  templateType: string;
-  templateData?: Record<string, unknown>;
-  recipientCriteria: RecipientCriteria;
-  scheduledAt?: Date | null;
-  onRecipientCountChange?: (count: number) => void;
-  className?: string;
-}
-
-interface PreviewRecipient {
-  id: string;
-  email: string;
-  name: string | null;
-  customerId: string | null;
-}
+// Re-export for backward compatibility
+export type { CampaignPreviewPanelProps, PreviewRecipient };
 
 // ============================================================================
 // PREVIEW SKELETON
@@ -125,7 +115,7 @@ export function CampaignPreviewPanel({
   className,
 }: CampaignPreviewPanelProps) {
   const {
-    data: previewData,
+    data: rawPreviewData,
     isLoading,
     isError,
     error,
@@ -134,6 +124,9 @@ export function CampaignPreviewPanel({
     sampleSize: 5,
     enabled: Object.keys(recipientCriteria).length > 0,
   });
+
+  // Type assertion for TanStack Query generic inference
+  const previewData = rawPreviewData as PreviewRecipientsResult | undefined;
 
   // Notify parent of recipient count changes
   useEffect(() => {
@@ -147,7 +140,7 @@ export function CampaignPreviewPanel({
   }
 
   const total = previewData?.total ?? 0;
-  const sample = (previewData?.sample ?? []) as PreviewRecipient[];
+  const sample = previewData?.sample ?? [];
 
   const hasNoRecipients = total === 0;
   const hasFilters =
@@ -263,7 +256,7 @@ export function CampaignPreviewPanel({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sample.map((recipient) => (
+                {sample.map((recipient: PreviewRecipient) => (
                   <TableRow key={recipient.id}>
                     <TableCell className="font-medium">
                       {recipient.name || (

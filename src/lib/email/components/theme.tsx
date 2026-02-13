@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Email components file exports components + re-exports */
 /**
  * Email Theme Provider and Dark Mode Support
  *

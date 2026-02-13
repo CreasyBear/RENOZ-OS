@@ -223,6 +223,17 @@ export function getStatusColorClasses(color: SemanticColor): string {
 }
 
 /**
+ * Get text and bg classes separately for dot variant and similar use cases.
+ */
+export function getStatusColorClassesSplit(color: SemanticColor): { text: string; bg: string } {
+  const c = STATUS_COLORS[color];
+  return {
+    text: `${c.light.text} ${c.dark.text}`,
+    bg: `${c.light.bg} ${c.dark.bg}`,
+  };
+}
+
+/**
  * Get hex color for PDF/Email rendering.
  */
 export function getStatusHex(color: SemanticColor): string {
@@ -242,4 +253,14 @@ export function getStatusRgb(color: SemanticColor): string {
  */
 export function getStatusRgba(color: SemanticColor, alpha: number): string {
   return `rgba(${STATUS_COLORS[color].rgb}, ${alpha})`;
+}
+
+/**
+ * Get icon color classes for a semantic color.
+ * Returns text color classes for light and dark mode.
+ * Use for MetricCard icons and other icon color needs.
+ */
+export function getIconColorClasses(color: SemanticColor): string {
+  const c = STATUS_COLORS[color];
+  return `${c.light.text} ${c.dark.text}`;
 }

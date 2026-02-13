@@ -1,17 +1,24 @@
 /**
  * CampaignDetailPanel Component
  *
- * Shows campaign stats graph and recipient list with status badges.
- * Used in side panel or modal when viewing a campaign.
+ * Comprehensive detail view for email campaigns following DETAIL-VIEW-STANDARDS.md.
+ * Implements 5-zone layout: Header, Progress, Alerts, Metrics, Recipients.
  *
  * @see DOM-COMMS-003d
+ * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
 "use client";
 
+import { memo, useMemo, useCallback, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   useCampaign,
   useCampaignRecipients,
+  useSendCampaign,
+  usePauseCampaign,
+  useResumeCampaign,
+  useTestSendCampaign,
 } from "@/hooks/communications/use-campaigns";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -25,19 +32,17 @@ import {
   Send,
   CheckCircle2,
   XCircle,
-  Clock,
+  BarChart3,
+  Plus,
+  History,
+  ArrowRight,
+  Pause,
+  Play,
 } from "lucide-react";
-import { CampaignStatusBadge, type CampaignStatus } from "./campaign-status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -48,59 +53,69 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { MetricCard } from "@/components/shared";
+import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
+import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
+import { StatusCell } from "@/components/shared/data-table/cells/status-cell";
+import { useAlertDismissals } from "@/hooks/_shared/use-alert-dismissals";
+import { useReducedMotion } from "@/hooks/_shared/use-reduced-motion";
+import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage, normalizeError } from "@/lib/error-handling";
+import {
+  getCampaignStatusVariant,
+  getCampaignStageIndex,
+  CAMPAIGN_STAGES,
+} from "./campaign-status-config";
+import { CAMPAIGN_RECIPIENT_STATUS_CONFIG } from "./campaign-recipient-status-config";
+import {
+  calculateSendProgress,
+  calculatePercentage,
+} from "@/lib/communications/campaign-utils";
+import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface CampaignDetailPanelProps {
-  campaignId: string;
-  onBack?: () => void;
-  className?: string;
-}
+import type {
+  Campaign,
+  CampaignRecipient,
+  CampaignDetailPanelProps,
+} from "@/lib/schemas/communications";
 
-interface Campaign {
-  id: string;
-  name: string;
-  templateType: string;
-  status: CampaignStatus;
-  recipientCount: number;
-  sentCount: number;
-  deliveredCount: number;
-  openCount: number;
-  clickCount: number;
-  bounceCount: number;
-  failedCount: number;
-  unsubscribeCount: number;
-  scheduledAt: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-}
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
-interface CampaignRecipient {
-  id: string;
-  email: string;
-  name: string | null;
-  contactId: string | null;
-  status: "pending" | "sent" | "delivered" | "opened" | "clicked" | "bounced" | "failed" | "unsubscribed";
-  sentAt: string | null;
-  openedAt: string | null;
-  clickedAt: string | null;
-  errorMessage: string | null;
-}
+const CAMPAIGN_STAT_STYLES = {
+  default: { iconClassName: "text-muted-foreground" },
+  success: { iconClassName: "text-green-600 dark:text-green-400" },
+  warning: { iconClassName: "text-amber-600 dark:text-amber-400" },
+  error: { iconClassName: "text-red-600 dark:text-red-400" },
+} as const;
 
 // ============================================================================
 // SKELETON COMPONENT
 // ============================================================================
 
-export function CampaignDetailSkeleton() {
+export const CampaignDetailSkeleton = memo(function CampaignDetailSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading campaign details">
       <div className="flex items-center gap-4">
-        <Skeleton className="h-9 w-9" />
+        <Skeleton className="h-12 w-12 rounded-full" />
         <div className="space-y-2 flex-1">
           <Skeleton className="h-6 w-48" />
           <Skeleton className="h-4 w-32" />
@@ -108,7 +123,6 @@ export function CampaignDetailSkeleton() {
         <Skeleton className="h-6 w-20" />
       </div>
 
-      {/* Stats Grid Skeleton */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i}>
@@ -120,7 +134,6 @@ export function CampaignDetailSkeleton() {
         ))}
       </div>
 
-      {/* Progress Skeleton */}
       <Card>
         <CardContent className="pt-4 space-y-4">
           <div className="flex justify-between">
@@ -131,7 +144,6 @@ export function CampaignDetailSkeleton() {
         </CardContent>
       </Card>
 
-      {/* Recipients Table Skeleton */}
       <div className="space-y-2">
         <Skeleton className="h-5 w-24" />
         <div className="rounded-md border">
@@ -166,23 +178,18 @@ export function CampaignDetailSkeleton() {
       </div>
     </div>
   );
-}
+});
 
 // ============================================================================
-// STAT CARD HELPERS
+// UTILITY FUNCTIONS
 // ============================================================================
 
-// Variant styles for campaign stat cards
-const CAMPAIGN_STAT_STYLES = {
-  default: { iconClassName: "text-muted-foreground" },
-  success: { iconClassName: "text-green-600 dark:text-green-400" },
-  warning: { iconClassName: "text-amber-600 dark:text-amber-400" },
-  error: { iconClassName: "text-red-600 dark:text-red-400" },
-} as const;
-
-// Format value with percentage for campaign stats
+/**
+ * Format campaign stat value with percentage
+ * Uses utility function for consistent calculation
+ */
 function formatCampaignStatValue(value: number, total?: number): React.ReactNode {
-  const percentage = total && total > 0 ? Math.round((value / total) * 100) : 0;
+  const percentage = total !== undefined ? calculatePercentage(value, total) : 0;
   return (
     <span className="flex items-baseline gap-2">
       <span>{value.toLocaleString()}</span>
@@ -193,81 +200,54 @@ function formatCampaignStatValue(value: number, total?: number): React.ReactNode
   );
 }
 
-// Note: Using shared MetricCard from @/components/shared
-
 // ============================================================================
-// RECIPIENT STATUS BADGE
+// RECIPIENT STATUS BADGE (memoized)
 // ============================================================================
 
-const RECIPIENT_STATUS_CONFIG: Record<
-  CampaignRecipient["status"],
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }
-> = {
-  pending: {
-    label: "Pending",
-    variant: "secondary",
-    className: "bg-slate-100 text-slate-700",
-  },
-  sent: {
-    label: "Sent",
-    variant: "default",
-    className: "bg-blue-100 text-blue-700",
-  },
-  delivered: {
-    label: "Delivered",
-    variant: "default",
-    className: "bg-green-100 text-green-700",
-  },
-  opened: {
-    label: "Opened",
-    variant: "default",
-    className: "bg-emerald-100 text-emerald-700",
-  },
-  clicked: {
-    label: "Clicked",
-    variant: "default",
-    className: "bg-teal-100 text-teal-700",
-  },
-  bounced: {
-    label: "Bounced",
-    variant: "destructive",
-    className: "bg-amber-100 text-amber-700",
-  },
-  failed: {
-    label: "Failed",
-    variant: "destructive",
-    className: "bg-red-100 text-red-700",
-  },
-  unsubscribed: {
-    label: "Unsubscribed",
-    variant: "outline",
-    className: "bg-gray-100 text-gray-700",
-  },
-};
+const RecipientStatusBadge = memo(function RecipientStatusBadge({
+  status,
+}: {
+  status: CampaignRecipient["status"] | "skipped";
+}) {
+  // Handle "skipped" status which may come from API but isn't in schema
+  if (status === "skipped") {
+    return (
+      <Badge variant="outline" className="text-xs">
+        Skipped
+      </Badge>
+    );
+  }
 
-function RecipientStatusBadge({ status }: { status: CampaignRecipient["status"] }) {
-  const config = RECIPIENT_STATUS_CONFIG[status];
   return (
-    <Badge variant={config.variant} className={cn("text-xs", config.className)}>
-      {config.label}
-    </Badge>
+    <StatusCell
+      status={status}
+      statusConfig={CAMPAIGN_RECIPIENT_STATUS_CONFIG}
+      className="text-xs"
+    />
   );
-}
+});
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
-export function CampaignDetailPanel({
+export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   campaignId,
   onBack,
   className,
 }: CampaignDetailPanelProps) {
-  const { data: campaignData, isLoading: campaignLoading } = useCampaign({
+  const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
+  const { dismiss, isAlertDismissed } = useAlertDismissals();
+  const { confirm } = useConfirmation();
+  const [testSendDialogOpen, setTestSendDialogOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+
+  const { data: campaignData, isLoading: campaignLoading, error: campaignError } = useCampaign({
     campaignId,
   });
 
-  const campaign = campaignData as Campaign | null;
+  const campaign = (campaignData ?? null) as Campaign | null;
 
   const { data: recipientsData, isLoading: recipientsLoading } =
     useCampaignRecipients({
@@ -277,109 +257,486 @@ export function CampaignDetailPanel({
       enabled: !!campaign,
     });
 
+  // Mutations
+  const sendCampaignMutation = useSendCampaign();
+  const pauseCampaignMutation = usePauseCampaign();
+  const resumeCampaignMutation = useResumeCampaign();
+  const testSendMutation = useTestSendCampaign();
+
+  // Memoized computations
+  const recipients = useMemo(
+    () => recipientsData?.items ?? [],
+    [recipientsData]
+  );
+
+  const isSending = useMemo(
+    () => campaign?.status === "sending",
+    [campaign?.status]
+  );
+
+  const sendProgress = useMemo(() => {
+    if (!campaign) return 0;
+    return calculateSendProgress(campaign.sentCount, campaign.recipientCount);
+  }, [campaign]);
+
+  // Handlers
+  const handleSendCampaign = useCallback(async () => {
+    if (!campaign) return;
+
+    // Validate recipients
+    if (campaign.recipientCount === 0) {
+      toast.error("Cannot send campaign", {
+        description: "This campaign has no recipients. Please add recipients before sending.",
+      });
+      return;
+    }
+
+    const { confirmed } = await confirm(
+      confirmations.sendCampaign(campaign.name, campaign.recipientCount)
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await sendCampaignMutation.mutateAsync({ id: campaign.id });
+      toast.success("Campaign sending started", {
+        description: `Your campaign "${campaign.name}" is now being sent to ${campaign.recipientCount} recipients.`,
+      });
+    } catch (error) {
+      toast.error("Failed to send campaign", {
+        description: getUserFriendlyMessage(normalizeError(error)),
+      });
+    }
+  }, [campaign, confirm, sendCampaignMutation]);
+
+  const handlePauseCampaign = useCallback(async () => {
+    if (!campaign) return;
+
+    const { confirmed } = await confirm(
+      confirmations.pauseCampaign(campaign.name)
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await pauseCampaignMutation.mutateAsync({ id: campaign.id });
+      toast.success("Campaign paused", {
+        description: `Campaign "${campaign.name}" has been paused. You can resume it later.`,
+      });
+    } catch (error) {
+      toast.error("Failed to pause campaign", {
+        description: getUserFriendlyMessage(normalizeError(error)),
+      });
+    }
+  }, [campaign, confirm, pauseCampaignMutation]);
+
+  const handleResumeCampaign = useCallback(async () => {
+    if (!campaign) return;
+
+    try {
+      await resumeCampaignMutation.mutateAsync({ id: campaign.id });
+      toast.success("Campaign resumed", {
+        description: `Campaign "${campaign.name}" is now sending again.`,
+      });
+    } catch (error) {
+      toast.error("Failed to resume campaign", {
+        description: getUserFriendlyMessage(normalizeError(error)),
+      });
+    }
+  }, [campaign, resumeCampaignMutation]);
+
+  const handleEditCampaign = useCallback(() => {
+    navigate({
+      to: "/communications/campaigns/$campaignId/edit",
+      params: { campaignId },
+    });
+  }, [navigate, campaignId]);
+
+  const handleViewAnalytics = useCallback(() => {
+    // Navigate to campaign analytics page
+    navigate({ to: "/communications/campaigns/analytics" });
+  }, [navigate]);
+
+  const handleViewEmailHistory = useCallback(() => {
+    if (!campaign) return;
+    // Navigate to inbox filtered by this campaign
+    navigate({ 
+      to: "/communications/inbox", 
+      search: { campaignId: campaign.id } 
+    });
+  }, [navigate, campaign]);
+
+  const handleTestSend = useCallback(async () => {
+    if (!campaign || !testEmail) return;
+    try {
+      await testSendMutation.mutateAsync({ campaignId: campaign.id, testEmail });
+      toast.success("Test email sent", {
+        description: `Sent to ${testEmail}`,
+      });
+      setTestSendDialogOpen(false);
+      setTestEmail("");
+    } catch (error) {
+      toast.error("Failed to send test email", {
+        description: getUserFriendlyMessage(normalizeError(error)),
+      });
+    }
+  }, [campaign, testEmail, testSendMutation]);
+
+  const currentStageIndex = useMemo(
+    () => (campaign ? getCampaignStageIndex(campaign.status) : -1),
+    [campaign]
+  );
+
+  // Build campaign meta fields for DetailGrid
+  const campaignMetaFields = useMemo(() => {
+    if (!campaign) return [];
+    const fields: DetailGridField[] = [];
+    
+    if (campaign.scheduledAt) {
+      fields.push({
+        label: "Scheduled",
+        value: (
+          <div className="flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {format(new Date(campaign.scheduledAt), "PPp")}
+          </div>
+        ),
+      });
+    }
+    
+    if (campaign.startedAt) {
+      fields.push({
+        label: "Started",
+        value: (
+          <div className="flex items-center gap-1">
+            <Send className="h-3 w-3" />
+            {formatDistanceToNow(new Date(campaign.startedAt), { addSuffix: true })}
+          </div>
+        ),
+      });
+    }
+    
+    if (campaign.completedAt) {
+      fields.push({
+        label: "Completed",
+        value: (
+          <div className="flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            {formatDistanceToNow(new Date(campaign.completedAt), { addSuffix: true })}
+          </div>
+        ),
+      });
+    }
+    
+    return fields;
+  }, [campaign]);
+
+  // Generate alerts for critical issues using utility function
+  const allAlerts = useMemo(() => {
+    if (!campaign) return [];
+    return generateCampaignAlerts(campaign);
+  }, [campaign]);
+
+  // Filter dismissed alerts
+  const visibleAlerts = useMemo(() => {
+    return allAlerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
+  }, [allAlerts, isAlertDismissed]);
+
+  // Handle alert dismissal
+  const handleDismissAlert = useCallback(
+    (alertId: string) => {
+      dismiss(alertId);
+    },
+    [dismiss]
+  );
+
+  // Memoized metric values
+  const metrics = useMemo(() => {
+    if (!campaign) return null;
+    return {
+      recipients: campaign.recipientCount.toLocaleString(),
+      sent: formatCampaignStatValue(campaign.sentCount, campaign.recipientCount),
+      opened: formatCampaignStatValue(campaign.openCount, campaign.sentCount),
+      clicked: formatCampaignStatValue(campaign.clickCount, campaign.sentCount),
+      openedIconClass: campaign.openCount > 0 
+        ? CAMPAIGN_STAT_STYLES.success.iconClassName 
+        : CAMPAIGN_STAT_STYLES.default.iconClassName,
+      clickedIconClass: campaign.clickCount > 0 
+        ? CAMPAIGN_STAT_STYLES.success.iconClassName 
+        : CAMPAIGN_STAT_STYLES.default.iconClassName,
+    };
+  }, [campaign]);
+
+  // Loading state
   if (campaignLoading) {
     return <CampaignDetailSkeleton />;
   }
 
-  if (!campaign) {
+  // Error state
+  if (campaignError || !campaign) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Campaign not found</p>
-        {onBack && (
-          <Button variant="link" onClick={onBack} className="mt-2">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to campaigns
-          </Button>
-        )}
-      </div>
+      <EmptyStateContainer variant="page">
+        <EmptyState
+          icon={AlertTriangle}
+          title="Campaign not found"
+          message={campaignError?.message || "This campaign could not be loaded."}
+          primaryAction={
+            onBack
+              ? {
+                  label: "Back to campaigns",
+                  onClick: onBack,
+                  icon: ArrowLeft,
+                }
+              : undefined
+          }
+        />
+      </EmptyStateContainer>
     );
   }
 
-  const recipients = (recipientsData?.items ?? []) as CampaignRecipient[];
-  const isSending = campaign.status === "sending";
-  const sendProgress =
-    campaign.recipientCount > 0
-      ? Math.round((campaign.sentCount / campaign.recipientCount) * 100)
-      : 0;
-
   return (
     <div className={cn("space-y-6", className)}>
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        {onBack && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            aria-label="Back to campaigns"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        )}
-        <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-semibold truncate">{campaign.name}</h2>
-          <p className="text-sm text-muted-foreground capitalize">
-            {campaign.templateType.replace("_", " ")} template
-          </p>
+      {/* Zone 1: Entity Header */}
+      <EntityHeader
+        name={campaign.name}
+        subtitle={
+          <>
+            {campaign.templateType.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())} template
+            {campaign.description && ` · ${campaign.description}`}
+          </>
+        }
+        avatarFallback={campaign.name.slice(0, 2).toUpperCase()}
+        status={{
+          value: campaign.status,
+          variant: getCampaignStatusVariant(campaign.status),
+        }}
+        typeBadge={
+          <Badge variant="outline" className="text-xs">
+            {campaign.templateType.replace("_", " ")}
+          </Badge>
+        }
+        primaryAction={
+          campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "paused"
+            ? {
+                label: campaign.status === "paused" ? "Resume" : "Send Now",
+                onClick: campaign.status === "paused" ? handleResumeCampaign : handleSendCampaign,
+                icon: campaign.status === "paused" ? <Play className="h-4 w-4" /> : <Send className="h-4 w-4" />,
+                disabled: sendCampaignMutation.isPending || resumeCampaignMutation.isPending || campaign.recipientCount === 0,
+              }
+            : campaign.status === "sending"
+            ? {
+                label: "Pause",
+                onClick: handlePauseCampaign,
+                icon: <Pause className="h-4 w-4" />,
+                disabled: pauseCampaignMutation.isPending,
+              }
+            : campaign.status === "sent"
+            ? {
+                label: "View Analytics",
+                onClick: handleViewAnalytics,
+                icon: <BarChart3 className="h-4 w-4" />,
+              }
+            : undefined
+        }
+        onEdit={
+          campaign.status === "draft" || campaign.status === "scheduled"
+            ? handleEditCampaign
+            : undefined
+        }
+        secondaryActions={
+          [
+            ...(onBack
+              ? [
+                  {
+                    label: "Back to campaigns",
+                    onClick: onBack,
+                    icon: <ArrowLeft className="h-4 w-4" />,
+                  },
+                ]
+              : []),
+            ...(campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "paused"
+              ? [
+                  {
+                    label: "Send Test Email",
+                    onClick: () => setTestSendDialogOpen(true),
+                    icon: <Send className="h-4 w-4" />,
+                  },
+                ]
+              : []),
+            ...(campaign.status === "sent"
+              ? [
+                  {
+                    label: "View Email History",
+                    onClick: handleViewEmailHistory,
+                    icon: <History className="h-4 w-4" />,
+                  },
+                ]
+              : []),
+          ]
+        }
+      />
+
+      {/* Zone 2: Progress Indicator */}
+      {currentStageIndex >= 0 && (
+        <section
+          className="rounded-lg border bg-background p-4"
+          role="progressbar"
+          aria-valuenow={currentStageIndex + 1}
+          aria-valuemin={1}
+          aria-valuemax={CAMPAIGN_STAGES.length}
+          aria-label={`Campaign progress: ${CAMPAIGN_STAGES[currentStageIndex]?.label || "Unknown"} stage`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm font-medium">Campaign lifecycle</div>
+              <div className="text-xs text-muted-foreground">
+                {campaign.status === "sending" && `Sending ${campaign.sentCount} of ${campaign.recipientCount} emails...`}
+                {campaign.status === "sent" && `Completed ${campaign.completedAt ? formatDistanceToNow(new Date(campaign.completedAt), { addSuffix: true }) : ""}`}
+                {campaign.status === "scheduled" && campaign.scheduledAt && `Scheduled for ${format(new Date(campaign.scheduledAt), "PPp")}`}
+              </div>
+            </div>
+            {isSending && (
+              <div className="text-sm font-medium" aria-live="polite" aria-atomic="true">
+                {sendProgress}%
+              </div>
+            )}
+          </div>
+          
+          {/* Progress bar for sending campaigns */}
+          {isSending && (
+            <Progress 
+              value={sendProgress} 
+              className={cn(
+                "h-2",
+                !prefersReducedMotion && "transition-all duration-300"
+              )}
+              aria-label={`Sending progress: ${sendProgress}%`}
+            />
+          )}
+
+          {/* Stage indicators */}
+          {!isSending && (
+            <div className="flex items-center gap-2 mt-3">
+              {CAMPAIGN_STAGES.map((stage, index) => {
+                const isCompleted = index < currentStageIndex;
+                const isCurrent = index === currentStageIndex;
+                const isPending = index > currentStageIndex;
+
+                return (
+                  <div
+                    key={stage.status}
+                    className={cn(
+                      "flex items-center gap-2 flex-1",
+                      index < CAMPAIGN_STAGES.length - 1 && "after:content-[''] after:flex-1 after:h-px after:bg-border"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium border-2",
+                        isCompleted && "bg-primary text-primary-foreground border-primary",
+                        isCurrent && "bg-primary/10 text-primary border-primary",
+                        isPending && "bg-muted text-muted-foreground border-muted-foreground/30"
+                      )}
+                      aria-label={
+                        isCompleted
+                          ? `${stage.label} - completed`
+                          : isCurrent
+                          ? `${stage.label} - current`
+                          : `${stage.label} - pending`
+                      }
+                    >
+                      {isCompleted ? "✓" : isCurrent ? "●" : "○"}
+                    </div>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        isCurrent && "font-medium",
+                        isPending && "text-muted-foreground"
+                      )}
+                    >
+                      {stage.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Zone 3: Alerts */}
+      {visibleAlerts.length > 0 && (
+        <section className="space-y-2" aria-label="Campaign alerts">
+          {visibleAlerts.map((alert) => (
+            <Alert
+              key={alert.id}
+              variant={alert.tone === "critical" ? "destructive" : "default"}
+            >
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>{alert.title}</AlertTitle>
+              <AlertDescription className="flex items-center justify-between gap-4">
+                <span>{alert.description}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {alert.onAction && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={alert.onAction}
+                    >
+                      {alert.actionLabel}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => handleDismissAlert(alert.id)}
+                    aria-label="Dismiss alert"
+                  >
+                    <XCircle className="h-3 w-3" />
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ))}
+        </section>
+      )}
+
+      {/* Zone 4: Key Metrics */}
+      {metrics && (
+        <div
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          aria-label="Campaign statistics"
+        >
+          <MetricCard
+            title="Recipients"
+            value={metrics.recipients}
+            icon={Users}
+            iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
+          />
+          <MetricCard
+            title="Sent"
+            value={metrics.sent}
+            icon={Mail}
+            iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
+          />
+          <MetricCard
+            title="Opened"
+            value={metrics.opened}
+            icon={Eye}
+            iconClassName={metrics.openedIconClass}
+          />
+          <MetricCard
+            title="Clicked"
+            value={metrics.clicked}
+            icon={MousePointerClick}
+            iconClassName={metrics.clickedIconClass}
+          />
         </div>
-        <CampaignStatusBadge status={campaign.status as CampaignStatus} />
-      </div>
-
-      {/* Campaign Meta */}
-      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-        {campaign.scheduledAt && (
-          <div className="flex items-center gap-1">
-            <Calendar className="h-4 w-4" />
-            Scheduled: {format(new Date(campaign.scheduledAt), "PPp")}
-          </div>
-        )}
-        {campaign.startedAt && (
-          <div className="flex items-center gap-1">
-            <Send className="h-4 w-4" />
-            Started: {formatDistanceToNow(new Date(campaign.startedAt), { addSuffix: true })}
-          </div>
-        )}
-        {campaign.completedAt && (
-          <div className="flex items-center gap-1">
-            <CheckCircle2 className="h-4 w-4" />
-            Completed: {formatDistanceToNow(new Date(campaign.completedAt), { addSuffix: true })}
-          </div>
-        )}
-      </div>
-
-      {/* Stats Grid */}
-      <div
-        className="grid grid-cols-2 md:grid-cols-4 gap-4"
-        aria-label="Campaign statistics"
-      >
-        <MetricCard
-          title="Recipients"
-          value={campaign.recipientCount.toLocaleString()}
-          icon={Users}
-          iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
-        />
-        <MetricCard
-          title="Sent"
-          value={formatCampaignStatValue(campaign.sentCount, campaign.recipientCount)}
-          icon={Mail}
-          iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
-        />
-        <MetricCard
-          title="Opened"
-          value={formatCampaignStatValue(campaign.openCount, campaign.sentCount)}
-          icon={Eye}
-          iconClassName={campaign.openCount > 0 ? CAMPAIGN_STAT_STYLES.success.iconClassName : CAMPAIGN_STAT_STYLES.default.iconClassName}
-        />
-        <MetricCard
-          title="Clicked"
-          value={formatCampaignStatValue(campaign.clickCount, campaign.sentCount)}
-          icon={MousePointerClick}
-          iconClassName={campaign.clickCount > 0 ? CAMPAIGN_STAT_STYLES.success.iconClassName : CAMPAIGN_STAT_STYLES.default.iconClassName}
-        />
-      </div>
+      )}
 
       {/* Error Stats (if any) */}
-      {(campaign.bounceCount > 0 || campaign.failedCount > 0) && (
+      {campaign.bounceCount > 0 || campaign.failedCount > 0 ? (
         <div className="grid grid-cols-2 gap-4">
           {campaign.bounceCount > 0 && (
             <MetricCard
@@ -398,48 +755,87 @@ export function CampaignDetailPanel({
             />
           )}
         </div>
+      ) : null}
+
+      {/* Terminal State: Action Suggestions (when campaign is completed) */}
+      {campaign.status === "sent" && (
+        <section className="rounded-lg border bg-muted/50 p-4" aria-label="Next steps">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-success/10 p-2">
+              <CheckCircle2 className="h-5 w-5 text-success" />
+            </div>
+            <div className="flex-1 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Campaign completed successfully</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your campaign has been sent. Here are some suggested next steps:
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleViewAnalytics}
+                  className="gap-2"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  View Analytics
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Navigate to create new campaign
+                    if (onBack) {
+                      onBack();
+                    }
+                  }}
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create New Campaign
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleViewEmailHistory}
+                  className="gap-2"
+                >
+                  <History className="h-4 w-4" />
+                  View Email History
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
-      {/* Sending Progress */}
-      {isSending && (
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3 w-3 animate-pulse" />
-                Sending in progress...
-              </span>
-              <span
-                className="font-medium"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {campaign.sentCount} / {campaign.recipientCount} ({sendProgress}%)
-              </span>
-            </div>
-            <Progress value={sendProgress} className="h-2" aria-label="Sending progress" />
-          </CardContent>
-        </Card>
+      {/* Zone 5: Campaign Information */}
+      {campaignMetaFields.length > 0 && (
+        <DetailSection id="meta" title="Campaign Information" defaultOpen={true}>
+          <DetailGrid fields={campaignMetaFields} />
+        </DetailSection>
       )}
 
-      {/* Recipients List */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Recipients</CardTitle>
-          <CardDescription>
-            {campaign.recipientCount} recipients in this campaign
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {recipientsLoading ? (
-            <div className="p-4">
-              <Skeleton className="h-32 w-full" />
-            </div>
-          ) : recipients.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground">
-              No recipients yet. Recipients will be populated when the campaign is sent.
-            </div>
-          ) : (
+      {/* Zone 5: Recipients List */}
+      <DetailSection id="recipients" title={`Recipients (${campaign.recipientCount})`} defaultOpen={true}>
+        {recipientsLoading ? (
+          <div className="p-4">
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : recipients.length === 0 ? (
+          <EmptyStateContainer variant="card">
+            <EmptyState
+              icon={Users}
+              title="No recipients yet"
+              message="Recipients will be populated when the campaign is sent or scheduled."
+            />
+          </EmptyStateContainer>
+        ) : (
+          <div className="rounded-md border">
             <ScrollArea className="h-[300px]">
               <Table aria-label="Campaign recipients">
                 <TableHeader>
@@ -485,9 +881,55 @@ export function CampaignDetailPanel({
                 </TableBody>
               </Table>
             </ScrollArea>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </DetailSection>
+
+      {/* Test Send Dialog */}
+      <Dialog open={testSendDialogOpen} onOpenChange={setTestSendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Test Email</DialogTitle>
+            <DialogDescription>
+              Send a test email for this campaign to verify how it looks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="test-email">Test Email Address</Label>
+              <Input
+                id="test-email"
+                type="email"
+                placeholder="test@example.com"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && testEmail && !testSendMutation.isPending) {
+                    handleTestSend();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTestSendDialogOpen(false);
+                setTestEmail("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleTestSend}
+              disabled={!testEmail || testSendMutation.isPending}
+            >
+              {testSendMutation.isPending ? "Sending..." : "Send Test Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+});

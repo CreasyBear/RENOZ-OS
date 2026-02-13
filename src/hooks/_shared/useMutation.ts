@@ -28,7 +28,7 @@ export function useMutation<TVariables, TData, TError = Error>(opts: {
         setError(err as TError);
       }
     },
-    [opts.fn]
+    [opts]
   );
 
   return {

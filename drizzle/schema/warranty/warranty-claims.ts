@@ -19,13 +19,13 @@ import {
   index,
   uniqueIndex,
   pgEnum,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
   currencyColumnNullable,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { customers } from "../customers/customers";
@@ -44,6 +44,7 @@ export const warrantyClaimStatusEnum = pgEnum("warranty_claim_status", [
   "approved", // Claim approved, pending resolution
   "denied", // Claim denied
   "resolved", // Claim resolved (repaired, replaced, refunded, or extended)
+  "cancelled", // Claim cancelled by customer or staff
 ]);
 
 // ============================================================================
@@ -147,74 +148,54 @@ export const warrantyClaims = pgTable(
     ...auditColumns,
     ...timestampColumns,
   },
-  (table) => [
+  (table) => ({
     // Unique claim number per org
-    uniqueIndex("idx_warranty_claims_number_org").on(
+    claimNumberOrgUnique: uniqueIndex("idx_warranty_claims_number_org").on(
       table.organizationId,
       table.claimNumber
     ),
 
     // Quick lookup by org
-    index("idx_warranty_claims_org").on(table.organizationId),
+    orgIdx: index("idx_warranty_claims_org").on(table.organizationId),
 
     // Warranty lookup (find all claims for a warranty)
-    index("idx_warranty_claims_warranty").on(table.warrantyId),
+    warrantyIdx: index("idx_warranty_claims_warranty").on(table.warrantyId),
 
     // Customer lookup (find all claims by customer)
-    index("idx_warranty_claims_customer").on(table.customerId),
+    customerIdx: index("idx_warranty_claims_customer").on(table.customerId),
 
     // Issue lookup (linked support ticket)
-    index("idx_warranty_claims_issue").on(table.issueId),
+    issueIdx: index("idx_warranty_claims_issue").on(table.issueId),
 
     // Status lookup for workflow
-    index("idx_warranty_claims_status").on(table.organizationId, table.status),
+    statusIdx: index("idx_warranty_claims_status").on(table.organizationId, table.status),
 
     // Claim type for analytics
-    index("idx_warranty_claims_type").on(table.organizationId, table.claimType),
+    typeIdx: index("idx_warranty_claims_type").on(table.organizationId, table.claimType),
 
     // SLA tracking lookup
-    index("idx_warranty_claims_sla").on(table.slaTrackingId),
+    slaIdx: index("idx_warranty_claims_sla").on(table.slaTrackingId),
 
     // Assigned user for workload
-    index("idx_warranty_claims_assigned").on(table.assignedUserId),
+    assignedIdx: index("idx_warranty_claims_assigned").on(table.assignedUserId),
 
     // Org timeline lookup
-    index("idx_warranty_claims_org_created").on(
+    orgCreatedIdx: index("idx_warranty_claims_org_created").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
 
     // Submitted date for recent claims
-    index("idx_warranty_claims_submitted").on(
+    submittedIdx: index("idx_warranty_claims_submitted").on(
       table.organizationId,
       table.submittedAt.desc(),
       table.id.desc()
     ),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("warranty_claims_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranty_claims_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranty_claims_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranty_claims_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("warranty_claims"),
+  })
 );
 
 // ============================================================================

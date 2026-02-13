@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + discovery config */
 /**
  * Feature Discovery Widget
  *
@@ -10,7 +11,7 @@
  * - "Progress Creates Motivation" - Shows "X of Y discovered"
  * - "Do, Don't Show" - Direct links to features with CTAs
  */
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, startTransition } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Headphones,
@@ -28,6 +29,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
 // ============================================================================
@@ -118,11 +120,29 @@ export function FeatureDiscovery({
 }: FeatureDiscoveryProps) {
   // Track if user dismissed this widget
   const [isDismissed, setIsDismissed] = useState(false)
-  
+
+  // Calculate discovery progress (must be before any early returns for rules-of-hooks)
+  const { undiscoveredFeatures, discoveryProgress, hasMoreToDiscover } = useMemo(() => {
+    const featuresWithStatus = DISCOVERABLE_FEATURES.map(f => ({
+      ...f,
+      discovered: discoveredFeatures.includes(f.id),
+    }))
+    const undiscovered = featuresWithStatus
+      .filter(f => !f.discovered)
+      .sort((a, b) => a.priority - b.priority)
+    const discovered = featuresWithStatus.filter(f => f.discovered)
+    const progress = Math.round((discovered.length / DISCOVERABLE_FEATURES.length) * 100)
+    return {
+      undiscoveredFeatures: undiscovered,
+      discoveryProgress: progress,
+      hasMoreToDiscover: undiscovered.length > 0,
+    }
+  }, [discoveredFeatures])
+
   useEffect(() => {
     const dismissed = localStorage.getItem(STORAGE_KEY)
     if (dismissed === 'true') {
-      setIsDismissed(true)
+      startTransition(() => setIsDismissed(true))
     }
   }, [])
   
@@ -136,28 +156,6 @@ export function FeatureDiscovery({
     return null
   }
 
-  // Calculate discovery progress
-  const { undiscoveredFeatures, discoveryProgress, hasMoreToDiscover } = useMemo(() => {
-    const featuresWithStatus = DISCOVERABLE_FEATURES.map(f => ({
-      ...f,
-      discovered: discoveredFeatures.includes(f.id),
-    }))
-    
-    const undiscovered = featuresWithStatus
-      .filter(f => !f.discovered)
-      .sort((a, b) => a.priority - b.priority)
-    
-    const discovered = featuresWithStatus.filter(f => f.discovered)
-    const progress = Math.round((discovered.length / DISCOVERABLE_FEATURES.length) * 100)
-    
-    return {
-      undiscoveredFeatures: undiscovered,
-      discoveredFeatures: discovered,
-      discoveryProgress: progress,
-      hasMoreToDiscover: undiscovered.length > 0,
-    }
-  }, [discoveredFeatures])
-
   // Don't show if all features discovered
   if (!hasMoreToDiscover) {
     return (
@@ -168,9 +166,9 @@ export function FeatureDiscovery({
               <CheckCircle2 className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="font-medium text-green-900">You're a power user!</p>
+              <p className="font-medium text-green-900">You&apos;re a power user!</p>
               <p className="text-sm text-green-700">
-                You've discovered all the main features. Explore settings for more options.
+                You&apos;ve discovered all the main features. Explore settings for more options.
               </p>
             </div>
           </div>
@@ -287,7 +285,7 @@ export function useFeatureDiscovery() {
   
   const markDiscovered = (featureId: string) => {
     // Implementation: call API or update localStorage
-    console.log('Feature discovered:', featureId)
+    logger.debug('Feature discovered', { featureId })
   }
   
   return { discoveredFeatures, markDiscovered }

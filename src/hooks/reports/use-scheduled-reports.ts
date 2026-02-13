@@ -60,7 +60,11 @@ export function useScheduledReports(options: UseScheduledReportsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.scheduledReports.list(filters),
-    queryFn: () => listScheduledReports({ data: filters as ListScheduledReportsInput }),
+    queryFn: async () => {
+      const result = await listScheduledReports({ data: filters as ListScheduledReportsInput });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -76,7 +80,13 @@ export function useScheduledReports(options: UseScheduledReportsOptions = {}) {
 export function useScheduledReport({ id, enabled = true }: UseScheduledReportOptions) {
   return useQuery({
     queryKey: queryKeys.reports.scheduledReports.detail(id),
-    queryFn: () => getScheduledReport({ data: { id } }),
+    queryFn: async () => {
+      const result = await getScheduledReport({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -88,7 +98,13 @@ export function useScheduledReport({ id, enabled = true }: UseScheduledReportOpt
 export function useScheduledReportStatus({ id, enabled = true }: UseScheduledReportOptions) {
   return useQuery({
     queryKey: queryKeys.reports.scheduledReports.status(id),
-    queryFn: () => getScheduledReportStatus({ data: { id } }),
+    queryFn: async () => {
+      const result = await getScheduledReportStatus({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 30 * 1000, // 30 seconds - status can change frequently
     refetchOnWindowFocus: true,

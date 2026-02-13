@@ -128,7 +128,7 @@ export function OrderShipped(props: OrderShippedProps) {
                 margin: "4px 0 0 0",
               }}
             >
-              It's on the way to you.
+              It&apos;s on the way to you.
             </Text>
           </Section>
 
@@ -314,7 +314,7 @@ export function OrderShipped(props: OrderShippedProps) {
                 margin: "24px 0 0 0",
               }}
             >
-              If you have any questions about your delivery, please don't
+              If you have any questions about your delivery, please don&apos;t
               hesitate to contact us.
             </Text>
           </Section>

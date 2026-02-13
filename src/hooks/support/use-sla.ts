@@ -38,7 +38,13 @@ import {
 export function useSlaConfigurations(filters?: SlaConfigurationFilters) {
   return useQuery({
     queryKey: queryKeys.support.slaConfigurationsList(filters),
-    queryFn: () => getSlaConfigurations({ data: filters ?? {} }),
+    queryFn: async () => {
+      const result = await getSlaConfigurations({
+        data: filters ?? {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -49,7 +55,13 @@ export function useSlaConfigurations(filters?: SlaConfigurationFilters) {
 export function useSlaConfiguration(configurationId: string) {
   return useQuery({
     queryKey: queryKeys.support.slaConfigurationDetail(configurationId),
-    queryFn: () => getSlaConfiguration({ data: { configurationId } }),
+    queryFn: async () => {
+      const result = await getSlaConfiguration({
+        data: { configurationId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!configurationId,
     staleTime: 5 * 60 * 1000,
   });
@@ -61,7 +73,13 @@ export function useSlaConfiguration(configurationId: string) {
 export function useDefaultSlaConfiguration(domain: 'support' | 'warranty' | 'jobs') {
   return useQuery({
     queryKey: queryKeys.support.slaConfigurationDefault(domain),
-    queryFn: () => getDefaultSlaConfiguration({ data: { domain } }),
+    queryFn: async () => {
+      const result = await getDefaultSlaConfiguration({
+        data: { domain } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -72,7 +90,13 @@ export function useDefaultSlaConfiguration(domain: 'support' | 'warranty' | 'job
 export function useHasSlaConfigurations(domain?: 'support' | 'warranty' | 'jobs') {
   return useQuery({
     queryKey: queryKeys.support.slaHasConfigurations(domain),
-    queryFn: () => hasSlsConfigurations({ data: { domain } }),
+    queryFn: async () => {
+      const result = await hasSlsConfigurations({
+        data: { domain } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -150,7 +174,13 @@ export function useSlaMetrics(filters?: {
 }) {
   return useQuery({
     queryKey: queryKeys.support.slaMetrics(filters),
-    queryFn: () => getSlaMetrics({ data: filters ?? {} }),
+    queryFn: async () => {
+      const result = await getSlaMetrics({
+        data: filters ?? {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -164,7 +194,13 @@ export function useSlaReportByIssueType(filters?: {
 }) {
   return useQuery({
     queryKey: queryKeys.support.slaReportByIssueType(filters),
-    queryFn: () => getSlaReportByIssueType({ data: filters ?? {} }),
+    queryFn: async () => {
+      const result = await getSlaReportByIssueType({
+        data: filters ?? {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 60 * 1000,
   });
 }
@@ -179,7 +215,13 @@ export function useSlaReportByIssueType(filters?: {
 export function useSlaState(trackingId: string) {
   return useQuery({
     queryKey: queryKeys.support.slaTrackingState(trackingId),
-    queryFn: () => getSlaState({ data: { trackingId } }),
+    queryFn: async () => {
+      const result = await getSlaState({
+        data: { trackingId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!trackingId,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -191,7 +233,13 @@ export function useSlaState(trackingId: string) {
 export function useSlaEvents(trackingId: string) {
   return useQuery({
     queryKey: queryKeys.support.slaTrackingEvents(trackingId),
-    queryFn: () => getSlaEvents({ data: { trackingId } }),
+    queryFn: async () => {
+      const result = await getSlaEvents({
+        data: { trackingId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!trackingId,
     staleTime: 30 * 1000,
   });

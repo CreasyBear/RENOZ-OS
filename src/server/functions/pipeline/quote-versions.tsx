@@ -11,9 +11,9 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt, notInArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { quoteVersions, opportunities, opportunityActivities } from 'drizzle/schema';
+import { quoteVersions, opportunities, opportunityActivities, generatedDocuments } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
@@ -28,6 +28,7 @@ import {
 import { GST_RATE } from '@/lib/order-calculations';
 import { formatCurrency } from '@/lib/formatters';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { createActivityLogger } from '@/lib/activity-logger';
 
 // ============================================================================
 // CONSTANTS
@@ -35,6 +36,19 @@ import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 /** Default quote validity in days */
 const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
+
+/** Raw quote line item from DB (supports legacy cents and new dollars format) */
+interface QuoteVersionItemRaw {
+  productId?: string;
+  sku?: string;
+  description?: string;
+  quantity: number;
+  unitPrice?: number;
+  unitPriceCents?: number;
+  total?: number;
+  totalCents?: number;
+  discountPercent?: number;
+}
 
 // ============================================================================
 // HELPERS
@@ -70,20 +84,6 @@ function calculateQuoteTotals(items: QuoteLineItem[]): {
   const total = Math.round((subtotal + taxAmount) * 100) / 100; // Round to 2 decimal places
 
   return { subtotal, taxAmount, total };
-}
-
-/**
- * Get the next version number for an opportunity
- */
-async function getNextVersionNumber(opportunityId: string): Promise<number> {
-  const latest = await db
-    .select({ versionNumber: quoteVersions.versionNumber })
-    .from(quoteVersions)
-    .where(eq(quoteVersions.opportunityId, opportunityId))
-    .orderBy(desc(quoteVersions.versionNumber))
-    .limit(1);
-
-  return (latest[0]?.versionNumber ?? 0) + 1;
 }
 
 // ============================================================================
@@ -123,17 +123,26 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
     // Calculate totals
     const { subtotal, taxAmount, total } = calculateQuoteTotals(items);
 
-    // Get next version number
-    const versionNumber = await getNextVersionNumber(opportunityId);
-
     // Process line items to ensure total is correct
     const processedItems = items.map((item) => ({
       ...item,
       total: calculateLineItemTotal(item),
     }));
 
-    // Wrap quote creation and opportunity update in transaction for atomicity
+    // Wrap quote creation and opportunity update in transaction for atomicity.
+    // Version number generation is inside the transaction to prevent race conditions
+    // where two concurrent creates could get the same version number.
     const quoteVersion = await db.transaction(async (tx) => {
+      // Get next version number inside transaction to prevent race condition
+      const latest = await tx
+        .select({ versionNumber: quoteVersions.versionNumber })
+        .from(quoteVersions)
+        .where(eq(quoteVersions.opportunityId, opportunityId))
+        .orderBy(desc(quoteVersions.versionNumber))
+        .limit(1);
+
+      const versionNumber = (latest[0]?.versionNumber ?? 0) + 1;
+
       // Create quote version
       const [newVersion] = await tx
         .insert(quoteVersions)
@@ -389,7 +398,10 @@ export const updateQuoteExpiration = createServerFn({ method: 'POST' })
       .where(eq(opportunities.id, opportunityId))
       .returning();
 
-    return { opportunity: result[0]! };
+    if (!result[0]) {
+      throw new Error('Failed to update quote expiration');
+    }
+    return { opportunity: result[0] };
   });
 
 /**
@@ -447,9 +459,10 @@ import {
   generateStoragePath,
   calculateChecksum,
   type QuoteDocumentData,
-  type DocumentOrganization,
 } from '@/lib/documents';
-import { organizations, customers, addresses } from 'drizzle/schema';
+import { buildDocumentViewUrl } from '@/lib/documents/urls';
+import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
+import { customers, addresses, organizations } from 'drizzle/schema';
 
 const STORAGE_BUCKET = 'documents';
 const QUOTE_VALIDITY_DAYS = 30;
@@ -465,7 +478,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     const { id } = data;
 
-    // Get the quote version with opportunity details
+    // Step 1: Get quote version
     const version = await db
       .select({
         id: quoteVersions.id,
@@ -488,7 +501,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     const quoteVersion = version[0];
 
-    // Get opportunity details
+    // Step 2: Get opportunity (depends on quoteVersion.opportunityId)
     const opportunity = await db
       .select({
         id: opportunities.id,
@@ -511,23 +524,26 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     const opp = opportunity[0];
 
-    // Get customer details
-    const customer = await db
-      .select({
-        id: customers.id,
-        name: customers.name,
-        email: customers.email,
-        phone: customers.phone,
-      })
-      .from(customers)
-      .where(
-        and(
-          eq(customers.id, opp.customerId),
-          eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+    // Step 3: Fetch customer and organization in parallel
+    const [customer, orgData] = await Promise.all([
+      db
+        .select({
+          id: customers.id,
+          name: customers.name,
+          email: customers.email,
+          phone: customers.phone,
+        })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.id, opp.customerId),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
         )
-      )
-      .limit(1);
+        .limit(1),
+      fetchOrganizationForDocument(ctx.organizationId),
+    ]);
 
     if (!customer[0]) {
       throw new NotFoundError('Customer not found', 'customer');
@@ -535,7 +551,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     const cust = customer[0];
 
-    // Fetch primary billing address
+    // Step 4: Fetch primary billing address (depends on customer.id)
     const [billingAddress] = await db
       .select({
         street1: addresses.street1,
@@ -580,61 +596,8 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       customerAddress = anyPrimary;
     }
 
-    // Get organization details
-    const org = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .limit(1);
-
-    if (!org[0]) {
-      throw new NotFoundError('Organization not found', 'organization');
-    }
-
-    const organization = org[0];
-    const orgAddress = organization.address as { street1?: string; street2?: string; city?: string; state?: string; postcode?: string; country?: string } | null;
-    const orgBranding = organization.branding as { logoUrl?: string; primaryColor?: string; secondaryColor?: string } | null;
-
-    // Build organization data for PDF
-    const orgData: DocumentOrganization = {
-      id: organization.id,
-      name: organization.name,
-      email: organization.email,
-      phone: organization.phone,
-      website: organization.website || orgBranding?.logoUrl,
-      taxId: organization.abn,
-      currency: organization.currency || 'AUD',
-      locale: organization.locale || 'en-AU',
-      address: orgAddress
-        ? {
-            addressLine1: orgAddress.street1,
-            addressLine2: orgAddress.street2,
-            city: orgAddress.city,
-            state: orgAddress.state,
-            postalCode: orgAddress.postcode,
-            country: orgAddress.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: orgBranding?.logoUrl,
-        primaryColor: orgBranding?.primaryColor,
-        secondaryColor: orgBranding?.secondaryColor,
-      },
-    };
-
-    // Generate QR code
-    const quoteUrl = `${process.env.APP_URL || 'https://app.renoz.com.au'}/quotes/${quoteVersion.id}`;
+    // Generate QR code and view-online URL (matches /pipeline/quotes/$quoteId route)
+    const quoteUrl = buildDocumentViewUrl('quote_version', quoteVersion.id);
     const qrCodeDataUrl = await generateQRCode(quoteUrl, {
       width: 240,
       margin: 0,
@@ -685,22 +648,22 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
               country: customerAddress.country,
             }
           : undefined,
-        lineItems: (quoteVersion.items || []).map((item, index) => {
+        lineItems: (quoteVersion.items || []).map((item: QuoteVersionItemRaw, index: number) => {
           // Handle both old (cents) and new (dollars) formats for backward compatibility
-          const unitPrice = 'unitPrice' in item ? item.unitPrice : (item as any).unitPriceCents / 100;
-          const total = 'total' in item ? item.total : ((item as any).totalCents || item.quantity * unitPrice);
+          const unitPrice = 'unitPrice' in item ? item.unitPrice : (item.unitPriceCents ?? 0) / 100;
+          const total = 'total' in item ? item.total : (item.totalCents ? item.totalCents / 100 : item.quantity * (unitPrice ?? 0));
 
           return {
             id: item.productId || `line-${index}`,
-            lineNumber: index + 1,
+            lineNumber: String(index + 1),
             sku: item.sku,
-            description: item.description,
+            description: item.description ?? '',
             quantity: item.quantity,
-            unitPrice,
+            unitPrice: unitPrice ?? 0,
             discountPercent: item.discountPercent || 0,
             discountAmount: 0,
             taxAmount: 0,
-            total,
+            total: total ?? 0,
             notes: undefined,
           };
         }),
@@ -722,6 +685,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
         organization={orgData}
         data={quoteData}
         qrCodeDataUrl={qrCodeDataUrl}
+        viewOnlineUrl={quoteUrl}
       />
     );
 
@@ -730,7 +694,10 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
     const storagePath = generateStoragePath(ctx.organizationId, 'quote', filename);
     const checksum = calculateChecksum(buffer);
 
-    const { error: uploadError } = await createAdminClient()
+    // Use admin client for storage (service role bypasses RLS)
+    const supabase = createAdminClient();
+
+    const { error: uploadError } = await supabase
       .storage.from(STORAGE_BUCKET)
       .upload(storagePath, buffer, {
         contentType: 'application/pdf',
@@ -742,13 +709,71 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
     }
 
     // Generate signed URL
-    const { data: signedUrlData, error: signedUrlError } = await createAdminClient()
+    const { data: signedUrlData, error: signedUrlError } = await supabase
       .storage.from(STORAGE_BUCKET)
       .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
 
     if (signedUrlError) {
       throw new Error(`Failed to generate signed URL: ${signedUrlError.message}`);
     }
+
+    // Upsert generated_documents: one row per (org, entity, docType)
+    // On regenerate: update metadata + increment regeneration count
+    const [upsertResult] = await db
+      .insert(generatedDocuments)
+      .values({
+        organizationId: ctx.organizationId,
+        documentType: 'quote',
+        entityType: 'opportunity',
+        entityId: opp.id,
+        filename,
+        storageUrl: signedUrlData.signedUrl,
+        fileSize: buffer.length,
+        generatedById: ctx.user.id,
+        regenerationCount: 0,
+      })
+      .onConflictDoUpdate({
+        target: [
+          generatedDocuments.organizationId,
+          generatedDocuments.entityType,
+          generatedDocuments.entityId,
+          generatedDocuments.documentType,
+        ],
+        set: {
+          filename,
+          storageUrl: signedUrlData.signedUrl,
+          fileSize: buffer.length,
+          generatedById: ctx.user.id,
+          generatedAt: new Date(),
+          updatedAt: new Date(),
+          regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+        },
+      })
+      .returning({ regenerationCount: generatedDocuments.regenerationCount });
+
+    // Log activity for audit trail (async, non-blocking)
+    const activityLogger = createActivityLogger({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+    });
+    const isRegeneration = (upsertResult?.regenerationCount ?? 0) > 0;
+    activityLogger.logAsync({
+      entityType: 'opportunity',
+      entityId: opp.id,
+      action: 'exported',
+      entityName: opp.title,
+      description: isRegeneration
+        ? `Regenerated quote PDF (version ${upsertResult?.regenerationCount ?? 1})`
+        : `Generated quote PDF`,
+      metadata: {
+        documentType: 'quote',
+        filename,
+        fileSize: buffer.length,
+        isRegeneration,
+        regenerationCount: upsertResult?.regenerationCount ?? 0,
+        quoteVersionId: id,
+      },
+    });
 
     // Update opportunity with PDF URL
     await db
@@ -858,7 +883,7 @@ export const sendQuote = createServerFn({ method: 'POST' })
         and(
           eq(customers.id, opp.customerId),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
       .limit(1);
@@ -986,32 +1011,45 @@ ${fromName} Team
       throw new Error(`Failed to send email: ${sendError.message}`);
     }
 
-    // Update email history with success
-    await db
-      .update(emailHistory)
-      .set({
-        status: 'sent',
-        sentAt: new Date(),
-        resendMessageId: sendResult?.id,
-      })
-      .where(eq(emailHistory.id, emailRecord.id));
+    // Wrap post-send DB updates in a transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Update email history with success
+      await tx
+        .update(emailHistory)
+        .set({
+          status: 'sent',
+          sentAt: new Date(),
+          resendMessageId: sendResult?.id,
+        })
+        .where(eq(emailHistory.id, emailRecord.id));
 
-    // Log activity on opportunity
-    await db.insert(opportunityActivities).values({
-      organizationId: ctx.organizationId,
-      opportunityId,
-      type: 'email_sent',
-      description: `Quote V${quoteVersion.versionNumber} sent to ${recipientEmail}`,
-      createdBy: ctx.userId,
+      // Log activity on opportunity
+      await tx.insert(opportunityActivities).values({
+        organizationId: ctx.organizationId,
+        opportunityId,
+        type: 'email',
+        description: `Quote V${quoteVersion.versionNumber} sent to ${recipientEmail}`,
+        createdBy: ctx.user.id,
+      });
+
+      // Update opportunity stage to 'proposal' if currently earlier
+      // Use current stage in WHERE clause for optimistic locking (prevents stale overwrites)
+      if (opp.stage === 'new' || opp.stage === 'qualified') {
+        await tx
+          .update(opportunities)
+          .set({
+            stage: 'proposal',
+            updatedAt: new Date(),
+            version: sql`${opportunities.version} + 1`,
+          })
+          .where(
+            and(
+              eq(opportunities.id, opportunityId),
+              eq(opportunities.stage, opp.stage) // Only update if stage hasn't changed concurrently
+            )
+          );
+      }
     });
-
-    // Update opportunity stage to 'proposal' if currently earlier
-    if (opp.stage === 'new' || opp.stage === 'qualified') {
-      await db
-        .update(opportunities)
-        .set({ stage: 'proposal', updatedAt: new Date() })
-        .where(eq(opportunities.id, opportunityId));
-    }
 
     return {
       quoteVersionId,
@@ -1142,7 +1180,7 @@ export const getExpiringQuotes = createServerFn({ method: 'GET' })
           gt(opportunities.quoteExpiresAt, now), // Not yet expired
           lte(opportunities.quoteExpiresAt, warningDate), // But expiring soon
           // Exclude won/lost
-          sql`${opportunities.stage} NOT IN ('won', 'lost')`
+          notInArray(opportunities.stage, ['won', 'lost'])
         )
       )
       .orderBy(opportunities.quoteExpiresAt)
@@ -1192,7 +1230,7 @@ export const getExpiredQuotes = createServerFn({ method: 'GET' })
           isNotNull(opportunities.quoteExpiresAt),
           lt(opportunities.quoteExpiresAt, now), // Already expired
           // Exclude won/lost
-          sql`${opportunities.stage} NOT IN ('won', 'lost')`
+          notInArray(opportunities.stage, ['won', 'lost'])
         )
       )
       .orderBy(desc(sql`NOW() - ${opportunities.quoteExpiresAt}`))
@@ -1400,61 +1438,26 @@ export const getQuoteValidityStats = createServerFn({ method: 'GET' })
     // Base conditions
     const baseConditions = [
       eq(opportunities.organizationId, ctx.organizationId),
-      sql`${opportunities.stage} NOT IN ('won', 'lost')`,
+      notInArray(opportunities.stage, ['won', 'lost']),
     ];
 
-    // Count expired
-    const expiredResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
+    // Single query with SUM(CASE WHEN ...) to replace 4 separate COUNT queries
+    const [stats] = await db
+      .select({
+        expired: sql<number>`SUM(CASE WHEN ${opportunities.quoteExpiresAt} IS NOT NULL AND ${opportunities.quoteExpiresAt} < ${now} THEN 1 ELSE 0 END)`,
+        expiringSoon: sql<number>`SUM(CASE WHEN ${opportunities.quoteExpiresAt} IS NOT NULL AND ${opportunities.quoteExpiresAt} > ${now} AND ${opportunities.quoteExpiresAt} <= ${sevenDaysFromNow} THEN 1 ELSE 0 END)`,
+        valid: sql<number>`SUM(CASE WHEN ${opportunities.quoteExpiresAt} IS NOT NULL AND ${opportunities.quoteExpiresAt} > ${sevenDaysFromNow} THEN 1 ELSE 0 END)`,
+        noExpiration: sql<number>`SUM(CASE WHEN ${opportunities.quoteExpiresAt} IS NULL THEN 1 ELSE 0 END)`,
+        total: sql<number>`COUNT(*)`,
+      })
       .from(opportunities)
-      .where(
-        and(
-          ...baseConditions,
-          isNotNull(opportunities.quoteExpiresAt),
-          lt(opportunities.quoteExpiresAt, now)
-        )
-      );
-
-    // Count expiring soon (next 7 days)
-    const expiringSoonResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(opportunities)
-      .where(
-        and(
-          ...baseConditions,
-          isNotNull(opportunities.quoteExpiresAt),
-          gt(opportunities.quoteExpiresAt, now),
-          lte(opportunities.quoteExpiresAt, sevenDaysFromNow)
-        )
-      );
-
-    // Count valid
-    const validResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(opportunities)
-      .where(
-        and(
-          ...baseConditions,
-          isNotNull(opportunities.quoteExpiresAt),
-          gt(opportunities.quoteExpiresAt, sevenDaysFromNow)
-        )
-      );
-
-    // Count no expiration set
-    const noExpirationResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(opportunities)
-      .where(and(...baseConditions, isNull(opportunities.quoteExpiresAt)));
+      .where(and(...baseConditions));
 
     return {
-      expired: Number(expiredResult[0]?.count ?? 0),
-      expiringSoon: Number(expiringSoonResult[0]?.count ?? 0),
-      valid: Number(validResult[0]?.count ?? 0),
-      noExpiration: Number(noExpirationResult[0]?.count ?? 0),
-      total:
-        Number(expiredResult[0]?.count ?? 0) +
-        Number(expiringSoonResult[0]?.count ?? 0) +
-        Number(validResult[0]?.count ?? 0) +
-        Number(noExpirationResult[0]?.count ?? 0),
+      expired: Number(stats?.expired ?? 0),
+      expiringSoon: Number(stats?.expiringSoon ?? 0),
+      valid: Number(stats?.valid ?? 0),
+      noExpiration: Number(stats?.noExpiration ?? 0),
+      total: Number(stats?.total ?? 0),
     };
   });

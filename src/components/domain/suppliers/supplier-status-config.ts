@@ -19,6 +19,7 @@ import {
   Package,
 } from "lucide-react";
 import type { SemanticStatusConfigItem, TypeConfigItem } from "@/components/shared/data-table";
+import type { SemanticColor } from "@/lib/status";
 import type { SupplierStatus, SupplierType } from "@/lib/schemas/suppliers";
 
 /**
@@ -72,6 +73,20 @@ export const SUPPLIER_TYPE_CONFIG: Record<SupplierType, TypeConfigItem> = {
     label: "Raw Materials",
     icon: Package,
   },
+};
+
+/**
+ * Supplier status config for EntityHeader (StatusBadge format: variant + label)
+ * Built explicitly to avoid type assertions (Object.fromEntries loses key types).
+ */
+export const SUPPLIER_STATUS_CONFIG_FOR_ENTITY_HEADER: Record<
+  SupplierStatus,
+  { variant: SemanticColor; label: string }
+> = {
+  active: { variant: 'success', label: 'Active' },
+  inactive: { variant: 'inactive', label: 'Inactive' },
+  suspended: { variant: 'warning', label: 'Suspended' },
+  blacklisted: { variant: 'error', label: 'Blacklisted' },
 };
 
 /**

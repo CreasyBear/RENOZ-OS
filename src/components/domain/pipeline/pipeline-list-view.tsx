@@ -70,39 +70,46 @@ type SortDirection = "asc" | "desc";
 // STAGE CONFIG
 // ============================================================================
 
+/**
+ * Stage configuration using design system semantic colors.
+ * Uses STATUS_COLORS for consistent theming across light/dark modes.
+ *
+ * @see lib/status/colors.ts - STATUS_COLORS
+ * @see docs/design-system/MASTER.md - Color Palette
+ */
 const STAGE_CONFIG: Record<
   OpportunityStage,
   { label: string; color: string; bgColor: string }
 > = {
   new: {
     label: "New",
-    color: "text-slate-700",
-    bgColor: "bg-slate-100",
+    color: "text-slate-600 dark:text-slate-400",
+    bgColor: "bg-slate-100 dark:bg-slate-800",
   },
   qualified: {
     label: "Qualified",
-    color: "text-blue-700",
-    bgColor: "bg-blue-100",
+    color: "text-blue-700 dark:text-blue-400",
+    bgColor: "bg-blue-100 dark:bg-blue-900/30",
   },
   proposal: {
     label: "Proposal",
-    color: "text-indigo-700",
-    bgColor: "bg-indigo-100",
+    color: "text-indigo-700 dark:text-indigo-400",
+    bgColor: "bg-indigo-100 dark:bg-indigo-900/30",
   },
   negotiation: {
     label: "Negotiation",
-    color: "text-purple-700",
-    bgColor: "bg-purple-100",
+    color: "text-violet-700 dark:text-violet-400",
+    bgColor: "bg-violet-100 dark:bg-violet-900/30",
   },
   won: {
     label: "Won",
-    color: "text-green-700",
-    bgColor: "bg-green-100",
+    color: "text-emerald-700 dark:text-emerald-400",
+    bgColor: "bg-emerald-100 dark:bg-emerald-900/30",
   },
   lost: {
     label: "Lost",
-    color: "text-gray-700",
-    bgColor: "bg-gray-100",
+    color: "text-slate-600 dark:text-slate-400",
+    bgColor: "bg-slate-100 dark:bg-slate-800",
   },
 };
 
@@ -204,7 +211,7 @@ export const PipelineListView = memo(function PipelineListView({
         case "probability":
           comparison = (a.probability ?? 0) - (b.probability ?? 0);
           break;
-        case "expectedCloseDate":
+        case "expectedCloseDate": {
           const dateA = a.expectedCloseDate
             ? new Date(a.expectedCloseDate).getTime()
             : Infinity;
@@ -213,6 +220,7 @@ export const PipelineListView = memo(function PipelineListView({
             : Infinity;
           comparison = dateA - dateB;
           break;
+        }
         case "daysInStage":
           comparison = a.daysInStage - b.daysInStage;
           break;
@@ -273,9 +281,9 @@ export const PipelineListView = memo(function PipelineListView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Bulk Actions Bar */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size >= 2 && (
         <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium">

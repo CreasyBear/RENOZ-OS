@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useActivityStats } from "@/hooks";
 import { format } from "date-fns";
 import type { ActivityAction, ActivityEntityType } from "@/lib/schemas/activities";
+import { isActivityAction, isActivityEntityType } from "@/lib/schemas/activities";
 
 // ============================================================================
 // COLOR PALETTE (Color-blind friendly)
@@ -69,6 +70,7 @@ const ENTITY_CHART_COLORS: Record<ActivityEntityType, string> = {
   supplier: "#EF4444",
   warranty: "#6366F1",
   issue: "#F97316",
+  rma: "#0D9488", // teal-600
   user: "#6B7280",
   call: "#06B6D4", // cyan
   email: "#3B82F6", // blue
@@ -255,11 +257,13 @@ export function ActionDistributionChart({
   }
 
   // Transform stats array to chart data (key is the action type)
-  const chartData = (data?.stats ?? []).map((item) => ({
-    name: item.key.charAt(0).toUpperCase() + item.key.slice(1),
-    value: item.count,
-    action: item.key as ActivityAction,
-  }));
+  const chartData = (data?.stats ?? [])
+    .filter((item) => isActivityAction(item.key))
+    .map((item) => ({
+      name: item.key.charAt(0).toUpperCase() + item.key.slice(1),
+      value: item.count,
+      action: item.key as ActivityAction, // Safe after type guard filter
+    }));
 
   if (chartData.length === 0) {
     return (
@@ -344,11 +348,13 @@ export function EntityBreakdownChart({
   }
 
   // Transform stats array to chart data (key is the entity type)
-  const chartData = (data?.stats ?? []).map((item) => ({
-    name: item.key.charAt(0).toUpperCase() + item.key.slice(1),
-    count: item.count,
-    entityType: item.key as ActivityEntityType,
-  }));
+  const chartData = (data?.stats ?? [])
+    .filter((item) => isActivityEntityType(item.key))
+    .map((item) => ({
+      name: item.key.charAt(0).toUpperCase() + item.key.slice(1),
+      count: item.count,
+      entityType: item.key as ActivityEntityType, // Safe after type guard filter
+    }));
 
   if (chartData.length === 0) {
     return (

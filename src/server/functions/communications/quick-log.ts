@@ -17,6 +17,7 @@ import {
 import { quickLogSchema } from '@/lib/schemas/communications'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
+import { ValidationError } from '@/lib/server/errors'
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -44,7 +45,7 @@ export const createQuickLog = createServerFn({ method: 'POST' })
     const entityId = customerId ?? opportunityId
 
     if (!entityId) {
-      throw new Error('Either customerId or opportunityId is required')
+      throw new ValidationError('Either customerId or opportunityId is required')
     }
 
     // Build description based on type

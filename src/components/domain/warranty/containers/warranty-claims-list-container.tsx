@@ -10,29 +10,11 @@
 
 import { useMemo } from 'react';
 import { useWarrantyClaims } from '@/hooks/warranty';
-import {
-  WarrantyClaimsListView,
-  type WarrantyClaimListItem,
-} from '../views/warranty-claims-list-view';
-import type { WarrantyClaimStatusValue, WarrantyClaimTypeValue } from '@/hooks/warranty';
-
-export type WarrantyClaimsSortField = 'submittedAt' | 'claimNumber' | 'status' | 'claimType';
-export type WarrantyClaimsSortOrder = 'asc' | 'desc';
-
-export interface WarrantyClaimsSearchParams {
-  status?: WarrantyClaimStatusValue;
-  type?: WarrantyClaimTypeValue;
-  page: number;
-  pageSize: number;
-  sortBy: WarrantyClaimsSortField;
-  sortOrder: WarrantyClaimsSortOrder;
-}
-
-export interface WarrantyClaimsListContainerProps {
-  search: WarrantyClaimsSearchParams;
-  onSearchChange: (updates: Partial<WarrantyClaimsSearchParams>) => void;
-  onRowClick: (claimId: string) => void;
-}
+import type {
+  WarrantyClaimListItem,
+  WarrantyClaimsListContainerProps,
+} from '@/lib/schemas/warranty';
+import { WarrantyClaimsListView } from '../views/warranty-claims-list-view';
 
 export function WarrantyClaimsListContainer({
   search,
@@ -48,8 +30,9 @@ export function WarrantyClaimsListContainer({
     sortOrder: search.sortOrder,
   });
 
-  const claims = useMemo(
-    () => (data?.items ?? []) as WarrantyClaimListItem[],
+  // Server function returns ListWarrantyClaimsResult with productId at source (SCHEMA-TRACE.md)
+  const claims = useMemo<WarrantyClaimListItem[]>(
+    () => data?.items ?? [],
     [data]
   );
   const pagination =

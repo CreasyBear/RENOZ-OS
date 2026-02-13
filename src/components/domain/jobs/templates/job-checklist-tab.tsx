@@ -22,6 +22,10 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChecklistItemCard } from './checklist-item-card';
 import { ApplyChecklistDialog } from './apply-checklist-dialog';
+import { toastError, toastSuccess } from '@/hooks';
+import { logger } from '@/lib/logger';
+import { useUploadFile, useFetchDownloadUrl } from '@/hooks/files';
+import { useUpdateChecklistItem } from '@/hooks/jobs';
 import type {
   ChecklistTemplateResponse,
   ChecklistItemResponse,
@@ -32,6 +36,8 @@ import type {
 // ============================================================================
 
 export interface JobChecklistTabProps {
+  /** Source: Jobs checklist container query. */
+  jobId: string;
   /** Source: Jobs checklist container query. */
   checklistItems: ChecklistItemResponse[];
   /** Source: Jobs checklist container query. */
@@ -63,6 +69,33 @@ export interface JobChecklistTabProps {
   /** Source: Jobs checklist container mutations. */
   isUpdating: boolean;
 }
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_FILE_TYPES = ['application/pdf'];
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const isValidChecklistUpload = (file: File) => {
+  const isImage = file.type.startsWith('image/');
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  if (!isImage && !isPdf) {
+    return {
+      valid: false,
+      message: 'Only images and PDFs are allowed.',
+    };
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      valid: false,
+      message: `File must be smaller than ${formatBytes(MAX_UPLOAD_BYTES)}.`,
+    };
+  }
+  return { valid: true };
+};
 
 // ============================================================================
 // SKELETON
@@ -103,6 +136,7 @@ function ChecklistSkeleton() {
 // ============================================================================
 
 export function JobChecklistTab({
+  jobId,
   checklistItems,
   stats,
   templateName,
@@ -121,6 +155,17 @@ export function JobChecklistTab({
 }: JobChecklistTabProps) {
   // State
   const [applyDialogOpen, setApplyDialogOpen] = React.useState(false);
+  const [pendingPhotoItemId, setPendingPhotoItemId] = React.useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState<{
+    itemId: string | null;
+    message: string;
+    file?: File;
+  } | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const uploadFile = useUploadFile();
+  const updateChecklistItem = useUpdateChecklistItem(jobId);
+  const fetchDownloadUrl = useFetchDownloadUrl();
 
   // Handlers
   const handleApplyTemplate = async (templateId: string) => {
@@ -128,7 +173,8 @@ export function JobChecklistTab({
       await onApplyTemplate(templateId);
       setApplyDialogOpen(false);
     } catch (err) {
-      console.error('Failed to apply checklist:', err);
+      logger.error('Failed to apply checklist', err);
+      toastError(err instanceof Error ? err.message : 'Failed to apply checklist');
     }
   };
 
@@ -136,7 +182,8 @@ export function JobChecklistTab({
     try {
       await onToggleComplete(itemId, isCompleted);
     } catch (err) {
-      console.error('Failed to toggle item:', err);
+      logger.error('Failed to toggle item', err);
+      toastError(err instanceof Error ? err.message : 'Failed to update checklist item');
     }
   };
 
@@ -144,13 +191,76 @@ export function JobChecklistTab({
     try {
       await onUpdateNotes(itemId, notes);
     } catch (err) {
-      console.error('Failed to update notes:', err);
+      logger.error('Failed to update notes', err);
+      toastError(err instanceof Error ? err.message : 'Failed to update notes');
     }
   };
 
   const handleAttachPhoto = (itemId: string) => {
-    // TODO: Implement photo upload functionality
-    console.log('Attach photo to item:', itemId);
+    setPendingPhotoItemId(itemId);
+    setUploadError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleUpload = async (file: File, itemId: string) => {
+    setIsUploadingPhoto(true);
+    setUploadError(null);
+    try {
+      const uploadResult = await uploadFile.mutateAsync({
+        file,
+        entityType: 'job',
+        entityId: jobId,
+      });
+
+      const download = await fetchDownloadUrl.mutateAsync(
+        uploadResult.attachment.id
+      );
+
+      await updateChecklistItem.mutateAsync({
+        itemId,
+        photoUrl: download?.downloadUrl,
+      });
+
+      toastSuccess('Photo attached');
+    } catch (err) {
+      logger.error('Failed to upload photo', err);
+      setUploadError({
+        itemId,
+        message: 'Failed to attach photo. Please try again.',
+        file,
+      });
+      toastError('Failed to attach photo');
+    } finally {
+      setIsUploadingPhoto(false);
+      setPendingPhotoItemId(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !pendingPhotoItemId) return;
+
+    const validation = isValidChecklistUpload(file);
+    if (!validation.valid) {
+      setUploadError({
+        itemId: pendingPhotoItemId,
+        message: validation.message ?? 'File is not supported.',
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    await handleUpload(file, pendingPhotoItemId);
+  };
+
+  const handleRetryUpload = async () => {
+    if (!uploadError?.file || !uploadError.itemId) return;
+    await handleUpload(uploadError.file, uploadError.itemId);
   };
 
   // Loading state
@@ -210,6 +320,13 @@ export function JobChecklistTab({
 
   return (
     <div className="space-y-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={`image/*,${ACCEPTED_FILE_TYPES.join(',')}`}
+        className="hidden"
+        onChange={handleFileChange}
+      />
       {/* Progress Header */}
       <div className="bg-card rounded-lg border p-4">
         <div className="mb-3 flex items-center justify-between">
@@ -248,6 +365,35 @@ export function JobChecklistTab({
       </div>
 
       {/* Checklist Items */}
+      {uploadError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Upload failed</AlertTitle>
+          <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>{uploadError.message}</span>
+            <div className="flex gap-2">
+              {uploadError.file && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetryUpload}
+                  disabled={isUploadingPhoto}
+                >
+                  Retry upload
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setUploadError(null)}
+                disabled={isUploadingPhoto}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="space-y-3">
         {checklistItems.map((item) => (
           <ChecklistItemCard
@@ -256,7 +402,11 @@ export function JobChecklistTab({
             onToggleComplete={(isCompleted) => handleToggleComplete(item.id, isCompleted)}
             onUpdateNotes={(notes) => handleUpdateNotes(item.id, notes)}
             onAttachPhoto={() => handleAttachPhoto(item.id)}
-            isUpdating={isUpdating}
+            isUpdating={
+              isUpdating ||
+              updateChecklistItem.isPending ||
+              (isUploadingPhoto && pendingPhotoItemId === item.id)
+            }
           />
         ))}
       </div>

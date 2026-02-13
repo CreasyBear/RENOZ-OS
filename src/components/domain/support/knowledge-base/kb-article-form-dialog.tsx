@@ -7,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-007b
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
@@ -117,7 +117,7 @@ export function KbArticleFormDialog({
         metaTitle: article?.metaTitle ?? '',
         metaDescription: article?.metaDescription ?? '',
       });
-      setTagInput('');
+      startTransition(() => setTagInput(''));
     }
   }, [open, article, form]);
 

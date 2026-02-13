@@ -105,3 +105,4 @@ export const ordersLogger = logger.child({ domain: 'orders' });
 export const pipelineLogger = logger.child({ domain: 'pipeline' });
 export const inventoryLogger = logger.child({ domain: 'inventory' });
 export const customersLogger = logger.child({ domain: 'customers' });
+export const warrantyLogger = logger.child({ domain: 'warranty' });

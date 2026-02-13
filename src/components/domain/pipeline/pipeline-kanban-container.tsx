@@ -17,14 +17,16 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { endOfMonth, isSameDay, startOfMonth } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useOpportunitiesKanban,
   usePipelineMetrics,
   useUpdateOpportunityStage,
+  useDeleteOpportunity,
   type OpportunityKanbanFilters,
 } from "@/hooks/pipeline";
-import { toastSuccess, toastError } from "@/hooks";
+import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { DomainFilterBar } from "@/components/shared/filters";
 import { PipelineBoard } from "./pipeline-board";
 import { PipelineListView } from "./pipeline-list-view";
@@ -34,11 +36,13 @@ import {
   DEFAULT_PIPELINE_FILTERS,
   type PipelineFiltersState,
 } from "./pipeline-filter-config";
+import { OpportunityQuickDialog } from "./opportunities/opportunity-quick-dialog";
 import { useUsers } from "@/hooks/users/use-users";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ErrorState } from "@/components/shared";
 import {
   AlertTriangle,
   User,
@@ -49,7 +53,8 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
-import type { OpportunityStage } from "@/lib/schemas/pipeline";
+import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
+import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // DEFAULT FILTERS - Keep result set manageable
@@ -79,7 +84,6 @@ const QUICK_FILTERS = [
     label: "Closing This Month",
     icon: Calendar,
     filters: { assignedTo: null, includeWonLost: false },
-    // TODO: Add date range filter when supported
   },
   {
     id: "high-value" as const,
@@ -141,6 +145,25 @@ function isBroadScope(filters: PipelineFiltersState): boolean {
     !filters.includeWonLost &&
     !filters.search &&
     filters.stages.length === 0
+  );
+}
+
+function getCurrentMonthRange() {
+  const now = new Date();
+  return {
+    from: startOfMonth(now),
+    to: endOfMonth(now),
+  };
+}
+
+function isSameMonthRange(
+  range: PipelineFiltersState["expectedCloseDate"] | null
+): boolean {
+  if (!range?.from || !range?.to) return false;
+  const currentRange = getCurrentMonthRange();
+  return (
+    isSameDay(range.from, currentRange.from) &&
+    isSameDay(range.to, currentRange.to)
   );
 }
 
@@ -248,8 +271,7 @@ function QuickFilterChips({ currentFilters, onChange }: QuickFilterChipsProps) {
       case "my-pipeline":
         return isMyPipeline(currentFilters);
       case "closing-soon":
-        // TODO: Add date range check when implemented
-        return false;
+        return isSameMonthRange(currentFilters.expectedCloseDate);
       case "high-value":
         return (
           currentFilters.minValue === 1000000 &&
@@ -267,9 +289,11 @@ function QuickFilterChips({ currentFilters, onChange }: QuickFilterChipsProps) {
   };
 
   const handleClick = (filter: (typeof QUICK_FILTERS)[number]) => {
+    const monthRange = getCurrentMonthRange();
     onChange({
       ...KANBAN_DEFAULT_FILTERS,
       ...filter.filters,
+      expectedCloseDate: filter.id === "closing-soon" ? monthRange : null,
     });
   };
 
@@ -314,14 +338,19 @@ export function PipelineKanbanContainer({
   initialFilters,
   initialViewMode = "kanban",
 }: PipelineKanbanContainerProps = {}) {
-  const navigate = useNavigate();
-  const router = useRouter();
+  const confirm = useConfirmation();
+  const queryClient = useQueryClient();
 
   // Filter state with defaults
   const [filters, setFilters] = useState<PipelineFiltersState>({
     ...KANBAN_DEFAULT_FILTERS,
     ...initialFilters,
   });
+
+  const [quickDialogOpen, setQuickDialogOpen] = useState(false);
+  const [quickDialogMode, setQuickDialogMode] = useState<"create" | "edit">("create");
+  const [quickDialogStage, setQuickDialogStage] = useState<OpportunityStage>("new");
+  const [quickDialogOpportunityId, setQuickDialogOpportunityId] = useState<string | null>(null);
 
   // View mode state (kanban vs list)
   const [viewMode, setViewMode] = useState<PipelineViewMode>(initialViewMode);
@@ -346,6 +375,8 @@ export function PipelineKanbanContainer({
       assignedTo: filters.assignedTo === "me" ? undefined : filters.assignedTo || undefined,
       minValue: filters.valueRange?.min ?? undefined,
       maxValue: filters.valueRange?.max ?? undefined,
+      expectedCloseDateFrom: filters.expectedCloseDate?.from ?? undefined,
+      expectedCloseDateTo: filters.expectedCloseDate?.to ?? undefined,
       includeWonLost: filters.includeWonLost,
     }),
     [filters]
@@ -367,6 +398,7 @@ export function PipelineKanbanContainer({
 
   // Stage change using centralized hook
   const stageChangeMutation = useUpdateOpportunityStage();
+  const deleteMutation = useDeleteOpportunity();
 
   // Handle stage change from board
   const handleStageChange = useCallback(
@@ -395,64 +427,78 @@ export function PipelineKanbanContainer({
   );
 
   // Handle add opportunity
-  const handleAddOpportunity = useCallback(
-    (stage: OpportunityStage) => {
-      navigate({
-        to: "/pipeline/new",
-        search: { stage } as any,
-      });
-    },
-    [navigate]
-  );
-
-  // Handle edit opportunity
-  const handleEditOpportunity = useCallback(
-    (id: string) => {
-      router.navigate({
-        to: "/pipeline/$opportunityId",
-        params: { opportunityId: id },
-      });
-    },
-    [router]
-  );
-
-  // Handle delete opportunity (for list view)
-  const handleDeleteOpportunity = useCallback((id: string) => {
-    // TODO: Implement delete with confirmation
-    console.log("Delete opportunity:", id);
+  const handleAddOpportunity = useCallback((stage: OpportunityStage) => {
+    setQuickDialogMode("create");
+    setQuickDialogStage(stage);
+    setQuickDialogOpportunityId(null);
+    setQuickDialogOpen(true);
   }, []);
 
-  const opportunities = opportunitiesData?.items ?? [];
+  // Handle edit opportunity
+  const handleEditOpportunity = useCallback((id: string) => {
+    setQuickDialogMode("edit");
+    setQuickDialogOpportunityId(id);
+    setQuickDialogOpen(true);
+  }, []);
+
+  // Handle delete opportunity (for list view)
+  const handleDeleteOpportunity = useCallback(
+    async (id: string) => {
+      const confirmed = await confirm.confirm({
+        title: "Delete Opportunity",
+        description: "Are you sure you want to delete this opportunity? This action cannot be undone.",
+        confirmLabel: "Delete Opportunity",
+        variant: "destructive",
+      });
+
+      if (!confirmed.confirmed) return;
+
+      try {
+        await deleteMutation.mutateAsync(id);
+        toastSuccess("Opportunity deleted successfully.");
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to delete opportunity.");
+      }
+    },
+    [confirm, deleteMutation]
+  );
+
+  // Cast: OpportunityMetadata from API lacks index signature { [x: string]: unknown } expected by schema
+  const opportunities: Opportunity[] = (opportunitiesData?.items ?? []) as Opportunity[];
   const totalCount = opportunitiesData?.pagination?.totalItems ?? opportunities.length;
-  const isLoading = isLoadingOpportunities || stageChangeMutation.isPending;
+  const isLoading =
+    isLoadingOpportunities || stageChangeMutation.isPending || deleteMutation.isPending;
   const error = opportunitiesError || metricsError;
 
   // Handle error state
   if (error && !isLoading) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-8 text-center">
-        <h3 className="text-lg font-semibold text-destructive mb-2">
-          Failed to load pipeline
-        </h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {error.message || "An unexpected error occurred"}
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-sm text-primary hover:underline"
-        >
-          Retry
-        </button>
-      </div>
+      <ErrorState
+        title="Failed to load pipeline"
+        message={error.message || "An unexpected error occurred"}
+        onRetry={() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+          queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+        }}
+        retryLabel="Retry"
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Quick Filter Chips */}
-      <QuickFilterChips currentFilters={filters} onChange={setFilters} />
+    <div className="space-y-3">
+      {/* Filters + Quick Chips on one row */}
+      <DomainFilterBar<PipelineFiltersState>
+        config={filterConfig}
+        filters={filters}
+        onFiltersChange={setFilters}
+        defaultFilters={DEFAULT_PIPELINE_FILTERS}
+        presetsSuffix={
+          <QuickFilterChips currentFilters={filters} onChange={setFilters} />
+        }
+      />
 
-      {/* Scope Indicator */}
+      {/* Scope Indicator (shows when filtered or broad scope) */}
       <ScopeIndicator
         filters={filters}
         totalCount={totalCount}
@@ -462,14 +508,6 @@ export function PipelineKanbanContainer({
 
       {/* Metrics */}
       <PipelineMetrics metrics={metricsData ?? null} isLoading={isLoadingMetrics} />
-
-      {/* Filters */}
-      <DomainFilterBar<PipelineFiltersState>
-        config={filterConfig}
-        filters={filters}
-        onFiltersChange={setFilters}
-        defaultFilters={DEFAULT_PIPELINE_FILTERS}
-      />
 
       {/* View Toggle */}
       <div className="flex items-center justify-between">
@@ -494,13 +532,15 @@ export function PipelineKanbanContainer({
 
       {/* View Content */}
       {viewMode === "kanban" ? (
-        <PipelineBoard
-          opportunities={opportunities}
-          onStageChange={handleStageChange}
-          onAddOpportunity={handleAddOpportunity}
-          onEditOpportunity={handleEditOpportunity}
-          isLoading={isLoading}
-        />
+        <div className="w-full min-w-0 overflow-hidden">
+          <PipelineBoard
+            opportunities={opportunities}
+            onStageChange={handleStageChange}
+            onAddOpportunity={handleAddOpportunity}
+            onEditOpportunity={handleEditOpportunity}
+            isLoading={isLoading}
+          />
+        </div>
       ) : (
         <PipelineListView
           opportunities={opportunities}
@@ -510,6 +550,20 @@ export function PipelineKanbanContainer({
           isLoading={isLoading}
         />
       )}
+
+      <OpportunityQuickDialog
+        open={quickDialogOpen}
+        onOpenChange={setQuickDialogOpen}
+        mode={quickDialogMode}
+        stage={quickDialogStage}
+        opportunityId={quickDialogOpportunityId}
+        onSuccess={(opportunityId) => {
+          // Invalidate pipeline queries to refresh the board
+          queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+          queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+          queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
+        }}
+      />
     </div>
   );
 }

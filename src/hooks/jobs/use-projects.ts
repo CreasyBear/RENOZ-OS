@@ -31,6 +31,9 @@ import type {
   AddProjectMemberInput,
   RemoveProjectMemberInput,
   CompleteProjectInput,
+  ProjectListResponse,
+  Project,
+  GetProjectRawInput,
 } from '@/lib/schemas/jobs/projects';
 
 // ============================================================================
@@ -47,46 +50,39 @@ export interface UseProjectsOptions extends Partial<ProjectListQuery> {
 export function useProjects(options: UseProjectsOptions = {}) {
   const { enabled = true, ...filters } = options;
 
-  return useQuery({
+  return useQuery<ProjectListResponse>({
     queryKey: queryKeys.projects.list(filters),
-    queryFn: () => getProjects({ data: filters as ProjectListQuery }),
+    queryFn: async () => {
+      const result = await getProjects({ data: filters as ProjectListQuery });
+      if (result == null) throw new Error('Projects list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
-}
-
-interface ProjectItem {
-  id: string;
-  [key: string]: unknown;
-}
-
-interface ProjectsResponse {
-  items: ProjectItem[];
-  pagination: {
-    totalItems: number;
-  };
 }
 
 /**
  * Get all projects (for small datasets)
  */
 export function useAllProjects(filters: Partial<ProjectListQuery> = {}, enabled = true) {
-  return useQuery({
-    queryKey: [...queryKeys.projects.lists(), 'all', filters],
+  return useQuery<Project[]>({
+    queryKey: queryKeys.projects.listAll(filters),
     queryFn: async () => {
-      const allResults: ProjectItem[] = [];
+      const allResults: Project[] = [];
       let page = 1;
       let hasMore = true;
-      
-      while (hasMore && page < 20) { // Safety limit
-        const result = await getProjects({
+
+      while (hasMore && page < 20) {
+        const result = (await getProjects({
           data: { ...filters, page, pageSize: 100 } as ProjectListQuery,
-        }) as ProjectsResponse;
+        })) as ProjectListResponse;
+        if (!result?.items) return allResults;
         allResults.push(...result.items);
         hasMore = result.items.length === 100 && allResults.length < result.pagination.totalItems;
         page++;
       }
-      
+
       return allResults;
     },
     enabled,
@@ -95,12 +91,37 @@ export function useAllProjects(filters: Partial<ProjectListQuery> = {}, enabled 
 }
 
 /**
+ * Returns loadOptions for project combobox (searchable async).
+ * Encapsulates getProjects server call per STANDARDS.md - no direct server fn in components.
+ */
+export function useLoadProjectOptions() {
+  return async (search: string): Promise<{ value: string; label: string }[]> => {
+    const result = await getProjects({
+      data: {
+        search: search || undefined,
+        page: 1,
+        pageSize: 20,
+      } as ProjectListQuery,
+    });
+    const items = result?.items ?? [];
+    return items.map((p) => ({
+      value: p.id,
+      label: `${p.title ?? 'Untitled'}${p.projectNumber ? ` (${p.projectNumber})` : ''}`,
+    }));
+  };
+}
+
+/**
  * Get projects with cursor pagination
  */
 export function useProjectsCursor(filters: Partial<ProjectCursorQuery> = {}) {
   return useQuery({
-    queryKey: [...queryKeys.projects.lists(), 'cursor', filters],
-    queryFn: () => getProjectsCursor({ data: filters as ProjectCursorQuery }),
+    queryKey: queryKeys.projects.listCursor(filters),
+    queryFn: async () => {
+      const result = await getProjectsCursor({ data: filters as ProjectCursorQuery });
+      if (result == null) throw new Error('Projects cursor returned no data');
+      return result;
+    },
     staleTime: 30 * 1000,
   });
 }
@@ -118,9 +139,13 @@ export interface UseProjectOptions {
  * Get single project by ID
  */
 export function useProject({ projectId, enabled = true }: UseProjectOptions) {
-  return useQuery({
+  return useQuery<GetProjectRawInput>({
     queryKey: queryKeys.projects.detail(projectId),
-    queryFn: () => getProject({ data: { projectId } }),
+    queryFn: async () => {
+      const result = await getProject({ data: { projectId } });
+      if (result == null) throw new Error('Project not found');
+      return result;
+    },
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -132,10 +157,13 @@ export function useProject({ projectId, enabled = true }: UseProjectOptions) {
 export function useProjectsByCustomer(customerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.projects.byCustomer(customerId),
-    queryFn: () =>
-      getProjects({
+    queryFn: async () => {
+      const result = await getProjects({
         data: { customerId, page: 1, pageSize: 100 } as ProjectListQuery,
-      }),
+      });
+      if (result == null) throw new Error('Projects by customer returned no data');
+      return result;
+    },
     enabled: enabled && !!customerId,
     staleTime: 60 * 1000,
   });
@@ -145,8 +173,6 @@ export function useProjectsByCustomer(customerId: string, enabled = true) {
 // MUTATION HOOKS
 // ============================================================================
 
-type ProjectResult = { id: string; customerId: string | null };
-
 /**
  * Create a new project
  */
@@ -154,14 +180,17 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
   const createFn = useServerFn(createProject);
 
-  return useMutation({
+  return useMutation<Project, Error, CreateProjectInput>({
     mutationFn: async (input: CreateProjectInput) => {
-      const result = await createFn({ data: input });
-      return result as ProjectResult;
+      return await createFn({ data: input });
     },
     onSuccess: (result) => {
       // Invalidate project lists
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists() });
+      // Invalidate project detail for the newly created project
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.detail(result.id),
+      });
       // Invalidate customer projects if applicable
       if (result.customerId) {
         queryClient.invalidateQueries({
@@ -187,6 +216,10 @@ export function useUpdateProject() {
         queryKey: queryKeys.projects.detail(variables.projectId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists() });
+      // Invalidate alerts (status, dates, budget changes affect multiple alert types)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(variables.projectId),
+      });
     },
   });
 }
@@ -281,6 +314,10 @@ export function useCompleteProject() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.detail(variables.projectId),
       });
+      // Invalidate alerts (completion clears most alerts)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(variables.projectId),
+      });
     },
   });
 }
@@ -298,7 +335,11 @@ export function usePrefetchProject() {
   return (projectId: string) => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.projects.detail(projectId),
-      queryFn: () => getProject({ data: { projectId } }),
+      queryFn: async () => {
+        const result = await getProject({ data: { projectId } });
+        if (result == null) throw new Error('Project not found');
+        return result;
+      },
       staleTime: 60 * 1000,
     });
   };

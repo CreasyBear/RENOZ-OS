@@ -18,12 +18,13 @@ import {
   integer,
   index,
   pgEnum,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
+  numericCasted,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
@@ -100,11 +101,11 @@ export const jobTasks = pgTable(
       enum: ["low", "normal", "high", "urgent"],
     }).notNull().default("normal"),
 
-    // Time estimates (in minutes)
-    estimatedHours: integer("estimated_hours"),
+    // Time estimates (hours, fractional allowed)
+    estimatedHours: numericCasted("estimated_hours", { precision: 8, scale: 2 }),
 
-    // Time tracking (in minutes)
-    actualHours: integer("actual_hours"),
+    // Time tracking (hours, fractional allowed)
+    actualHours: numericCasted("actual_hours", { precision: 8, scale: 2 }),
 
     // Ordering for drag-drop reorder
     position: integer("position").notNull(),
@@ -153,27 +154,7 @@ export const jobTasks = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("job_tasks_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("job_tasks_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("job_tasks_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("job_tasks_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("job_tasks"),
   })
 );
 

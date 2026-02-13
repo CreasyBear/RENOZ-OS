@@ -6,7 +6,7 @@
  */
 
 import crypto from 'node:crypto';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, inArray } from 'drizzle-orm';
 import {
   oauthConnections,
@@ -15,6 +15,14 @@ import {
   oauthSyncStates,
 } from 'drizzle/schema/oauth';
 import { decryptOAuthToken } from './token-encryption';
+import { logger } from '@/lib/logger';
+import type { ConnectionForSyncEngine } from '@/lib/schemas/oauth/connection';
+import type {
+  GoogleCalendarAttendeeRaw,
+  GoogleCalendarEventRaw,
+  MicrosoftCalendarAttendeeRaw,
+  MicrosoftCalendarEventRaw,
+} from '@/lib/schemas/integrations/calendar';
 
 // ============================================================================
 // CALENDAR EVENT TYPES
@@ -36,7 +44,7 @@ export interface CalendarEvent {
   isAllDay: boolean;
   recurrence?: CalendarRecurrence;
   reminders?: CalendarReminder[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   lastSyncedAt: Date;
@@ -243,17 +251,86 @@ export interface CalendarEventInput {
   }>;
 }
 
+/** Map Google API response to ExternalCalendarEvent with required fields */
+function toExternalCalendarEventFromGoogle(data: GoogleCalendarEventRaw): ExternalCalendarEvent {
+  const attendees = data.attendees
+    ?.map((a: GoogleCalendarAttendeeRaw) =>
+      a.email != null
+        ? {
+            email: a.email,
+            displayName: a.displayName,
+            responseStatus: a.responseStatus ?? 'needsAction',
+            organizer: a.organizer ?? false,
+          }
+        : null
+    )
+    .filter((a): a is NonNullable<typeof a> => a != null);
+  return {
+    id: data.id ?? '',
+    title: data.summary || '(No title)',
+    description: data.description,
+    start: data.start ?? {},
+    end: data.end ?? {},
+    location: data.location,
+    attendees,
+    status: data.status || 'confirmed',
+    recurrence: data.recurrence,
+    reminders: data.reminders
+      ? { useDefault: data.reminders.useDefault ?? true, overrides: data.reminders.overrides }
+      : undefined,
+    updated: data.updated ?? '',
+    created: data.created,
+    etag: data.etag,
+  };
+}
+
+/** Map Microsoft API response to ExternalCalendarEvent with required fields */
+function toExternalCalendarEventFromMicrosoft(data: MicrosoftCalendarEventRaw): ExternalCalendarEvent {
+  const attendees = data.attendees
+    ?.map((a: MicrosoftCalendarAttendeeRaw) => {
+      const email = a.emailAddress?.address;
+      return email != null
+        ? {
+            email,
+            displayName: a.emailAddress?.name,
+            responseStatus: a.status?.response ?? 'none',
+            organizer: a.type === 'organizer',
+          }
+        : null;
+    })
+    .filter((a): a is NonNullable<typeof a> => a != null);
+  return {
+    id: data.id ?? '',
+    title: data.subject || '(No title)',
+    description: data.body?.content,
+    start: {
+      dateTime: data.start?.dateTime,
+      timeZone: data.start?.timeZone,
+    },
+    end: {
+      dateTime: data.end?.dateTime,
+      timeZone: data.end?.timeZone,
+    },
+    location: data.location?.displayName,
+    attendees,
+    status: data.showAs || 'confirmed',
+    updated: (data.lastModifiedDateTime || data.createdDateTime) ?? '',
+    created: data.createdDateTime,
+    etag: data['@odata.etag'],
+  };
+}
+
 // ============================================================================
 // SYNC ENGINE IMPLEMENTATION
 // ============================================================================
 
 export class CalendarSyncEngine {
-  private db: PostgresJsDatabase<any>;
+  private db: OAuthDatabase;
   private config: CalendarSyncConfig;
   private googleProvider: CalendarProvider;
   private microsoftProvider: CalendarProvider;
 
-  constructor(db: PostgresJsDatabase<any>, config: Partial<CalendarSyncConfig> = {}) {
+  constructor(db: OAuthDatabase, config: Partial<CalendarSyncConfig> = {}) {
     this.db = db;
     this.config = { ...DEFAULT_CALENDAR_SYNC_CONFIG, ...config };
     this.googleProvider = new GoogleCalendarProvider();
@@ -368,10 +445,9 @@ export class CalendarSyncEngine {
 
       // Log sync failure
       try {
-      // Avoid logging without a real connectionId to preserve FK integrity
-      console.error('Calendar sync failed:', errorMessage);
+        logger.error('Calendar sync failed', new Error(errorMessage), {});
       } catch (logError) {
-        console.error('Failed to log sync failure:', logError);
+        logger.error('Failed to log sync failure', logError as Error, {});
       }
 
       return {
@@ -391,7 +467,7 @@ export class CalendarSyncEngine {
    * Perform a full sync of calendar events
    */
   private async performFullSync(
-    connection: any,
+    connection: ConnectionForSyncEngine,
     provider: CalendarProvider,
     tokens: { accessToken: string; refreshToken?: string },
     startDate: Date,
@@ -469,7 +545,7 @@ export class CalendarSyncEngine {
    * Perform an incremental sync using change tokens
    */
   private async performIncrementalSync(
-    connection: any,
+    connection: ConnectionForSyncEngine,
     provider: CalendarProvider,
     tokens: { accessToken: string; refreshToken?: string }
   ): Promise<SyncResult> {
@@ -527,7 +603,7 @@ export class CalendarSyncEngine {
    * Process a single external calendar event
    */
   private async processExternalEvent(
-    connection: any,
+    connection: ConnectionForSyncEngine,
     externalEvent: ExternalCalendarEvent
   ): Promise<{ created: boolean; updated: boolean; deleted: boolean; conflictResolved: boolean }> {
     // Convert external event to internal format
@@ -560,7 +636,7 @@ export class CalendarSyncEngine {
    * Convert external event format to internal format
    */
   private convertExternalEvent(
-    connection: any,
+    connection: ConnectionForSyncEngine,
     externalEvent: ExternalCalendarEvent
   ): CalendarEvent {
     const startTime = externalEvent.start.dateTime
@@ -774,13 +850,16 @@ export class CalendarSyncEngine {
     return state || null;
   }
 
-  private async upsertSyncState(connection: any, syncToken: string): Promise<void> {
+  private async upsertSyncState(
+    connection: ConnectionForSyncEngine,
+    syncToken: string
+  ): Promise<void> {
     await this.db
       .insert(oauthSyncStates)
       .values({
         organizationId: connection.organizationId,
         connectionId: connection.id,
-        provider: connection.provider,
+        provider: connection.provider as 'google_workspace' | 'microsoft_365',
         serviceType: 'calendar',
         syncToken,
         lastSyncedAt: new Date(),
@@ -939,26 +1018,10 @@ class GoogleCalendarProvider implements CalendarProvider {
 
     const data = await response.json();
 
-    const events: ExternalCalendarEvent[] = (data.items || []).map((item: any) => ({
-      id: item.id,
-      title: item.summary || '(No title)',
-      description: item.description,
-      start: item.start,
-      end: item.end,
-      location: item.location,
-      attendees: item.attendees?.map((attendee: any) => ({
-        email: attendee.email,
-        displayName: attendee.displayName,
-        responseStatus: attendee.responseStatus,
-        organizer: attendee.organizer,
-      })),
-      status: item.status || 'confirmed',
-      recurrence: item.recurrence,
-      reminders: item.reminders,
-      updated: item.updated,
-      created: item.created,
-      etag: item.etag,
-    }));
+    const items = (data.items ?? []) as GoogleCalendarEventRaw[];
+    const events: ExternalCalendarEvent[] = items
+      .filter((item): item is GoogleCalendarEventRaw & { id: string } => !!item.id)
+      .map(toExternalCalendarEventFromGoogle);
 
     return {
       events,
@@ -999,27 +1062,8 @@ class GoogleCalendarProvider implements CalendarProvider {
       );
     }
 
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.summary || '(No title)',
-      description: data.description,
-      start: data.start,
-      end: data.end,
-      location: data.location,
-      attendees: data.attendees?.map((attendee: any) => ({
-        email: attendee.email,
-        displayName: attendee.displayName,
-        responseStatus: attendee.responseStatus,
-        organizer: attendee.organizer,
-      })),
-      status: data.status || 'confirmed',
-      recurrence: data.recurrence,
-      reminders: data.reminders,
-      updated: data.updated,
-      created: data.created,
-      etag: data.etag,
-    };
+    const data = (await response.json()) as GoogleCalendarEventRaw;
+    return toExternalCalendarEventFromGoogle(data);
   }
 
   async updateEvent(
@@ -1045,27 +1089,8 @@ class GoogleCalendarProvider implements CalendarProvider {
       );
     }
 
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.summary || '(No title)',
-      description: data.description,
-      start: data.start,
-      end: data.end,
-      location: data.location,
-      attendees: data.attendees?.map((attendee: any) => ({
-        email: attendee.email,
-        displayName: attendee.displayName,
-        responseStatus: attendee.responseStatus,
-        organizer: attendee.organizer,
-      })),
-      status: data.status || 'confirmed',
-      recurrence: data.recurrence,
-      reminders: data.reminders,
-      updated: data.updated,
-      created: data.created,
-      etag: data.etag,
-    };
+    const data = (await response.json()) as GoogleCalendarEventRaw;
+    return toExternalCalendarEventFromGoogle(data);
   }
 
   async deleteEvent(
@@ -1116,26 +1141,10 @@ class GoogleCalendarProvider implements CalendarProvider {
     }
 
     const data = await response.json();
-    const events: ExternalCalendarEvent[] = (data.items || []).map((item: any) => ({
-      id: item.id,
-      title: item.summary || '(No title)',
-      description: item.description,
-      start: item.start,
-      end: item.end,
-      location: item.location,
-      attendees: item.attendees?.map((attendee: any) => ({
-        email: attendee.email,
-        displayName: attendee.displayName,
-        responseStatus: attendee.responseStatus,
-        organizer: attendee.organizer,
-      })),
-      status: item.status || 'confirmed',
-      recurrence: item.recurrence,
-      reminders: item.reminders,
-      updated: item.updated,
-      created: item.created,
-      etag: item.etag,
-    }));
+    const items = (data.items ?? []) as GoogleCalendarEventRaw[];
+    const events: ExternalCalendarEvent[] = items
+      .filter((item): item is GoogleCalendarEventRaw & { id: string } => !!item.id)
+      .map(toExternalCalendarEventFromGoogle);
 
     return {
       events,
@@ -1185,30 +1194,10 @@ class MicrosoftCalendarProvider implements CalendarProvider {
     }
 
     const data = await response.json();
-    const events: ExternalCalendarEvent[] = (data.value || []).map((item: any) => ({
-      id: item.id,
-      title: item.subject || '(No title)',
-      description: item.body?.content,
-      start: {
-        dateTime: item.start?.dateTime,
-        timeZone: item.start?.timeZone,
-      },
-      end: {
-        dateTime: item.end?.dateTime,
-        timeZone: item.end?.timeZone,
-      },
-      location: item.location?.displayName,
-      attendees: item.attendees?.map((attendee: any) => ({
-        email: attendee.emailAddress?.address,
-        displayName: attendee.emailAddress?.name,
-        responseStatus: attendee.status?.response,
-        organizer: attendee.type === 'organizer',
-      })),
-      status: item.showAs || 'confirmed',
-      updated: item.lastModifiedDateTime || item.createdDateTime,
-      created: item.createdDateTime,
-      etag: item['@odata.etag'],
-    }));
+    const items = (data.value ?? []) as MicrosoftCalendarEventRaw[];
+    const events: ExternalCalendarEvent[] = items
+      .filter((item): item is MicrosoftCalendarEventRaw & { id: string } => !!item.id)
+      .map(toExternalCalendarEventFromMicrosoft);
 
     return {
       events,
@@ -1251,31 +1240,8 @@ class MicrosoftCalendarProvider implements CalendarProvider {
       );
     }
 
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.subject || '(No title)',
-      description: data.body?.content,
-      start: {
-        dateTime: data.start?.dateTime,
-        timeZone: data.start?.timeZone,
-      },
-      end: {
-        dateTime: data.end?.dateTime,
-        timeZone: data.end?.timeZone,
-      },
-      location: data.location?.displayName,
-      attendees: data.attendees?.map((attendee: any) => ({
-        email: attendee.emailAddress?.address,
-        displayName: attendee.emailAddress?.name,
-        responseStatus: attendee.status?.response,
-        organizer: attendee.type === 'organizer',
-      })),
-      status: data.showAs || 'confirmed',
-      updated: data.lastModifiedDateTime || data.createdDateTime,
-      created: data.createdDateTime,
-      etag: data['@odata.etag'],
-    };
+    const data = (await response.json()) as MicrosoftCalendarEventRaw;
+    return toExternalCalendarEventFromMicrosoft(data);
   }
 
   async updateEvent(
@@ -1309,31 +1275,8 @@ class MicrosoftCalendarProvider implements CalendarProvider {
       );
     }
 
-    const data = await response.json();
-    return {
-      id: data.id,
-      title: data.subject || '(No title)',
-      description: data.body?.content,
-      start: {
-        dateTime: data.start?.dateTime,
-        timeZone: data.start?.timeZone,
-      },
-      end: {
-        dateTime: data.end?.dateTime,
-        timeZone: data.end?.timeZone,
-      },
-      location: data.location?.displayName,
-      attendees: data.attendees?.map((attendee: any) => ({
-        email: attendee.emailAddress?.address,
-        displayName: attendee.emailAddress?.name,
-        responseStatus: attendee.status?.response,
-        organizer: attendee.type === 'organizer',
-      })),
-      status: data.showAs || 'confirmed',
-      updated: data.lastModifiedDateTime || data.createdDateTime,
-      created: data.createdDateTime,
-      etag: data['@odata.etag'],
-    };
+    const data = (await response.json()) as MicrosoftCalendarEventRaw;
+    return toExternalCalendarEventFromMicrosoft(data);
   }
 
   async deleteEvent(
@@ -1378,30 +1321,10 @@ class MicrosoftCalendarProvider implements CalendarProvider {
     }
 
     const data = await response.json();
-    const events: ExternalCalendarEvent[] = (data.value || []).map((item: any) => ({
-      id: item.id,
-      title: item.subject || '(No title)',
-      description: item.body?.content,
-      start: {
-        dateTime: item.start?.dateTime,
-        timeZone: item.start?.timeZone,
-      },
-      end: {
-        dateTime: item.end?.dateTime,
-        timeZone: item.end?.timeZone,
-      },
-      location: item.location?.displayName,
-      attendees: item.attendees?.map((attendee: any) => ({
-        email: attendee.emailAddress?.address,
-        displayName: attendee.emailAddress?.name,
-        responseStatus: attendee.status?.response,
-        organizer: attendee.type === 'organizer',
-      })),
-      status: item.showAs || 'confirmed',
-      updated: item.lastModifiedDateTime || item.createdDateTime,
-      created: item.createdDateTime,
-      etag: item['@odata.etag'],
-    }));
+    const items = (data.value ?? []) as MicrosoftCalendarEventRaw[];
+    const events: ExternalCalendarEvent[] = items
+      .filter((item): item is MicrosoftCalendarEventRaw & { id: string } => !!item.id)
+      .map(toExternalCalendarEventFromMicrosoft);
 
     return {
       events,

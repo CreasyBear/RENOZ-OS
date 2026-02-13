@@ -2,148 +2,116 @@
  * User Profile Form
  *
  * Form for viewing and editing user profile information.
- * Follows container/presenter pattern - receives data via props.
+ * Uses TanStack Form with Zod validation per FORM-STANDARDS.md
  *
+ * @lastReviewed 2026-02-10
  * @see _Initiation/_prd/sprints/sprint-01-route-cleanup.prd.json (SPRINT-01-006)
+ * @see FORM-STANDARDS.md for form implementation patterns
  */
 
-import { useState, useCallback } from "react";
-import { User, Building2, Shield, Save, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { User, Building2, Shield, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
+import {
+  getInitials,
+  getRoleBadgeColor,
+  extractProfileFields,
+  getProfilePhone,
+  getProfileJobTitle,
+  getProfileDepartment,
+  getProfileBio,
+  calculateProfileCompleteness,
+} from "@/lib/users";
+import { formatDate } from "@/lib/formatters";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextField,
+  TextareaField,
+  SelectField,
+  FormActions,
+} from "@/components/shared/forms";
+import { profileFormSchema, type ProfileFormData } from "@/lib/schemas/users/profile";
+import type { ProfileFormProps } from "@/lib/schemas/users/profile";
+import { TIMEZONES, LANGUAGES } from "@/lib/constants";
+import { mergeProfileUpdate } from "@/lib/users/profile-helpers";
 
 // ============================================================================
-// TYPES
+// HELPER FUNCTIONS
 // ============================================================================
 
-export interface UserProfile {
-  id: string;
-  email: string;
-  name: string | null;
-  role: string;
-  status: string;
-  type: string | null;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  profile?: {
-    phone?: string;
-    title?: string;
-    department?: string;
-    bio?: string;
-    timezone?: string;
-    language?: string;
-  } | null;
-  preferences?: {
-    emailNotifications?: boolean;
-    smsNotifications?: boolean;
-    theme?: "light" | "dark" | "system";
-    dateFormat?: string;
-    currency?: string;
-  } | null;
-  groups?: Array<{
-    groupId: string;
-    groupName: string;
-    role: string;
-    joinedAt: Date | string;
-  }>;
-}
+/**
+ * Get initial form data from user
+ * Uses type-safe profile helpers (no type assertions)
+ *
+ * @param user - User data from useUser hook
+ * @returns Form data mapped from user profile JSONB
+ */
+function getInitialFormData(user: ProfileFormProps["user"]): ProfileFormData {
+  const profileFields = extractProfileFields(user.profile);
 
-export interface ProfileFormProps {
-  /** @source useUser hook in profile.tsx */
-  user: UserProfile;
-  /** @source useAuth hook in profile.tsx */
-  currentUser: { email?: string } | null;
-  /** @source useUpdateUser mutation in profile.tsx */
-  onUpdate: (data: { name?: string; profile?: Record<string, unknown> }) => Promise<void>;
-  /** @source useUpdateUser mutation state in profile.tsx */
-  isUpdating: boolean;
+  return {
+    name: user.name || "",
+    ...profileFields,
+  };
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
+/**
+ * Profile Form Component
+ *
+ * Displays user profile information in read-only mode with edit capability.
+ * Uses TanStack Form with Zod validation for type-safe form handling.
+ *
+ * @param user - User data from useUser hook (@source useUser in profile.tsx)
+ * @param currentUser - Current authenticated user (@source useAuth in profile.tsx)
+ * @param onUpdate - Update handler (@source useUpdateUser mutation in profile.tsx)
+ * @param isUpdating - Loading state (@source useUpdateUser mutation state in profile.tsx)
+ */
 export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
+  const initialFormData = useMemo(() => getInitialFormData(user), [user]);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: user.name || "",
-    phone: user.profile?.phone || "",
-    title: user.profile?.title || "",
-    department: user.profile?.department || "",
-    bio: user.profile?.bio || "",
-    timezone: user.profile?.timezone || "Australia/Sydney",
-    language: user.profile?.language || "en",
-  });
 
-  const handleChange = useCallback(
-    (field: keyof typeof formData, value: string) => {
-      setFormData((prev) => ({ ...prev, [field]: value }));
-    },
-    []
+  // Calculate profile completeness
+  const completeness = useMemo(
+    () => calculateProfileCompleteness({ name: user.name, profile: user.profile }),
+    [user.name, user.profile]
   );
 
-  const handleSave = useCallback(async () => {
-    await onUpdate({
-      name: formData.name,
-      profile: {
-        ...user.profile,
-        phone: formData.phone,
-        title: formData.title,
-        department: formData.department,
-        bio: formData.bio,
-        timezone: formData.timezone,
-        language: formData.language,
-      },
-    });
+  const form = useTanStackForm<ProfileFormData>({
+    schema: profileFormSchema,
+    defaultValues: initialFormData,
+    onSubmit: async (values) => {
+      // Build profile update using helper (preserves existing fields, updates changed ones)
+      const profileUpdate = mergeProfileUpdate(user.profile, values);
+
+      await onUpdate({
+        name: values.name,
+        profile: profileUpdate,
+      });
+      setIsEditing(false);
+    },
+  });
+
+  // Reset form when entering edit mode or when user data changes
+  useEffect(() => {
+    if (isEditing) {
+      form.reset(initialFormData);
+    }
+    // form.reset is stable, but form object reference changes - only reset when entering edit mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, initialFormData]);
+
+  const handleCancel = () => {
+    form.reset(initialFormData);
     setIsEditing(false);
-  }, [formData, user.profile, onUpdate]);
-
-  const handleCancel = useCallback(() => {
-    setFormData({
-      name: user.name || "",
-      phone: user.profile?.phone || "",
-      title: user.profile?.title || "",
-      department: user.profile?.department || "",
-      bio: user.profile?.bio || "",
-      timezone: user.profile?.timezone || "Australia/Sydney",
-      language: user.profile?.language || "en",
-    });
-    setIsEditing(false);
-  }, [user]);
-
-  const getInitials = (name: string | null) => {
-    if (!name) return "U";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString("en-AU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  };
-
-  const getRoleBadgeColor = (role: string) => {
-    const colors: Record<string, string> = {
-      admin: "bg-red-100 text-red-800",
-      manager: "bg-blue-100 text-blue-800",
-      sales: "bg-green-100 text-green-800",
-      operations: "bg-yellow-100 text-yellow-800",
-      support: "bg-purple-100 text-purple-800",
-      viewer: "bg-gray-100 text-gray-800",
-    };
-    return colors[role] || "bg-gray-100 text-gray-800";
   };
 
   return (
@@ -152,7 +120,7 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-start gap-6">
-            <Avatar className="h-20 w-20">
+            <Avatar className="h-20 w-20" aria-label={`${user.name || "User"} avatar`}>
               <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
                 {getInitials(user.name)}
               </AvatarFallback>
@@ -162,24 +130,76 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
                 {user.name || "Unnamed User"}
               </h1>
               <p className="text-muted-foreground">{user.email}</p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <Badge className={getRoleBadgeColor(user.role)}>
+              <div className="flex flex-wrap gap-2 mt-3" role="list" aria-label="User badges">
+                <Badge className={getRoleBadgeColor(user.role)} role="listitem">
                   {user.role}
                 </Badge>
-                <Badge variant="outline">{user.status}</Badge>
-                {user.type && <Badge variant="secondary">{user.type}</Badge>}
+                <Badge variant="outline" role="listitem">{user.status}</Badge>
+                {user.type && <Badge variant="secondary" role="listitem">{user.type}</Badge>}
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Profile Completeness Indicator */}
+      {!completeness.isComplete && (
+        <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              Complete Your Profile
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {completeness.missingFields.length > 0 && (
+                <>Add {completeness.missingFields.slice(0, 2).join(" and ")} to improve your profile</>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Profile completeness</span>
+              <span className="font-medium">{completeness.percentage}%</span>
+            </div>
+            <Progress value={completeness.percentage} className="h-2" aria-label={`Profile ${completeness.percentage}% complete`} />
+            {completeness.missingFields.length > 0 && (
+              <ul className="text-xs text-muted-foreground mt-2 space-y-1" role="list">
+                {completeness.missingFields.map((field) => (
+                  <li key={field} className="flex items-center gap-1" role="listitem">
+                    <span className="h-1 w-1 rounded-full bg-current" aria-hidden="true" />
+                    {field}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {completeness.isComplete && completeness.percentage >= 100 && (
+        <Card className="border-green-200 bg-green-50/50 dark:bg-green-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                  Profile Complete
+                </p>
+                <p className="text-xs text-green-700 dark:text-green-300">
+                  Your profile is {completeness.percentage}% complete
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
         {/* Profile Information */}
-        <Card>
+        <Card role="region" aria-labelledby="profile-info-title">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+            <CardTitle id="profile-info-title" className="flex items-center gap-2">
+              <User className="h-5 w-5" aria-hidden="true" />
               Profile Information
             </CardTitle>
             <CardDescription>
@@ -188,62 +208,110 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             {isEditing ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    placeholder="Enter your full name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => handleChange("phone", e.target.value)}
-                    placeholder="+61 XXX XXX XXX"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="title">Job Title</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => handleChange("title", e.target.value)}
-                    placeholder="e.g., Sales Manager"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Input
-                    id="department"
-                    value={formData.department}
-                    onChange={(e) => handleChange("department", e.target.value)}
-                    placeholder="e.g., Sales"
-                  />
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={isUpdating}>
-                    {isUpdating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                  <Button variant="outline" onClick={handleCancel}>
-                    Cancel
-                  </Button>
-                </div>
-              </>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  form.handleSubmit();
+                }}
+                className="space-y-4"
+                role="form"
+                aria-label="Profile information form"
+                noValidate
+              >
+                <form.Field name="name">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Full Name"
+                      placeholder="Enter your full name"
+                      required
+                      autocomplete="name"
+                      aria-required="true"
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="phone">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Phone Number"
+                      placeholder="+61 XXX XXX XXX"
+                      type="tel"
+                      autocomplete="tel"
+                      inputMode="tel"
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="jobTitle">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Job Title"
+                      placeholder="e.g., Sales Manager"
+                      autocomplete="organization-title"
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="department">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Department"
+                      placeholder="e.g., Sales"
+                      autocomplete="organization-unit"
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="bio">
+                  {(field) => (
+                    <TextareaField
+                      field={field}
+                      label="Bio"
+                      placeholder="Tell us about yourself..."
+                      rows={4}
+                      maxLength={500}
+                      aria-describedby="bio-description"
+                    />
+                  )}
+                </form.Field>
+                <p id="bio-description" className="text-xs text-muted-foreground -mt-2">
+                  Maximum 500 characters
+                </p>
+
+                <form.Field name="timezone">
+                  {(field) => (
+                    <SelectField
+                      field={field}
+                      label="Timezone"
+                      options={TIMEZONES.SUPPORTED.map((tz) => ({ value: tz, label: tz }))}
+                      placeholder="Select timezone"
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="language">
+                  {(field) => (
+                    <SelectField
+                      field={field}
+                      label="Language"
+                      options={[...LANGUAGES]}
+                      placeholder="Select language"
+                    />
+                  )}
+                </form.Field>
+
+                <FormActions
+                  form={form}
+                  submitLabel="Save Changes"
+                  onCancel={handleCancel}
+                  submitDisabled={isUpdating}
+                  loadingLabel="Saving..."
+                />
+              </form>
             ) : (
               <>
                 <div className="space-y-4">
@@ -260,26 +328,35 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
                   <div>
                     <p className="text-sm text-muted-foreground">Phone</p>
                     <p className="font-medium">
-                      {user.profile?.phone || "Not set"}
+                      {getProfilePhone(user.profile) || "Not set"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Job Title</p>
                     <p className="font-medium">
-                      {user.profile?.title || "Not set"}
+                      {getProfileJobTitle(user.profile) || "Not set"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Department</p>
                     <p className="font-medium">
-                      {user.profile?.department || "Not set"}
+                      {getProfileDepartment(user.profile) || "Not set"}
                     </p>
                   </div>
+                  {getProfileBio(user.profile) && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Bio</p>
+                      <p className="font-medium">
+                        {getProfileBio(user.profile)}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <Button
                   variant="outline"
                   className="w-full mt-4"
                   onClick={() => setIsEditing(true)}
+                  aria-label="Edit profile information"
                 >
                   Edit Profile
                 </Button>
@@ -289,39 +366,55 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
         </Card>
 
         {/* Account Information */}
-        <Card>
+        <Card role="region" aria-labelledby="account-info-title">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
+            <CardTitle id="account-info-title" className="flex items-center gap-2">
+              <Shield className="h-5 w-5" aria-hidden="true" />
               Account Information
             </CardTitle>
             <CardDescription>
               Your account status and membership details
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
+          <CardContent className="space-y-4" role="list" aria-label="Account details">
+            <div role="listitem">
               <p className="text-sm text-muted-foreground">Role</p>
-              <p className="font-medium capitalize">{user.role}</p>
+              <p className="font-medium capitalize" aria-label={`User role: ${user.role}`}>{user.role}</p>
             </div>
-            <div>
+            <div role="listitem">
               <p className="text-sm text-muted-foreground">Status</p>
-              <p className="font-medium capitalize">{user.status}</p>
+              <p className="font-medium capitalize" aria-label={`Account status: ${user.status}`}>{user.status}</p>
             </div>
-            <div>
+            <div role="listitem">
               <p className="text-sm text-muted-foreground">User Type</p>
-              <p className="font-medium capitalize">
+              <p className="font-medium capitalize" aria-label={`User type: ${user.type || "Standard"}`}>
                 {user.type || "Standard"}
               </p>
             </div>
-            <Separator />
-            <div>
+            <Separator role="separator" aria-orientation="horizontal" />
+            <div role="listitem">
               <p className="text-sm text-muted-foreground">Member Since</p>
-              <p className="font-medium">{formatDate(user.createdAt)}</p>
+              <p className="font-medium" aria-label={`Member since: ${formatDate(user.createdAt, {
+                dateStyle: "long",
+              })}`}>
+                {formatDate(user.createdAt, {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                  locale: "en-AU",
+                })}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Last Updated</p>
-              <p className="font-medium">{formatDate(user.updatedAt)}</p>
+              <p className="font-medium">
+                {formatDate(user.updatedAt, {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                  locale: "en-AU",
+                })}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -353,7 +446,13 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
                     </p>
                   </div>
                   <Badge variant="outline">
-                    Joined {formatDate(group.joinedAt)}
+                    Joined{" "}
+                    {formatDate(group.joinedAt, {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      locale: "en-AU",
+                    })}
                   </Badge>
                 </div>
               ))}

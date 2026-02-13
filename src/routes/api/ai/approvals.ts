@@ -11,6 +11,7 @@
 
 import { withAuth } from '@/lib/server/protected';
 import { getPendingApprovals } from '@/server/functions/ai/approvals';
+import { logger } from '@/lib/logger';
 
 export async function GET({ request }: { request: Request }) {
   try {
@@ -60,7 +61,7 @@ export async function GET({ request }: { request: Request }) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('[API /ai/approvals] Error:', error);
+    logger.error('[API /ai/approvals] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {

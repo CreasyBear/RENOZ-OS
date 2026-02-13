@@ -15,9 +15,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, isNull, gt, gte, lte, ne, desc, asc } from 'drizzle-orm';
+import { eq, and, sql, isNull, gt, gte, lte, ne, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { orders, customers as customersTable } from 'drizzle/schema';
+import { orders, customers as customersTable, orderPayments } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
   financialDashboardQuerySchema,
@@ -102,7 +102,7 @@ function calculateDaysOverdue(dueDate: Date | null, asOfDate: Date): number {
  * Get comprehensive financial dashboard metrics.
  * Returns KPIs for revenue, AR, payments, and GST.
  */
-export const getFinancialDashboardMetrics = createServerFn()
+export const getFinancialDashboardMetrics = createServerFn({ method: 'GET' })
   .inputValidator(financialDashboardQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -110,99 +110,126 @@ export const getFinancialDashboardMetrics = createServerFn()
     const now = new Date();
     const { start: monthStart, end: monthEnd } = getMonthBounds(now);
     const yearStart = getYearStart(now);
+    const periodStart = data.dateFrom ?? monthStart;
+    const periodEnd = data.dateTo ?? monthEnd;
+    const periodStartStr = periodStart.toISOString().split('T')[0];
+    const periodEndStr = periodEnd.toISOString().split('T')[0];
 
     // Previous month for comparison
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const monthStartStr = monthStart.toISOString().split('T')[0];
+    const monthEndStr = monthEnd.toISOString().split('T')[0];
+    const prevMonthStartStr = prevMonthStart.toISOString().split('T')[0];
+    const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
+    const yearStartStr = yearStart.toISOString().split('T')[0];
+    const nowStr = now.toISOString().split('T')[0];
 
-    // Get all orders for calculations
-    const allOrders = await db
+    const getCashReceivedTotal = async (startDate: string, endDate: string): Promise<number> => {
+      // Complex aggregation with CASE statement - acceptable use of sql template
+      const [result] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(CASE WHEN ${orderPayments.isRefund} THEN -${orderPayments.amount} ELSE ${orderPayments.amount} END), 0)`,
+        })
+        .from(orderPayments)
+        .innerJoin(orders, eq(orderPayments.orderId, orders.id))
+        .where(
+          and(
+            eq(orderPayments.organizationId, ctx.organizationId),
+            isNull(orderPayments.deletedAt),
+            isNull(orders.deletedAt),
+            ne(orders.status, 'cancelled'),
+            gte(orderPayments.paymentDate, startDate),
+            lte(orderPayments.paymentDate, endDate)
+          )
+        );
+
+      return Number(result?.total ?? 0);
+    };
+
+    const cashReceivedMTD = await getCashReceivedTotal(monthStartStr, monthEndStr);
+    const cashReceivedPrevMTD = await getCashReceivedTotal(prevMonthStartStr, prevMonthEndStr);
+    const cashReceivedYTD = await getCashReceivedTotal(yearStartStr, nowStr);
+
+    // Avg days to payment: CTE for last payment per order, then join with orders
+    const paymentSubquery = db.$with('p').as(
+      db
+        .select({
+          orderId: orderPayments.orderId,
+          lastPaymentDate: sql<Date>`MAX(${orderPayments.paymentDate})`.as('last_payment_date'),
+        })
+        .from(orderPayments)
+        .where(
+          and(
+            eq(orderPayments.organizationId, ctx.organizationId),
+            isNull(orderPayments.deletedAt),
+            eq(orderPayments.isRefund, false)
+          )
+        )
+        .groupBy(orderPayments.orderId)
+    );
+
+    const [avgRow] = await db
+      .with(paymentSubquery)
       .select({
-        id: orders.id,
-        total: orders.total,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-        taxAmount: orders.taxAmount,
-        orderDate: orders.orderDate,
-        dueDate: orders.dueDate,
-        paymentStatus: orders.paymentStatus,
-        status: orders.status,
+        avg_days: sql<string>`COALESCE(AVG(EXTRACT(DAY FROM (${paymentSubquery.lastPaymentDate} - ${orders.orderDate}))), 0)::text`,
       })
-      .from(orders)
+      .from(paymentSubquery)
+      .innerJoin(orders, eq(orders.id, paymentSubquery.orderId))
       .where(
         and(
           eq(orders.organizationId, ctx.organizationId),
           isNull(orders.deletedAt),
-          ne(orders.status, 'cancelled')
+          ne(orders.status, 'cancelled'),
+          eq(orders.paymentStatus, 'paid'),
+          sql`${paymentSubquery.lastPaymentDate} >= ${periodStartStr}::date`,
+          sql`${paymentSubquery.lastPaymentDate} <= ${periodEndStr}::date`
         )
       );
 
-    // Calculate MTD revenue (orders placed this month)
-    let revenueMTD = 0;
-    let revenuePrevMTD = 0;
-    let revenueYTD = 0;
-    let cashReceivedMTD = 0;
-    let cashReceivedPrevMTD = 0;
-    let cashReceivedYTD = 0;
-    let gstCollectedMTD = 0;
-    let arBalance = 0;
-    let overdueAmount = 0;
-    let invoiceCount = 0;
-    let overdueCount = 0;
-    let totalDaysToPayment = 0;
-    let paidInvoiceCount = 0;
+    const averageDaysToPayment = Math.round(parseFloat(avgRow?.avg_days ?? '0'));
 
-    for (const order of allOrders) {
-      const orderDate = new Date(order.orderDate);
-      const dueDate = order.dueDate ? new Date(order.dueDate) : null;
-      const daysOverdue = dueDate ? calculateDaysOverdue(dueDate, now) : 0;
+    // Aggregate all order metrics in a single SQL query using SUM/CASE
+    // This replaces fetching all orders and looping in JS
+    const baseConditions = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      ne(orders.status, 'cancelled')
+    );
 
-      // Revenue calculations (based on order date)
-      if (orderDate >= monthStart && orderDate <= monthEnd) {
-        revenueMTD += order.total;
-        gstCollectedMTD += order.taxAmount ?? order.total * GST_RATE;
-      }
-      if (orderDate >= prevMonthStart && orderDate <= prevMonthEnd) {
-        revenuePrevMTD += order.total;
-      }
-      if (orderDate >= yearStart && orderDate <= now) {
-        revenueYTD += order.total;
-      }
+    // RAW SQL (Phase 11 Keep): DATE_TRUNC, SUM(CASE WHEN). Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
+    const [orderMetrics] = await db
+      .select({
+        // Revenue by period
+        revenueMTD: sql<number>`COALESCE(SUM(CASE WHEN ${orders.orderDate} >= ${monthStartStr} AND ${orders.orderDate} <= ${monthEndStr} THEN ${orders.total} ELSE 0 END), 0)::numeric`,
+        revenuePrevMTD: sql<number>`COALESCE(SUM(CASE WHEN ${orders.orderDate} >= ${prevMonthStartStr} AND ${orders.orderDate} <= ${prevMonthEndStr} THEN ${orders.total} ELSE 0 END), 0)::numeric`,
+        revenueYTD: sql<number>`COALESCE(SUM(CASE WHEN ${orders.orderDate} >= ${yearStartStr} AND ${orders.orderDate} <= ${nowStr} THEN ${orders.total} ELSE 0 END), 0)::numeric`,
+        // GST collected this month
+        gstCollectedMTD: sql<number>`COALESCE(SUM(CASE WHEN ${orders.orderDate} >= ${monthStartStr} AND ${orders.orderDate} <= ${monthEndStr} THEN COALESCE(${orders.taxAmount}, ${orders.total} * ${GST_RATE}) ELSE 0 END), 0)::numeric`,
+        // AR balance and overdue (orders with outstanding balance)
+        arBalance: sql<number>`COALESCE(SUM(CASE WHEN ${orders.balanceDue} > 0 THEN ${orders.balanceDue} ELSE 0 END), 0)::numeric`,
+        overdueAmount: sql<number>`COALESCE(SUM(CASE WHEN ${orders.balanceDue} > 0 AND ${orders.dueDate} IS NOT NULL AND ${orders.dueDate}::date < ${nowStr}::date THEN ${orders.balanceDue} ELSE 0 END), 0)::numeric`,
+        invoiceCount: sql<number>`SUM(CASE WHEN ${orders.balanceDue} > 0 THEN 1 ELSE 0 END)::int`,
+        overdueCount: sql<number>`SUM(CASE WHEN ${orders.balanceDue} > 0 AND ${orders.dueDate} IS NOT NULL AND ${orders.dueDate}::date < ${nowStr}::date THEN 1 ELSE 0 END)::int`,
+        // Period invoice metrics
+        totalPeriodInvoices: sql<number>`SUM(CASE WHEN ${orders.orderDate} >= ${periodStartStr} AND ${orders.orderDate} <= ${periodEndStr} THEN 1 ELSE 0 END)::int`,
+        paidPeriodInvoices: sql<number>`SUM(CASE WHEN ${orders.orderDate} >= ${periodStartStr} AND ${orders.orderDate} <= ${periodEndStr} AND (${orders.paymentStatus} = 'paid' OR COALESCE(${orders.balanceDue}, 0) <= 0) THEN 1 ELSE 0 END)::int`,
+        overduePeriodInvoices: sql<number>`SUM(CASE WHEN ${orders.orderDate} >= ${periodStartStr} AND ${orders.orderDate} <= ${periodEndStr} AND ${orders.dueDate} IS NOT NULL AND ${orders.dueDate}::date < ${nowStr}::date AND COALESCE(${orders.balanceDue}, 0) > 0 THEN 1 ELSE 0 END)::int`,
+      })
+      .from(orders)
+      .where(baseConditions);
 
-      // Cash received (paid amount, approximated by order date for now)
-      // In a real system, this would use a payments table with payment dates
-      if (orderDate >= monthStart && orderDate <= monthEnd) {
-        cashReceivedMTD += order.paidAmount;
-      }
-      if (orderDate >= prevMonthStart && orderDate <= prevMonthEnd) {
-        cashReceivedPrevMTD += order.paidAmount;
-      }
-      if (orderDate >= yearStart && orderDate <= now) {
-        cashReceivedYTD += order.paidAmount;
-      }
-
-      // AR and overdue calculations (outstanding balance)
-      if (order.balanceDue > 0) {
-        arBalance += order.balanceDue;
-        invoiceCount++;
-
-        if (daysOverdue > 0) {
-          overdueAmount += order.balanceDue;
-          overdueCount++;
-        }
-      }
-
-      // Average days to payment (for fully paid orders)
-      if (order.paymentStatus === 'paid' && order.paidAmount > 0) {
-        // Estimate days to payment as 15 days (without payment date tracking)
-        // In production, this would use actual payment dates
-        totalDaysToPayment += 15;
-        paidInvoiceCount++;
-      }
-    }
-
-    const averageDaysToPayment =
-      paidInvoiceCount > 0 ? Math.round(totalDaysToPayment / paidInvoiceCount) : 0;
+    const revenueMTD = Number(orderMetrics?.revenueMTD ?? 0);
+    const revenuePrevMTD = Number(orderMetrics?.revenuePrevMTD ?? 0);
+    const revenueYTD = Number(orderMetrics?.revenueYTD ?? 0);
+    const gstCollectedMTD = Number(orderMetrics?.gstCollectedMTD ?? 0);
+    const arBalance = Number(orderMetrics?.arBalance ?? 0);
+    const overdueAmount = Number(orderMetrics?.overdueAmount ?? 0);
+    const invoiceCount = Number(orderMetrics?.invoiceCount ?? 0);
+    const overdueCount = Number(orderMetrics?.overdueCount ?? 0);
+    const totalPeriodInvoices = Number(orderMetrics?.totalPeriodInvoices ?? 0);
+    const paidPeriodInvoices = Number(orderMetrics?.paidPeriodInvoices ?? 0);
+    const overduePeriodInvoices = Number(orderMetrics?.overduePeriodInvoices ?? 0);
 
     const metrics: FinancialDashboardMetrics = {
       revenueMTD: calculateKPI(revenueMTD, data.includePreviousPeriod ? revenuePrevMTD : undefined),
@@ -218,6 +245,8 @@ export const getFinancialDashboardMetrics = createServerFn()
       invoiceCount,
       overdueCount,
       averageDaysToPayment,
+      paymentRate: totalPeriodInvoices > 0 ? paidPeriodInvoices / totalPeriodInvoices : 0,
+      overdueRate: totalPeriodInvoices > 0 ? overduePeriodInvoices / totalPeriodInvoices : 0,
       periodStart: data.dateFrom ?? monthStart,
       periodEnd: data.dateTo ?? monthEnd,
     };
@@ -234,18 +263,36 @@ export const getFinancialDashboardMetrics = createServerFn()
  * Supports daily, weekly, monthly, quarterly, yearly periods.
  * Breaks down by residential vs commercial customers.
  */
-export const getRevenueByPeriod = createServerFn()
+export const getRevenueByPeriod = createServerFn({ method: 'GET' })
   .inputValidator(revenueByPeriodQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Get orders with customer type
-    const ordersWithCustomers = await db
+    // Build customer type filter if specified
+    const customerTypeConditions: ReturnType<typeof eq>[] = [];
+    if (data.customerType === 'residential') {
+      customerTypeConditions.push(eq(customersTable.type, 'individual'));
+    } else if (data.customerType === 'commercial') {
+      customerTypeConditions.push(ne(customersTable.type, 'individual'));
+    }
+
+    // Determine SQL DATE_TRUNC interval and format from periodType
+    const truncInterval =
+      data.periodType === 'daily' ? 'day'
+      : data.periodType === 'weekly' ? 'week'
+      : data.periodType === 'quarterly' ? 'quarter'
+      : data.periodType === 'yearly' ? 'year'
+      : 'month';
+
+    // Raw SQL justified: DATE_TRUNC + TO_CHAR + SUM(CASE WHEN type) for period breakdown.
+    // Drizzle doesn't provide DATE_TRUNC/period grouping abstractions.
+    const results = await db
       .select({
-        id: orders.id,
-        total: orders.total,
-        orderDate: orders.orderDate,
-        customerType: customersTable.type,
+        period: sql<string>`TO_CHAR(DATE_TRUNC(${truncInterval}, ${orders.orderDate}::date), 'YYYY-MM-DD')`,
+        residentialRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${customersTable.type} = 'individual' THEN ${orders.total} ELSE 0 END), 0)::numeric`,
+        commercialRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${customersTable.type} != 'individual' THEN ${orders.total} ELSE 0 END), 0)::numeric`,
+        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        invoiceCount: sql<number>`COUNT(*)::int`,
       })
       .from(orders)
       .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
@@ -255,47 +302,25 @@ export const getRevenueByPeriod = createServerFn()
           isNull(orders.deletedAt),
           ne(orders.status, 'cancelled'),
           gte(orders.orderDate, data.dateFrom.toISOString().split('T')[0]),
-          lte(orders.orderDate, data.dateTo.toISOString().split('T')[0])
+          lte(orders.orderDate, data.dateTo.toISOString().split('T')[0]),
+          ...customerTypeConditions
         )
       )
-      .orderBy(asc(orders.orderDate));
+      .groupBy(sql`DATE_TRUNC(${truncInterval}, ${orders.orderDate}::date)`)
+      .orderBy(sql`DATE_TRUNC(${truncInterval}, ${orders.orderDate}::date)`)
+      .limit(500);
 
-    // Group by period
-    const periodMap = new Map<string, RevenuePeriodData>();
-
-    for (const order of ordersWithCustomers) {
-      const orderDate = new Date(order.orderDate);
-      const periodKey = getPeriodKey(orderDate, data.periodType);
-      const periodLabel = getPeriodLabel(orderDate, data.periodType);
-
-      if (!periodMap.has(periodKey)) {
-        periodMap.set(periodKey, {
-          period: periodKey,
-          periodLabel,
-          residentialRevenue: 0,
-          commercialRevenue: 0,
-          totalRevenue: 0,
-          invoiceCount: 0,
-        });
-      }
-
-      const periodData = periodMap.get(periodKey)!;
-
-      // Filter by customer type if specified
-      const isRes = isResidential(order.customerType);
-      if (data.customerType === 'residential' && !isRes) continue;
-      if (data.customerType === 'commercial' && isRes) continue;
-
-      if (isRes) {
-        periodData.residentialRevenue += order.total;
-      } else {
-        periodData.commercialRevenue += order.total;
-      }
-      periodData.totalRevenue += order.total;
-      periodData.invoiceCount++;
-    }
-
-    const periods = Array.from(periodMap.values()).sort((a, b) => a.period.localeCompare(b.period));
+    const periods: RevenuePeriodData[] = results.map((r) => {
+      const date = new Date(r.period);
+      return {
+        period: getPeriodKey(date, data.periodType),
+        periodLabel: getPeriodLabel(date, data.periodType),
+        residentialRevenue: Number(r.residentialRevenue),
+        commercialRevenue: Number(r.commercialRevenue),
+        totalRevenue: Number(r.totalRevenue),
+        invoiceCount: r.invoiceCount,
+      };
+    });
 
     const totals = periods.reduce(
       (acc, p) => ({
@@ -321,16 +346,20 @@ function getPeriodKey(date: Date, periodType: string): string {
     case 'daily':
       return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     case 'weekly':
-      // ISO week number
-      const firstDayOfYear = new Date(year, 0, 1);
-      const dayOfYear = Math.ceil((date.getTime() - firstDayOfYear.getTime()) / 86400000);
-      const weekNum = Math.ceil((dayOfYear + firstDayOfYear.getDay() + 1) / 7);
-      return `${year}-W${String(weekNum).padStart(2, '0')}`;
+      {
+        // ISO week number
+        const firstDayOfYear = new Date(year, 0, 1);
+        const dayOfYear = Math.ceil((date.getTime() - firstDayOfYear.getTime()) / 86400000);
+        const weekNum = Math.ceil((dayOfYear + firstDayOfYear.getDay() + 1) / 7);
+        return `${year}-W${String(weekNum).padStart(2, '0')}`;
+      }
     case 'monthly':
       return `${year}-${String(month).padStart(2, '0')}`;
     case 'quarterly':
-      const quarter = Math.ceil(month / 3);
-      return `${year}-Q${quarter}`;
+      {
+        const quarter = Math.ceil(month / 3);
+        return `${year}-Q${quarter}`;
+      }
     case 'yearly':
       return `${year}`;
     default:
@@ -367,8 +396,10 @@ function getPeriodLabel(date: Date, periodType: string): string {
     case 'monthly':
       return `${monthNames[month]} ${year}`;
     case 'quarterly':
-      const quarter = Math.ceil((month + 1) / 3);
-      return `Q${quarter} ${year}`;
+      {
+        const quarter = Math.ceil((month + 1) / 3);
+        return `Q${quarter} ${year}`;
+      }
     case 'yearly':
       return `${year}`;
     default:
@@ -384,7 +415,7 @@ function getPeriodLabel(date: Date, periodType: string): string {
  * Get top customers by total revenue.
  * Highlights commercial accounts ($50K+).
  */
-export const getTopCustomersByRevenue = createServerFn()
+export const getTopCustomersByRevenue = createServerFn({ method: 'GET' })
   .inputValidator(topCustomersQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -428,7 +459,7 @@ export const getTopCustomersByRevenue = createServerFn()
         and(eq(customersTable.organizationId, ctx.organizationId), isNull(customersTable.deletedAt))
       )
       .groupBy(customersTable.id, customersTable.name, customersTable.type)
-      .orderBy(desc(sql`COALESCE(SUM(${orders.total}), 0)`))
+      .orderBy(desc(sql`COALESCE(SUM(${orders.total}), 0)`)) // Complex aggregation - acceptable use of sql template
       .limit(pageSize)
       .offset(offset);
 
@@ -470,7 +501,7 @@ export const getTopCustomersByRevenue = createServerFn()
  * Get outstanding invoices with summary statistics.
  * Shows invoices with balance due, optionally filtered by overdue status.
  */
-export const getOutstandingInvoices = createServerFn()
+export const getOutstandingInvoices = createServerFn({ method: 'GET' })
   .inputValidator(outstandingInvoicesQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -480,42 +511,59 @@ export const getOutstandingInvoices = createServerFn()
     const offset = (page - 1) * pageSize;
     const now = new Date();
 
-    // Get outstanding orders
-    const outstandingOrders = await db
-      .select({
-        orderId: orders.id,
-        orderNumber: orders.orderNumber,
-        customerId: customersTable.id,
-        customerName: customersTable.name,
-        customerType: customersTable.type,
-        orderDate: orders.orderDate,
-        dueDate: orders.dueDate,
-        total: orders.total,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-      })
-      .from(orders)
-      .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
-      .where(
-        and(
-          eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt),
-          ne(orders.status, 'cancelled'),
-          gt(orders.balanceDue, 0)
-        )
-      )
-      .orderBy(desc(orders.orderDate))
-      .limit(pageSize)
-      .offset(offset);
+    // Base conditions for outstanding invoices
+    const outstandingConditions = [
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      ne(orders.status, 'cancelled'),
+      gt(orders.balanceDue, 0),
+    ];
 
-    // Process and filter invoices
+    // Run paginated data query and unpaginated summary query in parallel.
+    // The summary must aggregate across ALL matching rows, not just the current page.
+    const [outstandingOrders, summaryResult, countResult] = await Promise.all([
+      db
+        .select({
+          orderId: orders.id,
+          orderNumber: orders.orderNumber,
+          customerId: customersTable.id,
+          customerName: customersTable.name,
+          customerType: customersTable.type,
+          orderDate: orders.orderDate,
+          dueDate: orders.dueDate,
+          total: orders.total,
+          paidAmount: orders.paidAmount,
+          balanceDue: orders.balanceDue,
+        })
+        .from(orders)
+        .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
+        .where(and(...outstandingConditions))
+        .orderBy(desc(orders.orderDate))
+        .limit(pageSize)
+        .offset(offset),
+      // Separate SUM query without LIMIT/OFFSET for accurate summary totals
+      db
+        .select({
+          totalOutstanding: sql<number>`COALESCE(SUM(${orders.balanceDue}), 0)::numeric`,
+          totalOverdue: sql<number>`COALESCE(SUM(CASE WHEN ${orders.dueDate} IS NOT NULL AND ${orders.dueDate}::date < ${now.toISOString().split('T')[0]}::date THEN ${orders.balanceDue} ELSE 0 END), 0)::numeric`,
+          residentialOutstanding: sql<number>`COALESCE(SUM(CASE WHEN ${customersTable.type} = 'individual' THEN ${orders.balanceDue} ELSE 0 END), 0)::numeric`,
+          commercialOutstanding: sql<number>`COALESCE(SUM(CASE WHEN ${customersTable.type} != 'individual' THEN ${orders.balanceDue} ELSE 0 END), 0)::numeric`,
+          residentialCount: sql<number>`SUM(CASE WHEN ${customersTable.type} = 'individual' THEN 1 ELSE 0 END)::int`,
+          commercialCount: sql<number>`SUM(CASE WHEN ${customersTable.type} != 'individual' THEN 1 ELSE 0 END)::int`,
+          totalCount: sql<number>`COUNT(*)::int`,
+        })
+        .from(orders)
+        .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
+        .where(and(...outstandingConditions)),
+      // Count for pagination
+      db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(orders)
+        .where(and(...outstandingConditions)),
+    ]);
+
+    // Process invoices for the current page
     const invoices: OutstandingInvoiceEntry[] = [];
-    let totalOutstanding = 0;
-    let totalOverdue = 0;
-    let residentialOutstanding = 0;
-    let commercialOutstanding = 0;
-    let residentialCount = 0;
-    let commercialCount = 0;
 
     for (const order of outstandingOrders) {
       const dueDate = order.dueDate ? new Date(order.dueDate) : null;
@@ -544,32 +592,17 @@ export const getOutstandingInvoices = createServerFn()
         isOverdue,
         isCommercial: isCommercialOrder,
       });
-
-      // Update totals
-      totalOutstanding += order.balanceDue;
-      if (isOverdue) totalOverdue += order.balanceDue;
-
-      if (isRes) {
-        residentialOutstanding += order.balanceDue;
-        residentialCount++;
-      } else {
-        commercialOutstanding += order.balanceDue;
-        commercialCount++;
-      }
     }
 
-    // Get total count for pagination
-    const countResult = await db
-      .select({ count: sql<number>`COUNT(*)::int` })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt),
-          ne(orders.status, 'cancelled'),
-          gt(orders.balanceDue, 0)
-        )
-      );
+    // Use summary from the unpaginated query for accurate totals
+    const summary = summaryResult[0];
+    const totalOutstanding = Number(summary?.totalOutstanding ?? 0);
+    const totalOverdue = Number(summary?.totalOverdue ?? 0);
+    const residentialOutstanding = Number(summary?.residentialOutstanding ?? 0);
+    const commercialOutstanding = Number(summary?.commercialOutstanding ?? 0);
+    const residentialCount = Number(summary?.residentialCount ?? 0);
+    const commercialCount = Number(summary?.commercialCount ?? 0);
+    const totalInvoiceCount = Number(summary?.totalCount ?? 0);
 
     return {
       invoices,
@@ -578,7 +611,7 @@ export const getOutstandingInvoices = createServerFn()
         totalOverdue,
         residentialOutstanding,
         commercialOutstanding,
-        averageInvoiceValue: invoices.length > 0 ? totalOutstanding / invoices.length : 0,
+        averageInvoiceValue: totalInvoiceCount > 0 ? totalOutstanding / totalInvoiceCount : 0,
         averageResidentialValue:
           residentialCount > 0 ? residentialOutstanding / residentialCount : 0,
         averageCommercialValue: commercialCount > 0 ? commercialOutstanding / commercialCount : 0,

@@ -10,10 +10,8 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Phone, Loader2, CalendarClock } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { CalendarClock } from "lucide-react";
 
 import {
   Dialog,
@@ -24,15 +22,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DateTimePicker } from "../date-time-picker";
+
+import { useScheduleCall } from "@/hooks/communications/use-scheduled-calls";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
 import {
-  Form,
-  FormControl,
-  FormDescription,
+  scheduleCallFormSchema,
+  type ScheduleCallDialogProps,
+  type ScheduleCallFormValues,
+} from "@/lib/schemas/communications";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  SelectField,
+  TextareaField,
+  SwitchField,
   FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  FormActions,
+  extractFieldError,
+} from "@/components/shared/forms";
 import {
   Select,
   SelectContent,
@@ -40,48 +48,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { DateTimePicker } from "../date-time-picker";
-
-import { useScheduleCall } from "@/hooks/communications/use-scheduled-calls";
-import { toast } from "sonner";
-
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const scheduleCallFormSchema = z.object({
-  scheduledAt: z.date({ message: "Please select a date and time" }),
-  purpose: z.enum([
-    "quote_follow_up",
-    "installation",
-    "technical_support",
-    "sales",
-    "general",
-    "other",
-  ]),
-  notes: z.string().optional(),
-  enableReminder: z.boolean(),
-  reminderMinutes: z.number(),
-});
-
-type ScheduleCallFormValues = z.infer<typeof scheduleCallFormSchema>;
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface ScheduleCallDialogProps {
-  customerId: string;
-  customerName?: string;
-  assigneeId?: string;
-  trigger?: React.ReactNode;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  onSuccess?: (callId: string) => void;
-}
 
 // ============================================================================
 // CONSTANTS
@@ -120,46 +86,48 @@ export function ScheduleCallDialog({
   const [open, setOpen] = React.useState(defaultOpen);
   const scheduleMutation = useScheduleCall();
 
-  const form = useForm<ScheduleCallFormValues>({
-    resolver: zodResolver(scheduleCallFormSchema),
+  const form = useTanStackForm<ScheduleCallFormValues>({
+    schema: scheduleCallFormSchema,
     defaultValues: {
+      scheduledAt: new Date(),
       purpose: "general",
       notes: "",
       enableReminder: true,
       reminderMinutes: 15,
     },
+    onSubmit: async (values) => {
+      const reminderAt = values.enableReminder
+        ? new Date(
+            values.scheduledAt.getTime() -
+              values.reminderMinutes * 60 * 1000
+          )
+        : undefined;
+
+      scheduleMutation.mutate(
+        {
+          customerId,
+          assigneeId,
+          scheduledAt: values.scheduledAt,
+          reminderAt,
+          purpose: values.purpose,
+          notes: values.notes,
+        },
+        {
+          onSuccess: (data) => {
+            toast.success("Call scheduled successfully");
+            handleOpenChange(false);
+            form.reset();
+            onSuccess?.(data.id);
+          },
+          onError: (error) => {
+            toast.error("Failed to schedule call", {
+              description: getUserFriendlyMessage(error as Error),
+            });
+          },
+        }
+      );
+    },
   });
-
-  const handleSchedule = (values: ScheduleCallFormValues) => {
-    const reminderAt = values.enableReminder
-      ? new Date(values.scheduledAt.getTime() - values.reminderMinutes * 60 * 1000)
-      : undefined;
-
-    scheduleMutation.mutate(
-      {
-        customerId,
-        assigneeId,
-        scheduledAt: values.scheduledAt,
-        reminderAt,
-        purpose: values.purpose,
-        notes: values.notes,
-      },
-      {
-        onSuccess: (data) => {
-          toast.success("Call scheduled successfully");
-          handleOpenChange(false);
-          form.reset();
-          const callData = data as { id: string };
-          onSuccess?.(callData.id);
-        },
-        onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to schedule call"
-          );
-        },
-      }
-    );
-  };
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
@@ -169,9 +137,7 @@ export function ScheduleCallDialog({
     }
   };
 
-  const onSubmit = (values: ScheduleCallFormValues) => {
-    handleSchedule(values);
-  };
+  const enableReminder = form.useWatch("enableReminder");
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -191,124 +157,110 @@ export function ScheduleCallDialog({
           </DialogTitle>
           <DialogDescription id="schedule-call-description">
             {customerName
-              ? `Schedule a follow-up call with ${customerName}.`
+              ? (
+                  <>
+                    Schedule a follow-up call with{" "}
+                    <Link
+                      to="/customers/$customerId"
+                      params={{ customerId }}
+                      search={{}}
+                      className="font-medium hover:underline text-primary"
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    >
+                      {customerName}
+                    </Link>
+                    .
+                  </>
+                )
               : "Schedule a follow-up call with this customer."}
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4"
-            aria-label="call-form"
-          >
-            {/* Date/Time */}
-            <FormField
-              control={form.control}
-              name="scheduledAt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date & Time</FormLabel>
-                  <FormControl>
-                    <DateTimePicker
-                      value={field.value ?? undefined}
-                      onChange={(date) => field.onChange(date ?? null)}
-                      aria-label="schedule-call-datetime"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+          aria-label="call-form"
+        >
+          <form.Field name="scheduledAt">
+            {(field) => {
+              const error = extractFieldError(field);
+              return (
+                <FormField
+                  label="Date & Time"
+                  name={field.name}
+                  error={error}
+                  required
+                >
+                  <DateTimePicker
+                    value={field.state.value ?? undefined}
+                    onChange={(date) =>
+                      field.handleChange(date ?? field.state.value ?? new Date())
+                    }
+                    aria-label="schedule-call-datetime"
+                  />
+                </FormField>
+              );
+            }}
+          </form.Field>
 
-            {/* Purpose */}
-            <FormField
-              control={form.control}
-              name="purpose"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Call Purpose</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+          <form.Field name="purpose">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Call Purpose"
+                options={PURPOSE_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                }))}
+                placeholder="Select purpose"
+                required
+              />
+            )}
+          </form.Field>
+
+          <form.Field name="notes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Notes (Optional)"
+                placeholder="Add any notes or context for this call..."
+                rows={4}
+                className="min-h-[80px] resize-none"
+              />
+            )}
+          </form.Field>
+
+          <form.Field name="enableReminder">
+            {(field) => (
+              <SwitchField
+                field={field}
+                label="Reminder"
+                description="Get notified before the scheduled call"
+                className="flex flex-row items-center justify-between rounded-lg border p-3"
+              />
+            )}
+          </form.Field>
+
+          {enableReminder && (
+            <form.Field name="reminderMinutes">
+              {(field) => {
+                const error = extractFieldError(field);
+                return (
+                  <FormField
+                    label="Reminder Time"
+                    name={field.name}
+                    error={error}
                   >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select purpose" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {PURPOSE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Notes */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Add any notes or context for this call..."
-                      className="min-h-[80px] resize-none"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Reminder Toggle */}
-            <FormField
-              control={form.control}
-              name="enableReminder"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Reminder</FormLabel>
-                    <FormDescription>
-                      Get notified before the scheduled call
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      aria-label="Enable reminder"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {/* Reminder Time */}
-            {form.watch("enableReminder") && (
-              <FormField
-                control={form.control}
-                name="reminderMinutes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reminder Time</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      defaultValue={String(field.value)}
+                      value={String(field.state.value ?? 15)}
+                      onValueChange={(v) => field.handleChange(parseInt(v, 10))}
                     >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select reminder time" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select reminder time" />
+                      </SelectTrigger>
                       <SelectContent>
                         {REMINDER_OPTIONS.map((option) => (
                           <SelectItem
@@ -320,40 +272,23 @@ export function ScheduleCallDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+                  </FormField>
+                );
+              }}
+            </form.Field>
+          )}
 
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={scheduleMutation.isPending}
-                className="gap-2"
-              >
-                {scheduleMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Scheduling...
-                  </>
-                ) : (
-                  <>
-                    <Phone className="h-4 w-4" />
-                    Schedule Call
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <FormActions
+              form={form}
+              submitLabel="Schedule Call"
+              cancelLabel="Cancel"
+              loadingLabel="Scheduling..."
+              onCancel={() => handleOpenChange(false)}
+              submitDisabled={scheduleMutation.isPending}
+            />
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

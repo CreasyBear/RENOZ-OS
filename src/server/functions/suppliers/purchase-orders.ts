@@ -9,10 +9,16 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, ilike, desc, asc, sql, gte, lte, count, isNull } from 'drizzle-orm';
+import { eq, and, ilike, desc, asc, sql, gte, lte, lt, count, sum, isNull, isNotNull, inArray, not } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import {
+  cursorPaginationSchema,
+  decodeCursor,
+  buildCursorCondition,
+  buildStandardCursorResponse,
+} from '@/lib/db/pagination';
 import { currencySchema, percentageSchema } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
@@ -36,23 +42,26 @@ const PO_EXCLUDED_FIELDS: string[] = [
 // INPUT SCHEMAS
 // ============================================================================
 
+const poStatusEnum = z.enum([
+  'draft',
+  'pending_approval',
+  'approved',
+  'ordered',
+  'partial_received',
+  'received',
+  'closed',
+  'cancelled',
+]);
+
 const listPurchaseOrdersSchema = z.object({
   supplierId: z.string().uuid().optional(),
-  status: z
-    .enum([
-      'draft',
-      'pending_approval',
-      'approved',
-      'ordered',
-      'partial_received',
-      'received',
-      'closed',
-      'cancelled',
-    ])
-    .optional(),
+  status: z.array(poStatusEnum).optional(),
   search: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  valueMin: z.number().optional(),
+  valueMax: z.number().optional(),
+  requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   sortBy: z
     .enum(['poNumber', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt'])
     .default('createdAt'),
@@ -61,8 +70,25 @@ const listPurchaseOrdersSchema = z.object({
   pageSize: z.number().int().min(1).max(100).default(20),
 });
 
+const listPurchaseOrdersCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    supplierId: z.string().uuid().optional(),
+    status: z.array(poStatusEnum).optional(),
+    search: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    valueMin: z.number().optional(),
+    valueMax: z.number().optional(),
+    requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+);
+
 const getPurchaseOrderSchema = z.object({
   id: z.string().uuid(),
+});
+
+const bulkDeletePurchaseOrdersSchema = z.object({
+  purchaseOrderIds: z.array(z.string().uuid()).min(1),
 });
 
 const addressSchema = z.object({
@@ -124,6 +150,11 @@ const updatePurchaseOrderSchema = z.object({
   shipToAddress: addressSchema.optional(),
   billToAddress: addressSchema.optional(),
   paymentTerms: z.string().optional(),
+  exchangeRate: z.number().positive().optional(),
+  exchangeDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(), // YYYY-MM-DD format
   notes: z.string().optional(),
   internalNotes: z.string().optional(),
   internalReference: z.string().optional(),
@@ -147,6 +178,9 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
       search,
       startDate,
       endDate,
+      valueMin,
+      valueMax,
+      requiredBefore,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       page = 1,
@@ -163,8 +197,8 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
       conditions.push(eq(purchaseOrders.supplierId, supplierId));
     }
 
-    if (status) {
-      conditions.push(eq(purchaseOrders.status, status));
+    if (status && status.length > 0) {
+      conditions.push(inArray(purchaseOrders.status, status));
     }
 
     if (search) {
@@ -177,6 +211,25 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
 
     if (endDate) {
       conditions.push(lte(purchaseOrders.orderDate, endDate));
+    }
+
+    if (valueMin !== undefined) {
+      conditions.push(gte(purchaseOrders.totalAmount, valueMin));
+    }
+    if (valueMax !== undefined) {
+      conditions.push(lte(purchaseOrders.totalAmount, valueMax));
+    }
+
+    if (requiredBefore) {
+      conditions.push(
+        and(
+          isNotNull(purchaseOrders.requiredDate),
+          lt(purchaseOrders.requiredDate, requiredBefore)
+        )!
+      );
+      if (!status || status.length === 0) {
+        conditions.push(inArray(purchaseOrders.status, ['approved', 'ordered', 'partial_received']));
+      }
     }
 
     const whereClause = and(...conditions);
@@ -246,6 +299,119 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
   });
 
 /**
+ * List purchase orders with cursor pagination (recommended for large datasets).
+ */
+export const listPurchaseOrdersCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listPurchaseOrdersCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const {
+      cursor,
+      pageSize = 20,
+      sortOrder = 'desc',
+      supplierId,
+      status,
+      search,
+      startDate,
+      endDate,
+      valueMin,
+      valueMax,
+      requiredBefore,
+    } = data;
+
+    const conditions = [eq(purchaseOrders.organizationId, ctx.organizationId), isNull(purchaseOrders.deletedAt)];
+
+    if (supplierId) conditions.push(eq(purchaseOrders.supplierId, supplierId));
+    if (status && status.length > 0) conditions.push(inArray(purchaseOrders.status, status));
+    if (search) conditions.push(ilike(purchaseOrders.poNumber, containsPattern(search)));
+    if (startDate) conditions.push(gte(purchaseOrders.orderDate, startDate));
+    if (endDate) conditions.push(lte(purchaseOrders.orderDate, endDate));
+    if (valueMin !== undefined) conditions.push(gte(purchaseOrders.totalAmount, valueMin));
+    if (valueMax !== undefined) conditions.push(lte(purchaseOrders.totalAmount, valueMax));
+    if (requiredBefore) {
+      conditions.push(and(isNotNull(purchaseOrders.requiredDate), lt(purchaseOrders.requiredDate, requiredBefore))!);
+      if (!status || status.length === 0) {
+        conditions.push(inArray(purchaseOrders.status, ['approved', 'ordered', 'partial_received']));
+      }
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(purchaseOrders.createdAt, purchaseOrders.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const items = await db
+      .select({
+        id: purchaseOrders.id,
+        poNumber: purchaseOrders.poNumber,
+        supplierId: purchaseOrders.supplierId,
+        supplierName: suppliers.name,
+        status: purchaseOrders.status,
+        orderDate: purchaseOrders.orderDate,
+        requiredDate: purchaseOrders.requiredDate,
+        expectedDeliveryDate: purchaseOrders.expectedDeliveryDate,
+        totalAmount: purchaseOrders.totalAmount,
+        currency: purchaseOrders.currency,
+        createdAt: purchaseOrders.createdAt,
+        updatedAt: purchaseOrders.updatedAt,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(and(...conditions))
+      .orderBy(orderDir(purchaseOrders.createdAt), orderDir(purchaseOrders.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/** Status counts for filter chips (DOMAIN-LANDING-STANDARDS) */
+export const getPurchaseOrderStatusCounts = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const baseConditions = and(
+      eq(purchaseOrders.organizationId, ctx.organizationId),
+      isNull(purchaseOrders.deletedAt)
+    );
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const [allRow, pendingRow, partialRow, overdueRow] = await Promise.all([
+      db.select({ count: count() }).from(purchaseOrders).where(baseConditions),
+      db
+        .select({ count: count() })
+        .from(purchaseOrders)
+        .where(and(baseConditions, eq(purchaseOrders.status, 'pending_approval'))),
+      db
+        .select({ count: count() })
+        .from(purchaseOrders)
+        .where(and(baseConditions, eq(purchaseOrders.status, 'partial_received'))),
+      db
+        .select({ count: count() })
+        .from(purchaseOrders)
+        .where(
+          and(
+            baseConditions,
+            inArray(purchaseOrders.status, ['approved', 'ordered', 'partial_received']),
+            isNotNull(purchaseOrders.requiredDate),
+            lt(purchaseOrders.requiredDate, todayStr)
+          )
+        ),
+    ]);
+
+    return {
+      all: Number(allRow[0]?.count ?? 0),
+      pending_approval: Number(pendingRow[0]?.count ?? 0),
+      partial_received: Number(partialRow[0]?.count ?? 0),
+      overdue: Number(overdueRow[0]?.count ?? 0),
+    };
+  });
+
+/**
  * Get a single purchase order with items
  */
 export const getPurchaseOrder = createServerFn({ method: 'GET' })
@@ -253,10 +419,46 @@ export const getPurchaseOrder = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
-    // Get the purchase order with supplier info
+    // Get the purchase order with supplier info — select explicit columns
     const poResult = await db
       .select({
-        po: purchaseOrders,
+        po: {
+          id: purchaseOrders.id,
+          organizationId: purchaseOrders.organizationId,
+          poNumber: purchaseOrders.poNumber,
+          supplierId: purchaseOrders.supplierId,
+          status: purchaseOrders.status,
+          orderDate: purchaseOrders.orderDate,
+          requiredDate: purchaseOrders.requiredDate,
+          expectedDeliveryDate: purchaseOrders.expectedDeliveryDate,
+          actualDeliveryDate: purchaseOrders.actualDeliveryDate,
+          shipToAddress: purchaseOrders.shipToAddress,
+          billToAddress: purchaseOrders.billToAddress,
+          subtotal: purchaseOrders.subtotal,
+          taxAmount: purchaseOrders.taxAmount,
+          shippingAmount: purchaseOrders.shippingAmount,
+          discountAmount: purchaseOrders.discountAmount,
+          totalAmount: purchaseOrders.totalAmount,
+          currency: purchaseOrders.currency,
+          paymentTerms: purchaseOrders.paymentTerms,
+          orderedBy: purchaseOrders.orderedBy,
+          orderedAt: purchaseOrders.orderedAt,
+          approvedBy: purchaseOrders.approvedBy,
+          approvedAt: purchaseOrders.approvedAt,
+          approvalNotes: purchaseOrders.approvalNotes,
+          closedBy: purchaseOrders.closedBy,
+          closedAt: purchaseOrders.closedAt,
+          closedReason: purchaseOrders.closedReason,
+          supplierReference: purchaseOrders.supplierReference,
+          internalReference: purchaseOrders.internalReference,
+          notes: purchaseOrders.notes,
+          internalNotes: purchaseOrders.internalNotes,
+          metadata: purchaseOrders.metadata,
+          version: purchaseOrders.version,
+          createdAt: purchaseOrders.createdAt,
+          updatedAt: purchaseOrders.updatedAt,
+          createdBy: purchaseOrders.createdBy,
+        },
         supplierName: suppliers.name,
         supplierEmail: suppliers.email,
         supplierPhone: suppliers.phone,
@@ -276,7 +478,7 @@ export const getPurchaseOrder = createServerFn({ method: 'GET' })
       throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
-    // Get the line items
+    // Get the line items (with orgId filter)
     const items = await db
       .select({
         id: purchaseOrderItems.id,
@@ -299,7 +501,12 @@ export const getPurchaseOrder = createServerFn({ method: 'GET' })
         notes: purchaseOrderItems.notes,
       })
       .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.purchaseOrderId, data.id))
+      .where(
+        and(
+          eq(purchaseOrderItems.purchaseOrderId, data.id),
+          eq(purchaseOrderItems.organizationId, ctx.organizationId)
+        )
+      )
       .orderBy(asc(purchaseOrderItems.lineNumber));
 
     return {
@@ -319,11 +526,17 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
-    // Get supplier name for logging
+    // Get supplier name for logging (with orgId + deletedAt filter)
     const [supplier] = await db
       .select({ name: suppliers.name })
       .from(suppliers)
-      .where(eq(suppliers.id, data.supplierId))
+      .where(
+        and(
+          eq(suppliers.id, data.supplierId),
+          eq(suppliers.organizationId, ctx.organizationId),
+          isNull(suppliers.deletedAt)
+        )
+      )
       .limit(1);
 
     // Calculate totals from items
@@ -348,54 +561,59 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
 
     const totalAmount = subtotal + taxAmount;
 
-    // Create the purchase order
-    const [po] = await db
-      .insert(purchaseOrders)
-      .values({
-        organizationId: ctx.organizationId,
-        supplierId: data.supplierId,
-        status: 'draft',
-        orderDate: sql`CURRENT_DATE`,
-        requiredDate: data.requiredDate,
-        expectedDeliveryDate: data.expectedDeliveryDate,
-        shipToAddress: data.shipToAddress,
-        billToAddress: data.billToAddress,
-        subtotal,
-        taxAmount,
-        shippingAmount: 0,
-        discountAmount: 0,
-        totalAmount,
-        currency: data.currency,
-        paymentTerms: data.paymentTerms,
-        notes: data.notes,
-        internalNotes: data.internalNotes,
-        internalReference: data.internalReference,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+    // Wrap PO + items creation in a transaction for atomicity
+    const po = await db.transaction(async (tx) => {
+      // Create the purchase order
+      const [newPo] = await tx
+        .insert(purchaseOrders)
+        .values({
+          organizationId: ctx.organizationId,
+          supplierId: data.supplierId,
+          status: 'draft',
+          orderDate: new Date().toISOString().split('T')[0],
+          requiredDate: data.requiredDate,
+          expectedDeliveryDate: data.expectedDeliveryDate,
+          shipToAddress: data.shipToAddress,
+          billToAddress: data.billToAddress,
+          subtotal,
+          taxAmount,
+          shippingAmount: 0,
+          discountAmount: 0,
+          totalAmount,
+          currency: data.currency,
+          paymentTerms: data.paymentTerms,
+          notes: data.notes,
+          internalNotes: data.internalNotes,
+          internalReference: data.internalReference,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
 
-    // Create the line items
-    await db.insert(purchaseOrderItems).values(
-      itemsWithTotals.map((item) => ({
-        organizationId: ctx.organizationId,
-        purchaseOrderId: po.id,
-        lineNumber: item.lineNumber,
-        productId: item.productId,
-        productName: item.productName,
-        productSku: item.productSku,
-        description: item.description,
-        quantity: item.quantity,
-        unitOfMeasure: item.unitOfMeasure,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        taxRate: item.taxRate,
-        lineTotal: item.lineTotal,
-        quantityPending: item.quantity,
-        expectedDeliveryDate: item.expectedDeliveryDate,
-        notes: item.notes,
-      }))
-    );
+      // Create the line items
+      await tx.insert(purchaseOrderItems).values(
+        itemsWithTotals.map((item) => ({
+          organizationId: ctx.organizationId,
+          purchaseOrderId: newPo.id,
+          lineNumber: item.lineNumber,
+          productId: item.productId,
+          productName: item.productName,
+          productSku: item.productSku,
+          description: item.description,
+          quantity: item.quantity,
+          unitOfMeasure: item.unitOfMeasure,
+          unitPrice: item.unitPrice,
+          discountPercent: item.discountPercent,
+          taxRate: item.taxRate,
+          lineTotal: item.lineTotal,
+          quantityPending: item.quantity,
+          expectedDeliveryDate: item.expectedDeliveryDate,
+          notes: item.notes,
+        }))
+      );
+
+      return newPo;
+    });
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -467,6 +685,8 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
     if (updateData.shipToAddress !== undefined) updates.shipToAddress = updateData.shipToAddress;
     if (updateData.billToAddress !== undefined) updates.billToAddress = updateData.billToAddress;
     if (updateData.paymentTerms !== undefined) updates.paymentTerms = updateData.paymentTerms;
+    if (updateData.exchangeRate !== undefined) updates.exchangeRate = updateData.exchangeRate;
+    if (updateData.exchangeDate !== undefined) updates.exchangeDate = updateData.exchangeDate;
     if (updateData.notes !== undefined) updates.notes = updateData.notes;
     if (updateData.internalNotes !== undefined) updates.internalNotes = updateData.internalNotes;
     if (updateData.internalReference !== undefined)
@@ -566,6 +786,58 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
     });
 
     return { success: true, id: result[0].id };
+  });
+
+/**
+ * Bulk delete draft purchase orders.
+ * Only POs with status 'draft' can be deleted.
+ */
+export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
+  .inputValidator(bulkDeletePurchaseOrdersSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
+
+    const results = { deleted: 0, failed: [] as string[] };
+
+    for (const id of data.purchaseOrderIds) {
+      try {
+        const [existing] = await db
+          .select()
+          .from(purchaseOrders)
+          .where(
+            and(
+              eq(purchaseOrders.id, id),
+              eq(purchaseOrders.organizationId, ctx.organizationId),
+              isNull(purchaseOrders.deletedAt)
+            )
+          )
+          .limit(1);
+
+        if (!existing) {
+          results.failed.push(id);
+          continue;
+        }
+
+        if (existing.status !== 'draft') {
+          results.failed.push(id);
+          continue;
+        }
+
+        await db
+          .update(purchaseOrders)
+          .set({
+            deletedAt: new Date(),
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(purchaseOrders.id, id));
+
+        results.deleted += 1;
+      } catch {
+        results.failed.push(id);
+      }
+    }
+
+    return results;
   });
 
 // ============================================================================
@@ -883,7 +1155,7 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
         and(
           eq(purchaseOrders.id, data.id),
           eq(purchaseOrders.organizationId, ctx.organizationId),
-          sql`${purchaseOrders.status} NOT IN ('received', 'closed', 'cancelled')`,
+          not(inArray(purchaseOrders.status, ['received', 'closed', 'cancelled'])),
           isNull(purchaseOrders.deletedAt)
         )
       )
@@ -957,7 +1229,7 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
         and(
           eq(purchaseOrders.id, data.id),
           eq(purchaseOrders.organizationId, ctx.organizationId),
-          sql`${purchaseOrders.status} IN ('received', 'partial_received', 'ordered')`,
+          inArray(purchaseOrders.status, ['received', 'partial_received', 'ordered']),
           isNull(purchaseOrders.deletedAt)
         )
       )
@@ -1048,47 +1320,52 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
       throw new ValidationError('Can only add items to draft purchase orders');
     }
 
-    // Get the next line number
-    const lastItem = await db
-      .select({ lineNumber: purchaseOrderItems.lineNumber })
-      .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId))
-      .orderBy(desc(purchaseOrderItems.lineNumber))
-      .limit(1);
-
-    const lineNumber = (lastItem[0]?.lineNumber ?? 0) + 1;
-
     // Calculate line total
     const discountMultiplier = 1 - data.item.discountPercent / 100;
     const lineSubtotal = data.item.quantity * data.item.unitPrice * discountMultiplier;
     const lineTax = lineSubtotal * (data.item.taxRate / 100);
     const lineTotal = lineSubtotal + lineTax;
 
-    // Insert the item
-    const [newItem] = await db
-      .insert(purchaseOrderItems)
-      .values({
-        organizationId: ctx.organizationId,
-        purchaseOrderId: data.purchaseOrderId,
-        lineNumber,
-        productId: data.item.productId,
-        productName: data.item.productName,
-        productSku: data.item.productSku,
-        description: data.item.description,
-        quantity: data.item.quantity,
-        unitOfMeasure: data.item.unitOfMeasure,
-        unitPrice: data.item.unitPrice,
-        discountPercent: data.item.discountPercent,
-        taxRate: data.item.taxRate,
-        lineTotal,
-        quantityPending: data.item.quantity,
-        expectedDeliveryDate: data.item.expectedDeliveryDate,
-        notes: data.item.notes,
-      })
-      .returning();
+    // Insert the item and update PO totals atomically
+    const newItem = await db.transaction(async (tx) => {
+      // Get the next line number with row lock to prevent duplicate line numbers
+      const lastItem = await tx
+        .select({ lineNumber: purchaseOrderItems.lineNumber })
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId))
+        .orderBy(desc(purchaseOrderItems.lineNumber))
+        .limit(1)
+        .for('update');
 
-    // Update PO totals
-    await recalculatePurchaseOrderTotals(data.purchaseOrderId, ctx.user.id);
+      const lineNumber = (lastItem[0]?.lineNumber ?? 0) + 1;
+
+      const [item] = await tx
+        .insert(purchaseOrderItems)
+        .values({
+          organizationId: ctx.organizationId,
+          purchaseOrderId: data.purchaseOrderId,
+          lineNumber,
+          productId: data.item.productId,
+          productName: data.item.productName,
+          productSku: data.item.productSku,
+          description: data.item.description,
+          quantity: data.item.quantity,
+          unitOfMeasure: data.item.unitOfMeasure,
+          unitPrice: data.item.unitPrice,
+          discountPercent: data.item.discountPercent,
+          taxRate: data.item.taxRate,
+          lineTotal,
+          quantityPending: data.item.quantity,
+          expectedDeliveryDate: data.item.expectedDeliveryDate,
+          notes: data.item.notes,
+        })
+        .returning();
+
+      // Update PO totals
+      await recalculatePurchaseOrderTotals(data.purchaseOrderId, ctx.user.id, tx);
+
+      return item;
+    });
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -1123,11 +1400,16 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    // Get the item with full details for logging
+    // Get the item with full details for logging (with orgId filter)
     const [item] = await db
       .select()
       .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.id, data.itemId))
+      .where(
+        and(
+          eq(purchaseOrderItems.id, data.itemId),
+          eq(purchaseOrderItems.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!item) {
@@ -1154,11 +1436,21 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
       throw new ValidationError('Can only remove items from draft purchase orders');
     }
 
-    // Delete the item
-    await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, data.itemId));
+    // Delete the item and recalculate totals in a transaction
+    await db.transaction(async (tx) => {
+      const deletedItems = await tx.delete(purchaseOrderItems).where(
+        and(
+          eq(purchaseOrderItems.id, data.itemId),
+          eq(purchaseOrderItems.organizationId, ctx.organizationId)
+        )
+      ).returning();
+      if (!deletedItems[0]) {
+        throw new NotFoundError('Purchase order item not found or already deleted', 'purchaseOrderItem');
+      }
 
-    // Update PO totals
-    await recalculatePurchaseOrderTotals(item.purchaseOrderId, ctx.user.id);
+      // Update PO totals within the same transaction
+      await recalculatePurchaseOrderTotals(item.purchaseOrderId, ctx.user.id, tx);
+    });
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -1185,28 +1477,41 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
 // HELPER FUNCTIONS
 // ============================================================================
 
+/** Type for db or transaction executor (select/update compatible) */
+type PoTotalsExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
 /**
  * Recalculate purchase order totals from line items
  */
 async function recalculatePurchaseOrderTotals(
   purchaseOrderId: string,
-  userId: string
+  userId: string,
+  executor: PoTotalsExecutor = db
 ): Promise<void> {
-  const totals = await db
+  // Use Drizzle sum() for totalAmount (type-safe aggregation).
+  // subtotal/taxAmount: reverse-calculate from lineTotal (includes tax).
+  // sql template required — Drizzle has no built-in for (col / (1 + col2/100)) (per query-patterns.md).
+  const totals = await executor
     .select({
-      subtotal: sql<number>`SUM(${purchaseOrderItems.lineTotal} / (1 + ${purchaseOrderItems.taxRate}::numeric / 100))`,
-      taxAmount: sql<number>`SUM(${purchaseOrderItems.lineTotal} - (${purchaseOrderItems.lineTotal} / (1 + ${purchaseOrderItems.taxRate}::numeric / 100)))`,
-      totalAmount: sql<number>`SUM(${purchaseOrderItems.lineTotal})`,
+      // Reverse-calculate subtotal from lineTotal (which includes tax)
+      // lineTotal = subtotal * (1 + taxRate/100)
+      // subtotal = lineTotal / (1 + taxRate/100)
+      subtotal: sql<number>`COALESCE(SUM(${purchaseOrderItems.lineTotal} / (1 + ${purchaseOrderItems.taxRate}::numeric / 100)), 0)`,
+      // Tax amount = lineTotal - subtotal
+      taxAmount: sql<number>`COALESCE(SUM(${purchaseOrderItems.lineTotal} - (${purchaseOrderItems.lineTotal} / (1 + ${purchaseOrderItems.taxRate}::numeric / 100))), 0)`,
+      // Use Drizzle sum() for type safety
+      totalAmount: sum(purchaseOrderItems.lineTotal),
     })
     .from(purchaseOrderItems)
     .where(eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId));
 
-  await db
+  await executor
     .update(purchaseOrders)
     .set({
       subtotal: totals[0]?.subtotal ?? 0,
       taxAmount: totals[0]?.taxAmount ?? 0,
-      totalAmount: totals[0]?.totalAmount ?? 0,
+      // Handle null from sum() (returns null when no rows)
+      totalAmount: Number(totals[0]?.totalAmount ?? 0),
       updatedBy: userId,
     })
     .where(eq(purchaseOrders.id, purchaseOrderId));

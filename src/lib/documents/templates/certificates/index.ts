@@ -19,3 +19,11 @@ export {
   type CompletionCertificatePdfDocumentProps,
   type CompletionCertificatePdfTemplateProps,
 } from "./completion";
+
+export {
+  HandoverPackPdfDocument,
+  HandoverPackPdfTemplate,
+  type HandoverPackData,
+  type HandoverPackPdfDocumentProps,
+  type HandoverPackPdfTemplateProps,
+} from "./handover-pack";

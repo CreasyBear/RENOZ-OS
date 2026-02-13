@@ -7,6 +7,7 @@
  * @see drizzle/schema/suppliers/pricing.ts (when created)
  * @see src/lib/schemas/suppliers.ts
  */
+import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, ilike, desc, asc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -23,11 +24,16 @@ import {
   updatePriceAgreementSchema,
   listPriceListsSchema,
   listPriceAgreementsSchema,
+  listPriceListsCursorSchema,
+  listPriceAgreementsCursorSchema,
   type CreatePriceListInput,
   type UpdatePriceListInput,
   type CreatePriceAgreementInput,
   type UpdatePriceAgreementInput,
 } from "@/lib/schemas/suppliers";
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from "@/lib/db/pagination";
+
+type PriceDiscountType = 'percentage' | 'fixed' | 'volume' | 'none';
 
 // ============================================================================
 // PRICE LIST OPERATIONS
@@ -118,6 +124,39 @@ export const listPriceLists = createServerFn({ method: "GET" })
   });
 
 /**
+ * List price lists with cursor pagination (recommended for large datasets).
+ */
+export const listPriceListsCursor = createServerFn({ method: "GET" })
+  .inputValidator(listPriceListsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const { cursor, pageSize = 20, sortOrder = "desc", search, supplierId, status } = data;
+
+    const conditions = [eq(priceLists.organizationId, ctx.organizationId)];
+    if (supplierId) conditions.push(eq(priceLists.supplierId, supplierId));
+    if (status) conditions.push(eq(priceLists.status, status));
+    if (search) conditions.push(ilike(priceLists.productName, containsPattern(search)));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(priceLists.createdAt, priceLists.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === "asc" ? asc : desc;
+    const items = await db
+      .select()
+      .from(priceLists)
+      .where(and(...conditions))
+      .orderBy(orderDir(priceLists.createdAt), orderDir(priceLists.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/**
  * Create a new price list item
  */
 export const createPriceList = createServerFn({ method: "POST" })
@@ -138,7 +177,7 @@ export const createPriceList = createServerFn({ method: "POST" })
 
     // productId is required in the DB schema - generate a placeholder UUID if not provided
     // In production, this should either be required in the input or looked up from productSku
-    const productId = data.productId ?? crypto.randomUUID();
+    const productId = data.productId ?? randomUUID();
 
     const [result] = await db
       .insert(priceLists)
@@ -198,7 +237,7 @@ export const updatePriceList = createServerFn({ method: "POST" })
   .handler(async ({ data }: { data: UpdatePriceListInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedBy: ctx.user.id,
       updatedAt: new Date(),
     };
@@ -220,7 +259,7 @@ export const updatePriceList = createServerFn({ method: "POST" })
       }
 
       const basePrice = data.basePrice !== undefined ? Number(data.basePrice) : Number(currentPrice.basePrice);
-      const discountType = data.discountType !== undefined ? data.discountType : currentPrice.discountType as any;
+      const discountType: PriceDiscountType = data.discountType !== undefined ? data.discountType : (currentPrice.discountType as PriceDiscountType);
       const discountValue = data.discountValue !== undefined ? Number(data.discountValue) : Number(currentPrice.discountValue);
 
       let effectivePrice = basePrice;
@@ -228,6 +267,8 @@ export const updatePriceList = createServerFn({ method: "POST" })
         effectivePrice = basePrice * (1 - discountValue / 100);
       } else if (discountType === "fixed") {
         effectivePrice = basePrice - discountValue;
+      } else if (discountType === "none") {
+        effectivePrice = basePrice;
       }
 
       updateData.basePrice = basePrice;
@@ -306,7 +347,7 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
     const { ids, updates } = data;
 
     // Prepare update data
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedBy: ctx.user.id,
       updatedAt: new Date(),
     };
@@ -340,7 +381,7 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
     // Calculate new effective prices
     const itemsToUpdate = currentPrices.map((price) => {
       const basePrice = updates.basePrice !== undefined ? updates.basePrice : Number(price.basePrice);
-      const discountType = updates.discountType !== undefined ? updates.discountType : price.discountType as any;
+      const discountType: PriceDiscountType = updates.discountType !== undefined ? updates.discountType : (price.discountType as PriceDiscountType);
       const discountValue = updates.discountValue !== undefined ? updates.discountValue : Number(price.discountValue);
 
       let effectivePrice = basePrice;
@@ -466,6 +507,39 @@ export const listPriceAgreements = createServerFn({ method: "GET" })
   });
 
 /**
+ * List price agreements with cursor pagination (recommended for large datasets).
+ */
+export const listPriceAgreementsCursor = createServerFn({ method: "GET" })
+  .inputValidator(listPriceAgreementsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const { cursor, pageSize = 20, sortOrder = "desc", search, supplierId, status } = data;
+
+    const conditions = [eq(priceAgreements.organizationId, ctx.organizationId)];
+    if (supplierId) conditions.push(eq(priceAgreements.supplierId, supplierId));
+    if (status) conditions.push(eq(priceAgreements.status, status));
+    if (search) conditions.push(ilike(priceAgreements.title, containsPattern(search)));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(priceAgreements.createdAt, priceAgreements.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === "asc" ? asc : desc;
+    const items = await db
+      .select()
+      .from(priceAgreements)
+      .where(and(...conditions))
+      .orderBy(orderDir(priceAgreements.createdAt), orderDir(priceAgreements.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/**
  * Create a new price agreement
  */
 export const createPriceAgreement = createServerFn({ method: "POST" })
@@ -524,7 +598,7 @@ export const updatePriceAgreement = createServerFn({ method: "POST" })
   .handler(async ({ data }: { data: UpdatePriceAgreementInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedBy: ctx.user.id,
       updatedAt: new Date(),
     };

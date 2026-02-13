@@ -14,6 +14,7 @@
 import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, lt, isNull, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { logger as appLogger } from '@/lib/logger';
 import { issues, notifications, users, activities, slaTracking } from 'drizzle/schema';
 
 // ============================================================================
@@ -155,7 +156,7 @@ export const autoEscalateIssuesTask = schedules.task({
   id: 'auto-escalate-issues',
   cron: '*/15 * * * *',
   run: async () => {
-    console.log('Starting auto-escalation check');
+    appLogger.debug('Starting auto-escalation check');
 
     const now = new Date();
     const escalationCutoff = new Date(
@@ -199,9 +200,10 @@ export const autoEscalateIssuesTask = schedules.task({
         )
       );
 
-    console.log(
-      `Found ${unrespondedIssues.length} unresponded issues older than ${DEFAULT_THRESHOLDS.unrespondedHours}h`
-    );
+    appLogger.debug('Found unresponded issues', {
+      count: unrespondedIssues.length,
+      thresholdHours: DEFAULT_THRESHOLDS.unrespondedHours,
+    });
 
     // Escalate each unresponded issue
     for (const issue of unrespondedIssues) {
@@ -224,7 +226,7 @@ export const autoEscalateIssuesTask = schedules.task({
       // Notify manager
       await notifyManagerOfEscalation(issue, reason, null);
 
-      console.log(`Escalated issue ${issue.issueNumber} - time-based`);
+      appLogger.debug('Escalated issue', { issueNumber: issue.issueNumber, reason: 'time-based' });
       timeBasedEscalations++;
     }
 
@@ -257,7 +259,7 @@ export const autoEscalateIssuesTask = schedules.task({
         )
       );
 
-    console.log(`Found ${highPriorityIssues.length} high priority issues needing escalation`);
+    appLogger.debug('Found high priority issues needing escalation', { count: highPriorityIssues.length });
 
     for (const issue of highPriorityIssues) {
       const reason = `High priority issue unaddressed for ${DEFAULT_THRESHOLDS.highPriorityEscalateHours}+ hours`;
@@ -279,7 +281,7 @@ export const autoEscalateIssuesTask = schedules.task({
       // Notify manager
       await notifyManagerOfEscalation(issue, reason, null);
 
-      console.log(`Escalated issue ${issue.issueNumber} - priority-based`);
+      appLogger.debug('Escalated issue', { issueNumber: issue.issueNumber, reason: 'priority-based' });
       priorityEscalations++;
     }
 
@@ -312,7 +314,7 @@ export const autoEscalateIssuesTask = schedules.task({
           )
         );
 
-      console.log(`Found ${slaBreachedIssues.length} issues with SLA breaches`);
+      appLogger.debug('Found issues with SLA breaches', { count: slaBreachedIssues.length });
 
       for (const issue of slaBreachedIssues) {
         const reason = 'SLA breach - auto-escalated';
@@ -334,12 +336,12 @@ export const autoEscalateIssuesTask = schedules.task({
         // Notify manager
         await notifyManagerOfEscalation(issue, reason, null);
 
-        console.log(`Escalated issue ${issue.issueNumber} - SLA breach`);
+        appLogger.debug('Escalated issue', { issueNumber: issue.issueNumber, reason: 'SLA breach' });
         slaBreachEscalations++;
       }
     }
 
-    console.log('Auto-escalation check completed', {
+    appLogger.debug('Auto-escalation check completed', {
       timeBasedEscalations,
       priorityEscalations,
       slaBreachEscalations,

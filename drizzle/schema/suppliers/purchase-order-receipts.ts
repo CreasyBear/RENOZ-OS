@@ -10,7 +10,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   integer,
@@ -24,6 +23,8 @@ import { receiptStatusEnum, conditionEnum, rejectionReasonEnum } from "../_share
 import {
   timestampColumns,
   auditColumns,
+  standardRlsPolicies,
+  sqlEmptyTextArray,
 } from "../_shared/patterns";
 import { purchaseOrders } from "./purchase-orders";
 import { purchaseOrderItems } from "./purchase-order-items";
@@ -173,27 +174,7 @@ export const purchaseOrderReceipts = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("purchase_order_receipts_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("purchase_order_receipts_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("purchase_order_receipts_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("purchase_order_receipts_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("purchase_order_receipts"),
   })
 );
 
@@ -239,7 +220,7 @@ export const purchaseOrderReceiptItems = pgTable(
 
     // Lot/batch tracking
     lotNumber: text("lot_number"),
-    serialNumbers: text("serial_numbers").array().default(sql`'{}'::text[]`),
+    serialNumbers: text("serial_numbers").array().default(sqlEmptyTextArray()),
     expiryDate: timestamp("expiry_date", { withTimezone: true }),
 
     // Timestamps
@@ -323,27 +304,7 @@ export const purchaseOrderReceiptItems = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("purchase_order_receipt_items_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("purchase_order_receipt_items_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("purchase_order_receipt_items_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("purchase_order_receipt_items_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("purchase_order_receipt_items"),
   })
 );
 

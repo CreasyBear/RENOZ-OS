@@ -5,7 +5,15 @@
  */
 
 // --- Core warranty hooks ---
-export { useWarranties, useWarranty, useUpdateWarrantyOptOut } from './core/use-warranties';
+export {
+  useWarranties,
+  useWarranty,
+  useWarrantyStatusCounts,
+  useUpdateWarrantyOptOut,
+  useDeleteWarranty,
+  useVoidWarranty,
+  useTransferWarranty,
+} from './core/use-warranties';
 export {
   useExpiringWarranties,
   useExpiringWarrantiesReport,
@@ -24,7 +32,7 @@ export {
   useDenyClaim,
   useResolveClaim,
   useAssignClaim,
-  getSlaDueStatus,
+  useCancelWarrantyClaim,
   claimStatusConfig,
   claimTypeConfig,
   resolutionTypeConfig,
@@ -83,6 +91,10 @@ export {
   usePreviewWarrantyImport,
   useBulkRegisterWarranties,
 } from './bulk-import/use-warranty-bulk-import';
+
+// --- Detail view header actions ---
+export { useWarrantyHeaderActions } from './use-warranty-header-actions';
+export type { WarrantyHeaderActionsInput, WarrantyHeaderActionsResult } from './use-warranty-header-actions';
 
 // --- Re-export key types ---
 export type { WarrantyFilters, WarrantyStatus } from '@/lib/schemas/warranty/warranties';

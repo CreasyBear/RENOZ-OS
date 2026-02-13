@@ -22,6 +22,7 @@ import {
   createErrorResult,
 } from '@/lib/ai/tools/types';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // COMPATIBILITY RULES
@@ -197,7 +198,7 @@ export const configureSystemTool = tool({
         ...(sizing && { sizing }),
       };
     } catch (error) {
-      console.error('Error in configureSystemTool:', error);
+      logger.error('Error in configureSystemTool', error as Error, {});
       return createErrorResult(
         'Failed to configure system',
         'Verify product IDs and try again',
@@ -339,7 +340,7 @@ export const calculatePriceTool = tool({
         },
       };
     } catch (error) {
-      console.error('Error in calculatePriceTool:', error);
+      logger.error('Error in calculatePriceTool', error as Error, {});
       return createErrorResult(
         'Failed to calculate pricing',
         'Verify product IDs and try again',
@@ -446,7 +447,7 @@ export const checkCompatibilityTool = tool({
         suggestions: [...new Set(suggestions)], // Deduplicate
       };
     } catch (error) {
-      console.error('Error in checkCompatibilityTool:', error);
+      logger.error('Error in checkCompatibilityTool', error as Error, {});
       return createErrorResult(
         'Failed to check compatibility',
         'Verify product IDs and try again',

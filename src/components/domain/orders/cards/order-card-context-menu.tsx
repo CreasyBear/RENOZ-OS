@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import type { FulfillmentOrder } from '../fulfillment/fulfillment-dashboard/fulfillment-card';
+import type { FulfillmentOrder } from '@/lib/schemas/orders';
 
 export interface OrderCardContextMenuProps {
   order: FulfillmentOrder;

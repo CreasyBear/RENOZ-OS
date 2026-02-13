@@ -12,6 +12,7 @@
 
 import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
+import { logger } from "@/lib/logger";
 
 // ============================================================================
 // REDIS CLIENT
@@ -26,7 +27,7 @@ function getRedisClient(): Redis | null {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    console.warn(
+    logger.warn(
       "[rate-limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured. Rate limiting disabled."
     );
     return null;
@@ -36,6 +37,7 @@ function getRedisClient(): Redis | null {
 }
 
 const redis = getRedisClient();
+const inMemoryFallback = new Map<string, { count: number; windowStart: number }>();
 
 // ============================================================================
 // RATE LIMITERS
@@ -80,6 +82,54 @@ const passwordResetRateLimiter = redis
     })
   : null;
 
+/**
+ * Resend confirmation email rate limiter.
+ * 3 attempts per hour per email (align with password reset).
+ */
+const resendConfirmationRateLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, "1 h"),
+      analytics: true,
+      prefix: "ratelimit:resend-confirmation:",
+    })
+  : null;
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 5;
+const FALLBACK_KEY_PREFIX = 'ratelimit-fallback';
+
+function applyInMemoryFallbackLimit(
+  namespace: string,
+  identifier: string,
+  maxAttempts: number,
+  windowMs: number
+): RateLimitResult {
+  const key = `${FALLBACK_KEY_PREFIX}:${namespace}:${identifier}`;
+  const now = Date.now();
+  const current = inMemoryFallback.get(key);
+
+  if (!current || now - current.windowStart >= windowMs) {
+    inMemoryFallback.set(key, { count: 1, windowStart: now });
+    return { success: true, remaining: maxAttempts - 1, reset: now + windowMs };
+  }
+
+  if (current.count >= maxAttempts) {
+    throw new RateLimitError(
+      `Too many login attempts. Please try again in ${Math.ceil((current.windowStart + windowMs - now) / 60000)} minutes.`,
+      Math.ceil((current.windowStart + windowMs - now) / 1000)
+    );
+  }
+
+  current.count += 1;
+  inMemoryFallback.set(key, current);
+  return {
+    success: true,
+    remaining: Math.max(0, maxAttempts - current.count),
+    reset: current.windowStart + windowMs,
+  };
+}
+
 // ============================================================================
 // ERROR CLASS
 // ============================================================================
@@ -115,8 +165,7 @@ export async function checkLoginRateLimit(
   identifier: string
 ): Promise<RateLimitResult> {
   if (!loginRateLimiter) {
-    // Rate limiting disabled - allow all requests
-    return { success: true, remaining: 999, reset: 0 };
+    return applyInMemoryFallbackLimit('login', identifier, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
   }
 
   const { success, remaining, reset } = await loginRateLimiter.limit(identifier);
@@ -139,7 +188,10 @@ export async function checkLoginRateLimit(
  * @param identifier - Email address or IP address
  */
 export async function resetLoginRateLimit(identifier: string): Promise<void> {
-  if (!redis) return;
+  if (!redis) {
+    inMemoryFallback.delete(`${FALLBACK_KEY_PREFIX}:login:${identifier}`);
+    return;
+  }
 
   // Delete all keys for this identifier
   await redis.del(`ratelimit:login:${identifier}`);
@@ -200,6 +252,34 @@ export async function checkPasswordResetRateLimit(
   return { success, remaining, reset };
 }
 
+/**
+ * Check resend confirmation email rate limit.
+ *
+ * @param email - User email address
+ * @throws RateLimitError if limit exceeded
+ * @returns Remaining attempts
+ */
+export async function checkResendConfirmationRateLimit(
+  email: string
+): Promise<RateLimitResult> {
+  if (!resendConfirmationRateLimiter) {
+    return { success: true, remaining: 999, reset: 0 };
+  }
+
+  const { success, remaining, reset } =
+    await resendConfirmationRateLimiter.limit(email.toLowerCase());
+
+  if (!success) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+    throw new RateLimitError(
+      `Too many resend requests. Please try again in ${Math.ceil(retryAfter / 60)} minutes.`,
+      retryAfter
+    );
+  }
+
+  return { success, remaining, reset };
+}
+
 // ============================================================================
 // MIDDLEWARE HELPER
 // ============================================================================
@@ -212,12 +292,20 @@ export async function checkPasswordResetRateLimit(
  * @returns Client identifier (IP address)
  */
 export function getClientIdentifier(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    // Get the first IP in the chain (original client)
-    return forwarded.split(",")[0].trim();
+  const trustProxy = process.env.TRUST_PROXY === 'true';
+  if (trustProxy) {
+    const forwarded = request.headers.get("x-forwarded-for");
+    if (forwarded) {
+      // Get the first IP in the chain (original client).
+      return forwarded.split(",")[0].trim();
+    }
+
+    const realIp = request.headers.get('x-real-ip');
+    if (realIp) {
+      return realIp.trim();
+    }
   }
 
-  // Fallback - in production, this should always have a forwarded header
+  // Conservative default: do not trust spoofable forwarding headers.
   return "unknown-client";
 }

@@ -1,7 +1,9 @@
+'use server';
+
 /**
  * Dashboard Server Functions
  *
- * Barrel export for all dashboard-related server functions.
+ * ⚠️ SERVER-ONLY: Barrel export for all dashboard-related server functions.
  *
  * @see src/lib/schemas/dashboard/ for validation schemas
  * @see drizzle/schema/dashboard/ for database schemas

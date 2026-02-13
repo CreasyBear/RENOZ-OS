@@ -7,9 +7,9 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and } from 'drizzle-orm';
+import { sql, eq, and, desc, asc, isNull, gt } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { customerTags } from 'drizzle/schema';
+import { customerTags, customerTagAssignments, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 
@@ -52,50 +52,64 @@ export const getSegmentsWithStats = createServerFn({ method: 'GET' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
     const includeEmpty = data?.includeEmpty ?? false;
 
-    // Get all tags with aggregated customer stats
-    const segments = await db.execute(sql`
-      SELECT
-        t.id,
-        t.name,
-        t.description,
-        t.color,
-        t.usage_count as customer_count,
-        t.created_at,
-        t.updated_at,
-        COALESCE(stats.total_value, 0) as total_value,
-        COALESCE(stats.avg_health_score, 0) as avg_health_score,
-        COALESCE(stats.active_count, 0) as active_count
-      FROM customer_tags t
-      LEFT JOIN (
-        SELECT
-          ta.tag_id,
-          SUM(COALESCE(c.lifetime_value, 0)) as total_value,
-          AVG(COALESCE(c.health_score, 50)) as avg_health_score,
-          COUNT(CASE WHEN c.status = 'active' THEN 1 END) as active_count
-        FROM customer_tag_assignments ta
-        JOIN customers c ON c.id = ta.customer_id
-        WHERE c.organization_id = ${ctx.organizationId}
-          AND c.deleted_at IS NULL
-        GROUP BY ta.tag_id
-      ) stats ON stats.tag_id = t.id
-      WHERE t.organization_id = ${ctx.organizationId}
-        ${!includeEmpty ? sql`AND t.usage_count > 0` : sql``}
-      ORDER BY t.usage_count DESC, t.name ASC
-    `);
+    // Get all tags with aggregated customer stats using Drizzle query builder
+    // Use LEFT JOINs with aggregations (pattern matches customer-analytics.ts getSegmentPerformance)
+    const segments = await db
+      .select({
+        id: customerTags.id,
+        name: customerTags.name,
+        description: customerTags.description,
+        color: customerTags.color,
+        customerCount: customerTags.usageCount,
+        createdAt: customerTags.createdAt,
+        updatedAt: customerTags.updatedAt,
+        totalValue: sql<number>`COALESCE(SUM(${customers.lifetimeValue}), 0)::numeric`,
+        avgHealthScore: sql<number>`COALESCE(AVG(${customers.healthScore}), 0)::numeric`,
+        activeCount: sql<number>`COUNT(CASE WHEN ${customers.status} = 'active' THEN 1 END)::int`,
+      })
+      .from(customerTags)
+      .leftJoin(
+        customerTagAssignments,
+        eq(customerTagAssignments.tagId, customerTags.id)
+      )
+      .leftJoin(
+        customers,
+        and(
+          eq(customers.id, customerTagAssignments.customerId),
+          eq(customers.organizationId, ctx.organizationId),
+          isNull(customers.deletedAt)
+        )
+      )
+      .where(
+        and(
+          eq(customerTags.organizationId, ctx.organizationId),
+          includeEmpty ? sql`1=1` : gt(customerTags.usageCount, 0)
+        )
+      )
+      .groupBy(
+        customerTags.id,
+        customerTags.name,
+        customerTags.description,
+        customerTags.color,
+        customerTags.usageCount,
+        customerTags.createdAt,
+        customerTags.updatedAt
+      )
+      .orderBy(desc(customerTags.usageCount), asc(customerTags.name));
 
     // Transform to typed response
-    const segmentsWithStats: SegmentWithStats[] = ([...segments] as any[]).map((row) => ({
+    const segmentsWithStats: SegmentWithStats[] = segments.map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description,
       color: row.color,
-      customerCount: Number(row.customer_count) || 0,
-      totalValue: Number(row.total_value) || 0,
-      avgHealthScore: Math.round(Number(row.avg_health_score) || 0),
+      customerCount: Number(row.customerCount ?? 0),
+      totalValue: Number(row.totalValue ?? 0),
+      avgHealthScore: Math.round(Number(row.avgHealthScore ?? 0)),
       growth: 0, // Would require historical data to calculate
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      isActive: Number(row.active_count) > 0,
+      createdAt: row.createdAt?.toISOString() ?? '',
+      updatedAt: row.updatedAt?.toISOString() ?? '',
+      isActive: Number(row.activeCount ?? 0) > 0,
       criteriaCount: 1, // Tags are single-criteria segments
     }));
 
@@ -159,94 +173,111 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
       };
     }
 
-    // Get customers in this segment
-    const customersInSegment = await db.execute(sql`
-      SELECT
-        c.id,
-        c.name,
-        c.customer_code,
-        c.status,
-        COALESCE(c.lifetime_value, 0) as lifetime_value,
-        COALESCE(c.health_score, 50) as health_score
-      FROM customers c
-      JOIN customer_tag_assignments ta ON ta.customer_id = c.id
-      WHERE ta.tag_id = ${segmentId}
-        AND c.organization_id = ${ctx.organizationId}
-        AND c.deleted_at IS NULL
-      ORDER BY c.lifetime_value DESC
-    `);
+    // Segment base conditions for reuse
+    const segmentConditions = and(
+      eq(customerTagAssignments.tagId, segmentId),
+      eq(customers.organizationId, ctx.organizationId),
+      isNull(customers.deletedAt)
+    );
 
-    const customersData = [...customersInSegment] as any[];
+    // Run aggregation in SQL instead of fetching all rows and bucketing in JS
+    const [aggregationResult, statusResult] = await Promise.all([
+      // Aggregate health buckets, total value, avg health, and count in SQL
+      db
+        .select({
+          total: sql<number>`COUNT(*)::int`.as('total'),
+          excellent: sql<number>`SUM(CASE WHEN COALESCE(${customers.healthScore}, 50) >= 80 THEN 1 ELSE 0 END)::int`.as('excellent'),
+          good: sql<number>`SUM(CASE WHEN COALESCE(${customers.healthScore}, 50) >= 60 AND COALESCE(${customers.healthScore}, 50) < 80 THEN 1 ELSE 0 END)::int`.as('good'),
+          fair: sql<number>`SUM(CASE WHEN COALESCE(${customers.healthScore}, 50) >= 40 AND COALESCE(${customers.healthScore}, 50) < 60 THEN 1 ELSE 0 END)::int`.as('fair'),
+          poor: sql<number>`SUM(CASE WHEN COALESCE(${customers.healthScore}, 50) < 40 THEN 1 ELSE 0 END)::int`.as('poor'),
+          totalValue: sql<number>`COALESCE(SUM(COALESCE(${customers.lifetimeValue}, 0)), 0)::numeric`.as('total_value'),
+          avgHealth: sql<number>`COALESCE(AVG(COALESCE(${customers.healthScore}, 50)), 0)::numeric`.as('avg_health'),
+        })
+        .from(customers)
+        .innerJoin(customerTagAssignments, eq(customerTagAssignments.customerId, customers.id))
+        .where(segmentConditions),
 
-    // Calculate health distribution
-    const healthBuckets = { excellent: 0, good: 0, fair: 0, poor: 0 };
-    const statusCounts: Record<string, number> = {};
+      // Aggregate status counts in SQL
+      db
+        .select({
+          status: customers.status,
+          count: sql<number>`COUNT(*)::int`.as('count'),
+        })
+        .from(customers)
+        .innerJoin(customerTagAssignments, eq(customerTagAssignments.customerId, customers.id))
+        .where(segmentConditions)
+        .groupBy(customers.status),
+    ]);
 
-    for (const c of customersData) {
-      const score = c.health_score;
-      if (score >= 80) healthBuckets.excellent++;
-      else if (score >= 60) healthBuckets.good++;
-      else if (score >= 40) healthBuckets.fair++;
-      else healthBuckets.poor++;
-
-      statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
-    }
-
-    const total = customersData.length || 1;
+    const agg = aggregationResult[0] ?? { total: 0, excellent: 0, good: 0, fair: 0, poor: 0, totalValue: 0, avgHealth: 0 };
+    const total = agg.total || 1;
 
     const healthDistribution = [
       {
         level: 'Excellent',
-        count: healthBuckets.excellent,
-        percentage: Math.round((healthBuckets.excellent / total) * 100),
+        count: agg.excellent,
+        percentage: Math.round((agg.excellent / total) * 100),
         color: 'bg-green-500',
       },
       {
         level: 'Good',
-        count: healthBuckets.good,
-        percentage: Math.round((healthBuckets.good / total) * 100),
+        count: agg.good,
+        percentage: Math.round((agg.good / total) * 100),
         color: 'bg-blue-500',
       },
       {
         level: 'Fair',
-        count: healthBuckets.fair,
-        percentage: Math.round((healthBuckets.fair / total) * 100),
+        count: agg.fair,
+        percentage: Math.round((agg.fair / total) * 100),
         color: 'bg-yellow-500',
       },
       {
         level: 'Poor',
-        count: healthBuckets.poor,
-        percentage: Math.round((healthBuckets.poor / total) * 100),
+        count: agg.poor,
+        percentage: Math.round((agg.poor / total) * 100),
         color: 'bg-red-500',
       },
     ];
 
-    const customersByStatus = Object.entries(statusCounts).map(([status, count]) => ({
-      status,
-      count,
-      percentage: Math.round((count / total) * 100),
+    const customersByStatus = statusResult.map((row) => ({
+      status: row.status,
+      count: row.count,
+      percentage: Math.round((row.count / total) * 100),
     }));
 
-    // Top 10 customers by LTV
-    const topCustomers = customersData.slice(0, 10).map((c) => ({
+    // Top 10 customers by LTV — fetched via SQL with LIMIT
+    const topCustomersResult = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        customerCode: customers.customerCode,
+        lifetimeValue: sql<number>`COALESCE(${customers.lifetimeValue}, 0)::numeric`,
+        healthScore: sql<number>`COALESCE(${customers.healthScore}, 50)::numeric`,
+      })
+      .from(customers)
+      .innerJoin(customerTagAssignments, eq(customerTagAssignments.customerId, customers.id))
+      .where(segmentConditions)
+      .orderBy(desc(customers.lifetimeValue))
+      .limit(10);
+
+    const topCustomers = topCustomersResult.map((c) => ({
       id: c.id,
       name: c.name,
-      customerCode: c.customer_code,
-      lifetimeValue: Number(c.lifetime_value),
-      healthScore: c.health_score,
+      customerCode: c.customerCode,
+      lifetimeValue: Number(c.lifetimeValue ?? 0),
+      healthScore: Number(c.healthScore ?? 0),
     }));
 
-    // Build segment stats
-    const totalValue = customersData.reduce((sum, c) => sum + Number(c.lifetime_value), 0);
-    const avgHealth =
-      customersData.reduce((sum, c) => sum + Number(c.health_score), 0) / (total || 1);
+    // Build segment stats from SQL aggregation
+    const totalValue = Number(agg.totalValue);
+    const avgHealth = Number(agg.avgHealth);
 
     const segmentWithStats: SegmentWithStats = {
       id: segment.id,
       name: segment.name,
       description: segment.description,
       color: segment.color,
-      customerCount: customersData.length,
+      customerCount: agg.total,
       totalValue,
       avgHealthScore: Math.round(avgHealth),
       growth: 0,

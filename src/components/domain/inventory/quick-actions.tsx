@@ -47,7 +47,17 @@ interface QuickAction {
 // QUICK ACTION DEFINITIONS
 // ============================================================================
 
-const QUICK_ACTIONS: QuickAction[] = [
+/** Route paths for inventory quick actions - typed for Link `to` prop */
+type QuickActionRoute =
+  | '/inventory/receiving'
+  | '/inventory/counts'
+  | '/inventory'
+  | '/reports';
+
+const QUICK_ACTIONS: (Omit<QuickAction, 'href'> & {
+  href?: QuickActionRoute;
+  search?: Record<string, string>;
+})[] = [
   {
     id: "receive",
     label: "Receive Inventory",
@@ -66,21 +76,23 @@ const QUICK_ACTIONS: QuickAction[] = [
     id: "adjust",
     label: "Adjust Stock",
     icon: ArrowLeftRight,
-    href: "/inventory?action=adjust",
+    href: "/inventory",
+    search: { action: "adjust" },
     description: "Make inventory adjustment",
   },
   {
     id: "transfer",
     label: "Transfer Items",
     icon: Package,
-    href: "/inventory?action=transfer",
+    href: "/inventory",
+    search: { action: "transfer" },
     description: "Move between locations",
   },
   {
     id: "reports",
     label: "View Reports",
     icon: BarChart3,
-    href: "/reports/inventory",
+    href: "/reports",
     description: "Inventory analytics",
   },
 ];
@@ -108,7 +120,8 @@ export const QuickActionsBar = memo(function QuickActionsBar({
             return (
               <Link
                 key={action.id}
-                to={action.href as any}
+                to={action.href}
+                search={action.search}
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
               >
                 <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -146,8 +159,9 @@ export const QuickActionsBar = memo(function QuickActionsBar({
               const Icon = action.icon;
               if (action.href) {
                 return (
-                  <DropdownMenuItem key={action.id} asChild>
-                    <Link to={action.href as any} className="flex items-center">
+                  <DropdownMenuItem key={action.id} className="p-0">
+                    {/* Avoid DropdownMenuItem asChild + TanStack Link SSR issues */}
+                    <Link to={action.href} search={action.search} className="flex w-full items-center px-2 py-1.5">
                       <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
                       <div>
                         <div>{action.label}</div>
@@ -201,8 +215,9 @@ export const QuickActionsBar = memo(function QuickActionsBar({
               const Icon = action.icon;
               if (action.href) {
                 return (
-                  <DropdownMenuItem key={action.id} asChild>
-                    <Link to={action.href as any} className="flex items-center">
+                  <DropdownMenuItem key={action.id} className="p-0">
+                    {/* Avoid DropdownMenuItem asChild + TanStack Link SSR issues */}
+                    <Link to={action.href} search={action.search} className="flex w-full items-center px-2 py-1.5">
                       <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
                       <div>
                         <div>{action.label}</div>
@@ -263,17 +278,18 @@ export const QuickActionsGrid = memo(function QuickActionsGrid({
           const Icon = action.icon;
           if (action.href) {
             return (
-              <Button
+              <Link
                 key={action.id}
-                variant="outline"
-                className="h-auto py-4 flex flex-col items-center gap-2"
-                asChild
+                to={action.href}
+                search={action.search}
+                className={cn(
+                  buttonVariants({ variant: 'outline' }),
+                  'h-auto py-4 flex flex-col items-center gap-2'
+                )}
               >
-                <Link to={action.href as any}>
-                  <Icon className="h-6 w-6" aria-hidden="true" />
-                  <span className="text-xs text-center">{action.label}</span>
-                </Link>
-              </Button>
+                <Icon className="h-6 w-6" aria-hidden="true" />
+                <span className="text-xs text-center">{action.label}</span>
+              </Link>
             );
           }
           return (

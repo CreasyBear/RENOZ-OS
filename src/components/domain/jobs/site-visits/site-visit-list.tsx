@@ -1,6 +1,8 @@
 /**
  * Site Visit List Component
  *
+ * @deprecated Use ScheduleDashboard instead. No longer exported from site-visits index.
+ *
  * List view for site visits with filtering and grouping.
  *
  * SPRINT-03: New components for project-centric jobs model
@@ -13,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import type { SiteVisit, SiteVisitStatus, SiteVisitType } from 'drizzle/schema/jobs/site-visits';
+import type { SiteVisit, SiteVisitStatus, SiteVisitType } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES
@@ -182,6 +184,10 @@ function VisitCard({ visit, onClick }: VisitCardProps) {
 // LIST COMPONENT
 // ============================================================================
 
+/**
+ * List view for site visits with filtering and grouping.
+ * @deprecated Use ScheduleDashboard or project detail Visits tab instead. Not used by any route.
+ */
 export function SiteVisitList({
   visits,
   projectId,
@@ -250,6 +256,10 @@ interface CompactSiteVisitListProps {
   className?: string;
 }
 
+/**
+ * Compact list of site visits for dashboard/overview.
+ * @deprecated Use ScheduleDashboard or project detail Visits tab instead. Not used by any route.
+ */
 export function CompactSiteVisitList({
   visits,
   projectId,

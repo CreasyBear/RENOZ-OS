@@ -1,29 +1,46 @@
-Welcome to your new TanStack app! 
+# Renoz CRM v3
 
-# Getting Started
+CRM application built with TanStack Start, React, Supabase, and Drizzle.
 
-To run this application:
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+ or [Bun](https://bun.sh)
+- Supabase project
+- Copy `.env.example` to `.env` and fill in values
+
+### Development
 
 ```bash
 npm install
-npm run start
+npm run dev
 ```
 
-# Building For Production
+Open [http://localhost:3000](http://localhost:3000).
 
-To build this application for production:
+### Building for Production
 
 ```bash
 npm run build
+npm run preview   # Preview production build locally
 ```
 
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+### Testing
 
 ```bash
-npm run test
+npm run test          # All tests (Bun)
+npm run test:unit     # Unit tests only
+npm run test:vitest   # Vitest run
+npm run typecheck     # TypeScript check
+npm run lint          # ESLint
 ```
+
+## Deployment
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Vercel/GitHub deployment steps
+- **[PRE-DEPLOYMENT-CHECKLIST.md](./PRE-DEPLOYMENT-CHECKLIST.md)** — Checklist before go-live
+- **Pre-deploy**: `npm run predeploy` (typecheck + lint + test + build)
 
 ## Styling
 

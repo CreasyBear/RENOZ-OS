@@ -32,7 +32,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ScheduledReportForm, type ScheduledReportFormProps } from '@/components/domain/settings/scheduled-report-form';
+import { ReportFavoriteButton } from './report-favorite-button';
+import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
 import {
   SummaryMetricsGrid,
   ClaimsByProductChart,
@@ -44,52 +45,22 @@ import {
   ExtensionTypeChart,
   ResolutionTypeChart,
 } from '@/components/domain/support/warranty-analytics-charts';
-import type { useWarrantyAnalyticsDashboard } from '@/hooks/warranty';
+import type {
+  WarrantyAnalyticsSearchParams,
+  WarrantyAnalyticsDashboard,
+  FilterOption,
+  AnalyticsFilterBadge,
+  WarrantyAnalyticsViewProps,
+} from '@/lib/schemas/reports/warranty-analytics';
 
-export type SearchParams = {
-  range: '7' | '30' | '60' | '90' | '365' | 'all';
-  warrantyType: 'battery_performance' | 'inverter_manufacturer' | 'installation_workmanship' | 'all';
-  claimType:
-    | 'cell_degradation'
-    | 'bms_fault'
-    | 'inverter_failure'
-    | 'installation_defect'
-    | 'other'
-    | 'all';
+// Re-export for consumers
+export type {
+  WarrantyAnalyticsSearchParams,
+  WarrantyAnalyticsDashboard,
+  FilterOption,
+  AnalyticsFilterBadge,
+  WarrantyAnalyticsViewProps,
 };
-
-export type WarrantyAnalyticsDashboard = ReturnType<typeof useWarrantyAnalyticsDashboard>;
-
-export type FilterOption<T extends string> = { value: T; label: string };
-
-export type AnalyticsFilterBadge = {
-  key: 'range' | 'warrantyType' | 'claimType';
-  label: string;
-};
-
-export interface WarrantyAnalyticsViewProps {
-  search: SearchParams;
-  mobileFilters: SearchParams;
-  rangeOptions: FilterOption<SearchParams['range']>[];
-  warrantyTypeOptions: FilterOption<SearchParams['warrantyType']>[];
-  claimTypeOptions: FilterOption<SearchParams['claimType']>[];
-  hasActiveFilters: boolean;
-  activeFilterBadges: AnalyticsFilterBadge[];
-  dashboard: WarrantyAnalyticsDashboard;
-  isExporting: boolean;
-  scheduleOpen: boolean;
-  isScheduleSubmitting: boolean;
-  onUpdateSearch: (updates: Partial<SearchParams>) => void;
-  onMobileFilterChange: (updates: Partial<SearchParams>) => void;
-  onResetMobileFilters: () => void;
-  onApplyMobileFilters: () => void;
-  onClearAllFilters: () => void;
-  onExport: (format: 'csv' | 'json') => void;
-  onExportFile: (format: 'pdf' | 'excel') => void;
-  onOpenSchedule: () => void;
-  onScheduleOpenChange: (open: boolean) => void;
-  onScheduleSubmit: ScheduledReportFormProps['onSubmit'];
-}
 
 export function WarrantyAnalyticsView({
   search,
@@ -119,6 +90,7 @@ export function WarrantyAnalyticsView({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">Warranty Analytics Report</div>
         <div className="flex items-center gap-2">
+          <ReportFavoriteButton reportType="warranty" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -145,7 +117,7 @@ export function WarrantyAnalyticsView({
         {/* Date Range */}
         <div className="flex items-center gap-2">
           <Calendar className="text-muted-foreground h-4 w-4" />
-          <Select value={search.range} onValueChange={(value) => onUpdateSearch({ range: value as SearchParams['range'] })}>
+          <Select value={search.range} onValueChange={(value) => onUpdateSearch({ range: value as WarrantyAnalyticsSearchParams['range'] })}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Date range" />
             </SelectTrigger>
@@ -162,7 +134,7 @@ export function WarrantyAnalyticsView({
         {/* Warranty Type */}
         <Select
           value={search.warrantyType}
-          onValueChange={(value) => onUpdateSearch({ warrantyType: value as SearchParams['warrantyType'] })}
+          onValueChange={(value) => onUpdateSearch({ warrantyType: value as WarrantyAnalyticsSearchParams['warrantyType'] })}
         >
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Warranty type" />
@@ -179,7 +151,7 @@ export function WarrantyAnalyticsView({
         {/* Claim Type */}
         <Select
           value={search.claimType}
-          onValueChange={(value) => onUpdateSearch({ claimType: value as SearchParams['claimType'] })}
+          onValueChange={(value) => onUpdateSearch({ claimType: value as WarrantyAnalyticsSearchParams['claimType'] })}
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Claim type" />
@@ -227,7 +199,7 @@ export function WarrantyAnalyticsView({
                 <label className="text-sm font-medium">Date Range</label>
                 <Select
                   value={mobileFilters.range}
-                  onValueChange={(value) => onMobileFilterChange({ range: value as SearchParams['range'] })}
+                  onValueChange={(value) => onMobileFilterChange({ range: value as WarrantyAnalyticsSearchParams['range'] })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select range" />
@@ -248,7 +220,7 @@ export function WarrantyAnalyticsView({
                 <Select
                   value={mobileFilters.warrantyType}
                   onValueChange={(value) =>
-                    onMobileFilterChange({ warrantyType: value as SearchParams['warrantyType'] })
+                    onMobileFilterChange({ warrantyType: value as WarrantyAnalyticsSearchParams['warrantyType'] })
                   }
                 >
                   <SelectTrigger>
@@ -269,7 +241,7 @@ export function WarrantyAnalyticsView({
                 <label className="text-sm font-medium">Claim Type</label>
                 <Select
                   value={mobileFilters.claimType}
-                  onValueChange={(value) => onMobileFilterChange({ claimType: value as SearchParams['claimType'] })}
+                  onValueChange={(value) => onMobileFilterChange({ claimType: value as WarrantyAnalyticsSearchParams['claimType'] })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />

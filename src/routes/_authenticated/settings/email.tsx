@@ -34,7 +34,7 @@ import { useDomainVerification } from "@/hooks/communications/use-domain-verific
 // ROUTE DEFINITION
 // ============================================================================
 
-export const Route = createFileRoute("/_authenticated/settings/email" as any)({
+export const Route = createFileRoute("/_authenticated/settings/email")({
   component: EmailSettingsPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/settings" />

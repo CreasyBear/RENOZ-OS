@@ -18,13 +18,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
+import type { ProductStatus, ProductType } from "@/lib/schemas/products";
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type ProductStatus = "active" | "inactive" | "discontinued";
-export type ProductType = "physical" | "service" | "digital" | "bundle";
+// ProductStatus, ProductType imported from schemas/products.ts
 
 export interface ProductFiltersState extends Record<string, unknown> {
   search: string;

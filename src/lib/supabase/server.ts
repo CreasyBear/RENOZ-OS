@@ -24,6 +24,15 @@
  */
 import { createServerClient, parseCookieHeader, serializeCookieHeader } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { getRequest, setResponseHeaders } from '@tanstack/react-start/server'
+import type { User } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const SERVER_USER_CACHE_TTL_MS = 5_000
+const MAX_SERVER_USER_CACHE_ENTRIES = 200
+
+const serverUserCache = new Map<string, { user: User | null; cachedAt: number }>()
+const serverUserInFlight = new Map<string, Promise<User | null>>()
 
 function getSupabaseConfig() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
@@ -48,11 +57,12 @@ function getSupabaseConfig() {
  * @param request - Optional request object. If not provided, uses getRequest() from context.
  * @returns Supabase client configured for server use
  */
-export function createServerSupabase(request?: Request) {
+export function createServerSupabase(request?: globalThis.Request) {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig()
+  const activeRequest = request ?? getRequest()
 
   // Parse cookies from request using Supabase's utility
-  const cookieHeader = request?.headers.get('Cookie') ?? ''
+  const cookieHeader = activeRequest?.headers.get('Cookie') ?? ''
   const parsedCookies = parseCookieHeader(cookieHeader)
 
   // Filter out cookies with undefined values and ensure type safety
@@ -65,12 +75,24 @@ export function createServerSupabase(request?: Request) {
         return cookies
       },
       setAll(cookiesToSet) {
-        // In server functions, we typically can't set cookies directly
-        // The session refresh happens automatically via the browser client
-        // This is pattern 3 (read-only) from the Supabase SSR docs
-        // For full cookie setting support, you'd need middleware
-        if (process.env.NODE_ENV === 'development' && cookiesToSet.length > 0) {
-          console.debug(`[Supabase SSR] Cookie set attempted: ${cookiesToSet.map(c => c.name).join(', ')}`)
+        if (cookiesToSet.length === 0) {
+          return
+        }
+
+        const headers = new Headers()
+        for (const { name, value, options } of cookiesToSet) {
+          headers.append('Set-Cookie', serializeCookieHeader(name, value, options))
+        }
+
+        try {
+          setResponseHeaders(headers)
+        } catch (error) {
+          if (process.env.NODE_ENV === 'development') {
+            logger.warn('[Supabase SSR] Failed to write refreshed auth cookies', {
+              cookieNames: cookiesToSet.map((c) => c.name),
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
         }
       },
     },
@@ -84,9 +106,7 @@ export function createServerSupabase(request?: Request) {
  * @returns Supabase client configured for server use
  */
 export async function createClient() {
-  const { getRequest } = await import('@tanstack/react-start/server')
-  const request = getRequest()
-  return createServerSupabase(request)
+  return createServerSupabase()
 }
 
 /**
@@ -125,19 +145,42 @@ export function createAdminSupabase() {
  * @param request - The incoming request
  * @returns The authenticated user or null
  */
-export async function getServerUser(request?: Request) {
-  const supabase = request ? createServerSupabase(request) : await createClient()
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) {
-    console.error('Error getting server user:', error.message)
-    return null
+export async function getServerUser(request?: globalThis.Request) {
+  const key = getServerUserCacheKey(request)
+  const now = Date.now()
+  const cached = serverUserCache.get(key)
+  if (cached && now - cached.cachedAt <= SERVER_USER_CACHE_TTL_MS) {
+    return cached.user
   }
 
-  return user
+  const inFlight = serverUserInFlight.get(key)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const resolveUser = (async () => {
+    const supabase = request ? createServerSupabase(request) : await createClient()
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error) {
+      logger.error('Error getting server user', error)
+      writeServerUserCache(key, null)
+      return null
+    }
+
+    writeServerUserCache(key, user)
+    return user
+  })()
+
+  serverUserInFlight.set(key, resolveUser)
+  try {
+    return await resolveUser
+  } finally {
+    serverUserInFlight.delete(key)
+  }
 }
 
 /**
@@ -148,12 +191,26 @@ export async function getServerUser(request?: Request) {
  * @returns The authenticated user
  * @throws Error if not authenticated
  */
-export async function requireServerUser(request?: Request) {
+export async function requireServerUser(request?: globalThis.Request) {
   const user = await getServerUser(request)
   if (!user) {
     throw new Error('Unauthorized: No valid session')
   }
   return user
+}
+
+function getServerUserCacheKey(request?: globalThis.Request) {
+  if (!request) return '__default__'
+  const cookieHeader = request.headers.get('Cookie') ?? ''
+  const authHeader = request.headers.get('Authorization') ?? ''
+  return `${cookieHeader}|${authHeader}`
+}
+
+function writeServerUserCache(key: string, user: User | null) {
+  if (serverUserCache.size >= MAX_SERVER_USER_CACHE_ENTRIES) {
+    serverUserCache.clear()
+  }
+  serverUserCache.set(key, { user, cachedAt: Date.now() })
 }
 
 // Re-export the utilities for use in middleware if needed

@@ -25,6 +25,7 @@ import {
   getCountVarianceAnalysis,
   getCountHistory,
 } from '@/server/functions/inventory';
+import type { StockCount } from '@/lib/schemas/inventory';
 
 // ============================================================================
 // TYPES
@@ -57,7 +58,11 @@ export function useStockCounts(options: UseStockCountsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.inventory.stockCounts(filters),
-    queryFn: () => listStockCounts({ data: filters }),
+    queryFn: async () => {
+      const result = await listStockCounts({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -69,12 +74,19 @@ export function useStockCounts(options: UseStockCountsOptions = {}) {
 export function useStockCount(countId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.stockCount(countId),
-    queryFn: () => getStockCount({ data: { id: countId } }),
+    queryFn: async () => {
+      const result = await getStockCount({
+        data: { id: countId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!countId,
     staleTime: 30 * 1000,
     refetchInterval: (query) => {
       // Auto-refresh in-progress counts every 30 seconds
-      return (query.state.data as any)?.count?.status === 'in_progress' ? 30 * 1000 : false;
+      const data = query.state.data as { count?: Pick<StockCount, 'status'> } | undefined;
+      return data?.count?.status === 'in_progress' ? 30 * 1000 : false;
     },
   });
 }
@@ -100,7 +112,13 @@ export function useStockCountItems(countId: string, enabled = true) {
 export function useCountVarianceAnalysis(countId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.stockCountVariances(countId),
-    queryFn: () => getCountVarianceAnalysis({ data: { id: countId } }),
+    queryFn: async () => {
+      const result = await getCountVarianceAnalysis({
+        data: { id: countId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!countId,
     staleTime: 60 * 1000,
   });
@@ -119,8 +137,12 @@ export function useCountHistory(
   enabled = true
 ) {
   return useQuery({
-    queryKey: [...queryKeys.inventory.stockCountsAll(), 'history', options],
-    queryFn: () => getCountHistory({ data: options }),
+    queryKey: queryKeys.inventory.stockCountsHistory(options),
+    queryFn: async () => {
+      const result = await getCountHistory({ data: options });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });

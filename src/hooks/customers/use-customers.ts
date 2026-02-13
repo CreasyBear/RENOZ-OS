@@ -6,6 +6,9 @@
  * - Customer 360 view
  * - Customer search
  * - Customer mutations (create, update, delete)
+ *
+ * Uses direct server function calls in queryFn (no useServerFn) per
+ * tanstack-start-best-practices and working dashboard pattern.
  */
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
@@ -19,6 +22,8 @@ import {
   deleteCustomer,
   bulkDeleteCustomers,
   bulkUpdateCustomers,
+  bulkUpdateHealthScores,
+  deleteCustomerTag,
 } from '@/server/customers';
 import type { CustomerListQuery, CreateCustomer, UpdateCustomer } from '@/lib/schemas/customers';
 
@@ -40,7 +45,11 @@ export function useCustomers(options: UseCustomersOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.customers.list(filters),
-    queryFn: () => getCustomers({ data: filters as CustomerListQuery }),
+    queryFn: async () => {
+      const result = await getCustomers({ data: filters as CustomerListQuery });
+      if (result == null) throw new Error('Customers list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -52,14 +61,17 @@ export function useCustomers(options: UseCustomersOptions = {}) {
 export function useCustomersInfinite(filters: Partial<CustomerListQuery> = {}) {
   return useInfiniteQuery({
     queryKey: queryKeys.customers.list(filters), // Use list key for infinite queries too
-    queryFn: ({ pageParam }) =>
-      getCustomers({
+    queryFn: async ({ pageParam }) => {
+      const result = await getCustomers({
         data: {
           ...filters,
           page: pageParam,
           pageSize: filters.pageSize ?? 50,
         } as CustomerListQuery,
-      }),
+      });
+      if (result == null) throw new Error('Customers list returned no data');
+      return result;
+    },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       const totalFetched = allPages.reduce((sum, p) => sum + p.items.length, 0);
@@ -81,7 +93,11 @@ export interface UseCustomerOptions {
 export function useCustomer({ id, enabled = true }: UseCustomerOptions) {
   return useQuery({
     queryKey: queryKeys.customers.detail(id),
-    queryFn: () => getCustomerById({ data: { id } }),
+    queryFn: async () => {
+      const result = await getCustomerById({ data: { id } });
+      if (result == null) throw new Error('Customer not found');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -101,7 +117,11 @@ export interface UseCustomerTagsOptions {
 export function useCustomerTags({ enabled = true }: UseCustomerTagsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.customers.tags.list(),
-    queryFn: () => getCustomerTags(),
+    queryFn: async () => {
+      const result = await getCustomerTags();
+      if (result == null) throw new Error('Customer tags returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes - tags don't change often
   });
@@ -120,14 +140,17 @@ export interface UseCustomerSearchOptions {
 export function useCustomerSearch({ query, limit = 10, enabled = true }: UseCustomerSearchOptions) {
   return useQuery({
     queryKey: queryKeys.customers.list({ search: query }),
-    queryFn: () =>
-      getCustomers({
+    queryFn: async () => {
+      const result = await getCustomers({
         data: {
           search: query,
           pageSize: limit,
           page: 1,
         } as CustomerListQuery,
-      }),
+      });
+      if (result == null) throw new Error('Customer search returned no data');
+      return result;
+    },
     enabled: enabled && query.length >= 2,
     staleTime: 10 * 1000, // 10 seconds
     placeholderData: (previousData) => previousData,
@@ -290,6 +313,41 @@ export function useBulkUpdateCustomers() {
   });
 }
 
+export function useBulkUpdateHealthScores() {
+  const queryClient = useQueryClient();
+  const bulkUpdateHealthScoresFn = useServerFn(bulkUpdateHealthScores);
+
+  return useMutation({
+    mutationFn: (input: { customerIds: string[]; healthScore: number; reason?: string }) =>
+      bulkUpdateHealthScoresFn({ data: input }),
+    onSuccess: (result) => {
+      // Invalidate customer lists and details
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      result.results?.forEach((r) => {
+        if (r.success) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(r.customerId) });
+        }
+      });
+    },
+  });
+}
+
+/**
+ * Delete a customer tag.
+ */
+export function useDeleteCustomerTag() {
+  const queryClient = useQueryClient();
+  const deleteFn = useServerFn(deleteCustomerTag);
+
+  return useMutation({
+    mutationFn: (tagId: string) => deleteFn({ data: { id: tagId } }),
+    onSuccess: () => {
+      // Invalidate both list and detail caches per STANDARDS.md
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.tags.list() });
+    },
+  });
+}
+
 // ============================================================================
 // PREFETCH UTILITIES
 // ============================================================================
@@ -300,7 +358,11 @@ export function usePrefetchCustomer() {
   return (id: string) => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.customers.detail(id),
-      queryFn: () => getCustomerById({ data: { id } }),
+      queryFn: async () => {
+        const result = await getCustomerById({ data: { id } });
+        if (result == null) throw new Error('Customer not found');
+        return result;
+      },
       staleTime: 60 * 1000,
     });
   };

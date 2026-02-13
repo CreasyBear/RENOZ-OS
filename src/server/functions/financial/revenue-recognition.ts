@@ -17,7 +17,8 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, isNull, gte, lte, desc } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, isNull, gte, lte, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   revenueRecognition,
@@ -56,34 +57,6 @@ const MAX_SYNC_RETRIES = 5;
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Get month key for grouping.
- */
-function getMonthKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-}
-
-/**
- * Get month label.
- */
-function getMonthLabel(date: Date): string {
-  const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  return `${months[date.getMonth()]} ${date.getFullYear()}`;
-}
-
 // ============================================================================
 // RECOGNIZE REVENUE
 // ============================================================================
@@ -94,7 +67,7 @@ function getMonthLabel(date: Date): string {
  * Creates a revenue recognition record and transitions state to RECOGNIZED.
  * For commercial milestones, specify the milestone name.
  */
-export const recognizeRevenue = createServerFn()
+export const recognizeRevenue = createServerFn({ method: 'POST' })
   .inputValidator(recognizeRevenueSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -117,6 +90,7 @@ export const recognizeRevenue = createServerFn()
       );
 
     if (!order) {
+      setResponseStatus(404);
       throw new NotFoundError('Order not found', 'order');
     }
 
@@ -156,6 +130,11 @@ export const recognizeRevenue = createServerFn()
       },
     });
 
+    // Fire-and-forget sync to Xero
+    void syncRecognitionToXero({ data: { recognitionId: recognition.id, force: false } }).catch(
+      () => null
+    );
+
     return {
       success: true,
       recognitionId: recognition.id,
@@ -172,7 +151,7 @@ export const recognizeRevenue = createServerFn()
  * Create a deferred revenue record for advance payments.
  * Used for 50% commercial deposits.
  */
-export const createDeferredRevenue = createServerFn()
+export const createDeferredRevenue = createServerFn({ method: 'POST' })
   .inputValidator(createDeferredRevenueSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -191,6 +170,7 @@ export const createDeferredRevenue = createServerFn()
       );
 
     if (!order) {
+      setResponseStatus(404);
       throw new NotFoundError('Order not found', 'order');
     }
 
@@ -242,7 +222,7 @@ export const createDeferredRevenue = createServerFn()
  * Creates a recognition record and updates deferred balance.
  * Both operations are wrapped in a transaction for atomicity.
  */
-export const releaseDeferredRevenue = createServerFn()
+export const releaseDeferredRevenue = createServerFn({ method: 'POST' })
   .inputValidator(releaseDeferredRevenueSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -268,6 +248,7 @@ export const releaseDeferredRevenue = createServerFn()
         );
 
       if (!deferred) {
+        setResponseStatus(404);
         throw new NotFoundError('Deferred revenue record not found', 'deferredRevenue');
       }
 
@@ -319,26 +300,22 @@ export const releaseDeferredRevenue = createServerFn()
 
       return {
         recognitionId: recognition.id,
+        orderId: deferred.orderId,
         releaseAmount,
         newRemainingAmount,
         newStatus,
       };
     });
 
-    // Activity logging - need to get orderId from transaction result
-    const [deferredRecord] = await db
-      .select({ orderId: deferredRevenue.orderId })
-      .from(deferredRevenue)
-      .where(eq(deferredRevenue.id, deferredRevenueId));
-
+    // Activity logging - orderId is now returned from the transaction
     const logger = createActivityLoggerWithContext(ctx);
     logger.logAsync({
       entityType: 'order',
-      entityId: deferredRecord.orderId,
+      entityId: result.orderId,
       action: 'updated',
       description: `Released deferred revenue: ${milestoneName ?? 'Deferred revenue release'}`,
       metadata: {
-        orderId: deferredRecord.orderId,
+        orderId: result.orderId,
         deferredRevenueId,
         recognitionId: result.recognitionId,
         releasedAmount: Number(result.releaseAmount),
@@ -347,6 +324,11 @@ export const releaseDeferredRevenue = createServerFn()
         milestoneName: milestoneName ?? undefined,
       },
     });
+
+    // Fire-and-forget sync to Xero
+    void syncRecognitionToXero({ data: { recognitionId: result.recognitionId, force: false } }).catch(
+      () => null
+    );
 
     return {
       success: true,
@@ -364,15 +346,21 @@ export const releaseDeferredRevenue = createServerFn()
 /**
  * Sync a revenue recognition record to Xero as a manual journal.
  */
-export const syncRecognitionToXero = createServerFn()
+export const syncRecognitionToXero = createServerFn({ method: 'POST' })
   .inputValidator(syncRecognitionToXeroSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const { recognitionId, force } = data;
 
     // Get recognition record
+    // Select only columns needed for sync logic
     const [recognition] = await db
-      .select()
+      .select({
+        id: revenueRecognition.id,
+        state: revenueRecognition.state,
+        xeroJournalId: revenueRecognition.xeroJournalId,
+        xeroSyncAttempts: revenueRecognition.xeroSyncAttempts,
+      })
       .from(revenueRecognition)
       .where(
         and(
@@ -382,6 +370,7 @@ export const syncRecognitionToXero = createServerFn()
       );
 
     if (!recognition) {
+      setResponseStatus(404);
       throw new NotFoundError('Recognition record not found', 'revenueRecognition');
     }
 
@@ -399,17 +388,22 @@ export const syncRecognitionToXero = createServerFn()
       throw new ValidationError('Recognition requires manual override. Please resolve in Xero.');
     }
 
-    // Update to syncing
+    // Update to syncing — orgId for defense-in-depth
     await db
       .update(revenueRecognition)
       .set({
         state: 'syncing',
         lastXeroSyncAt: new Date(),
       })
-      .where(eq(revenueRecognition.id, recognitionId));
+      .where(
+        and(
+          eq(revenueRecognition.id, recognitionId),
+          eq(revenueRecognition.organizationId, ctx.organizationId)
+        )
+      );
 
     try {
-      // TODO: Actual Xero API call to create manual journal
+      // TODO(PHASE12-002): Actual Xero API call to create manual journal
       // This would use the Xero Manual Journals API
       // For now, simulate successful sync
 
@@ -423,7 +417,12 @@ export const syncRecognitionToXero = createServerFn()
           xeroSyncError: null,
           lastXeroSyncAt: new Date(),
         })
-        .where(eq(revenueRecognition.id, recognitionId));
+        .where(
+          and(
+            eq(revenueRecognition.id, recognitionId),
+            eq(revenueRecognition.organizationId, ctx.organizationId)
+          )
+        );
 
       return {
         success: true,
@@ -443,7 +442,12 @@ export const syncRecognitionToXero = createServerFn()
           xeroSyncError: errorMessage,
           lastXeroSyncAt: new Date(),
         })
-        .where(eq(revenueRecognition.id, recognitionId));
+        .where(
+          and(
+            eq(revenueRecognition.id, recognitionId),
+            eq(revenueRecognition.organizationId, ctx.organizationId)
+          )
+        );
 
       return {
         success: false,
@@ -461,7 +465,7 @@ export const syncRecognitionToXero = createServerFn()
 /**
  * Retry a failed recognition sync.
  */
-export const retryRecognitionSync = createServerFn()
+export const retryRecognitionSync = createServerFn({ method: 'POST' })
   .inputValidator(retryRecognitionSyncSchema)
   .handler(async ({ data }) => {
     // Delegate to syncRecognitionToXero with force=true
@@ -475,7 +479,7 @@ export const retryRecognitionSync = createServerFn()
 /**
  * Get all revenue recognition records for an order.
  */
-export const getOrderRecognitions = createServerFn()
+export const getOrderRecognitions = createServerFn({ method: 'GET' })
   .inputValidator(getOrderRecognitionsSchema)
   .handler(async ({ data }): Promise<RevenueRecognitionRecord[]> => {
     const ctx = await withAuth();
@@ -485,6 +489,7 @@ export const getOrderRecognitions = createServerFn()
         id: revenueRecognition.id,
         orderId: revenueRecognition.orderId,
         orderNumber: orders.orderNumber,
+        customerId: orders.customerId,
         customerName: customersTable.name,
         recognitionType: revenueRecognition.recognitionType,
         milestoneName: revenueRecognition.milestoneName,
@@ -507,7 +512,8 @@ export const getOrderRecognitions = createServerFn()
           eq(revenueRecognition.organizationId, ctx.organizationId)
         )
       )
-      .orderBy(desc(revenueRecognition.recognitionDate));
+      .orderBy(desc(revenueRecognition.recognitionDate))
+      .limit(100);
 
     return results.map((r) => ({
       ...r,
@@ -523,7 +529,7 @@ export const getOrderRecognitions = createServerFn()
 /**
  * Get deferred revenue records for an order.
  */
-export const getOrderDeferredRevenue = createServerFn()
+export const getOrderDeferredRevenue = createServerFn({ method: 'GET' })
   .inputValidator(getOrderDeferredRevenueSchema)
   .handler(async ({ data }): Promise<DeferredRevenueRecord[]> => {
     const ctx = await withAuth();
@@ -552,7 +558,8 @@ export const getOrderDeferredRevenue = createServerFn()
           eq(deferredRevenue.organizationId, ctx.organizationId)
         )
       )
-      .orderBy(desc(deferredRevenue.deferralDate));
+      .orderBy(desc(deferredRevenue.deferralDate))
+      .limit(100);
 
     return results.map((r) => ({
       ...r,
@@ -572,7 +579,7 @@ export const getOrderDeferredRevenue = createServerFn()
  * List recognition records filtered by state.
  * Useful for finding failed syncs and manual overrides.
  */
-export const listRecognitionsByState = createServerFn()
+export const listRecognitionsByState = createServerFn({ method: 'GET' })
   .inputValidator(listRecognitionsByStateSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -595,31 +602,39 @@ export const listRecognitionsByState = createServerFn()
       conditions.push(lte(revenueRecognition.recognitionDate, dateTo.toISOString().split('T')[0]));
     }
 
-    const results = await db
-      .select({
-        id: revenueRecognition.id,
-        orderId: revenueRecognition.orderId,
-        orderNumber: orders.orderNumber,
-        customerName: customersTable.name,
-        recognitionType: revenueRecognition.recognitionType,
-        milestoneName: revenueRecognition.milestoneName,
-        recognizedAmount: revenueRecognition.recognizedAmount,
-        recognitionDate: revenueRecognition.recognitionDate,
-        state: revenueRecognition.state,
-        xeroSyncAttempts: revenueRecognition.xeroSyncAttempts,
-        xeroSyncError: revenueRecognition.xeroSyncError,
-        lastXeroSyncAt: revenueRecognition.lastXeroSyncAt,
-        xeroJournalId: revenueRecognition.xeroJournalId,
-        notes: revenueRecognition.notes,
-        createdAt: revenueRecognition.createdAt,
-      })
-      .from(revenueRecognition)
-      .innerJoin(orders, eq(revenueRecognition.orderId, orders.id))
-      .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
-      .where(and(...conditions))
-      .orderBy(desc(revenueRecognition.recognitionDate))
-      .limit(pageSize)
-      .offset(offset);
+    // Run data query and count query in parallel
+    const [results, countResult] = await Promise.all([
+      db
+        .select({
+          id: revenueRecognition.id,
+          orderId: revenueRecognition.orderId,
+          orderNumber: orders.orderNumber,
+          customerId: orders.customerId,
+          customerName: customersTable.name,
+          recognitionType: revenueRecognition.recognitionType,
+          milestoneName: revenueRecognition.milestoneName,
+          recognizedAmount: revenueRecognition.recognizedAmount,
+          recognitionDate: revenueRecognition.recognitionDate,
+          state: revenueRecognition.state,
+          xeroSyncAttempts: revenueRecognition.xeroSyncAttempts,
+          xeroSyncError: revenueRecognition.xeroSyncError,
+          lastXeroSyncAt: revenueRecognition.lastXeroSyncAt,
+          xeroJournalId: revenueRecognition.xeroJournalId,
+          notes: revenueRecognition.notes,
+          createdAt: revenueRecognition.createdAt,
+        })
+        .from(revenueRecognition)
+        .innerJoin(orders, eq(revenueRecognition.orderId, orders.id))
+        .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
+        .where(and(...conditions))
+        .orderBy(desc(revenueRecognition.recognitionDate))
+        .limit(pageSize)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(revenueRecognition)
+        .where(and(...conditions)),
+    ]);
 
     return {
       records: results.map((r) => ({
@@ -627,6 +642,7 @@ export const listRecognitionsByState = createServerFn()
         recognitionDate: new Date(r.recognitionDate),
         createdAt: new Date(r.createdAt),
       })),
+      total: countResult[0]?.count ?? 0,
       page,
       pageSize,
     };
@@ -639,17 +655,22 @@ export const listRecognitionsByState = createServerFn()
 /**
  * Get recognition summary by period for reports.
  */
-export const getRecognitionSummary = createServerFn()
+export const getRecognitionSummary = createServerFn({ method: 'GET' })
   .inputValidator(getRecognitionSummarySchema)
   .handler(async ({ data }): Promise<RecognitionSummary[]> => {
     const ctx = await withAuth();
     const { dateFrom, dateTo } = data;
 
+    // Use SQL GROUP BY with DATE_TRUNC and SUM(CASE WHEN) instead of in-memory aggregation
     const results = await db
       .select({
-        recognitionDate: revenueRecognition.recognitionDate,
-        recognitionType: revenueRecognition.recognitionType,
-        recognizedAmount: revenueRecognition.recognizedAmount,
+        period: sql<string>`TO_CHAR(DATE_TRUNC('month', ${revenueRecognition.recognitionDate}::date), 'YYYY-MM')`,
+        periodLabel: sql<string>`TO_CHAR(DATE_TRUNC('month', ${revenueRecognition.recognitionDate}::date), 'FMMonth YYYY')`,
+        totalRecognized: sql<number>`COALESCE(SUM(${revenueRecognition.recognizedAmount}), 0)::numeric`,
+        onDeliveryAmount: sql<number>`COALESCE(SUM(CASE WHEN ${revenueRecognition.recognitionType} = 'on_delivery' THEN ${revenueRecognition.recognizedAmount} ELSE 0 END), 0)::numeric`,
+        milestoneAmount: sql<number>`COALESCE(SUM(CASE WHEN ${revenueRecognition.recognitionType} = 'milestone' THEN ${revenueRecognition.recognizedAmount} ELSE 0 END), 0)::numeric`,
+        timeBasedAmount: sql<number>`COALESCE(SUM(CASE WHEN ${revenueRecognition.recognitionType} = 'time_based' THEN ${revenueRecognition.recognizedAmount} ELSE 0 END), 0)::numeric`,
+        recordCount: sql<number>`COUNT(*)::int`,
       })
       .from(revenueRecognition)
       .where(
@@ -659,45 +680,21 @@ export const getRecognitionSummary = createServerFn()
           lte(revenueRecognition.recognitionDate, dateTo.toISOString().split('T')[0])
         )
       )
-      .orderBy(revenueRecognition.recognitionDate);
+      // RAW SQL (Phase 11 Keep): DATE_TRUNC for month grouping. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
+      .groupBy(
+        sql`DATE_TRUNC('month', ${revenueRecognition.recognitionDate}::date)`
+      )
+      .orderBy(sql`DATE_TRUNC('month', ${revenueRecognition.recognitionDate}::date)`);
 
-    // Group by month
-    const periodMap = new Map<string, RecognitionSummary>();
-
-    for (const r of results) {
-      const date = new Date(r.recognitionDate);
-      const periodKey = getMonthKey(date);
-
-      if (!periodMap.has(periodKey)) {
-        periodMap.set(periodKey, {
-          period: periodKey,
-          periodLabel: getMonthLabel(date),
-          totalRecognized: 0,
-          onDeliveryAmount: 0,
-          milestoneAmount: 0,
-          timeBasedAmount: 0,
-          recordCount: 0,
-        });
-      }
-
-      const summary = periodMap.get(periodKey)!;
-      summary.totalRecognized += r.recognizedAmount;
-      summary.recordCount++;
-
-      switch (r.recognitionType) {
-        case 'on_delivery':
-          summary.onDeliveryAmount += r.recognizedAmount;
-          break;
-        case 'milestone':
-          summary.milestoneAmount += r.recognizedAmount;
-          break;
-        case 'time_based':
-          summary.timeBasedAmount += r.recognizedAmount;
-          break;
-      }
-    }
-
-    return Array.from(periodMap.values()).sort((a, b) => a.period.localeCompare(b.period));
+    return results.map((r): RecognitionSummary => ({
+      period: r.period,
+      periodLabel: r.periodLabel,
+      totalRecognized: Number(r.totalRecognized),
+      onDeliveryAmount: Number(r.onDeliveryAmount),
+      milestoneAmount: Number(r.milestoneAmount),
+      timeBasedAmount: Number(r.timeBasedAmount),
+      recordCount: r.recordCount,
+    }));
   });
 
 // ============================================================================
@@ -707,54 +704,35 @@ export const getRecognitionSummary = createServerFn()
 /**
  * Get deferred revenue balance summary.
  */
-export const getDeferredRevenueBalance = createServerFn()
+export const getDeferredRevenueBalance = createServerFn({ method: 'GET' })
   .inputValidator(getDeferredRevenueBalanceSchema)
   .handler(async ({ data: _data }): Promise<DeferredRevenueBalance> => {
     // Note: asOfDate filtering can be added later for historical snapshots
     const ctx = await withAuth();
 
-    const results = await db
+    // Use SQL SUM(CASE WHEN) aggregation instead of in-memory loop
+    const [result] = await db
       .select({
-        originalAmount: deferredRevenue.originalAmount,
-        remainingAmount: deferredRevenue.remainingAmount,
-        recognizedAmount: deferredRevenue.recognizedAmount,
-        status: deferredRevenue.status,
+        totalDeferred: sql<number>`COALESCE(SUM(${deferredRevenue.originalAmount}), 0)::numeric`,
+        totalRecognized: sql<number>`COALESCE(SUM(COALESCE(${deferredRevenue.recognizedAmount}, 0)), 0)::numeric`,
+        totalRemaining: sql<number>`COALESCE(SUM(${deferredRevenue.remainingAmount}), 0)::numeric`,
+        recordCount: sql<number>`COUNT(*)::int`,
+        deferredAmount: sql<number>`COALESCE(SUM(CASE WHEN ${deferredRevenue.status} = 'deferred' THEN ${deferredRevenue.remainingAmount} ELSE 0 END), 0)::numeric`,
+        partiallyRecognizedAmount: sql<number>`COALESCE(SUM(CASE WHEN ${deferredRevenue.status} = 'partially_recognized' THEN ${deferredRevenue.remainingAmount} ELSE 0 END), 0)::numeric`,
+        fullyRecognizedAmount: sql<number>`COALESCE(SUM(CASE WHEN ${deferredRevenue.status} = 'fully_recognized' THEN ${deferredRevenue.originalAmount} ELSE 0 END), 0)::numeric`,
       })
       .from(deferredRevenue)
       .where(eq(deferredRevenue.organizationId, ctx.organizationId));
 
-    let totalDeferred = 0;
-    let totalRecognized = 0;
-    let totalRemaining = 0;
-    const byStatus = {
-      deferred: 0,
-      partiallyRecognized: 0,
-      fullyRecognized: 0,
-    };
-
-    for (const r of results) {
-      totalDeferred += r.originalAmount;
-      totalRecognized += r.recognizedAmount ?? 0;
-      totalRemaining += r.remainingAmount;
-
-      switch (r.status) {
-        case 'deferred':
-          byStatus.deferred += r.remainingAmount;
-          break;
-        case 'partially_recognized':
-          byStatus.partiallyRecognized += r.remainingAmount;
-          break;
-        case 'fully_recognized':
-          byStatus.fullyRecognized += r.originalAmount;
-          break;
-      }
-    }
-
     return {
-      totalDeferred,
-      totalRecognized,
-      totalRemaining,
-      recordCount: results.length,
-      byStatus,
+      totalDeferred: Number(result?.totalDeferred ?? 0),
+      totalRecognized: Number(result?.totalRecognized ?? 0),
+      totalRemaining: Number(result?.totalRemaining ?? 0),
+      recordCount: result?.recordCount ?? 0,
+      byStatus: {
+        deferred: Number(result?.deferredAmount ?? 0),
+        partiallyRecognized: Number(result?.partiallyRecognizedAmount ?? 0),
+        fullyRecognized: Number(result?.fullyRecognizedAmount ?? 0),
+      },
     };
   });

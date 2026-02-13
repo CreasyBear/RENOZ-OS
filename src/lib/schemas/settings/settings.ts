@@ -13,15 +13,191 @@
  * @see drizzle/schema/data-exports.ts
  */
 
-import { z } from 'zod';
-import { paginationSchema } from '../_shared/patterns';
+import { z } from "zod";
+import { paginationSchema } from "../_shared/patterns";
 
 // ============================================================================
 // ORGANIZATION SETTINGS
 // ============================================================================
 // NOTE: Core organization schemas (Organization, OrganizationSettings, etc.)
-// are defined in ./auth.ts to avoid duplication. This file contains only
+// are defined in lib/schemas/auth to avoid duplication. This file contains
 // settings-domain specific schemas.
+
+/**
+ * Organization settings section data types.
+ * Used by settings-sections.tsx for General, Address, Regional, Financial, Branding.
+ */
+export interface GeneralSettingsData {
+  name: string;
+  email: string;
+  phone: string;
+  abn: string;
+  website: string;
+}
+
+export interface AddressSettingsData {
+  addressLine1: string;
+  addressLine2: string;
+  suburb: string;
+  state: string;
+  postcode: string;
+  country: string;
+}
+
+export interface FinancialSettingsData {
+  fiscalYearStart: number;
+  defaultPaymentTerms: number;
+  defaultTaxRate: number;
+}
+
+export interface BrandingSettingsData {
+  logoUrl: string;
+  primaryColor: string;
+  secondaryColor: string;
+  websiteUrl: string;
+}
+
+/**
+ * Explicit type for organization settings API response.
+ * Matches getOrganizationSettings and updateOrganizationSettings return shape.
+ * @see SCHEMA-TRACE.md §4 ServerFn boundary
+ */
+export interface OrganizationSettingsResponse {
+  timezone: string;
+  locale: string;
+  currency: string;
+  dateFormat: string;
+  timeFormat: "12h" | "24h";
+  numberFormat: "1,234.56" | "1.234,56" | "1 234,56";
+  fiscalYearStart: number;
+  weekStartDay: number;
+  defaultTaxRate: number;
+  defaultPaymentTerms: number;
+  portalBranding: { [key: string]: object };
+}
+
+// ============================================================================
+// ORGANIZATION SECTION ZOD SCHEMAS (validation)
+// ============================================================================
+
+export const generalSettingsSchema = z.object({
+  name: z.string().min(1, "Organization name is required").max(255),
+  email: z.union([z.string().email("Invalid email"), z.literal("")]),
+  phone: z.string().max(50),
+  abn: z.string().max(50),
+  website: z.union([z.string().url("Invalid URL"), z.literal("")]),
+});
+
+export const addressSettingsSchema = z.object({
+  addressLine1: z.string().max(255),
+  addressLine2: z.string().max(255),
+  suburb: z.string().max(100),
+  state: z.string().max(100),
+  postcode: z.string().max(20),
+  country: z.string().max(100),
+});
+
+/** Parses and validates week start day (0-6). Returns 1 if invalid. */
+export function parseWeekStartDay(v: string): 0 | 1 | 2 | 3 | 4 | 5 | 6 {
+  const n = parseInt(v, 10);
+  return (n >= 0 && n <= 6 ? n : 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+}
+
+export const regionalSettingsSchema = z.object({
+  timezone: z.string().max(100),
+  locale: z.string().max(20),
+  currency: z.string().length(3),
+  dateFormat: z.string().max(50),
+  timeFormat: z.enum(["12h", "24h"]),
+  weekStartDay: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
+  numberFormat: z.enum(["1,234.56", "1.234,56", "1 234,56"]),
+});
+
+export const financialSettingsSchema = z.object({
+  fiscalYearStart: z.number().int().min(1).max(12),
+  defaultPaymentTerms: z.number().int().min(0).max(365),
+  defaultTaxRate: z.number().min(0).max(100),
+});
+
+export const brandingSettingsSchema = z.object({
+  logoUrl: z.union([z.string().url(), z.literal("")]),
+  primaryColor: z
+    .string()
+    .transform((v) => v.trim())
+    .refine(
+      (v) => v === "" || /^#[0-9A-Fa-f]{6}$/.test(v),
+      "Must be a valid hex color (e.g. #1F4B99) or empty"
+    ),
+  secondaryColor: z
+    .string()
+    .transform((v) => v.trim())
+    .refine(
+      (v) => v === "" || /^#[0-9A-Fa-f]{6}$/.test(v),
+      "Must be a valid hex color (e.g. #1F4B99) or empty"
+    ),
+  websiteUrl: z.union([z.string().url(), z.literal("")]),
+});
+
+/**
+ * Extended settings section data types.
+ * Used by settings-sections-extended.tsx.
+ */
+export interface PreferencesSettingsData {
+  theme: string;
+  accentColor: string;
+  density: string;
+  notifications_email: boolean;
+  notifications_inApp: boolean;
+  notifications_sound: boolean;
+  tablePageSize: string;
+  stickyHeaders: boolean;
+  reduceMotion: boolean;
+}
+
+export interface EmailSettingsData {
+  defaultFromName: string;
+  defaultFromEmail: string;
+  replyToEmail: string;
+  bccEmail: string;
+  emailSignature: string;
+}
+
+export interface SecuritySettingsData {
+  twoFactorEnabled: boolean;
+  sessionTimeout: string;
+  requirePasswordChange: boolean;
+  passwordExpiryDays: string;
+}
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  lastUsed: string | null;
+  expiresAt: string | null;
+  scopes: string[];
+}
+
+export interface SettingsCategory {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  childCount: number;
+}
+
+export interface TargetsSettingsData {
+  salesTarget: number;
+  leadTarget: number;
+  conversionTarget: number;
+  revenueTarget: number;
+}
+
+export interface SettingsWinLossReason {
+  id: string;
+  label: string;
+  type: 'win' | 'loss';
+  isActive: boolean;
+}
 
 // ============================================================================
 // SYSTEM SETTINGS
@@ -214,6 +390,11 @@ export const customFieldEntityTypeValues = [
 ] as const;
 export const customFieldEntityTypeSchema = z.enum(customFieldEntityTypeValues);
 export type CustomFieldEntityType = z.infer<typeof customFieldEntityTypeSchema>;
+
+/** Audit log entity types for settings/data-exports/documents (used by logAuditEvent) */
+export const auditEntityTypeValues = ['setting', 'export', 'custom_field'] as const;
+export const auditEntityTypeSchema = z.enum(auditEntityTypeValues);
+export type AuditEntityType = z.infer<typeof auditEntityTypeSchema>;
 
 export const customFieldOptionSchema = z.object({
   value: z.string().min(1).max(100),

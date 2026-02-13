@@ -7,7 +7,7 @@
  * @see docs/design-system/FILTER-STANDARDS.md
  */
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import { z } from "zod";
 
 /**
@@ -281,19 +281,10 @@ export function useTransformedFilterUrlState<
   /** Page key name in URL params (default: 'page') */
   pageKey?: string;
 }): UseTransformedFilterUrlStateResult<TFilters> {
-  // Use refs for transform functions to avoid dependency issues
-  // when consumers don't memoize them
-  const fromUrlParamsRef = useRef(fromUrlParams);
-  const toUrlParamsRef = useRef(toUrlParams);
-  fromUrlParamsRef.current = fromUrlParams;
-  toUrlParamsRef.current = toUrlParams;
-
   // Transform URL params to filter state
-  // Only recalculate when currentSearch changes, not when fromUrlParams reference changes
   const filters = useMemo(
-    () => fromUrlParamsRef.current(currentSearch),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentSearch]
+    () => fromUrlParams(currentSearch),
+    [currentSearch, fromUrlParams]
   );
 
   // Update filters handler
@@ -304,7 +295,7 @@ export function useTransformedFilterUrlState<
         (key) => newFilters[key] !== filters[key]
       );
 
-      const urlSearch = toUrlParamsRef.current(newFilters);
+      const urlSearch = toUrlParams(newFilters);
 
       // Reset page to 1 if filter that affects results changed
       if (shouldResetPage) {
@@ -327,17 +318,17 @@ export function useTransformedFilterUrlState<
         search: cleanSearch,
       });
     },
-    [filters, navigate, pageKey, resetPageOnChange]
+    [filters, navigate, pageKey, resetPageOnChange, toUrlParams]
   );
 
   // Reset to defaults
   const resetFilters = useCallback(() => {
-    const urlSearch = toUrlParamsRef.current(defaults);
+    const urlSearch = toUrlParams(defaults);
     navigate({
       to: ".",
       search: urlSearch,
     });
-  }, [navigate, defaults]);
+  }, [navigate, defaults, toUrlParams]);
 
   // Count active filters (excluding pagination and search)
   const { hasActiveFilters, activeFilterCount } = useMemo(() => {

@@ -52,6 +52,7 @@ export interface CountItem {
   countedQuantity: number | null;
   varianceReason?: string;
   countedAt?: Date | null;
+  unitCost?: number;
 }
 
 export interface CountProgress {

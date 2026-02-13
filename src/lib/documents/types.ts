@@ -13,10 +13,23 @@
 // ============================================================================
 
 /**
- * Supported document types
+ * All supported document types for order documents.
+ * Includes both financial (quote, invoice) and operational (packing-slip, delivery-note) types.
  */
-export const DOCUMENT_TYPES = ["quote", "invoice"] as const;
+export const DOCUMENT_TYPES = ["quote", "invoice", "pro-forma", "packing-slip", "delivery-note"] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/**
+ * Financial document types that include pricing information.
+ */
+export const FINANCIAL_DOCUMENT_TYPES = ["quote", "invoice", "pro-forma"] as const;
+export type FinancialDocumentType = (typeof FINANCIAL_DOCUMENT_TYPES)[number];
+
+/**
+ * Operational document types for logistics/shipping.
+ */
+export const OPERATIONAL_DOCUMENT_TYPES = ["packing-slip", "delivery-note"] as const;
+export type OperationalDocumentType = (typeof OPERATIONAL_DOCUMENT_TYPES)[number];
 
 // ============================================================================
 // ADDRESS DATA
@@ -57,6 +70,8 @@ export interface DocumentOrganization {
   address?: DocumentAddress | null;
   branding?: {
     logoUrl?: string | null;
+    /** Pre-fetched logo as data URL; preferred over logoUrl for PDF rendering */
+    logoDataUrl?: string | null;
     primaryColor?: string | null;
     secondaryColor?: string | null;
     websiteUrl?: string | null;
@@ -103,6 +118,8 @@ export interface DocumentLineItem {
   discountPercent?: number | null;
   discountAmount?: number | null;
   taxType?: "gst" | "exempt" | "included" | null;
+  /** Per-line-item tax rate as percentage (e.g., 10 for 10%). Overrides order-level tax rate if provided. */
+  taxRate?: number | null;
   taxAmount?: number | null;
   total: number;
   notes?: string | null;

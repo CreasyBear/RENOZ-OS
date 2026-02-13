@@ -8,13 +8,16 @@
  */
 
 import { memo, useState, useMemo, useCallback } from "react";
-import { Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Collapsible,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { FilterSearchInput } from "./filter-search-input";
 import { FilterSelect } from "./filter-select";
@@ -34,11 +37,13 @@ import { countActiveFilters } from "./types";
 
 /**
  * Render a single filter field based on its config.
+ * @param compact - When true, use label as placeholder instead of above the control (for primary row alignment)
  */
 function renderFilterField<TFilters extends Record<string, unknown>>(
   config: FilterFieldConfig,
   filters: TFilters,
-  onFiltersChange: (filters: TFilters) => void
+  onFiltersChange: (filters: TFilters) => void,
+  compact?: boolean
 ): React.ReactNode {
   const value = filters[config.key as keyof TFilters];
 
@@ -53,8 +58,8 @@ function renderFilterField<TFilters extends Record<string, unknown>>(
           value={value as string | null}
           onChange={updateFilter}
           options={config.options ?? []}
-          placeholder={config.placeholder}
-          label={config.label}
+          placeholder={compact ? (config.placeholder ?? config.label) : config.placeholder}
+          label={compact ? undefined : config.label}
           allLabel={config.allLabel}
           disabled={config.disabled}
         />
@@ -66,8 +71,9 @@ function renderFilterField<TFilters extends Record<string, unknown>>(
           value={(value as string[]) ?? []}
           onChange={updateFilter}
           options={config.options ?? []}
-          placeholder={config.placeholder}
-          label={config.label}
+          placeholder={compact ? (config.placeholder ?? config.label) : config.placeholder}
+          label={compact ? undefined : config.label}
+          maxSelections={config.maxSelections}
           disabled={config.disabled}
         />
       );
@@ -167,6 +173,7 @@ export const DomainFilterBar = memo(function DomainFilterBar<
   showResultCount = true,
   showChips = true,
   showPresets = true,
+  presetsSuffix,
   className,
 }: DomainFilterBarProps<TFilters>) {
   const [advancedOpen, setAdvancedOpen] = useState(defaultAdvancedOpen);
@@ -213,9 +220,9 @@ export const DomainFilterBar = memo(function DomainFilterBar<
   const hasPresets = showPresets && config.presets && config.presets.length > 0;
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* Primary Row: Search + Primary Filters + Advanced Toggle */}
-      <div className="flex flex-col lg:flex-row gap-3">
+    <div className={cn("space-y-3", className)}>
+      {/* Primary Row: Search + Primary Filters + Result Count + Advanced Toggle */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 min-h-10">
         {/* Search Input */}
         {config.search && (
           <div className="flex-1 min-w-[200px]">
@@ -229,96 +236,90 @@ export const DomainFilterBar = memo(function DomainFilterBar<
         )}
 
         {/* Primary Filters */}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {primaryFilters.map((field) => (
             <div key={field.key} className="min-w-[140px]">
-              {renderFilterField(field, filters, onFiltersChange)}
+              {renderFilterField(field, filters, onFiltersChange, true)}
             </div>
           ))}
         </div>
 
         {/* Result Count */}
         {showResultCount && resultCount !== undefined && (
-          <div className="flex items-center">
+          <div className="flex items-center shrink-0">
             <span className="text-sm text-muted-foreground whitespace-nowrap">
               {resultCount.toLocaleString()} result{resultCount !== 1 ? "s" : ""}
             </span>
           </div>
         )}
 
-        {/* Advanced Toggle */}
+        {/* Advanced Filters - Dialog to avoid layout shift */}
         {hasAdvancedFilters && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAdvancedOpen(!advancedOpen)}
-            className="gap-2 shrink-0"
-            aria-label={advancedOpen ? "Close advanced filters" : "Open advanced filters"}
-            aria-expanded={advancedOpen}
-            aria-controls="advanced-filters-panel"
-          >
-            <Filter className="h-4 w-4" />
-            <span className="hidden sm:inline">Filters</span>
-            {activeFilterCount > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                {activeFilterCount}
-              </Badge>
-            )}
-            {advancedOpen ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
+          <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 shrink-0"
+                aria-label="Open advanced filters"
+              >
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filters</span>
+                {activeFilterCount > 0 && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Advanced Filters</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onFiltersChange(defaultFilters)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Clear all
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {advancedFilters.map((field) => (
+                    <div key={field.key}>
+                      {renderFilterField(field, filters, onFiltersChange)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
 
-      {/* Quick Presets */}
-      {hasPresets && (
-        <FilterPresets
-          presets={config.presets!}
-          currentFilters={filters}
-          onApply={handleApplyPreset}
-        />
-      )}
-
-      {/* Advanced Filters Panel */}
-      {hasAdvancedFilters && (
-        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleContent>
-            <div id="advanced-filters-panel" className="pt-2 pb-4 border-t">
-              {/* Header with Clear all button */}
-              <div className="flex items-center justify-between pt-2">
-                <h4 className="text-sm font-medium">Advanced Filters</h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onFiltersChange(defaultFilters)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  Clear all
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-4">
-                {advancedFilters.map((field) => (
-                  <div key={field.key}>
-                    {renderFilterField(field, filters, onFiltersChange)}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
-      {/* Active Filter Chips */}
-      {showChips && (
-        <FilterChipsBar
-          filters={filters}
-          onChange={onFiltersChange}
-          config={config}
-          defaultFilters={defaultFilters}
-        />
+      {/* Presets + Chips + suffix (e.g. Save Current Filters) on one row */}
+      {(hasPresets || showChips || presetsSuffix) && (
+        <div className="flex flex-wrap items-center gap-2 min-h-8">
+          {hasPresets && (
+            <FilterPresets
+              presets={config.presets!}
+              currentFilters={filters}
+              onApply={handleApplyPreset}
+            />
+          )}
+          {showChips && (
+            <FilterChipsBar
+              filters={filters}
+              onChange={onFiltersChange}
+              config={config}
+              defaultFilters={defaultFilters}
+            />
+          )}
+          {presetsSuffix}
+        </div>
       )}
     </div>
   );

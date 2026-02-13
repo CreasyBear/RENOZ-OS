@@ -1,3 +1,4 @@
+
 /**
  * Pipeline Server Functions
  *
@@ -8,7 +9,7 @@
  * filter by organizationId for multi-tenant isolation.
  *
  * Australian B2B Context:
- * - All monetary values in AUD cents
+ * - All monetary values in AUD dollars
  * - 10% GST applied to quotes
  * - Pipeline stages: New (10%) → Qualified (30%) → Proposal (60%) → Negotiation (80%) → Won/Lost
  *
@@ -16,12 +17,15 @@
  * @see drizzle/schema/pipeline.ts for database schema
  */
 
+import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull, ne, or } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull, isNotNull, ne, or, count, sum } from 'drizzle-orm';
 import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
+import { pipelineLogger } from '@/lib/logger';
 import {
   opportunities,
   opportunityActivities,
@@ -29,12 +33,17 @@ import {
   winLossReasons,
   customers,
   contacts,
+  quotes,
 } from 'drizzle/schema';
+import { createOrder } from '@/server/functions/orders/orders';
+import type { CreateOrder } from '@/lib/schemas/orders';
+import type { QuoteLineItem } from '@/lib/schemas/pipeline';
 import {
   createOpportunitySchema,
   updateOpportunitySchema,
   updateOpportunityStageSchema,
   opportunityListQuerySchema,
+  opportunityCursorQuerySchema,
   opportunityParamsSchema,
   pipelineMetricsQuerySchema,
   STAGE_PROBABILITY_DEFAULTS,
@@ -43,9 +52,13 @@ import {
   opportunityActivityParamsSchema,
   type OpportunityStage,
   paginationSchema,
+  percentageSchema,
 } from '@/lib/schemas';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { opportunityStageSchema } from '@/lib/schemas/pipeline';
 import { withAuth } from '@/lib/server/protected';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/server/errors';
+import { verifyCustomerExists } from '@/server/functions/_shared/entity-verification';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
@@ -53,6 +66,28 @@ import { computeChanges } from '@/lib/activity-logger';
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/** Normalize opportunity row: ensure date fields are Date | null at boundary (SCHEMA-TRACE §8) */
+function normalizeOpportunityRow<
+  T extends {
+    expectedCloseDate?: Date | string | null;
+    actualCloseDate?: Date | string | null;
+    followUpDate?: Date | string | null;
+  },
+>(row: T): T & { expectedCloseDate: Date | null; actualCloseDate: Date | null; followUpDate: Date | null } {
+  return {
+    ...row,
+    expectedCloseDate: row.expectedCloseDate ? new Date(row.expectedCloseDate) : null,
+    actualCloseDate: row.actualCloseDate ? new Date(row.actualCloseDate) : null,
+    followUpDate: row.followUpDate ? new Date(row.followUpDate) : null,
+  };
+}
+
+/** Maximum follow-ups returned by getUpcomingFollowUps */
+const MAX_FOLLOW_UPS = 1000;
+
+/** Maximum activity timeline items returned by getActivityTimeline */
+const MAX_ACTIVITY_TIMELINE_ITEMS = 500;
 
 /**
  * Fields to exclude from activity change tracking (system-managed)
@@ -66,6 +101,75 @@ const OPPORTUNITY_EXCLUDED_FIELDS: string[] = [
   'actualCloseDate',
 ];
 
+// ============================================================================
+// QUERY BUILDERS (DRY: Shared where clause patterns)
+// ============================================================================
+
+/**
+ * Build base where clause for opportunity queries.
+ * ALWAYS includes organizationId and deletedAt filters for security.
+ */
+function buildOpportunityBaseWhere(organizationId: string) {
+  return and(
+    eq(opportunities.organizationId, organizationId),
+    isNull(opportunities.deletedAt)
+  )!;
+}
+
+/**
+ * Build where clause for opportunity by ID.
+ * Includes organizationId and deletedAt filters.
+ */
+function buildOpportunityByIdWhere(id: string, organizationId: string) {
+  return and(
+    eq(opportunities.id, id),
+    eq(opportunities.organizationId, organizationId),
+    isNull(opportunities.deletedAt)
+  )!;
+}
+
+/**
+ * Build where clause for opportunity activities.
+ * Includes organizationId filter.
+ */
+function buildActivityBaseWhere(organizationId: string) {
+  return eq(opportunityActivities.organizationId, organizationId);
+}
+
+/**
+ * Build where clause for activity by ID.
+ * Includes organizationId filter.
+ */
+function buildActivityByIdWhere(id: string, organizationId: string) {
+  return and(
+    eq(opportunityActivities.id, id),
+    eq(opportunityActivities.organizationId, organizationId)
+  )!;
+}
+
+/**
+ * Build where clause for quote by ID.
+ * Includes organizationId and deletedAt filters.
+ */
+function buildQuoteByIdWhere(id: string, organizationId: string) {
+  return and(
+    eq(quotes.id, id),
+    eq(quotes.organizationId, organizationId),
+    isNull(quotes.deletedAt)
+  )!;
+}
+
+/**
+ * Build where clause for customer JOIN with security filters.
+ * Ensures multi-tenant isolation in JOINs.
+ */
+function buildCustomerJoinWhere(organizationId: string) {
+  return and(
+    eq(customers.organizationId, organizationId),
+    isNull(customers.deletedAt)
+  )!;
+}
+
 /**
  * Calculate weighted value: value * probability / 100
  */
@@ -75,10 +179,158 @@ function calculateWeightedValue(value: number, probability: number | null): numb
 }
 
 /**
+ * Type-safe stage update data.
+ * Ensures type safety instead of using Record<string, unknown>.
+ */
+type StageUpdateData = {
+  stage: OpportunityStage;
+  probability: number;
+  weightedValue: number;
+  updatedBy: string;
+  actualCloseDate?: string;
+  daysInStage?: number;
+  winLossReasonId?: string;
+  lostNotes?: string;
+  competitorName?: string;
+};
+
+/**
+ * Prepare stage update data object.
+ * Centralized logic for stage changes to avoid DRY violations.
+ * Returns properly typed object instead of Record<string, unknown>.
+ */
+function prepareStageUpdateData(params: {
+  stage: OpportunityStage;
+  probability: number;
+  value: number;
+  currentStage: OpportunityStage;
+  updatedBy: string;
+  winLossReasonId?: string;
+  lostNotes?: string;
+  competitorName?: string;
+}): StageUpdateData {
+  const { stage, probability, value, currentStage, updatedBy, winLossReasonId, lostNotes, competitorName } = params;
+  
+  const weightedValue = calculateWeightedValue(value, probability);
+  
+  const updateData: StageUpdateData = {
+    stage,
+    probability,
+    weightedValue,
+    updatedBy,
+  };
+
+  // Set actual close date for won/lost
+  if (stage === 'won' || stage === 'lost') {
+    updateData.actualCloseDate = new Date().toISOString().split('T')[0];
+  }
+
+  // Reset days in stage if stage changed
+  if (currentStage !== stage) {
+    updateData.daysInStage = 0;
+  }
+
+  // Set win/loss specific fields
+  if (winLossReasonId !== undefined) {
+    updateData.winLossReasonId = winLossReasonId;
+  }
+  if (lostNotes !== undefined) {
+    updateData.lostNotes = lostNotes;
+  }
+  if (competitorName !== undefined) {
+    updateData.competitorName = competitorName;
+  }
+
+  return updateData;
+}
+
+/**
+ * Log stage change activity.
+ * Centralized activity logging for stage changes.
+ */
+async function logStageChangeActivity(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  params: {
+    organizationId: string;
+    opportunityId: string;
+    previousStage: OpportunityStage;
+    newStage: OpportunityStage;
+    createdBy: string;
+    isBulk?: boolean;
+  }
+): Promise<void> {
+  const { organizationId, opportunityId, previousStage, newStage, createdBy, isBulk = false } = params;
+  
+  await tx.insert(opportunityActivities).values({
+    organizationId,
+    opportunityId,
+    type: 'note',
+    description: isBulk
+      ? `Bulk stage change: ${previousStage} → ${newStage}`
+      : `Stage changed from ${previousStage} to ${newStage}`,
+    createdBy,
+  });
+}
+
+/**
  * Get default probability for a stage
  */
 function getDefaultProbability(stage: OpportunityStage): number {
   return STAGE_PROBABILITY_DEFAULTS[stage] ?? 10;
+}
+
+/**
+ * Calculate conversion metrics from won/lost counts and values.
+ * DRY helper to avoid repeating the same calculation pattern.
+ * Accepts number | null (from Drizzle aggregates) and handles nulls properly.
+ */
+function calculateConversionMetrics(row: {
+  wonCount: number | null;
+  lostCount: number | null;
+  wonValue: number | null;
+  lostValue: number | null;
+}): {
+  wonCount: number;
+  lostCount: number;
+  wonValue: number;
+  lostValue: number;
+  conversionRate: number;
+} {
+  const wonCount = row.wonCount ?? 0;
+  const lostCount = row.lostCount ?? 0;
+  const total = wonCount + lostCount;
+  return {
+    wonCount,
+    lostCount,
+    wonValue: row.wonValue ?? 0,
+    lostValue: row.lostValue ?? 0,
+    conversionRate: total > 0 ? Math.round((wonCount / total) * 100) : 0,
+  };
+}
+
+// ============================================================================
+// STAGE TRANSITION VALIDATION (Business Rules)
+// ============================================================================
+
+/**
+ * Valid stage transitions for opportunity workflow.
+ * Based on PRD: New (10%) → Qualified (30%) → Proposal (60%) → Negotiation (80%) → Won/Lost
+ */
+const STAGE_TRANSITIONS: Record<OpportunityStage, OpportunityStage[]> = {
+  new: ['qualified', 'won', 'lost'],
+  qualified: ['proposal', 'won', 'lost'],
+  proposal: ['negotiation', 'won', 'lost'],
+  negotiation: ['won', 'lost'],
+  won: [], // Terminal state - cannot transition from won
+  lost: [], // Terminal state - cannot transition from lost
+};
+
+/**
+ * Validate stage transition is allowed.
+ * Prevents invalid business logic transitions (e.g., won → new).
+ */
+function validateStageTransition(current: OpportunityStage, next: OpportunityStage): boolean {
+  return STAGE_TRANSITIONS[current]?.includes(next) ?? false;
 }
 
 // ============================================================================
@@ -112,11 +364,9 @@ export const listOpportunities = createServerFn({ method: 'GET' })
       includeWonLost,
     } = data;
 
-    // Build where conditions - ALWAYS include organizationId for isolation
-    const conditions = [
-      eq(opportunities.organizationId, ctx.organizationId),
-      isNull(opportunities.deletedAt),
-    ];
+    // Build base where conditions using shared helper
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [];
 
     // Exclude won/lost by default unless includeWonLost is true
     if (!includeWonLost) {
@@ -161,14 +411,19 @@ export const listOpportunities = createServerFn({ method: 'GET' })
       );
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = and(baseWhere, ...conditions);
 
     // Get total count
     const countResult = await db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: count() })
       .from(opportunities)
       .where(whereClause);
-    const totalItems = Number(countResult[0]?.count ?? 0);
+    
+    // Validate count result exists
+    if (!countResult[0]) {
+      throw new Error('Failed to fetch opportunity count');
+    }
+    const totalItems = countResult[0].count ?? 0;
 
     // Get paginated results
     const offset = (page - 1) * pageSize;
@@ -184,7 +439,7 @@ export const listOpportunities = createServerFn({ method: 'GET' })
               : opportunities.createdAt;
     const orderDirection = sortOrder === 'asc' ? asc : desc;
 
-    const items = await db
+    const rawItems = await db
       .select()
       .from(opportunities)
       .where(whereClause)
@@ -192,18 +447,27 @@ export const listOpportunities = createServerFn({ method: 'GET' })
       .limit(pageSize)
       .offset(offset);
 
-    // Calculate metrics for current filter
+    const items = rawItems.map(normalizeOpportunityRow);
+
+    // Calculate metrics for current filter using Drizzle aggregates
     const metricsResult = await db
       .select({
-        totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-        weightedValue: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
+        totalValue: sum(opportunities.value),
+        weightedValue: sum(opportunities.weightedValue),
       })
       .from(opportunities)
       .where(whereClause);
 
+    // Validate metrics result exists
+    if (!metricsResult[0]) {
+      throw new Error('Failed to fetch opportunity metrics');
+    }
+    // Drizzle's sum() returns number | null, ensure we convert to number safely
+    const totalValueRaw = metricsResult[0].totalValue;
+    const weightedValueRaw = metricsResult[0].weightedValue;
     const metrics = {
-      totalValue: Number(metricsResult[0]?.totalValue ?? 0),
-      weightedValue: Number(metricsResult[0]?.weightedValue ?? 0),
+      totalValue: typeof totalValueRaw === 'number' ? totalValueRaw : Number(totalValueRaw) || 0,
+      weightedValue: typeof weightedValueRaw === 'number' ? weightedValueRaw : Number(weightedValueRaw) || 0,
     };
 
     return {
@@ -218,90 +482,202 @@ export const listOpportunities = createServerFn({ method: 'GET' })
     };
   });
 
+/**
+ * List opportunities with cursor pagination (recommended for large datasets).
+ */
+export const listOpportunitiesCursor = createServerFn({ method: 'GET' })
+  .inputValidator(opportunityCursorQuerySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+
+    const {
+      cursor,
+      pageSize = 20,
+      sortOrder = 'desc',
+      search,
+      stage,
+      stages,
+      customerId,
+      assignedTo,
+      minValue,
+      maxValue,
+      minProbability,
+      maxProbability,
+      expectedCloseDateFrom,
+      expectedCloseDateTo,
+      includeWonLost,
+    } = data;
+
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [];
+
+    if (!includeWonLost) {
+      conditions.push(and(ne(opportunities.stage, 'won'), ne(opportunities.stage, 'lost'))!);
+    }
+    if (search) conditions.push(ilike(opportunities.title, containsPattern(search)));
+    if (stage) conditions.push(eq(opportunities.stage, stage));
+    if (stages?.length) conditions.push(inArray(opportunities.stage, stages));
+    if (customerId) conditions.push(eq(opportunities.customerId, customerId));
+    if (assignedTo) conditions.push(eq(opportunities.assignedTo, assignedTo));
+    if (minValue !== undefined) conditions.push(gte(opportunities.value, minValue));
+    if (maxValue !== undefined) conditions.push(lte(opportunities.value, maxValue));
+    if (minProbability !== undefined) conditions.push(gte(opportunities.probability, minProbability));
+    if (maxProbability !== undefined) conditions.push(lte(opportunities.probability, maxProbability));
+    if (expectedCloseDateFrom) {
+      conditions.push(
+        gte(opportunities.expectedCloseDate, expectedCloseDateFrom.toISOString().split('T')[0])
+      );
+    }
+    if (expectedCloseDateTo) {
+      conditions.push(
+        lte(opportunities.expectedCloseDate, expectedCloseDateTo.toISOString().split('T')[0])
+      );
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(opportunities.createdAt, opportunities.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const whereClause = and(baseWhere, ...conditions);
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const rawItems = await db
+      .select()
+      .from(opportunities)
+      .where(whereClause)
+      .orderBy(orderDir(opportunities.createdAt), orderDir(opportunities.id))
+      .limit(pageSize + 1);
+
+    const items = rawItems.map(normalizeOpportunityRow);
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
 // ============================================================================
 // GET OPPORTUNITY
 // ============================================================================
 
 /**
+ * Cached data fetcher for getOpportunity.
+ * React.cache deduplicates multiple calls with same (id, organizationId) within a request.
+ */
+const _getOpportunityCached = cache(
+  async (id: string, organizationId: string) => {
+    const [opportunity] = await db
+      .select()
+      .from(opportunities)
+      .where(buildOpportunityByIdWhere(id, organizationId))
+      .limit(1);
+
+    if (!opportunity) return null;
+
+    const [
+      customerResult,
+      activities,
+      versions,
+      contactResult,
+      winLossReasonResult,
+    ] = await Promise.all([
+      // Customer (required) - MUST include organizationId filter
+      db
+        .select()
+        .from(customers)
+        .where(
+          and(
+            eq(customers.id, opportunity.customerId),
+            eq(customers.organizationId, organizationId),
+            isNull(customers.deletedAt)
+          )
+        )
+        .limit(1),
+      
+      // Activities (limited to prevent large payloads) - MUST include organizationId filter
+      db
+        .select()
+        .from(opportunityActivities)
+        .where(
+          and(
+            eq(opportunityActivities.opportunityId, id),
+            eq(opportunityActivities.organizationId, organizationId)
+          )
+        )
+        .orderBy(desc(opportunityActivities.createdAt))
+        .limit(50),
+      
+      // Quote versions - MUST include organizationId filter
+      db
+        .select()
+        .from(quoteVersions)
+        .where(
+          and(
+            eq(quoteVersions.opportunityId, id),
+            eq(quoteVersions.organizationId, organizationId)
+          )
+        )
+        .orderBy(desc(quoteVersions.versionNumber))
+        .limit(20),
+      
+      // Contact (conditional) - MUST include organizationId filter
+      opportunity.contactId
+        ? db
+            .select()
+            .from(contacts)
+            .where(
+              and(
+                eq(contacts.id, opportunity.contactId),
+                eq(contacts.organizationId, organizationId)
+              )
+            )
+            .limit(1)
+            .then(r => r[0] ?? null)
+        : Promise.resolve(null),
+      
+      // Win/loss reason (conditional) - MUST include organizationId filter
+      opportunity.winLossReasonId
+        ? db
+            .select()
+            .from(winLossReasons)
+            .where(
+              and(
+                eq(winLossReasons.id, opportunity.winLossReasonId),
+                eq(winLossReasons.organizationId, organizationId)
+              )
+            )
+            .limit(1)
+            .then(r => r[0] ?? null)
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      opportunity: normalizeOpportunityRow(opportunity),
+      customer: customerResult[0] ?? null,
+      contact: contactResult,
+      activities,
+      versions,
+      winLossReason: winLossReasonResult,
+    };
+  }
+);
+
+/**
  * Get a single opportunity with full details including customer, contact, activities, and quote versions
+ * 
+ * PERFORMANCE: Uses React.cache for request deduplication; Promise.all for parallel query execution.
  */
 export const getOpportunity = createServerFn({ method: 'GET' })
   .inputValidator(opportunityParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
-
-    const { id } = data;
-
-    // Get opportunity with organization check
-    const opportunity = await db
-      .select()
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, id),
-          eq(opportunities.organizationId, ctx.organizationId),
-          isNull(opportunities.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!opportunity[0]) {
+    const result = await _getOpportunityCached(data.id, ctx.organizationId);
+    if (!result) {
+      setResponseStatus(404);
       throw new NotFoundError('Opportunity not found', 'opportunity');
     }
-
-    // Get customer
-    const customer = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.id, opportunity[0].customerId))
-      .limit(1);
-
-    // Get contact if exists
-    let contact = null;
-    if (opportunity[0].contactId) {
-      const contactResult = await db
-        .select()
-        .from(contacts)
-        .where(eq(contacts.id, opportunity[0].contactId))
-        .limit(1);
-      contact = contactResult[0] ?? null;
-    }
-
-    // Get activities
-    const activities = await db
-      .select()
-      .from(opportunityActivities)
-      .where(eq(opportunityActivities.opportunityId, id))
-      .orderBy(desc(opportunityActivities.createdAt))
-      .limit(50);
-
-    // Get quote versions
-    const versions = await db
-      .select()
-      .from(quoteVersions)
-      .where(eq(quoteVersions.opportunityId, id))
-      .orderBy(desc(quoteVersions.versionNumber))
-      .limit(20);
-
-    // Get win/loss reason if applicable
-    let winLossReason = null;
-    if (opportunity[0].winLossReasonId) {
-      const reasonResult = await db
-        .select()
-        .from(winLossReasons)
-        .where(eq(winLossReasons.id, opportunity[0].winLossReasonId))
-        .limit(1);
-      winLossReason = reasonResult[0] ?? null;
-    }
-
-    return {
-      opportunity: opportunity[0],
-      customer: customer[0] ?? null,
-      contact,
-      activities,
-      versions,
-      winLossReason,
-    };
+    return result;
   });
 
 // ============================================================================
@@ -332,6 +708,11 @@ export const createOpportunity = createServerFn({ method: 'POST' })
       metadata,
       tags,
     } = data;
+
+    // Validate customer exists and belongs to organization
+    await verifyCustomerExists(customerId, ctx.organizationId, {
+      message: 'Customer does not exist or is not accessible',
+    });
 
     // Use default probability for stage if not provided
     const actualProbability = probability ?? getDefaultProbability(stage);
@@ -376,7 +757,7 @@ export const createOpportunity = createServerFn({ method: 'POST' })
         tx
       );
 
-      return result[0];
+      return result[0] ?? null;
     });
 
     // Log opportunity creation
@@ -393,7 +774,7 @@ export const createOpportunity = createServerFn({ method: 'POST' })
       metadata: {
         value: created.value,
         stage: created.stage,
-        probability: created.probability,
+        probability: created.probability ?? undefined,
         customerId: created.customerId,
       },
     });
@@ -418,17 +799,16 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
 
     const { id, version, ...updates } = data;
 
-    // Get current opportunity (for change tracking)
+    // Require version for optimistic locking — prevents stale-data overwrites
+    if (version === undefined) {
+      throw new ValidationError('Version is required for optimistic locking. Please refresh and try again.');
+    }
+
+    // Get current opportunity (for change tracking) using shared helper
     const current = await db
       .select()
       .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, id),
-          eq(opportunities.organizationId, ctx.organizationId),
-          isNull(opportunities.deletedAt)
-        )
-      )
+      .where(buildOpportunityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
     if (!current[0]) {
@@ -444,7 +824,13 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
 
     if (updates.title !== undefined) updateData.title = updates.title;
     if (updates.description !== undefined) updateData.description = updates.description;
-    if (updates.customerId !== undefined) updateData.customerId = updates.customerId;
+    if (updates.customerId !== undefined) {
+      // Validate customer exists before updating
+      await verifyCustomerExists(updates.customerId, ctx.organizationId, {
+        message: 'Customer does not exist or is not accessible',
+      });
+      updateData.customerId = updates.customerId;
+    }
     if (updates.contactId !== undefined) updateData.contactId = updates.contactId;
     if (updates.assignedTo !== undefined) updateData.assignedTo = updates.assignedTo;
     if (updates.value !== undefined) {
@@ -476,8 +862,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(opportunities.id, id),
-            // Only check version if provided (optimistic locking)
-            version !== undefined ? eq(opportunities.version, version) : sql`true`
+            eq(opportunities.version, version)
           )
         )
         .returning();
@@ -504,7 +889,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
         tx
       );
 
-      return result[0];
+      return result[0] ?? null;
     });
 
     // Log opportunity update
@@ -547,17 +932,16 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
 
     const { id, stage, probability, winLossReasonId, lostNotes, competitorName, version } = data;
 
-    // Get current opportunity
+    // Require version for optimistic locking — prevents stale-data overwrites
+    if (version === undefined) {
+      throw new ValidationError('Version is required for optimistic locking. Please refresh and try again.');
+    }
+
+    // Get current opportunity using shared helper
     const current = await db
       .select()
       .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, id),
-          eq(opportunities.organizationId, ctx.organizationId),
-          isNull(opportunities.deletedAt)
-        )
-      )
+      .where(buildOpportunityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
     if (!current[0]) {
@@ -567,6 +951,13 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
     const before = current[0];
     const previousStage = before.stage;
 
+    // Validate stage transition is allowed (business rule)
+    if (!validateStageTransition(previousStage, stage)) {
+      throw new ValidationError('Invalid stage transition', {
+        stage: [`Cannot transition from '${previousStage}' to '${stage}'. Valid transitions: ${STAGE_TRANSITIONS[previousStage]?.join(', ') || 'none'}`],
+      });
+    }
+
     // Validate win/loss reason for closed stages
     if ((stage === 'won' || stage === 'lost') && !winLossReasonId) {
       // Allow closing without reason, but validate if provided
@@ -574,36 +965,18 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
 
     // Use default probability for new stage if not provided
     const actualProbability = probability ?? getDefaultProbability(stage);
-    const weightedValue = calculateWeightedValue(current[0].value, actualProbability);
 
-    // Prepare update data (version will be incremented atomically in SQL)
-    const updateData: Record<string, unknown> = {
+    // Prepare update data using shared helper
+    const updateData = prepareStageUpdateData({
       stage,
       probability: actualProbability,
-      weightedValue,
+      value: current[0].value,
+      currentStage: before.stage,
       updatedBy: ctx.user.id,
-    };
-
-    // Set actual close date for won/lost
-    if (stage === 'won' || stage === 'lost') {
-      updateData.actualCloseDate = new Date().toISOString().split('T')[0];
-    }
-
-    // Reset days in stage if stage changed
-    if (current[0].stage !== stage) {
-      updateData.daysInStage = 0;
-    }
-
-    // Set win/loss specific fields
-    if (winLossReasonId !== undefined) {
-      updateData.winLossReasonId = winLossReasonId;
-    }
-    if (lostNotes !== undefined) {
-      updateData.lostNotes = lostNotes;
-    }
-    if (competitorName !== undefined) {
-      updateData.competitorName = competitorName;
-    }
+      winLossReasonId,
+      lostNotes,
+      competitorName,
+    });
 
     // Wrap update and activity log in transaction for atomicity
     const result = await db.transaction(async (tx) => {
@@ -617,8 +990,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(opportunities.id, id),
-            // Only check version if provided (optimistic locking)
-            version !== undefined ? eq(opportunities.version, version) : sql`true`
+            eq(opportunities.version, version)
           )
         )
         .returning();
@@ -631,15 +1003,15 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
       }
 
       // Log stage change activity within same transaction
-      await tx.insert(opportunityActivities).values({
+      await logStageChangeActivity(tx, {
         organizationId: ctx.organizationId,
         opportunityId: id,
-        type: 'note',
-        description: `Stage changed from ${current[0].stage} to ${stage}`,
+        previousStage: before.stage,
+        newStage: stage,
         createdBy: ctx.user.id,
       });
 
-      return updateResult[0];
+      return updateResult[0] ?? null;
     });
 
     // Log stage change to audit trail
@@ -656,13 +1028,200 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
       metadata: {
         previousStage,
         newStage: result.stage,
-        probability: result.probability,
-        winLossReasonId: winLossReasonId ?? null,
+        probability: result.probability ?? undefined,
       },
     });
 
     return { opportunity: result };
   });
+
+// ============================================================================
+// BULK UPDATE OPPORTUNITY STAGE
+// ============================================================================
+
+/**
+ * Bulk update opportunity stages.
+ * Updates multiple opportunities to a new stage in a single transaction.
+ * Returns count of successful updates and list of failed opportunity IDs.
+ */
+export const bulkUpdateOpportunityStage = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      opportunityIds: z.array(z.string().uuid()).min(1),
+      stage: opportunityStageSchema,
+      probability: percentageSchema.optional(),
+      winLossReasonId: z.string().uuid().optional(),
+      lostNotes: z.string().max(2000).optional(),
+      competitorName: z.string().max(100).optional(),
+    })
+  )
+  .handler(
+    async ({
+      data: { opportunityIds, stage, probability, winLossReasonId, lostNotes, competitorName },
+    }): Promise<{ updated: number; failed: string[] }> => {
+      const ctx = await withAuth({
+        permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      });
+      const logger = createActivityLoggerWithContext(ctx);
+
+      if (opportunityIds.length === 0) {
+        throw new ValidationError('No opportunity IDs provided', {
+          opportunityIds: ['At least one opportunity ID is required'],
+        });
+      }
+
+      const updated: string[] = [];
+      const failed: string[] = [];
+
+      // PERFORMANCE: Batch fetch all opportunities in a single query instead of N queries
+      const existingOpportunities = await db
+        .select()
+        .from(opportunities)
+        .where(
+          and(
+            buildOpportunityBaseWhere(ctx.organizationId),
+            inArray(opportunities.id, opportunityIds)
+          )
+        );
+
+      // Create lookup map for O(1) access
+      const opportunityMap = new Map(existingOpportunities.map(o => [o.id, o]));
+
+      // Use default probability for new stage if not provided
+      const actualProbability = probability ?? getDefaultProbability(stage);
+
+      // Track opportunities that passed validation (store version for optimistic locking)
+      const validUpdates: Array<{
+        opportunity: typeof existingOpportunities[0];
+        version: number;
+      }> = [];
+
+      // Validate all opportunities first (in memory, no DB queries)
+      for (const opportunityId of opportunityIds) {
+        const existing = opportunityMap.get(opportunityId);
+
+        if (!existing) {
+          failed.push(`${opportunityId}: Opportunity not found`);
+          continue;
+        }
+
+        // Validate stage transition is allowed (business rule)
+        if (!validateStageTransition(existing.stage, stage)) {
+          failed.push(
+            `${opportunityId}: Invalid transition from '${existing.stage}' to '${stage}'. Valid transitions: ${STAGE_TRANSITIONS[existing.stage]?.join(', ') || 'none'}`
+          );
+          continue;
+        }
+
+        // Validate win/loss reason for closed stages
+        if ((stage === 'won' || stage === 'lost') && !winLossReasonId) {
+          // Allow closing without reason, but log warning
+        }
+
+        validUpdates.push({ 
+          opportunity: existing,
+          version: existing.version ?? 1, // Store version for optimistic locking
+        });
+      }
+
+      // Process valid updates in a transaction for atomicity
+      // NOTE: We use N queries in a loop because each row requires optimistic locking (version check).
+      // This is necessary for data integrity but means we can't batch into a single UPDATE.
+      // For large batches (100+), consider implementing a batch update pattern with CASE statements.
+      if (validUpdates.length > 0) {
+        await db.transaction(async (tx) => {
+          for (const { opportunity: existing, version } of validUpdates) {
+            try {
+              // Prepare update data using shared helper
+              const updateData = prepareStageUpdateData({
+                stage,
+                probability: actualProbability,
+                value: existing.value,
+                currentStage: existing.stage,
+                updatedBy: ctx.user.id,
+                winLossReasonId,
+                lostNotes,
+                competitorName,
+              });
+
+              // Atomic optimistic locking: version check in WHERE clause + increment in SET
+              const updateResult = await tx
+                .update(opportunities)
+                .set({
+                  ...updateData,
+                  version: sql`${opportunities.version} + 1`,
+                })
+                .where(
+                  and(
+                    eq(opportunities.id, existing.id),
+                    eq(opportunities.organizationId, ctx.organizationId),
+                    eq(opportunities.version, version), // Optimistic lock: only update if version matches
+                    isNull(opportunities.deletedAt)
+                  )
+                )
+                .returning();
+
+              if (updateResult.length > 0) {
+                updated.push(existing.id);
+              } else {
+                const errorMsg = `Update failed (concurrent modification - version mismatch)`;
+                failed.push(`${existing.id}: ${errorMsg}`);
+                // Log version mismatch for observability (use logger for errors, not activity log)
+                pipelineLogger.error('[Bulk Update] Version mismatch', undefined, {
+                  opportunityId: existing.id,
+                  expectedVersion: version,
+                  stage,
+                  organizationId: ctx.organizationId,
+                });
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              const errorStack = error instanceof Error ? error.stack : undefined;
+              failed.push(`${existing.id}: ${errorMessage}`);
+              
+              // Log error with full context for debugging
+              pipelineLogger.error('[Bulk Update] Exception', error, {
+                opportunityId: existing.id,
+                error: errorMessage,
+                stack: errorStack,
+                stage,
+                organizationId: ctx.organizationId,
+              });
+            }
+          }
+
+          // Log single bulk activity record (not per-opportunity)
+          if (updated.length > 0) {
+            await tx.insert(opportunityActivities).values({
+              organizationId: ctx.organizationId,
+              opportunityId: updated[0], // Use first ID as representative
+              type: 'note',
+              description: `Bulk stage change: ${updated.length} opportunity${updated.length !== 1 ? 'ies' : ''} updated to ${stage}`,
+              createdBy: ctx.user.id,
+            });
+          }
+        });
+
+        // Log bulk operation to audit trail with structured metadata
+        if (updated.length > 0) {
+          logger.logAsync({
+            action: 'updated',
+            entityType: 'opportunity',
+            entityId: updated[0], // Use first updated ID as representative
+            description: `Bulk stage change: ${updated.length} opportunity${updated.length !== 1 ? 'ies' : ''} updated to ${stage}`,
+            metadata: {
+              stage,
+              previousStage: validUpdates[0]?.opportunity.stage,
+              newStage: stage,
+              recordCount: updated.length, // Use recordCount for bulk operations
+            },
+          });
+        }
+      }
+
+      return { updated: updated.length, failed };
+    }
+  );
 
 // ============================================================================
 // DELETE OPPORTUNITY (Soft Delete)
@@ -707,7 +1266,12 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
           deletedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(opportunities.id, id));
+        .where(
+          and(
+            eq(opportunities.id, id),
+            eq(opportunities.organizationId, ctx.organizationId)
+          )
+        );
 
       await enqueueSearchIndexOutbox(
         {
@@ -754,11 +1318,9 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
 
     const { dateFrom, dateTo, assignedTo, customerId } = data;
 
-    // Build base conditions
-    const conditions = [
-      eq(opportunities.organizationId, ctx.organizationId),
-      isNull(opportunities.deletedAt),
-    ];
+    // Build base conditions using shared helper
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [];
 
     if (dateFrom) {
       conditions.push(gte(opportunities.createdAt, new Date(dateFrom)));
@@ -773,14 +1335,14 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
       conditions.push(eq(opportunities.customerId, customerId));
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = and(baseWhere, ...conditions);
 
     // Get totals
     const totalsResult = await db
       .select({
-        totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-        weightedValue: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
-        count: sql<number>`COUNT(*)`,
+        totalValue: sum(opportunities.value),
+        weightedValue: sum(opportunities.weightedValue),
+        count: count(),
       })
       .from(opportunities)
       .where(whereClause);
@@ -789,9 +1351,9 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
     const byStageResult = await db
       .select({
         stage: opportunities.stage,
-        count: sql<number>`COUNT(*)`,
-        value: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-        weightedValue: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
+        count: count(),
+        value: sum(opportunities.value),
+        weightedValue: sum(opportunities.weightedValue),
         avgDaysInStage: sql<number>`COALESCE(AVG(${opportunities.daysInStage}), 0)`,
       })
       .from(opportunities)
@@ -799,16 +1361,23 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
       .groupBy(opportunities.stage);
 
     // Build byStage and avgDaysInStage objects
+    // Note: Drizzle's count() and sum() return number | null, so we handle nulls explicitly
     const byStage: Record<string, { count: number; value: number; weightedValue: number }> = {};
     const avgDaysInStage: Record<string, number> = {};
 
     for (const row of byStageResult) {
+      // Drizzle's sum() returns number | null, but can be string for very large numbers
+      // Ensure we convert to number safely
+      const count = typeof row.count === 'number' ? row.count : Number(row.count) || 0;
+      const value = typeof row.value === 'number' ? row.value : Number(row.value) || 0;
+      const weightedValue = typeof row.weightedValue === 'number' ? row.weightedValue : Number(row.weightedValue) || 0;
+      
       byStage[row.stage] = {
-        count: Number(row.count),
-        value: Number(row.value),
-        weightedValue: Number(row.weightedValue),
+        count,
+        value,
+        weightedValue,
       };
-      avgDaysInStage[row.stage] = Math.round(Number(row.avgDaysInStage));
+      avgDaysInStage[row.stage] = Math.round(row.avgDaysInStage ?? 0);
     }
 
     // Calculate conversion rate (won / (won + lost))
@@ -817,10 +1386,20 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
     const totalClosed = wonCount + lostCount;
     const conversionRate = totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 0;
 
+    // Validate totals result exists
+    if (!totalsResult[0]) {
+      throw new Error('Failed to fetch pipeline metrics totals');
+    }
+
+    // Drizzle's sum() returns number | null, ensure we convert to number safely
+    const totalValueRaw = totalsResult[0].totalValue;
+    const weightedValueRaw = totalsResult[0].weightedValue;
+    const countRaw = totalsResult[0].count;
+    
     return {
-      totalValue: Number(totalsResult[0]?.totalValue ?? 0),
-      weightedValue: Number(totalsResult[0]?.weightedValue ?? 0),
-      opportunityCount: Number(totalsResult[0]?.count ?? 0),
+      totalValue: typeof totalValueRaw === 'number' ? totalValueRaw : Number(totalValueRaw) || 0,
+      weightedValue: typeof weightedValueRaw === 'number' ? weightedValueRaw : Number(weightedValueRaw) || 0,
+      opportunityCount: typeof countRaw === 'number' ? countRaw : Number(countRaw) || 0,
       byStage,
       avgDaysInStage,
       conversionRate,
@@ -832,8 +1411,52 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
 // ============================================================================
 
 /**
+ * Map quote line items to CreateOrder line items.
+ * Uses latest quote version. Generates lineNumber as "1", "2", ...
+ */
+function quoteToOrderPayload(
+  opportunity: { id: string; customerId: string | null },
+  items: QuoteLineItem[]
+): CreateOrder {
+  if (!opportunity.customerId) {
+    throw new ValidationError('Opportunity must have a customer to convert to order');
+  }
+  if (items.length === 0) {
+    throw new ValidationError('Quote must have at least one line item to convert');
+  }
+
+  const lineItems = items.map((item, index) => {
+    if (!item.description || item.quantity == null || item.unitPrice == null) {
+      throw new ValidationError(
+        `Quote line item ${index + 1} missing required fields (description, quantity, unitPrice)`
+      );
+    }
+    return {
+      lineNumber: (index + 1).toString(),
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      productId: item.productId,
+      sku: item.sku,
+      discountPercent: item.discountPercent,
+      taxType: 'gst' as const,
+    };
+  });
+
+  return {
+    customerId: opportunity.customerId,
+    status: 'draft',
+    paymentStatus: 'pending',
+    shippingAmount: 0,
+    metadata: { externalRef: `opportunity:${opportunity.id}` },
+    lineItems,
+  };
+}
+
+/**
  * Convert a won opportunity to an order
- * Note: Full implementation depends on Orders domain
+ *
+ * Uses latest quote version. Maps quote line items to order line items.
  */
 export const convertToOrder = createServerFn({ method: 'POST' })
   .inputValidator(opportunityParamsSchema)
@@ -845,39 +1468,60 @@ export const convertToOrder = createServerFn({ method: 'POST' })
     const { id } = data;
 
     // Get opportunity
-    const opportunity = await db
+    const [opportunity] = await db
       .select()
       .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, id),
-          eq(opportunities.organizationId, ctx.organizationId),
-          isNull(opportunities.deletedAt)
-        )
-      )
+      .where(buildOpportunityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
-    if (!opportunity[0]) {
+    if (!opportunity) {
       throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Validate stage is "won"
-    if (opportunity[0].stage !== 'won') {
+    if (opportunity.stage !== 'won') {
       throw new ValidationError('Only won opportunities can be converted to orders');
     }
 
     // Check quote validity
-    if (opportunity[0].quoteExpiresAt && new Date(opportunity[0].quoteExpiresAt) < new Date()) {
+    if (opportunity.quoteExpiresAt && new Date(opportunity.quoteExpiresAt) < new Date()) {
       throw new ValidationError(
         'Quote has expired. Please extend validity or create a new quote before converting.'
       );
     }
 
-    // TODO: Implement order creation when Orders domain is ready
-    // For now, return a placeholder response
+    // Fetch latest quote version (highest versionNumber)
+    const [latestQuote] = await db
+      .select({
+        id: quoteVersions.id,
+        items: quoteVersions.items,
+      })
+      .from(quoteVersions)
+      .where(
+        and(
+          eq(quoteVersions.opportunityId, id),
+          eq(quoteVersions.organizationId, ctx.organizationId)
+        )
+      )
+      .orderBy(desc(quoteVersions.versionNumber))
+      .limit(1);
+
+    if (!latestQuote || !latestQuote.items || latestQuote.items.length === 0) {
+      throw new ValidationError(
+        'No quote with line items found. Create and approve a quote before converting.'
+      );
+    }
+
+    const payload = quoteToOrderPayload(
+      { id: opportunity.id, customerId: opportunity.customerId },
+      latestQuote.items as QuoteLineItem[]
+    );
+
+    const order = await createOrder({ data: payload });
+
     return {
       success: true,
-      message: 'Order conversion endpoint ready - awaiting Orders domain integration',
+      order,
       opportunityId: id,
     };
   });
@@ -905,8 +1549,9 @@ export const listActivities = createServerFn({ method: 'GET' })
       completed,
     } = data;
 
-    // Build conditions
-    const conditions = [eq(opportunityActivities.organizationId, ctx.organizationId)];
+    // Build conditions using shared helper
+    const baseWhere = buildActivityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [];
 
     if (opportunityId) {
       conditions.push(eq(opportunityActivities.opportunityId, opportunityId));
@@ -921,20 +1566,27 @@ export const listActivities = createServerFn({ method: 'GET' })
       conditions.push(lte(opportunityActivities.scheduledAt, new Date(scheduledTo)));
     }
     if (completed === true) {
-      conditions.push(sql`${opportunityActivities.completedAt} IS NOT NULL`);
+      conditions.push(isNotNull(opportunityActivities.completedAt));
     } else if (completed === false) {
       conditions.push(isNull(opportunityActivities.completedAt));
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = conditions.length > 0 
+      ? and(baseWhere, ...conditions) 
+      : baseWhere;
 
     // Get total count
     const countResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
+      .select({ count: count() })
       .from(opportunityActivities)
       .where(whereClause);
 
-    const totalItems = Number(countResult[0]?.count ?? 0);
+    // Validate count result exists
+    if (!countResult[0]) {
+      throw new Error('Failed to fetch activity count');
+    }
+    // Drizzle's count() returns number | null, ensure we convert to number
+    const totalItems = typeof countResult[0].count === 'number' ? countResult[0].count : Number(countResult[0].count) || 0;
 
     // Get activities with pagination
     const activities = await db
@@ -969,12 +1621,7 @@ export const getActivity = createServerFn({ method: 'GET' })
     const activity = await db
       .select()
       .from(opportunityActivities)
-      .where(
-        and(
-          eq(opportunityActivities.id, id),
-          eq(opportunityActivities.organizationId, ctx.organizationId)
-        )
-      )
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
     if (!activity[0]) {
@@ -997,39 +1644,38 @@ export const logActivity = createServerFn({ method: 'POST' })
 
     const { opportunityId, type, description, outcome, scheduledAt, completedAt } = data;
 
-    // Verify opportunity exists and belongs to org
-    const opportunity = await db
-      .select()
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, opportunityId),
-          eq(opportunities.organizationId, ctx.organizationId),
-          isNull(opportunities.deletedAt)
-        )
-      )
-      .limit(1);
+    // Wrap check-then-insert in a transaction to prevent race conditions
+    const result = await db.transaction(async (tx) => {
+      // Verify opportunity exists and belongs to org
+      const opportunity = await tx
+        .select()
+        .from(opportunities)
+        .where(buildOpportunityByIdWhere(opportunityId, ctx.organizationId))
+        .limit(1);
 
-    if (!opportunity[0]) {
-      throw new NotFoundError('Opportunity not found', 'opportunity');
-    }
+      if (!opportunity[0]) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
 
-    // Create activity
-    const result = await db
-      .insert(opportunityActivities)
-      .values({
-        organizationId: ctx.organizationId,
-        opportunityId,
-        type,
-        description,
-        outcome: outcome ?? null,
-        scheduledAt: scheduledAt ?? null,
-        completedAt: completedAt ?? null,
-        createdBy: ctx.user.id,
-      })
-      .returning();
+      // Create activity
+      const [activity] = await tx
+        .insert(opportunityActivities)
+        .values({
+          organizationId: ctx.organizationId,
+          opportunityId,
+          type,
+          description,
+          outcome: outcome ?? null,
+          scheduledAt: scheduledAt ?? null,
+          completedAt: completedAt ?? null,
+          createdBy: ctx.user.id,
+        })
+        .returning();
 
-    return { activity: result[0] };
+      return activity;
+    });
+
+    return { activity: result };
   });
 
 /**
@@ -1052,12 +1698,7 @@ export const updateActivity = createServerFn({ method: 'POST' })
     const current = await db
       .select()
       .from(opportunityActivities)
-      .where(
-        and(
-          eq(opportunityActivities.id, id),
-          eq(opportunityActivities.organizationId, ctx.organizationId)
-        )
-      )
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
     if (!current[0]) {
@@ -1077,10 +1718,11 @@ export const updateActivity = createServerFn({ method: 'POST' })
       return { activity: current[0] };
     }
 
+    // MUST include organizationId filter in update WHERE clause
     const result = await db
       .update(opportunityActivities)
       .set(updateData)
-      .where(eq(opportunityActivities.id, id))
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
       .returning();
 
     return { activity: result[0] };
@@ -1106,25 +1748,21 @@ export const completeActivity = createServerFn({ method: 'POST' })
     const current = await db
       .select()
       .from(opportunityActivities)
-      .where(
-        and(
-          eq(opportunityActivities.id, id),
-          eq(opportunityActivities.organizationId, ctx.organizationId)
-        )
-      )
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
     if (!current[0]) {
       throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
+    // MUST include organizationId filter in update WHERE clause
     const result = await db
       .update(opportunityActivities)
       .set({
         completedAt: new Date(),
         outcome: outcome ?? current[0].outcome,
       })
-      .where(eq(opportunityActivities.id, id))
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
       .returning();
 
     return { activity: result[0] };
@@ -1146,19 +1784,16 @@ export const deleteActivity = createServerFn({ method: 'POST' })
     const current = await db
       .select()
       .from(opportunityActivities)
-      .where(
-        and(
-          eq(opportunityActivities.id, id),
-          eq(opportunityActivities.organizationId, ctx.organizationId)
-        )
-      )
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
       .limit(1);
 
     if (!current[0]) {
       throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
-    await db.delete(opportunityActivities).where(eq(opportunityActivities.id, id));
+    await db
+      .delete(opportunityActivities)
+      .where(buildActivityByIdWhere(id, ctx.organizationId));
 
     return { success: true };
   });
@@ -1198,19 +1833,22 @@ export const getActivityTimeline = createServerFn({ method: 'GET' })
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // Get activities for timeline
+    // Get activities for timeline — bounded by LIMIT to prevent unbounded queries
+    // MUST include organizationId filter for security
     const activities = await db
       .select()
       .from(opportunityActivities)
       .where(
         and(
           eq(opportunityActivities.opportunityId, opportunityId),
+          eq(opportunityActivities.organizationId, ctx.organizationId),
           gte(opportunityActivities.createdAt, startDate)
         )
       )
-      .orderBy(desc(opportunityActivities.createdAt));
+      .orderBy(desc(opportunityActivities.createdAt))
+      .limit(MAX_ACTIVITY_TIMELINE_ITEMS);
 
-    // Group by date
+    // Group by date (JS grouping is acceptable for bounded data from the LIMIT above)
     const byDate: Record<string, typeof activities> = {};
     for (const activity of activities) {
       const dateKey = activity.createdAt.toISOString().split('T')[0];
@@ -1246,51 +1884,46 @@ export const getUpcomingFollowUps = createServerFn({ method: 'GET' })
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + days);
 
-    // Build conditions
-    const conditions = [
+    // Build base conditions for activities
+    const activityConditions = [
       eq(opportunityActivities.organizationId, ctx.organizationId),
       isNull(opportunityActivities.completedAt),
-      sql`${opportunityActivities.scheduledAt} IS NOT NULL`,
+      isNotNull(opportunityActivities.scheduledAt),
       lte(opportunityActivities.scheduledAt, endDate),
     ];
 
     if (opportunityId) {
-      conditions.push(eq(opportunityActivities.opportunityId, opportunityId));
+      activityConditions.push(eq(opportunityActivities.opportunityId, opportunityId));
     }
 
-    // If filtering by assignedTo, join with opportunities
-    let followUps;
+    // Build join conditions (always include organizationId for security)
+    const joinConditions = [
+      eq(opportunityActivities.opportunityId, opportunities.id),
+      eq(opportunities.organizationId, ctx.organizationId),
+      isNull(opportunities.deletedAt),
+    ];
+
+    // Add assignedTo filter to join conditions if specified
+    const whereConditions = [...activityConditions];
     if (assignedTo) {
-      followUps = await db
-        .select({
-          activity: opportunityActivities,
-          opportunity: {
-            id: opportunities.id,
-            title: opportunities.title,
-            stage: opportunities.stage,
-            assignedTo: opportunities.assignedTo,
-          },
-        })
-        .from(opportunityActivities)
-        .innerJoin(opportunities, eq(opportunityActivities.opportunityId, opportunities.id))
-        .where(and(...conditions, eq(opportunities.assignedTo, assignedTo)))
-        .orderBy(asc(opportunityActivities.scheduledAt));
-    } else {
-      followUps = await db
-        .select({
-          activity: opportunityActivities,
-          opportunity: {
-            id: opportunities.id,
-            title: opportunities.title,
-            stage: opportunities.stage,
-            assignedTo: opportunities.assignedTo,
-          },
-        })
-        .from(opportunityActivities)
-        .innerJoin(opportunities, eq(opportunityActivities.opportunityId, opportunities.id))
-        .where(and(...conditions))
-        .orderBy(asc(opportunityActivities.scheduledAt));
+      whereConditions.push(eq(opportunities.assignedTo, assignedTo));
     }
+
+    const followUps = await db
+      .select({
+        activity: opportunityActivities,
+        opportunity: {
+          id: opportunities.id,
+          title: opportunities.title,
+          stage: opportunities.stage,
+          assignedTo: opportunities.assignedTo,
+        },
+      })
+      .from(opportunityActivities)
+      .innerJoin(opportunities, and(...joinConditions))
+      .where(and(...whereConditions))
+      .orderBy(asc(opportunityActivities.scheduledAt))
+      .limit(MAX_FOLLOW_UPS);
 
     // Separate overdue and upcoming
     const now = new Date();
@@ -1324,8 +1957,9 @@ export const getActivityAnalytics = createServerFn({ method: 'GET' })
 
     const { dateFrom, dateTo, opportunityId } = data;
 
-    // Build conditions
-    const conditions = [eq(opportunityActivities.organizationId, ctx.organizationId)];
+    // Build conditions using shared helper
+    const baseWhere = buildActivityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [];
 
     if (dateFrom) {
       conditions.push(gte(opportunityActivities.createdAt, dateFrom));
@@ -1337,13 +1971,13 @@ export const getActivityAnalytics = createServerFn({ method: 'GET' })
       conditions.push(eq(opportunityActivities.opportunityId, opportunityId));
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = conditions.length > 0 ? and(baseWhere, ...conditions) : baseWhere;
 
     // Get totals by type
     const byTypeResult = await db
       .select({
         type: opportunityActivities.type,
-        count: sql<number>`COUNT(*)`,
+        count: count(),
         completedCount: sql<number>`SUM(CASE WHEN ${opportunityActivities.completedAt} IS NOT NULL THEN 1 ELSE 0 END)`,
       })
       .from(opportunityActivities)
@@ -1358,8 +1992,8 @@ export const getActivityAnalytics = createServerFn({ method: 'GET' })
     let totalCompleted = 0;
 
     for (const row of byTypeResult) {
-      const count = Number(row.count);
-      const completedCount = Number(row.completedCount);
+      const count = row.count ?? 0;
+      const completedCount = row.completedCount ?? 0;
       byType[row.type] = {
         count,
         completedCount,
@@ -1376,16 +2010,16 @@ export const getActivityAnalytics = createServerFn({ method: 'GET' })
     const dailyResult = await db
       .select({
         date: sql<string>`DATE(${opportunityActivities.createdAt})`,
-        count: sql<number>`COUNT(*)`,
+        count: count(),
       })
       .from(opportunityActivities)
-      .where(and(...conditions, gte(opportunityActivities.createdAt, thirtyDaysAgo)))
+      .where(and(baseWhere, ...conditions, gte(opportunityActivities.createdAt, thirtyDaysAgo)))
       .groupBy(sql`DATE(${opportunityActivities.createdAt})`)
       .orderBy(sql`DATE(${opportunityActivities.createdAt})`);
 
     const dailyCounts = dailyResult.map((row) => ({
       date: row.date,
-      count: Number(row.count),
+      count: row.count ?? 0,
     }));
 
     return {
@@ -1420,10 +2054,9 @@ export const getPipelineForecast = createServerFn({ method: 'GET' })
 
     const { startDate, endDate, groupBy, includeWeighted, assignedTo, customerId, stages } = data;
 
-    // Build base conditions
-    const conditions = [
-      eq(opportunities.organizationId, ctx.organizationId),
-      isNull(opportunities.deletedAt),
+    // Build base conditions using shared helper
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [
       gte(opportunities.expectedCloseDate, startDate),
       lte(opportunities.expectedCloseDate, endDate),
     ];
@@ -1438,7 +2071,7 @@ export const getPipelineForecast = createServerFn({ method: 'GET' })
       conditions.push(inArray(opportunities.stage, stages));
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = and(baseWhere, ...conditions);
 
     // Determine period expression based on groupBy
     let periodExpr: ReturnType<typeof sql>;
@@ -1461,9 +2094,9 @@ export const getPipelineForecast = createServerFn({ method: 'GET' })
         period: periodExpr,
         periodStart: sql<Date>`MIN(${opportunities.expectedCloseDate})`,
         periodEnd: sql<Date>`MAX(${opportunities.expectedCloseDate})`,
-        opportunityCount: sql<number>`COUNT(*)`,
-        totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-        weightedValue: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
+        opportunityCount: count(),
+        totalValue: sum(opportunities.value),
+        weightedValue: sum(opportunities.weightedValue),
         wonValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'won' THEN ${opportunities.value} ELSE 0 END), 0)`,
         lostValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN ${opportunities.value} ELSE 0 END), 0)`,
         avgProbability: sql<number>`COALESCE(AVG(${opportunities.probability}), 0)`,
@@ -1473,17 +2106,25 @@ export const getPipelineForecast = createServerFn({ method: 'GET' })
       .groupBy(periodExpr)
       .orderBy(periodExpr);
 
-    const forecast: ForecastPeriod[] = forecastResult.map((row) => ({
-      period: String(row.period),
-      periodStart: row.periodStart,
-      periodEnd: row.periodEnd,
-      opportunityCount: Number(row.opportunityCount),
-      totalValue: Number(row.totalValue),
-      weightedValue: includeWeighted ? Number(row.weightedValue) : Number(row.totalValue),
-      wonValue: Number(row.wonValue),
-      lostValue: Number(row.lostValue),
-      avgProbability: Math.round(Number(row.avgProbability)),
-    }));
+    const forecast: ForecastPeriod[] = forecastResult.map((row) => {
+      // Drizzle's sum() returns number | null, but can be string for very large numbers
+      // Ensure we convert to number safely
+      const opportunityCount = typeof row.opportunityCount === 'number' ? row.opportunityCount : Number(row.opportunityCount) || 0;
+      const totalValue = typeof row.totalValue === 'number' ? row.totalValue : Number(row.totalValue) || 0;
+      const weightedValueRaw = typeof row.weightedValue === 'number' ? row.weightedValue : Number(row.weightedValue) || 0;
+      
+      return {
+        period: String(row.period),
+        periodStart: row.periodStart,
+        periodEnd: row.periodEnd,
+        opportunityCount,
+        totalValue,
+        weightedValue: includeWeighted ? weightedValueRaw : totalValue,
+        wonValue: row.wonValue ?? 0,
+        lostValue: row.lostValue ?? 0,
+        avgProbability: Math.round(row.avgProbability ?? 0),
+      };
+    });
 
     // Calculate summary
     const summary = forecast.reduce(
@@ -1515,10 +2156,9 @@ export const getForecastByEntity = createServerFn({ method: 'GET' })
 
     const { startDate, endDate, groupBy, assignedTo, customerId } = data;
 
-    // Build conditions
-    const conditions = [
-      eq(opportunities.organizationId, ctx.organizationId),
-      isNull(opportunities.deletedAt),
+    // Build conditions using shared helper
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [
       gte(opportunities.expectedCloseDate, startDate),
       lte(opportunities.expectedCloseDate, endDate),
     ];
@@ -1530,16 +2170,16 @@ export const getForecastByEntity = createServerFn({ method: 'GET' })
       conditions.push(eq(opportunities.customerId, customerId));
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = and(baseWhere, ...conditions);
 
     if (groupBy === 'rep') {
       // Group by assigned user
       const result = await db
         .select({
           entityId: opportunities.assignedTo,
-          opportunityCount: sql<number>`COUNT(*)`,
-          totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-          weightedValue: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
+          opportunityCount: count(),
+          totalValue: sum(opportunities.value),
+          weightedValue: sum(opportunities.weightedValue),
           wonValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'won' THEN ${opportunities.value} ELSE 0 END), 0)`,
           wonCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
           lostCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
@@ -1550,21 +2190,27 @@ export const getForecastByEntity = createServerFn({ method: 'GET' })
 
       return {
         groupBy: 'rep',
-        data: result.map((row) => ({
-          entityId: row.entityId,
-          opportunityCount: Number(row.opportunityCount),
-          totalValue: Number(row.totalValue),
-          weightedValue: Number(row.weightedValue),
-          wonValue: Number(row.wonValue),
-          wonCount: Number(row.wonCount),
-          lostCount: Number(row.lostCount),
-          conversionRate:
-            Number(row.wonCount) + Number(row.lostCount) > 0
-              ? Math.round(
-                  (Number(row.wonCount) / (Number(row.wonCount) + Number(row.lostCount))) * 100
-                )
-              : 0,
-        })),
+        data: result.map((row) => {
+          // Drizzle's sum() returns number | null, ensure we convert to number safely
+          const opportunityCount = typeof row.opportunityCount === 'number' ? row.opportunityCount : Number(row.opportunityCount) || 0;
+          const totalValue = typeof row.totalValue === 'number' ? row.totalValue : Number(row.totalValue) || 0;
+          const weightedValue = typeof row.weightedValue === 'number' ? row.weightedValue : Number(row.weightedValue) || 0;
+          const wonValue = typeof row.wonValue === 'number' ? row.wonValue : Number(row.wonValue) || 0;
+          const wonCount = typeof row.wonCount === 'number' ? row.wonCount : Number(row.wonCount) || 0;
+          const lostCount = typeof row.lostCount === 'number' ? row.lostCount : Number(row.lostCount) || 0;
+          const totalClosed = wonCount + lostCount;
+          
+          return {
+            entityId: row.entityId,
+            opportunityCount,
+            totalValue,
+            weightedValue,
+            wonValue,
+            wonCount,
+            lostCount,
+            conversionRate: totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 0,
+          };
+        }),
       };
     } else if (groupBy === 'customer') {
       // Group by customer with join to get customer name
@@ -1572,15 +2218,21 @@ export const getForecastByEntity = createServerFn({ method: 'GET' })
         .select({
           entityId: opportunities.customerId,
           customerName: customers.name,
-          opportunityCount: sql<number>`COUNT(*)`,
-          totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-          weightedValue: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
+          opportunityCount: count(),
+          totalValue: sum(opportunities.value),
+          weightedValue: sum(opportunities.weightedValue),
           wonValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'won' THEN ${opportunities.value} ELSE 0 END), 0)`,
           wonCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
           lostCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
         })
         .from(opportunities)
-        .leftJoin(customers, eq(opportunities.customerId, customers.id))
+        .leftJoin(
+          customers,
+          and(
+            eq(opportunities.customerId, customers.id),
+            buildCustomerJoinWhere(ctx.organizationId)
+          )
+        )
         .where(whereClause)
         .groupBy(opportunities.customerId, customers.name);
 
@@ -1589,9 +2241,9 @@ export const getForecastByEntity = createServerFn({ method: 'GET' })
         data: result.map((row) => ({
           entityId: row.entityId,
           entityName: row.customerName,
-          opportunityCount: Number(row.opportunityCount),
-          totalValue: Number(row.totalValue),
-          weightedValue: Number(row.weightedValue),
+          opportunityCount: Number(row.opportunityCount ?? 0),
+          totalValue: Number(row.totalValue ?? 0),
+          weightedValue: Number(row.weightedValue ?? 0),
           wonValue: Number(row.wonValue),
           wonCount: Number(row.wonCount),
           lostCount: Number(row.lostCount),
@@ -1619,11 +2271,9 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
 
     const { dateFrom, dateTo } = data;
 
-    // Build base conditions
-    const conditions = [
-      eq(opportunities.organizationId, ctx.organizationId),
-      isNull(opportunities.deletedAt),
-    ];
+    // Build base conditions using shared helper
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [];
 
     if (dateFrom) {
       conditions.push(gte(opportunities.createdAt, new Date(dateFrom)));
@@ -1632,9 +2282,10 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
       conditions.push(lte(opportunities.createdAt, new Date(dateTo)));
     }
 
-    const whereClause = and(...conditions);
+    const whereClause = and(baseWhere, ...conditions);
 
     // Get won opportunities for sales cycle calculation
+    // MUST include organizationId filter
     const wonOpportunities = await db
       .select({
         avgDealSize: sql<number>`COALESCE(AVG(${opportunities.value}), 0)`,
@@ -1643,16 +2294,16 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
           THEN EXTRACT(EPOCH FROM (${opportunities.actualCloseDate} - ${opportunities.createdAt})) / 86400
           ELSE NULL END
         ), 0)`,
-        wonCount: sql<number>`COUNT(*)`,
-        totalWonValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+        wonCount: count(),
+        totalWonValue: sum(opportunities.value),
       })
       .from(opportunities)
-      .where(and(...conditions, eq(opportunities.stage, 'won')));
+      .where(and(whereClause, eq(opportunities.stage, 'won')));
 
     // Get overall counts for rates
     const allOpportunities = await db
       .select({
-        totalCount: sql<number>`COUNT(*)`,
+        totalCount: count(),
         wonCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
         lostCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
       })
@@ -1664,7 +2315,7 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
       .select({
         stage: opportunities.stage,
         avgDaysInStage: sql<number>`COALESCE(AVG(${opportunities.daysInStage}), 0)`,
-        count: sql<number>`COUNT(*)`,
+        count: count(),
       })
       .from(opportunities)
       .where(whereClause)
@@ -1673,16 +2324,31 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
     const avgTimeInStage: Record<string, number> = {};
     const stageConversionRates: Record<string, number> = {};
 
-    // Calculate stage conversion rates (simplified - % in each stage)
-    const totalCount = Number(allOpportunities[0]?.totalCount ?? 0);
-    for (const row of stageMetrics) {
-      avgTimeInStage[row.stage] = Math.round(Number(row.avgDaysInStage));
-      stageConversionRates[row.stage] =
-        totalCount > 0 ? Math.round((Number(row.count) / totalCount) * 100) : 0;
+    // Validate results exist
+    if (!allOpportunities[0]) {
+      throw new Error('Failed to fetch pipeline velocity metrics');
+    }
+    if (!wonOpportunities[0]) {
+      throw new Error('Failed to fetch won opportunities metrics');
     }
 
-    const wonCount = Number(allOpportunities[0]?.wonCount ?? 0);
-    const lostCount = Number(allOpportunities[0]?.lostCount ?? 0);
+    // Calculate stage conversion rates (simplified - % in each stage)
+    // Drizzle's count() returns number | null, ensure we convert to number
+    const totalCountRaw = allOpportunities[0].totalCount;
+    const totalCount = typeof totalCountRaw === 'number' ? totalCountRaw : Number(totalCountRaw) || 0;
+    
+    for (const row of stageMetrics) {
+      avgTimeInStage[row.stage] = Math.round(row.avgDaysInStage ?? 0);
+      const countRaw = row.count;
+      const count = typeof countRaw === 'number' ? countRaw : Number(countRaw) || 0;
+      stageConversionRates[row.stage] =
+        totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+    }
+
+    const wonCountRaw = allOpportunities[0].wonCount;
+    const lostCountRaw = allOpportunities[0].lostCount;
+    const wonCount = typeof wonCountRaw === 'number' ? wonCountRaw : Number(wonCountRaw) || 0;
+    const lostCount = typeof lostCountRaw === 'number' ? lostCountRaw : Number(lostCountRaw) || 0;
     const closedCount = wonCount + lostCount;
 
     // Calculate pipeline velocity (won value per day)
@@ -1690,12 +2356,14 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
       dateFrom && dateTo
         ? Math.max(1, Math.ceil((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000))
         : 30; // Default 30 days
-    const totalWonValue = Number(wonOpportunities[0]?.totalWonValue ?? 0);
+    // Drizzle's sum() returns number | null, ensure we convert to number
+    const totalWonValueRaw = wonOpportunities[0].totalWonValue;
+    const totalWonValue = typeof totalWonValueRaw === 'number' ? totalWonValueRaw : Number(totalWonValueRaw) || 0;
     const pipelineVelocity = Math.round(totalWonValue / daysInRange);
 
     return {
-      avgDealSize: Math.round(Number(wonOpportunities[0]?.avgDealSize ?? 0)),
-      avgSalesCycle: Math.round(Number(wonOpportunities[0]?.avgSalesCycle ?? 0)),
+      avgDealSize: Math.round(wonOpportunities[0].avgDealSize ?? 0),
+      avgSalesCycle: Math.round(wonOpportunities[0].avgSalesCycle ?? 0),
       avgTimeInStage,
       winRate: closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0,
       lossRate: closedCount > 0 ? Math.round((lostCount / closedCount) * 100) : 0,
@@ -1715,16 +2383,15 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
 
     const { dateFrom, dateTo, groupBy } = data;
 
-    // Base conditions for closed opportunities in date range
-    const conditions = [
-      eq(opportunities.organizationId, ctx.organizationId),
-      isNull(opportunities.deletedAt),
+    // Base conditions for closed opportunities in date range using shared helper
+    const baseWhere = buildOpportunityBaseWhere(ctx.organizationId);
+    const conditions: ReturnType<typeof and>[] = [
       gte(opportunities.actualCloseDate, dateFrom),
       lte(opportunities.actualCloseDate, dateTo),
       or(eq(opportunities.stage, 'won'), eq(opportunities.stage, 'lost')),
     ];
 
-    const whereClause = and(...conditions);
+    const whereClause = and(baseWhere, ...conditions);
 
     let result: RevenueAttribution[] = [];
 
@@ -1742,19 +2409,18 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
         .groupBy(opportunities.assignedTo);
 
       result = queryResult.map((row) => {
-        const wonCount = Number(row.wonCount);
-        const lostCount = Number(row.lostCount);
-        const total = wonCount + lostCount;
+        const metrics = calculateConversionMetrics({
+          wonCount: row.wonCount ?? 0,
+          lostCount: row.lostCount ?? 0,
+          wonValue: row.wonValue ?? 0,
+          lostValue: row.lostValue ?? 0,
+        });
         return {
           group: row.groupId ?? 'Unassigned',
           groupId: row.groupId ?? undefined,
-          wonCount,
-          wonValue: Number(row.wonValue),
-          lostCount,
-          lostValue: Number(row.lostValue),
+          ...metrics,
           pipelineCount: 0,
           pipelineValue: 0,
-          conversionRate: total > 0 ? Math.round((wonCount / total) * 100) : 0,
         };
       });
     } else if (groupBy === 'customer') {
@@ -1768,24 +2434,29 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
           lostValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN ${opportunities.value} ELSE 0 END), 0)`,
         })
         .from(opportunities)
-        .leftJoin(customers, eq(opportunities.customerId, customers.id))
+        .leftJoin(
+          customers,
+          and(
+            eq(opportunities.customerId, customers.id),
+            buildCustomerJoinWhere(ctx.organizationId)
+          )
+        )
         .where(whereClause)
         .groupBy(opportunities.customerId, customers.name);
 
       result = queryResult.map((row) => {
-        const wonCount = Number(row.wonCount);
-        const lostCount = Number(row.lostCount);
-        const total = wonCount + lostCount;
+        const metrics = calculateConversionMetrics({
+          wonCount: row.wonCount ?? 0,
+          lostCount: row.lostCount ?? 0,
+          wonValue: row.wonValue ?? 0,
+          lostValue: row.lostValue ?? 0,
+        });
         return {
           group: row.groupName ?? 'Unknown',
           groupId: row.groupId,
-          wonCount,
-          wonValue: Number(row.wonValue),
-          lostCount,
-          lostValue: Number(row.lostValue),
+          ...metrics,
           pipelineCount: 0,
           pipelineValue: 0,
-          conversionRate: total > 0 ? Math.round((wonCount / total) * 100) : 0,
         };
       });
     } else if (groupBy === 'month') {
@@ -1803,18 +2474,17 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
         .orderBy(sql`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`);
 
       result = queryResult.map((row) => {
-        const wonCount = Number(row.wonCount);
-        const lostCount = Number(row.lostCount);
-        const total = wonCount + lostCount;
+        const metrics = calculateConversionMetrics({
+          wonCount: row.wonCount ?? 0,
+          lostCount: row.lostCount ?? 0,
+          wonValue: row.wonValue ?? 0,
+          lostValue: row.lostValue ?? 0,
+        });
         return {
           group: row.group,
-          wonCount,
-          wonValue: Number(row.wonValue),
-          lostCount,
-          lostValue: Number(row.lostValue),
+          ...metrics,
           pipelineCount: 0,
           pipelineValue: 0,
-          conversionRate: total > 0 ? Math.round((wonCount / total) * 100) : 0,
         };
       });
     }
@@ -1842,4 +2512,91 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
       },
       dateRange: { dateFrom, dateTo },
     };
+  });
+
+// ============================================================================
+// DELETE QUOTE (Soft Delete)
+// ============================================================================
+
+/**
+ * Fields to exclude from quote activity change tracking (system-managed)
+ */
+const QUOTE_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+];
+
+/**
+ * Soft delete a quote.
+ * Cannot delete quotes that have been accepted.
+ */
+export const deleteQuote = createServerFn({ method: 'POST' })
+  .inputValidator(opportunityParamsSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({
+      permission: PERMISSIONS.quote.delete,
+    });
+    const logger = createActivityLoggerWithContext(ctx);
+
+    const { id } = data;
+
+    // Verify ownership
+    const current = await db
+      .select()
+      .from(quotes)
+        .where(buildQuoteByIdWhere(id, ctx.organizationId))
+      .limit(1);
+
+    if (!current[0]) {
+      throw new NotFoundError('Quote not found', 'quote');
+    }
+
+    const quoteToDelete = current[0];
+
+    // Guard: Cannot delete accepted quotes
+    if (quoteToDelete.status === 'accepted') {
+      throw new ValidationError('Cannot delete an accepted quote');
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({
+          deletedAt: new Date(),
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(quotes.id, id));
+
+      await enqueueSearchIndexOutbox(
+        {
+          organizationId: ctx.organizationId,
+          entityType: 'quote',
+          entityId: id,
+          action: 'delete',
+        },
+        tx
+      );
+    });
+
+    // Log quote deletion
+    logger.logAsync({
+      entityType: 'quote',
+      entityId: id,
+      action: 'deleted',
+      changes: computeChanges({
+        before: quoteToDelete,
+        after: null,
+        excludeFields: QUOTE_EXCLUDED_FIELDS as never[],
+      }),
+      description: `Deleted quote: ${quoteToDelete.quoteNumber}`,
+      metadata: {
+        status: quoteToDelete.status,
+        total: quoteToDelete.total,
+      },
+    });
+
+    return { success: true };
   });

@@ -9,12 +9,9 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Link } from "@tanstack/react-router";
 import {
   CheckCircle,
-  Loader2,
   Phone,
   PhoneOff,
   Voicemail,
@@ -32,57 +29,28 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 import { useCompleteCall } from "@/hooks/communications/use-scheduled-calls";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
+import {
+  callOutcomeFormSchema,
+  type CallOutcomeDialogProps,
+  type CallOutcomeFormValues,
+} from "@/lib/schemas/communications";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextareaField,
+  FormField,
+  FormActions,
+  extractFieldError,
+} from "@/components/shared/forms";
 
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const callOutcomeSchema = z.object({
-  outcome: z.enum([
-    "answered",
-    "no_answer",
-    "voicemail",
-    "busy",
-    "wrong_number",
-    "callback_requested",
-    "completed_successfully",
-  ]),
-  outcomeNotes: z.string().optional(),
-});
-
-type CallOutcomeFormValues = z.infer<typeof callOutcomeSchema>;
-
-// Export type for consumers
+// Export type for consumers (backward compatibility)
 export type CallOutcomeFormData = CallOutcomeFormValues;
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface CallOutcomeDialogProps {
-  callId: string;
-  customerName?: string;
-  trigger?: React.ReactNode;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  onSuccess?: () => void;
-}
 
 // ============================================================================
 // CONSTANTS
@@ -139,6 +107,7 @@ const OUTCOME_OPTIONS = [
 
 export function CallOutcomeDialog({
   callId,
+  customerId,
   customerName,
   trigger,
   defaultOpen = false,
@@ -146,13 +115,36 @@ export function CallOutcomeDialog({
   onSuccess,
 }: CallOutcomeDialogProps) {
   const [open, setOpen] = React.useState(defaultOpen);
+
   const completeMutation = useCompleteCall();
 
-  const form = useForm<CallOutcomeFormValues>({
-    resolver: zodResolver(callOutcomeSchema),
+  const form = useTanStackForm<CallOutcomeFormValues>({
+    schema: callOutcomeFormSchema,
     defaultValues: {
       outcome: "completed_successfully",
       outcomeNotes: "",
+    },
+    onSubmit: async (values) => {
+      completeMutation.mutate(
+        {
+          id: callId,
+          outcome: values.outcome,
+          outcomeNotes: values.outcomeNotes,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Call outcome logged successfully");
+            handleOpenChange(false);
+            form.reset();
+            onSuccess?.();
+          },
+          onError: (error) => {
+            toast.error("Failed to log call outcome", {
+              description: getUserFriendlyMessage(error as Error),
+            });
+          },
+        }
+      );
     },
   });
 
@@ -164,30 +156,7 @@ export function CallOutcomeDialog({
     }
   };
 
-  const onSubmit = (values: CallOutcomeFormValues) => {
-    completeMutation.mutate(
-      {
-        id: callId,
-        outcome: values.outcome,
-        outcomeNotes: values.outcomeNotes,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Call outcome logged successfully");
-          handleOpenChange(false);
-          form.reset();
-          onSuccess?.();
-        },
-        onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to log call outcome"
-          );
-        },
-      }
-    );
-  };
-
-  const selectedOutcome = form.watch("outcome");
+  const selectedOutcome = form.useWatch("outcome");
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -207,131 +176,132 @@ export function CallOutcomeDialog({
           </DialogTitle>
           <DialogDescription id="outcome-dialog-description">
             {customerName
-              ? `Record the outcome of your call with ${customerName}.`
+              ? (
+                  <>
+                    Record the outcome of your call with{" "}
+                    {customerId ? (
+                      <Link
+                        to="/customers/$customerId"
+                        params={{ customerId }}
+                        search={{}}
+                        className="font-medium hover:underline text-primary"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {customerName}
+                      </Link>
+                    ) : (
+                      customerName
+                    )}
+                    .
+                  </>
+                )
               : "Record the outcome of this call."}
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4"
-            aria-label="outcome-dialog"
-          >
-            {/* Outcome Selection */}
-            <FormField
-              control={form.control}
-              name="outcome"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Call Outcome</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="grid grid-cols-1 gap-2"
-                    >
-                      {OUTCOME_OPTIONS.map((option) => {
-                        const Icon = option.icon;
-                        const isSelected = selectedOutcome === option.value;
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+          aria-label="outcome-dialog"
+        >
+          <form.Field name="outcome">
+            {(field) => {
+              const error = extractFieldError(field);
+              return (
+                <FormField
+                  label="Call Outcome"
+                  name={field.name}
+                  error={error}
+                  required
+                >
+                  <RadioGroup
+                    value={field.state.value ?? ""}
+                    onValueChange={(v) =>
+                      form.setFieldValue("outcome", v as CallOutcomeFormValues["outcome"])
+                    }
+                    onBlur={field.handleBlur}
+                    className="grid grid-cols-1 gap-2"
+                    aria-invalid={!!error}
+                  >
+                    {OUTCOME_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const isSelected = selectedOutcome === option.value;
 
-                        return (
-                          <Label
-                            key={option.value}
-                            htmlFor={option.value}
+                      return (
+                        <Label
+                          key={option.value}
+                          htmlFor={option.value}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
+                            isSelected
+                              ? "border-primary bg-primary/5"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <RadioGroupItem
+                            value={option.value}
+                            id={option.value}
+                            className="sr-only"
+                          />
+                          <Icon
                             className={cn(
-                              "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
+                              "h-5 w-5 flex-shrink-0",
                               isSelected
-                                ? "border-primary bg-primary/5"
-                                : "hover:bg-muted/50"
+                                ? "text-primary"
+                                : "text-muted-foreground"
                             )}
-                          >
-                            <RadioGroupItem
-                              value={option.value}
-                              id={option.value}
-                              className="sr-only"
-                            />
-                            <Icon
+                          />
+                          <div className="flex-1">
+                            <div
                               className={cn(
-                                "h-5 w-5 flex-shrink-0",
-                                isSelected
-                                  ? "text-primary"
-                                  : "text-muted-foreground"
+                                "font-medium",
+                                isSelected && "text-primary"
                               )}
-                            />
-                            <div className="flex-1">
-                              <div
-                                className={cn(
-                                  "font-medium",
-                                  isSelected && "text-primary"
-                                )}
-                              >
-                                {option.label}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {option.description}
-                              </div>
+                            >
+                              {option.label}
                             </div>
-                            {isSelected && (
-                              <CheckCircle className="h-4 w-4 text-primary" />
-                            )}
-                          </Label>
-                        );
-                      })}
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                            <div className="text-xs text-muted-foreground">
+                              {option.description}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle className="h-4 w-4 text-primary" />
+                          )}
+                        </Label>
+                      );
+                    })}
+                  </RadioGroup>
+                </FormField>
+              );
+            }}
+          </form.Field>
 
-            {/* Notes */}
-            <FormField
-              control={form.control}
-              name="outcomeNotes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Add any notes about the call..."
-                      className="min-h-[80px] resize-none"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="outcomeNotes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Notes (Optional)"
+                placeholder="Add any notes about the call..."
+                rows={4}
+                className="min-h-[80px] resize-none"
+              />
+            )}
+          </form.Field>
 
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={completeMutation.isPending}
-                className="gap-2"
-              >
-                {completeMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4" />
-                    Log Outcome
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <FormActions
+              form={form}
+              submitLabel="Log Outcome"
+              cancelLabel="Cancel"
+              loadingLabel="Saving..."
+              onCancel={() => handleOpenChange(false)}
+              submitDisabled={completeMutation.isPending}
+            />
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

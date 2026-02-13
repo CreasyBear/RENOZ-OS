@@ -285,7 +285,7 @@ export function DuplicateReviewQueue({
                 <Badge variant="secondary">{filteredPairs.length}</Badge>
               )}
             </h2>
-            <Button variant="ghost" size="icon" onClick={onRefresh}>
+            <Button variant="ghost" size="icon" onClick={onRefresh} aria-label="Refresh duplicate pairs">
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -396,6 +396,7 @@ export function DuplicateReviewQueue({
               size="icon"
               onClick={goToPrevious}
               disabled={currentIndex === 0 || filteredPairs.length === 0}
+              aria-label="Previous duplicate pair"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -411,6 +412,7 @@ export function DuplicateReviewQueue({
               disabled={
                 currentIndex >= filteredPairs.length - 1 || filteredPairs.length === 0
               }
+              aria-label="Next duplicate pair"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -452,7 +454,7 @@ export function DuplicateReviewQueue({
                 All Duplicates Reviewed
               </h3>
               <p className="text-sm">
-                You've reviewed all potential duplicates in the queue
+                You&apos;ve reviewed all potential duplicates in the queue
               </p>
             </div>
           )}

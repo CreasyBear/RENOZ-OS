@@ -47,6 +47,11 @@ export {
   useUpdateOrganizationBranding,
 } from './use-organization';
 
+export {
+  useOrganizationLogoUpload,
+  useRemoveOrganizationLogo,
+} from './use-organization-logo-upload';
+
 // ============================================================================
 // COMPOSITE HOOKS (Backward Compatibility)
 // ============================================================================

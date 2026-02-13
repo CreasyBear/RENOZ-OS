@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, startTransition } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -33,8 +33,13 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import type { WarrantyPolicy, WarrantyPolicyTerms } from 'drizzle/schema';
-import type { WarrantyPolicyTypeValue } from '@/lib/schemas/warranty/policies';
+import {
+  warrantyPolicyTermsSchema,
+  isWarrantyPolicyTypeValue,
+  type WarrantyPolicy,
+  type WarrantyPolicyTerms,
+  type WarrantyPolicyTypeValue,
+} from '@/lib/schemas/warranty';
 import { Battery, Zap, Wrench, Shield } from 'lucide-react';
 
 interface WarrantyPolicyFormDialogProps {
@@ -102,6 +107,7 @@ export function WarrantyPolicyFormDialog({
   // Reset form when dialog opens or policy changes
   useEffect(() => {
     if (open) {
+      startTransition(() => {
       if (policy) {
         // Edit mode - populate from existing policy
         setName(policy.name);
@@ -111,8 +117,9 @@ export function WarrantyPolicyFormDialog({
         setCycleLimit(policy.cycleLimit);
         setIsDefault(policy.isDefault);
 
-        // Parse terms
-        const terms = policy.terms as WarrantyPolicyTerms | null;
+        // Parse terms (schema parse per SCHEMA-TRACE)
+        const parsed = warrantyPolicyTermsSchema.safeParse(policy.terms);
+        const terms = parsed.success ? parsed.data : null;
         setCoverage(terms?.coverage?.join('\n') ?? '');
         setExclusions(terms?.exclusions?.join('\n') ?? '');
         setClaimRequirements(terms?.claimRequirements?.join('\n') ?? '');
@@ -130,6 +137,7 @@ export function WarrantyPolicyFormDialog({
         setClaimRequirements('');
         setTransferable(true);
       }
+      });
     }
   }, [open, policy]);
 
@@ -137,8 +145,10 @@ export function WarrantyPolicyFormDialog({
   useEffect(() => {
     if (!isEditMode && open) {
       const defaults = DEFAULT_DURATIONS[type];
-      setDurationMonths(defaults.months);
-      setCycleLimit(defaults.cycles ?? null);
+      startTransition(() => {
+        setDurationMonths(defaults.months);
+        setCycleLimit(defaults.cycles ?? null);
+      });
     }
   }, [type, isEditMode, open]);
 
@@ -197,8 +207,8 @@ export function WarrantyPolicyFormDialog({
 
       onOpenChange(false);
       onSuccess?.();
-    } catch (err) {
-      // Error toast is handled by the mutation hook
+    } catch {
+      toast.error('Failed to save policy. Please try again.');
     }
   };
 
@@ -247,7 +257,7 @@ export function WarrantyPolicyFormDialog({
                 <Label htmlFor="type">Policy Type *</Label>
                 <Select
                   value={type}
-                  onValueChange={(v) => setType(v as WarrantyPolicyTypeValue)}
+                  onValueChange={(v) => setType(isWarrantyPolicyTypeValue(v) ? v : type)}
                   disabled={isEditMode}
                 >
                   <SelectTrigger>

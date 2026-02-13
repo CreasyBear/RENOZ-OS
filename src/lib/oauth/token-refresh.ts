@@ -5,7 +5,7 @@
  * Based on midday's token refresh patterns with exponential backoff.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, lt, gte, sql, inArray } from 'drizzle-orm';
 import { oauthConnections, oauthSyncLogs } from 'drizzle/schema/oauth';
 import { encryptOAuthToken, decryptOAuthToken } from './token-encryption';
@@ -60,7 +60,7 @@ export interface RefreshCandidate {
  * Returns connections expiring within the refresh buffer window.
  */
 export async function getConnectionsNeedingRefresh(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   config: TokenRefreshConfig = DEFAULT_REFRESH_CONFIG
 ): Promise<RefreshCandidate[]> {
   const refreshThreshold = new Date(Date.now() + config.refreshBufferMinutes * 60 * 1000);
@@ -180,7 +180,7 @@ export interface RefreshResult {
  * Handles provider-specific refresh logic with error handling.
  */
 export async function refreshOAuthTokens(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   connectionId: string,
   organizationId: string,
   config: TokenRefreshConfig = DEFAULT_REFRESH_CONFIG
@@ -460,7 +460,7 @@ export interface BulkRefreshResult {
  * Processes connections in priority order with concurrency control.
  */
 export async function bulkRefreshTokens(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   options: {
     organizationId?: string;
     provider?: 'google_workspace' | 'microsoft_365';
@@ -541,7 +541,7 @@ export async function bulkRefreshTokens(
  * Gets token refresh statistics for monitoring.
  */
 export async function getTokenRefreshStats(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   organizationId?: string
 ): Promise<{
   totalConnections: number;

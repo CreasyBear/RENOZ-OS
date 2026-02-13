@@ -24,7 +24,5 @@ export {
   type SuppressionListTableProps,
 } from "./suppression-list-table";
 
-export {
-  AddSuppressionDialog,
-  type AddSuppressionDialogProps,
-} from "./add-suppression-dialog";
+export { AddSuppressionDialog } from "./add-suppression-dialog";
+export type { AddSuppressionDialogProps } from "@/lib/schemas/communications";

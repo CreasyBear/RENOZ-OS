@@ -36,7 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 
 // Types
-import type { SiteVisit } from 'drizzle/schema';
+import type { SiteVisit } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES

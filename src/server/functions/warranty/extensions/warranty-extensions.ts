@@ -11,7 +11,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
+import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, desc, asc, gte, lte, sql } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
 import {
   warrantyExtensions,
@@ -26,11 +28,15 @@ import {
   extendWarrantySchema,
   listWarrantyExtensionsSchema,
   getExtensionHistorySchema,
+  getExtensionHistoryCursorSchema,
   getExtensionByIdSchema,
+  type WarrantyExtensionItem,
+  type ListWarrantyExtensionsResult,
 } from '@/lib/schemas/warranty/extensions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
-import { computeChanges } from '@/lib/activity-logger';
+import { computeChanges, excludeFieldsForActivity } from '@/lib/activity-logger';
+import { warrantyLogger } from '@/lib/logger';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -39,32 +45,20 @@ import { computeChanges } from '@/lib/activity-logger';
 /**
  * Fields to exclude from activity change tracking (system-managed)
  */
-const WARRANTY_EXTENSION_EXCLUDED_FIELDS: string[] = [
+const WARRANTY_EXTENSION_EXCLUDED_FIELDS = [
   'updatedAt',
   'updatedBy',
   'createdAt',
   'createdBy',
   'deletedAt',
   'organizationId',
-];
+] as const satisfies readonly string[];
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface WarrantyExtensionItem {
-  id: string;
-  warrantyId: string;
-  warrantyNumber: string;
-  extensionType: WarrantyExtension['extensionType'];
-  extensionMonths: number;
-  previousExpiryDate: string;
-  newExpiryDate: string;
-  price: number | null;
-  notes: string | null;
-  approvedById: string | null;
-  createdAt: string;
-}
+// Types are now imported from @/lib/schemas/warranty/extensions per SCHEMA-TRACE.md
 
 export interface WarrantyExtensionWithDetails extends WarrantyExtensionItem {
   customerName: string | null;
@@ -130,6 +124,20 @@ export const extendWarranty = createServerFn({ method: 'POST' })
     if (warranty.status === 'voided') {
       throw new ValidationError('Cannot extend a voided warranty');
     }
+    if (warranty.status === 'transferred') {
+      throw new ValidationError('Cannot extend a transferred warranty');
+    }
+
+    // Guard: If warranty is expired, check time limit (90 days)
+    if (warranty.status === 'expired') {
+      const expiryDate = new Date(warranty.expiryDate);
+      const daysSinceExpiry = Math.floor((Date.now() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceExpiry > 90) {
+        throw new ValidationError(
+          `Cannot extend warranty that expired more than 90 days ago (expired ${daysSinceExpiry} days ago)`
+        );
+      }
+    }
 
     // 2. Calculate new expiry date
     const previousExpiryDate = warranty.expiryDate;
@@ -189,7 +197,7 @@ export const extendWarranty = createServerFn({ method: 'POST' })
       changes: computeChanges({
         before: null,
         after: extension,
-        excludeFields: WARRANTY_EXTENSION_EXCLUDED_FIELDS as never[],
+        excludeFields: excludeFieldsForActivity<WarrantyExtension>(WARRANTY_EXTENSION_EXCLUDED_FIELDS),
       }),
       metadata: {
         customerId: warranty.customerId,
@@ -230,7 +238,7 @@ export const extendWarranty = createServerFn({ method: 'POST' })
  */
 export const listWarrantyExtensions = createServerFn({ method: 'GET' })
   .inputValidator(listWarrantyExtensionsSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ListWarrantyExtensionsResult> => {
     const ctx = await withAuth();
 
     // Verify the warranty belongs to this organization
@@ -353,7 +361,7 @@ export const getExtensionHistory = createServerFn({ method: 'GET' })
       .where(and(...conditions))
       .orderBy(orderByClause)
       .limit(data.limit)
-      .offset(offset);
+      .offset(offset); // OFFSET pagination; consider cursor-based for >10k rows
 
     // Get total count
     const countResult = await db
@@ -383,6 +391,78 @@ export const getExtensionHistory = createServerFn({ method: 'GET' })
       page: data.page,
       limit: data.limit,
       totalPages: Math.ceil(totalCount / data.limit),
+    };
+  });
+
+/**
+ * Get extension history with cursor pagination (recommended for large datasets).
+ */
+export const getExtensionHistoryCursor = createServerFn({ method: 'GET' })
+  .inputValidator(getExtensionHistoryCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', extensionType, startDate, endDate } = data;
+
+    const conditions = [eq(warrantyExtensions.organizationId, ctx.organizationId)];
+    if (extensionType) conditions.push(eq(warrantyExtensions.extensionType, extensionType));
+    if (startDate) conditions.push(gte(warrantyExtensions.createdAt, new Date(startDate)));
+    if (endDate) conditions.push(lte(warrantyExtensions.createdAt, new Date(endDate)));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(warrantyExtensions.createdAt, warrantyExtensions.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const results = await db
+      .select({
+        id: warrantyExtensions.id,
+        warrantyId: warrantyExtensions.warrantyId,
+        warrantyNumber: warranties.warrantyNumber,
+        extensionType: warrantyExtensions.extensionType,
+        extensionMonths: warrantyExtensions.extensionMonths,
+        previousExpiryDate: warrantyExtensions.previousExpiryDate,
+        newExpiryDate: warrantyExtensions.newExpiryDate,
+        price: warrantyExtensions.price,
+        notes: warrantyExtensions.notes,
+        approvedById: warrantyExtensions.approvedById,
+        createdAt: warrantyExtensions.createdAt,
+        customerName: customers.name,
+        productName: products.name,
+      })
+      .from(warrantyExtensions)
+      .innerJoin(warranties, eq(warranties.id, warrantyExtensions.warrantyId))
+      .innerJoin(customers, eq(customers.id, warranties.customerId))
+      .innerJoin(products, eq(products.id, warranties.productId))
+      .where(and(...conditions))
+      .orderBy(orderDir(warrantyExtensions.createdAt), orderDir(warrantyExtensions.id))
+      .limit(pageSize + 1);
+
+    const { items, nextCursor, hasNextPage } = buildStandardCursorResponse(results, pageSize);
+
+    return {
+      items: items.map((ext) => ({
+        id: ext.id,
+        warrantyId: ext.warrantyId,
+        warrantyNumber: ext.warrantyNumber,
+        extensionType: ext.extensionType,
+        extensionMonths: ext.extensionMonths,
+        previousExpiryDate: ext.previousExpiryDate.toISOString(),
+        newExpiryDate: ext.newExpiryDate.toISOString(),
+        price: ext.price,
+        notes: ext.notes,
+        approvedById: ext.approvedById,
+        createdAt: ext.createdAt.toISOString(),
+        customerName: ext.customerName,
+        productName: ext.productName,
+      })),
+      nextCursor,
+      hasNextPage,
     };
   });
 
@@ -427,7 +507,8 @@ export const getExtensionById = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result) {
-      return null;
+      setResponseStatus(404);
+      throw new NotFoundError('Warranty extension not found', 'warrantyExtension');
     }
 
     return {
@@ -483,9 +564,9 @@ async function triggerWarrantyExtendedNotification(params: {
 
   // Skip if no customer email
   if (!customer?.email) {
-    console.log(
-      `[warranty-extension] Skipping notification for warranty ${params.warrantyNumber} - no customer email`
-    );
+    warrantyLogger.info('Skipping extension notification - no customer email', {
+      warrantyNumber: params.warrantyNumber,
+    });
     return;
   }
 
@@ -510,7 +591,8 @@ async function triggerWarrantyExtendedNotification(params: {
     payload,
   });
 
-  console.log(
-    `[warranty-extension] Triggered notification for warranty ${params.warrantyNumber} extended by ${params.extensionMonths} months`
-  );
+  warrantyLogger.info('Extension notification triggered', {
+    warrantyNumber: params.warrantyNumber,
+    extensionMonths: params.extensionMonths,
+  });
 }

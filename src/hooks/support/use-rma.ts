@@ -21,6 +21,7 @@ import {
   rejectRma,
   receiveRma,
   processRma,
+  cancelRma,
 } from '@/server/functions/orders/rma';
 import type {
   ListRmasInput,
@@ -98,8 +99,8 @@ export function useRmas({
 
   return useQuery({
     queryKey: queryKeys.support.rmasListFiltered(filters),
-    queryFn: () =>
-      listRmas({
+    queryFn: async () => {
+      const result = await listRmas({
         data: {
           ...filters,
           page: page ?? 1,
@@ -107,7 +108,10 @@ export function useRmas({
           sortBy: sortBy ?? 'createdAt',
           sortOrder: sortOrder ?? 'desc',
         },
-      }),
+      });
+      if (result == null) throw new Error('RMA list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -128,7 +132,11 @@ export interface UseRmaOptions {
 export function useRma({ rmaId, enabled = true }: UseRmaOptions) {
   return useQuery({
     queryKey: queryKeys.support.rmaDetail(rmaId),
-    queryFn: () => getRma({ data: { rmaId } }),
+    queryFn: async () => {
+      const result = await getRma({ data: { rmaId } });
+      if (result == null) throw new Error('RMA not found');
+      return result;
+    },
     enabled: enabled && !!rmaId,
     staleTime: 30 * 1000,
   });
@@ -193,8 +201,9 @@ export function useApproveRma() {
   return useMutation({
     mutationFn: (data: ApproveRmaInput) => approveRma({ data }),
     onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
+      // Invalidate both list and detail caches per STANDARDS.md
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.rmaDetail(result.id) });
     },
   });
 }
@@ -237,6 +246,26 @@ export function useProcessRma() {
 
   return useMutation({
     mutationFn: (data: ProcessRmaInput) => processRma({ data }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+    },
+  });
+}
+
+// ============================================================================
+// CANCEL RMA
+// ============================================================================
+
+/**
+ * Cancel an RMA (status-based cancellation from requested/approved)
+ */
+export function useCancelRma() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { id: string; reason?: string }) =>
+      cancelRma({ data }),
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });

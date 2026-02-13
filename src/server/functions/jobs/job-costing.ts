@@ -10,7 +10,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { and, eq, gte, lte, sql, desc, isNotNull } from 'drizzle-orm';
+import { and, eq, gte, lte, sql, desc, isNotNull, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   jobAssignments,
@@ -33,6 +33,7 @@ import {
   type LaborCost,
 } from '@/lib/schemas';
 import { NotFoundError } from '@/lib/server/errors';
+import { unitCostToDollars, orderTotalToQuotedAmount, laborRateCentsToHourlyRate } from './job-costing-utils';
 
 // ============================================================================
 // CONSTANTS
@@ -110,7 +111,7 @@ export const calculateJobCost = createServerFn({ method: 'GET' })
       );
 
     const materials: MaterialCost[] = materialsData.map((m) => {
-      const unitCostDollars = Number(m.unitCost) / 100;
+      const unitCostDollars = unitCostToDollars(m.unitCost);
       const qty = Number(m.quantityUsed) || 0;
       return {
         productId: m.productId,
@@ -158,7 +159,7 @@ export const calculateJobCost = createServerFn({ method: 'GET' })
       }
     }
 
-    const hourlyRate = laborRateCents / 100;
+    const hourlyRate = laborRateCentsToHourlyRate(laborRateCents);
     const labor: LaborCost[] = Array.from(laborByUser.entries()).map(([userId, data]) => ({
       userId,
       userName: data.userName,
@@ -229,8 +230,8 @@ export const getJobProfitability = createServerFn({ method: 'GET' })
       },
     });
 
-    // Quoted amount from order (convert from cents to dollars)
-    const quotedAmount = job.orderTotal ? Number(job.orderTotal) / 100 : 0;
+    // Quoted amount from order (order total is in dollars)
+    const quotedAmount = orderTotalToQuotedAmount(job.orderTotal);
     const actualCost = costResult.totalCost;
     const profit = quotedAmount - actualCost;
     const marginPercent = quotedAmount > 0 ? (profit / quotedAmount) * 100 : 0;
@@ -297,6 +298,8 @@ export const getJobCostingReport = createServerFn({ method: 'GET' })
     const jobsData = await db
       .select({
         id: jobAssignments.id,
+        migratedToProjectId: jobAssignments.migratedToProjectId,
+        customerId: jobAssignments.customerId,
         jobNumber: jobAssignments.jobNumber,
         title: jobAssignments.title,
         jobType: jobAssignments.jobType,
@@ -331,7 +334,7 @@ export const getJobCostingReport = createServerFn({ method: 'GET' })
             .innerJoin(products, eq(jobMaterials.productId, products.id))
             .where(
               and(
-                sql`${jobMaterials.jobId} IN (${sql.join(jobIds.map(id => sql`${id}`), sql`, `)})`,
+                inArray(jobMaterials.jobId, jobIds),
                 eq(jobMaterials.organizationId, ctx.organizationId)
               )
             )
@@ -350,7 +353,7 @@ export const getJobCostingReport = createServerFn({ method: 'GET' })
             .innerJoin(users, eq(jobTimeEntries.userId, users.id))
             .where(
               and(
-                sql`${jobTimeEntries.jobId} IN (${sql.join(jobIds.map(id => sql`${id}`), sql`, `)})`,
+                inArray(jobTimeEntries.jobId, jobIds),
                 eq(jobTimeEntries.organizationId, ctx.organizationId),
                 isNotNull(jobTimeEntries.endTime)
               )
@@ -386,13 +389,13 @@ export const getJobCostingReport = createServerFn({ method: 'GET' })
     const laborRateCents = data.laborRateOverride
       ? Math.round(data.laborRateOverride * 100)
       : DEFAULT_LABOR_RATE_CENTS;
-    const hourlyRate = laborRateCents / 100;
+    const hourlyRate = laborRateCentsToHourlyRate(laborRateCents);
 
     for (const job of jobsData) {
       // Calculate material cost from batched data
       const jobMaterialsData = materialsByJob.get(job.id) || [];
       const materialCost = jobMaterialsData.reduce((sum, m) => {
-        const unitCostDollars = Number(m.unitCost) / 100;
+        const unitCostDollars = unitCostToDollars(m.unitCost);
         const qty = Number(m.quantityUsed) || 0;
         return sum + unitCostDollars * qty;
       }, 0);
@@ -414,7 +417,7 @@ export const getJobCostingReport = createServerFn({ method: 'GET' })
         0
       );
 
-      const quotedAmount = job.orderTotal ? Number(job.orderTotal) / 100 : 0;
+      const quotedAmount = orderTotalToQuotedAmount(job.orderTotal);
       const actualCost = materialCost + laborCost;
       const profit = quotedAmount - actualCost;
       const marginPercent = quotedAmount > 0 ? (profit / quotedAmount) * 100 : 0;
@@ -422,6 +425,8 @@ export const getJobCostingReport = createServerFn({ method: 'GET' })
 
       jobs.push({
         jobId: job.id,
+        projectId: job.migratedToProjectId ?? undefined,
+        customerId: job.customerId ?? undefined,
         jobNumber: job.jobNumber,
         jobTitle: job.title,
         customerName: job.customerName,

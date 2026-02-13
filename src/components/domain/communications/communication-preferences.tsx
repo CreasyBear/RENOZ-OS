@@ -1,10 +1,11 @@
 /**
  * Communication Preferences Component
  *
- * UI for managing contact communication preferences (email/SMS opt-in).
- * Includes audit history table for compliance.
+ * Container/Presenter pattern for managing contact communication preferences.
+ * Container handles data fetching, presenter handles UI rendering.
  *
  * @see DOM-COMMS-005
+ * @see STANDARDS.md - Container/Presenter Pattern
  */
 
 "use client";
@@ -57,8 +58,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
+import type {
+  ContactPreferences,
+  PreferenceHistoryItem,
+  CommunicationPreferencesProps,
+  PreferenceHistoryProps,
+} from "@/lib/schemas/communications";
 
 // ============================================================================
 // SCHEMAS
@@ -72,64 +79,36 @@ const preferencesFormSchema = z.object({
 type PreferencesFormValues = z.infer<typeof preferencesFormSchema>;
 
 // ============================================================================
-// TYPES
+// PRESENTER COMPONENTS
 // ============================================================================
 
-interface CommunicationPreferencesProps {
-  contactId: string;
+/**
+ * Communication Preferences Presenter
+ * Pure UI component - receives data via props
+ */
+interface CommunicationPreferencesPresenterProps {
+  /** @source useContactPreferences hook in CommunicationPreferencesContainer */
+  preferences: ContactPreferences | null;
+  /** @source useUpdateContactPreferences hook in CommunicationPreferencesContainer */
+  isUpdating: boolean;
   contactName?: string;
   className?: string;
+  onToggle: (field: "emailOptIn" | "smsOptIn", value: boolean) => void;
+  onConfirmOptOut: (field: "emailOptIn" | "smsOptIn") => void;
+  confirmOptOut: "email" | "sms" | null;
+  onConfirmOptOutChange: (value: "email" | "sms" | null) => void;
 }
 
-interface ContactPreferences {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  emailOptIn: boolean;
-  smsOptIn: boolean;
-  emailOptInAt: string | null;
-  smsOptInAt: string | null;
-}
-
-interface PreferenceHistoryItem {
-  id: string;
-  description: string;
-  createdAt: string;
-  metadata: {
-    channel?: string;
-    oldValue?: boolean;
-    newValue?: boolean;
-    changedAt?: string;
-    contactName?: string;
-  };
-}
-
-interface PreferenceHistoryResponse {
-  items: PreferenceHistoryItem[];
-  total: number;
-}
-
-// ============================================================================
-// COMPONENT
-// ============================================================================
-
-export function CommunicationPreferences({
-  contactId,
+function CommunicationPreferencesPresenter({
+  preferences,
+  isUpdating,
   contactName,
   className,
-}: CommunicationPreferencesProps) {
-  const [confirmOptOut, setConfirmOptOut] = React.useState<
-    "email" | "sms" | null
-  >(null);
-  // Fetch current preferences
-  const { data: preferencesData, isLoading } = useContactPreferences({
-    contactId,
-    enabled: !!contactId,
-  });
-
-  const preferences = preferencesData as ContactPreferences | undefined;
-
+  onToggle,
+  onConfirmOptOut,
+  confirmOptOut,
+  onConfirmOptOutChange,
+}: CommunicationPreferencesPresenterProps) {
   const form = useForm<PreferencesFormValues>({
     resolver: zodResolver(preferencesFormSchema),
     defaultValues: {
@@ -143,73 +122,6 @@ export function CommunicationPreferences({
         }
       : undefined,
   });
-
-  const updateMutation = useUpdateContactPreferences();
-
-  const handleToggle = (field: "emailOptIn" | "smsOptIn", value: boolean) => {
-    // If opting out, show confirmation dialog
-    if (!value) {
-      setConfirmOptOut(field === "emailOptIn" ? "email" : "sms");
-      return;
-    }
-
-    // If opting in, update immediately
-    form.setValue(field, value);
-    updateMutation.mutate(
-      { contactId, [field]: value },
-      {
-        onSuccess: () => {
-          toast.success("Preferences updated");
-        },
-        onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to update preferences"
-          );
-        },
-      }
-    );
-  };
-
-  const confirmOptOutAction = () => {
-    if (!confirmOptOut) return;
-
-    const field = confirmOptOut === "email" ? "emailOptIn" : "smsOptIn";
-    form.setValue(field, false);
-    updateMutation.mutate(
-      { contactId, [field]: false },
-      {
-        onSuccess: () => {
-          toast.success("Preferences updated");
-        },
-        onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to update preferences"
-          );
-        },
-      }
-    );
-    setConfirmOptOut(null);
-  };
-
-  // Loading skeleton
-  if (isLoading) {
-    return (
-      <Card className={className} aria-label="preference-form">
-        <CardHeader>
-          <CardTitle className="text-lg">Communication Preferences</CardTitle>
-          <CardDescription>
-            Manage how we communicate with this contact
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   const displayName =
     contactName ||
@@ -242,9 +154,9 @@ export function CommunicationPreferences({
                       <Checkbox
                         checked={field.value}
                         onCheckedChange={(checked) =>
-                          handleToggle("emailOptIn", checked === true)
+                          onToggle("emailOptIn", checked === true)
                         }
-                        disabled={updateMutation.isPending}
+                        disabled={isUpdating}
                         aria-label="email-opt-in"
                       />
                     </FormControl>
@@ -287,9 +199,9 @@ export function CommunicationPreferences({
                       <Checkbox
                         checked={field.value}
                         onCheckedChange={(checked) =>
-                          handleToggle("smsOptIn", checked === true)
+                          onToggle("smsOptIn", checked === true)
                         }
-                        disabled={updateMutation.isPending}
+                        disabled={isUpdating}
                         aria-label="sms-opt-in"
                       />
                     </FormControl>
@@ -321,7 +233,7 @@ export function CommunicationPreferences({
                 )}
               />
 
-              {updateMutation.isPending && (
+              {isUpdating && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Updating preferences...
@@ -335,7 +247,7 @@ export function CommunicationPreferences({
       {/* Opt-Out Confirmation Dialog */}
       <AlertDialog
         open={!!confirmOptOut}
-        onOpenChange={(open) => !open && setConfirmOptOut(null)}
+        onOpenChange={(open) => !open && onConfirmOptOutChange(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -353,7 +265,12 @@ export function CommunicationPreferences({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmOptOutAction}
+              onClick={() => {
+                if (confirmOptOut) {
+                  const field = confirmOptOut === "email" ? "emailOptIn" : "smsOptIn";
+                  onConfirmOptOut(field);
+                }
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Confirm Opt-Out
@@ -365,50 +282,20 @@ export function CommunicationPreferences({
   );
 }
 
-// ============================================================================
-// PREFERENCE HISTORY COMPONENT
-// ============================================================================
-
-interface PreferenceHistoryProps {
-  contactId?: string;
-  customerId?: string;
+/**
+ * Preference History Presenter
+ * Pure UI component - receives data via props
+ */
+interface PreferenceHistoryPresenterProps {
+  /** @source usePreferenceHistory hook in PreferenceHistoryContainer */
+  history: PreferenceHistoryItem[];
   className?: string;
 }
 
-export function PreferenceHistory({
-  contactId,
-  customerId,
+function PreferenceHistoryPresenter({
+  history,
   className,
-}: PreferenceHistoryProps) {
-  const { data: historyData, isLoading } = usePreferenceHistory({
-    contactId,
-    customerId,
-    limit: 50,
-    enabled: !!contactId || !!customerId,
-  });
-
-  const history = (historyData as PreferenceHistoryResponse | undefined)?.items ?? [];
-
-  if (isLoading) {
-    return (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Preference History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
+}: PreferenceHistoryPresenterProps) {
   if (history.length === 0) {
     return (
       <Card className={className}>
@@ -500,4 +387,155 @@ export function PreferenceHistory({
       </CardContent>
     </Card>
   );
+}
+
+// ============================================================================
+// CONTAINER COMPONENTS
+// ============================================================================
+
+/**
+ * Communication Preferences Container
+ * Handles data fetching and business logic
+ * @source preferences from useContactPreferences hook
+ * @source updateMutation from useUpdateContactPreferences hook
+ */
+export function CommunicationPreferences({
+  contactId,
+  contactName,
+  className,
+}: CommunicationPreferencesProps) {
+  const [confirmOptOut, setConfirmOptOut] = React.useState<
+    "email" | "sms" | null
+  >(null);
+
+  // Fetch current preferences
+  const { data: preferencesData, isLoading } = useContactPreferences({
+    contactId,
+    enabled: !!contactId,
+  });
+
+  const preferences = preferencesData ?? null;
+
+  const updateMutation = useUpdateContactPreferences();
+
+  const handleToggle = React.useCallback(
+    (field: "emailOptIn" | "smsOptIn", value: boolean) => {
+      // If opting out, show confirmation dialog
+      if (!value) {
+        setConfirmOptOut(field === "emailOptIn" ? "email" : "sms");
+        return;
+      }
+
+      // If opting in, update immediately
+      updateMutation.mutate(
+        { contactId, [field]: value },
+        {
+          onSuccess: () => {
+            toast.success("Preferences updated");
+          },
+          onError: (error) => {
+            toast.error("Failed to update preferences", {
+              description: getUserFriendlyMessage(error as Error),
+            });
+          },
+        }
+      );
+    },
+    [contactId, updateMutation]
+  );
+
+  const confirmOptOutAction = React.useCallback(
+    (field: "emailOptIn" | "smsOptIn") => {
+      updateMutation.mutate(
+        { contactId, [field]: false },
+        {
+          onSuccess: () => {
+            toast.success("Preferences updated");
+          },
+          onError: (error) => {
+            toast.error("Failed to update preferences", {
+              description: getUserFriendlyMessage(error as Error),
+            });
+          },
+        }
+      );
+      setConfirmOptOut(null);
+    },
+    [contactId, updateMutation]
+  );
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <Card className={className} aria-label="preference-form">
+        <CardHeader>
+          <CardTitle className="text-lg">Communication Preferences</CardTitle>
+          <CardDescription>
+            Manage how we communicate with this contact
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <CommunicationPreferencesPresenter
+      preferences={preferences}
+      isUpdating={updateMutation.isPending}
+      contactName={contactName}
+      className={className}
+      onToggle={handleToggle}
+      onConfirmOptOut={confirmOptOutAction}
+      confirmOptOut={confirmOptOut}
+      onConfirmOptOutChange={setConfirmOptOut}
+    />
+  );
+}
+
+/**
+ * Preference History Container
+ * Handles data fetching
+ * @source history from usePreferenceHistory hook
+ */
+export function PreferenceHistory({
+  contactId,
+  customerId,
+  className,
+}: PreferenceHistoryProps) {
+  const { data: historyData, isLoading } = usePreferenceHistory({
+    contactId,
+    customerId,
+    limit: 50,
+    enabled: !!contactId || !!customerId,
+  });
+
+  const history = historyData?.items ?? [];
+
+  if (isLoading) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <History className="h-5 w-5" />
+            Preference History
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return <PreferenceHistoryPresenter history={history} className={className} />;
 }

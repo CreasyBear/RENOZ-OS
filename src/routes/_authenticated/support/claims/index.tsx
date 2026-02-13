@@ -13,14 +13,17 @@ import { z } from 'zod';
 
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
-import { WarrantyClaimsListContainer } from '@/components/domain/warranty';
+import { WarrantyClaimsListContainer } from '@/components/domain/warranty/containers/warranty-claims-list-container';
+import type { WarrantyClaimsSearchParams } from '@/lib/schemas/warranty';
 
 // ============================================================================
 // ROUTE SEARCH PARAMS
 // ============================================================================
 
 const claimsSearchSchema = z.object({
-  status: z.enum(['submitted', 'under_review', 'approved', 'denied', 'resolved']).optional(),
+  status: z
+    .enum(['submitted', 'under_review', 'approved', 'denied', 'resolved', 'cancelled'])
+    .optional(),
   type: z
     .enum(['cell_degradation', 'bms_fault', 'inverter_failure', 'installation_defect', 'other'])
     .optional(),
@@ -54,7 +57,7 @@ function ClaimsListPage() {
   const search = Route.useSearch();
 
   // Update search params
-  const updateSearch = (updates: Partial<z.infer<typeof claimsSearchSchema>>) => {
+  const updateSearch = (updates: Partial<WarrantyClaimsSearchParams>) => {
     navigate({
       search: (prev) => ({
         ...prev,

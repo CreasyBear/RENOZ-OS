@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Context file exports provider + hook */
 /**
  * Customer Context Provider
  *
@@ -15,9 +16,9 @@ import {
   useMemo,
   type ReactNode,
 } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
-import { getCustomerById } from '@/server/customers'
+import { useCustomer, usePrefetchCustomer } from '@/hooks/customers'
 
 // ============================================================================
 // TYPES
@@ -92,28 +93,29 @@ export function CustomerProvider({ children }: CustomerProviderProps) {
   })
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Fetch current customer data
-  const { data: customerData, isLoading: isLoadingCustomer } = useQuery({
-    queryKey: queryKeys.customers.detail(currentCustomerId ?? ''),
-    queryFn: async () => {
-      if (!currentCustomerId) return null
-      const result = await getCustomerById({ data: { id: currentCustomerId } })
-      if (!result) return null
-      return {
-        id: result.id,
-        customerCode: result.customerCode,
-        name: result.name,
-        type: result.type,
-        status: result.status,
-        healthScore: result.healthScore,
-        lifetimeValue: result.lifetimeValue
-          ? typeof result.lifetimeValue === 'string' ? parseFloat(result.lifetimeValue) : result.lifetimeValue
-          : null,
-      } as CustomerSummary
-    },
+  // Fetch current customer data using hook (per STANDARDS.md)
+  const { data: customerResult, isLoading: isLoadingCustomer } = useCustomer({
+    id: currentCustomerId ?? '',
     enabled: !!currentCustomerId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
   })
+
+  // Transform customer data to summary format
+  const customerData = useMemo<CustomerSummary | null>(() => {
+    if (!customerResult) return null
+    return {
+      id: customerResult.id,
+      customerCode: customerResult.customerCode,
+      name: customerResult.name,
+      type: customerResult.type,
+      status: customerResult.status,
+      healthScore: customerResult.healthScore,
+      lifetimeValue: customerResult.lifetimeValue
+        ? typeof customerResult.lifetimeValue === 'string'
+          ? parseFloat(customerResult.lifetimeValue)
+          : customerResult.lifetimeValue
+        : null,
+    }
+  }, [customerResult])
 
   // Set current customer
   const setCurrentCustomer = useCallback((customerId: string | null) => {
@@ -144,35 +146,22 @@ export function CustomerProvider({ children }: CustomerProviderProps) {
     }
   }, [])
 
-  // Quick lookup
+  // Quick lookup - uses prefetch pattern via queryClient
+  const prefetchCustomer = usePrefetchCustomer()
   const lookupCustomer = useCallback(
     async (customerId: string): Promise<CustomerSummary | null> => {
       try {
-        const result = await queryClient.fetchQuery({
-          queryKey: queryKeys.customers.detail(customerId),
-          queryFn: async () => {
-            const data = await getCustomerById({ data: { id: customerId } })
-            if (!data) return null
-            return {
-              id: data.id,
-              customerCode: data.customerCode,
-              name: data.name,
-              type: data.type,
-              status: data.status,
-              healthScore: data.healthScore,
-              lifetimeValue: data.lifetimeValue
-                ? typeof data.lifetimeValue === 'string' ? parseFloat(data.lifetimeValue) : data.lifetimeValue
-                : null,
-            } as CustomerSummary
-          },
-          staleTime: 5 * 60 * 1000,
-        })
-        return result
+        // Prefetch and return from cache
+        await prefetchCustomer(customerId)
+        const data = queryClient.getQueryData<CustomerSummary>(
+          queryKeys.customers.detail(customerId)
+        )
+        return data ?? null
       } catch {
         return null
       }
     },
-    [queryClient]
+    [queryClient, prefetchCustomer]
   )
 
   // Memoize context value

@@ -42,6 +42,11 @@ import {
   quantityColumn,
   currencyColumn,
   numericCasted,
+  standardRlsPolicies,
+  organizationRlsUsing,
+  organizationRlsWithCheck,
+  sqlEmptyTextArray,
+  sqlEmptyUuidArray,
 } from "../_shared/patterns";
 import { products } from "../products/products";
 import { warehouseLocations } from "./warehouse-locations";
@@ -77,6 +82,16 @@ export interface MovementMetadata {
   countCode?: string;
   /** Variance reason for count discrepancies */
   varianceReason?: string;
+  /** Receipt ID for goods receipt movements */
+  receiptId?: string;
+  /** PO number for reference display */
+  poNumber?: string;
+  /** Shipment ID for fulfillment movements */
+  shipmentId?: string;
+  /** Total COGS for this movement */
+  cogsTotal?: number;
+  /** COGS per unit for this movement */
+  cogsUnitCost?: number;
 }
 
 // ============================================================================
@@ -153,6 +168,8 @@ export const inventory = pgTable(
     // Common queries
     productIdx: index("idx_inventory_product").on(table.productId),
     locationIdx: index("idx_inventory_location").on(table.locationId),
+    // Serial number lookups (for getAvailableSerials)
+    serialNumberIdx: index("idx_inventory_serial_number").on(table.serialNumber),
     // Allocation cannot exceed on-hand
     allocationCheck: check(
       "inventory_allocation_max",
@@ -160,27 +177,7 @@ export const inventory = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("inventory_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("inventory_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("inventory_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("inventory_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("inventory"),
   })
 );
 
@@ -259,12 +256,12 @@ export const inventoryMovements = pgTable(
     selectPolicy: pgPolicy("inventory_movements_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
     insertPolicy: pgPolicy("inventory_movements_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: organizationRlsWithCheck(),
     }),
   })
 );
@@ -342,27 +339,7 @@ export const stockCounts = pgTable(
     locationIdx: index("idx_stock_counts_location").on(table.locationId),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("stock_counts_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("stock_counts_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("stock_counts_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("stock_counts_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("stock_counts"),
   })
 );
 
@@ -467,27 +444,7 @@ export const inventoryCostLayers = pgTable(
     inventoryIdx: index("idx_cost_layers_inventory").on(table.inventoryId),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("inventory_cost_layers_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("inventory_cost_layers_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("inventory_cost_layers_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("inventory_cost_layers_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("inventory_cost_layers"),
   })
 );
 
@@ -543,27 +500,7 @@ export const inventoryForecasts = pgTable(
     periodIdx: index("idx_forecasts_period").on(table.forecastPeriod),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("inventory_forecasts_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("inventory_forecasts_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("inventory_forecasts_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("inventory_forecasts_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("inventory_forecasts"),
   })
 );
 
@@ -603,8 +540,8 @@ export const inventoryAlerts = pgTable(
     isActive: boolean("is_active").notNull().default(true),
 
     // Notification settings
-    notificationChannels: text("notification_channels").array().default(sql`'{}'::text[]`),
-    escalationUsers: uuid("escalation_users").array().default(sql`'{}'::uuid[]`),
+    notificationChannels: text("notification_channels").array().default(sqlEmptyTextArray()),
+    escalationUsers: uuid("escalation_users").array().default(sqlEmptyUuidArray()),
 
     // Tracking
     lastTriggeredAt: timestamp("last_triggered_at", { withTimezone: true }),
@@ -634,27 +571,7 @@ export const inventoryAlerts = pgTable(
     triggeredIdx: index("idx_alerts_triggered").on(table.lastTriggeredAt),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("inventory_alerts_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("inventory_alerts_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("inventory_alerts_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("inventory_alerts_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("inventory_alerts"),
   })
 );
 

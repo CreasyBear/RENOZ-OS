@@ -7,20 +7,21 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth, useSignOut } from '@/lib/auth/hooks'
+import { useSignOut } from '@/lib/auth/hooks'
+import { useCurrentUser } from '@/hooks/auth/use-current-user'
 import { toast } from '@/hooks'
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user } = useCurrentUser()
   const signOut = useSignOut()
 
   // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (menuRef.current && !menuRef.current.contains(event.target as never)) {
         setIsOpen(false)
       }
     }

@@ -4,16 +4,17 @@
  * Floating checklist that guides new users through onboarding steps.
  * Shows progress, allows completion/dismissal of steps, and provides actions.
  *
- * @see src/server/functions/onboarding.ts for server functions
+ * @see src/hooks/users/use-onboarding.ts for hooks
  */
 
-import { useState, useEffect } from 'react';
-import { useServerFn } from '@tanstack/react-start';
+import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import {
-  getOnboardingProgress,
-  completeOnboardingStep,
-  dismissOnboardingStep,
-} from '@/server/functions/users/onboarding';
+  useOnboardingProgress,
+  useCompleteOnboardingStep,
+  useDismissOnboardingStep,
+  type OnboardingStep,
+} from '@/hooks/users';
 import { toast } from '@/hooks';
 
 // UI Components
@@ -32,29 +33,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 // Icons
 import { CheckCircle2, Circle, ChevronRight, Sparkles, PartyPopper, Loader2 } from 'lucide-react';
 
-// Types
-interface OnboardingStep {
-  key: string;
-  name: string;
-  description: string;
-  action: string;
-  isCompleted: boolean;
-  completedAt: Date | null;
-  isDismissed: boolean;
-  dismissedAt: Date | null;
-}
-
-interface OnboardingStats {
-  totalSteps: number;
-  completedSteps: number;
-  dismissedSteps: number;
-  remainingSteps: number;
-  percentComplete: number;
-}
-
 interface OnboardingChecklistProps {
-  /** Render as sheet (sidebar) or popover (floating) */
-  variant?: 'sheet' | 'popover';
+  /** Render as sheet (sidebar), popover (floating), or inline (embedded content) */
+  variant?: 'sheet' | 'popover' | 'inline';
   /** Auto-hide when all steps completed */
   autoHideOnComplete?: boolean;
 }
@@ -63,40 +44,23 @@ export function OnboardingChecklist({
   variant = 'popover',
   autoHideOnComplete = true,
 }: OnboardingChecklistProps) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [steps, setSteps] = useState<OnboardingStep[]>([]);
-  const [stats, setStats] = useState<OnboardingStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const getProgressFn = useServerFn(getOnboardingProgress);
-  const completeStepFn = useServerFn(completeOnboardingStep);
-  const dismissStepFn = useServerFn(dismissOnboardingStep);
+  const { data, isLoading } = useOnboardingProgress();
+  const completeStepMutation = useCompleteOnboardingStep();
+  const dismissStepMutation = useDismissOnboardingStep();
 
-  // Fetch onboarding progress
-  const fetchProgress = async () => {
-    try {
-      const result = await getProgressFn({ data: {} });
-      setSteps(result.steps as OnboardingStep[]);
-      setStats(result.stats);
-    } catch {
-      // Silently fail - onboarding is not critical
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProgress();
-  }, []);
+  const steps = data?.steps ?? [];
+  const stats = data?.stats ?? null;
 
   // Handle step completion
   const handleComplete = async (stepKey: string) => {
     setActionLoading(stepKey);
     try {
-      await completeStepFn({ data: { stepKey } });
+      await completeStepMutation.mutateAsync(stepKey);
       toast.success('Step completed!');
-      fetchProgress();
     } catch {
       toast.error('Failed to complete step');
     } finally {
@@ -109,8 +73,7 @@ export function OnboardingChecklist({
     e.stopPropagation();
     setActionLoading(stepKey);
     try {
-      await dismissStepFn({ data: { stepKey } });
-      fetchProgress();
+      await dismissStepMutation.mutateAsync(stepKey);
     } catch {
       toast.error('Failed to dismiss step');
     } finally {
@@ -118,18 +81,23 @@ export function OnboardingChecklist({
     }
   };
 
-  // Navigate to action
+  // Navigate to action (use router instead of window.location for SPA navigation)
   const handleAction = (action: string) => {
-    window.location.href = action;
+    const [path, searchStr] = action.split('?');
+    const search = searchStr
+      ? Object.fromEntries(new URLSearchParams(searchStr))
+      : undefined;
+    navigate({ to: path || '/', search });
+    setOpen(false);
   };
 
   // Don't render if loading or complete
-  if (loading) return null;
+  if (isLoading) return null;
   if (!stats) return null;
   if (autoHideOnComplete && stats.percentComplete === 100) return null;
 
   // Active steps (not completed or dismissed)
-  const activeSteps = steps.filter((s) => !s.isCompleted && !s.isDismissed);
+  const activeSteps = steps.filter((s: OnboardingStep) => !s.isCompleted && !s.isDismissed);
 
   const content = (
     <div className="space-y-4">
@@ -151,15 +119,15 @@ export function OnboardingChecklist({
           <PartyPopper className="h-5 w-5 text-green-600" />
           <div>
             <p className="font-medium text-green-900">All done!</p>
-            <p className="text-xs text-green-700">You've completed all onboarding steps</p>
+            <p className="text-xs text-green-700">You&apos;ve completed all onboarding steps</p>
           </div>
         </div>
       )}
 
       {/* Steps list */}
       <div className="space-y-2">
-        {steps.map((step) => {
-          const isLoading = actionLoading === step.key;
+        {steps.map((step: OnboardingStep) => {
+          const isStepLoading = actionLoading === step.key;
 
           return (
             <div
@@ -175,7 +143,7 @@ export function OnboardingChecklist({
             >
               {/* Status icon */}
               <div className="mt-0.5">
-                {isLoading ? (
+                {isStepLoading ? (
                   <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
                 ) : step.isCompleted ? (
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -206,7 +174,7 @@ export function OnboardingChecklist({
                         e.stopPropagation();
                         handleComplete(step.key);
                       }}
-                      disabled={isLoading}
+                      disabled={isStepLoading}
                     >
                       Mark Done
                     </Button>
@@ -215,7 +183,7 @@ export function OnboardingChecklist({
                       variant="ghost"
                       className="text-muted-foreground h-7 text-xs"
                       onClick={(e) => handleDismiss(step.key, e)}
-                      disabled={isLoading}
+                      disabled={isStepLoading}
                     >
                       Skip
                     </Button>
@@ -224,7 +192,7 @@ export function OnboardingChecklist({
               </div>
 
               {/* Navigation arrow for active steps */}
-              {!step.isCompleted && !step.isDismissed && !isLoading && (
+              {!step.isCompleted && !step.isDismissed && !isStepLoading && (
                 <ChevronRight className="text-muted-foreground h-5 w-5" />
               )}
             </div>
@@ -262,6 +230,10 @@ export function OnboardingChecklist({
         </SheetContent>
       </Sheet>
     );
+  }
+
+  if (variant === 'inline') {
+    return <div className="space-y-4">{content}</div>;
   }
 
   return (

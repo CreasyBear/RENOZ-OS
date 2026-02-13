@@ -9,10 +9,14 @@
  * @path src/components/domain/jobs/projects/project-completion-dialog.tsx
  */
 
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useForm, type SubmitHandler, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { CheckCircle, Star, FileText, PartyPopper } from 'lucide-react';
+import { CheckCircle, Star, PartyPopper, FileText } from 'lucide-react';
+import {
+  projectCompletionFormSchema,
+  type CompletionValidation,
+  type ProjectCompletionFormValues,
+} from '@/lib/schemas/jobs/projects';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -44,23 +49,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useCompleteProject } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 import { useState } from 'react';
+import { DisabledButtonWithTooltip } from '@/components/shared/disabled-with-tooltip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const projectCompletionFormSchema = z.object({
-  status: z.enum(['completed', 'cancelled', 'on_hold']),
-  actualCompletionDate: z.string().date(),
-  actualTotalCost: z.number().positive().optional(),
-  customerSatisfactionRating: z.number().int().min(1).max(5).optional(),
-  customerFeedback: z.string().optional(),
-  generateHandoverPack: z.boolean(),
-});
-
-type ProjectCompletionFormValues = z.infer<typeof projectCompletionFormSchema>;
 
 // ============================================================================
 // TYPES
@@ -72,6 +63,8 @@ export interface ProjectCompletionDialogProps {
   projectId: string;
   projectTitle: string;
   estimatedTotalValue?: number;
+  /** Completion validation - when provided, blocks "completed" status if tasks/BOM incomplete */
+  completionValidation?: CompletionValidation;
   /** Callback after successful completion */
   onSuccess?: () => void;
 }
@@ -86,6 +79,7 @@ export function ProjectCompletionDialog({
   projectId,
   projectTitle,
   estimatedTotalValue,
+  completionValidation,
   onSuccess,
 }: ProjectCompletionDialogProps) {
   const completeProject = useCompleteProject();
@@ -93,7 +87,7 @@ export function ProjectCompletionDialog({
   const [showCelebration, setShowCelebration] = useState(false);
 
   const form = useForm<ProjectCompletionFormValues>({
-    resolver: zodResolver(projectCompletionFormSchema),
+    resolver: zodResolver(projectCompletionFormSchema) as Resolver<ProjectCompletionFormValues>,
     defaultValues: {
       status: 'completed',
       actualCompletionDate: format(new Date(), 'yyyy-MM-dd'),
@@ -101,12 +95,13 @@ export function ProjectCompletionDialog({
       customerSatisfactionRating: undefined,
       customerFeedback: '',
       generateHandoverPack: true,
+      overrideReason: '',
     },
   });
 
   const onSubmit: SubmitHandler<ProjectCompletionFormValues> = async (data) => {
     try {
-      await completeProject.mutateAsync({
+      const updatedProject = await completeProject.mutateAsync({
         projectId,
         status: data.status,
         actualCompletionDate: data.actualCompletionDate,
@@ -115,14 +110,21 @@ export function ProjectCompletionDialog({
         customerFeedback: data.customerFeedback,
         generateHandoverPack: data.generateHandoverPack,
       });
-      
+
       if (data.status === 'completed') {
         setShowCelebration(true);
-        toast.success('Project completed successfully! 🎉');
+        toast.success('Project completed successfully! 🎉', {
+          description: updatedProject?.handoverPackUrl
+            ? 'Handover pack generated.'
+            : undefined,
+          action: updatedProject?.handoverPackUrl
+            ? { label: 'View Handover Pack', onClick: () => window.open(updatedProject.handoverPackUrl!, '_blank') }
+            : undefined,
+        });
       } else {
         toast.success(`Project marked as ${data.status}`);
       }
-      
+
       setTimeout(() => {
         form.reset();
         onSuccess?.();
@@ -130,14 +132,30 @@ export function ProjectCompletionDialog({
         setShowCelebration(false);
       }, 1500);
     } catch (error) {
-      toast.error('Failed to complete project');
-      console.error('Completion error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to complete project: ${message}`);
     }
   };
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
   const selectedRating = form.watch('customerSatisfactionRating');
   const actualCost = form.watch('actualTotalCost');
   const status = form.watch('status');
+  const overrideReason = form.watch('overrideReason');
+
+  // Completion validation: block "completed" if tasks or BOM incomplete
+  const isTasksIncomplete =
+    completionValidation &&
+    completionValidation.totalTasks > 0 &&
+    completionValidation.completedTasks < completionValidation.totalTasks;
+  const isBomIncomplete =
+    completionValidation &&
+    completionValidation.totalBomItems > 0 &&
+    completionValidation.installedBomItems < completionValidation.totalBomItems;
+  const isCompletionBlocked =
+    status === 'completed' && (isTasksIncomplete === true || isBomIncomplete === true);
+  const hasValidOverride =
+    !isCompletionBlocked || (overrideReason?.trim().length ?? 0) >= 10;
 
   // Calculate variance
   const variance = estimatedTotalValue && actualCost 
@@ -251,8 +269,44 @@ export function ProjectCompletionDialog({
               )}
             />
 
+            {status === 'completed' && isCompletionBlocked && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {isTasksIncomplete && isBomIncomplete
+                    ? `${completionValidation!.totalTasks - completionValidation!.completedTasks} task(s) incomplete and ${completionValidation!.totalBomItems - completionValidation!.installedBomItems} BOM item(s) not installed.`
+                    : isTasksIncomplete
+                      ? `${completionValidation!.totalTasks - completionValidation!.completedTasks} task(s) incomplete.`
+                      : `${completionValidation!.totalBomItems - completionValidation!.installedBomItems} BOM item(s) not installed.`}{' '}
+                  Provide a reason below to override and complete anyway.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {status === 'completed' && (
               <>
+                {isCompletionBlocked && (
+                  <FormField
+                    control={form.control}
+                    name="overrideReason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Override Reason *</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="I understand items are incomplete. Reason for override..."
+                            className="min-h-[60px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Minimum 10 characters required to complete with incomplete items
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 {/* Customer Rating */}
                 <FormField
                   control={form.control}
@@ -348,16 +402,25 @@ export function ProjectCompletionDialog({
               >
                 Cancel
               </Button>
-              <Button
+              <DisabledButtonWithTooltip
                 type="submit"
                 disabled={completeProject.isPending || !form.formState.isValid}
+                disabledReason={
+                  status === 'completed' && isCompletionBlocked && !hasValidOverride
+                    ? isTasksIncomplete && isBomIncomplete
+                      ? 'Complete all tasks and BOM items first, or provide an override reason below (min 10 characters)'
+                      : isTasksIncomplete
+                        ? 'Complete all tasks first, or provide an override reason below'
+                        : 'Install all BOM items first, or provide an override reason below'
+                    : undefined
+                }
               >
-                {completeProject.isPending 
-                  ? 'Completing...' 
-                  : status === 'completed' 
-                    ? 'Complete Project' 
+                {completeProject.isPending
+                  ? 'Completing...'
+                  : status === 'completed'
+                    ? 'Complete Project'
                     : 'Update Status'}
-              </Button>
+              </DisabledButtonWithTooltip>
             </DialogFooter>
           </form>
         </Form>

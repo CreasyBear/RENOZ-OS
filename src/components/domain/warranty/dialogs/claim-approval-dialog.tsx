@@ -30,7 +30,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Spinner } from '@/components/ui/spinner';
 import { CheckCircle2, XCircle, AlertCircle, Shield, User, Package, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { WarrantyClaimTypeValue } from '@/lib/schemas/warranty/claims';
+import { isWarrantyClaimTypeValue } from '@/lib/schemas/warranty';
 import {
   claimTypeConfig,
   claimStatusConfig,
@@ -85,6 +85,10 @@ export interface ClaimApprovalDialogProps {
 }
 
 type Decision = 'approve' | 'deny' | 'request_info';
+
+function isDecision(v: unknown): v is Decision {
+  return v === 'approve' || v === 'deny' || v === 'request_info';
+}
 
 // ============================================================================
 // COMPONENT
@@ -147,7 +151,9 @@ export function ClaimApprovalDialog({
     }
   };
 
-  const claimTypeCfg = claimTypeConfig[claim.claimType as WarrantyClaimTypeValue];
+  const claimTypeCfg = isWarrantyClaimTypeValue(claim.claimType)
+    ? claimTypeConfig[claim.claimType]
+    : undefined;
 
   // Check if claim can be approved/denied
   const canDecide = claim.status === 'submitted' || claim.status === 'under_review';
@@ -244,7 +250,7 @@ export function ClaimApprovalDialog({
               <Label>Decision</Label>
               <RadioGroup
                 value={decision}
-                onValueChange={(v) => setDecision(v as Decision)}
+                onValueChange={(v) => setDecision(isDecision(v) ? v : 'approve')}
                 className="space-y-2"
               >
                 <div className="flex items-center space-x-2">

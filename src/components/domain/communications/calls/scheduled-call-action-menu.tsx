@@ -44,19 +44,16 @@ import {
   useCancelCall,
   useRescheduleCall,
 } from "@/hooks/communications/use-scheduled-calls";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
+
+import type { ScheduledCallActionMenuProps } from "@/lib/schemas/communications";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-interface ScheduledCallActionMenuProps {
-  callId: string;
-  scheduledAt: Date;
-  onComplete?: () => void;
-  onReschedule?: () => void;
-  trigger?: React.ReactNode;
-}
+// ScheduledCallActionMenuProps imported from schemas
 
 // ============================================================================
 // CONSTANTS
@@ -97,9 +94,9 @@ export function ScheduledCallActionMenu({
           toast.success("Call snoozed");
         },
         onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to snooze call"
-          );
+          toast.error("Failed to snooze call", {
+            description: getUserFriendlyMessage(error as Error),
+          });
         },
       }
     );
@@ -117,9 +114,9 @@ export function ScheduledCallActionMenu({
           setCancelDialogOpen(false);
         },
         onError: (error) => {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to cancel call"
-          );
+          toast.error("Failed to cancel call", {
+            description: getUserFriendlyMessage(error as Error),
+          });
         },
       }
     );

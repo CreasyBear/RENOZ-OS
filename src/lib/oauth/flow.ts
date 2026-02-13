@@ -8,7 +8,7 @@
  */
 
 import crypto from 'node:crypto';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { oauthSyncLogs } from 'drizzle/schema/oauth';
 import { encryptOAuthState, type OAuthStatePayload } from '@/lib/oauth/token-encryption';
 import {
@@ -16,6 +16,8 @@ import {
   createPersistentOAuthState,
 } from '@/lib/oauth/state-management';
 import { createOAuthConnections } from '@/lib/oauth/connections';
+import { isAllowedExternalRedirect } from '@/lib/auth/redirects';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // PKCE (Proof Key for Code Exchange) Implementation
@@ -68,7 +70,7 @@ export interface InitiateOAuthFlowParams {
   provider: 'google_workspace' | 'microsoft_365';
   services: ('calendar' | 'email' | 'contacts')[];
   redirectUrl: string;
-  db: PostgresJsDatabase<any>;
+  db: OAuthDatabase;
 }
 
 export interface OAuthFlowUrls {
@@ -85,6 +87,11 @@ export async function initiateOAuthFlow(params: InitiateOAuthFlowParams): Promis
   const { organizationId, userId, provider, services, redirectUrl, db } = params;
 
   if (!isAllowedRedirectUrl(redirectUrl)) {
+    logger.warn('[oauth] rejected redirect URL during initiation', {
+      provider,
+      organizationId,
+      redirectUrl,
+    });
     throw new Error('Redirect URL is not allowed');
   }
 
@@ -154,7 +161,7 @@ export interface OAuthCallbackParams {
   state?: string;
   error?: string;
   errorDescription?: string;
-  db: PostgresJsDatabase<any>;
+  db: OAuthDatabase;
 }
 
 export interface OAuthCallbackResultSuccess {
@@ -213,6 +220,9 @@ export async function handleOAuthCallback(
   const stateValidation = await validateOAuthStateWithDatabase(db, state);
 
   if (!stateValidation.isValid || !stateValidation.state) {
+    logger.warn('[oauth] callback state validation failed', {
+      error: stateValidation.error,
+    });
     return {
       success: false,
       error: 'invalid_state',
@@ -521,19 +531,15 @@ function generateMicrosoftScopes(services: ('calendar' | 'email' | 'contacts')[]
 // Redirect URL validation
 // ============================================================================
 
-function isAllowedRedirectUrl(redirectUrl: string): boolean {
+export function isAllowedRedirectUrl(redirectUrl: string): boolean {
   const allowlist = (process.env.OAUTH_REDIRECT_ALLOWLIST || '')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
 
-  if (process.env.APP_URL) {
-    allowlist.push(process.env.APP_URL);
-  }
-
-  if (allowlist.length === 0) {
-    return true;
-  }
-
-  return allowlist.some((allowed) => redirectUrl.startsWith(allowed));
+  return isAllowedExternalRedirect(redirectUrl, {
+    allowlist,
+    appUrl: process.env.APP_URL,
+    nodeEnv: process.env.NODE_ENV,
+  });
 }

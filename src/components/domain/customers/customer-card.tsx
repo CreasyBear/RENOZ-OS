@@ -54,12 +54,24 @@ const typeConfig: Record<string, { label: string; icon: typeof Building2 }> = {
   non_profit: { label: 'Non-Profit', icon: Building2 },
 }
 
+import { getHealthScoreSemanticColor } from './customer-status-config';
+import { capitalizeFirst } from '@/lib/customer-utils';
+
 function getHealthScoreColor(score: number | null): string {
-  if (score === null) return 'bg-gray-200'
-  if (score >= 80) return 'bg-green-500'
-  if (score >= 60) return 'bg-yellow-500'
-  if (score >= 40) return 'bg-orange-500'
-  return 'bg-red-500'
+  const semanticColor = getHealthScoreSemanticColor(score);
+  // Map semantic colors to dot colors (using more saturated variants)
+  const dotColorMap: Record<typeof semanticColor, string> = {
+    success: 'bg-emerald-500',
+    warning: 'bg-amber-500',
+    pending: 'bg-orange-500',
+    error: 'bg-red-500',
+    neutral: 'bg-gray-400',
+    info: 'bg-blue-500',
+    progress: 'bg-violet-500',
+    inactive: 'bg-slate-400',
+    draft: 'bg-slate-300',
+  };
+  return dotColorMap[semanticColor] ?? 'bg-gray-400';
 }
 
 function formatRelativeTime(date: string | Date | null | undefined): string {
@@ -226,7 +238,7 @@ export function CustomerCard({
                 />
               ) : (
                 <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
-                  {customer.owner.name.charAt(0).toUpperCase()}
+                  {capitalizeFirst(customer.owner.name.charAt(0))}
                 </div>
               )}
               <span className="text-xs text-muted-foreground">{customer.owner.name}</span>

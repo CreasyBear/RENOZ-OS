@@ -9,38 +9,24 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Link } from '@tanstack/react-router';
 import { AlertTriangle, User, Calendar, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { buttonVariants } from '@/components/ui/button';
+import type { IssueKanbanItem, IssuePriority } from '@/lib/schemas/support/issues';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface IssueKanbanItem {
-  id: string;
-  issueNumber: string;
-  title: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  status: string;
-  type: string;
-  customer?: { name: string } | null;
-  assignedTo?: { name: string | null; email: string } | null;
-  createdAt: Date | string;
-  slaStatus?: 'on_track' | 'at_risk' | 'breached' | null;
-  slaResponseDue?: Date | string | null;
-  slaResolutionDue?: Date | string | null;
-}
+export type { IssueKanbanItem };
 
 // ============================================================================
 // PRIORITY CONFIG
 // ============================================================================
 
 const priorityConfig: Record<
-  IssueKanbanItem['priority'],
+  IssuePriority,
   {
     label: string;
     variant: 'default' | 'secondary' | 'outline' | 'destructive';
@@ -116,7 +102,7 @@ export function IssueKanbanCard({
           {onSelect && (
             <Checkbox
               checked={isSelected}
-              onCheckedChange={(checked) => onSelect(issue.id, checked as boolean)}
+              onCheckedChange={(checked) => onSelect(issue.id, checked === true)}
               onClick={(e) => e.stopPropagation()}
               className="mt-0.5"
             />
@@ -149,7 +135,19 @@ export function IssueKanbanCard({
       </CardHeader>
       <CardContent className="p-3 pt-0" onClick={() => onClick?.(issue)}>
         <div className="text-muted-foreground flex items-center gap-3 text-xs">
-          {issue.customer && <span className="max-w-[100px] truncate">{issue.customer.name}</span>}
+          {issue.customerId ? (
+            <Link
+              to="/customers/$customerId"
+              params={{ customerId: issue.customerId }}
+              search={{}}
+              className={cn(buttonVariants({ variant: 'link' }), 'h-auto max-w-[100px] truncate p-0 text-xs')}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {issue.customer?.name ?? 'Customer'}
+            </Link>
+          ) : (
+            issue.customer && <span className="max-w-[100px] truncate">{issue.customer.name}</span>
+          )}
           {issue.assignedTo && (
             <Tooltip>
               <TooltipTrigger asChild>

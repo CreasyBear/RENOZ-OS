@@ -19,11 +19,11 @@
  */
 import { FormField } from "./form-field"
 import { cn } from "~/lib/utils"
-import type { AnyFieldApi } from "./types"
+import type { FormFieldWithType } from "./types"
 
 export interface TextareaFieldProps {
   /** TanStack Form field instance */
-  field: AnyFieldApi<string>
+  field: FormFieldWithType<string | null | undefined>
   /** Field label */
   label: string
   /** Placeholder text */

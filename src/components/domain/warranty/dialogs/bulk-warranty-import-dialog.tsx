@@ -12,6 +12,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import {
   Dialog,
   DialogContent,
@@ -43,7 +44,9 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { formatDateAustralian } from '@/lib/warranty';
 import {
   Upload,
   FileText,
@@ -67,6 +70,10 @@ import type {
 
 type ImportStep = 'upload' | 'preview' | 'importing' | 'complete';
 type RowFilter = 'all' | 'valid' | 'errors';
+
+function isRowFilter(v: unknown): v is RowFilter {
+  return v === 'all' || v === 'valid' || v === 'errors';
+}
 
 interface BulkWarrantyImportDialogProps {
   open: boolean;
@@ -114,15 +121,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDateAustralian(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-AU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }
 
 function downloadCsv(content: string, filename: string): void {
@@ -376,7 +374,12 @@ function PreviewTable({ validRows, errorRows, filter, onFilterChange }: PreviewT
           <Label htmlFor="row-filter" className="text-sm font-medium">
             Show:
           </Label>
-          <Select value={filter} onValueChange={(value) => onFilterChange(value as RowFilter)}>
+          <Select
+            value={filter}
+            onValueChange={(value) =>
+              onFilterChange(isRowFilter(value) ? value : filter)
+            }
+          >
             <SelectTrigger id="row-filter" className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -449,7 +452,7 @@ function PreviewTable({ validRows, errorRows, filter, onFilterChange }: PreviewT
                     {row.isValid ? row.policyName : '-'}
                   </TableCell>
                   <TableCell>
-                    {row.isValid && row.expiryDate ? formatDateAustralian(row.expiryDate) : '-'}
+                    {row.isValid && row.expiryDate ? formatDateAustralian(row.expiryDate, 'numeric') : '-'}
                   </TableCell>
                   <TableCell>
                     {row.isValid ? (
@@ -684,8 +687,8 @@ export function BulkWarrantyImportDialog({
 
       setPreviewResult(result);
       setStep('preview');
-    } catch (_error) {
-      // Error handled by mutation
+    } catch {
+      toast.error('Failed to preview CSV. Please check the file format and try again.');
     }
   }, [file, onPreview]);
 
@@ -711,8 +714,8 @@ export function BulkWarrantyImportDialog({
       setImportResult(result);
       setStep('complete');
       onComplete?.(result);
-    } catch (_error) {
-      // Go back to preview on error
+    } catch {
+      toast.error('Import failed. Please try again or contact support.');
       setStep('preview');
     }
   }, [previewResult, sendNotifications, onRegister, onComplete]);
@@ -722,13 +725,13 @@ export function BulkWarrantyImportDialog({
     downloadCsv(CSV_TEMPLATE, CSV_TEMPLATE_FILENAME);
   }, []);
 
+  const navigate = useNavigate();
+
   // Handle view warranties
   const handleViewWarranties = useCallback(() => {
-    // Close dialog and navigate
     handleOpenChange(false);
-    // Navigation would be handled by parent component or router
-    window.location.href = '/support/warranties';
-  }, [handleOpenChange]);
+    navigate({ to: '/support/warranties', params: {} as never });
+  }, [handleOpenChange, navigate]);
 
   // Computed values
   const canValidate = file && !isPreviewing;

@@ -16,6 +16,31 @@ import {
   Save,
   X,
 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+
+/** Shared drag sensors for sortable lists */
+function useDragSensors() {
+  return useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+}
+import { CSS } from '@dnd-kit/utilities'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -194,7 +219,7 @@ function CriteriaRow({ criteria, onUpdate, onRemove, showDrag }: CriteriaRowProp
       </Select>
 
       {/* Value input */}
-      {field?.dataType === 'enum' && field.options ? (
+      {field?.dataType === 'enum' && field.options && field.options.length > 0 ? (
         <Select
           value={criteria.value as string}
           onValueChange={(value) => onUpdate({ ...criteria, value })}
@@ -250,7 +275,7 @@ function CriteriaRow({ criteria, onUpdate, onRemove, showDrag }: CriteriaRowProp
         </>
       )}
 
-      <Button variant="ghost" size="icon" onClick={onRemove}>
+      <Button variant="ghost" size="icon" onClick={onRemove} aria-label="Remove criteria">
         <X className="h-4 w-4" />
       </Button>
     </div>
@@ -258,94 +283,69 @@ function CriteriaRow({ criteria, onUpdate, onRemove, showDrag }: CriteriaRowProp
 }
 
 // ============================================================================
-// CRITERIA GROUP COMPONENT
+// SORTABLE CRITERIA ROW
 // ============================================================================
 
-interface CriteriaGroupComponentProps {
-  group: CriteriaGroup
-  groupIndex: number
-  onUpdate: (group: CriteriaGroup) => void
+interface SortableCriteriaRowProps {
+  criteria: SegmentCriteria
+  index: number
+  groupLogic: LogicOperator
+  onUpdate: (criteria: SegmentCriteria) => void
   onRemove: () => void
 }
 
-function CriteriaGroupComponent({ group, groupIndex, onUpdate, onRemove }: CriteriaGroupComponentProps) {
-  const addCriteria = () => {
-    const newCriteria: SegmentCriteria = {
-      id: crypto.randomUUID(),
-      field: 'status',
-      operator: 'equals',
-      value: 'active',
-    }
-    onUpdate({ ...group, criteria: [...group.criteria, newCriteria] })
-  }
+function SortableCriteriaRow({
+  criteria,
+  index,
+  groupLogic,
+  onUpdate,
+  onRemove,
+}: SortableCriteriaRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: criteria.id })
 
-  const updateCriteria = (index: number, criteria: SegmentCriteria) => {
-    const updated = [...group.criteria]
-    updated[index] = criteria
-    onUpdate({ ...group, criteria: updated })
-  }
-
-  const removeCriteria = (index: number) => {
-    onUpdate({ ...group, criteria: group.criteria.filter((_, i) => i !== index) })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">
-            Condition Group {groupIndex + 1}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Select
-              value={group.logic}
-              onValueChange={(value) => onUpdate({ ...group, logic: value as LogicOperator })}
-            >
-              <SelectTrigger className="w-[80px] h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="AND">AND</SelectItem>
-                <SelectItem value="OR">OR</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="ghost" size="icon" onClick={onRemove} className="h-8 w-8">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <CardDescription>
-          Match {group.logic === 'AND' ? 'all' : 'any'} of the following conditions
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {group.criteria.map((criteria, index) => (
-          <div key={criteria.id} className="flex items-center gap-2">
-            {index > 0 && (
-              <Badge variant="outline" className="shrink-0">
-                {group.logic}
-              </Badge>
-            )}
-            <div className="flex-1">
-              <CriteriaRow
-                criteria={criteria}
-                onUpdate={(c) => updateCriteria(index, c)}
-                onRemove={() => removeCriteria(index)}
-              />
-            </div>
-          </div>
-        ))}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={addCriteria}
-          className="w-full mt-2"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Add Condition
-        </Button>
-      </CardContent>
-    </Card>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-2',
+        isDragging && 'opacity-50 z-50'
+      )}
+    >
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted"
+        aria-label="Drag to reorder"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+      {index > 0 && (
+        <Badge variant="outline" className="shrink-0">
+          {groupLogic}
+        </Badge>
+      )}
+      <div className="flex-1">
+        <CriteriaRow
+          criteria={criteria}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -458,6 +458,25 @@ export function SegmentBuilder({
     }))
   }, [])
 
+  // Handle group reordering
+  const handleGroupDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = segment.groups.findIndex((g) => g.id === active.id)
+    const newIndex = segment.groups.findIndex((g) => g.id === over.id)
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      setSegment((prev) => ({
+        ...prev,
+        groups: arrayMove(prev.groups, oldIndex, newIndex),
+      }))
+    }
+  }, [segment.groups])
+
+  // Sensors for drag-and-drop (using shared configuration)
+  const sensors = useDragSensors()
+
   const handleSave = () => {
     if (onSave && segment.name) {
       onSave(segment)
@@ -467,7 +486,12 @@ export function SegmentBuilder({
   const hasCriteria = segment.groups.some(g => g.criteria.length > 0)
 
   return (
-    <div className={cn('space-y-6', className)}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleGroupDragEnd}
+    >
+      <div className={cn('space-y-6', className)}>
       {/* Segment Info */}
       <Card>
         <CardHeader>
@@ -498,8 +522,8 @@ export function SegmentBuilder({
             </div>
           </div>
         </CardContent>
-      </Card>
-
+        </Card>
+        </div>
       {/* Criteria Groups */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -528,23 +552,21 @@ export function SegmentBuilder({
           )}
         </div>
 
-        {segment.groups.map((group, index) => (
-          <div key={group.id}>
-            {index > 0 && (
-              <div className="flex items-center gap-2 my-2">
-                <div className="flex-1 h-px bg-border" />
-                <Badge variant="secondary">{segment.groupLogic}</Badge>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-            )}
-            <CriteriaGroupComponent
+        <SortableContext
+          items={segment.groups.map((g) => g.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {segment.groups.map((group, index) => (
+            <SortableGroupItem
+              key={group.id}
               group={group}
               groupIndex={index}
+              groupLogic={segment.groupLogic}
               onUpdate={(g) => updateGroup(index, g)}
               onRemove={() => removeGroup(index)}
             />
-          </div>
-        ))}
+          ))}
+        </SortableContext>
 
         <Button variant="outline" onClick={addGroup} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
@@ -570,6 +592,165 @@ export function SegmentBuilder({
           Save Segment
         </Button>
       </div>
+    </DndContext>
+  )
+}
+
+// ============================================================================
+// SORTABLE GROUP ITEM (Missing component - fixes runtime error)
+// ============================================================================
+
+interface SortableGroupItemProps {
+  group: CriteriaGroup
+  groupIndex: number
+  groupLogic: LogicOperator
+  onUpdate: (group: CriteriaGroup) => void
+  onRemove: () => void
+}
+
+function SortableGroupItem({
+  group,
+  groupIndex,
+  groupLogic,
+  onUpdate,
+  onRemove,
+}: SortableGroupItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: group.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const addCriteria = () => {
+    const newCriteria: SegmentCriteria = {
+      id: crypto.randomUUID(),
+      field: 'status',
+      operator: 'equals',
+      value: 'active',
+    }
+    onUpdate({ ...group, criteria: [...group.criteria, newCriteria] })
+  }
+
+  const updateCriteria = (index: number, criteria: SegmentCriteria) => {
+    const updated = [...group.criteria]
+    updated[index] = criteria
+    onUpdate({ ...group, criteria: updated })
+  }
+
+  const removeCriteria = (index: number) => {
+    onUpdate({ ...group, criteria: group.criteria.filter((_, i) => i !== index) })
+  }
+
+  const handleCriteriaDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = group.criteria.findIndex((c) => c.id === active.id)
+    const newIndex = group.criteria.findIndex((c) => c.id === over.id)
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove(group.criteria, oldIndex, newIndex)
+      onUpdate({ ...group, criteria: reordered })
+    }
+  }
+
+  // Sensors for nested criteria drag-and-drop (using shared configuration)
+  const criteriaSensors = useDragSensors()
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        isDragging && 'opacity-50 z-50'
+      )}
+    >
+      {groupIndex > 0 && (
+        <div className="flex items-center gap-2 my-2">
+          <div className="flex-1 h-px bg-border" />
+          <Badge variant="secondary">{groupLogic}</Badge>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+      )}
+      <Card className={cn(isDragging && 'ring-2 ring-primary')}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted"
+                aria-label="Drag to reorder group"
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <CardTitle className="text-sm font-medium">
+                Condition Group {groupIndex + 1}
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={group.logic}
+                onValueChange={(value) => onUpdate({ ...group, logic: value as LogicOperator })}
+              >
+                <SelectTrigger className="w-[80px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AND">AND</SelectItem>
+                  <SelectItem value="OR">OR</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="ghost" size="icon" onClick={onRemove} className="h-8 w-8" aria-label="Remove group">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <CardDescription>
+            Match {group.logic === 'AND' ? 'all' : 'any'} of the following conditions
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <DndContext
+            sensors={criteriaSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleCriteriaDragEnd}
+          >
+            <SortableContext
+              items={group.criteria.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {group.criteria.map((criteria, index) => (
+                <SortableCriteriaRow
+                  key={criteria.id}
+                  criteria={criteria}
+                  index={index}
+                  groupLogic={group.logic}
+                  onUpdate={(c) => updateCriteria(index, c)}
+                  onRemove={() => removeCriteria(index)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addCriteria}
+            className="w-full mt-2"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Condition
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

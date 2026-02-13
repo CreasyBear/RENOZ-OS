@@ -4,11 +4,12 @@
  * Dialog for creating new projects.
  * Based on patterns from job-create-dialog and reference project-wizard.
  *
- * SPRINT-03: New component for project-centric jobs model
+ * @source src/components/domain/jobs/projects/project-create-dialog.tsx
+ * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useMemo, useEffect } from 'react';
-import { z } from 'zod';
+import { useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Folder, MapPin, Calendar } from 'lucide-react';
 import {
   Dialog,
@@ -29,32 +30,13 @@ import {
   NumberField,
   DateField,
 } from '@/components/shared/forms';
-import { useCreateProject } from '@/hooks/jobs';
-import { useCustomers } from '@/hooks/customers';
+import { useCreateProject, useJobTemplates, useJobTemplate } from '@/hooks/jobs';
+import { useCustomers, useCustomer } from '@/hooks/customers';
 import { toast } from '@/lib/toast';
-import { format } from 'date-fns';
-
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const createProjectFormSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255, 'Title too long'),
-  description: z.string().optional(),
-  customerId: z.string().min(1, 'Customer is required'),
-  projectType: z.enum(['solar', 'battery', 'solar_battery', 'service', 'warranty', 'inspection', 'commissioning']),
-  priority: z.enum(['urgent', 'high', 'medium', 'low']),
-  siteAddress: z.object({
-    street: z.string().min(1, 'Street is required'),
-    city: z.string().min(1, 'City is required'),
-    state: z.string().min(1, 'State is required'),
-    postalCode: z.string().min(1, 'Postal code is required'),
-    country: z.string(),
-  }),
-  startDate: z.date().optional().nullable(),
-  targetCompletionDate: z.date().optional().nullable(),
-  estimatedTotalValue: z.number().min(0).optional().nullable(),
-});
+import {
+  createProjectFormSchema,
+  transformCreateProjectFormToApi,
+} from '@/lib/schemas/jobs/projects';
 
 const projectTypeOptions = [
   { value: 'solar', label: 'Solar Only' },
@@ -96,21 +78,15 @@ export function ProjectCreateDialog({
   defaultCustomerId,
   onSuccess,
 }: ProjectCreateDialogProps) {
+  const navigate = useNavigate();
   const createProject = useCreateProject();
   const { data: customersData } = useCustomers({ pageSize: 100 });
-
-  const customers = useMemo(() => {
-    return customersData?.items ?? [];
-  }, [customersData]);
-
-  const customerOptions = customers.map((customer) => ({
-    value: customer.id,
-    label: customer.name,
-  }));
+  const { data: templatesData } = useJobTemplates({ includeInactive: false });
 
   const form = useTanStackForm({
     schema: createProjectFormSchema,
     defaultValues: {
+      templateId: '',
       title: '',
       description: '',
       customerId: defaultCustomerId || '',
@@ -123,31 +99,24 @@ export function ProjectCreateDialog({
         postalCode: '',
         country: 'Australia',
       },
+      scopeInScope: '',
+      scopeOutOfScope: '',
+      outcomesText: '',
       startDate: null,
       targetCompletionDate: null,
       estimatedTotalValue: null,
     },
     onSubmit: async (data) => {
       try {
-        const result = await createProject.mutateAsync({
-          title: data.title,
-          description: data.description,
-          customerId: data.customerId,
-          projectType: data.projectType,
-          priority: data.priority,
-          siteAddress: data.siteAddress,
-          startDate: data.startDate ? format(data.startDate, 'yyyy-MM-dd') : undefined,
-          targetCompletionDate: data.targetCompletionDate
-            ? format(data.targetCompletionDate, 'yyyy-MM-dd')
-            : undefined,
-          estimatedTotalValue: data.estimatedTotalValue ?? undefined,
-          // Required by API schema with defaults
-          scope: { inScope: [], outOfScope: [] },
-          outcomes: [],
-          keyFeatures: { p0: [], p1: [], p2: [] },
-        });
+        const payload = transformCreateProjectFormToApi(data);
+        const result = await createProject.mutateAsync(payload);
 
-        toast.success('Project created successfully');
+        toast.success('Project created successfully', {
+          action: {
+            label: 'View Project',
+            onClick: () => navigate({ to: '/projects/$projectId', params: { projectId: result.id } }),
+          },
+        });
         onOpenChange(false);
         form.reset();
         onSuccess?.(result.id);
@@ -157,10 +126,74 @@ export function ProjectCreateDialog({
     },
   });
 
+  const templates = useMemo(() => templatesData?.templates ?? [], [templatesData]);
+  const templateOptions = useMemo(
+    () => [
+      { value: '', label: 'No template' },
+      ...templates.map((t) => ({ value: t.id, label: t.name })),
+    ],
+    [templates]
+  );
+
+  const selectedTemplateId = form.useWatch('templateId') ?? '';
+  const selectedCustomerId = form.useWatch('customerId') ?? '';
+  const { data: templateData } = useJobTemplate(
+    selectedTemplateId && selectedTemplateId.length > 0 ? selectedTemplateId : undefined
+  );
+  const { data: selectedCustomer } = useCustomer({
+    id: selectedCustomerId,
+    enabled: !!selectedCustomerId && open,
+  });
+
+  const selectedTemplate = templateData?.template;
+  const lastPrefilledTemplateId = useRef<string | null>(null);
+  const lastPrefilledCustomerId = useRef<string | null>(null);
+
+  // Prefill description from template when template is first selected
+  useEffect(() => {
+    if (!open || !selectedTemplate || selectedTemplate.id === lastPrefilledTemplateId.current) return;
+    lastPrefilledTemplateId.current = selectedTemplate.id;
+    if (selectedTemplate.description) {
+      form.setFieldValue('description', selectedTemplate.description);
+    }
+  }, [open, selectedTemplate, form]);
+
+  // Prefill site address from customer when customer is first selected
+  useEffect(() => {
+    if (!open || !selectedCustomer?.addresses?.length || selectedCustomer.id === lastPrefilledCustomerId.current)
+      return;
+    lastPrefilledCustomerId.current = selectedCustomer.id;
+    const addr = selectedCustomer.addresses.find((a) => a.isPrimary) ?? selectedCustomer.addresses[0];
+    if (addr) {
+      const country = addr.country === 'AU' ? 'Australia' : addr.country ?? 'Australia';
+      form.setFieldValue('siteAddress', {
+        street: [addr.street1, addr.street2].filter(Boolean).join(', '),
+        city: addr.city ?? '',
+        state: addr.state ?? '',
+        postalCode: addr.postcode ?? '',
+        country,
+      });
+    }
+  }, [open, selectedCustomer, form]);
+
+  const customers = useMemo(() => customersData?.items ?? [], [customersData]);
+  const customerOptions = customers.map((customer) => ({
+    value: customer.id,
+    label: customer.name,
+  }));
+
+  useEffect(() => {
+    if (!open) {
+      lastPrefilledTemplateId.current = null;
+      lastPrefilledCustomerId.current = null;
+    }
+  }, [open]);
+
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       form.reset({
+        templateId: '',
         title: '',
         description: '',
         customerId: defaultCustomerId || '',
@@ -173,6 +206,9 @@ export function ProjectCreateDialog({
           postalCode: '',
           country: 'Australia',
         },
+        scopeInScope: '',
+        scopeOutOfScope: '',
+        outcomesText: '',
         startDate: null,
         targetCompletionDate: null,
         estimatedTotalValue: null,
@@ -207,6 +243,19 @@ export function ProjectCreateDialog({
               {/* Basic Info */}
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-muted-foreground">Basic Information</h3>
+
+                {templateOptions.length > 1 && (
+                  <form.Field name="templateId">
+                    {(field) => (
+                      <SelectField
+                        field={field}
+                        label="Template (optional)"
+                        options={templateOptions}
+                        placeholder="Select a template to prefill"
+                      />
+                    )}
+                  </form.Field>
+                )}
 
                 <form.Field name="title">
                   {(field) => (
@@ -262,6 +311,41 @@ export function ProjectCreateDialog({
                       label="Priority"
                       options={priorityOptions}
                       required
+                    />
+                  )}
+                </form.Field>
+              </div>
+
+              {/* Scope & Outcomes (optional) */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground">Scope & Outcomes (Optional)</h3>
+                <form.Field name="scopeInScope">
+                  {(field) => (
+                    <TextareaField
+                      field={field}
+                      label="In Scope"
+                      placeholder="One item per line (e.g. Solar panel installation)"
+                      rows={2}
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="scopeOutOfScope">
+                  {(field) => (
+                    <TextareaField
+                      field={field}
+                      label="Out of Scope"
+                      placeholder="One item per line (e.g. Roof repairs)"
+                      rows={2}
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="outcomesText">
+                  {(field) => (
+                    <TextareaField
+                      field={field}
+                      label="Outcomes"
+                      placeholder="One outcome per line (e.g. 6.6kW system commissioned)"
+                      rows={2}
                     />
                   )}
                 </form.Field>

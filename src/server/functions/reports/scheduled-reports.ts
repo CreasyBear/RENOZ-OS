@@ -14,7 +14,10 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, ilike, desc, asc } from 'drizzle-orm';
+import { eq, and, sql, ilike, desc, asc, inArray } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { addDays, addWeeks, addMonths } from 'date-fns';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
@@ -23,24 +26,21 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { scheduledReports } from 'drizzle/schema/reports';
 import { client, reportEvents } from '@/trigger/client';
 import { uploadFile, createSignedUrl } from '@/lib/storage';
-import { renderPdfToBuffer, ReportSummaryPdfDocument, type DocumentOrganization } from '@/lib/documents';
+import { renderPdfToBuffer, ReportSummaryPdfDocument } from '@/lib/documents';
 import { calculateMetrics as calculateMetricsAggregator } from '@/server/functions/metrics/aggregator';
 import { getMetric } from '@/lib/metrics/registry';
 import { organizations } from 'drizzle/schema/settings/organizations';
+import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
 import { TextEncoder } from 'util';
 import { randomUUID } from 'crypto';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import type { DocumentProps } from '@react-pdf/renderer';
-import type {
-  OrganizationAddress,
-  OrganizationBranding,
-  OrganizationSettings,
-} from 'drizzle/schema/settings/organizations';
 import {
   createScheduledReportSchema,
   updateScheduledReportSchema,
   listScheduledReportsSchema,
+  listScheduledReportsCursorSchema,
   getScheduledReportSchema,
   deleteScheduledReportSchema,
   executeScheduledReportSchema,
@@ -126,6 +126,40 @@ export const listScheduledReports = createServerFn({ method: 'GET' })
   });
 
 /**
+ * List scheduled reports with cursor pagination (recommended for large datasets).
+ */
+export const listScheduledReportsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listScheduledReportsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, isActive, frequency, format } = data;
+
+    const conditions = [eq(scheduledReports.organizationId, ctx.organizationId)];
+    if (search) conditions.push(ilike(scheduledReports.name, containsPattern(search)));
+    if (isActive !== undefined) conditions.push(eq(scheduledReports.isActive, isActive));
+    if (frequency) conditions.push(eq(scheduledReports.frequency, frequency));
+    if (format) conditions.push(eq(scheduledReports.format, format));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(scheduledReports.createdAt, scheduledReports.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const items = await db
+      .select()
+      .from(scheduledReports)
+      .where(and(...conditions))
+      .orderBy(orderDir(scheduledReports.createdAt), orderDir(scheduledReports.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/**
  * Get a single scheduled report by ID.
  */
 export const getScheduledReport = createServerFn({ method: 'GET' })
@@ -180,7 +214,8 @@ export const getScheduledReportStatus = createServerFn({ method: 'GET' })
       throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
-    // TODO: Get actual last run status from job history
+    // TODO(PHASE12-004): Get actual last run status from Trigger.dev job history. See REPORTS-007.
+    // Currently returns null; implement by querying report run events or job status API.
     return {
       ...report,
       lastRunStatus: null,
@@ -196,8 +231,14 @@ export const createScheduledReport = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.create });
 
-    // Calculate next run time and cron expression based on frequency
-    const nextRunAt = calculateNextRun(data.frequency);
+    const [org] = await db
+      .select({ timezone: organizations.timezone })
+      .from(organizations)
+      .where(eq(organizations.id, ctx.organizationId))
+      .limit(1);
+    const tz = org?.timezone ?? 'Australia/Sydney';
+
+    const nextRunAt = calculateNextRun(data.frequency, tz);
     const scheduleCron = frequencyToCron(data.frequency);
 
     const [report] = await db
@@ -209,6 +250,7 @@ export const createScheduledReport = createServerFn({ method: 'POST' })
         frequency: data.frequency,
         format: data.format,
         scheduleCron,
+        timezone: tz,
         isActive: data.isActive ?? true,
         recipients: data.recipients,
         metrics: data.metrics,
@@ -231,6 +273,21 @@ export const updateScheduledReport = createServerFn({ method: 'POST' })
 
     const { id, ...updates } = data;
 
+    let reportTimezone: string | undefined;
+    if (updates.frequency !== undefined) {
+      const [report] = await db
+        .select({ timezone: scheduledReports.timezone })
+        .from(scheduledReports)
+        .where(
+          and(
+            eq(scheduledReports.id, id),
+            eq(scheduledReports.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+      reportTimezone = report?.timezone ?? 'Australia/Sydney';
+    }
+
     // Build update object
     const updateValues: Record<string, unknown> = {
       updatedBy: ctx.user.id,
@@ -239,10 +296,10 @@ export const updateScheduledReport = createServerFn({ method: 'POST' })
 
     if (updates.name !== undefined) updateValues.name = updates.name;
     if (updates.description !== undefined) updateValues.description = updates.description;
-    if (updates.frequency !== undefined) {
+    if (updates.frequency !== undefined && reportTimezone !== undefined) {
       updateValues.frequency = updates.frequency;
       updateValues.scheduleCron = frequencyToCron(updates.frequency);
-      updateValues.nextRunAt = calculateNextRun(updates.frequency);
+      updateValues.nextRunAt = calculateNextRun(updates.frequency, reportTimezone);
     }
     if (updates.format !== undefined) updateValues.format = updates.format;
     if (updates.isActive !== undefined) updateValues.isActive = updates.isActive;
@@ -342,6 +399,16 @@ export const bulkUpdateScheduledReports = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.update });
 
+    let tz = 'Australia/Sydney';
+    if (data.updates.frequency !== undefined) {
+      const [org] = await db
+        .select({ timezone: organizations.timezone })
+        .from(organizations)
+        .where(eq(organizations.id, ctx.organizationId))
+        .limit(1);
+      tz = org?.timezone ?? 'Australia/Sydney';
+    }
+
     const updateValues: Record<string, unknown> = {
       updatedBy: ctx.user.id,
       updatedAt: new Date(),
@@ -351,7 +418,7 @@ export const bulkUpdateScheduledReports = createServerFn({ method: 'POST' })
     if (data.updates.frequency !== undefined) {
       updateValues.frequency = data.updates.frequency;
       updateValues.scheduleCron = frequencyToCron(data.updates.frequency);
-      updateValues.nextRunAt = calculateNextRun(data.updates.frequency);
+      updateValues.nextRunAt = calculateNextRun(data.updates.frequency, tz);
     }
     if (data.updates.format !== undefined) updateValues.format = data.updates.format;
     if (data.updates.recipients !== undefined) updateValues.recipients = data.updates.recipients;
@@ -361,7 +428,7 @@ export const bulkUpdateScheduledReports = createServerFn({ method: 'POST' })
       .set(updateValues)
       .where(
         and(
-          sql`${scheduledReports.id} = ANY(${data.ids})`,
+          inArray(scheduledReports.id, data.ids),
           eq(scheduledReports.organizationId, ctx.organizationId)
         )
       )
@@ -382,7 +449,7 @@ export const bulkDeleteScheduledReports = createServerFn({ method: 'POST' })
       .delete(scheduledReports)
       .where(
         and(
-          sql`${scheduledReports.id} = ANY(${data.ids})`,
+          inArray(scheduledReports.id, data.ids),
           eq(scheduledReports.organizationId, ctx.organizationId)
         )
       )
@@ -442,28 +509,6 @@ export const generateReport = createServerFn({ method: 'POST' })
       dateTo: endDate,
     });
 
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new NotFoundError('Organization not found', 'organization');
-    }
-
     let content: string;
     let contentBody: string | ArrayBuffer = '';
     let filename: string;
@@ -478,7 +523,7 @@ export const generateReport = createServerFn({ method: 'POST' })
         contentBody = content;
         break;
       case 'pdf': {
-        const orgData = buildDocumentOrganization(org);
+        const orgData = await fetchOrganizationForDocument(ctx.organizationId);
         const pdfElement = createElement(ReportSummaryPdfDocument, {
           organization: orgData,
           data: {
@@ -667,51 +712,6 @@ function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function buildDocumentOrganization(org: {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  abn: string | null;
-  address: OrganizationAddress | null;
-  currency: string;
-  locale: string;
-  branding: OrganizationBranding | null;
-  settings: OrganizationSettings | null;
-}): DocumentOrganization {
-  const address = org.address;
-  const branding = org.branding;
-
-  return {
-    id: org.id,
-    name: org.name,
-    email: org.email,
-    phone: org.phone,
-    website: org.website || branding?.websiteUrl,
-    taxId: org.abn,
-    currency: org.currency || 'AUD',
-    locale: org.locale || 'en-AU',
-    address: address
-      ? {
-          addressLine1: address.street1,
-          addressLine2: address.street2,
-          city: address.city,
-          state: address.state,
-          postalCode: address.postalCode,
-          country: address.country,
-        }
-      : undefined,
-    branding: {
-      logoUrl: branding?.logoUrl,
-      primaryColor: branding?.primaryColor,
-      secondaryColor: branding?.secondaryColor,
-      websiteUrl: branding?.websiteUrl,
-    },
-    settings: org.settings ?? undefined,
-  };
-}
-
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -739,37 +739,50 @@ function frequencyToCron(frequency: string): string {
 
 /**
  * Calculate next run time based on frequency.
+ * Uses timezone-aware logic: "next 8 AM" in the report's timezone.
+ *
+ * @param frequency - daily | weekly | biweekly | monthly | quarterly
+ * @param timezone - IANA timezone (e.g. Australia/Sydney), default Australia/Sydney
  */
-function calculateNextRun(frequency: string): Date {
+function calculateNextRun(
+  frequency: string,
+  timezone: string = 'Australia/Sydney'
+): Date {
   const now = new Date();
+  const zonedNow = toZonedTime(now, timezone);
 
+  let nextZoned: Date;
   switch (frequency) {
     case 'daily':
-      now.setDate(now.getDate() + 1);
-      now.setHours(8, 0, 0, 0); // 8 AM next day
+      nextZoned = addDays(zonedNow, 1);
       break;
     case 'weekly':
-      now.setDate(now.getDate() + 7);
-      now.setHours(8, 0, 0, 0);
+      nextZoned = addWeeks(zonedNow, 1);
       break;
     case 'biweekly':
-      now.setDate(now.getDate() + 14);
-      now.setHours(8, 0, 0, 0);
+      nextZoned = addDays(zonedNow, 14);
       break;
     case 'monthly':
-      now.setMonth(now.getMonth() + 1);
-      now.setDate(1);
-      now.setHours(8, 0, 0, 0);
+      nextZoned = addMonths(zonedNow, 1);
+      nextZoned.setDate(1);
       break;
     case 'quarterly':
-      now.setMonth(now.getMonth() + 3);
-      now.setDate(1);
-      now.setHours(8, 0, 0, 0);
+      nextZoned = addMonths(zonedNow, 3);
+      nextZoned.setDate(1);
       break;
     default:
-      now.setDate(now.getDate() + 1);
-      now.setHours(8, 0, 0, 0);
+      nextZoned = addDays(zonedNow, 1);
   }
 
-  return now;
+  // Set 8:00 AM in the target timezone, then convert to UTC for storage
+  const d = new Date(
+    nextZoned.getFullYear(),
+    nextZoned.getMonth(),
+    nextZoned.getDate(),
+    8,
+    0,
+    0,
+    0
+  );
+  return fromZonedTime(d, timezone);
 }

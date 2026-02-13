@@ -1,44 +1,52 @@
 /**
- * Financial Dashboard Page (Container)
+ * Financial Index Route (Landing Page)
  *
- * Landing page for the Financial domain with quick access cards
- * to AR Aging, Revenue Recognition, Xero Sync, and Payment Reminders.
- * Also displays the full financial dashboard with KPIs and charts.
+ * Landing page for Financial domain following DOMAIN-LANDING-STANDARDS.md.
+ * Implements 4-zone layout: Header, Command Bar, Triage, Navigation Grid.
  *
- * Container responsibilities:
- * - Fetches all dashboard data via centralized hooks
- * - Manages period type state for revenue chart
- * - Passes aggregated data to FinancialDashboard presenter
- *
- * @see src/components/domain/financial/financial-dashboard.tsx (presenter)
- * @see src/hooks/financial/use-financial.ts (hooks)
- * @see _Initiation/_prd/2-domains/financial/financial.prd.json
+ * @performance Code-split for reduced initial bundle size
+ * @see src/routes/_authenticated/financial/financial-landing-page.tsx - Page component
+ * @see docs/design-system/DOMAIN-LANDING-STANDARDS.md
  */
 
-import { useState } from 'react';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { subMonths, startOfYear } from 'date-fns';
-import { Clock, TrendingUp, RefreshCw, Bell, ArrowRight } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { buttonVariants } from '@/components/ui/button';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
-import { cn } from '@/lib/utils';
-import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
-import { FinancialDashboard } from '@/components/domain/financial/financial-dashboard';
-import {
-  useFinancialDashboardMetrics,
-  useRevenueByPeriod,
-  useTopCustomersByRevenue,
-  useOutstandingInvoices,
-} from '@/hooks/financial';
-import type { PeriodType } from '@/lib/schemas';
+import { createFileRoute } from '@tanstack/react-router';
+import { lazy, Suspense } from 'react';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// ============================================================================
-// ROUTE
-// ============================================================================
+const FinancialLandingPage = lazy(() => import('./financial-landing-page'));
 
 export const Route = createFileRoute('/_authenticated/financial/')({
-  component: FinancialDashboardPage,
+  component: () => (
+    <Suspense
+      fallback={
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title="Financial"
+            description="Accounts receivable, revenue recognition, and payment management"
+          />
+          <PageLayout.Content>
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <Skeleton key={i} className="h-32 w-full" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </PageLayout.Content>
+        </PageLayout>
+      }
+    >
+      <FinancialLandingPage />
+    </Suspense>
+  ),
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
@@ -49,151 +57,21 @@ export const Route = createFileRoute('/_authenticated/financial/')({
         description="Accounts receivable, revenue recognition, and payment management"
       />
       <PageLayout.Content>
-        <FinancialDashboardSkeleton />
+        <div className="space-y-8">
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-48" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-32 w-full" />
+              ))}
+            </div>
+          </div>
+        </div>
       </PageLayout.Content>
     </PageLayout>
   ),
 });
-
-// ============================================================================
-// SUB-PAGE CARDS
-// ============================================================================
-
-const financialPages = [
-  {
-    title: 'AR Aging',
-    description: 'Accounts receivable aging report with bucket analysis',
-    href: '/financial/ar-aging' as const,
-    icon: Clock,
-    color: 'text-orange-500',
-  },
-  {
-    title: 'Revenue Recognition',
-    description: 'Track recognized vs deferred revenue and Xero sync status',
-    href: '/financial/revenue' as const,
-    icon: TrendingUp,
-    color: 'text-green-500',
-  },
-  {
-    title: 'Xero Sync',
-    description: 'Invoice sync status, history, and retry failed syncs',
-    href: '/financial/xero-sync' as const,
-    icon: RefreshCw,
-    color: 'text-blue-500',
-  },
-  {
-    title: 'Payment Reminders',
-    description: 'Manage reminder templates and view reminder history',
-    href: '/financial/reminders' as const,
-    icon: Bell,
-    color: 'text-purple-500',
-  },
-] as const;
-
-// ============================================================================
-// PAGE COMPONENT
-// ============================================================================
-
-function FinancialDashboardPage() {
-  // ===========================================================================
-  // UI STATE
-  // ===========================================================================
-
-  // Period type state for revenue chart
-  const [periodType, setPeriodType] = useState<PeriodType>('monthly');
-
-  // ===========================================================================
-  // DATA FETCHING (Container responsibility via centralized hooks)
-  // ===========================================================================
-
-  // Dashboard metrics query
-  const {
-    data: metrics,
-    isLoading: metricsLoading,
-    error: metricsError,
-  } = useFinancialDashboardMetrics({ includePreviousPeriod: true });
-
-  // Revenue by period query
-  const {
-    data: revenueByPeriod,
-    isLoading: revenueLoading,
-    error: revenueError,
-  } = useRevenueByPeriod({
-    dateFrom: subMonths(new Date(), 6),
-    dateTo: new Date(),
-    periodType,
-  });
-
-  // Top customers query
-  const {
-    data: topCustomers,
-    isLoading: customersLoading,
-    error: customersError,
-  } = useTopCustomersByRevenue({
-    dateFrom: startOfYear(new Date()),
-    dateTo: new Date(),
-    pageSize: 5,
-  });
-
-  // Outstanding invoices query
-  const {
-    data: outstanding,
-    isLoading: outstandingLoading,
-    error: outstandingError,
-  } = useOutstandingInvoices({ overdueOnly: true, pageSize: 5 });
-
-  // Combined loading and error states
-  const isLoading = metricsLoading || revenueLoading || customersLoading || outstandingLoading;
-  const error = metricsError || revenueError || customersError || outstandingError;
-
-  return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Financial"
-        description="Accounts receivable, revenue recognition, and payment management"
-      />
-      <PageLayout.Content>
-        {/* Navigation Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {financialPages.map((page) => {
-            const Icon = page.icon;
-            return (
-              <Card key={page.href} className="transition-shadow hover:shadow-md">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{page.title}</CardTitle>
-                  <Icon className={`h-5 w-5 ${page.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="mb-4">{page.description}</CardDescription>
-                  <Link
-                    to={page.href}
-                    className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                  >
-                    View
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Financial Dashboard */}
-        <div className="mt-8">
-          <FinancialDashboard
-            dashboardData={{
-              metrics,
-              revenueByPeriod,
-              topCustomers,
-              outstanding,
-            }}
-            isLoading={isLoading}
-            error={error ?? undefined}
-            periodType={periodType}
-            onPeriodTypeChange={setPeriodType}
-          />
-        </div>
-      </PageLayout.Content>
-    </PageLayout>
-  );
-}

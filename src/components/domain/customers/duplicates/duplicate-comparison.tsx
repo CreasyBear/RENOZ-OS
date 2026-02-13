@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { FormatAmount } from '@/components/shared/format'
+import { formatDate } from '@/lib/formatters'
 
 // ============================================================================
 // TYPES
@@ -64,14 +65,6 @@ interface DuplicateComparisonProps {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-AU', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
 
 function getStatusColor(status: string): string {
   switch (status) {
@@ -342,7 +335,7 @@ export function DuplicateComparison({
             label="Created"
             value1={customer1.createdAt}
             value2={customer2.createdAt}
-            format={(v) => (v ? formatDate(String(v)) : '-')}
+            format={(v) => (v ? formatDate(String(v), { locale: 'en-AU' }) : '-')}
           />
         </CardContent>
       </Card>
@@ -367,7 +360,7 @@ export function DuplicateComparison({
         </Button>
         <Button onClick={handleMerge} disabled={!primaryId || isMerging}>
           {isMerging ? (
-            <>Merging...</>
+            <>Merging…</>
           ) : (
             <>
               <ArrowRight className="h-4 w-4 mr-2" />

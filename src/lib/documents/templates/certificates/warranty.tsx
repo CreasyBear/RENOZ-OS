@@ -321,8 +321,11 @@ function WarrantyCertificateContent({
         <View style={styles.content}>
           {/* Logo/Organization */}
           <View style={styles.logoContainer}>
-            {organization.branding?.logoUrl ? (
-              <Image src={organization.branding.logoUrl} style={styles.logo} />
+            {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+              <Image
+                src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+                style={styles.logo}
+              />
             ) : (
               <Text style={[styles.orgName, { color: primaryColor }]}>
                 {organization.name}
@@ -403,14 +406,14 @@ function WarrantyCertificateContent({
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Cycle Limit</Text>
                   <Text style={styles.detailValue}>
-                    {data.cycleLimit.toLocaleString()} cycles
+                    {`${data.cycleLimit.toLocaleString()} cycles`}
                   </Text>
                 </View>
                 {data.currentCycleCount !== null && data.currentCycleCount !== undefined && (
                   <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>Current Cycles</Text>
                     <Text style={styles.detailValue}>
-                      {data.currentCycleCount.toLocaleString()} cycles
+                      {`${data.currentCycleCount.toLocaleString()} cycles`}
                     </Text>
                   </View>
                 )}
@@ -492,6 +495,8 @@ export function WarrantyCertificatePdfDocument({
         author={organization.name}
         subject={`Warranty Certificate for ${data.customerName}`}
         creator="Renoz CRM"
+        language="en-AU"
+        keywords={`warranty, ${data.warrantyNumber}, ${data.customerName}`}
       >
         <WarrantyCertificateContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
       </Document>

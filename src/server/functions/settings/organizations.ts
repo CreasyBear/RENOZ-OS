@@ -19,6 +19,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { NotFoundError } from '@/lib/server/errors';
+import type { OrganizationSettingsResponse } from '@/lib/schemas/settings';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -33,12 +34,20 @@ const addressSchema = z.object({
   country: z.string().max(100).optional(),
 });
 
+const weekStartDaySchema = z.union([
+  z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6),
+]);
+
 const settingsSchema = z.object({
   timezone: z.string().max(100).optional(),
   locale: z.string().max(20).optional(),
   currency: z.string().length(3).optional(),
   dateFormat: z.string().max(50).optional(),
+  timeFormat: z.enum(['12h', '24h']).optional(),
+  numberFormat: z.enum(['1,234.56', '1.234,56', '1 234,56']).optional(),
+  weekStartDay: weekStartDaySchema.optional(),
   fiscalYearStart: z.number().int().min(1).max(12).optional(),
+  defaultTaxRate: z.number().min(0).max(100).optional(),
   defaultPaymentTerms: z.number().int().min(0).max(365).optional(),
   portalBranding: z
     .object({
@@ -151,7 +160,7 @@ export const getOrganization = createServerFn({ method: 'GET' }).handler(async (
 export const updateOrganization = createServerFn({ method: 'POST' })
   .inputValidator(updateOrganizationSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.organization?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     // Get current values for audit
     const [currentOrg] = await db
@@ -268,7 +277,9 @@ const _getOrganizationSettings = cache(async (organizationId: string) => {
       weekStartDay: organizations.weekStartDay,
       defaultTaxRate: organizations.defaultTaxRate,
       defaultPaymentTerms: organizations.defaultPaymentTerms,
-      // Legacy JSONB (for portalBranding only)
+      // Branding: single source of truth
+      branding: organizations.branding,
+      // Legacy JSONB (fallback for portalBranding)
       settings: organizations.settings,
     })
     .from(organizations)
@@ -279,8 +290,13 @@ const _getOrganizationSettings = cache(async (organizationId: string) => {
     throw new NotFoundError('Organization not found', 'organization');
   }
 
-  // Return merged settings: columns preferred, JSONB for portalBranding
+  // Derive portalBranding from branding column (single source of truth); fallback to legacy settings
+  // Cast for ServerFn serialization boundary (SCHEMA-TRACE.md §4)
   const legacySettings = organization.settings as Record<string, unknown> | null;
+  const legacyPortalBranding = legacySettings?.portalBranding as Record<string, unknown> | undefined;
+  const branding = organization.branding as Record<string, unknown> | null | undefined;
+  const portalBranding = ((branding ?? legacyPortalBranding) ?? {}) as { [key: string]: object };
+
   return {
     timezone: organization.timezone,
     locale: organization.locale,
@@ -293,7 +309,7 @@ const _getOrganizationSettings = cache(async (organizationId: string) => {
     weekStartDay: organization.weekStartDay,
     defaultTaxRate: organization.defaultTaxRate,
     defaultPaymentTerms: organization.defaultPaymentTerms,
-    portalBranding: legacySettings?.portalBranding ?? {},
+    portalBranding,
   };
 });
 
@@ -313,12 +329,13 @@ export const getOrganizationSettings = createServerFn({ method: 'GET' }).handler
 export const updateOrganizationSettings = createServerFn({ method: 'POST' })
   .inputValidator(settingsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.organization?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     const [currentOrg] = await db
       .select({
         id: organizations.id,
         settings: organizations.settings,
+        branding: organizations.branding,
         timezone: organizations.timezone,
         locale: organizations.locale,
         currency: organizations.currency,
@@ -338,7 +355,7 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
       throw new NotFoundError('Organization not found', 'organization');
     }
 
-    // Build update object with DOUBLE WRITE (columns + JSONB for backward compat)
+    // Build update object (single source of truth: organizations.branding for portalBranding)
     const updatePayload: Record<string, unknown> = {};
 
     // Write to Tier 1 columns (preferred)
@@ -346,13 +363,31 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
     if (data.locale !== undefined) updatePayload.locale = data.locale;
     if (data.currency !== undefined) updatePayload.currency = data.currency;
     if (data.dateFormat !== undefined) updatePayload.dateFormat = data.dateFormat;
+    if (data.timeFormat !== undefined) updatePayload.timeFormat = data.timeFormat;
+    if (data.numberFormat !== undefined) updatePayload.numberFormat = data.numberFormat;
+    if (data.weekStartDay !== undefined) updatePayload.weekStartDay = data.weekStartDay;
     if (data.fiscalYearStart !== undefined) updatePayload.fiscalYearStart = data.fiscalYearStart;
+    if (data.defaultTaxRate !== undefined) updatePayload.defaultTaxRate = data.defaultTaxRate;
     if (data.defaultPaymentTerms !== undefined) updatePayload.defaultPaymentTerms = data.defaultPaymentTerms;
 
-    // Also write to JSONB for backward compatibility (Double Write)
+    // Branding: write to organizations.branding only (single source of truth)
+    if (data.portalBranding !== undefined) {
+      const currentBranding = (currentOrg.branding as Record<string, unknown>) ?? {};
+      const mergedBranding: Record<string, unknown> = { ...currentBranding };
+      for (const [key, value] of Object.entries(data.portalBranding)) {
+        if (value !== undefined && value !== '') {
+          mergedBranding[key] = value;
+        }
+      }
+      updatePayload.branding = mergedBranding;
+    }
+
+    // Settings merge: exclude portalBranding (we write to branding column only)
+    const { portalBranding: _p, ...restData } = data;
+    void _p;
     const newSettings = {
       ...(currentOrg.settings as Record<string, unknown>),
-      ...data,
+      ...restData,
     };
     updatePayload.settings = newSettings;
 
@@ -373,6 +408,7 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
         defaultTaxRate: organizations.defaultTaxRate,
         defaultPaymentTerms: organizations.defaultPaymentTerms,
         settings: organizations.settings,
+        branding: organizations.branding,
       });
 
     // Log audit event
@@ -386,21 +422,24 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
       newValues: { settings: updated.settings },
     });
 
-    // Return merged settings (columns preferred)
-    const legacySettings = updated.settings as Record<string, unknown> | null;
-    return {
+    // Return merged settings; portalBranding derived from branding column
+    // Explicit return satisfies OrganizationSettingsResponse (SCHEMA-TRACE.md §4)
+    const branding = updated.branding as Record<string, unknown> | null;
+    const portalBranding = (branding ?? {}) as { [key: string]: object };
+    const result: OrganizationSettingsResponse = {
       timezone: updated.timezone,
       locale: updated.locale,
       currency: updated.currency,
       dateFormat: updated.dateFormat,
-      timeFormat: updated.timeFormat,
-      numberFormat: updated.numberFormat,
+      timeFormat: updated.timeFormat as '12h' | '24h',
+      numberFormat: updated.numberFormat as '1,234.56' | '1.234,56' | '1 234,56',
       fiscalYearStart: updated.fiscalYearStart,
       weekStartDay: updated.weekStartDay,
       defaultTaxRate: updated.defaultTaxRate,
       defaultPaymentTerms: updated.defaultPaymentTerms,
-      portalBranding: legacySettings?.portalBranding ?? {},
+      portalBranding,
     };
+    return result;
   });
 
 // ============================================================================
@@ -445,7 +484,7 @@ export const getOrganizationBranding = createServerFn({ method: 'GET' }).handler
 export const updateOrganizationBranding = createServerFn({ method: 'POST' })
   .inputValidator(brandingSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.organization?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     const [currentOrg] = await db
       .select({

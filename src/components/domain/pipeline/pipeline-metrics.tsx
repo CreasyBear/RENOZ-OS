@@ -25,7 +25,7 @@ export interface PipelineMetricsProps {
 // COMPONENT
 // ============================================================================
 
-export const PipelineMetrics = memo(function PipelineMetrics({
+function PipelineMetricsComponent({
   metrics,
   isLoading = false,
 }: PipelineMetricsProps) {
@@ -71,6 +71,8 @@ export const PipelineMetrics = memo(function PipelineMetrics({
       />
     </div>
   );
-});
+}
+
+export const PipelineMetrics = memo(PipelineMetricsComponent);
 
 export default PipelineMetrics;

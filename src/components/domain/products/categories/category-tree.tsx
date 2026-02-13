@@ -28,29 +28,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
+import { confirmations, useConfirmation } from "@/hooks";
+import type { CategoryNode } from "@/lib/schemas/products";
 
-export interface CategoryNode {
-  id: string;
-  name: string;
-  description?: string | null;
-  parentId?: string | null;
-  productCount?: number;
-  sortOrder: number;
-  isActive: boolean;
-  children: CategoryNode[];
-}
+// CategoryNode type moved to schemas/products.ts - imported above
 
 interface CategoryTreeProps {
   categories: CategoryNode[];
@@ -103,10 +86,10 @@ function TreeNode({
   isFirst = false,
   isLast = false,
 }: TreeNodeProps) {
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedIds.has(node.id);
   const isSelected = selectedId === node.id;
+  const confirmation = useConfirmation();
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -122,10 +105,28 @@ function TreeNode({
     onEdit?.(node);
   };
 
-  const handleDelete = () => {
-    setShowDeleteDialog(false);
-    onDelete?.(node);
-  };
+  const handleDelete = useCallback(async () => {
+    const warnings: string[] = [];
+    if (hasChildren) {
+      warnings.push(
+        `Warning: This category has ${node.children.length} subcategories that will also be deleted.`
+      );
+    }
+    if (node.productCount && node.productCount > 0) {
+      warnings.push(
+        `${node.productCount} products are in this category and will become uncategorized.`
+      );
+    }
+
+    const baseDescription = `Are you sure you want to delete "${node.name}"?`;
+    const description = warnings.length > 0 ? `${baseDescription}\n\n${warnings.join("\n")}` : baseDescription;
+
+    await confirmation.confirm({
+      ...confirmations.delete(node.name, "category"),
+      description,
+      onConfirm: () => onDelete?.(node),
+    });
+  }, [confirmation, hasChildren, node, onDelete]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -260,7 +261,7 @@ function TreeNode({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-red-600 focus:text-red-600"
-              onClick={() => setShowDeleteDialog(true)}
+              onClick={handleDelete}
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
@@ -296,34 +297,6 @@ function TreeNode({
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Category</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{node.name}&quot;?
-              {hasChildren && (
-                <span className="block mt-2 text-amber-600">
-                  Warning: This category has {node.children.length} subcategories that will also
-                  be deleted.
-                </span>
-              )}
-              {node.productCount && node.productCount > 0 && (
-                <span className="block mt-2 text-amber-600">
-                  {node.productCount} products are in this category and will become uncategorized.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

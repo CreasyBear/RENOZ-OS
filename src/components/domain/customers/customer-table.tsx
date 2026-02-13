@@ -52,6 +52,7 @@ interface CustomerTableProps {
   onSort: (column: string) => void;
   sortColumn?: string;
   sortDirection?: "asc" | "desc";
+  onViewCustomer?: (id: string) => void;
   onEdit?: (customer: CustomerTableData) => void;
   onDelete?: (customer: CustomerTableData) => void;
 }
@@ -185,6 +186,7 @@ export const CustomerTable = memo(function CustomerTable({
   onSort,
   sortColumn = "name",
   sortDirection = "asc",
+  onViewCustomer,
   onEdit,
   onDelete,
 }: CustomerTableProps) {
@@ -248,9 +250,11 @@ export const CustomerTable = memo(function CustomerTable({
   );
 
   // View handler - navigate to customer detail
-  const handleViewCustomer = useCallback((id: string) => {
-    window.location.href = `/customers/${id}`;
-  }, []);
+  const handleViewCustomerClick = useCallback((id: string) => {
+    if (onViewCustomer) {
+      onViewCustomer(id);
+    }
+  }, [onViewCustomer]);
 
   // Edit handler
   const handleEditCustomer = useMemo(() => {
@@ -280,7 +284,7 @@ export const CustomerTable = memo(function CustomerTable({
         isPartiallySelected,
         onSelectAll,
         isSelected,
-        onViewCustomer: handleViewCustomer,
+        onViewCustomer: handleViewCustomerClick,
         onEditCustomer: handleEditCustomer,
         onDeleteCustomer: handleDeleteCustomer,
       }),
@@ -291,7 +295,7 @@ export const CustomerTable = memo(function CustomerTable({
       isPartiallySelected,
       onSelectAll,
       isSelected,
-      handleViewCustomer,
+      handleViewCustomerClick,
       handleEditCustomer,
       handleDeleteCustomer,
     ]
@@ -343,6 +347,7 @@ export const CustomerTable = memo(function CustomerTable({
   );
 
   // Create TanStack Table instance
+  // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable({
     data: customers,
     columns,

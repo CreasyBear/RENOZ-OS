@@ -20,7 +20,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { createOrderColumns, type OrderTableItem } from "./order-columns";
+import { createOrderColumns } from "./order-columns";
+import type { OrderTableItem } from "@/lib/schemas/orders";
 
 export interface OrdersTablePresenterProps {
   /** Orders to display */
@@ -51,6 +52,8 @@ export interface OrdersTablePresenterProps {
   onDuplicateOrder: (id: string) => void;
   /** Delete order handler */
   onDeleteOrder: (id: string) => void;
+  /** When creating RMA from issue - preserve in order links */
+  fromIssueId?: string;
   /** Additional className */
   className?: string;
 }
@@ -74,6 +77,7 @@ export const OrdersTablePresenter = memo(function OrdersTablePresenter({
   onViewOrder,
   onDuplicateOrder,
   onDeleteOrder,
+  fromIssueId,
   className,
 }: OrdersTablePresenterProps) {
   // Create columns with selection handlers
@@ -89,6 +93,7 @@ export const OrdersTablePresenter = memo(function OrdersTablePresenter({
         onViewOrder,
         onDuplicateOrder,
         onDeleteOrder,
+        fromIssueId,
       }),
     [
       onSelect,
@@ -100,6 +105,7 @@ export const OrdersTablePresenter = memo(function OrdersTablePresenter({
       onViewOrder,
       onDuplicateOrder,
       onDeleteOrder,
+      fromIssueId,
     ]
   );
 
@@ -119,6 +125,7 @@ export const OrdersTablePresenter = memo(function OrdersTablePresenter({
     }
   };
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable({
     data: orders,
     columns,

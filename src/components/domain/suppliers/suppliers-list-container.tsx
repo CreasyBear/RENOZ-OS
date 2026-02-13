@@ -21,13 +21,15 @@ import { Trash2, CheckCircle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { useSuppliers, useDeleteSupplier } from "@/hooks/suppliers";
+import { useSuppliers, useDeleteSupplier, useUpdateSupplier } from "@/hooks/suppliers";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
 import { DomainFilterBar } from "@/components/shared/filters";
-import type {
-  SupplierFiltersState,
-  ListSuppliersInput,
+import {
+  type SupplierFiltersState,
+  type ListSuppliersInput,
+  type SupplierTableItem,
+  type SupplierSortField,
+  isSupplierSortField,
 } from "@/lib/schemas/suppliers";
 import {
   SUPPLIER_FILTER_CONFIG,
@@ -35,7 +37,6 @@ import {
   type SupplierFiltersState as ConfigFiltersState,
 } from "./supplier-filter-config";
 import { SuppliersListPresenter } from "./suppliers-list-presenter";
-import type { SupplierTableItem } from "./supplier-columns";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -47,7 +48,6 @@ export interface SuppliersListContainerProps {
   onRefresh?: () => void;
 }
 
-type SortField = "name" | "status" | "overallRating" | "createdAt" | "lastOrderDate";
 type SortDirection = "asc" | "desc";
 
 function buildSupplierQuery(
@@ -55,8 +55,8 @@ function buildSupplierQuery(
 ): Partial<ListSuppliersInput> {
   return {
     search: filters.search || undefined,
-    status: filters.status?.[0] ?? undefined,
-    supplierType: filters.supplierType?.[0] ?? undefined,
+    status: filters.status ?? undefined,
+    supplierType: filters.supplierType ?? undefined,
     ratingMin: filters.ratingMin ?? undefined,
     ratingMax: filters.ratingMax ?? undefined,
   };
@@ -69,7 +69,7 @@ export function SuppliersListContainer({
   const navigate = useNavigate();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortField, setSortField] = useState<SupplierSortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const queryFilters = useMemo<Partial<ListSuppliersInput>>(
@@ -89,9 +89,8 @@ export function SuppliersListContainer({
     error: suppliersError,
   } = useSuppliers(queryFilters);
 
-  // Cast suppliers to SupplierTableItem type
   const suppliers = useMemo<SupplierTableItem[]>(
-    () => (suppliersData?.items ?? []) as SupplierTableItem[],
+    () => suppliersData?.items ?? [],
     [suppliersData]
   );
   const total = suppliersData?.pagination?.totalItems ?? 0;
@@ -112,6 +111,7 @@ export function SuppliersListContainer({
   } = useTableSelection({ items: suppliers });
 
   const deleteMutation = useDeleteSupplier();
+  const updateMutation = useUpdateSupplier();
 
   // Handle sort toggle
   const handleSort = useCallback((field: string) => {
@@ -127,7 +127,7 @@ export function SuppliersListContainer({
           ? "desc"
           : "asc"
       );
-      return field as SortField;
+      return isSupplierSortField(field) ? field : currentField;
     });
     setPage(1); // Reset to first page on sort change
   }, []);
@@ -187,8 +187,10 @@ export function SuppliersListContainer({
       try {
         await deleteMutation.mutateAsync({ data: { id: supplierId } });
         toastSuccess("Supplier deleted");
-      } catch {
-        toastError("Failed to delete supplier");
+      } catch (error) {
+        toastError(
+          error instanceof Error ? error.message : "Failed to delete supplier"
+        );
       }
     },
     [deleteMutation, suppliers, confirmation]
@@ -244,31 +246,49 @@ export function SuppliersListContainer({
       );
       toastSuccess(`Deleted ${count} supplier${count > 1 ? "s" : ""}`);
       clearSelection();
-    } catch {
-      toastError("Failed to delete some suppliers");
+    } catch (error) {
+      toastError(
+        error instanceof Error ? error.message : "Failed to delete some suppliers"
+      );
     }
   }, [selectedItems, confirmation, deleteMutation, clearSelection]);
 
+  const handleBulkStatusUpdate = useCallback(
+    async (status: "active" | "inactive") => {
+      if (selectedItems.length === 0) return;
+
+      try {
+        await Promise.all(
+          selectedItems.map((supplier) =>
+            updateMutation.mutateAsync({ data: { id: supplier.id, status } })
+          )
+        );
+        toastSuccess(
+          `${status === "active" ? "Activated" : "Deactivated"} ${selectedItems.length} supplier${
+            selectedItems.length > 1 ? "s" : ""
+          }`
+        );
+        clearSelection();
+      } catch (error) {
+        toastError(
+          error instanceof Error ? error.message : "Failed to update supplier status"
+        );
+      }
+    },
+    [selectedItems, updateMutation, clearSelection]
+  );
+
   const handleBulkActivate = useCallback(() => {
-    // TODO: Implement bulk status update when mutation is available
-    toastSuccess(
-      `Activated ${selectedItems.length} supplier${selectedItems.length > 1 ? "s" : ""}`
-    );
-    clearSelection();
-  }, [selectedItems.length, clearSelection]);
+    void handleBulkStatusUpdate("active");
+  }, [handleBulkStatusUpdate]);
 
   const handleBulkDeactivate = useCallback(() => {
-    // TODO: Implement bulk status update when mutation is available
-    toastSuccess(
-      `Deactivated ${selectedItems.length} supplier${selectedItems.length > 1 ? "s" : ""}`
-    );
-    clearSelection();
-  }, [selectedItems.length, clearSelection]);
+    void handleBulkStatusUpdate("inactive");
+  }, [handleBulkStatusUpdate]);
 
   return (
     <>
-      <ConfirmationDialog />
-      <div className="space-y-4">
+      <div className="space-y-3">
         <DomainFilterBar
           config={SUPPLIER_FILTER_CONFIG}
           filters={configFilters}
@@ -295,7 +315,7 @@ export function SuppliersListContainer({
         <SuppliersListPresenter
           suppliers={suppliers}
           isLoading={isSuppliersLoading}
-          error={suppliersError as Error | null}
+          error={suppliersError instanceof Error ? suppliersError : null}
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
           isPartiallySelected={isPartiallySelected}

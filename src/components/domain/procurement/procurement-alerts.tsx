@@ -24,32 +24,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import type {
+  AlertSeverity,
+  AlertType,
+  ProcurementAlert,
+} from '@/lib/schemas/procurement';
+import { isValidAlertType } from '@/lib/schemas/procurement';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-type AlertSeverity = 'info' | 'warning' | 'error';
-type AlertType =
-  | 'low_stock'
-  | 'approval_overdue'
-  | 'delivery_delayed'
-  | 'supplier_issue'
-  | 'price_expiring'
-  | 'budget_warning';
-
-interface ProcurementAlert {
-  id: string;
-  type: AlertType;
-  severity: AlertSeverity;
-  title: string;
-  message: string;
-  createdAt: string;
-  linkTo?: string;
-  linkParams?: Record<string, string>;
-  linkLabel?: string;
-  dismissible?: boolean;
-}
 
 interface ProcurementAlertsProps {
   alerts: ProcurementAlert[];
@@ -142,7 +126,7 @@ function EmptyState() {
       <Bell className="text-muted-foreground mb-3 h-10 w-10" />
       <p className="font-medium">No Active Alerts</p>
       <p className="text-muted-foreground text-sm">
-        You're all caught up! No procurement issues to address.
+        You&apos;re all caught up! No procurement issues to address.
       </p>
     </div>
   );
@@ -206,28 +190,32 @@ interface CompactAlertsListProps {
   onDismiss?: (id: string) => void;
 }
 
+// Type guards imported from schema
+
 function CompactAlertsList({ alerts, onDismiss: _onDismiss }: CompactAlertsListProps) {
   // onDismiss available for future use when dismiss buttons added to compact view
   void _onDismiss;
-  const groupedByType = alerts.reduce(
+  const groupedByType = alerts.reduce<Partial<Record<AlertType, ProcurementAlert[]>>>(
     (acc, alert) => {
       if (!acc[alert.type]) {
         acc[alert.type] = [];
       }
-      acc[alert.type].push(alert);
+      acc[alert.type]!.push(alert);
       return acc;
     },
-    {} as Record<AlertType, ProcurementAlert[]>
+    {}
   );
 
   return (
     <div className="space-y-2">
       {Object.entries(groupedByType).map(([type, typeAlerts]) => {
-        const TypeIcon = typeIcons[type as AlertType];
-        const highestSeverity = typeAlerts.reduce((max, a) => {
-          const severityOrder = { error: 3, warning: 2, info: 1 };
-          return severityOrder[a.severity] > severityOrder[max] ? a.severity : max;
-        }, 'info' as AlertSeverity);
+        if (!isValidAlertType(type) || !typeAlerts) return null;
+        const TypeIcon = typeIcons[type];
+        const severityOrder: Record<AlertSeverity, number> = { error: 3, warning: 2, info: 1 };
+        const highestSeverity = typeAlerts.reduce<AlertSeverity>(
+          (max, a) => (severityOrder[a.severity] > severityOrder[max] ? a.severity : max),
+          'info'
+        );
 
         return (
           <div key={type} className="flex items-center justify-between rounded-lg border px-4 py-3">
@@ -347,4 +335,4 @@ function ProcurementAlerts({
 }
 
 export { ProcurementAlerts, AlertItem, CompactAlertsList };
-export type { ProcurementAlertsProps, ProcurementAlert, AlertSeverity, AlertType };
+export type { ProcurementAlertsProps };

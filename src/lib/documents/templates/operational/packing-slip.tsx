@@ -9,6 +9,9 @@ import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   QRCode,
+  FixedDocumentHeader,
+  pageMargins,
+  fixedHeaderClearance,
   fontSize,
   spacing,
   colors,
@@ -32,6 +35,7 @@ export interface PackingSlipLineItem {
   location?: string | null;
   isFragile?: boolean;
   weight?: number | null;
+  serialNumbers?: string[];
 }
 
 export interface PackingSlipDocumentData {
@@ -80,14 +84,15 @@ export interface PackingSlipPdfDocumentProps extends PackingSlipPdfTemplateProps
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32,
-    paddingBottom: 32,
-    paddingLeft: 40,
-    paddingRight: 40,
+    paddingTop: pageMargins.top,
+    paddingBottom: pageMargins.bottom,
+    paddingLeft: pageMargins.left,
+    paddingRight: pageMargins.right,
     backgroundColor: colors.background.white,
   },
   content: {
     flex: 1,
+    marginTop: fixedHeaderClearance,
   },
 
   // Header
@@ -228,8 +233,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   checkbox: {
-    width: 14,
-    height: 14,
+    width: 18,
+    height: 18,
     borderWidth: 1,
     borderColor: colors.border.medium,
     marginRight: spacing.sm,
@@ -251,6 +256,25 @@ const styles = StyleSheet.create({
   colDescription: { flex: 3 },
   colQty: { width: 50, textAlign: "center" },
   colLocation: { width: 80, textAlign: "center" },
+  serialNumberRow: {
+    flexDirection: "row" as const,
+    paddingLeft: 48,
+    paddingVertical: 2,
+  },
+  serialNumberLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    marginRight: 4,
+  },
+  serialNumberValues: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    flex: 1,
+  },
 
   // Summary
   summarySection: {
@@ -318,6 +342,11 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
 
   return (
     <Page size="A4" style={styles.page}>
+      <FixedDocumentHeader
+        orgName={organization.name}
+        documentType="Packing Slip"
+        documentNumber={data.documentNumber}
+      />
       <View style={styles.content}>
         {/* QR Code */}
         {qrCodeDataUrl && (
@@ -337,7 +366,7 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
                   {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
                 </Text>
                 <Text style={styles.companyDetail}>
-                  {organization.address.city}, {organization.address.state} {organization.address.postalCode}
+                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
                 </Text>
               </>
             )}
@@ -372,14 +401,14 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
           {data.shippingAddress && (
             <>
               {data.shippingAddress.contactName && (
-                <Text style={styles.shipToDetail}>Attn: {data.shippingAddress.contactName}</Text>
+                <Text style={styles.shipToDetail}>{`Attn: ${data.shippingAddress.contactName}`}</Text>
               )}
               <Text style={styles.shipToDetail}>
                 {data.shippingAddress.addressLine1}
                 {data.shippingAddress.addressLine2 ? `, ${data.shippingAddress.addressLine2}` : ""}
               </Text>
               <Text style={styles.shipToDetail}>
-                {data.shippingAddress.city}, {data.shippingAddress.state} {data.shippingAddress.postalCode}
+                {`${data.shippingAddress.city}, ${data.shippingAddress.state} ${data.shippingAddress.postalCode}`}
               </Text>
               {data.shippingAddress.contactPhone && (
                 <Text style={styles.shipToDetail}>{data.shippingAddress.contactPhone}</Text>
@@ -413,7 +442,7 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
           {data.packageCount && (
             <View style={styles.shippingItem}>
               <Text style={styles.shippingLabel}>Packages</Text>
-              <Text style={styles.shippingValue}>{data.packageCount}</Text>
+              <Text style={styles.shippingValue}>{String(data.packageCount)}</Text>
             </View>
           )}
         </View>
@@ -429,17 +458,27 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
           </View>
 
           {data.lineItems.map((item) => (
-            <View key={item.id} style={styles.tableRow} wrap={true}>
-              <View style={styles.colCheckbox}>
-                <View style={styles.checkbox} />
+            <View key={item.id} wrap={true}>
+              <View style={styles.tableRow}>
+                <View style={styles.colCheckbox}>
+                  <View style={styles.checkbox} />
+                </View>
+                <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "-"}</Text>
+                <View style={styles.colDescription}>
+                  <Text style={styles.tableCell}>{item.description}</Text>
+                  {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
+                </View>
+                <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
+                <Text style={[styles.tableCell, styles.colLocation]}>{item.location || "-"}</Text>
               </View>
-              <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "-"}</Text>
-              <View style={styles.colDescription}>
-                <Text style={styles.tableCell}>{item.description}</Text>
-                {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
-              </View>
-              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
-              <Text style={[styles.tableCell, styles.colLocation]}>{item.location || "-"}</Text>
+              {item.serialNumbers && item.serialNumbers.length > 0 && (
+                <View style={styles.serialNumberRow}>
+                  <Text style={styles.serialNumberLabel}>Serial Numbers:</Text>
+                  <Text style={styles.serialNumberValues}>
+                    {item.serialNumbers.join(", ")}
+                  </Text>
+                </View>
+              )}
             </View>
           ))}
         </View>
@@ -450,13 +489,13 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Total Items:</Text>
               <Text style={styles.summaryValue}>
-                {data.lineItems.reduce((sum, item) => sum + item.quantity, 0)}
+                {String(data.lineItems.reduce((sum, item) => sum + item.quantity, 0))}
               </Text>
             </View>
             {data.totalWeight && (
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Weight:</Text>
-                <Text style={styles.summaryValue}>{data.totalWeight} kg</Text>
+                <Text style={styles.summaryValue}>{`${data.totalWeight} kg`}</Text>
               </View>
             )}
           </View>
@@ -491,6 +530,8 @@ export function PackingSlipPdfDocument({
         title={`Packing Slip ${data.documentNumber}`}
         author={organization.name}
         subject={`Packing Slip for Order ${data.orderNumber}`}
+        language="en-AU"
+        keywords={`packing slip, ${data.documentNumber}, ${data.orderNumber}`}
         creator="Renoz"
       >
         <PackingSlipContent data={data} qrCodeDataUrl={qrCodeDataUrl} />

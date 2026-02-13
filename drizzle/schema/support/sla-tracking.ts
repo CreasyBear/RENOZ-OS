@@ -17,10 +17,12 @@ import {
   uniqueIndex,
   index,
   check,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { slaDomainEnum, slaTrackingStatusEnum } from "../_shared/enums";
 import { slaConfigurations } from "./sla-configurations";
@@ -78,51 +80,31 @@ export const slaTracking = pgTable(
 
     ...timestampColumns,
   },
-  (table) => [
+  (table) => ({
     // Unique tracking per entity
-    uniqueIndex("idx_sla_tracking_entity").on(
+    entityUnique: uniqueIndex("idx_sla_tracking_entity").on(
       table.domain,
       table.entityType,
       table.entityId
     ),
-    check(
+    entityTypeCheck: check(
       "sla_tracking_entity_type_check",
       sql`${table.entityType} IN ('issue','warranty_claim','job_assignment')`
     ),
     // Find active SLAs approaching due dates
-    index("idx_sla_tracking_due_dates").on(
+    dueDatesIdx: index("idx_sla_tracking_due_dates").on(
       table.organizationId,
       table.responseDueAt,
       table.resolutionDueAt
     ),
     // Filter by status
-    index("idx_sla_tracking_status").on(table.organizationId, table.status),
+    statusIdx: index("idx_sla_tracking_status").on(table.organizationId, table.status),
     // By configuration
-    index("idx_sla_tracking_config").on(table.slaConfigurationId),
+    configIdx: index("idx_sla_tracking_config").on(table.slaConfigurationId),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("sla_tracking_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("sla_tracking_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("sla_tracking_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("sla_tracking_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("sla_tracking"),
+  })
 );
 
 // ============================================================================

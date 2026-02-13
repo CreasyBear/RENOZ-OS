@@ -28,6 +28,8 @@ export interface OpportunityKanbanFilters {
   assignedTo?: string;
   minValue?: number;
   maxValue?: number;
+  expectedCloseDateFrom?: Date;
+  expectedCloseDateTo?: Date;
   includeWonLost?: boolean;
 }
 
@@ -47,8 +49,8 @@ export function useOpportunities(options: UseOpportunitiesOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.opportunities.list(filters),
-    queryFn: () =>
-      listOpportunities({
+    queryFn: async () => {
+      const result = await listOpportunities({
         data: {
           page: filters.page ?? 1,
           pageSize: filters.pageSize ?? 50,
@@ -59,7 +61,10 @@ export function useOpportunities(options: UseOpportunitiesOptions = {}) {
           assignedTo: filters.assignedTo,
           customerId: filters.customerId,
         },
-      }),
+      });
+      if (result == null) throw new Error('Opportunities list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -95,14 +100,13 @@ export function useOpportunitiesKanban(options: UseOpportunitiesKanbanOptions = 
           assignedTo: filters.assignedTo || undefined,
           minValue: filters.minValue ?? undefined,
           maxValue: filters.maxValue ?? undefined,
+          expectedCloseDateFrom: filters.expectedCloseDateFrom,
+          expectedCloseDateTo: filters.expectedCloseDateTo,
           includeWonLost: filters.includeWonLost,
         },
       });
-      return result as {
-        items: Opportunity[];
-        pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
-        metrics: { totalValue: number; weightedValue: number };
-      };
+      if (result == null) throw new Error('Opportunities list returned no data');
+      return result;
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -115,8 +119,8 @@ export function useOpportunitiesKanban(options: UseOpportunitiesKanbanOptions = 
 export function useOpportunitiesInfinite(filters: Partial<OpportunityFilters> = {}) {
   return useInfiniteQuery({
     queryKey: queryKeys.opportunities.list(filters),
-    queryFn: ({ pageParam }) =>
-      listOpportunities({
+    queryFn: async ({ pageParam }) => {
+      const result = await listOpportunities({
         data: {
           page: pageParam,
           pageSize: filters.pageSize ?? 50,
@@ -127,7 +131,10 @@ export function useOpportunitiesInfinite(filters: Partial<OpportunityFilters> = 
           assignedTo: filters.assignedTo,
           customerId: filters.customerId,
         },
-      }),
+      });
+      if (result == null) throw new Error('Opportunities list returned no data');
+      return result;
+    },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       const totalFetched = allPages.reduce((sum, p) => sum + p.items.length, 0);
@@ -152,7 +159,11 @@ export interface UseOpportunityOptions {
 export function useOpportunity({ id, enabled = true }: UseOpportunityOptions) {
   return useQuery({
     queryKey: queryKeys.pipeline.opportunity(id),
-    queryFn: () => getOpportunity({ data: { id } }),
+    queryFn: async () => {
+      const result = await getOpportunity({ data: { id } });
+      if (result == null) throw new Error('Opportunity not found');
+      return result;
+    },
     enabled: enabled && !!id && id !== 'new',
     staleTime: 60 * 1000, // 1 minute
   });
@@ -174,8 +185,8 @@ export interface UseOpportunitySearchOptions {
 export function useOpportunitySearch({ query, limit = 10, enabled = true }: UseOpportunitySearchOptions) {
   return useQuery({
     queryKey: queryKeys.opportunities.list({ search: query }),
-    queryFn: () =>
-      listOpportunities({
+    queryFn: async () => {
+      const result = await listOpportunities({
         data: {
           search: query,
           pageSize: limit,
@@ -183,7 +194,10 @@ export function useOpportunitySearch({ query, limit = 10, enabled = true }: UseO
           sortBy: 'createdAt',
           sortOrder: 'desc',
         },
-      }),
+      });
+      if (result == null) throw new Error('Opportunity search returned no data');
+      return result;
+    },
     enabled: enabled && query.length >= 2,
     staleTime: 10 * 1000, // 10 seconds
     placeholderData: (previousData) => previousData,

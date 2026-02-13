@@ -2,9 +2,11 @@
  * Warranty Claim Detail Route
  *
  * Layout-only route that renders the claim detail container.
+ *
+ * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { WarrantyClaimDetailContainer } from '@/components/domain/warranty';
 
@@ -15,7 +17,7 @@ export const Route = createFileRoute('/_authenticated/support/claims/$claimId')(
   ),
   pendingComponent: () => (
     <PageLayout variant="full-width">
-      <PageLayout.Header title="Claim Details" description="Loading warranty claim information..." />
+      <PageLayout.Header title={null} />
       <PageLayout.Content>
         <SupportDetailSkeleton />
       </PageLayout.Content>
@@ -25,11 +27,16 @@ export const Route = createFileRoute('/_authenticated/support/claims/$claimId')(
 
 function ClaimDetailPage() {
   const { claimId } = Route.useParams();
+
   return (
     <WarrantyClaimDetailContainer claimId={claimId}>
-      {({ headerTitle, headerActions, content }) => (
+      {({ headerActions, content }) => (
         <PageLayout variant="full-width">
-          <PageLayout.Header title={headerTitle} actions={headerActions} />
+          <PageLayout.Header
+            title={null}
+            leading={<DetailPageBackButton to="/support/claims" aria-label="Back to claims" />}
+            actions={headerActions}
+          />
           <PageLayout.Content>{content}</PageLayout.Content>
         </PageLayout>
       )}

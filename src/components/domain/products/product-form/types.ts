@@ -56,12 +56,8 @@ export const productFormSchema = z.object({
 
 export type ProductFormValues = z.infer<typeof productFormSchema>;
 
-export interface Category {
-  id: string;
-  name: string;
-  parentId: string | null;
-  children?: Category[];
-}
+// Category type moved to schemas/products.ts - import from there
+import type { Category } from '@/lib/schemas/products';
 
 export interface ProductFormProps {
   categories?: Category[];

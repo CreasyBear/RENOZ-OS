@@ -8,8 +8,14 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json
  */
 
+import type { ReactNode } from 'react';
 import { z } from 'zod';
 import { warrantyPolicyTypeSchema } from './policies';
+import type { WarrantyClaimListItem } from './claims';
+import type { WarrantyExtensionItem } from './extensions';
+import type { WarrantyClaimTypeValue } from './claims';
+import type { WarrantyExtensionTypeValue } from './extensions';
+import type { UnifiedActivity } from '../unified-activity';
 
 // ============================================================================
 // ENUMS (must match drizzle schema)
@@ -25,6 +31,10 @@ export const warrantyStatusValues = [
 
 export const warrantyStatusSchema = z.enum(warrantyStatusValues);
 export type WarrantyStatus = z.infer<typeof warrantyStatusSchema>;
+
+export function isWarrantyStatusValue(v: unknown): v is WarrantyStatus {
+  return warrantyStatusSchema.safeParse(v).success;
+}
 
 // ============================================================================
 // METADATA SCHEMA
@@ -209,3 +219,226 @@ export const updateCustomerWarrantyOptOutSchema = z.object({
 });
 
 export type UpdateCustomerWarrantyOptOutInput = z.input<typeof updateCustomerWarrantyOptOutSchema>;
+
+// ============================================================================
+// EXPIRING WARRANTY ITEM TYPES (for dashboard widgets and reports)
+// ============================================================================
+
+/**
+ * Urgency level for expiring warranties.
+ */
+export type WarrantyUrgencyLevel = 'urgent' | 'warning' | 'approaching' | 'healthy';
+
+/**
+ * Individual expiring warranty item for dashboard widgets and reports.
+ */
+export interface ExpiringWarrantyItem {
+  id: string;
+  warrantyNumber: string;
+  customerId: string;
+  customerName: string | null;
+  productId: string;
+  productName: string | null;
+  productSerial: string | null;
+  policyType: 'battery_performance' | 'inverter_manufacturer' | 'installation_workmanship';
+  policyName: string;
+  expiryDate: string;
+  daysUntilExpiry: number;
+  urgencyLevel: WarrantyUrgencyLevel;
+  currentCycleCount: number | null;
+  cycleLimit: number | null;
+}
+
+/**
+ * Response type for expiring warranties query (dashboard widget).
+ */
+export interface GetExpiringWarrantiesResult {
+  warranties: ExpiringWarrantyItem[];
+  totalCount: number;
+}
+
+/**
+ * Response type for expiring warranties report (full page with pagination).
+ */
+export interface ExpiringWarrantiesReportResult {
+  warranties: ExpiringWarrantyItem[];
+  totalCount: number;
+  totalValue: number;
+  avgDaysToExpiry: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * Individual warranty list item (for list views).
+ */
+export interface WarrantyListItem {
+  id: string;
+  warrantyNumber: string;
+  customerId: string;
+  customerName: string | null;
+  productId: string;
+  productName: string | null;
+  productSku: string | null;
+  productSerial: string | null;
+  warrantyPolicyId: string;
+  policyName: string;
+  policyType: 'battery_performance' | 'inverter_manufacturer' | 'installation_workmanship';
+  registrationDate: string;
+  expiryDate: string;
+  status: WarrantyStatus;
+  currentCycleCount: number | null;
+  cycleLimit: number | null;
+  expiryAlertOptOut: boolean;
+  certificateUrl: string | null;
+}
+
+/**
+ * Response type for listing warranties with pagination.
+ */
+export interface ListWarrantiesResult {
+  warranties: WarrantyListItem[];
+  total: number;
+  hasMore: boolean;
+  nextOffset?: number;
+}
+
+/**
+ * Warranty detail response type (for detail views).
+ * Matches the structure returned by getWarranty server function.
+ */
+export interface WarrantyDetail {
+  id: string;
+  warrantyNumber: string;
+  organizationId: string;
+  customerId: string;
+  customerName: string | null;
+  productId: string;
+  productName: string | null;
+  productSerial: string | null;
+  warrantyPolicyId: string;
+  policyName: string;
+  policyType: 'battery_performance' | 'inverter_manufacturer' | 'installation_workmanship';
+  registrationDate: string;
+  expiryDate: string;
+  status: WarrantyStatus;
+  currentCycleCount: number | null;
+  cycleLimit: number | null;
+  assignedUserId: string | null;
+  expiryAlertOptOut: boolean;
+  lastExpiryAlertSent: string | null;
+  certificateUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{
+    id: string;
+    productId: string;
+    productName: string | null;
+    productSku: string | null;
+    productSerial: string | null;
+    warrantyStartDate: string;
+    warrantyEndDate: string;
+    warrantyPeriodMonths: number;
+    installationNotes: string | null;
+  }>;
+}
+
+// ============================================================================
+// VIEW / CONTAINER PROPS (SCHEMA-TRACE: types in schemas, not components)
+// ============================================================================
+
+/** Render props for WarrantyDetailContainer render prop pattern */
+export interface WarrantyDetailContainerRenderProps {
+  /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
+  headerActions?: ReactNode;
+  /** Main content */
+  content: ReactNode;
+}
+
+/** Props for WarrantyDetailContainer */
+export interface WarrantyDetailContainerProps {
+  warrantyId: string;
+  children?: (props: WarrantyDetailContainerRenderProps) => ReactNode;
+}
+
+/** Certificate status for warranty detail view */
+export interface WarrantyCertificateStatus {
+  exists: boolean;
+  certificateUrl: string | null;
+}
+
+/** Options for createWarrantyColumns */
+export interface CreateWarrantyColumnsOptions {
+  onSelect: (id: string, checked: boolean) => void;
+  onShiftClickRange: (rowIndex: number) => void;
+  isAllSelected: boolean;
+  isPartiallySelected: boolean;
+  onSelectAll: (checked: boolean) => void;
+  isSelected: (id: string) => boolean;
+  onViewWarranty: (id: string) => void;
+  onViewCertificate?: (id: string) => void;
+  onVoidWarranty?: (id: string) => void;
+  onTransferWarranty?: (id: string) => void;
+}
+
+/** Props for WarrantyDetailView */
+export interface WarrantyDetailViewProps {
+  warranty: WarrantyDetail;
+  /** When true, EntityHeader omits actions (used when PageLayout.Header renders them) */
+  headerActionsInLayout?: boolean;
+  onDelete?: () => void;
+  claims: WarrantyClaimListItem[];
+  extensions: WarrantyExtensionItem[];
+  certificateStatus: WarrantyCertificateStatus | null | undefined;
+  isClaimsLoading: boolean;
+  isExtensionsLoading: boolean;
+  isExtensionsError: boolean;
+  isCertificateLoading: boolean;
+  isOptOutUpdating: boolean;
+  isSubmittingClaim: boolean;
+  isSubmittingApproval: boolean;
+  isSubmittingExtend: boolean;
+  isClaimDialogOpen: boolean;
+  isApprovalDialogOpen: boolean;
+  isExtendDialogOpen: boolean;
+  selectedClaimForApproval: WarrantyClaimListItem | null;
+  onClaimRowClick: (claimId: string) => void;
+  onReviewClaim: (claim: WarrantyClaimListItem) => void;
+  onClaimDialogOpenChange: (open: boolean) => void;
+  onApprovalDialogOpenChange: (open: boolean) => void;
+  onExtendDialogOpenChange: (open: boolean) => void;
+  onRetryExtensions: () => void;
+  onClaimsSuccess: () => void;
+  onExtensionsSuccess: () => void;
+  onSubmitClaim: (payload: {
+    warrantyId: string;
+    claimType: WarrantyClaimTypeValue;
+    description: string;
+    cycleCountAtClaim?: number;
+    notes?: string;
+  }) => Promise<void>;
+  onApproveClaim: (payload: { claimId: string; notes?: string }) => Promise<void>;
+  onDenyClaim: (payload: { claimId: string; denialReason: string; notes?: string }) => Promise<void>;
+  onExtendWarranty: (payload: {
+    warrantyId: string;
+    extensionType: WarrantyExtensionTypeValue;
+    extensionMonths: number;
+    price: number | null;
+    notes: string | null;
+  }) => Promise<void>;
+  onToggleOptOut: (checked: boolean) => void;
+  certificateError?: string | null;
+  onRetryCertificate?: () => void;
+  onDownloadCertificate?: () => void;
+  onGenerateCertificate?: () => void;
+  onRegenerateCertificate?: () => void;
+  isCertificateGenerating?: boolean;
+  isCertificateRegenerating?: boolean;
+  activities?: UnifiedActivity[];
+  activitiesLoading?: boolean;
+  activitiesError?: Error | null;
+  onLogActivity?: () => void;
+  onScheduleFollowUp?: () => void;
+}

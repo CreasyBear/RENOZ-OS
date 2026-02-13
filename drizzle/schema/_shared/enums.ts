@@ -199,6 +199,7 @@ export const orderStatusEnum = pgEnum("order_status", [
   "confirmed",
   "picking",
   "picked",
+  "partially_shipped",
   "shipped",
   "delivered",
   "cancelled",
@@ -210,6 +211,26 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "paid",
   "refunded",
   "overdue",
+]);
+
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft",
+  "scheduled",
+  "unpaid",
+  "overdue",
+  "paid",
+  "canceled",
+  "refunded",
+]);
+
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "bank_transfer",
+  "credit_card",
+  "cash",
+  "cheque",
+  "paypal",
+  "stripe",
+  "xero",
 ]);
 
 export const orderLineItemPickStatusEnum = pgEnum("order_line_item_pick_status", [
@@ -430,6 +451,7 @@ export const activityActionEnum = pgEnum("activity_action", [
   "note_added",
 ]);
 
+// Must match lib/schemas/activities activityEntityTypeValues
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "customer",
   "contact",
@@ -440,6 +462,7 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "supplier",
   "warranty",
   "issue",
+  "rma",
   "user",
   "email",
   "call",
@@ -494,6 +517,11 @@ export const jobTimeCategoryEnum = pgEnum("job_time_category", [
   "travel",
   "break",
 ]);
+
+export const jobMaterialReservationStatusEnum = pgEnum(
+  "job_material_reservation_status",
+  ["pending", "fulfilled", "released", "expired"]
+);
 
 // ============================================================================
 // WAREHOUSE MANAGEMENT ENUMS

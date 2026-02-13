@@ -27,7 +27,8 @@ import {
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { WarrantyPolicy } from 'drizzle/schema';
+import type { WarrantyPolicy } from '@/lib/schemas/warranty';
+import { WARRANTY_POLICY_LABELS } from '@/lib/warranty';
 import {
   Plus,
   Search,
@@ -258,7 +259,7 @@ export function WarrantyPolicyList({
               {!row.original.isDefault && (
                 <DropdownMenuItem onClick={() => onSetDefault?.(row.original)}>
                   <Star className="mr-2 h-4 w-4" />
-                  Set as Default
+                  {WARRANTY_POLICY_LABELS.SET_AS_DEFAULT}
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />

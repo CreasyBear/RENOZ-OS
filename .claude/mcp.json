@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "supabase-renoz-website": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest", "--project-ref", "tcrpfwxfsbkrwqielhfg"],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_3fb5580eb0b218fed357072cef692b6300cd69ef"
+      }
+    },
+    "supabase-renoz-crm": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest", "--project-ref", "rbeuidfnvjqxonxplfjb"],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_143d02807151d24f933fa7b4cc18173c0078d70c"
+      }
+    },
+    "exa": {
+      "type": "http",
+      "url": "https://mcp.exa.ai/mcp?exaApiKey=cd0ae929-3aa8-48d1-84c1-18d2ca5282cf&tools=web_search_exa,get_code_context_exa,crawling_exa,company_research_exa,linkedin_search_exa,deep_researcher_start,deep_researcher_check"
+    },
+    "grep-mcp": {
+      "command": "uvx",
+      "args": ["grep-mcp"]
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.ai/mcp"
+    }
+  }
+}

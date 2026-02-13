@@ -9,6 +9,7 @@ import { Link, useRouterState, type LinkProps } from '@tanstack/react-router'
 import { ChevronRight, Home, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBreadcrumbLabel } from '@/lib/routing'
+import { useBreadcrumbOverride } from './breadcrumb-context'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,12 +32,14 @@ interface BreadcrumbItem {
 export function Breadcrumbs() {
   const router = useRouterState()
   const pathname = router.location.pathname
+  const override = useBreadcrumbOverride()
 
   // Parse pathname into breadcrumb items
   const segments = pathname.split('/').filter(Boolean)
   const breadcrumbs: BreadcrumbItem[] = segments.map((_, index) => {
     const href = '/' + segments.slice(0, index + 1).join('/')
-    const label = getBreadcrumbLabel(href)
+    const label =
+      override?.segmentPath === href ? override.label : getBreadcrumbLabel(href)
     const current = index === segments.length - 1
 
     return { label, href, current }
@@ -58,6 +61,7 @@ export function Breadcrumbs() {
     <nav aria-label="Breadcrumb" className="flex items-center space-x-1 text-sm">
       <Link
         to="/dashboard"
+        search={{ tab: 'overview' }}
         className={cn(
           'text-gray-500 hover:text-gray-700 transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-gray-200 rounded'
@@ -127,8 +131,17 @@ export function Breadcrumbs() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {middleItems.map((item) => (
-                  <DropdownMenuItem key={item.href} asChild>
-                    <DynamicLink to={item.href}>{item.label}</DynamicLink>
+                  <DropdownMenuItem
+                    key={item.href}
+                    className="p-0"
+                  >
+                    {/* Avoid DropdownMenuItem asChild + TanStack Link SSR issues */}
+                    <DynamicLink
+                      to={item.href}
+                      className="w-full px-2 py-1.5"
+                    >
+                      {item.label}
+                    </DynamicLink>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>

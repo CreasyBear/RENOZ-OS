@@ -9,7 +9,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, ilike, or, gte, lte } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, or, gte, lte, isNull, isNotNull, inArray } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse, encodeCursor } from '@/lib/db/pagination';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import {
@@ -19,12 +21,14 @@ import {
   slaEvents,
   businessHoursConfig,
   organizationHolidays,
+  customers,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
   createIssueSchema,
   updateIssueSchema,
   getIssuesSchema,
+  getIssuesCursorSchema,
   getIssueByIdSchema,
 } from '@/lib/schemas/support/issues';
 import {
@@ -37,12 +41,14 @@ import {
   buildPausedEventData,
   buildResumedEventData,
   buildResolvedEventData,
+  type SlaConfiguration,
+  type BusinessHoursConfig as BusinessHoursConfigType,
+  toBusinessHoursConfig,
+  toSlaTracking,
+  toSlaConfiguration,
 } from '@/lib/sla';
-import type {
-  SlaConfiguration,
-  BusinessHoursConfig as BusinessHoursConfigType,
-} from '@/lib/sla/types';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 
@@ -73,69 +79,81 @@ export const createIssue = createServerFn({ method: 'POST' })
     const ctx = await withAuth();
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Create the issue first
-    const [issue] = await db
-      .insert(issues)
-      .values({
-        organizationId: ctx.organizationId,
-        title: data.title,
-        description: data.description ?? null,
-        type: data.type,
-        priority: data.priority,
-        status: 'open',
-        customerId: data.customerId ?? null,
-        assignedToUserId: data.assignedToUserId ?? null,
-        metadata: data.metadata ?? null,
-        tags: data.tags ?? null,
-        createdBy: ctx.user.id,
-      })
-      .returning();
+    // Wrap issue creation + SLA tracking in a transaction for atomicity
+    const { issue, slaTrackingRecord } = await db.transaction(async (tx) => {
+      // Create the issue first
+      const [newIssue] = await tx
+        .insert(issues)
+        .values({
+          organizationId: ctx.organizationId,
+          title: data.title,
+          description: data.description ?? null,
+          type: data.type,
+          priority: data.priority,
+          status: 'open',
+          customerId: data.customerId ?? null,
+          assignedToUserId: data.assignedToUserId ?? null,
+          metadata: data.metadata ?? null,
+          tags: data.tags ?? null,
+          createdBy: ctx.user.id,
+        })
+        .returning();
 
-    // If SLA configuration is provided, start SLA tracking
-    let slaTrackingRecord = null;
-    if (data.slaConfigurationId) {
-      slaTrackingRecord = await startSlaTrackingForIssue(
-        ctx.organizationId,
-        ctx.user.id,
-        issue.id,
-        data.slaConfigurationId
-      );
-
-      // Update issue with SLA tracking ID
-      await db
-        .update(issues)
-        .set({ slaTrackingId: slaTrackingRecord.id })
-        .where(eq(issues.id, issue.id));
-    } else {
-      // Try to find default SLA configuration for support domain
-      const [defaultConfig] = await db
-        .select()
-        .from(slaConfigurations)
-        .where(
-          and(
-            eq(slaConfigurations.organizationId, ctx.organizationId),
-            eq(slaConfigurations.domain, 'support'),
-            eq(slaConfigurations.isDefault, true),
-            eq(slaConfigurations.isActive, true)
-          )
-        )
-        .limit(1);
-
-      if (defaultConfig) {
-        slaTrackingRecord = await startSlaTrackingForIssue(
+      // If SLA configuration is provided, start SLA tracking
+      let slaRecord = null;
+      if (data.slaConfigurationId) {
+        slaRecord = await startSlaTrackingForIssue(
           ctx.organizationId,
           ctx.user.id,
-          issue.id,
-          defaultConfig.id
+          newIssue.id,
+          data.slaConfigurationId,
+          tx as unknown as typeof db
         );
 
         // Update issue with SLA tracking ID
-        await db
+        await tx
           .update(issues)
-          .set({ slaTrackingId: slaTrackingRecord.id })
-          .where(eq(issues.id, issue.id));
+          .set({ slaTrackingId: slaRecord.id })
+          .where(
+            and(
+              eq(issues.id, newIssue.id),
+              eq(issues.organizationId, ctx.organizationId)
+            )
+          );
+      } else {
+        // Try to find default SLA configuration for support domain
+        const [defaultConfig] = await tx
+          .select()
+          .from(slaConfigurations)
+          .where(
+            and(
+              eq(slaConfigurations.organizationId, ctx.organizationId),
+              eq(slaConfigurations.domain, 'support'),
+              eq(slaConfigurations.isDefault, true),
+              eq(slaConfigurations.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (defaultConfig) {
+          slaRecord = await startSlaTrackingForIssue(
+            ctx.organizationId,
+            ctx.user.id,
+            newIssue.id,
+            defaultConfig.id,
+            tx as unknown as typeof db
+          );
+
+          // Update issue with SLA tracking ID
+          await tx
+            .update(issues)
+            .set({ slaTrackingId: slaRecord.id })
+            .where(eq(issues.id, newIssue.id));
+        }
       }
-    }
+
+      return { issue: newIssue, slaTrackingRecord: slaRecord };
+    });
 
     // Log issue creation
     logger.logAsync({
@@ -174,10 +192,11 @@ async function startSlaTrackingForIssue(
   organizationId: string,
   userId: string,
   issueId: string,
-  configId: string
+  configId: string,
+  executor: typeof db = db
 ) {
   // Get the SLA configuration first (needed to determine if we need business hours)
-  const [config] = await db
+  const [config] = await executor
     .select()
     .from(slaConfigurations)
     .where(eq(slaConfigurations.id, configId))
@@ -195,13 +214,13 @@ async function startSlaTrackingForIssue(
 
   const [businessHoursResult, holidays] = await Promise.all([
     config.businessHoursConfigId
-      ? db
+      ? executor
           .select()
           .from(businessHoursConfig)
           .where(eq(businessHoursConfig.id, config.businessHoursConfigId))
           .limit(1)
       : Promise.resolve([]),
-    db
+    executor
       .select()
       .from(organizationHolidays)
       .where(
@@ -223,14 +242,7 @@ async function startSlaTrackingForIssue(
   // Transform business hours result if present
   const bh = businessHoursResult[0];
   const businessHours: BusinessHoursConfigType | null = bh
-    ? {
-        id: bh.id,
-        organizationId: bh.organizationId,
-        name: bh.name,
-        weeklySchedule: bh.weeklySchedule as any,
-        timezone: bh.timezone,
-        isDefault: bh.isDefault,
-      }
+    ? toBusinessHoursConfig(bh)
     : null;
 
   const holidayDates = holidays.map((h) => new Date(h.date));
@@ -270,14 +282,14 @@ async function startSlaTrackingForIssue(
   );
 
   // Create tracking record
-  const [tracking] = await db.insert(slaTracking).values(initialValues).returning();
+  const [tracking] = await executor.insert(slaTracking).values(initialValues).returning();
 
   // Create started event
-  await db.insert(slaEvents).values({
+  await executor.insert(slaEvents).values({
     organizationId,
     slaTrackingId: tracking.id,
     eventType: 'started',
-    eventData: buildStartedEventData(tracking as any),
+    eventData: buildStartedEventData(toSlaTracking(tracking)),
     triggeredByUserId: userId,
   });
 
@@ -299,10 +311,18 @@ export const getIssues = createServerFn({ method: 'GET' })
     const conditions = [eq(issues.organizationId, ctx.organizationId)];
 
     if (data.status) {
-      conditions.push(eq(issues.status, data.status));
+      if (Array.isArray(data.status) && data.status.length > 0) {
+        conditions.push(inArray(issues.status, data.status));
+      } else if (!Array.isArray(data.status)) {
+        conditions.push(eq(issues.status, data.status));
+      }
     }
     if (data.priority) {
-      conditions.push(eq(issues.priority, data.priority));
+      if (Array.isArray(data.priority) && data.priority.length > 0) {
+        conditions.push(inArray(issues.priority, data.priority));
+      } else if (!Array.isArray(data.priority)) {
+        conditions.push(eq(issues.priority, data.priority));
+      }
     }
     if (data.type) {
       conditions.push(eq(issues.type, data.type));
@@ -310,8 +330,14 @@ export const getIssues = createServerFn({ method: 'GET' })
     if (data.customerId) {
       conditions.push(eq(issues.customerId, data.customerId));
     }
-    if (data.assignedToUserId) {
-      conditions.push(eq(issues.assignedToUserId, data.assignedToUserId));
+    if (data.assignedToFilter === 'unassigned') {
+      conditions.push(isNull(issues.assignedToUserId));
+    } else if (data.assignedToFilter === 'me' || data.assignedToUserId) {
+      const userId = data.assignedToFilter === 'me' ? ctx.user.id : data.assignedToUserId;
+      if (userId) conditions.push(eq(issues.assignedToUserId, userId));
+    }
+    if (data.escalated === true) {
+      conditions.push(isNotNull(issues.escalatedAt));
     }
     if (data.search) {
       conditions.push(
@@ -328,6 +354,60 @@ export const getIssues = createServerFn({ method: 'GET' })
       .offset(data.offset);
 
     return results;
+  });
+
+/**
+ * Get issues with cursor pagination (recommended for large datasets).
+ */
+export const getIssuesCursor = createServerFn({ method: 'GET' })
+  .inputValidator(getIssuesCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', status, priority, type, customerId, assignedToUserId, assignedToFilter, search, escalated } = data;
+
+    const conditions = [eq(issues.organizationId, ctx.organizationId)];
+    if (status) {
+      if (Array.isArray(status) && status.length > 0) conditions.push(inArray(issues.status, status));
+      else if (!Array.isArray(status)) conditions.push(eq(issues.status, status));
+    }
+    if (priority) {
+      if (Array.isArray(priority) && priority.length > 0) conditions.push(inArray(issues.priority, priority));
+      else if (!Array.isArray(priority)) conditions.push(eq(issues.priority, priority));
+    }
+    if (type) conditions.push(eq(issues.type, type));
+    if (customerId) conditions.push(eq(issues.customerId, customerId));
+    if (assignedToFilter === 'unassigned') {
+      conditions.push(isNull(issues.assignedToUserId));
+    } else if (assignedToFilter === 'me' || assignedToUserId) {
+      const userId = assignedToFilter === 'me' ? ctx.user.id : assignedToUserId;
+      if (userId) conditions.push(eq(issues.assignedToUserId, userId));
+    }
+    if (escalated === true) conditions.push(isNotNull(issues.escalatedAt));
+    if (search) {
+      conditions.push(
+        or(ilike(issues.title, containsPattern(search)), ilike(issues.issueNumber, containsPattern(search)))!
+      );
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(issues.createdAt, issues.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const results = await db
+      .select()
+      .from(issues)
+      .where(and(...conditions))
+      .orderBy(orderDir(issues.createdAt), orderDir(issues.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(results, pageSize);
   });
 
 /**
@@ -362,13 +442,21 @@ export const getIssueById = createServerFn({ method: 'GET' })
         .limit(1);
 
       if (slaData?.tracking && slaData?.config) {
-        slaState = computeStateSnapshot(slaData.tracking as any, slaData.config as any);
+        slaState = computeStateSnapshot(
+          toSlaTracking(slaData.tracking),
+          toSlaConfiguration(slaData.config)
+        );
       }
     }
 
+    // Extract warrantyId from metadata if present
+    const metadata = issue.metadata as Record<string, unknown> | null;
+    const warrantyId = metadata?.warrantyId as string | null;
+
     return {
       ...issue,
-      slaState,
+      slaMetrics: slaState,  // Return as slaMetrics to match client expectations
+      warrantyId: warrantyId ?? null,
     };
   });
 
@@ -404,90 +492,82 @@ export const updateIssue = createServerFn({ method: 'POST' })
       throw new NotFoundError('Issue not found', 'issue');
     }
 
-    // Handle SLA pause/resume on status change
-    if (updates.status && existing.slaTrackingId) {
-      const [tracking] = await db
-        .select()
-        .from(slaTracking)
-        .where(eq(slaTracking.id, existing.slaTrackingId))
-        .limit(1);
+    const [issue] = await db.transaction(async (tx) => {
+      if (updates.status && existing.slaTrackingId) {
+        const [tracking] = await tx
+          .select()
+          .from(slaTracking)
+          .where(eq(slaTracking.id, existing.slaTrackingId))
+          .limit(1);
 
-      if (tracking) {
-        // Pause SLA when going to on_hold status
-        if (updates.status === 'on_hold' && existing.status !== 'on_hold' && !tracking.isPaused) {
-          const pauseReason = updates.holdReason ?? 'On hold';
-          const pauseUpdates = calculatePauseUpdate(tracking as any, pauseReason);
+        if (tracking) {
+          if (updates.status === 'on_hold' && existing.status !== 'on_hold' && !tracking.isPaused) {
+            const pauseReason = updates.holdReason ?? 'On hold';
+            const pauseUpdates = calculatePauseUpdate(toSlaTracking(tracking), pauseReason);
+            await tx.update(slaTracking).set(pauseUpdates).where(eq(slaTracking.id, tracking.id));
+            await tx.insert(slaEvents).values({
+              organizationId: ctx.organizationId,
+              slaTrackingId: tracking.id,
+              eventType: 'paused',
+              eventData: buildPausedEventData(pauseReason),
+              triggeredByUserId: ctx.user.id,
+            });
+          }
 
-          await db.update(slaTracking).set(pauseUpdates).where(eq(slaTracking.id, tracking.id));
+          if (existing.status === 'on_hold' && updates.status !== 'on_hold' && tracking.isPaused) {
+            const resumeUpdates = calculateResumeUpdate(toSlaTracking(tracking));
+            const pauseDuration =
+              resumeUpdates.totalPausedDurationSeconds! - tracking.totalPausedDurationSeconds;
+            await tx.update(slaTracking).set(resumeUpdates).where(eq(slaTracking.id, tracking.id));
+            await tx.insert(slaEvents).values({
+              organizationId: ctx.organizationId,
+              slaTrackingId: tracking.id,
+              eventType: 'resumed',
+              eventData: buildResumedEventData(
+                pauseDuration,
+                resumeUpdates.totalPausedDurationSeconds!
+              ),
+              triggeredByUserId: ctx.user.id,
+            });
+          }
 
-          await db.insert(slaEvents).values({
-            organizationId: ctx.organizationId,
-            slaTrackingId: tracking.id,
-            eventType: 'paused',
-            eventData: buildPausedEventData(pauseReason),
-            triggeredByUserId: ctx.user.id,
-          });
-        }
-
-        // Resume SLA when coming out of on_hold status
-        if (existing.status === 'on_hold' && updates.status !== 'on_hold' && tracking.isPaused) {
-          const resumeUpdates = calculateResumeUpdate(tracking as any);
-          const pauseDuration =
-            resumeUpdates.totalPausedDurationSeconds! - tracking.totalPausedDurationSeconds;
-
-          await db.update(slaTracking).set(resumeUpdates).where(eq(slaTracking.id, tracking.id));
-
-          await db.insert(slaEvents).values({
-            organizationId: ctx.organizationId,
-            slaTrackingId: tracking.id,
-            eventType: 'resumed',
-            eventData: buildResumedEventData(
-              pauseDuration,
-              resumeUpdates.totalPausedDurationSeconds!
-            ),
-            triggeredByUserId: ctx.user.id,
-          });
-        }
-
-        // Record resolution when issue is resolved or closed
-        if (
-          (updates.status === 'resolved' || updates.status === 'closed') &&
-          existing.status !== 'resolved' &&
-          existing.status !== 'closed' &&
-          !tracking.resolvedAt
-        ) {
-          const resolvedAt = new Date();
-          const resolutionUpdates = calculateResolutionUpdate(tracking as any, resolvedAt);
-
-          await db
-            .update(slaTracking)
-            .set(resolutionUpdates)
-            .where(eq(slaTracking.id, tracking.id));
-
-          await db.insert(slaEvents).values({
-            organizationId: ctx.organizationId,
-            slaTrackingId: tracking.id,
-            eventType: 'resolved',
-            eventData: buildResolvedEventData(tracking as any, resolvedAt),
-            triggeredByUserId: ctx.user.id,
-          });
-
-          // Track resolvedAt to include in the issue update
-          issueResolvedAt = resolvedAt;
+          if (
+            (updates.status === 'resolved' || updates.status === 'closed') &&
+            existing.status !== 'resolved' &&
+            existing.status !== 'closed' &&
+            !tracking.resolvedAt
+          ) {
+            const resolvedAt = new Date();
+            const resolutionUpdates = calculateResolutionUpdate(
+              toSlaTracking(tracking),
+              resolvedAt
+            );
+            await tx
+              .update(slaTracking)
+              .set(resolutionUpdates)
+              .where(eq(slaTracking.id, tracking.id));
+            await tx.insert(slaEvents).values({
+              organizationId: ctx.organizationId,
+              slaTrackingId: tracking.id,
+              eventType: 'resolved',
+              eventData: buildResolvedEventData(toSlaTracking(tracking), resolvedAt),
+              triggeredByUserId: ctx.user.id,
+            });
+            issueResolvedAt = resolvedAt;
+          }
         }
       }
-    }
 
-    // Update the issue
-    const [issue] = await db
-      .update(issues)
-      .set({
-        ...updates,
-        ...(issueResolvedAt && { resolvedAt: issueResolvedAt }),
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(issues.id, issueId))
-      .returning();
+      return await tx
+        .update(issues)
+        .set({
+          ...updates,
+          ...(issueResolvedAt && { resolvedAt: issueResolvedAt }),
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(issues.id, issueId))
+        .returning();
+    });
 
     // Log issue update
     const changes = computeChanges({
@@ -563,10 +643,18 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
     const conditions = [eq(issues.organizationId, ctx.organizationId)];
 
     if (data.status) {
-      conditions.push(eq(issues.status, data.status));
+      if (Array.isArray(data.status) && data.status.length > 0) {
+        conditions.push(inArray(issues.status, data.status));
+      } else if (!Array.isArray(data.status)) {
+        conditions.push(eq(issues.status, data.status));
+      }
     }
     if (data.priority) {
-      conditions.push(eq(issues.priority, data.priority));
+      if (Array.isArray(data.priority) && data.priority.length > 0) {
+        conditions.push(inArray(issues.priority, data.priority));
+      } else if (!Array.isArray(data.priority)) {
+        conditions.push(eq(issues.priority, data.priority));
+      }
     }
     if (data.type) {
       conditions.push(eq(issues.type, data.type));
@@ -574,8 +662,14 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
     if (data.customerId) {
       conditions.push(eq(issues.customerId, data.customerId));
     }
-    if (data.assignedToUserId) {
-      conditions.push(eq(issues.assignedToUserId, data.assignedToUserId));
+    if (data.assignedToFilter === 'unassigned') {
+      conditions.push(isNull(issues.assignedToUserId));
+    } else if (data.assignedToFilter === 'me' || data.assignedToUserId) {
+      const userId = data.assignedToFilter === 'me' ? ctx.user.id : data.assignedToUserId;
+      if (userId) conditions.push(eq(issues.assignedToUserId, userId));
+    }
+    if (data.escalated === true) {
+      conditions.push(isNotNull(issues.escalatedAt));
     }
     if (data.search) {
       conditions.push(
@@ -583,23 +677,46 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
       );
     }
 
-    // Get issues with their SLA tracking data
+    // slaStatus filter: breached = only issues with breached SLA
+    if (data.slaStatus === 'breached') {
+      conditions.push(
+        and(
+          isNotNull(slaTracking.id),
+          or(
+            eq(slaTracking.status, 'breached'),
+            eq(slaTracking.responseBreached, true),
+            eq(slaTracking.resolutionBreached, true)
+          )!
+        )!
+      );
+    }
+
+    // Get issues with their SLA tracking data and customer (for kanban customer link)
     const results = await db
       .select({
         issue: issues,
         tracking: slaTracking,
         config: slaConfigurations,
+        customer: { id: customers.id, name: customers.name },
       })
       .from(issues)
       .leftJoin(slaTracking, eq(issues.slaTrackingId, slaTracking.id))
       .leftJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
+      .leftJoin(
+        customers,
+        and(
+          eq(issues.customerId, customers.id),
+          eq(customers.organizationId, ctx.organizationId),
+          isNull(customers.deletedAt)
+        )
+      )
       .where(and(...conditions))
       .orderBy(desc(issues.createdAt))
       .limit(data.limit)
       .offset(data.offset);
 
     // Compute SLA metrics for each issue
-    const issuesWithMetrics: IssueWithSlaMetrics[] = results.map(({ issue, tracking, config }) => {
+    const issuesWithMetrics: IssueWithSlaMetrics[] = results.map(({ issue, tracking, config, customer }) => {
       let slaMetrics: IssueSlaMetrics | null = null;
 
       if (tracking && config) {
@@ -633,7 +750,10 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
           isActive: config.isActive,
         };
 
-        const snapshot = computeStateSnapshot(trackingData as any, configData as any);
+        const snapshot = computeStateSnapshot(
+          toSlaTracking(trackingData),
+          toSlaConfiguration(configData)
+        );
 
         slaMetrics = {
           slaTrackingId: tracking.id,
@@ -655,8 +775,213 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
       return {
         ...issue,
         slaMetrics,
+        customer: customer?.id ? { id: customer.id, name: customer.name } : null,
       };
     });
 
     return issuesWithMetrics;
+  });
+
+/**
+ * Get issues with SLA metrics and cursor pagination (recommended for large datasets).
+ */
+export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(getIssuesCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', status, priority, type, customerId, assignedToUserId, assignedToFilter, search, slaStatus, escalated } = data;
+
+    const conditions = [eq(issues.organizationId, ctx.organizationId)];
+    if (status) {
+      if (Array.isArray(status) && status.length > 0) conditions.push(inArray(issues.status, status));
+      else if (!Array.isArray(status)) conditions.push(eq(issues.status, status));
+    }
+    if (priority) {
+      if (Array.isArray(priority) && priority.length > 0) conditions.push(inArray(issues.priority, priority));
+      else if (!Array.isArray(priority)) conditions.push(eq(issues.priority, priority));
+    }
+    if (type) conditions.push(eq(issues.type, type));
+    if (customerId) conditions.push(eq(issues.customerId, customerId));
+    if (assignedToFilter === 'unassigned') {
+      conditions.push(isNull(issues.assignedToUserId));
+    } else if (assignedToFilter === 'me' || assignedToUserId) {
+      const userId = assignedToFilter === 'me' ? ctx.user.id : assignedToUserId;
+      if (userId) conditions.push(eq(issues.assignedToUserId, userId));
+    }
+    if (escalated === true) conditions.push(isNotNull(issues.escalatedAt));
+    if (search) {
+      conditions.push(
+        or(ilike(issues.title, containsPattern(search)), ilike(issues.issueNumber, containsPattern(search)))!
+      );
+    }
+    if (slaStatus === 'breached') {
+      conditions.push(
+        and(
+          isNotNull(slaTracking.id),
+          or(
+            eq(slaTracking.status, 'breached'),
+            eq(slaTracking.responseBreached, true),
+            eq(slaTracking.resolutionBreached, true)
+          )!
+        )!
+      );
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(issues.createdAt, issues.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const results = await db
+      .select({
+        issue: issues,
+        tracking: slaTracking,
+        config: slaConfigurations,
+        customer: { id: customers.id, name: customers.name },
+      })
+      .from(issues)
+      .leftJoin(slaTracking, eq(issues.slaTrackingId, slaTracking.id))
+      .leftJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
+      .leftJoin(
+        customers,
+        and(
+          eq(issues.customerId, customers.id),
+          eq(customers.organizationId, ctx.organizationId),
+          isNull(customers.deletedAt)
+        )
+      )
+      .where(and(...conditions))
+      .orderBy(orderDir(issues.createdAt), orderDir(issues.id))
+      .limit(pageSize + 1);
+
+    const hasNextPage = results.length > pageSize;
+    const pageResults = hasNextPage ? results.slice(0, pageSize) : results;
+
+    const issuesWithMetrics: IssueWithSlaMetrics[] = pageResults.map(({ issue, tracking, config, customer }) => {
+      let slaMetrics: IssueSlaMetrics | null = null;
+
+      if (tracking && config) {
+        const trackingData = {
+          ...tracking,
+          startedAt: tracking.startedAt,
+          responseDueAt: tracking.responseDueAt,
+          resolutionDueAt: tracking.resolutionDueAt,
+          respondedAt: tracking.respondedAt,
+          resolvedAt: tracking.resolvedAt,
+          pausedAt: tracking.pausedAt,
+        };
+        const configData = {
+          id: config.id,
+          organizationId: config.organizationId,
+          domain: config.domain,
+          name: config.name,
+          description: config.description,
+          responseTargetValue: config.responseTargetValue,
+          responseTargetUnit: config.responseTargetUnit,
+          resolutionTargetValue: config.resolutionTargetValue,
+          resolutionTargetUnit: config.resolutionTargetUnit,
+          atRiskThresholdPercent: config.atRiskThresholdPercent,
+          escalateOnBreach: config.escalateOnBreach,
+          escalateToUserId: config.escalateToUserId,
+          businessHoursConfigId: config.businessHoursConfigId,
+          isDefault: config.isDefault,
+          priorityOrder: config.priorityOrder,
+          isActive: config.isActive,
+        };
+        const snapshot = computeStateSnapshot(
+          toSlaTracking(trackingData),
+          toSlaConfiguration(configData)
+        );
+        slaMetrics = {
+          slaTrackingId: tracking.id,
+          status: tracking.status,
+          isPaused: tracking.isPaused,
+          responseBreached: tracking.responseBreached,
+          resolutionBreached: tracking.resolutionBreached,
+          isResponseAtRisk: snapshot.isResponseAtRisk,
+          isResolutionAtRisk: snapshot.isResolutionAtRisk,
+          responseTimeRemaining: snapshot.responseTimeRemaining,
+          resolutionTimeRemaining: snapshot.resolutionTimeRemaining,
+          responsePercentComplete: snapshot.responsePercentComplete,
+          resolutionPercentComplete: snapshot.resolutionPercentComplete,
+          responseDueAt: tracking.responseDueAt,
+          resolutionDueAt: tracking.resolutionDueAt,
+        };
+      }
+      return {
+        ...issue,
+        slaMetrics,
+        customer: customer?.id ? { id: customer.id, name: customer.name } : null,
+      };
+    });
+
+    let nextCursor: string | null = null;
+    if (hasNextPage && pageResults.length > 0) {
+      const last = pageResults[pageResults.length - 1].issue;
+      nextCursor = encodeCursor({ createdAt: last.createdAt, id: last.id });
+    }
+
+    return {
+      items: issuesWithMetrics,
+      nextCursor,
+      hasNextPage,
+    };
+  });
+
+// ============================================================================
+// DELETE ISSUE (SOFT DELETE)
+// ============================================================================
+
+/**
+ * Soft delete a support issue (archive)
+ */
+export const deleteIssue = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.support?.delete ?? 'support:delete' });
+    const logger = createActivityLoggerWithContext(ctx);
+    const { id } = data;
+
+    const existing = await db.query.issues.findFirst({
+      where: and(
+        eq(issues.id, id),
+        eq(issues.organizationId, ctx.organizationId),
+          isNull(issues.deletedAt)
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundError('Issue not found', 'issue');
+    }
+
+    // Guard: Cannot delete issues that are in_progress or escalated
+    if (['in_progress', 'escalated'].includes(existing.status)) {
+      throw new ValidationError(`Cannot delete issue in '${existing.status}' status. Resolve or close it first.`);
+    }
+
+    await db
+      .update(issues)
+      .set({
+        deletedAt: new Date(),
+        updatedBy: ctx.user.id,
+      })
+      .where(eq(issues.id, id));
+
+    logger.logAsync({
+      entityType: 'issue',
+      entityId: id,
+      action: 'deleted',
+      description: `Deleted issue: ${existing.issueNumber ?? id}`,
+      metadata: {
+        status: existing.status,
+      },
+    });
+
+    return { success: true, id };
   });

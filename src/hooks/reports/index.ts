@@ -123,6 +123,15 @@ export {
 } from './use-report-favorites';
 
 // ============================================================================
+// FINANCIAL SUMMARY
+// ============================================================================
+export {
+  useFinancialSummaryReport,
+  useExportFinancialSummaryReport,
+  type UseFinancialSummaryReportOptions,
+} from './use-financial-summary';
+
+// ============================================================================
 // METRICS HOOKS
 // ============================================================================
 export {

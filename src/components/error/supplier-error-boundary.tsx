@@ -5,22 +5,23 @@
  * Prevents crashes and provides user-friendly error recovery.
  */
 import { Component } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { logError, userAnalytics } from '@/lib/monitoring';
+import { logger } from '@/lib/logger';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-  onError?: (error: Error, errorInfo: any) => void;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
   hasError: boolean;
   error?: Error;
-  errorInfo?: any;
+  errorInfo?: ErrorInfo;
 }
 
 export class SupplierErrorBoundary extends Component<Props, State> {
@@ -36,7 +37,7 @@ export class SupplierErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log error with monitoring system
     logError('Supplier component error caught by error boundary', error, {
       component: 'SupplierErrorBoundary',
@@ -101,11 +102,10 @@ export class SupplierErrorBoundary extends Component<Props, State> {
             )}
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => window.location.reload()}>
+              <Button onClick={this.handleRetry}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Reload Page
+                Try Again
               </Button>
-              <Button onClick={this.handleRetry}>Try Again</Button>
             </div>
           </CardContent>
         </Card>
@@ -118,8 +118,8 @@ export class SupplierErrorBoundary extends Component<Props, State> {
 
 // Hook version for functional components
 export function useSupplierErrorHandler() {
-  return (error: Error, errorInfo?: any) => {
-    console.error('Supplier error handled:', error, errorInfo);
+  return (error: Error, errorInfo?: ErrorInfo) => {
+    logger.error('Supplier error handled', error, { errorInfo });
     // Could integrate with error reporting service
   };
 }

@@ -9,7 +9,7 @@
  * - Responsive layout (sidebar on desktop, tabs on mobile)
  * - All settings inline within the modal
  */
-import { useState } from 'react'
+import { useState, useEffect, startTransition } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,19 +17,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { useQueryClient } from '@tanstack/react-query'
 import {
+  AlertCircle,
   Building2,
   MapPin,
   Globe,
   DollarSign,
+  Palette,
   Shield,
   Key,
   Target,
   Wrench,
   User,
   Bell,
+  Plug2,
 } from 'lucide-react'
 import { useOrganizationQuery, useUpdateOrganization, useUpdateOrganizationSettings } from '@/hooks/organizations'
+import { queryKeys } from '@/lib/query-keys'
 import { useOrganizationSettings } from '@/contexts/organization-settings-context'
 import { useCurrentUser } from '@/hooks'
 import {
@@ -37,11 +42,14 @@ import {
   AddressSettingsSection,
   RegionalSettingsSection,
   FinancialSettingsSection,
+  BrandingSettingsSection,
   type GeneralSettingsData,
   type AddressSettingsData,
   type RegionalSettingsData,
   type FinancialSettingsData,
+  type BrandingSettingsData,
 } from '@/components/domain/settings/settings-sections'
+import { createOrganizationSectionHandlers } from '@/lib/settings/organization-section-handlers'
 import {
   PreferencesSettingsSection,
   SecuritySettingsSection,
@@ -55,6 +63,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { OAuthConnectionManager } from '@/components/integrations/oauth/oauth-connection-manager'
 
 // ============================================================================
 // TYPES
@@ -63,9 +72,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 export interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** When provided and dialog opens, switch to this pane immediately */
+  initialPane?: SettingsPaneId
 }
 
-type SettingsPane =
+export type SettingsPaneId =
   | 'account'
   | 'notifications'
   | 'preferences'
@@ -73,12 +84,14 @@ type SettingsPane =
   | 'address'
   | 'regional'
   | 'financial'
+  | 'branding'
   | 'security'
   | 'api-tokens'
   | 'targets'
+  | 'integrations'
 
 interface NavItem {
-  id: SettingsPane
+  id: SettingsPaneId
   label: string
   icon: React.ComponentType<{ className?: string }>
   group: 'personal' | 'workspace' | 'advanced'
@@ -94,10 +107,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'address', label: 'Address', icon: MapPin, group: 'workspace' },
   { id: 'regional', label: 'Regional', icon: Globe, group: 'workspace' },
   { id: 'financial', label: 'Financial', icon: DollarSign, group: 'workspace' },
+  { id: 'branding', label: 'Branding', icon: Palette, group: 'workspace' },
   { id: 'targets', label: 'Targets', icon: Target, group: 'workspace' },
   // Advanced
   { id: 'security', label: 'Security', icon: Shield, group: 'advanced' },
   { id: 'api-tokens', label: 'API Tokens', icon: Key, group: 'advanced' },
+  { id: 'integrations', label: 'Connected Accounts', icon: Plug2, group: 'advanced' },
 ]
 
 const GROUP_LABELS: Record<NavItem['group'], string> = {
@@ -110,12 +125,20 @@ const GROUP_LABELS: Record<NavItem['group'], string> = {
 // COMPONENT
 // ============================================================================
 
-export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [activePane, setActivePane] = useState<SettingsPane>('account')
+export function SettingsDialog({ open, onOpenChange, initialPane }: SettingsDialogProps) {
+  const [activePane, setActivePane] = useState<SettingsPaneId>('account')
+  const queryClient = useQueryClient()
   const { user } = useCurrentUser()
 
+  // Sync to initialPane when dialog opens with one specified
+  useEffect(() => {
+    if (open && initialPane) {
+      startTransition(() => setActivePane(initialPane))
+    }
+  }, [open, initialPane])
+
   // Fetch organization data
-  const { data: organization, isLoading: orgLoading } = useOrganizationQuery()
+  const { data: organization, isLoading: orgLoading, error: orgError } = useOrganizationQuery()
   const settings = useOrganizationSettings()
   const updateOrganization = useUpdateOrganization()
   const updateSettings = useUpdateOrganizationSettings()
@@ -197,8 +220,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <div className="flex-1 flex flex-col min-w-0">
             <ScrollArea className="flex-1">
               <div className="p-6 max-w-3xl">
-                {orgLoading ? (
+                {orgLoading || settings.isLoading ? (
                   <LoadingPane />
+                ) : orgError || settings.error ? (
+                  <ErrorPane
+                    error={orgError ?? settings.error ?? new Error('Failed to load settings')}
+                    onRetry={() => {
+                      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.current() })
+                      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.settings() })
+                    }}
+                  />
                 ) : (
                   <SettingsPane
                     pane={activePane}
@@ -223,7 +254,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 // ============================================================================
 
 interface SettingsPaneProps {
-  pane: SettingsPane
+  pane: SettingsPaneId
   user: ReturnType<typeof useCurrentUser>['user']
   organization: ReturnType<typeof useOrganizationQuery>['data']
   settings: ReturnType<typeof useOrganizationSettings>
@@ -239,6 +270,8 @@ function SettingsPane({
   updateOrganization,
   updateSettings,
 }: SettingsPaneProps) {
+  const handlers = createOrganizationSectionHandlers(updateOrganization, updateSettings)
+
   // Data preparation
   const generalData: GeneralSettingsData = {
     name: organization?.name ?? '',
@@ -264,12 +297,20 @@ function SettingsPane({
     dateFormat: settings.dateFormat,
     timeFormat: settings.timeFormat,
     weekStartDay: settings.weekStartDay,
+    numberFormat: settings.numberFormat,
   }
 
   const financialData: FinancialSettingsData = {
     fiscalYearStart: settings.fiscalYearStart ?? 7,
     defaultPaymentTerms: settings.defaultPaymentTerms ?? 30,
     defaultTaxRate: settings.defaultTaxRate ?? 0,
+  }
+
+  const brandingData: BrandingSettingsData = {
+    logoUrl: settings.portalBranding?.logoUrl ?? '',
+    primaryColor: settings.portalBranding?.primaryColor ?? '',
+    secondaryColor: settings.portalBranding?.secondaryColor ?? '',
+    websiteUrl: settings.portalBranding?.websiteUrl ?? '',
   }
 
   const preferencesData: PreferencesSettingsData = {
@@ -309,8 +350,7 @@ function SettingsPane({
       return (
         <PreferencesSettingsSection
           data={preferencesData}
-          onSave={async (key, value) => {
-            console.log('Save preference:', key, value)
+          onSave={async () => {
             toast.success('Preference saved')
           }}
         />
@@ -320,10 +360,7 @@ function SettingsPane({
       return (
         <GeneralSettingsSection
           data={generalData}
-          onSave={async (data) => {
-            await updateOrganization.mutateAsync(data)
-          }}
-          isSaving={updateOrganization.isPending}
+          onSave={handlers.onSaveGeneral}
         />
       )
 
@@ -331,19 +368,7 @@ function SettingsPane({
       return (
         <AddressSettingsSection
           data={addressData}
-          onSave={async (data) => {
-            await updateOrganization.mutateAsync({
-              address: {
-                street1: data.addressLine1,
-                street2: data.addressLine2,
-                city: data.suburb,
-                state: data.state,
-                postalCode: data.postcode,
-                country: data.country,
-              },
-            })
-          }}
-          isSaving={updateOrganization.isPending}
+          onSave={handlers.onSaveAddress}
         />
       )
 
@@ -351,17 +376,7 @@ function SettingsPane({
       return (
         <RegionalSettingsSection
           data={regionalData}
-          onSave={async (data) => {
-            await updateSettings.mutateAsync({
-              timezone: data.timezone,
-              locale: data.locale,
-              currency: data.currency,
-              dateFormat: data.dateFormat,
-              timeFormat: data.timeFormat as '12h' | '24h',
-              weekStartDay: data.weekStartDay,
-            })
-          }}
-          isSaving={updateSettings.isPending}
+          onSave={handlers.onSaveRegional}
         />
       )
 
@@ -369,14 +384,15 @@ function SettingsPane({
       return (
         <FinancialSettingsSection
           data={financialData}
-          onSave={async (data) => {
-            await updateSettings.mutateAsync({
-              fiscalYearStart: data.fiscalYearStart,
-              defaultPaymentTerms: data.defaultPaymentTerms,
-              defaultTaxRate: data.defaultTaxRate,
-            })
-          }}
-          isSaving={updateSettings.isPending}
+          onSave={handlers.onSaveFinancial}
+        />
+      )
+
+    case 'branding':
+      return (
+        <BrandingSettingsSection
+          data={brandingData}
+          onSave={handlers.onSaveBranding}
         />
       )
 
@@ -384,8 +400,7 @@ function SettingsPane({
       return (
         <SecuritySettingsSection
           data={securityData}
-          onSave={async (key, value) => {
-            console.log('Save security setting:', key, value)
+          onSave={async () => {
             toast.success('Setting saved')
           }}
           onChangePassword={() => {
@@ -402,7 +417,7 @@ function SettingsPane({
         <ApiTokensSettingsSection
           tokens={[]}
           onCreateToken={() => toast.info('Create token dialog coming soon')}
-          onRevokeToken={(id) => console.log('Revoke token:', id)}
+          onRevokeToken={() => toast.info('Revoke token coming soon')}
         />
       )
 
@@ -410,11 +425,25 @@ function SettingsPane({
       return (
         <TargetsSettingsSection
           data={targetsData}
-          onSave={async (data) => {
-            console.log('Save targets:', data)
+          onSave={async () => {
             toast.success('Targets saved')
           }}
         />
+      )
+
+    case 'integrations':
+      return organization?.id ? (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-1">Connected Accounts</h3>
+            <p className="text-sm text-muted-foreground">
+              Connect Google Workspace and Microsoft 365 for calendar, email, and contacts.
+            </p>
+          </div>
+          <OAuthConnectionManager organizationId={organization.id} />
+        </div>
+      ) : (
+        <div className="text-sm text-muted-foreground">Loading organization...</div>
       )
 
     default:
@@ -603,6 +632,33 @@ function LoadingPane() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// ERROR STATE
+// ============================================================================
+
+function ErrorPane({
+  error,
+  onRetry,
+}: {
+  error: Error
+  onRetry: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+      <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
+      <h3 className="text-lg font-medium text-foreground">Failed to load settings</h3>
+      <p className="text-sm mt-1">{error.message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+      >
+        Retry
+      </button>
     </div>
   )
 }

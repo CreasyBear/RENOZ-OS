@@ -1,29 +1,30 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+/**
+ * Sign-Up Success Route
+ *
+ * Post-signup confirmation page. User lands here after submitting sign-up form.
+ * Provides resend confirmation and login link.
+ *
+ * @see src/components/auth/sign-up-success-card.tsx
+ */
 import { createFileRoute } from '@tanstack/react-router';
+import { SignUpSuccessCard } from '@/components/auth/sign-up-success-card';
+import { AuthLayout } from '@/components/auth/auth-layout';
+import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
+import { signUpSuccessSearchSchema } from '@/lib/schemas/auth';
 
 export const Route = createFileRoute('/sign-up-success')({
-  component: SignUpSuccess,
+  validateSearch: signUpSuccessSearchSchema,
+  component: SignUpSuccessPage,
 });
 
-function SignUpSuccess() {
+function SignUpSuccessPage() {
+  const { email } = Route.useSearch();
+
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Thank you for signing up!</CardTitle>
-              <CardDescription>Check your email to confirm</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm">
-                You&apos;ve successfully signed up. Please check your email to confirm your account
-                before signing in.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+    <AuthErrorBoundary>
+      <AuthLayout>
+        <SignUpSuccessCard email={email} />
+      </AuthLayout>
+    </AuthErrorBoundary>
   );
 }

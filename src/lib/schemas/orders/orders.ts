@@ -14,6 +14,7 @@ import {
   filterSchema,
   idParamSchema,
 } from '../_shared/patterns';
+import type { FlexibleJson } from '../_shared/patterns';
 import { taxTypeSchema } from '../products/products';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
@@ -26,6 +27,7 @@ export const orderStatusValues = [
   'confirmed',
   'picking',
   'picked',
+  'partially_shipped',
   'shipped',
   'delivered',
   'cancelled',
@@ -68,7 +70,8 @@ export const orderMetadataSchema = z
     externalRef: z.string().max(255).optional(),
     notes: z.string().max(2000).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .catchall(z.unknown());
 
 export type OrderMetadata = z.infer<typeof orderMetadataSchema>;
 
@@ -278,3 +281,109 @@ export const deleteOrderLineItemInputSchema = z.object({
 });
 
 export type DeleteOrderLineItemInput = z.infer<typeof deleteOrderLineItemInputSchema>;
+
+// ============================================================================
+// ORDER LIST TYPES (for table/list views)
+// ============================================================================
+
+/**
+ * Order list item - matches server function response for list queries
+ */
+export interface OrderListItem {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  orderDate: Date | string | null; // Database/JSON may return Date or ISO string
+  dueDate: Date | string | null; // Database/JSON may return Date or ISO string
+  total: number | null;
+  metadata: OrderMetadata | FlexibleJson | null; // FlexibleJson for ServerFn boundary per SCHEMA-TRACE
+  createdAt: Date;
+  updatedAt: Date;
+  customer: {
+    id: string;
+    name: string;
+  } | null;
+  itemCount: number;
+}
+
+/**
+ * Order table item - used in table columns (same as OrderListItem, kept separate for future extensibility)
+ */
+export type OrderTableItem = OrderListItem;
+
+/**
+ * Order list result - server function response
+ * Returns OrderTableItem[] for table/list views (OrderTableItem extends OrderListItem)
+ */
+export interface ListOrdersResult {
+  orders: OrderTableItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+// ============================================================================
+// FULFILLMENT KANBAN TYPES
+// ============================================================================
+
+/**
+ * Fulfillment kanban order - used in fulfillment dashboard kanban view
+ */
+export interface FulfillmentKanbanOrder {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string | null;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  orderDate: Date;
+  dueDate: Date | null;
+  total: number;
+  /** FlexibleJson for ServerFn serialization boundary */
+  metadata: FlexibleJson | null;
+  createdAt: Date;
+  updatedAt: Date;
+  itemCount: number;
+  shippedDate: Date | null;
+}
+
+/**
+ * Fulfillment kanban result - grouped by workflow stages
+ */
+export interface FulfillmentKanbanResult {
+  stages: {
+    to_allocate: FulfillmentKanbanOrder[];
+    to_pick: FulfillmentKanbanOrder[];
+    picking: FulfillmentKanbanOrder[];
+    to_ship: FulfillmentKanbanOrder[];
+    shipped_today: FulfillmentKanbanOrder[];
+  };
+  total: number;
+}
+
+/**
+ * Fulfillment order - used in fulfillment card component
+ */
+export interface FulfillmentOrder {
+  id: string;
+  orderNumber: string;
+  customerId: string; // Added for linking to customer detail
+  customerName: string;
+  itemCount: number;
+  total: number; // Currency in dollars
+  requiredDate: string | null;
+  priority: 'normal' | 'high' | 'urgent';
+  status: 'confirmed' | 'picking' | 'picked' | 'shipped' | 'delivered' | 'cancelled';
+  assignedTo?: { id: string; name: string; avatar?: string };
+  progress?: { completed: number; total: number };
+  metadata?: {
+    comments: number;
+    attachments: number;
+    links: number;
+    labels: Array<{ id: string; name: string; color: string }>;
+  };
+  createdAt: Date;
+}

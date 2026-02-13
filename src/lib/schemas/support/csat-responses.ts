@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
@@ -81,6 +82,20 @@ export const listFeedbackSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 export type ListFeedbackInput = z.infer<typeof listFeedbackSchema>;
+
+/** Cursor pagination for list feedback (uses createdAt + id for stable sort) */
+export const listFeedbackCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    issueId: z.string().uuid().optional(),
+    rating: z.number().int().min(1).max(5).optional(),
+    minRating: z.number().int().min(1).max(5).optional(),
+    maxRating: z.number().int().min(1).max(5).optional(),
+    source: csatSourceSchema.optional(),
+    startDate: z.string().datetime().optional(),
+    endDate: z.string().datetime().optional(),
+  })
+);
+export type ListFeedbackCursorInput = z.infer<typeof listFeedbackCursorSchema>;
 
 // ============================================================================
 // CSAT METRICS

@@ -10,7 +10,7 @@
  * @see src/lib/query-keys.ts for centralized query keys
  * @see src/server/functions/pipeline/quote-versions.ts for server functions
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listQuoteVersions,
@@ -20,6 +20,7 @@ import {
   getExpiredQuotes,
   getQuoteValidityStats,
 } from '@/server/functions/pipeline/quote-versions';
+import { deleteQuote } from '@/server/functions/pipeline/pipeline';
 import type { QuoteVersion } from '@/lib/schemas/pipeline';
 
 // ============================================================================
@@ -55,7 +56,11 @@ export interface UseQuoteVersionsOptions {
 export function useQuoteVersions({ opportunityId, enabled = true }: UseQuoteVersionsOptions) {
   return useQuery({
     queryKey: queryKeys.pipeline.quoteVersions(opportunityId),
-    queryFn: () => listQuoteVersions({ data: { opportunityId } }),
+    queryFn: async () => {
+      const result = await listQuoteVersions({ data: { opportunityId } });
+      if (result == null) throw new Error('Quote versions returned no data');
+      return result;
+    },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -75,8 +80,12 @@ export interface UseQuoteVersionOptions {
  */
 export function useQuoteVersion({ versionId, enabled = true }: UseQuoteVersionOptions) {
   return useQuery({
-    queryKey: [...queryKeys.pipeline.all, 'quote-version', versionId] as const,
-    queryFn: () => getQuoteVersion({ data: { id: versionId } }),
+    queryKey: queryKeys.pipeline.quoteVersion(versionId),
+    queryFn: async () => {
+      const result = await getQuoteVersion({ data: { id: versionId } });
+      if (result == null) throw new Error('Quote version not found');
+      return result;
+    },
     enabled: enabled && !!versionId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -97,8 +106,12 @@ export interface UseQuoteComparisonOptions {
  */
 export function useQuoteComparison({ version1Id, version2Id, enabled = true }: UseQuoteComparisonOptions) {
   return useQuery({
-    queryKey: [...queryKeys.pipeline.all, 'quote-comparison', version1Id, version2Id] as const,
-    queryFn: () => compareQuoteVersions({ data: { version1Id, version2Id } }),
+    queryKey: queryKeys.pipeline.quoteComparison(version1Id, version2Id),
+    queryFn: async () => {
+      const result = await compareQuoteVersions({ data: { version1Id, version2Id } });
+      if (result == null) throw new Error('Quote comparison returned no data');
+      return result;
+    },
     enabled: enabled && !!version1Id && !!version2Id,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -122,7 +135,8 @@ export function useExpiringQuotes({ warningDays = 7, limit = 10, enabled = true 
     queryKey: queryKeys.pipeline.expiringQuotes(warningDays),
     queryFn: async () => {
       const result = await getExpiringQuotes({ data: { warningDays, limit } });
-      return result as { expiringQuotes: QuoteAlertItem[] };
+      if (result == null) throw new Error('Expiring quotes returned no data');
+      return result;
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -146,7 +160,8 @@ export function useExpiredQuotes({ limit = 10, enabled = true }: UseExpiredQuote
     queryKey: queryKeys.pipeline.expiredQuotes(),
     queryFn: async () => {
       const result = await getExpiredQuotes({ data: { limit } });
-      return result as { expiredQuotes: QuoteAlertItem[] };
+      if (result == null) throw new Error('Expired quotes returned no data');
+      return result;
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -166,10 +181,35 @@ export interface UseQuoteValidityStatsOptions {
  */
 export function useQuoteValidityStats({ enabled = true }: UseQuoteValidityStatsOptions = {}) {
   return useQuery({
-    queryKey: [...queryKeys.pipeline.all, 'quote-validity-stats'] as const,
-    queryFn: () => getQuoteValidityStats({ data: {} }),
+    queryKey: queryKeys.pipeline.quoteValidityStats(),
+    queryFn: async () => {
+      const result = await getQuoteValidityStats({ data: {} });
+      if (result == null) throw new Error('Quote validity stats returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+// ============================================================================
+// DELETE QUOTE MUTATION
+// ============================================================================
+
+/**
+ * Soft-delete a quote (sets deletedAt, hides from lists)
+ */
+export function useDeleteQuote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteQuote({ data: { id } }),
+    onSuccess: (_, id) => {
+      // Invalidate both list and detail caches per STANDARDS.md
+      queryClient.invalidateQueries({ queryKey: queryKeys.quotes.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.quotes.detail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+    },
   });
 }
 

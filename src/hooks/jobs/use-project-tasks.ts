@@ -5,71 +5,21 @@
  * Fetches tasks across all site visits for a project.
  *
  * SPRINT-03: Hooks for project tasks tab
+ *
+ * NOTE: Server function moved to src/server/functions/jobs/job-tasks.ts
+ * to avoid bundling drizzle into client code.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { db } from '@/lib/db';
-import { jobTasks, siteVisits } from 'drizzle/schema';
-import { eq, and, inArray, asc } from 'drizzle-orm';
-import { createServerFn } from '@tanstack/react-start';
-import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/auth/permissions';
-import { z } from 'zod';
+import { getProjectTasks } from '@/server/functions/jobs/job-tasks';
+import type { GetProjectTasksResponse, ProjectTaskResponse } from '@/lib/schemas/jobs/job-tasks';
 import {
   useCreateTask as useBaseCreateTask,
   useUpdateTask as useBaseUpdateTask,
   useDeleteTask as useBaseDeleteTask,
   useUpdateJobTaskStatus as useBaseUpdateJobTaskStatus,
 } from './use-job-tasks';
-
-// ============================================================================
-// SERVER FUNCTION
-// ============================================================================
-
-/**
- * Get tasks for a project (across all site visits)
- */
-export const getProjectTasks = createServerFn({ method: 'GET' })
-  .inputValidator(
-    z.object({
-      projectId: z.string().uuid(),
-    })
-  )
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.job.read });
-
-    // Get all site visits for this project
-    const visits = await db
-      .select({ id: siteVisits.id })
-      .from(siteVisits)
-      .where(
-        and(
-          eq(siteVisits.projectId, data.projectId),
-          eq(siteVisits.organizationId, ctx.organizationId)
-        )
-      );
-
-    const visitIds = visits.map((v) => v.id);
-
-    if (visitIds.length === 0) {
-      return { tasks: [] };
-    }
-
-    // Get tasks for these site visits
-    const tasks = await db
-      .select()
-      .from(jobTasks)
-      .where(
-        and(
-          inArray(jobTasks.siteVisitId, visitIds),
-          eq(jobTasks.organizationId, ctx.organizationId)
-        )
-      )
-      .orderBy(asc(jobTasks.position));
-
-    return { tasks };
-  });
 
 // ============================================================================
 // QUERY HOOKS
@@ -84,12 +34,16 @@ export interface UseProjectTasksOptions {
  * Get tasks for a project
  */
 export function useProjectTasks({ projectId, enabled = true }: UseProjectTasksOptions) {
-  return useQuery({
+  return useQuery<GetProjectTasksResponse, Error, ProjectTaskResponse[]>({
     queryKey: queryKeys.projectTasks.byProject(projectId),
-    queryFn: () => getProjectTasks({ data: { projectId } }),
+    queryFn: async () => {
+      const result = await getProjectTasks({ data: { projectId } });
+      if (result == null) throw new Error('Project tasks returned no data');
+      return result;
+    },
     enabled: enabled && !!projectId,
     staleTime: 30 * 1000, // 30 seconds
-    select: (data) => data.tasks,
+    select: (data) => data?.tasks ?? [],
   });
 }
 
@@ -98,7 +52,7 @@ export function useProjectTasks({ projectId, enabled = true }: UseProjectTasksOp
 // ============================================================================
 
 /**
- * Update a task with project tasks list invalidation
+ * Update a task with project tasks list and alerts invalidation
  */
 export function useUpdateProjectTask(projectId: string) {
   const queryClient = useQueryClient();
@@ -108,9 +62,12 @@ export function useUpdateProjectTask(projectId: string) {
     ...baseMutation,
     mutateAsync: async (input: Parameters<typeof baseMutation.mutateAsync>[0]) => {
       const result = await baseMutation.mutateAsync(input);
-      // Invalidate project tasks
+      // Invalidate project tasks and alerts (blocked_tasks alert depends on task status)
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectTasks.byProject(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
       });
       return result;
     },
@@ -123,7 +80,7 @@ export function useUpdateProjectTask(projectId: string) {
 export { useBaseCreateTask as useCreateTask };
 
 /**
- * Delete a task with project tasks list invalidation
+ * Delete a task with project tasks list and alerts invalidation
  */
 export function useDeleteProjectTask(projectId: string) {
   const queryClient = useQueryClient();
@@ -133,9 +90,12 @@ export function useDeleteProjectTask(projectId: string) {
     ...baseMutation,
     mutateAsync: async (input: Parameters<typeof baseMutation.mutateAsync>[0]) => {
       const result = await baseMutation.mutateAsync(input);
-      // Invalidate project tasks
+      // Invalidate project tasks and alerts (blocked_tasks alert depends on task count)
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectTasks.byProject(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
       });
       return result;
     },
@@ -143,7 +103,7 @@ export function useDeleteProjectTask(projectId: string) {
 }
 
 /**
- * Update task status with project tasks list invalidation
+ * Update task status with project tasks list and alerts invalidation
  */
 export function useUpdateProjectTaskStatus(projectId: string) {
   const queryClient = useQueryClient();
@@ -152,9 +112,12 @@ export function useUpdateProjectTaskStatus(projectId: string) {
   return useMutation({
     mutationFn: baseMutation.mutateAsync,
     onSuccess: () => {
-      // Invalidate project tasks
+      // Invalidate project tasks and alerts (blocked_tasks alert depends on task status)
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectTasks.byProject(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
       });
     },
   });

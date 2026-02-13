@@ -4,39 +4,7 @@
  * Displays procurement metrics and alerts.
  */
 
-export interface ProcurementMetrics {
-  totalOrders: number;
-  activeOrders: number;
-  completedOrders: number;
-  totalSpend: number;
-  monthlySpend: number;
-  budgetRemaining: number;
-  budgetUsed: number;
-  avgOrderValue: number;
-  onTimeDelivery: number;
-  supplierCount: number;
-  activeApprovals: number;
-  pendingReceipts: number;
-  qualityScore: number;
-  alerts: ProcurementAlert[];
-}
-
-export interface ProcurementAlert {
-  id: string;
-  type: 'warning' | 'error' | 'info' | 'budget' | 'quality' | 'delivery' | 'supplier';
-  severity?: 'low' | 'medium' | 'high';
-  title?: string;
-  message?: string;
-  description?: string;
-  actionRequired?: boolean;
-  timestamp?: string;
-  priority?: 'low' | 'medium' | 'high';
-}
-
-export interface ProcurementStatsProps {
-  metrics: ProcurementMetrics;
-  formatCurrency: (amount: number) => string;
-}
+import type { ProcurementStatsProps } from '@/lib/schemas/procurement';
 
 export function ProcurementStats({ metrics, formatCurrency }: ProcurementStatsProps) {
   return (
@@ -57,7 +25,6 @@ export function ProcurementStats({ metrics, formatCurrency }: ProcurementStatsPr
       {metrics.alerts.map((alert) => (
         <div key={alert.id} data-testid={`alert-${alert.id}`}>
           {alert.title || alert.message}
-          {alert.description && <div>{alert.description}</div>}
         </div>
       ))}
     </div>

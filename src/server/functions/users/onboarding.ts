@@ -186,12 +186,13 @@ export const completeOnboardingStep = createServerFn({ method: 'POST' })
           isCompleted: true,
           completedAt: new Date(),
           updatedBy: ctx.user.id,
-          version: sql`version + 1`,
+          version: sql`${userOnboarding.version} + 1`,
         })
         .where(eq(userOnboarding.id, existing.id));
     } else {
       // Create new
       await db.insert(userOnboarding).values({
+        organizationId: ctx.organizationId,
         userId: ctx.user.id,
         stepKey: data.stepKey,
         stepName: stepConfig.name,
@@ -246,12 +247,13 @@ export const dismissOnboardingStep = createServerFn({ method: 'POST' })
         .set({
           dismissedAt: new Date(),
           updatedBy: ctx.user.id,
-          version: sql`version + 1`,
+          version: sql`${userOnboarding.version} + 1`,
         })
         .where(eq(userOnboarding.id, existing.id));
     } else {
       // Create new
       await db.insert(userOnboarding).values({
+        organizationId: ctx.organizationId,
         userId: ctx.user.id,
         stepKey: data.stepKey,
         stepName: stepConfig.name,

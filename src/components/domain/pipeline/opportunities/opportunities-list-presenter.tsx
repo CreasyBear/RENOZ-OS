@@ -18,7 +18,7 @@ import { FormatAmount } from "@/components/shared/format";
 import { cn } from "@/lib/utils";
 import { OpportunitiesTablePresenter } from "./opportunities-table-presenter";
 import { OpportunitiesMobileCards } from "./opportunities-mobile-cards";
-import type { OpportunityTableItem } from "./opportunity-columns";
+import type { OpportunityTableItem } from "@/lib/schemas/pipeline";
 import type { OpportunityStage } from "@/lib/schemas/pipeline";
 
 export interface OpportunitiesListPresenterProps {

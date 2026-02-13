@@ -8,6 +8,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { QUERY_CONFIG } from "@/lib/constants";
 import { getEmailMetrics } from "@/server/functions/communications/email-analytics";
 import type { EmailMetricsFilters } from "@/lib/schemas/communications/email-analytics";
 
@@ -36,15 +37,18 @@ export function useEmailMetrics(options: UseEmailMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.communications.emailAnalytics.metrics(filters),
-    queryFn: () =>
-      getEmailMetrics({
+    queryFn: async () => {
+      const result = await getEmailMetrics({
         data: {
           period: filters.period ?? "30d",
           startDate: filters.startDate,
           endDate: filters.endDate,
         },
-      }),
+      });
+      if (result == null) throw new Error('Email analytics returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes - metrics change slowly
+    staleTime: QUERY_CONFIG.STALE_TIME_LONG,
   });
 }

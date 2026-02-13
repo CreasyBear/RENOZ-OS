@@ -668,7 +668,7 @@ export const createCustomer = createServerFn({ method: "POST" })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -700,7 +700,7 @@ export const updateCustomer = createServerFn({ method: "POST" })
       throw new Error("Customer not found");
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -781,7 +781,7 @@ export const createContact = createServerFn({ method: "POST" })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -812,7 +812,7 @@ export const updateContact = createServerFn({ method: "POST" })
       throw new Error("Contact not found");
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -886,7 +886,7 @@ export const createAddress = createServerFn({ method: "POST" })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -914,7 +914,7 @@ export const updateAddress = createServerFn({ method: "POST" })
       throw new Error("Address not found");
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -1025,7 +1025,7 @@ export const createCustomerActivity = createServerFn({ method: "POST" })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 // ============================================================================
@@ -1065,7 +1065,7 @@ export const createCustomerTag = createServerFn({ method: "POST" })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -1093,7 +1093,7 @@ export const updateCustomerTag = createServerFn({ method: "POST" })
       throw new Error("Tag not found");
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -1168,7 +1168,7 @@ export const assignCustomerTag = createServerFn({ method: "POST" })
       })
       .where(eq(customerTags.id, tagId));
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -1280,7 +1280,7 @@ export const createCustomerHealthMetric = createServerFn({ method: "POST" })
         .where(eq(customers.id, data.customerId));
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 // ============================================================================
@@ -1339,7 +1339,7 @@ export const setCustomerPriority = createServerFn({ method: "POST" })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -1367,7 +1367,7 @@ export const updateCustomerPriority = createServerFn({ method: "POST" })
       throw new Error("Customer priority settings not found");
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 // ============================================================================
@@ -1647,3 +1647,6 @@ export const mergeCustomers = createServerFn({ method: "POST" })
       mergedCount: duplicateCustomerIds.length,
     };
   });
+
+// Re-export from functions module for hooks that expect all customer ops in one place
+export { bulkUpdateHealthScores } from './functions/customers';

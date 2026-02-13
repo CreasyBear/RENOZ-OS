@@ -20,6 +20,14 @@
 // Types
 export * from './types';
 
+// Adapters for Drizzle rows → engine types (replaces `as any`)
+export {
+  toSlaTracking,
+  toSlaConfiguration,
+  toWeeklySchedule,
+  toBusinessHoursConfig,
+} from './adapters';
+
 // Calculator - pure functions for SLA calculations
 export {
   calculateDueDates,

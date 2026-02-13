@@ -68,7 +68,11 @@ export function useSpendMetrics(options: UseSpendMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.procurement.spend(params),
-    queryFn: () => getSpendMetrics({ data: input }),
+    queryFn: async () => {
+      const result = await getSpendMetrics({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -89,7 +93,11 @@ export function useOrderMetrics(options: UseOrderMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.procurement.orders(params),
-    queryFn: () => getOrderMetrics({ data: input }),
+    queryFn: async () => {
+      const result = await getOrderMetrics({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -114,7 +122,11 @@ export function useSupplierMetrics(options: UseSupplierMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.procurement.suppliers(params),
-    queryFn: () => getSupplierMetrics({ data: input }),
+    queryFn: async () => {
+      const result = await getSupplierMetrics({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -133,7 +145,11 @@ export function useProcurementAlerts(options: UseProcurementAlertsOptions = {}) 
 
   return useQuery({
     queryKey: queryKeys.procurement.alerts(),
-    queryFn: () => getProcurementAlerts({}),
+    queryFn: async () => {
+      const result = await getProcurementAlerts({});
+      if (result == null) throw new Error('Procurement alerts returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
@@ -159,7 +175,11 @@ export function useProcurementDashboard(options: UseProcurementDashboardOptions 
 
   return useQuery({
     queryKey: queryKeys.procurement.dashboard(params),
-    queryFn: () => getProcurementDashboard({ data: input }),
+    queryFn: async () => {
+      const result = await getProcurementDashboard({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });

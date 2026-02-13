@@ -34,7 +34,13 @@ export function useSupportMetrics({
 }: UseSupportMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.support.supportMetricsWithDates(startDate, endDate),
-    queryFn: () => getSupportMetrics({ data: { startDate, endDate } }),
+    queryFn: async () => {
+      const result = await getSupportMetrics({
+        data: { startDate, endDate } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
     refetchInterval: 5 * 60 * 1000, // 5 minutes

@@ -32,6 +32,7 @@ import { FormatAmount } from "@/components/shared/format";
 import { MetricCard } from "@/components/shared/metric-card";
 import { StatusCell } from "@/components/shared/data-table";
 import { MOVEMENT_TYPE_CONFIG } from "./inventory-status-config";
+import { getMovementReferenceLink } from './movement-reference-links';
 
 // ============================================================================
 // TYPES
@@ -132,24 +133,6 @@ export const StockOverviewWidget = memo(function StockOverviewWidget({
 // ============================================================================
 // UTILITIES
 // ============================================================================
-
-/**
- * Generate a link URL for a movement reference
- */
-function getMovementReferenceLink(
-  referenceType: string | null | undefined,
-  referenceId: string | null | undefined
-): string | null {
-  if (!referenceType || !referenceId) return null;
-
-  const routeMap: Record<string, (id: string) => string> = {
-    order: (id) => `/orders/${id}`,
-    purchase_order: (id) => `/purchase-orders/${id}`,
-  };
-
-  const routeBuilder = routeMap[referenceType];
-  return routeBuilder ? routeBuilder(referenceId) : null;
-}
 
 /**
  * Format reference type for display
@@ -254,7 +237,7 @@ export const RecentMovementsWidget = memo(function RecentMovementsWidget({
                         const referenceLink = getMovementReferenceLink(movement.referenceType, movement.referenceId);
                         return referenceLink ? (
                           <Link
-                            to={referenceLink as any}
+                            {...referenceLink}
                             className="inline-flex items-center gap-1"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -550,7 +533,7 @@ export const LocationUtilizationWidget = memo(function LocationUtilizationWidget
               key={loc.locationId}
               className={cn(
                 "aspect-square rounded flex items-center justify-center text-white text-xs font-medium",
-                "hover:ring-2 hover:ring-offset-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary",
+                "hover:ring-2 hover:ring-offset-2 hover:ring-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary",
                 getUtilizationColor(loc.utilizationPercent)
               )}
               title={`${loc.locationName}: ${loc.utilizationPercent.toFixed(0)}% utilized (${loc.used}/${loc.capacity})`}

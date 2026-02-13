@@ -156,6 +156,8 @@ export interface MaterialResponse {
   quantityUsed: number;
   unitCost: number;
   notes: string | null;
+  serialNumbers: string[];
+  photos: string[];
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;

@@ -18,6 +18,7 @@
  * ```
  */
 import type { ReactNode } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { Card, CardContent, CardHeader } from "~/components/ui/card"
 import { EntityAvatar } from "./entity-avatar"
 import { cn } from "~/lib/utils"
@@ -59,11 +60,16 @@ export function EntityCard({
   className,
   onClick,
 }: EntityCardProps) {
+  const navigate = useNavigate()
   const isClickable = !!href || !!onClick
 
   const handleClick = () => {
     if (href) {
-      window.location.href = href
+      if (href.startsWith("/")) {
+        navigate({ to: href })
+      } else {
+        window.location.href = href
+      }
     } else if (onClick) {
       onClick()
     }

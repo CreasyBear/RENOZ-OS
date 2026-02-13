@@ -22,15 +22,22 @@ import {
   checkIn,
   checkOut,
   recordCustomerSignOff,
+  cancelSiteVisit,
+  rescheduleSiteVisit,
+  getPastDueSiteVisits,
 } from '@/server/functions/site-visits';
-import type {
-  SiteVisitListQuery,
-  CreateSiteVisitInput,
-  UpdateSiteVisitInput,
-  CheckInInput,
-  CheckOutInput,
-  CustomerSignOffInput,
-  SiteVisitListResult,
+import {
+  siteVisitListQuerySchema,
+  type SiteVisitListQuery,
+  type CreateSiteVisitInput,
+  type UpdateSiteVisitInput,
+  type RescheduleSiteVisitInput,
+  type CheckInInput,
+  type CheckOutInput,
+  type CustomerSignOffInput,
+  type SiteVisitListResult,
+  type SiteVisitMutationResult,
+  type CustomerSignOffResult,
 } from '@/lib/schemas/jobs/site-visits';
 
 // ============================================================================
@@ -49,7 +56,13 @@ export function useSiteVisits(options: UseSiteVisitsOptions = {}) {
 
   return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.list(filters),
-    queryFn: () => getSiteVisits({ data: filters as SiteVisitListQuery }) as Promise<SiteVisitListResult>,
+    queryFn: async () => {
+      const parsed = siteVisitListQuerySchema.safeParse(filters);
+      if (!parsed.success) {
+        throw new Error('Invalid site visit filters');
+      }
+      return getSiteVisits({ data: parsed.data });
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -61,10 +74,13 @@ export function useSiteVisits(options: UseSiteVisitsOptions = {}) {
 export function useSiteVisitsByProject(projectId: string, enabled = true) {
   return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.byProject(projectId),
-    queryFn: () =>
-      getSiteVisits({
-        data: { projectId, page: 1, pageSize: 100 } as SiteVisitListQuery,
-      }) as Promise<SiteVisitListResult>,
+    queryFn: async () => {
+      const parsed = siteVisitListQuerySchema.safeParse({ projectId, page: 1, pageSize: 100 });
+      if (!parsed.success) {
+        throw new Error('Invalid site visit filters');
+      }
+      return getSiteVisits({ data: parsed.data });
+    },
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000,
   });
@@ -76,27 +92,61 @@ export function useSiteVisitsByProject(projectId: string, enabled = true) {
 export function useSiteVisitsByInstaller(installerId: string, enabled = true) {
   return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.byInstaller(installerId),
-    queryFn: () =>
-      getSiteVisits({
-        data: { installerId, page: 1, pageSize: 100 } as SiteVisitListQuery,
-      }) as Promise<SiteVisitListResult>,
+    queryFn: async () => {
+      const parsed = siteVisitListQuerySchema.safeParse({ installerId, page: 1, pageSize: 100 });
+      if (!parsed.success) {
+        throw new Error('Invalid site visit filters');
+      }
+      return getSiteVisits({ data: parsed.data });
+    },
     enabled: enabled && !!installerId,
     staleTime: 60 * 1000,
   });
 }
 
 /**
- * Get schedule for a date range
+ * Get schedule for a date range, optionally filtered by project.
  */
-export function useSchedule(dateFrom: string, dateTo: string, enabled = true) {
+export function useSchedule(
+  dateFrom: string,
+  dateTo: string,
+  options?: { projectId?: string; enabled?: boolean }
+) {
+  const { projectId, enabled = true } = options ?? {};
   return useQuery<SiteVisitListResult>({
-    queryKey: queryKeys.siteVisits.schedule(dateFrom, dateTo),
-    queryFn: () =>
-      getSiteVisits({
-        data: { dateFrom, dateTo, page: 1, pageSize: 500 } as SiteVisitListQuery,
-      }) as Promise<SiteVisitListResult>,
+    queryKey: queryKeys.siteVisits.schedule(dateFrom, dateTo, projectId),
+    queryFn: async () => {
+      const parsed = siteVisitListQuerySchema.safeParse({
+        dateFrom,
+        dateTo,
+        projectId,
+        page: 1,
+        pageSize: 500,
+      });
+      if (!parsed.success) {
+        throw new Error('Invalid site visit filters');
+      }
+      return getSiteVisits({ data: parsed.data });
+    },
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Get past-due site visits (scheduled before today, not completed)
+ * For the "Needs rescheduling" sidebar in the schedule calendar.
+ */
+export function usePastDueSiteVisits(enabled = true) {
+  return useQuery<SiteVisitListResult>({
+    queryKey: queryKeys.siteVisits.pastDue(),
+    queryFn: async () => {
+      const result = await getPastDueSiteVisits({});
+      if (result == null) throw new Error('Past due site visits returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -115,7 +165,13 @@ export interface UseSiteVisitOptions {
 export function useSiteVisit({ siteVisitId, enabled = true }: UseSiteVisitOptions) {
   return useQuery({
     queryKey: queryKeys.siteVisits.detail(siteVisitId),
-    queryFn: () => getSiteVisit({ data: { siteVisitId } }),
+    queryFn: async () => {
+      const result = await getSiteVisit({
+        data: { siteVisitId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!siteVisitId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -125,8 +181,6 @@ export function useSiteVisit({ siteVisitId, enabled = true }: UseSiteVisitOption
 // MUTATION HOOKS
 // ============================================================================
 
-type SiteVisitResult = { id: string; projectId: string; installerId: string | null };
-
 /**
  * Create a new site visit
  */
@@ -135,9 +189,9 @@ export function useCreateSiteVisit() {
   const createFn = useServerFn(createSiteVisit);
 
   return useMutation({
-    mutationFn: async (input: CreateSiteVisitInput) => {
+    mutationFn: async (input: CreateSiteVisitInput): Promise<SiteVisitMutationResult> => {
       const result = await createFn({ data: input });
-      return result as SiteVisitResult;
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
       // Invalidate project visits
@@ -164,9 +218,9 @@ export function useUpdateSiteVisit() {
   const updateFn = useServerFn(updateSiteVisit);
 
   return useMutation({
-    mutationFn: async (input: UpdateSiteVisitInput) => {
+    mutationFn: async (input: UpdateSiteVisitInput): Promise<SiteVisitMutationResult> => {
       const result = await updateFn({ data: input });
-      return result as SiteVisitResult;
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result, variables) => {
       // Invalidate specific visit and related lists
@@ -182,6 +236,36 @@ export function useUpdateSiteVisit() {
         });
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+    },
+  });
+}
+
+/**
+ * Reschedule a site visit (scheduled/in_progress only)
+ */
+export function useRescheduleSiteVisit() {
+  const queryClient = useQueryClient();
+  const rescheduleFn = useServerFn(rescheduleSiteVisit);
+
+  return useMutation({
+    mutationFn: async (input: RescheduleSiteVisitInput): Promise<SiteVisitMutationResult> => {
+      const result = await rescheduleFn({ data: input });
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.siteVisits.detail(result.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.siteVisits.byProject(result.projectId),
+      });
+      if (result.installerId) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.all });
     },
   });
 }
@@ -216,9 +300,9 @@ export function useCheckIn() {
   const checkInFn = useServerFn(checkIn);
 
   return useMutation({
-    mutationFn: async (input: CheckInInput) => {
+    mutationFn: async (input: CheckInInput): Promise<SiteVisitMutationResult> => {
       const result = await checkInFn({ data: input });
-      return result as SiteVisitResult;
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
       // Update detail cache
@@ -247,9 +331,9 @@ export function useCheckOut() {
   const checkOutFn = useServerFn(checkOut);
 
   return useMutation({
-    mutationFn: async (input: CheckOutInput) => {
+    mutationFn: async (input: CheckOutInput): Promise<SiteVisitMutationResult> => {
       const result = await checkOutFn({ data: input });
-      return result as SiteVisitResult;
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
       // Update detail cache
@@ -274,8 +358,6 @@ export function useCheckOut() {
 // CUSTOMER SIGN-OFF
 // ============================================================================
 
-type SignOffResult = { id: string; projectId: string };
-
 /**
  * Record customer sign-off for a completed visit
  */
@@ -284,9 +366,9 @@ export function useCustomerSignOff() {
   const signOffFn = useServerFn(recordCustomerSignOff);
 
   return useMutation({
-    mutationFn: async (input: CustomerSignOffInput) => {
+    mutationFn: async (input: CustomerSignOffInput): Promise<CustomerSignOffResult> => {
       const result = await signOffFn({ data: input });
-      return result as SignOffResult;
+      return { id: result.id, projectId: result.projectId };
     },
     onSuccess: (result) => {
       // Update detail cache
@@ -295,6 +377,29 @@ export function useCustomerSignOff() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.siteVisits.byProject(result.projectId),
       });
+    },
+  });
+}
+
+// ============================================================================
+// CANCEL SITE VISIT
+// ============================================================================
+
+/**
+ * Cancel a site visit (status-based cancellation for scheduled visits)
+ */
+export function useCancelSiteVisit() {
+  const queryClient = useQueryClient();
+  const cancelFn = useServerFn(cancelSiteVisit);
+
+  return useMutation({
+    mutationFn: (data: { siteVisitId: string; reason?: string }) =>
+      cancelFn({ data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.siteVisits.detail(variables.siteVisitId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
     },
   });
 }
@@ -312,7 +417,13 @@ export function usePrefetchSiteVisit() {
   return (siteVisitId: string) => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.siteVisits.detail(siteVisitId),
-      queryFn: () => getSiteVisit({ data: { siteVisitId } }),
+      queryFn: async () => {
+      const result = await getSiteVisit({
+        data: { siteVisitId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
       staleTime: 60 * 1000,
     });
   };
@@ -326,6 +437,7 @@ export type {
   SiteVisitListQuery,
   CreateSiteVisitInput,
   UpdateSiteVisitInput,
+  RescheduleSiteVisitInput,
   CheckInInput,
   CheckOutInput,
   CustomerSignOffInput,

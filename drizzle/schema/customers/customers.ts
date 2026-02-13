@@ -20,7 +20,6 @@ import {
   check,
   index,
   uniqueIndex,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -40,6 +39,10 @@ import {
   fullTextSearchSql,
   currencyColumnNullable,
   numericCasted,
+  standardRlsPolicies,
+  rangeCheck,
+  dateRangeCheck,
+  sqlNow,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 
@@ -165,6 +168,8 @@ export const customers = pgTable(
     parentIdx: index("idx_customers_parent").on(table.parentId),
 
     // Cursor pagination index (org + createdAt DESC + id for deterministic ordering)
+    // Note: PostgreSQL can efficiently scan this index backwards for ASC queries,
+    // so this single index supports both ASC and DESC cursor pagination
     orgCreatedIdIdx: index("idx_customers_org_created_id").on(
       table.organizationId,
       table.createdAt.desc(),
@@ -181,10 +186,7 @@ export const customers = pgTable(
     tagsGinIdx: index("idx_customers_tags_gin").using("gin", table.tags),
 
     // Health score constraint
-    healthScoreCheck: check(
-      "health_score_range",
-      sql`${table.healthScore} IS NULL OR (${table.healthScore} >= 0 AND ${table.healthScore} <= 100)`
-    ),
+    healthScoreCheck: rangeCheck("health_score_range", table.healthScore, 0, 100),
 
     // Parent cannot be self
     parentNotSelfCheck: check(
@@ -193,27 +195,7 @@ export const customers = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("customers_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("customers_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("customers_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("customers_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("customers"),
   })
 );
 
@@ -264,6 +246,8 @@ export const contacts = pgTable(
     ...auditColumns,
   },
   (table) => ({
+    // Base organization index for org-only queries
+    orgIdx: index("idx_contacts_org").on(table.organizationId),
     customerIdx: index("idx_contacts_customer").on(table.customerId),
     orgCustomerIdx: index("idx_contacts_org_customer").on(
       table.organizationId,
@@ -276,27 +260,7 @@ export const contacts = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("contacts_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("contacts_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("contacts_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("contacts_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("contacts"),
   })
 );
 
@@ -339,6 +303,8 @@ export const addresses = pgTable(
     ...timestampColumns,
   },
   (table) => ({
+    // Base organization index for org-only queries
+    orgIdx: index("idx_addresses_org").on(table.organizationId),
     customerIdx: index("idx_addresses_customer").on(table.customerId),
     orgCustomerIdx: index("idx_addresses_org_customer").on(
       table.organizationId,
@@ -352,27 +318,7 @@ export const addresses = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("addresses_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("addresses_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("addresses_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("addresses_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("addresses"),
   })
 );
 
@@ -415,7 +361,7 @@ export const customerActivities = pgTable(
     metadata: jsonb("metadata").$type<CustomerActivityMetadata>().default({}),
 
     // Tracking (only createdAt, createdBy - activities are immutable)
-    createdAt: text("created_at").notNull().default(sql`now()`),
+    createdAt: text("created_at").notNull().default(sqlNow()),
     createdBy: uuid("created_by").notNull(),
   },
   (table) => ({
@@ -509,7 +455,7 @@ export const customerTagAssignments = pgTable(
 
     // Tracking
     assignedBy: uuid("assigned_by").notNull(),
-    assignedAt: text("assigned_at").notNull().default(sql`now()`),
+    assignedAt: text("assigned_at").notNull().default(sqlNow()),
     notes: text("notes"),
   },
   (table) => ({
@@ -523,27 +469,7 @@ export const customerTagAssignments = pgTable(
     ),
     tagIdx: index("idx_customer_tag_assignments_tag").on(table.tagId),
     // RLS Policies
-    selectPolicy: pgPolicy("customer_tag_assignments_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("customer_tag_assignments_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("customer_tag_assignments_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("customer_tag_assignments_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("customer_tag_assignments"),
   })
 );
 
@@ -577,7 +503,7 @@ export const customerHealthMetrics = pgTable(
     overallScore: numericCasted("overall_score", { precision: 5, scale: 2 }),
 
     // Tracking
-    createdAt: text("created_at").notNull().default(sql`now()`),
+    createdAt: text("created_at").notNull().default(sqlNow()),
   },
   (table) => ({
     // Unique metric per customer per date
@@ -600,26 +526,11 @@ export const customerHealthMetrics = pgTable(
     ),
 
     // Score range checks
-    recencyScoreCheck: check(
-      "recency_score_range",
-      sql`${table.recencyScore} IS NULL OR (${table.recencyScore} >= 0 AND ${table.recencyScore} <= 100)`
-    ),
-    frequencyScoreCheck: check(
-      "frequency_score_range",
-      sql`${table.frequencyScore} IS NULL OR (${table.frequencyScore} >= 0 AND ${table.frequencyScore} <= 100)`
-    ),
-    monetaryScoreCheck: check(
-      "monetary_score_range",
-      sql`${table.monetaryScore} IS NULL OR (${table.monetaryScore} >= 0 AND ${table.monetaryScore} <= 100)`
-    ),
-    engagementScoreCheck: check(
-      "engagement_score_range",
-      sql`${table.engagementScore} IS NULL OR (${table.engagementScore} >= 0 AND ${table.engagementScore} <= 100)`
-    ),
-    overallScoreCheck: check(
-      "overall_score_range",
-      sql`${table.overallScore} IS NULL OR (${table.overallScore} >= 0 AND ${table.overallScore} <= 100)`
-    ),
+    recencyScoreCheck: rangeCheck("recency_score_range", table.recencyScore, 0, 100),
+    frequencyScoreCheck: rangeCheck("frequency_score_range", table.frequencyScore, 0, 100),
+    monetaryScoreCheck: rangeCheck("monetary_score_range", table.monetaryScore, 0, 100),
+    engagementScoreCheck: rangeCheck("engagement_score_range", table.engagementScore, 0, 100),
+    overallScoreCheck: rangeCheck("overall_score_range", table.overallScore, 0, 100),
   })
 );
 
@@ -672,10 +583,7 @@ export const customerPriorities = pgTable(
     ),
 
     // Contract date validation
-    contractDatesCheck: check(
-      "contract_dates_valid",
-      sql`${table.contractEndDate} IS NULL OR ${table.contractStartDate} IS NULL OR ${table.contractEndDate} > ${table.contractStartDate}`
-    ),
+    contractDatesCheck: dateRangeCheck("contract_dates_valid", table.contractStartDate, table.contractEndDate),
   })
 );
 
@@ -708,7 +616,7 @@ export const customerMergeAudit = pgTable(
 
     // Who performed the action
     performedBy: uuid("performed_by").notNull(),
-    performedAt: text("performed_at").notNull().default(sql`now()`),
+    performedAt: text("performed_at").notNull().default(sqlNow()),
 
     // Snapshot of merged data (for undo capability)
     mergedData: jsonb("merged_data").$type<Record<string, unknown>>().default({}),

@@ -5,11 +5,16 @@
  * Inspired by Xero, QuickBooks, FreshBooks - not "designed", just clear.
  */
 
-import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import { useMemo } from "react";
+import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
 import {
   PageNumber,
   PaidWatermark,
   QRCode,
+  ExternalLinkIcon,
+  FixedDocumentHeader,
+  pageMargins,
+  fixedHeaderClearance,
   colors,
   spacing,
   fontSize,
@@ -27,14 +32,15 @@ import type { InvoiceDocumentData, DocumentOrganization } from "../../types";
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32,
-    paddingBottom: 32,
-    paddingLeft: 40,
-    paddingRight: 40,
+    paddingTop: pageMargins.top,
+    paddingBottom: pageMargins.bottom,
+    paddingLeft: pageMargins.left,
+    paddingRight: pageMargins.right,
     backgroundColor: colors.background.white,
   },
   content: {
     flex: 1,
+    marginTop: fixedHeaderClearance,
   },
 
   // Header row - Tight
@@ -190,7 +196,10 @@ const styles = StyleSheet.create({
   colDescription: { flex: 4 },
   colQty: { flex: 0.8, textAlign: "center" },
   colPrice: { flex: 1.2, textAlign: "right" },
+  colTax: { flex: 0.8, textAlign: "right" },
   colTotal: { flex: 1.2, textAlign: "right" },
+  // When tax column is shown, adjust description width
+  colDescriptionWithTax: { flex: 3.5 },
 
   // Summary section
   summarySection: {
@@ -304,7 +313,10 @@ const styles = StyleSheet.create({
   },
   qrSection: {
     marginTop: spacing.lg,
-    alignItems: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: spacing.lg,
   },
   notesLabel: {
     fontSize: fontSize.xs,
@@ -330,6 +342,7 @@ const styles = StyleSheet.create({
 export interface InvoicePdfTemplateProps {
   data: InvoiceDocumentData;
   qrCodeDataUrl?: string;
+  viewOnlineUrl?: string;
 }
 
 export interface InvoicePdfDocumentProps extends InvoicePdfTemplateProps {
@@ -340,15 +353,25 @@ export interface InvoicePdfDocumentProps extends InvoicePdfTemplateProps {
 // COMPONENT
 // ============================================================================
 
-function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
+function InvoiceContent({ data, qrCodeDataUrl, viewOnlineUrl }: InvoicePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const { order } = data;
 
   const isPaid = data.isPaid;
-  const isOverdue = !isPaid && data.dueDate && new Date(data.dueDate).getTime() < Date.now();
+  // eslint-disable-next-line react-hooks/purity -- cached "now" for PDF render is intentional
+  const now = useMemo(() => Date.now(), []);
+  const isOverdue = !isPaid && data.dueDate && new Date(data.dueDate).getTime() < now;
+
+  // Check if any line items have per-item tax rates
+  const hasPerItemTax = order.lineItems.some(item => item.taxRate != null);
 
   return (
     <Page size="A4" style={styles.page}>
+      <FixedDocumentHeader
+        orgName={organization.name}
+        documentType="Invoice"
+        documentNumber={data.documentNumber}
+      />
       <View style={styles.content}>
         {/* Header - Company left, Invoice info right */}
         <View style={styles.headerRow}>
@@ -361,7 +384,7 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
                   {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
                 </Text>
                 <Text style={styles.companyDetail}>
-                  {organization.address.city}, {organization.address.state} {organization.address.postalCode}
+                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
                 </Text>
                 {organization.phone && (
                   <Text style={styles.companyDetail}>{organization.phone}</Text>
@@ -418,7 +441,7 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
                 {order.billingAddress.addressLine2 ? `, ${order.billingAddress.addressLine2}` : ""}
               </Text>
               <Text style={styles.billToDetail}>
-                {order.billingAddress.city}, {order.billingAddress.state} {order.billingAddress.postalCode}
+                {`${order.billingAddress.city}, ${order.billingAddress.state} ${order.billingAddress.postalCode}`}
               </Text>
             </>
           )}
@@ -428,23 +451,31 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
         <View style={styles.table}>
           {/* Header */}
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
+            <Text style={[styles.tableHeaderCell, hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
             <Text style={[styles.tableHeaderCell, styles.colPrice]}>Price</Text>
+            {hasPerItemTax && (
+              <Text style={[styles.tableHeaderCell, styles.colTax]}>Tax %</Text>
+            )}
             <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount</Text>
           </View>
 
           {/* Rows */}
           {order.lineItems.map((item) => (
             <View key={item.id} style={styles.tableRow} wrap={true}>
-              <View style={styles.colDescription}>
+              <View style={hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription}>
                 <Text style={styles.tableCell}>{item.description}</Text>
                 {item.sku && <Text style={styles.tableCellMuted}>{item.sku}</Text>}
               </View>
-              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
               <Text style={[styles.tableCell, styles.colPrice]}>
                 {formatCurrencyForPdf(item.unitPrice, organization.currency, locale)}
               </Text>
+              {hasPerItemTax && (
+                <Text style={[styles.tableCell, styles.colTax]}>
+                  {item.taxRate != null ? `${item.taxRate}%` : "-"}
+                </Text>
+              )}
               <Text style={[styles.tableCell, styles.colTotal]}>
                 {formatCurrencyForPdf(item.total, organization.currency, locale)}
               </Text>
@@ -452,8 +483,8 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
           ))}
         </View>
 
-        {/* Summary */}
-        <View style={styles.summarySection}>
+        {/* Summary - unbreakable */}
+        <View style={styles.summarySection} wrap={false}>
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
@@ -472,7 +503,7 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
             )}
             
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tax ({order.taxRate || 0}%)</Text>
+              <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
               <Text style={styles.summaryValue}>
                 {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
               </Text>
@@ -496,9 +527,9 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
           </View>
         </View>
 
-        {/* Payment Details */}
+        {/* Payment Details - unbreakable */}
         {data.paymentDetails && (
-          <View style={styles.paymentSection}>
+          <View style={styles.paymentSection} wrap={false}>
             <Text style={styles.paymentTitle}>Payment Details</Text>
             <View style={styles.paymentGrid}>
               {data.paymentDetails.bankName && (
@@ -529,25 +560,33 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
           </View>
         )}
 
-        {/* Terms/Notes */}
+        {/* Terms/Notes - allow orphans/widows for long text */}
         {data.terms && (
           <View style={styles.notesSection}>
             <Text style={styles.notesLabel}>Terms</Text>
-            <Text style={styles.notesText}>{data.terms}</Text>
+            <Text style={styles.notesText} orphans={2} widows={2}>{data.terms}</Text>
           </View>
         )}
 
         {data.notes && (
           <View style={styles.notesSection}>
             <Text style={styles.notesLabel}>Notes</Text>
-            <Text style={styles.notesText}>{data.notes}</Text>
+            <Text style={styles.notesText} orphans={2} widows={2}>{data.notes}</Text>
           </View>
         )}
 
-        {/* QR Code */}
-        {qrCodeDataUrl && (
+        {/* QR Code and View online link */}
+        {(qrCodeDataUrl || viewOnlineUrl) && (
           <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={80} />
+            {qrCodeDataUrl && <QRCode dataUrl={qrCodeDataUrl} size={80} />}
+            {viewOnlineUrl && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <ExternalLinkIcon size={10} color={colors.status.info} />
+                <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
+                  <Text>View online</Text>
+                </Link>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -569,6 +608,7 @@ export function InvoicePdfDocument({
   organization,
   data,
   qrCodeDataUrl,
+  viewOnlineUrl,
 }: InvoicePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -577,8 +617,10 @@ export function InvoicePdfDocument({
         author={organization.name}
         subject={`Invoice for ${data.order.customer.name}`}
         creator="Renoz"
+        language="en-AU"
+        keywords={`invoice, ${data.documentNumber}, ${data.order.customer.name}`}
       >
-        <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
       </Document>
     </OrgDocumentProvider>
   );
@@ -587,6 +629,7 @@ export function InvoicePdfDocument({
 export function InvoicePdfTemplate({
   data,
   qrCodeDataUrl,
+  viewOnlineUrl,
 }: InvoicePdfTemplateProps) {
-  return <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+  return <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />;
 }

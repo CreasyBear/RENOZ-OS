@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import type {
   ScheduleEmailInput,
   UpdateScheduledEmailInput,
@@ -30,19 +31,26 @@ import {
 export interface UseScheduledEmailsOptions {
   status?: 'pending' | 'sent' | 'cancelled';
   customerId?: string;
+  search?: string;
   limit?: number;
   offset?: number;
   enabled?: boolean;
 }
 
 export function useScheduledEmails(options: UseScheduledEmailsOptions = {}) {
-  const { status, customerId, limit = 50, offset = 0, enabled = true } = options;
+  const { status, customerId, search, limit = 50, offset = 0, enabled = true } = options;
 
   return useQuery({
-    queryKey: queryKeys.communications.scheduledEmailsList({ status, customerId }),
-    queryFn: () => getScheduledEmails({ data: { status, customerId, limit, offset } }),
+    queryKey: queryKeys.communications.scheduledEmailsList({ status, customerId, search }),
+    queryFn: async () => {
+      const result = await getScheduledEmails({
+        data: { status, customerId, search, limit, offset } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
   });
 }
 
@@ -56,9 +64,15 @@ export function useScheduledEmail(options: UseScheduledEmailOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.scheduledEmailDetail(emailId),
-    queryFn: () => getScheduledEmailById({ data: { id: emailId } }),
+    queryFn: async () => {
+      const result = await getScheduledEmailById({
+        data: { id: emailId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!emailId,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
   });
 }
 

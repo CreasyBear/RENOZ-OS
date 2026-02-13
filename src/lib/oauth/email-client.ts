@@ -7,6 +7,15 @@
  * Handles message fetching, sending, threading, and attachment processing.
  */
 
+import { logger } from '@/lib/logger';
+import type {
+  GmailHeader,
+  GmailMessagePayload,
+  OutlookEmailRecipient,
+  OutlookMessageAttachment,
+  OutlookMessagePayload,
+} from '@/lib/schemas/integrations/email';
+
 // ============================================================================
 // EMAIL DATA TYPES
 // ============================================================================
@@ -31,7 +40,7 @@ export interface EmailMessage {
   sentAt: Date;
   receivedAt: Date;
   headers: Record<string, string>;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface EmailAddress {
@@ -227,7 +236,7 @@ export class GmailProvider implements EmailProvider {
         const fullMessage = await this.getMessage(connection, message.id);
         messages.push(fullMessage);
       } catch (error) {
-        console.warn(`Failed to fetch message ${message.id}:`, error);
+        logger.warn('Failed to fetch message', { messageId: message.id, error: String(error) });
       }
     }
 
@@ -289,7 +298,7 @@ export class GmailProvider implements EmailProvider {
         const fullThread = await this.getThreadDetails(connection, thread.id);
         threads.push(fullThread);
       } catch (error) {
-        console.warn(`Failed to fetch thread ${thread.id}:`, error);
+        logger.warn('Failed to fetch thread', { threadId: thread.id, error: String(error) });
       }
     }
 
@@ -430,30 +439,34 @@ export class GmailProvider implements EmailProvider {
     return queryParts.join(' ');
   }
 
-  private parseGmailMessage(data: any): EmailMessage {
-    const headers = this.parseHeaders(data.payload.headers || []);
+  private parseGmailMessage(data: GmailMessagePayload): EmailMessage {
+    const id = data.id ?? '';
+    const threadId = data.threadId ?? '';
+    const payload = data.payload ?? { headers: [] };
+    const headers = this.parseHeaders(payload.headers ?? []);
+    const internalDate = data.internalDate ? parseInt(data.internalDate, 10) : Date.now();
 
     return {
-      id: data.id,
-      threadId: data.threadId,
+      id,
+      threadId,
       subject: headers.subject || '(no subject)',
-      from: this.parseEmailAddress(headers.from),
-      to: this.parseEmailAddresses(headers.to),
+      from: this.parseEmailAddress(headers.from ?? ''),
+      to: this.parseEmailAddresses(headers.to ?? ''),
       cc: headers.cc ? this.parseEmailAddresses(headers.cc) : undefined,
       bcc: headers.bcc ? this.parseEmailAddresses(headers.bcc) : undefined,
-      body: this.extractBody(data.payload),
-      attachments: this.extractAttachments(data.payload),
+      body: this.extractBody(payload),
+      attachments: this.extractAttachments(payload),
       labels: data.labelIds || [],
       isRead: !data.labelIds?.includes('UNREAD'),
       isStarred: data.labelIds?.includes('STARRED') || false,
       priority: this.extractPriority(headers),
-      sentAt: new Date(parseInt(data.internalDate)),
-      receivedAt: new Date(parseInt(data.internalDate)),
+      sentAt: new Date(internalDate),
+      receivedAt: new Date(internalDate),
       headers,
     };
   }
 
-  private parseHeaders(headers: any[]): Record<string, string> {
+  private parseHeaders(headers: GmailHeader[]): Record<string, string> {
     const result: Record<string, string> = {};
     for (const header of headers) {
       result[header.name.toLowerCase()] = header.value;
@@ -480,8 +493,9 @@ export class GmailProvider implements EmailProvider {
       .filter((addr) => addr.email);
   }
 
-  private extractBody(payload: any): { text?: string; html?: string } {
+  private extractBody(payload: GmailMessagePayload['payload']): { text?: string; html?: string } {
     const body: { text?: string; html?: string } = {};
+    if (!payload) return body;
 
     if (payload.body?.data) {
       if (payload.mimeType === 'text/plain') {
@@ -504,23 +518,22 @@ export class GmailProvider implements EmailProvider {
     return body;
   }
 
-  private extractAttachments(payload: any): EmailAttachment[] {
+  private extractAttachments(payload: GmailMessagePayload['payload']): EmailAttachment[] {
     const attachments: EmailAttachment[] = [];
+    if (!payload?.parts) return attachments;
 
-    if (payload.parts) {
-      for (const part of payload.parts) {
-        if (part.filename && part.body?.attachmentId) {
-          attachments.push({
-            id: part.body.attachmentId,
-            filename: part.filename,
-            mimeType: part.mimeType,
-            size: part.body.size || 0,
-            isInline:
-              part.headers?.some(
-                (h: any) => h.name === 'Content-Disposition' && h.value.includes('inline')
-              ) || false,
-          });
-        }
+    for (const part of payload.parts) {
+      if (part.filename && part.body?.attachmentId) {
+        attachments.push({
+          id: part.body.attachmentId,
+          filename: part.filename,
+          mimeType: part.mimeType ?? 'application/octet-stream',
+          size: part.body.size || 0,
+          isInline:
+            part.headers?.some(
+              (h: GmailHeader) => h.name === 'Content-Disposition' && h.value.includes('inline')
+            ) || false,
+        });
       }
     }
 
@@ -553,7 +566,9 @@ export class GmailProvider implements EmailProvider {
     }
 
     const data = await response.json();
-    const messages = data.messages.map((msg: any) => this.parseGmailMessage(msg));
+    const messages = (data.messages ?? []).map((msg: GmailMessagePayload) =>
+      this.parseGmailMessage(msg)
+    );
 
     return {
       id: threadId,
@@ -673,7 +688,9 @@ export class OutlookProvider implements EmailProvider {
     const data = await response.json();
 
     return {
-      messages: data.value.map((msg: any) => this.parseOutlookMessage(msg)),
+      messages: (data.value ?? []).map((msg: OutlookMessagePayload) =>
+        this.parseOutlookMessage(msg)
+      ),
       totalCount: data['@odata.count'] || data.value.length,
       hasMore: !!data['@odata.nextLink'],
       nextPageToken: data['@odata.nextLink'],
@@ -832,7 +849,7 @@ export class OutlookProvider implements EmailProvider {
     // Outlook uses categories instead of labels
     // This is simplified - would need proper category mapping
     for (const messageId of messageIds) {
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
 
       if (addLabels?.length) {
         updateData.categories = addLabels;
@@ -866,25 +883,30 @@ export class OutlookProvider implements EmailProvider {
   }
 
   // Helper methods
-  private parseOutlookMessage(data: any): EmailMessage {
+  private parseOutlookMessage(data: OutlookMessagePayload): EmailMessage {
+    const id = data.id ?? '';
+    const threadId = data.conversationId ?? data.id ?? '';
+    const sentAt = data.sentDateTime ? new Date(data.sentDateTime) : new Date();
+    const receivedAt = data.receivedDateTime ? new Date(data.receivedDateTime) : new Date();
+
     return {
-      id: data.id,
-      threadId: data.conversationId || data.id,
+      id,
+      threadId,
       subject: data.subject || '(no subject)',
       from: {
         name: data.from?.emailAddress?.name,
         email: data.from?.emailAddress?.address || '',
       },
       to:
-        data.toRecipients?.map((recipient: any) => ({
+        data.toRecipients?.map((recipient: OutlookEmailRecipient) => ({
           name: recipient.emailAddress?.name,
           email: recipient.emailAddress?.address || '',
         })) || [],
-      cc: data.ccRecipients?.map((recipient: any) => ({
+      cc: data.ccRecipients?.map((recipient: OutlookEmailRecipient) => ({
         name: recipient.emailAddress?.name,
         email: recipient.emailAddress?.address || '',
       })),
-      bcc: data.bccRecipients?.map((recipient: any) => ({
+      bcc: data.bccRecipients?.map((recipient: OutlookEmailRecipient) => ({
         name: recipient.emailAddress?.name,
         email: recipient.emailAddress?.address || '',
       })),
@@ -893,19 +915,24 @@ export class OutlookProvider implements EmailProvider {
         html: data.body?.contentType === 'html' ? data.body.content : undefined,
       },
       attachments:
-        data.attachments?.map((att: any) => ({
-          id: att.id,
-          filename: att.name,
-          mimeType: att.contentType,
-          size: att.size,
-          isInline: att.isInline || false,
-        })) || [],
+        data.attachments
+          ?.filter(
+            (att): att is OutlookMessageAttachment & { id: string; name: string } =>
+              !!att.id && !!att.name
+          )
+          .map((att) => ({
+            id: att.id,
+            filename: att.name,
+            mimeType: att.contentType ?? 'application/octet-stream',
+            size: att.size ?? 0,
+            isInline: att.isInline || false,
+          })) ?? [],
       labels: data.categories || [],
       isRead: data.isRead || false,
       isStarred: data.flag?.flagStatus === 'flagged',
       priority: this.mapOutlookPriority(data.importance),
-      sentAt: new Date(data.sentDateTime),
-      receivedAt: new Date(data.receivedDateTime),
+      sentAt,
+      receivedAt,
       headers: {}, // Outlook doesn't expose headers directly
       metadata: {
         internetMessageId: data.internetMessageId,
@@ -914,7 +941,7 @@ export class OutlookProvider implements EmailProvider {
     };
   }
 
-  private mapOutlookPriority(outlookPriority: string): 'low' | 'normal' | 'high' {
+  private mapOutlookPriority(outlookPriority?: string): 'low' | 'normal' | 'high' {
     switch (outlookPriority) {
       case 'high':
         return 'high';

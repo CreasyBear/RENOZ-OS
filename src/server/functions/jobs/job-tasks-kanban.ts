@@ -11,74 +11,18 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, inArray, asc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobTasks, jobAssignments, customers, orders } from 'drizzle/schema';
+import { jobTasks, jobAssignments, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { z } from 'zod';
+import type { MyTaskKanban } from '@/lib/schemas/jobs/job-tasks';
+import {
+  listJobTasksForKanbanSchema,
+  getMyTasksForKanbanSchema,
+  type KanbanTask,
+} from '@/lib/schemas/jobs/job-tasks-kanban';
 
-// ============================================================================
-// SCHEMAS
-// ============================================================================
-
-export const listJobTasksForKanbanSchema = z.object({
-  /** Optional status filter */
-  status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional(),
-  /** Optional assignee filter */
-  assigneeId: z.string().optional(),
-  /** Optional priority filter */
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  /** Limit for performance (default 200) */
-  limit: z.number().min(1).max(1000).default(200),
-});
-
-export type ListJobTasksForKanbanInput = z.infer<typeof listJobTasksForKanbanSchema>;
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface KanbanTask {
-  id: string;
-  title: string;
-  description: string | null;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
-  priority: 'low' | 'normal' | 'high' | 'urgent';
-  position: number;
-  estimatedHours: number | null;
-  actualHours: number | null;
-  dueDate: Date | null;
-
-  // Job assignment context
-  jobAssignment: {
-    id: string;
-    jobNumber: string;
-    type: string;
-    scheduledDate: Date | null;
-  };
-
-  // Customer context
-  customer: {
-    id: string;
-    name: string;
-  } | null;
-
-  // Assignee context
-  assignee: {
-    id: string;
-    name: string;
-    avatar?: string;
-  } | null;
-
-  // Metadata for UI enhancements
-  metadata?: {
-    comments: number;
-    attachments: number;
-    subtasks: number;
-  };
-
-  createdAt: Date;
-  updatedAt: Date;
-}
+// Re-export for hook consumers
+export type { KanbanTask, ListJobTasksForKanbanInput, GetMyTasksForKanbanInput } from '@/lib/schemas/jobs/job-tasks-kanban';
 
 // ============================================================================
 // LIST JOB TASKS FOR KANBAN
@@ -141,8 +85,7 @@ export const listJobTasksForKanban = createServerFn({ method: 'GET' })
       })
       .from(jobTasks)
       .innerJoin(jobAssignments, eq(jobTasks.jobId, jobAssignments.id))
-      .leftJoin(orders, eq(jobAssignments.orderId, orders.id))
-      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .leftJoin(customers, eq(jobAssignments.customerId, customers.id))
       .where(and(...conditions))
       .orderBy(asc(jobTasks.position))
       .limit(data.limit);
@@ -209,5 +152,143 @@ export const listJobTasksForKanban = createServerFn({ method: 'GET' })
     return {
       tasks: kanbanTasks,
       total: kanbanTasks.length,
+    };
+  });
+
+// ============================================================================
+// MY TASKS FOR KANBAN (CROSS-PROJECT)
+// ============================================================================
+
+/**
+ * Get current user's tasks across all projects for kanban board.
+ * Used by /my-tasks route for cross-project task view.
+ */
+export const getMyTasksForKanban = createServerFn({ method: 'GET' })
+  .inputValidator(getMyTasksForKanbanSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({
+      permission: PERMISSIONS.job?.read ?? 'customer.read',
+    });
+
+    const { siteVisits, projects, projectWorkstreams } = await import('drizzle/schema');
+
+    // Build where conditions - always filter by current user
+    const conditions = [
+      eq(jobTasks.organizationId, ctx.organizationId),
+      eq(jobTasks.assigneeId, ctx.user.id),
+    ];
+
+    if (data.status) {
+      conditions.push(eq(jobTasks.status, data.status));
+    }
+
+    if (data.priority) {
+      conditions.push(eq(jobTasks.priority, data.priority));
+    }
+
+    // If projectId filter provided, add it
+    if (data.projectId) {
+      conditions.push(eq(siteVisits.projectId, data.projectId));
+    }
+
+    // Query tasks with project and site visit context
+    const tasks = await db
+      .select({
+        // Task fields
+        id: jobTasks.id,
+        title: jobTasks.title,
+        description: jobTasks.description,
+        status: jobTasks.status,
+        priority: jobTasks.priority,
+        position: jobTasks.position,
+        estimatedHours: jobTasks.estimatedHours,
+        actualHours: jobTasks.actualHours,
+        dueDate: jobTasks.dueDate,
+        workstreamId: jobTasks.workstreamId,
+        createdAt: jobTasks.createdAt,
+        updatedAt: jobTasks.updatedAt,
+        siteVisitId: jobTasks.siteVisitId,
+
+        // Project fields
+        projectId: projects.id,
+        projectNumber: projects.projectNumber,
+        projectTitle: projects.title,
+        projectStatus: projects.status,
+
+        // Site visit fields
+        siteVisitNumber: siteVisits.visitNumber,
+        siteVisitType: siteVisits.visitType,
+        scheduledDate: siteVisits.scheduledDate,
+
+        // Customer fields
+        customerId: projects.customerId,
+        customerName: customers.name,
+      })
+      .from(jobTasks)
+      .innerJoin(siteVisits, eq(jobTasks.siteVisitId, siteVisits.id))
+      .innerJoin(projects, eq(siteVisits.projectId, projects.id))
+      .leftJoin(customers, eq(projects.customerId, customers.id))
+      .where(and(...conditions))
+      .orderBy(asc(jobTasks.dueDate), asc(jobTasks.position))
+      .limit(data.limit);
+
+    // Get workstream names
+    const workstreamIds = tasks.map((t) => t.workstreamId).filter((id): id is string => id !== null);
+    let workstreamMap: Record<string, string> = {};
+    if (workstreamIds.length > 0) {
+      const workstreamData = await db
+        .select({
+          id: projectWorkstreams.id,
+          name: projectWorkstreams.name,
+        })
+        .from(projectWorkstreams)
+        .where(inArray(projectWorkstreams.id, workstreamIds));
+
+      workstreamMap = Object.fromEntries(workstreamData.map((w) => [w.id, w.name]));
+    }
+
+    // Transform to MyTaskKanban format
+    const myTasks: MyTaskKanban[] = tasks.map((task) => ({
+      id: task.id as string,
+      title: task.title as string,
+      description: task.description as string | null,
+      status: task.status as MyTaskKanban['status'],
+      priority: task.priority as MyTaskKanban['priority'],
+      position: task.position as number,
+      estimatedHours: task.estimatedHours as number | null,
+      actualHours: task.actualHours as number | null,
+      dueDate: task.dueDate ? new Date(task.dueDate as string | Date) : null,
+      workstreamId: task.workstreamId as string | null,
+      workstreamName: task.workstreamId ? (workstreamMap[task.workstreamId as string] ?? null) : null,
+      createdAt: new Date(task.createdAt as string | Date),
+      updatedAt: new Date(task.updatedAt as string | Date),
+
+      project: {
+        id: task.projectId as string,
+        projectNumber: task.projectNumber as string,
+        title: task.projectTitle as string,
+        status: task.projectStatus as string,
+      },
+
+      siteVisit: task.siteVisitId
+        ? {
+            id: task.siteVisitId as string,
+            scheduledDate: task.scheduledDate ? new Date(task.scheduledDate as string | Date) : null,
+            visitNumber: task.siteVisitNumber as string,
+            visitType: task.siteVisitType as string,
+          }
+        : null,
+
+      customer: task.customerId
+        ? {
+            id: task.customerId as string,
+            name: task.customerName as string,
+          }
+        : null,
+    }));
+
+    return {
+      tasks: myTasks,
+      total: myTasks.length,
     };
   });

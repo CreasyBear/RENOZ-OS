@@ -38,8 +38,7 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { cn } from '@/lib/utils';
-import type { ProjectFile } from 'drizzle/schema/jobs/workstreams-notes';
-import type { ProjectFileType } from '@/lib/schemas/jobs/workstreams-notes';
+import type { ProjectFile, ProjectFileType } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES
@@ -117,11 +116,6 @@ const FILE_TYPE_CONFIG: Record<ProjectFileType, {
 // HELPERS
 // ============================================================================
 
-function getFileIcon(_mimeType?: string | null) {
-  // TODO: Use mimeType to determine icon when properly stored
-  return File;
-}
-
 function formatFileSize(bytes?: number | null): string {
   if (bytes == null) return 'Unknown size';
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -169,7 +163,7 @@ function FileCard({
   viewMode: 'grid' | 'list';
 }) {
   const config = FILE_TYPE_CONFIG[file.fileType as ProjectFileType];
-  const FileIcon = getFileIcon(file.mimeType);
+  const IconComponent = config.icon;
   const extension = getFileExtension(file.fileName);
   const isImage = false; // TODO: Detect from mimeType when properly stored
 
@@ -177,7 +171,7 @@ function FileCard({
     return (
       <div className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors group">
         <div className={cn('h-10 w-10 rounded-lg flex items-center justify-center shrink-0', config.bgColor)}>
-          <FileIcon className={cn('h-5 w-5', config.color)} />
+          <IconComponent className={cn('h-5 w-5', config.color)} />
         </div>
         
         <div className="flex-1 min-w-0">
@@ -256,7 +250,7 @@ function FileCard({
             />
           ) : (
             <div className="text-center">
-              <FileIcon className={cn('h-12 w-12 mx-auto', config.color)} />
+              <IconComponent className={cn('h-12 w-12 mx-auto', config.color)} />
               <span className={cn('text-xs font-bold mt-1 block', config.color)}>
                 {extension}
               </span>

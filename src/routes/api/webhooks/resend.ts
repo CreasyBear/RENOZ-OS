@@ -24,6 +24,7 @@ import {
   type RateLimitOptions,
 } from '@/lib/server/rate-limit';
 import { client } from '@/trigger/client';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // CONFIGURATION
@@ -109,7 +110,7 @@ export async function POST({ request }: { request: Request }) {
   if (!rateLimitResult.allowed) {
     const retryAfterSeconds = Math.ceil(rateLimitResult.retryAfterMs / 1000);
 
-    console.warn('[resend-webhook] Rate limit exceeded', {
+    logger.warn('[resend-webhook] Rate limit exceeded', {
       clientId: clientId.substring(0, 8) + '...',
       retryAfterSeconds,
     });
@@ -135,7 +136,7 @@ export async function POST({ request }: { request: Request }) {
   const resendApiKey = process.env.RESEND_API_KEY;
 
   if (!webhookSecret) {
-    console.error('[resend-webhook] RESEND_WEBHOOK_SECRET not configured');
+    logger.error('[resend-webhook] RESEND_WEBHOOK_SECRET not configured');
     // Return 500 to indicate server misconfiguration (don't expose details)
     return new Response(
       JSON.stringify({ error: 'Webhook not configured' }),
@@ -147,7 +148,7 @@ export async function POST({ request }: { request: Request }) {
   }
 
   if (!resendApiKey) {
-    console.error('[resend-webhook] RESEND_API_KEY not configured');
+    logger.error('[resend-webhook] RESEND_API_KEY not configured');
     return new Response(
       JSON.stringify({ error: 'Webhook not configured' }),
       {
@@ -169,7 +170,7 @@ export async function POST({ request }: { request: Request }) {
 
   // Check required headers are present
   if (!svixId || !svixTimestamp || !svixSignature) {
-    console.warn('[resend-webhook] Missing SVIX headers', {
+    logger.warn('[resend-webhook] Missing SVIX headers', {
       hasSvixId: Boolean(svixId),
       hasSvixTimestamp: Boolean(svixTimestamp),
       hasSvixSignature: Boolean(svixSignature),
@@ -203,7 +204,7 @@ export async function POST({ request }: { request: Request }) {
       webhookSecret,
     }) as ResendWebhookEvent;
   } catch (error) {
-    console.warn('[resend-webhook] Signature verification failed', {
+    logger.warn('[resend-webhook] Signature verification failed', {
       error: error instanceof Error ? error.message : 'Unknown error',
       svixId,
       svixTimestamp: svixTimestamp.substring(0, 10) + '...',
@@ -223,7 +224,7 @@ export async function POST({ request }: { request: Request }) {
   // -------------------------------------------------------------------------
   const receivedAt = new Date().toISOString();
 
-  console.info('[resend-webhook] Event received', {
+  logger.info('[resend-webhook] Event received', {
     type: event.type,
     emailId: event.data.email_id,
     receivedAt,
@@ -245,8 +246,7 @@ export async function POST({ request }: { request: Request }) {
   } catch (error) {
     // Log but don't fail the webhook - we've received the event
     // The webhook can be retried by Resend if processing fails
-    console.error('[resend-webhook] Failed to dispatch to Trigger.dev', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    logger.error('[resend-webhook] Failed to dispatch to Trigger.dev', error as Error, {
       emailId: event.data.email_id,
       eventType: event.type,
     });
@@ -261,7 +261,7 @@ export async function POST({ request }: { request: Request }) {
   const processingTime = performance.now() - startTime;
 
   if (processingTime > 100) {
-    console.warn('[resend-webhook] Response time exceeded 100ms target', {
+    logger.warn('[resend-webhook] Response time exceeded 100ms target', {
       processingTimeMs: processingTime.toFixed(2),
     });
   }

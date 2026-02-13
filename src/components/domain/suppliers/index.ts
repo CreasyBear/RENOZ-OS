@@ -7,6 +7,7 @@
 // ============================================================================
 // DIRECTORY & LIST (DataTable Pattern)
 // ============================================================================
+/** @deprecated Use SuppliersListPresenter with DomainFilterBar instead. See suppliers-page.tsx. */
 export { SupplierDirectory } from './supplier-directory';
 
 // --- Filter Config (FILTER-STANDARDS compliant) ---
@@ -31,15 +32,20 @@ export {
   formatRating,
 } from './supplier-status-config';
 
-// Legacy table (deprecated - use SuppliersListContainer instead)
-/** @deprecated Use SuppliersListContainer instead */
+// Legacy table (deprecated - use SuppliersListPresenter instead)
+/** @deprecated Use SuppliersListPresenter instead. See suppliers-page.tsx. */
 export { SupplierTable, type SupplierTableData } from './supplier-table';
 
 // ============================================================================
 // DETAIL (Container/Presenter Pattern)
 // ============================================================================
 export { SupplierDetailContainer, type SupplierDetailContainerProps, type SupplierDetailContainerRenderProps } from './containers/supplier-detail-container';
-export { SupplierDetailView, type SupplierDetailViewProps, type SupplierData } from './views/supplier-detail-view';
+export {
+  SupplierDetailView,
+  type SupplierDetailViewProps,
+  type SupplierDetailHeaderConfig,
+  type SupplierData,
+} from './views/supplier-detail-view';
 
 // Legacy detail component (deprecated - use SupplierDetailContainer instead)
 /** @deprecated Use SupplierDetailContainer instead */

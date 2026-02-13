@@ -2,7 +2,7 @@
  * Current User Hook
  *
  * Provides the current authenticated user from route context.
- * User data is fetched once in __root.tsx and available throughout the app.
+ * User data is fetched once in beforeLoad and available throughout the app.
  *
  * Note: __root.tsx only provides basic auth info (email, authId).
  * For full profile data, use server functions in authenticated routes.
@@ -21,9 +21,9 @@ export type { SSRSafeUser as AuthenticatedUser };
  * Returns auth user enriched with app user data (role, org, status) when available.
  */
 export function useCurrentUser() {
-  // User context is provided by the _authenticated layout route
+  // User context is provided by the _authenticated layout route (undefined during SSR before client hydration)
   const context = useRouteContext({ from: '/_authenticated' });
-  const appUser = context.appUser as
+  const appUser = context?.appUser as
     | {
         id: string;
         organizationId: string;
@@ -32,7 +32,7 @@ export function useCurrentUser() {
       }
     | undefined;
 
-  const user = context.user
+  const user = context?.user
     ? ({
         ...context.user,
         appUserId: appUser?.id,

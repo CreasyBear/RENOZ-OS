@@ -16,7 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { addProductImage } from "@/server/functions/products/product-images";
+import { useAddProductImage } from "@/hooks/products";
+import { toastError } from "@/hooks";
 
 // Validation constants
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -102,6 +103,9 @@ export function ImageUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Use mutation hook
+  const addImageMutation = useAddProductImage();
 
   // Calculate remaining slots
   const remainingSlots = maxImagesPerProduct - existingImageCount - files.length;
@@ -216,16 +220,14 @@ export function ImageUploader({
       // In production, replace with actual storage URL
       const imageUrl = uploadFile.preview;
 
-      // Register image with server
-      await addProductImage({
-        data: {
-          productId,
-          imageUrl,
-          fileSize: uploadFile.file.size,
-          dimensions: uploadFile.dimensions,
-          mimeType: uploadFile.file.type,
-          setAsPrimary: false,
-        },
+      // Register image with server using the hook
+      await addImageMutation.mutateAsync({
+        productId,
+        imageUrl,
+        fileSize: uploadFile.file.size,
+        dimensions: uploadFile.dimensions,
+        mimeType: uploadFile.file.type,
+        setAsPrimary: false,
       });
 
       // Update status to success
@@ -239,7 +241,8 @@ export function ImageUploader({
 
       return true;
     } catch (error) {
-      console.error("Upload failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "Upload failed";
+      toastError(errorMessage);
       setFiles((prev) =>
         prev.map((f) =>
           f.id === uploadFile.id

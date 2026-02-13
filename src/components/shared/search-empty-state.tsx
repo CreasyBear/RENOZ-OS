@@ -94,7 +94,7 @@ export function SearchEmptyState({
 
         {/* Title */}
         <h3 className="text-lg font-semibold mb-1">
-          No results for "{query}"
+          No results for &quot;{query}&quot;
         </h3>
 
         {/* Message */}
@@ -145,7 +145,7 @@ export function SearchEmptyState({
                     className="w-full text-left px-3 py-2 rounded-md hover:bg-muted transition-colors min-h-12 flex items-center justify-between text-sm"
                   >
                     <span className="text-primary hover:underline">
-                      "{suggestion.text}"
+                      &quot;{suggestion.text}&quot;
                     </span>
                     <span className="text-muted-foreground">
                       ({suggestion.resultCount} result{suggestion.resultCount !== 1 ? "s" : ""})

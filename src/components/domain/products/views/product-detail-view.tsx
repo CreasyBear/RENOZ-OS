@@ -18,8 +18,6 @@ import {
   Barcode,
   Scale,
   Ruler,
-  Building2,
-  ChevronRight,
   Link2,
   PanelRight,
   DollarSign,
@@ -28,7 +26,7 @@ import {
   Boxes,
   CheckCircle,
   XCircle,
-  AlertTriangle,
+  Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,73 +44,34 @@ import { FormatAmount } from '@/components/shared/format';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { PRODUCT_STATUS_CONFIG, PRODUCT_TYPE_CONFIG, calculateMargin } from '../product-status-config';
-import type { ProductStatus, ProductType } from '../product-status-config';
+import type { ProductStatus, ProductType } from '@/lib/schemas/products';
+import { ProductInventoryTab } from '../tabs/inventory-tab';
+import { ProductImagesTab } from '../tabs/images-tab';
+import { ProductAttributesTab } from '../tabs/attributes-tab';
+import { PriceTiers } from '../pricing/price-tiers';
+import { CustomerPricing } from '../pricing/customer-pricing';
+import { PricingEngineContainer } from '../pricing/pricing-engine-container';
+import type {
+  ProductWithRelations,
+  Category,
+  PriceTier,
+  ProductImage,
+  CustomerPrice,
+  ProductMetadata,
+} from '@/lib/schemas/products';
+import { productStatusValues, productTypeValues } from '@/lib/schemas/products';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export interface ProductWithRelations {
-  id: string;
-  sku: string;
-  name: string;
-  description: string | null;
-  barcode: string | null;
-  categoryId: string | null;
-  type: string;
-  status: string;
-  isSerialized: boolean;
-  trackInventory: boolean;
-  basePrice: number | null;
-  costPrice: number | null;
-  taxType: string;
-  weight: number | null;
-  dimensions: { length?: number; width?: number; height?: number; unit?: string } | null;
-  specifications: Record<string, unknown> | null;
-  seoTitle: string | null;
-  seoDescription: string | null;
-  tags: string[] | null;
-  xeroItemId: string | null;
-  metadata: Record<string, unknown> | null;
-  reorderPoint: number | null;
-  reorderQty: number | null;
-  isActive: boolean;
-  isSellable: boolean;
-  isPurchasable: boolean;
-  warrantyPolicyId: string | null;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  createdBy: string | null;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
-export interface PriceTier {
-  id: string;
-  minQuantity: number;
-  maxQuantity: number | null;
-  price: number;
-  discountPercent: number | null;
-  isActive: boolean;
-}
-
-export interface ProductImage {
-  id: string;
-  imageUrl: string;
-  altText: string | null;
-  isPrimary: boolean;
-  sortOrder: number;
-}
+// All data types moved to schemas/products.ts - imported above
 
 export interface ProductDetailViewProps {
   product: ProductWithRelations;
   category: Category | null;
   images: ProductImage[];
   priceTiers: PriceTier[];
+  customerPrices?: CustomerPrice[];
   inventorySummary?: {
     totalOnHand: number;
     totalAvailable: number;
@@ -127,6 +86,9 @@ export interface ProductDetailViewProps {
   activities?: UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
+  /** Handler to open activity logging dialog */
+  onLogActivity?: () => void;
+  onPriceUpdate?: (newPrice: number) => void;
   className?: string;
 }
 
@@ -182,11 +144,26 @@ function MetaChipsRow({ items }: { items: MetaChip[] }) {
 interface ProductHeaderProps {
   product: ProductWithRelations;
   category: Category | null;
+  inventorySummary?: ProductDetailViewProps['inventorySummary'];
 }
 
-function ProductHeader({ product, category }: ProductHeaderProps) {
-  const statusConfig = PRODUCT_STATUS_CONFIG[product.status as ProductStatus];
-  const typeConfig = PRODUCT_TYPE_CONFIG[product.type as ProductType];
+// Type guard for ProductStatus
+function isValidProductStatus(status: string): status is ProductStatus {
+  return (productStatusValues as readonly string[]).includes(status);
+}
+
+// Type guard for ProductType
+function isValidProductType(type: string): type is ProductType {
+  return (productTypeValues as readonly string[]).includes(type);
+}
+
+function ProductHeader({ product, category, inventorySummary }: ProductHeaderProps) {
+  const statusConfig = isValidProductStatus(product.status)
+    ? PRODUCT_STATUS_CONFIG[product.status]
+    : undefined;
+  const typeConfig = isValidProductType(product.type)
+    ? PRODUCT_TYPE_CONFIG[product.type]
+    : undefined;
   const StatusIcon = statusConfig?.icon || Package;
   const TypeIcon = typeConfig?.icon || Package;
 
@@ -196,6 +173,13 @@ function ProductHeader({ product, category }: ProductHeaderProps) {
     ...(category ? [{ label: 'Category', value: category.name, icon: <Tag className="h-3.5 w-3.5" /> }] : []),
     ...(product.barcode ? [{ label: 'Barcode', value: product.barcode, icon: <Barcode className="h-3.5 w-3.5" /> }] : []),
   ];
+
+  const basePrice = product.basePrice ?? 0;
+  const costPrice = product.costPrice ?? 0;
+  const margin = calculateMargin(basePrice, costPrice);
+  const marginColor = margin === null ? 'text-muted-foreground' :
+    margin >= 30 ? 'text-green-600' :
+    margin >= 10 ? 'text-amber-600' : 'text-red-600';
 
   return (
     <section className="space-y-4">
@@ -215,6 +199,30 @@ function ProductHeader({ product, category }: ProductHeaderProps) {
                 Inactive
               </Badge>
             )}
+          </div>
+        </div>
+
+        {/* Key Metrics - hidden on small screens, shown in KeyNumbersSummary instead */}
+        <div className="hidden md:flex items-center gap-4 shrink-0">
+          <div className="text-center px-3 py-1.5 border rounded-md bg-muted/30">
+            <div className="text-lg font-semibold tabular-nums">
+              <FormatAmount amount={basePrice} />
+            </div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Sell Price</div>
+          </div>
+          <div className="text-center px-3 py-1.5 border rounded-md bg-muted/30">
+            <div className="text-lg font-semibold tabular-nums">
+              {product.trackInventory
+                ? (inventorySummary?.totalAvailable ?? 0)
+                : 'N/A'}
+            </div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Stock</div>
+          </div>
+          <div className="text-center px-3 py-1.5 border rounded-md bg-muted/30">
+            <div className={cn('text-lg font-semibold tabular-nums', marginColor)}>
+              {margin !== null ? `${margin.toFixed(0)}%` : '—'}
+            </div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Margin</div>
           </div>
         </div>
       </div>
@@ -246,8 +254,8 @@ function PricingBreakdown({ product, priceTiers }: PricingBreakdownProps) {
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-foreground mb-4">Pricing</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <h2 className="text-base font-semibold text-foreground mb-3">Pricing</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Price Breakdown */}
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
@@ -260,7 +268,8 @@ function PricingBreakdown({ product, priceTiers }: PricingBreakdownProps) {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Cost Price
+              <DollarSign className="h-4 w-4" /> Landed Cost
+              <span className="text-[10px] text-muted-foreground/70">(weighted avg)</span>
             </span>
             <span className="font-medium tabular-nums">
               {costPrice > 0 ? <FormatAmount amount={costPrice} /> : '-'}
@@ -327,7 +336,7 @@ function PricingBreakdown({ product, priceTiers }: PricingBreakdownProps) {
                   {tier.minQuantity}+ units
                 </div>
                 <div className="font-medium text-sm">
-                  <FormatAmount amount={tier.price} />
+                  {tier.price !== null ? <FormatAmount amount={tier.price} /> : `${tier.discountPercent ?? 0}% off`}
                 </div>
                 {tier.discountPercent && (
                   <div className="text-xs text-green-600 mt-1">
@@ -336,100 +345,6 @@ function PricingBreakdown({ product, priceTiers }: PricingBreakdownProps) {
                 )}
               </div>
             ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ============================================================================
-// INVENTORY SUMMARY SECTION
-// ============================================================================
-
-interface InventorySummaryProps {
-  product: ProductWithRelations;
-  inventorySummary?: {
-    totalOnHand: number;
-    totalAvailable: number;
-    totalAllocated: number;
-    locationCount: number;
-    totalValue: number;
-  } | null;
-}
-
-function InventorySummary({ product, inventorySummary }: InventorySummaryProps) {
-  if (!product.trackInventory) {
-    return (
-      <section>
-        <h2 className="text-base font-semibold text-foreground mb-4">Inventory</h2>
-        <div className="p-4 border rounded-lg bg-muted/30">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <XCircle className="h-4 w-4" />
-            <span className="text-sm">Inventory tracking is disabled for this product</span>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  const summary = inventorySummary ?? { totalOnHand: 0, totalAvailable: 0, totalAllocated: 0, locationCount: 0, totalValue: 0 };
-  const isLowStock = product.reorderPoint !== null && summary.totalOnHand <= product.reorderPoint;
-
-  return (
-    <section>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-foreground">Inventory</h2>
-        {isLowStock && (
-          <Badge variant="destructive" className="gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Low Stock
-          </Badge>
-        )}
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        <div>
-          <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-            <Package className="h-3 w-3" /> Total On Hand
-          </div>
-          <div className="text-lg font-semibold">{summary.totalOnHand}</div>
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" /> Available
-          </div>
-          <div className="text-lg font-semibold text-green-600">{summary.totalAvailable}</div>
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-            <Boxes className="h-3 w-3" /> Allocated
-          </div>
-          <div className="text-lg font-semibold text-amber-600">{summary.totalAllocated}</div>
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-            <Building2 className="h-3 w-3" /> Locations
-          </div>
-          <div className="text-lg font-semibold">{summary.locationCount}</div>
-        </div>
-      </div>
-
-      {/* Reorder Settings */}
-      {(product.reorderPoint !== null || product.reorderQty !== null) && (
-        <div className="mt-4 pt-4 border-t">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            {product.reorderPoint !== null && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Reorder Point</span>
-                <span className="font-medium">{product.reorderPoint} units</span>
-              </div>
-            )}
-            {product.reorderQty !== null && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Reorder Quantity</span>
-                <span className="font-medium">{product.reorderQty} units</span>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -576,6 +491,74 @@ function SettingsFlagsSection({ product }: SettingsFlagsSectionProps) {
 }
 
 // ============================================================================
+// KEY NUMBERS SUMMARY (compact overview card)
+// ============================================================================
+
+interface KeyNumbersSummaryProps {
+  product: ProductWithRelations;
+  inventorySummary?: ProductDetailViewProps['inventorySummary'];
+}
+
+function KeyNumbersSummary({ product, inventorySummary }: KeyNumbersSummaryProps) {
+  const basePrice = product.basePrice ?? 0;
+  const costPrice = product.costPrice ?? 0;
+  const margin = calculateMargin(basePrice, costPrice);
+
+  const marginColor = margin === null ? 'text-muted-foreground' :
+    margin >= 30 ? 'text-green-600' :
+    margin >= 10 ? 'text-amber-600' : 'text-red-600';
+
+  const summary = inventorySummary ?? { totalOnHand: 0, totalAvailable: 0, totalAllocated: 0, locationCount: 0, totalValue: 0 };
+
+  return (
+    <section>
+      <h2 className="text-base font-semibold text-foreground mb-4">Key Numbers</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="p-3 border rounded-lg bg-muted/30">
+          <div className="text-xs text-muted-foreground mb-1">Sell Price</div>
+          <div className="text-lg font-semibold tabular-nums">
+            <FormatAmount amount={basePrice} />
+          </div>
+        </div>
+        <div className="p-3 border rounded-lg bg-muted/30">
+          <div className="text-xs text-muted-foreground mb-1">Cost Price</div>
+          <div className="text-lg font-semibold tabular-nums">
+            {costPrice > 0 ? <FormatAmount amount={costPrice} /> : '—'}
+          </div>
+        </div>
+        <div className="p-3 border rounded-lg bg-muted/30">
+          <div className="text-xs text-muted-foreground mb-1">Margin</div>
+          <div className={cn('text-lg font-semibold tabular-nums', marginColor)}>
+            {margin !== null ? `${margin.toFixed(1)}%` : '—'}
+          </div>
+        </div>
+        {product.trackInventory ? (
+          <>
+            <div className="p-3 border rounded-lg bg-muted/30">
+              <div className="text-xs text-muted-foreground mb-1">On Hand</div>
+              <div className="text-lg font-semibold tabular-nums">{summary.totalOnHand}</div>
+            </div>
+            <div className="p-3 border rounded-lg bg-muted/30">
+              <div className="text-xs text-muted-foreground mb-1">Available</div>
+              <div className="text-lg font-semibold tabular-nums text-green-600">{summary.totalAvailable}</div>
+            </div>
+            <div className="p-3 border rounded-lg bg-muted/30">
+              <div className="text-xs text-muted-foreground mb-1">Allocated</div>
+              <div className="text-lg font-semibold tabular-nums text-amber-600">{summary.totalAllocated}</div>
+            </div>
+          </>
+        ) : (
+          <div className="p-3 border rounded-lg bg-muted/30 col-span-3">
+            <div className="text-xs text-muted-foreground mb-1">Inventory</div>
+            <div className="text-sm text-muted-foreground">Not tracked</div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
 // RIGHT META PANEL
 // ============================================================================
 
@@ -587,7 +570,7 @@ interface RightMetaPanelProps {
 
 function RightMetaPanel({ product, category, images }: RightMetaPanelProps) {
   const primaryImage = images.find((img) => img.isPrimary) ?? images[0];
-  const metadata = product.metadata as Record<string, string | undefined> | null;
+  const metadata = product.metadata as ProductMetadata | null;
 
   return (
     <aside className="flex flex-col gap-8 p-4 pt-8 lg:sticky lg:self-start lg:top-4">
@@ -717,6 +700,7 @@ export const ProductDetailView = memo(function ProductDetailView({
   category,
   images,
   priceTiers,
+  customerPrices = [],
   inventorySummary,
   activeTab,
   onTabChange,
@@ -725,25 +709,24 @@ export const ProductDetailView = memo(function ProductDetailView({
   activities = [],
   activitiesLoading = false,
   activitiesError,
+  onLogActivity,
+  onPriceUpdate,
   className,
 }: ProductDetailViewProps) {
   const priceTierCount = useMemo(() => priceTiers.length, [priceTiers]);
 
   return (
-    <div className={cn('flex flex-1 flex-col min-w-0 m-2 border border-border rounded-lg', className)}>
-      {/* Top Bar */}
-      <div className="flex items-center justify-between gap-4 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Products</span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">{product.sku}</span>
+    <div className={cn('space-y-4', className)}>
+      {/* Entity Header with panel toggle */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <ProductHeader product={product} category={category} inventorySummary={inventorySummary} />
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(window.location.href)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" onClick={() => copyToClipboard(window.location.href)} aria-label="Copy link">
                   <Link2 className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -756,8 +739,9 @@ export const ProductDetailView = memo(function ProductDetailView({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={cn('h-8 w-8', showMetaPanel && 'bg-muted')}
+                  className={cn('h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0', showMetaPanel && 'bg-muted')}
                   onClick={onToggleMetaPanel}
+                  aria-label={showMetaPanel ? 'Hide details panel' : 'Show details panel'}
                 >
                   <PanelRight className="h-4 w-4" />
                 </Button>
@@ -768,16 +752,13 @@ export const ProductDetailView = memo(function ProductDetailView({
         </div>
       </div>
 
-      {/* Main Content - FULL WIDTH */}
-      <div className="flex flex-1 flex-col bg-background px-2 rounded-b-lg min-w-0 border-t">
-        <div className="px-4">
-          <div className={cn(
-            'grid grid-cols-1 gap-12',
-            showMetaPanel ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,320px)]' : 'lg:grid-cols-1'
-          )}>
-            {/* Primary Content */}
-            <div className="space-y-6 pt-4 pb-6">
-              <ProductHeader product={product} category={category} />
+      {/* Main Content Grid */}
+      <div className={cn(
+        'grid grid-cols-1 gap-8',
+        showMetaPanel ? 'lg:grid-cols-[minmax(0,1fr)_320px]' : 'lg:grid-cols-1'
+      )}>
+        {/* Primary Content */}
+        <div className="space-y-6 min-w-0">
 
               <Tabs value={activeTab} onValueChange={onTabChange}>
                 <TabsList className="w-full gap-6 bg-transparent border-b border-border rounded-none h-auto p-0">
@@ -790,72 +771,114 @@ export const ProductDetailView = memo(function ProductDetailView({
                   <TabsTrigger value="inventory" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
                     Inventory
                   </TabsTrigger>
+                  <TabsTrigger value="images" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
+                    Images {images.length > 0 && `(${images.length})`}
+                  </TabsTrigger>
+                  <TabsTrigger value="attributes" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
+                    Attributes
+                  </TabsTrigger>
                   <TabsTrigger value="activity" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
                     Activity
                   </TabsTrigger>
                 </TabsList>
 
-                {/* Overview Tab - space-y-10 for generous spacing */}
+                {/* Overview Tab */}
                 <TabsContent value="overview" className="mt-0 pt-6">
-                  <div className="space-y-10">
-                    <PricingBreakdown product={product} priceTiers={priceTiers} />
-                    <InventorySummary product={product} inventorySummary={inventorySummary} />
-                    <SpecificationsSection product={product} />
+                  <div className="space-y-6">
+                    <KeyNumbersSummary product={product} inventorySummary={inventorySummary} />
                     <DescriptionSection description={product.description} />
-                    <TagsSection tags={product.tags} />
+                    <SpecificationsSection product={product} />
                     <SettingsFlagsSection product={product} />
+                    <TagsSection tags={product.tags} />
                   </div>
                 </TabsContent>
 
-                {/* Pricing Tab - delegates to existing tab component via container */}
+                {/* Pricing Tab - full CRUD with PricingEngine, PriceTiers and CustomerPricing */}
                 <TabsContent value="pricing" className="mt-0 pt-6">
-                  <div className="text-sm text-muted-foreground">
-                    {/* Pricing content is delegated to the container which uses ProductPricingTab */}
+                  <div className="space-y-6 max-w-2xl">
                     <PricingBreakdown product={product} priceTiers={priceTiers} />
+                    <PricingEngineContainer
+                      productId={product.id}
+                      sku={product.sku}
+                      name={product.name}
+                      basePrice={product.basePrice ?? 0}
+                      costPrice={product.costPrice ?? null}
+                      onPriceUpdate={onPriceUpdate}
+                    />
+                    <PriceTiers
+                      productId={product.id}
+                      basePrice={product.basePrice ?? 0}
+                      tiers={priceTiers}
+                    />
+                    <CustomerPricing
+                      productId={product.id}
+                      basePrice={product.basePrice ?? 0}
+                      customerPrices={customerPrices}
+                    />
                   </div>
                 </TabsContent>
 
                 {/* Inventory Tab */}
                 <TabsContent value="inventory" className="mt-0 pt-6">
-                  <InventorySummary product={product} inventorySummary={inventorySummary} />
+                  <ProductInventoryTab
+                    productId={product.id}
+                    trackInventory={product.trackInventory}
+                    isSerialized={product.isSerialized}
+                  />
+                </TabsContent>
+
+                {/* Images Tab */}
+                <TabsContent value="images" className="mt-0 pt-6">
+                  <ProductImagesTab productId={product.id} />
+                </TabsContent>
+
+                {/* Attributes Tab */}
+                <TabsContent value="attributes" className="mt-0 pt-6">
+                  <ProductAttributesTab productId={product.id} />
                 </TabsContent>
 
                 {/* Activity Tab */}
                 <TabsContent value="activity" className="mt-0 pt-6">
-                  <UnifiedActivityTimeline
-                    activities={activities}
-                    isLoading={activitiesLoading}
-                    hasError={!!activitiesError}
-                    error={activitiesError || undefined}
-                    title="Activity Timeline"
-                    description="Complete history of product changes and updates"
-                    showFilters={true}
-                    emptyMessage="No activity recorded yet"
-                    emptyDescription="Product activities will appear here when changes are made."
-                  />
+                  <div className="space-y-4">
+                    {onLogActivity && (
+                      <div className="flex items-center justify-end">
+                        <Button size="sm" onClick={onLogActivity}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Log Activity
+                        </Button>
+                      </div>
+                    )}
+                    <UnifiedActivityTimeline
+                      activities={activities}
+                      isLoading={activitiesLoading}
+                      hasError={!!activitiesError}
+                      error={activitiesError || undefined}
+                      title="Activity Timeline"
+                      description="Complete history of product changes and updates"
+                      showFilters={true}
+                      emptyMessage="No activity recorded yet"
+                      emptyDescription="Product activities will appear here when changes are made."
+                    />
+                  </div>
                 </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* Animated Side Meta Panel */}
-            <AnimatePresence initial={false}>
-              {showMetaPanel && (
-                <motion.div
-                  key="meta-panel"
-                  initial={{ x: 80, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: 80, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-                  className="lg:border-l lg:border-border"
-                >
-                  <RightMetaPanel product={product} category={category} images={images} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          </Tabs>
         </div>
 
-        <Separator className="mt-auto" />
+        {/* Animated Side Meta Panel */}
+        <AnimatePresence initial={false}>
+          {showMetaPanel && (
+            <motion.div
+              key="meta-panel"
+              initial={{ x: 80, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 80, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+              className="border-l border-border pl-6"
+            >
+              <RightMetaPanel product={product} category={category} images={images} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

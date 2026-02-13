@@ -35,6 +35,7 @@ export function useSegments(options: UseSegmentsOptions = {}) {
     queryKey: queryKeys.customers.segments.list({ includeEmpty }),
     queryFn: async () => {
       const result = await segmentsFn({ data: { includeEmpty } });
+      if (result == null) throw new Error('Customer segments returned no data');
       return result;
     },
     enabled,
@@ -63,6 +64,7 @@ export function useSegmentDetail(options: UseSegmentDetailOptions) {
     queryKey: queryKeys.customers.segments.analytics(segmentId),
     queryFn: async () => {
       const result = await analyticsFn({ data: { segmentId } });
+      if (result == null) throw new Error('Segment analytics returned no data');
       return result;
     },
     enabled: enabled && !!segmentId,

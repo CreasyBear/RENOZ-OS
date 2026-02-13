@@ -23,15 +23,28 @@ export {
   useGenerateOrderDocument,
   useGenerateOrderQuote,
   useGenerateOrderInvoice,
+  useGenerateOrderProForma,
   useGenerateOrderPackingSlip,
   useGenerateOrderDeliveryNote,
   type OrderDocumentType,
   type GenerateOrderDocumentResult,
   type GenerateOrderQuoteInput,
   type GenerateOrderInvoiceInput,
+  type GenerateOrderProFormaInput,
   type GenerateOrderPackingSlipInput,
   type GenerateOrderDeliveryNoteInput,
 } from './use-generate-order-documents';
+
+// --- Generation (Sync - Project Documents) ---
+export {
+  useGenerateProjectDocument,
+  useGenerateWorkOrder,
+  useGenerateCompletionCertificate,
+  type ProjectDocumentType,
+  type GenerateProjectDocumentResult,
+  type GenerateWorkOrderInput,
+  type GenerateCompletionCertificateInput,
+} from './use-generate-project-documents';
 
 // --- History ---
 export {

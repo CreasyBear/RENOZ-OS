@@ -63,7 +63,9 @@ export interface LegacyCalendarConnection {
 // HELPER FUNCTIONS
 // ============================================================================
 
-function mapOAuthToLegacyConnection(oauthConnection: any): LegacyCalendarConnection {
+function mapOAuthToLegacyConnection(
+  oauthConnection: import('@/lib/schemas/oauth/connection').OAuthConnectionForSync
+): LegacyCalendarConnection {
   return {
     id: oauthConnection.id,
     organizationId: oauthConnection.organizationId,
@@ -73,10 +75,10 @@ function mapOAuthToLegacyConnection(oauthConnection: any): LegacyCalendarConnect
     calendarName: `${oauthConnection.provider} Calendar`,
     accessToken: oauthConnection.accessToken,
     refreshToken: oauthConnection.refreshToken || '',
-    expiresAt: oauthConnection.tokenExpiresAt || new Date(),
+    expiresAt: oauthConnection.tokenExpiresAt != null ? oauthConnection.tokenExpiresAt : new Date(),
     scope: oauthConnection.scopes || [],
     isActive: oauthConnection.isActive !== false,
-    lastSyncedAt: oauthConnection.lastSyncedAt,
+    lastSyncedAt: oauthConnection.lastSyncedAt ?? undefined,
     createdAt: oauthConnection.createdAt,
     updatedAt: oauthConnection.updatedAt,
   };

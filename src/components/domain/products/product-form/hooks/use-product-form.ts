@@ -18,6 +18,7 @@ export function useProductForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ProductFormValues>({
+    // zodResolver infers basePrice as unknown from z.coerce.number(); runtime is correct
     resolver: zodResolver(productFormSchema) as never,
     defaultValues: {
       sku: '',
@@ -41,6 +42,7 @@ export function useProductForm({
       specifications: null,
       reorderPoint: 0,
       reorderQty: 0,
+      warrantyPolicyId: null,
       ...defaultValues,
     },
   });

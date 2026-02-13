@@ -46,6 +46,7 @@ export {
   useDownloadUrl,
   useDownloadUrls,
   useTransformedImageUrl,
+  useFetchDownloadUrl,
   // Upload
   useUploadFile,
   // Delete

@@ -49,7 +49,7 @@ export interface ScannedItem {
 export interface OfflineAction {
   id: string;
   type: "receive" | "adjust" | "count" | "transfer";
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   createdAt: Date;
   synced: boolean;
 }

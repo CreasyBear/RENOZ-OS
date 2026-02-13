@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { cursorPaginationSchema } from "@/lib/db/pagination";
 
 // ============================================================================
 // ENUMS
@@ -56,6 +57,15 @@ export const suppressionListFiltersSchema = z.object({
 export type SuppressionListFilters = z.infer<
   typeof suppressionListFiltersSchema
 >;
+
+export const suppressionListCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    reason: suppressionReasonSchema.optional(),
+    search: z.string().optional(),
+    includeDeleted: z.boolean().optional().default(false),
+  })
+);
+export type SuppressionListCursorInput = z.infer<typeof suppressionListCursorSchema>;
 
 // ============================================================================
 // CHECK SUPPRESSION
@@ -162,3 +172,30 @@ export const suppressionListResultSchema = z.object({
   hasMore: z.boolean(),
 });
 export type SuppressionListResult = z.infer<typeof suppressionListResultSchema>;
+
+// ============================================================================
+// FORM SCHEMAS (UI validation)
+// ============================================================================
+
+export const addSuppressionFormSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  reason: suppressionReasonSchema,
+  notes: z.string().optional(),
+});
+export type AddSuppressionFormValues = z.infer<typeof addSuppressionFormSchema>;
+
+// ============================================================================
+// COMPONENT PROP TYPES
+// ============================================================================
+
+/**
+ * Form values for add suppression dialog (re-exported from schema)
+ */
+
+/**
+ * Props for AddSuppressionDialog component
+ */
+export interface AddSuppressionDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}

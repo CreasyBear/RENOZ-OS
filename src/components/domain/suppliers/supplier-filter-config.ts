@@ -7,35 +7,20 @@
  * @see docs/design-system/FILTER-STANDARDS.md
  */
 
-import {
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Star,
-  Factory,
-  Truck,
-  Store,
-  Wrench,
-  Package,
-} from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Star, Factory, Truck, Store, Wrench, Package } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
-import type { SupplierStatus, SupplierType } from "@/lib/schemas/suppliers";
+import type {
+  SupplierStatus,
+  SupplierType,
+  SupplierFilterBarState,
+} from "@/lib/schemas/suppliers";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface SupplierFiltersState extends Record<string, unknown> {
-  search: string;
-  status: SupplierStatus[];
-  supplierType: SupplierType[];
-  ratingRange: { min: number | null; max: number | null } | null;
-}
+export type SupplierFiltersState = SupplierFilterBarState;
 
 export const DEFAULT_SUPPLIER_FILTERS: SupplierFiltersState = {
   search: "",
-  status: [],
-  supplierType: [],
+  status: null,
+  supplierType: null,
   ratingRange: null,
 };
 
@@ -71,14 +56,14 @@ export const SUPPLIER_FILTER_CONFIG: FilterBarConfig<SupplierFiltersState> = {
     {
       key: "status",
       label: "Status",
-      type: "multi-select",
+      type: "select",
       options: SUPPLIER_STATUS_OPTIONS,
       primary: true,
     },
     {
       key: "supplierType",
       label: "Type",
-      type: "multi-select",
+      type: "select",
       options: SUPPLIER_TYPE_OPTIONS,
       primary: true,
     },
@@ -108,7 +93,7 @@ export const SUPPLIER_FILTER_CONFIG: FilterBarConfig<SupplierFiltersState> = {
       id: "active",
       label: "Active",
       icon: CheckCircle,
-      filters: { status: ["active"] },
+      filters: { status: "active" },
     },
     {
       id: "top-rated",
@@ -120,13 +105,13 @@ export const SUPPLIER_FILTER_CONFIG: FilterBarConfig<SupplierFiltersState> = {
       id: "manufacturers",
       label: "Manufacturers",
       icon: Factory,
-      filters: { supplierType: ["manufacturer"] },
+      filters: { supplierType: "manufacturer" },
     },
     {
       id: "needs-review",
       label: "Needs Review",
       icon: AlertTriangle,
-      filters: { status: ["suspended"], ratingRange: { min: null, max: 3 } },
+      filters: { status: "suspended", ratingRange: { min: null, max: 3 } },
     },
   ],
   labels: {

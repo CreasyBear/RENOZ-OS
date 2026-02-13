@@ -20,8 +20,17 @@ import {
   deleteSupplier,
   updateSupplierRating,
   getSupplierPerformance,
+  deletePriceList,
+  deletePriceAgreement,
+  cancelPriceChangeRequest,
 } from '@/server/functions/suppliers';
-import type { CreateSupplierInput, UpdateSupplierInput, UpdateSupplierRatingInput } from '@/lib/schemas/suppliers';
+import { listPriceLists } from '@/server/functions/suppliers/pricing';
+import type {
+  CreateSupplierInput,
+  UpdateSupplierInput,
+  UpdateSupplierRatingInput,
+  ListSuppliersResult,
+} from '@/lib/schemas/suppliers';
 
 // ============================================================================
 // QUERY KEYS
@@ -40,11 +49,64 @@ export interface UseSuppliersOptions extends Partial<SupplierFilters> {
 export function useSuppliers(options: UseSuppliersOptions = {}) {
   const { enabled = true, ...filters } = options;
 
-  return useQuery({
+  return useQuery<ListSuppliersResult>({
     queryKey: queryKeys.suppliers.suppliersListFiltered(filters),
-    queryFn: () => listSuppliers({ data: filters as Record<string, unknown> }),
+    queryFn: async () => {
+      const result = await listSuppliers({ data: filters as Record<string, unknown> });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
+  });
+}
+
+// ============================================================================
+// PRICE LISTS HOOK
+// ============================================================================
+
+export interface UsePriceListsOptions {
+  supplierId: string;
+  status?: 'active' | 'inactive' | 'pending' | 'expired';
+  page?: number;
+  pageSize?: number;
+  sortBy?: 'basePrice' | 'unitPrice' | 'expiryDate' | 'productName' | 'effectivePrice' | 'effectiveDate';
+  sortOrder?: 'asc' | 'desc';
+  enabled?: boolean;
+}
+
+/**
+ * Fetch price lists for a supplier.
+ */
+export function usePriceLists(options: UsePriceListsOptions) {
+  const {
+    supplierId,
+    status = 'active',
+    page = 1,
+    pageSize = 50,
+    sortBy = 'productName',
+    sortOrder = 'asc',
+    enabled = true,
+  } = options;
+
+  return useQuery({
+    queryKey: queryKeys.suppliers.priceLists.list({
+      supplierId,
+      status,
+      page,
+      pageSize,
+      sortBy,
+      sortOrder,
+    }),
+    queryFn: async () => {
+      const result = await listPriceLists({
+        data: { supplierId, status, page, pageSize, sortBy, sortOrder },
+      });
+      if (result == null) throw new Error('Price lists returned no data');
+      return result;
+    },
+    enabled: enabled && !!supplierId,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -57,7 +119,13 @@ export function useSupplier(id: string, options: { enabled?: boolean } = {}) {
 
   return useQuery({
     queryKey: queryKeys.suppliers.supplierDetail(id),
-    queryFn: () => getSupplier({ data: { id } }),
+    queryFn: async () => {
+      const result = await getSupplier({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -68,7 +136,13 @@ export function useSupplierPerformance(id: string, options: { enabled?: boolean 
 
   return useQuery({
     queryKey: queryKeys.suppliers.supplierPerformance(id),
-    queryFn: () => getSupplierPerformance({ data: { supplierId: id } }),
+    queryFn: async () => {
+      const result = await getSupplierPerformance({
+        data: { supplierId: id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 5 * 60 * 1000,
   });
@@ -108,8 +182,11 @@ export function useDeleteSupplier() {
 
   return useMutation({
     mutationFn: (input: { data: { id: string } }) => deleteSupplier(input),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.supplierDetail(variables.data.id),
+      });
     },
   });
 }
@@ -127,6 +204,39 @@ export function useUpdateSupplierRating() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.supplierPerformance(variables.data.id),
       });
+    },
+  });
+}
+
+export function useDeletePriceList() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { data: { id: string } }) => deletePriceList(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.lists() });
+    },
+  });
+}
+
+export function useDeletePriceAgreement() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { data: { id: string } }) => deletePriceAgreement(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.lists() });
+    },
+  });
+}
+
+export function useCancelPriceChangeRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { data: { id: string } }) => cancelPriceChangeRequest(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.lists() });
     },
   });
 }

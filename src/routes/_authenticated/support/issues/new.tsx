@@ -2,22 +2,26 @@
  * New Issue Page
  *
  * Form for creating a new support issue.
+ * Supports pre-population from warranty context via search params.
  *
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-004
+ * @design-system Contextual Navigation Pattern (DETAIL-VIEW-STANDARDS.md)
  */
-import { useState } from 'react';
+import { useState, useEffect, startTransition } from 'react';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SupportFormSkeleton } from '@/components/skeletons/support';
-import { ChevronLeft, TicketIcon } from 'lucide-react';
+import { ChevronLeft, TicketIcon, Shield, Package, User, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageLayout } from '@/components/layout';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -26,7 +30,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateIssue } from '@/hooks/support';
+import { useCustomer } from '@/hooks/customers';
+import { useWarranty } from '@/hooks/warranty';
 import type { IssueType, IssuePriority } from '@/lib/schemas/support/issues';
+import { z } from 'zod';
+
+// ============================================================================
+// SEARCH PARAMS SCHEMA
+// ============================================================================
+
+const newIssueSearchSchema = z.object({
+  customerId: z.string().optional(),
+  warrantyId: z.string().optional(),
+  productId: z.string().optional(),
+  serialNumber: z.string().optional(),
+});
 
 // ============================================================================
 // ROUTE
@@ -34,6 +52,7 @@ import type { IssueType, IssuePriority } from '@/lib/schemas/support/issues';
 
 export const Route = createFileRoute('/_authenticated/support/issues/new')({
   component: NewIssuePage,
+  validateSearch: newIssueSearchSchema,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/support/issues" />
   ),
@@ -88,14 +107,51 @@ const PRIORITY_OPTIONS: { value: IssuePriority; label: string; description: stri
 
 function NewIssuePage() {
   const navigate = useNavigate();
+  const { customerId: searchCustomerId, warrantyId, productId, serialNumber } = Route.useSearch();
   const createMutation = useCreateIssue();
+
+  // Fetch context data when provided via search params
+  const { data: customerData, isLoading: isCustomerLoading } = useCustomer({
+    id: searchCustomerId ?? '',
+    enabled: !!searchCustomerId,
+  });
+  const { data: warrantyData, isLoading: isWarrantyLoading } = useWarranty({
+    id: warrantyId ?? '',
+    enabled: !!warrantyId,
+  });
 
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<IssueType>('other');
   const [priority, setPriority] = useState<IssuePriority>('medium');
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState(searchCustomerId ?? '');
+
+  // Auto-populate description with warranty context
+  useEffect(() => {
+    if (warrantyData || serialNumber) {
+      const contextLines: string[] = [];
+      
+      if (warrantyData) {
+        contextLines.push(`Related Warranty: ${warrantyData.warrantyNumber}`);
+        contextLines.push(`Product: ${warrantyData.productName ?? 'Unknown Product'}`);
+      }
+      
+      if (serialNumber) {
+        contextLines.push(`Serial Number: ${serialNumber}`);
+      }
+      
+      if (contextLines.length > 0) {
+        const contextBlock = `\n\n---\n${contextLines.join('\n')}`;
+        startTransition(() => {
+          setDescription((prev) => {
+            if (prev.includes('---')) return prev;
+            return prev + contextBlock;
+          });
+        });
+      }
+    }
+  }, [warrantyData, serialNumber]);
 
   // Handle submit
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,6 +169,14 @@ function NewIssuePage() {
         type,
         priority,
         customerId: customerId || undefined,
+        // Store warranty context in metadata
+        metadata: warrantyId
+          ? {
+              warrantyId,
+              productId,
+              serialNumber: serialNumber ?? undefined,
+            }
+          : undefined,
       });
 
       toast.success('Issue created successfully');
@@ -125,6 +189,8 @@ function NewIssuePage() {
     }
   };
 
+  const isLoading = isCustomerLoading || isWarrantyLoading;
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
@@ -136,11 +202,12 @@ function NewIssuePage() {
         }
         description="Create a new support issue"
         actions={
-          <Link to="/support/issues">
-            <Button variant="outline">
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Back to Issues
-            </Button>
+          <Link
+            to="/support/issues"
+            className={cn(buttonVariants({ variant: 'outline' }))}
+          >
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Back to Issues
           </Link>
         }
       />
@@ -174,8 +241,13 @@ function NewIssuePage() {
                     placeholder="Detailed description of the issue..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    rows={6}
+                    rows={8}
                   />
+                  {warrantyId && (
+                    <p className="text-xs text-muted-foreground">
+                      Warranty information has been pre-populated in the description.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -226,20 +298,101 @@ function NewIssuePage() {
                   <CardTitle className="text-base">Customer</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <Label htmlFor="customerId">Customer ID (optional)</Label>
-                    <Input
-                      id="customerId"
-                      placeholder="Enter customer ID"
-                      value={customerId}
-                      onChange={(e) => setCustomerId(e.target.value)}
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      Link this issue to a specific customer
-                    </p>
-                  </div>
+                  {isLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">Loading...</span>
+                    </div>
+                  ) : searchCustomerId && customerData ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{customerData.name}</span>
+                      </div>
+                      {customerData.email && (
+                        <p className="text-sm text-muted-foreground ml-6">
+                          {customerData.email}
+                        </p>
+                      )}
+                      <input type="hidden" value={customerId} />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-muted-foreground"
+                        onClick={() => setCustomerId('')}
+                      >
+                        Remove customer
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="customerId">Customer ID</Label>
+                      <Input
+                        id="customerId"
+                        placeholder="Enter customer ID"
+                        value={customerId}
+                        onChange={(e) => setCustomerId(e.target.value)}
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        Link this issue to a specific customer
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+
+              {/* Context Card - Shows when coming from warranty */}
+              {warrantyId && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Warranty Context
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {isWarrantyLoading ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Loading warranty...</span>
+                      </div>
+                    ) : warrantyData ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">
+                            {warrantyData.warrantyNumber}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {warrantyData.status}
+                          </Badge>
+                        </div>
+                        {warrantyData.productName && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Package className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">
+                              {warrantyData.productName}
+                            </span>
+                          </div>
+                        )}
+                        {serialNumber && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">SN:</span>
+                            <span className="font-mono text-xs">{serialNumber}</span>
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground pt-1">
+                          This issue will be linked to the warranty
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Warranty information unavailable
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Submit Button */}
               <Button

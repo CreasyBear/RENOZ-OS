@@ -7,7 +7,7 @@
  * Implements the complete email sync workflow following midday's patterns.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { oauthConnections, oauthSyncLogs, oauthEmailMessages } from 'drizzle/schema/oauth';
@@ -18,6 +18,7 @@ import {
   type EmailSearchOptions,
 } from '@/lib/oauth/email-client';
 import { filterEmails, type EmailFilterOptions } from '@/lib/oauth/email-processing';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -137,7 +138,7 @@ export type SyncEmailsResponse = SyncEmailsResponseSuccess | SyncEmailsResponseE
  * Implements the complete email sync workflow with filtering, threading, and logging.
  */
 export async function syncEmails(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: SyncEmailsRequest
 ): Promise<SyncEmailsResponse> {
   const startTime = Date.now();
@@ -337,7 +338,7 @@ export async function syncEmails(
       completedAt: new Date(),
       });
     } catch (logError) {
-      console.error('Failed to log email sync failure:', logError);
+      logger.error('Failed to log email sync failure', logError as Error, {});
     }
 
     return {
@@ -384,7 +385,7 @@ export type SendEmailResponse = SendEmailResponseSuccess | SendEmailResponseErro
  * Send an email using the OAuth connection.
  */
 export async function sendEmail(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: SendEmailRequest
 ): Promise<SendEmailResponse> {
   try {
@@ -518,7 +519,7 @@ export async function sendEmail(
         completedAt: new Date(),
       });
     } catch (logError) {
-      console.error('Failed to log email send failure:', logError);
+      logger.error('Failed to log email send failure', logError as Error, {});
     }
 
     return {
@@ -532,7 +533,7 @@ export async function sendEmail(
 // STORAGE FUNCTIONS
 // ============================================================================
 
-function serializeEmailMessage(message: EmailMessage): Record<string, any> {
+function serializeEmailMessage(message: EmailMessage): Record<string, unknown> {
   return {
     ...message,
     attachments: message.attachments.map((attachment) => ({
@@ -551,7 +552,7 @@ function serializeEmailMessage(message: EmailMessage): Record<string, any> {
 }
 
 async function findExistingEmailMessage(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   externalId: string,
   connectionId: string
 ): Promise<{ id: string; receivedAt: Date | null } | null> {
@@ -568,8 +569,8 @@ async function findExistingEmailMessage(
 }
 
 async function storeEmailMessage(
-  db: PostgresJsDatabase<any>,
-  connection: any,
+  db: OAuthDatabase,
+  connection: { id: string; organizationId: string },
   message: EmailMessage
 ): Promise<void> {
   await db.insert(oauthEmailMessages).values({
@@ -586,8 +587,8 @@ async function storeEmailMessage(
 }
 
 async function updateEmailMessage(
-  db: PostgresJsDatabase<any>,
-  connection: any,
+  db: OAuthDatabase,
+  connection: { id: string; organizationId: string },
   message: EmailMessage
 ): Promise<void> {
   await db
@@ -612,7 +613,7 @@ function checkMessageNeedsUpdate(
 }
 
 async function storeSentEmail(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   params: {
     organizationId: string;
     connectionId: string;

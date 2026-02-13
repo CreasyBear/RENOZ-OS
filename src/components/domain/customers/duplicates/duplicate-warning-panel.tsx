@@ -193,7 +193,7 @@ export function DuplicateWarningPanel({
         <CheckCircle2 className="h-4 w-4 text-green-600" />
         <AlertTitle className="text-green-800">Confirmed</AlertTitle>
         <AlertDescription className="text-green-700">
-          You've confirmed this is a new customer.{' '}
+          You&apos;ve confirmed this is a new customer.{' '}
           <Button
             variant="link"
             className="p-0 h-auto text-green-700 underline"
@@ -211,7 +211,7 @@ export function DuplicateWarningPanel({
     return (
       <Alert className={cn('border-blue-200 bg-blue-50', className)}>
         <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-        <AlertTitle className="text-blue-800">Checking for duplicates...</AlertTitle>
+        <AlertTitle className="text-blue-800">Checking for duplicates…</AlertTitle>
         <AlertDescription className="text-blue-700">
           Searching for similar existing customers
         </AlertDescription>
@@ -316,7 +316,7 @@ export function CompactDuplicateWarning({
     return (
       <div className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
         <Loader2 className="h-3 w-3 animate-spin" />
-        Checking for duplicates...
+        Checking for duplicates…
       </div>
     )
   }

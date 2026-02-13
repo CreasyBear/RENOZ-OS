@@ -174,3 +174,50 @@ export const deletePaymentPlanSchema = z.object({
 });
 
 export type DeletePaymentPlanInput = z.infer<typeof deletePaymentPlanSchema>;
+
+// ============================================================================
+// RESPONSE TYPES (for server function return types)
+// ============================================================================
+
+/**
+ * Single installment response from getPaymentSchedule.
+ * Matches PaymentScheduleRecord structure from drizzle schema.
+ */
+export interface InstallmentResponse {
+  id: string;
+  organizationId: string;
+  orderId: string;
+  planType: PaymentPlanType;
+  installmentNo: number;
+  description: string | null;
+  dueDate: Date;
+  amount: number;
+  gstAmount: number;
+  status: InstallmentStatus;
+  paidAmount: number | null;
+  paidAt: Date | null;
+  paymentReference: string | null;
+  notes: string | null;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Payment schedule response from getPaymentSchedule server function.
+ * Contains summary information and list of installments.
+ */
+export interface PaymentScheduleResponse {
+  orderId: string;
+  planType: PaymentPlanType;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  installmentCount: number;
+  paidCount: number;
+  overdueCount: number;
+  nextDueDate: Date | null;
+  nextDueAmount: number | null;
+  installments: InstallmentResponse[];
+}

@@ -65,3 +65,6 @@ export type { TagsCellProps, TagItem } from "./tags-cell";
 
 export { SourceCell, SOURCE_CONFIG } from "./source-cell";
 export type { SourceCellProps, SourceType } from "./source-cell";
+
+export { ContactCell } from "./contact-cell";
+export type { ContactCellProps } from "./contact-cell";

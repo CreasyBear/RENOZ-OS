@@ -12,26 +12,20 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { isPast, isBefore, addDays } from 'date-fns';
 import {
   Edit,
   Copy,
   Printer,
-  MoreHorizontal,
   XCircle,
   Package,
   Send,
   CheckCircle,
+  ClipboardList,
+  Link2,
+  PanelRight,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +37,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { cn } from '@/lib/utils';
+import { EntityActivityLogger } from '@/components/shared/activity';
+import { EntityHeaderActions } from '@/components/shared';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
+import { GoodsReceiptDialog } from '../receive/goods-receipt-dialog';
 import { toastSuccess, toastError } from '@/hooks';
 import {
   usePurchaseOrder,
@@ -55,20 +52,29 @@ import {
   useCancelPurchaseOrder,
 } from '@/hooks/suppliers';
 import { useUnifiedActivities } from '@/hooks/activities';
-import type { PurchaseOrderStatus } from '@/lib/schemas/purchase-orders';
-import { PODetailView, type PurchaseOrderWithDetails } from '../views/po-detail-view';
-import { PO_STATUS_CONFIG, canEditPO, canDeletePO } from '../po-status-config';
+import { useTrackView } from '@/hooks/search';
+import { useAlertDismissals, generateAlertId } from '@/hooks/_shared/use-alert-dismissals';
+import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
+import {
+  purchaseOrderStatusEnum,
+  type PurchaseOrderStatus,
+} from '@/lib/schemas/purchase-orders';
+import { PODetailView } from '../views/po-detail-view';
+import type {
+  PurchaseOrderWithDetails,
+  PODetailHeaderConfig,
+  POAlert,
+} from '@/lib/schemas/purchase-orders';
+import { canEditPO, canDeletePO } from '../po-status-config';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface PODetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
-  /** Header action buttons */
-  headerActions: React.ReactNode;
-  /** Main content */
+  /** Header action buttons (optional - view may render its own header) */
+  headerActions?: React.ReactNode;
+  /** Main content (includes EntityHeader with actions) */
   content: React.ReactNode;
 }
 
@@ -79,8 +85,6 @@ export interface PODetailContainerProps {
   onBack?: () => void;
   /** Callback when user clicks edit */
   onEdit?: () => void;
-  /** Callback when receive goods action is triggered */
-  onReceiveGoods?: () => void;
   /** Render props pattern for layout composition */
   children?: (props: PODetailContainerRenderProps) => React.ReactNode;
   /** Additional CSS classes */
@@ -111,7 +115,6 @@ export function PODetailContainer({
   poId,
   onBack,
   onEdit,
-  onReceiveGoods,
   children,
   className,
 }: PODetailContainerProps) {
@@ -121,6 +124,7 @@ export function PODetailContainer({
   const [activeTab, setActiveTab] = useState('overview');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [showMetaPanel, setShowMetaPanel] = useState(true);
 
   // ---------------------------------------------------------------------------
@@ -128,6 +132,10 @@ export function PODetailContainer({
   // ---------------------------------------------------------------------------
   const handleToggleMetaPanel = useCallback(() => {
     setShowMetaPanel((prev) => !prev);
+  }, []);
+
+  const handleViewReceipts = useCallback(() => {
+    setActiveTab('receipts');
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -139,6 +147,8 @@ export function PODetailContainer({
     error,
     refetch,
   } = usePurchaseOrder(poId);
+  useTrackView('purchase_order', po?.id, po?.poNumber, po?.supplierName ?? undefined, `/purchase-orders/${poId}`);
+  useDetailBreadcrumb(`/purchase-orders/${poId}`, po ? (po.poNumber ?? poId) : undefined, !!po);
 
   const {
     activities,
@@ -147,6 +157,12 @@ export function PODetailContainer({
   } = useUnifiedActivities({
     entityType: 'purchase_order',
     entityId: poId,
+  });
+
+  const { onLogActivity, loggerProps } = useEntityActivityLogging({
+    entityType: 'purchase_order',
+    entityId: poId,
+    entityLabel: `Purchase Order: ${po?.poNumber ?? poId}`,
   });
 
   // ---------------------------------------------------------------------------
@@ -174,7 +190,12 @@ export function PODetailContainer({
   const handleApprove = useCallback(async () => {
     try {
       await approveMutation.mutateAsync({ id: poId });
-      toastSuccess('Purchase order approved');
+      toastSuccess('Purchase order approved', {
+        action: {
+          label: 'Receive Goods',
+          onClick: () => setReceiveDialogOpen(true),
+        },
+      });
     } catch {
       toastError('Failed to approve purchase order');
     }
@@ -192,7 +213,12 @@ export function PODetailContainer({
   const handleMarkAsOrdered = useCallback(async () => {
     try {
       await orderMutation.mutateAsync({ id: poId });
-      toastSuccess('Purchase order marked as ordered');
+      toastSuccess('Purchase order marked as ordered', {
+        action: {
+          label: 'Receive Goods',
+          onClick: () => setReceiveDialogOpen(true),
+        },
+      });
     } catch {
       toastError('Failed to mark as ordered');
     }
@@ -227,19 +253,16 @@ export function PODetailContainer({
   // ---------------------------------------------------------------------------
   // Derived State
   // ---------------------------------------------------------------------------
-  const statusConfig = useMemo(() => {
-    if (!po) return null;
-    return PO_STATUS_CONFIG[po.status as PurchaseOrderStatus] ?? PO_STATUS_CONFIG.draft;
-  }, [po]);
-
   const canEdit = useMemo(() => {
     if (!po) return false;
-    return canEditPO(po.status as PurchaseOrderStatus);
+    const parsed = purchaseOrderStatusEnum.safeParse(po.status);
+    return parsed.success && canEditPO(parsed.data);
   }, [po]);
 
   const canDelete = useMemo(() => {
     if (!po) return false;
-    return canDeletePO(po.status as PurchaseOrderStatus);
+    const parsed = purchaseOrderStatusEnum.safeParse(po.status);
+    return parsed.success && canDeletePO(parsed.data);
   }, [po]);
 
   const canReceive = useMemo(() => {
@@ -253,6 +276,46 @@ export function PODetailContainer({
   }, [po]);
 
   // ---------------------------------------------------------------------------
+  // Alerts (Zone 3) - must be before early returns (hooks rules)
+  // ---------------------------------------------------------------------------
+  const { dismiss, isAlertDismissed } = useAlertDismissals();
+
+  const alerts = useMemo<POAlert[]>(() => {
+    if (!po?.requiredDate) return [];
+    const due = new Date(po.requiredDate);
+    const now = new Date();
+    const isOverdue = isPast(due);
+    const isUrgent = !isOverdue && isBefore(due, addDays(now, 7));
+
+    const result: POAlert[] = [];
+    if (isOverdue) {
+      result.push({
+        id: generateAlertId('purchase_order', po.id, 'required_date_overdue'),
+        type: 'required_date_overdue',
+        severity: 'critical',
+        title: 'Required date overdue',
+        description: `This PO was required by ${po.requiredDate}. Consider following up with the supplier.`,
+      });
+    } else if (isUrgent) {
+      result.push({
+        id: generateAlertId('purchase_order', po.id, 'required_date_urgent'),
+        type: 'required_date_urgent',
+        severity: 'warning',
+        title: 'Required date approaching',
+        description: `Required by ${po.requiredDate}. Ensure delivery is on track.`,
+      });
+    }
+    return result.filter((a) => !isAlertDismissed(a.id));
+  }, [po, isAlertDismissed]);
+
+  const handleDismissAlert = useCallback(
+    (alertId: string) => {
+      dismiss(alertId);
+    },
+    [dismiss]
+  );
+
+  // ---------------------------------------------------------------------------
   // Render: Loading
   // ---------------------------------------------------------------------------
   if (isLoading) {
@@ -261,7 +324,6 @@ export function PODetailContainer({
       return (
         <>
           {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
             headerActions: <Skeleton className="h-10 w-32" />,
             content: loadingContent,
           })}
@@ -287,7 +349,6 @@ export function PODetailContainer({
       return (
         <>
           {children({
-            headerTitle: 'Purchase Order Not Found',
             headerActions: null,
             content: errorContent,
           })}
@@ -300,11 +361,14 @@ export function PODetailContainer({
   // ---------------------------------------------------------------------------
   // Transform data to match view props
   // ---------------------------------------------------------------------------
+  const parseResult = purchaseOrderStatusEnum.safeParse(po.status);
+  const status: PurchaseOrderStatus = parseResult.success ? parseResult.data : 'draft';
+
   const transformedPO: PurchaseOrderWithDetails = {
     id: po.id,
     poNumber: po.poNumber,
     supplierId: po.supplierId,
-    status: po.status as PurchaseOrderStatus,
+    status,
     orderDate: po.orderDate,
     requiredDate: po.requiredDate,
     expectedDeliveryDate: po.expectedDeliveryDate,
@@ -360,110 +424,115 @@ export function PODetailContainer({
   };
 
   // ---------------------------------------------------------------------------
-  // Render: Header Elements
+  // Render: Header Config (for EntityHeader in view)
   // ---------------------------------------------------------------------------
-  const StatusIcon = statusConfig?.icon ?? Package;
-
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <span className="text-xl font-semibold">{po.poNumber}</span>
-      {statusConfig && (
-        <Badge className={cn('gap-1')}>
-          <StatusIcon className="h-3 w-3" />
-          {statusConfig.label}
-        </Badge>
-      )}
-    </div>
-  );
-
   const isPending = submitMutation.isPending || approveMutation.isPending || orderMutation.isPending;
 
-  const headerActions = (
-    <div className="flex items-center gap-2">
-      {/* Primary Action Based on Status */}
-      {po.status === 'draft' && (
-        <Button onClick={handleSubmitForApproval} disabled={isPending}>
-          <Send className="h-4 w-4 mr-2" />
-          {submitMutation.isPending ? 'Submitting...' : 'Submit for Approval'}
-        </Button>
-      )}
-      {po.status === 'pending_approval' && (
-        <div className="flex gap-2">
-          <Button onClick={handleApprove} disabled={isPending}>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            {approveMutation.isPending ? 'Approving...' : 'Approve'}
-          </Button>
-          <Button variant="outline" onClick={handleReject} disabled={isPending}>
-            Reject
-          </Button>
-        </div>
-      )}
-      {po.status === 'approved' && (
-        <Button onClick={handleMarkAsOrdered} disabled={isPending}>
-          <Send className="h-4 w-4 mr-2" />
-          {orderMutation.isPending ? 'Processing...' : 'Mark as Ordered'}
-        </Button>
-      )}
-      {canReceive && onReceiveGoods && (
-        <Button onClick={onReceiveGoods}>
-          <Package className="h-4 w-4 mr-2" />
-          Receive Goods
-        </Button>
-      )}
+  const headerConfig: PODetailHeaderConfig = {
+    primaryAction:
+      po.status === 'draft'
+        ? {
+            label: submitMutation.isPending ? 'Submitting...' : 'Submit for Approval',
+            onClick: handleSubmitForApproval,
+            icon: <Send className="h-4 w-4 mr-2" />,
+            disabled: isPending,
+          }
+        : po.status === 'pending_approval'
+          ? {
+              label: approveMutation.isPending ? 'Approving...' : 'Approve',
+              onClick: handleApprove,
+              icon: <CheckCircle className="h-4 w-4 mr-2" />,
+              disabled: isPending,
+            }
+          : po.status === 'approved'
+            ? {
+                label: orderMutation.isPending ? 'Processing...' : 'Mark as Ordered',
+                onClick: handleMarkAsOrdered,
+                icon: <Send className="h-4 w-4 mr-2" />,
+                disabled: isPending,
+              }
+            : canReceive
+              ? {
+                  label: 'Receive Goods',
+                  onClick: () => setReceiveDialogOpen(true),
+                  icon: <Package className="h-4 w-4 mr-2" />,
+                }
+              : undefined,
+    secondaryActions: [
+      {
+        label: 'Receiving History',
+        onClick: handleViewReceipts,
+        icon: <ClipboardList className="h-4 w-4 mr-2" />,
+      },
+      {
+        label: 'Print',
+        onClick: handlePrint,
+        icon: <Printer className="h-4 w-4 mr-2" />,
+      },
+      {
+        label: 'Copy link',
+        onClick: () => navigator.clipboard.writeText(window.location.href),
+        icon: <Link2 className="h-4 w-4 mr-2" />,
+      },
+      {
+        label: 'Copy PO Number',
+        onClick: () => navigator.clipboard.writeText(po.poNumber),
+        icon: <Copy className="h-4 w-4 mr-2" />,
+      },
+      {
+        label: showMetaPanel ? 'Hide' : 'Show details panel',
+        onClick: handleToggleMetaPanel,
+        icon: <PanelRight className="h-4 w-4 mr-2" />,
+      },
+      ...(canEdit && onEdit
+        ? [
+            {
+              label: 'Edit Order',
+              onClick: onEdit,
+              icon: <Edit className="h-4 w-4 mr-2" />,
+            },
+          ]
+        : []),
+      ...(po.status === 'pending_approval'
+        ? [
+            {
+              label: 'Reject',
+              onClick: handleReject,
+              icon: <XCircle className="h-4 w-4 mr-2" />,
+              disabled: isPending,
+            },
+          ]
+        : []),
+      ...(canCancel
+        ? [
+            {
+              label: 'Cancel Order',
+              onClick: () => setCancelDialogOpen(true),
+              icon: <XCircle className="h-4 w-4 mr-2" />,
+              destructive: true,
+            },
+          ]
+        : []),
+    ],
+    onEdit: canEdit && onEdit ? onEdit : undefined,
+    onDelete: canDelete ? () => setDeleteDialogOpen(true) : undefined,
+  };
 
-      {/* More Actions */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">More actions</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {canEdit && onEdit && (
-            <DropdownMenuItem onClick={onEdit}>
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Order
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => navigator.clipboard.writeText(po.poNumber)}
-          >
-            <Copy className="h-4 w-4 mr-2" />
-            Copy PO Number
-          </DropdownMenuItem>
-          {canCancel && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setCancelDialogOpen(true)}
-                className="text-amber-600"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Cancel Order
-              </DropdownMenuItem>
-            </>
-          )}
-          {canDelete && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
+
+  // When using render props (layout pattern), actions go in PageLayout.Header.
+  // Pass headerConfig without actions so EntityHeader only shows identity.
+  const headerConfigForView = children
+    ? { ...headerConfig, primaryAction: undefined, secondaryActions: [], onEdit: undefined, onDelete: undefined }
+    : headerConfig;
+
+  const headerActions = children ? (
+    <EntityHeaderActions
+      primaryAction={headerConfig.primaryAction}
+      secondaryActions={headerConfig.secondaryActions}
+      onEdit={headerConfig.onEdit}
+      onDelete={headerConfig.onDelete}
+    />
+  ) : undefined;
 
   // ---------------------------------------------------------------------------
   // Render: Main Content
@@ -471,16 +540,22 @@ export function PODetailContainer({
   const content = (
     <>
       <PODetailView
+        alerts={alerts}
+        onDismissAlert={handleDismissAlert}
         po={transformedPO}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         showMetaPanel={showMetaPanel}
         onToggleMetaPanel={handleToggleMetaPanel}
+        headerConfig={headerConfigForView}
         activities={activities}
         activitiesLoading={activitiesLoading}
         activitiesError={activitiesError}
+        onLogActivity={onLogActivity}
         className={className}
       />
+
+      <EntityActivityLogger {...loggerProps} />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -527,6 +602,18 @@ export function PODetailContainer({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Goods Receipt Dialog */}
+      {canReceive && (
+        <GoodsReceiptDialog
+          open={receiveDialogOpen}
+          onOpenChange={setReceiveDialogOpen}
+          poId={po.id}
+          poNumber={po.poNumber}
+          items={transformedPO.items}
+          onReceiptComplete={() => setActiveTab('receipts')}
+        />
+      )}
     </>
   );
 
@@ -534,19 +621,10 @@ export function PODetailContainer({
   // Render: With Render Props or Default
   // ---------------------------------------------------------------------------
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
-  // Default rendering (standalone usage)
-  return (
-    <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
-        {headerActions}
-      </div>
-      {content}
-    </div>
-  );
+  return <div className={className}>{content}</div>;
 }
 
 export default PODetailContainer;

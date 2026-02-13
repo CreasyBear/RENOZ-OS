@@ -14,9 +14,9 @@
  * @see src/hooks/reports/use-targets.ts
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Trash2, Target, Filter, Calendar, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Target, Filter, Calendar } from 'lucide-react';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { toast } from 'sonner';
@@ -42,16 +42,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { useConfirmation } from '@/hooks';
+import { confirmations } from '@/hooks/_shared/use-confirmation';
 import { TargetForm } from '@/components/domain/settings/target-form';
 import { TargetProgressWidget } from '@/components/domain/dashboard/target-progress';
 import {
@@ -138,9 +130,8 @@ function TargetsSettingsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [formOpen, setFormOpen] = useState(false);
   const [editingTarget, setEditingTarget] = useState<TargetType | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [targetToDelete, setTargetToDelete] = useState<TargetType | null>(null);
-  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+  const confirmation = useConfirmation();
 
   // ============================================================================
   // DATA FETCHING
@@ -171,7 +162,7 @@ function TargetsSettingsPage() {
   const bulkDeleteMutation = useBulkDeleteTargets();
 
   // Extract data
-  const targets = targetsData?.items ?? [];
+  const targets = useMemo(() => targetsData?.items ?? [], [targetsData]);
   const pagination = targetsData?.pagination;
 
   // ============================================================================
@@ -193,15 +184,27 @@ function TargetsSettingsPage() {
     setFormOpen(true);
   }, []);
 
-  const handleDeleteClick = useCallback((target: ServerTarget) => {
-    // Convert string dates to Date objects
-    setTargetToDelete({
-      ...target,
-      startDate: new Date(target.startDate),
-      endDate: new Date(target.endDate),
-    });
-    setDeleteConfirmOpen(true);
-  }, []);
+  const handleDeleteClick = useCallback(
+    async (target: ServerTarget) => {
+      const { confirmed } = await confirmation.confirm(
+        confirmations.delete(target.name, 'target')
+      );
+      if (!confirmed) return;
+
+      try {
+        await deleteMutation.mutateAsync(target.id);
+        toast.success(`"${target.name}" has been deleted`);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(target.id);
+          return next;
+        });
+      } catch {
+        toast.error('Failed to delete target');
+      }
+    },
+    [confirmation, deleteMutation]
+  );
 
   const handleFormSubmit = useCallback(
     async (data: CreateTargetInput) => {
@@ -229,39 +232,25 @@ function TargetsSettingsPage() {
     [editingTarget, createMutation, updateMutation]
   );
 
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!targetToDelete) return;
+  const handleBulkDeleteClick = useCallback(
+    async () => {
+      if (selectedIds.size === 0) return;
 
-    try {
-      await deleteMutation.mutateAsync(targetToDelete.id);
-      toast.success(`"${targetToDelete.name}" has been deleted`);
-      setDeleteConfirmOpen(false);
-      setTargetToDelete(null);
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(targetToDelete.id);
-        return next;
-      });
-    } catch {
-      toast.error('Failed to delete target');
-    }
-  }, [targetToDelete, deleteMutation]);
+      const { confirmed } = await confirmation.confirm(
+        confirmations.bulkDelete(selectedIds.size, 'targets')
+      );
+      if (!confirmed) return;
 
-  const handleBulkDeleteClick = useCallback(() => {
-    if (selectedIds.size === 0) return;
-    setBulkDeleteConfirmOpen(true);
-  }, [selectedIds]);
-
-  const handleBulkDeleteConfirm = useCallback(async () => {
-    try {
-      await bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds) });
-      toast.success(`${selectedIds.size} targets deleted`);
-      setBulkDeleteConfirmOpen(false);
-      setSelectedIds(new Set());
-    } catch {
-      toast.error('Failed to delete targets');
-    }
-  }, [selectedIds, bulkDeleteMutation]);
+      try {
+        await bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds) });
+        toast.success(`${selectedIds.size} targets deleted`);
+        setSelectedIds(new Set());
+      } catch {
+        toast.error('Failed to delete targets');
+      }
+    },
+    [selectedIds, confirmation, bulkDeleteMutation]
+  );
 
   const handleSelectAll = useCallback(
     (checked: boolean) => {
@@ -356,7 +345,7 @@ function TargetsSettingsPage() {
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-sm font-medium">Filters</CardTitle>
               </div>
-              {selectedIds.size > 0 && (
+              {selectedIds.size >= 2 && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -552,59 +541,6 @@ function TargetsSettingsPage() {
         onSubmit={handleFormSubmit}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
       />
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Target</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{targetToDelete?.name}"? This
-              action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Bulk Delete Confirmation */}
-      <AlertDialog
-        open={bulkDeleteConfirmOpen}
-        onOpenChange={setBulkDeleteConfirmOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.size} Targets</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedIds.size} targets? This
-              action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleBulkDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {bulkDeleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PageLayout>
   );
 }

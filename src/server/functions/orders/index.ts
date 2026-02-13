@@ -1,5 +1,7 @@
 // Barrel exports for orders domain
 export * from './order-amendments';
+export * from './order-payments';
+export * from './order-picking';
 export * from './order-shipments';
 export * from './order-templates';
 export * from './orders';

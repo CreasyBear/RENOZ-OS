@@ -11,20 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, ArrowDown, User, Clock } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import type { EscalationHistoryItem } from '@/lib/schemas/support/escalation';
 
-export interface EscalationHistoryItem {
-  id: string;
-  action: 'escalate' | 'de_escalate';
-  reason: string | null;
-  createdAt: Date;
-  performedByUserId: string;
-  escalatedToUserId: string | null;
-  previousAssigneeId: string | null;
-  escalationRuleId: string | null;
-  // Populated by join
-  performedByUser?: { name: string | null; email: string } | null;
-  escalatedToUser?: { name: string | null; email: string } | null;
-}
+export type { EscalationHistoryItem };
 
 interface EscalationTimelineProps {
   history: EscalationHistoryItem[];

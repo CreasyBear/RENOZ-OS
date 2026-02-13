@@ -17,11 +17,8 @@ import {
   orderLineItems,
   customers,
   addresses,
-  organizations,
-  type OrganizationBranding,
-  type OrganizationAddress,
-  type OrganizationSettings,
 } from "drizzle/schema";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -30,9 +27,9 @@ import {
   generateStoragePath,
   calculateChecksum,
   type InvoiceDocumentData,
-  type DocumentOrganization,
   type DocumentPaymentDetails,
 } from "@/lib/documents";
+import { buildInvoicePaymentUrl } from "@/lib/documents/urls";
 
 // ============================================================================
 // TYPES
@@ -57,18 +54,6 @@ export interface GenerateInvoicePdfPayload {
 
 const STORAGE_BUCKET = "documents";
 const DEFAULT_PAYMENT_TERMS_DAYS = 30;
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Generate the payment URL for an invoice
- */
-function getInvoicePaymentUrl(orderId: string): string {
-  const baseUrl = process.env.APP_URL || "https://app.renoz.com.au";
-  return `${baseUrl}/invoices/${orderId}/pay`;
-}
 
 // ============================================================================
 // TASK DEFINITION
@@ -172,60 +157,9 @@ export const generateInvoicePdf = task({
       })),
     };
 
-    // Step 2: Fetch organization details with payment info
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
-    const address = org.address as OrganizationAddress | null;
-    const branding = org.branding as OrganizationBranding | null;
-    const settings = org.settings as OrganizationSettings | null;
-
-    const orgData: DocumentOrganization = {
-      id: org.id,
-      name: org.name,
-      email: org.email,
-      phone: org.phone,
-      website: org.website || branding?.websiteUrl,
-      taxId: org.abn,
-      currency: org.currency || "AUD",
-      locale: org.locale || "en-AU",
-      address: address
-        ? {
-            addressLine1: address.street1,
-            addressLine2: address.street2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: branding?.logoUrl,
-        primaryColor: branding?.primaryColor,
-        secondaryColor: branding?.secondaryColor,
-      },
-    };
-
-    const defaultPaymentTerms = settings?.defaultPaymentTerms;
+    // Step 2: Fetch organization details (with logo pre-fetched for PDF)
+    const orgData = await fetchOrganizationForDocument(organizationId);
+    const defaultPaymentTerms = orgData.settings?.defaultPaymentTerms;
 
     // Step 3: Fetch customer details with primary billing address
     const [customer] = await db
@@ -312,7 +246,7 @@ export const generateInvoicePdf = task({
     };
 
     // Step 4: Generate QR code for payment
-    const paymentUrl = getInvoicePaymentUrl(orderId);
+    const paymentUrl = buildInvoicePaymentUrl(orderId);
     const qrCodeDataUrl = await generateQRCode(paymentUrl, {
       width: 240,
       margin: 0,

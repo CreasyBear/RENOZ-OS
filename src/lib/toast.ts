@@ -125,6 +125,8 @@ export const toast = {
 };
 
 // ============================================================================
+import { logger } from '@/lib/logger';
+
 // LEGACY COMPATIBILITY
 // ============================================================================
 
@@ -133,7 +135,7 @@ export const toast = {
  * @deprecated Use toast.success() instead
  */
 export function toastSuccess(message: string, options?: ToastOptions) {
-  console.warn('toastSuccess is deprecated. Use toast.success() instead.');
+  logger.warn('toastSuccess is deprecated. Use toast.success() instead.');
   return toast.success(message, options);
 }
 
@@ -142,7 +144,7 @@ export function toastSuccess(message: string, options?: ToastOptions) {
  * @deprecated Use toast.error() instead
  */
 export function toastError(message: string, options?: ToastOptions) {
-  console.warn('toastError is deprecated. Use toast.error() instead.');
+  logger.warn('toastError is deprecated. Use toast.error() instead.');
   return toast.error(message, options);
 }
 

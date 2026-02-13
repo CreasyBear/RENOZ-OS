@@ -86,9 +86,10 @@ export {
 export {
   ProjectDetailView,
   type ProjectDetailViewProps,
-  type ProjectDetailData,
-  type ProjectMember,
 } from './views/project-detail-view';
+
+// Re-export types from schemas (single source of truth)
+export type { ProjectDetailData, ProjectMember } from '@/lib/schemas/jobs/project-detail';
 
 // --- Tab Components (for use with ProjectDetailView) ---
 export {
@@ -104,6 +105,7 @@ export type { ProjectTabData } from './project-detail-tabs';
 
 // --- Timeline & Overview Components ---
 export { ProgressCircle, StatusProgressCircle } from './progress-circle';
+export { ProjectLifecycleProgress } from './project-lifecycle-progress';
 export { ProjectTimelineGantt } from './project-timeline-gantt';
 export {
   ScopeColumns,
@@ -133,6 +135,10 @@ export { ProjectFilesTab as ProjectFilesTabEnhanced } from './project-files-tab'
 
 // --- Projects Dashboard ---
 export { ProjectsDashboard } from './projects-dashboard';
+export {
+  ProjectsTriageSection,
+  type ProjectsTriageSectionProps,
+} from './projects-triage-section';
 
 // --- Checklists (Migrated from jobs/templates) ---
 export {

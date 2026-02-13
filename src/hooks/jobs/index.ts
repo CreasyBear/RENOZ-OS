@@ -77,6 +77,8 @@ export {
   useJobTasksKanban,
   useUpdateJobTaskStatus,
   useJobTaskKanbanConfig,
+  // My Tasks (cross-project)
+  useMyTasksKanban,
 } from './use-job-tasks';
 
 export type {
@@ -86,6 +88,8 @@ export type {
   UseJobTasksKanbanOptions,
   UseUpdateJobTaskStatusOptions,
   KanbanTask,
+  MyTaskKanban,
+  UseMyTasksKanbanOptions,
 } from './use-job-tasks';
 
 // ============================================================================
@@ -174,6 +178,7 @@ export {
   useProjects,
   useAllProjects,
   useProjectsCursor,
+  useLoadProjectOptions,
   useProject,
   useProjectsByCustomer,
   useCreateProject,
@@ -195,10 +200,13 @@ export {
   useSiteVisitsByProject,
   useSiteVisitsByInstaller,
   useSchedule,
+  usePastDueSiteVisits,
   useSiteVisit,
   useCreateSiteVisit,
   useUpdateSiteVisit,
+  useRescheduleSiteVisit,
   useDeleteSiteVisit,
+  useCancelSiteVisit,
   useCheckIn,
   useCheckOut,
   useCustomerSignOff,
@@ -232,6 +240,8 @@ export {
   useCreateInstallerProfile,
   useUpdateInstallerProfile,
   useDeleteInstallerProfile,
+  // Bulk mutations
+  useUpdateInstallerStatusBatch,
   // Certification mutations
   useCreateCertification,
   useUpdateCertification,
@@ -251,8 +261,10 @@ export {
   useDeleteBlockout,
 } from './use-installers';
 
+export type { UseInstallersOptions } from './use-installers';
+
+// Installer output types - canonical source: @/lib/schemas/jobs/installers
 export type {
-  UseInstallersOptions,
   InstallerListItem,
   InstallerDetail,
   Certification,
@@ -261,8 +273,8 @@ export type {
   Blockout,
   AvailabilityResult,
   WorkloadResult,
-  Suggestion,
-} from './use-installers';
+  InstallerSuggestion,
+} from '@/lib/schemas/jobs/installers';
 
 // ============================================================================
 // SPRINT-03: WORKSTREAMS, NOTES, FILES
@@ -321,6 +333,10 @@ export {
   useAddBomItem,
   useUpdateBomItem,
   useRemoveBomItem,
+  useRemoveBomItems,
+  useUpdateBomItemsStatus,
+  useImportBomFromCsv,
+  useImportBomFromOrder,
 } from './use-project-bom';
 
 // ============================================================================
@@ -331,8 +347,52 @@ export {
   useProjectTasks,
   useCreateTask as useCreateProjectTask,
   useUpdateProjectTask,
+  useUpdateProjectTaskStatus,
   useDeleteProjectTask,
 } from './use-project-tasks';
+
+// ============================================================================
+// PROJECT DETAIL (Composite + Separated Hooks)
+// ============================================================================
+
+// Composite hook (backward compatible)
+export {
+  useProjectDetail,
+  type UseProjectDetailReturn,
+  type ProjectDetailActions,
+  type ProjectDetailData,
+  type ProjectTeamMember,
+} from './use-project-detail';
+
+// Data-only hook (recommended for new code)
+export {
+  useProjectDetailData,
+  type UseProjectDetailDataReturn,
+  type ProjectDetailActions as ProjectDetailDataActions,
+} from './use-project-detail-data';
+
+// UI state hook (recommended for new code)
+export {
+  useProjectDetailUI,
+  type ProjectDetailUIState,
+  type UseProjectDetailUIOptions,
+} from './use-project-detail-ui';
+
+// ============================================================================
+// PROJECT ALERTS
+// ============================================================================
+
+export {
+  useProjectAlerts,
+  type UseProjectAlertsOptions,
+  type UseProjectAlertsReturn,
+} from './use-project-alerts';
+
+export type {
+  ProjectAlert,
+  ProjectAlertType,
+  AlertSeverity,
+} from '@/lib/schemas/jobs/project-alerts';
 
 // ============================================================================
 // RE-EXPORTED TYPES

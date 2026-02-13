@@ -232,11 +232,12 @@ export function generateForecast(
     case "exponential_smoothing":
       baseForecast = exponentialSmoothing(data, alpha);
       break;
-    case "double_exponential":
+    case "double_exponential": {
       const des = doubleExponentialSmoothing(data, alpha, beta);
       baseForecast = des.forecast;
       trend = des.trend;
       break;
+    }
     case "seasonal":
       baseForecast = exponentialSmoothing(data, alpha);
       break;

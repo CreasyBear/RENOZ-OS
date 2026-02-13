@@ -29,7 +29,7 @@ import {
 } from '@/components/shared/forms';
 import { useCreateNote, useUpdateNote } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
-import type { ProjectNote } from 'drizzle/schema';
+import type { ProjectNote } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // SCHEMAS

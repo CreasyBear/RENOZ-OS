@@ -26,10 +26,12 @@ import {
   createCustomReportSchema,
   updateCustomReportSchema,
   listCustomReportsSchema,
+  listCustomReportsCursorSchema,
   getCustomReportSchema,
   executeCustomReportSchema,
   type ReportResult,
 } from '@/lib/schemas/reports/custom-reports';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 
 // ============================================================================
 // CUSTOM REPORTS CRUD
@@ -90,6 +92,38 @@ export const listCustomReports = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(totalItems / pageSize),
       },
     };
+  });
+
+/**
+ * List custom reports with cursor pagination (recommended for large datasets).
+ */
+export const listCustomReportsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listCustomReportsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.report.viewOperations });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, isShared } = data;
+
+    const conditions = [eq(customReports.organizationId, ctx.organizationId)];
+    if (search) conditions.push(ilike(customReports.name, containsPattern(search)));
+    if (isShared !== undefined) conditions.push(eq(customReports.isShared, isShared));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(customReports.createdAt, customReports.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const items = await db
+      .select()
+      .from(customReports)
+      .where(and(...conditions))
+      .orderBy(orderDir(customReports.createdAt), orderDir(customReports.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
   });
 
 /**

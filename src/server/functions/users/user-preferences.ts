@@ -13,7 +13,9 @@ import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { userPreferences } from 'drizzle/schema';
-import { withAuth } from '@/lib/server/protected';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { withAuth, withInternalAuth } from '@/lib/server/protected';
+import { NotFoundError } from '@/lib/server/errors';
 import {
   setPreferenceSchema,
   setPreferencesSchema,
@@ -21,6 +23,7 @@ import {
   resetPreferencesSchema,
   type Preference,
 } from '@/lib/schemas/users';
+import type { JsonValue } from '@/lib/schemas/_shared/patterns';
 import { PREFERENCE_CATEGORIES } from 'drizzle/schema';
 
 // ============================================================================
@@ -36,7 +39,10 @@ export const getPreferences = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    const conditions = [eq(userPreferences.userId, ctx.user.id)];
+    const conditions = [
+      eq(userPreferences.userId, ctx.user.id),
+      eq(userPreferences.organizationId, ctx.organizationId),
+    ];
     if (data.category) {
       conditions.push(eq(userPreferences.category, data.category));
     }
@@ -56,12 +62,12 @@ export const getPreferences = createServerFn({ method: 'GET' })
       .orderBy(userPreferences.category, userPreferences.key);
 
     // Group by category for easier consumption
-    const grouped: Record<string, Record<string, any>> = {};
+    const grouped: Record<string, Record<string, JsonValue>> = {};
     for (const pref of preferences) {
       if (!grouped[pref.category]) {
         grouped[pref.category] = {};
       }
-      grouped[pref.category][pref.key] = pref.value;
+      grouped[pref.category][pref.key] = pref.value as JsonValue;
     }
 
     return {
@@ -101,6 +107,7 @@ export const getPreference = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(userPreferences.userId, ctx.user.id),
+          eq(userPreferences.organizationId, ctx.organizationId),
           eq(userPreferences.category, data.category),
           eq(userPreferences.key, data.key)
         )
@@ -108,7 +115,8 @@ export const getPreference = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!preference) {
-      return null;
+      setResponseStatus(404);
+      throw new NotFoundError('User preference not found', 'userPreference');
     }
 
     return preference as Preference;
@@ -133,6 +141,7 @@ export const setPreference = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(userPreferences.userId, ctx.user.id),
+          eq(userPreferences.organizationId, ctx.organizationId),
           eq(userPreferences.category, data.category),
           eq(userPreferences.key, data.key)
         )
@@ -146,7 +155,7 @@ export const setPreference = createServerFn({ method: 'POST' })
         .set({
           value: data.value,
           updatedBy: ctx.user.id,
-          version: sql`version + 1`,
+          version: sql<number>`${userPreferences.version} + 1`,
         })
         .where(eq(userPreferences.id, existing.id))
         .returning();
@@ -156,7 +165,7 @@ export const setPreference = createServerFn({ method: 'POST' })
         userId: updated.userId,
         category: updated.category,
         key: updated.key,
-        value: updated.value,
+        value: updated.value as Preference["value"],
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
       };
@@ -165,6 +174,7 @@ export const setPreference = createServerFn({ method: 'POST' })
       const [created] = await db
         .insert(userPreferences)
         .values({
+          organizationId: ctx.organizationId,
           userId: ctx.user.id,
           category: data.category,
           key: data.key,
@@ -179,7 +189,7 @@ export const setPreference = createServerFn({ method: 'POST' })
         userId: created.userId,
         category: created.category,
         key: created.key,
-        value: created.value,
+        value: created.value as Preference["value"],
         createdAt: created.createdAt,
         updatedAt: created.updatedAt,
       };
@@ -208,6 +218,7 @@ export const setPreferences = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(userPreferences.userId, ctx.user.id),
+            eq(userPreferences.organizationId, ctx.organizationId),
             eq(userPreferences.category, pref.category),
             eq(userPreferences.key, pref.key)
           )
@@ -220,7 +231,7 @@ export const setPreferences = createServerFn({ method: 'POST' })
           .set({
             value: pref.value,
             updatedBy: ctx.user.id,
-            version: sql`version + 1`,
+            version: sql<number>`${userPreferences.version} + 1`,
           })
           .where(eq(userPreferences.id, existing.id))
           .returning();
@@ -230,7 +241,7 @@ export const setPreferences = createServerFn({ method: 'POST' })
           userId: updated.userId,
           category: updated.category,
           key: updated.key,
-          value: updated.value,
+          value: updated.value as Preference["value"],
           createdAt: updated.createdAt,
           updatedAt: updated.updatedAt,
         });
@@ -238,6 +249,7 @@ export const setPreferences = createServerFn({ method: 'POST' })
         const [created] = await db
           .insert(userPreferences)
           .values({
+            organizationId: ctx.organizationId,
             userId: ctx.user.id,
             category: pref.category,
             key: pref.key,
@@ -252,7 +264,7 @@ export const setPreferences = createServerFn({ method: 'POST' })
           userId: created.userId,
           category: created.category,
           key: created.key,
-          value: created.value,
+          value: created.value as Preference["value"],
           createdAt: created.createdAt,
           updatedAt: created.updatedAt,
         });
@@ -275,7 +287,10 @@ export const resetPreferences = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    const conditions = [eq(userPreferences.userId, ctx.user.id)];
+    const conditions = [
+      eq(userPreferences.userId, ctx.user.id),
+      eq(userPreferences.organizationId, ctx.organizationId),
+    ];
     if (data.category) {
       conditions.push(eq(userPreferences.category, data.category));
     }
@@ -313,6 +328,7 @@ export const deletePreference = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(userPreferences.userId, ctx.user.id),
+          eq(userPreferences.organizationId, ctx.organizationId),
           eq(userPreferences.category, data.category),
           eq(userPreferences.key, data.key)
         )
@@ -333,6 +349,7 @@ export const deletePreference = createServerFn({ method: 'POST' })
  * Useful for UI dropdowns and validation.
  */
 export const getPreferenceCategories = createServerFn({ method: 'GET' }).handler(async () => {
+  await withAuth();
   return Object.values(PREFERENCE_CATEGORIES);
 });
 
@@ -408,16 +425,20 @@ export const initializeUserPreferences = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       userId: z.string().uuid(),
+      organizationId: z.string().uuid(),
       role: z.string(),
     })
   )
   .handler(async ({ data }) => {
+    await withInternalAuth();
+
     const defaults = getDefaultPreferences(data.role);
 
     const created = await db
       .insert(userPreferences)
       .values(
         defaults.map((pref) => ({
+          organizationId: data.organizationId,
           userId: data.userId,
           category: pref.category,
           key: pref.key,

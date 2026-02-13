@@ -4,24 +4,17 @@
  * Personalized user settings with category-based organization.
  * Features auto-save with success toast notifications.
  *
- * Categories:
- * - Appearance: Theme, accent color, density
- * - Notifications: Email, in-app, push preferences
- * - Localization: Language, timezone, date/number formats
- * - Dashboard: Default view, widgets, refresh interval
- * - Data Display: Table density, page sizes
- * - Accessibility: Motion, font size, contrast
- * - Shortcuts: Keyboard shortcut preferences
+ * ARCHITECTURE: Route renders container, container fetches via hooks.
  *
- * @see src/server/functions/user-preferences.ts for server functions
+ * @see src/hooks/users/use-preferences.ts for hooks
  */
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useServerFn } from '@tanstack/react-start';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
-import { getPreferences, setPreference } from '@/server/functions/users/user-preferences';
-import { PREFERENCE_CATEGORIES, type PreferenceCategory } from 'drizzle/schema';
+import { usePreferences, useSetPreference } from '@/hooks/users';
+import { PREFERENCE_CATEGORIES, type PreferenceCategory } from '@/lib/schemas/users/users';
+import { toast } from '@/hooks';
 
 // UI Components
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +28,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { toast } from '@/hooks';
 
 // Icons
 import {
@@ -49,17 +41,13 @@ import {
   Loader2,
 } from 'lucide-react';
 
-// Route definition
-export const Route = createFileRoute('/_authenticated/settings/preferences' as any)({
+// Route definition - no loader, data fetched in component via hooks
+export const Route = createFileRoute('/_authenticated/settings/preferences')({
   component: PreferencesSettings,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/settings" />
   ),
   pendingComponent: () => <SettingsCardsSkeleton sections={3} showSidebar />,
-  loader: async () => {
-    const result = await getPreferences({ data: {} });
-    return { preferences: result.grouped };
-  },
 });
 
 // Category metadata
@@ -109,29 +97,30 @@ const CATEGORIES = [
 ];
 
 function PreferencesSettings() {
-  const loaderData = (Route.useLoaderData as any)();
+  const { data: preferences, isLoading } = usePreferences();
+  const setPreferenceMutation = useSetPreference();
+
   const [activeCategory, setActiveCategory] = useState<PreferenceCategory>(
     PREFERENCE_CATEGORIES.APPEARANCE
   );
-  const [preferences, setPreferences] = useState<Record<string, Record<string, any>>>(
-    loaderData?.preferences || {}
-  );
+  const [localPreferences, setLocalPreferences] = useState<Record<string, Record<string, unknown>>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
-  const setPreferenceFn = useServerFn(setPreference);
+  // Merge server preferences with local optimistic updates
+  const mergedPreferences = { ...preferences, ...localPreferences };
 
   // Get value with default fallback
-  const getValue = (category: string, key: string, defaultValue: any) => {
-    return preferences[category]?.[key] ?? defaultValue;
+  const getValue = (category: string, key: string, defaultValue: unknown) => {
+    return mergedPreferences[category]?.[key] ?? defaultValue;
   };
 
   // Save preference with auto-save and toast
-  const savePref = async (category: string, key: string, value: any) => {
+  const savePref = async (category: string, key: string, value: unknown) => {
     const saveKey = `${category}.${key}`;
     setSaving(saveKey);
 
     // Optimistic update
-    setPreferences((prev) => ({
+    setLocalPreferences((prev) => ({
       ...prev,
       [category]: {
         ...prev[category],
@@ -140,17 +129,32 @@ function PreferencesSettings() {
     }));
 
     try {
-      await setPreferenceFn({ data: { category, key, value } });
+      await setPreferenceMutation.mutateAsync({
+        category,
+        key,
+        value: value as string | number | boolean | unknown[] | Record<string, unknown> | null,
+      });
       toast.success('Preference saved', { duration: 2000 });
+      // Clear local state on success (server state will be authoritative)
+      setLocalPreferences((prev) => {
+        const updated = { ...prev };
+        if (updated[category]) {
+          delete updated[category][key];
+          if (Object.keys(updated[category]).length === 0) {
+            delete updated[category];
+          }
+        }
+        return updated;
+      });
     } catch {
       // Revert on error
-      setPreferences((prev) => ({
-        ...prev,
-        [category]: {
-          ...prev[category],
-          [key]: loaderData?.preferences?.[category]?.[key],
-        },
-      }));
+      setLocalPreferences((prev) => {
+        const updated = { ...prev };
+        if (updated[category]) {
+          delete updated[category][key];
+        }
+        return updated;
+      });
       toast.error('Failed to save preference');
     } finally {
       setSaving(null);
@@ -167,7 +171,7 @@ function PreferencesSettings() {
           {saving === saveKey && <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />}
           <Switch
             id={saveKey}
-            checked={getValue(category, key, defaultValue)}
+            checked={getValue(category, key, defaultValue) as boolean}
             onCheckedChange={(checked) => savePref(category, key, checked)}
           />
         </div>
@@ -189,7 +193,7 @@ function PreferencesSettings() {
         <div className="flex items-center gap-2">
           {saving === saveKey && <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />}
           <Select
-            value={getValue(category, key, defaultValue)}
+            value={getValue(category, key, defaultValue) as string}
             onValueChange={(value) => savePref(category, key, value)}
           >
             <SelectTrigger className="w-[180px]">
@@ -523,6 +527,11 @@ function PreferencesSettings() {
 
   const activeCategoryMeta = CATEGORIES.find((c) => c.id === activeCategory);
 
+  // Show loading skeleton while fetching preferences
+  if (isLoading) {
+    return <SettingsCardsSkeleton sections={3} showSidebar />;
+  }
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
@@ -530,46 +539,45 @@ function PreferencesSettings() {
         description="Personalize your experience. Changes are saved automatically."
       />
       <PageLayout.Content>
+        <div className="flex gap-6">
+          {/* Sidebar */}
+          <div className="w-64 flex-shrink-0">
+            <nav className="space-y-1">
+              {CATEGORIES.map((category) => {
+                const Icon = category.icon;
+                const isActive = activeCategory === category.id;
+                return (
+                  <button
+                    key={category.id}
+                    onClick={() => setActiveCategory(category.id)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-sm font-medium">{category.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-      <div className="flex gap-6">
-        {/* Sidebar */}
-        <div className="w-64 flex-shrink-0">
-          <nav className="space-y-1">
-            {CATEGORIES.map((category) => {
-              const Icon = category.icon;
-              const isActive = activeCategory === category.id;
-              return (
-                <button
-                  key={category.id}
-                  onClick={() => setActiveCategory(category.id)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-sm font-medium">{category.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+          {/* Content */}
+          <div className="max-w-2xl flex-1">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {activeCategoryMeta && <activeCategoryMeta.icon className="h-5 w-5" />}
+                  {activeCategoryMeta?.label}
+                </CardTitle>
+                <CardDescription>{activeCategoryMeta?.description}</CardDescription>
+              </CardHeader>
+              <CardContent>{renderCategoryContent()}</CardContent>
+            </Card>
+          </div>
         </div>
-
-        {/* Content */}
-        <div className="max-w-2xl flex-1">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {activeCategoryMeta && <activeCategoryMeta.icon className="h-5 w-5" />}
-                {activeCategoryMeta?.label}
-              </CardTitle>
-              <CardDescription>{activeCategoryMeta?.description}</CardDescription>
-            </CardHeader>
-            <CardContent>{renderCategoryContent()}</CardContent>
-          </Card>
-        </div>
-      </div>
       </PageLayout.Content>
     </PageLayout>
   );

@@ -1,14 +1,22 @@
 /**
  * Filter Chips Bar
  *
- * Displays all active filters as removable chips.
+ * Displays active filters in a dropdown to avoid layout shift.
+ * Always renders a compact trigger; chips live in a Popover.
  *
  * @see docs/design-system/FILTER-STANDARDS.md
  */
 
 import { memo, useMemo, type ReactElement } from "react";
 import { format } from "date-fns";
+import { Filter, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { FilterChip } from "./filter-chip";
 import type { FilterChipsBarProps, FilterFieldConfig, FilterValue } from "./types";
@@ -101,7 +109,8 @@ function getFilterLabel<T>(
 }
 
 /**
- * Active filter chips bar with clear all button.
+ * Active filter chips in a dropdown. Always renders a fixed-height trigger
+ * to prevent layout shift when filters are applied or cleared.
  *
  * @example
  * ```tsx
@@ -131,11 +140,6 @@ export const FilterChipsBar = memo(function FilterChipsBar<
     });
   }, [filters]);
 
-  // No active filters - don't render
-  if (activeFilters.length === 0) {
-    return null;
-  }
-
   const clearFilter = (key: string) => {
     const fieldConfig = config.filters.find((f) => f.key === key);
     const defaultValue = defaultFilters[key as keyof TFilters];
@@ -160,41 +164,76 @@ export const FilterChipsBar = memo(function FilterChipsBar<
   };
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <span className="text-sm text-muted-foreground shrink-0">
-        Active filters:
-      </span>
+    <div className={cn("flex items-center h-8", className)}>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 h-8 shrink-0"
+            aria-label={
+              activeFilters.length > 0
+                ? `Active filters (${activeFilters.length}), click to view or clear`
+                : "Active filters (0), click to view"
+            }
+            aria-expanded={undefined}
+            aria-haspopup="dialog"
+          >
+            <Filter className="h-4 w-4" />
+            <span className="hidden sm:inline">Active filters</span>
+            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+              {activeFilters.length}
+            </Badge>
+            <ChevronDown className="h-4 w-4 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-80 max-h-[280px] overflow-y-auto p-3"
+        >
+          {activeFilters.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No active filters
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {activeFilters.map(([key, value]) => {
+                  const fieldConfig = config.filters.find((f) => f.key === key);
+                  const label = getFilterLabel(key, config);
+                  const displayValue = formatFilterValue(
+                    value as FilterValue,
+                    fieldConfig
+                  );
 
-      {activeFilters.map(([key, value]) => {
-        const fieldConfig = config.filters.find((f) => f.key === key);
-        const label = getFilterLabel(key, config);
-        const displayValue = formatFilterValue(value as FilterValue, fieldConfig);
+                  if (!displayValue) return null;
 
-        // Skip if no display value
-        if (!displayValue) return null;
-
-        return (
-          <FilterChip
-            key={key}
-            label={label}
-            value={displayValue}
-            onRemove={() => clearFilter(key)}
-          />
-        );
-      })}
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={clearAll}
-        className="text-muted-foreground hover:text-foreground h-auto py-1 px-2 shrink-0"
-      >
-        Clear all
-      </Button>
+                  return (
+                    <FilterChip
+                      key={key}
+                      label={label}
+                      value={displayValue}
+                      onRemove={() => clearFilter(key)}
+                    />
+                  );
+                })}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAll}
+                className="text-muted-foreground hover:text-foreground w-full justify-center h-8"
+              >
+                Clear all
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }) as <TFilters extends Record<string, unknown>>(
   props: FilterChipsBarProps<TFilters>
-) => ReactElement | null;
+) => ReactElement;
 
 (FilterChipsBar as { displayName?: string }).displayName = "FilterChipsBar";

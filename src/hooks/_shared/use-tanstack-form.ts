@@ -52,7 +52,7 @@
  * ```
  */
 
-import { useForm, type DeepValue } from '@tanstack/react-form'
+import { useForm, useStore, type DeepValue } from '@tanstack/react-form'
 import type { z } from 'zod'
 
 // ============================================================================
@@ -99,6 +99,11 @@ export interface FormUtilities<TFormData> {
   ) => void
   /** Check if form has been modified */
   isDirty: () => boolean
+  /**
+   * Subscribe to a field value (react-hook-form compatible).
+   * Must be called at top level of component.
+   */
+  useWatch: <K extends keyof TFormData>(field: K) => TFormData[K]
 }
 
 // ============================================================================
@@ -165,7 +170,11 @@ export function useTanStackForm<TFormData>({
     },
   })
 
-  // Add utility methods via Object.assign to preserve form type
+  // useWatch hook - must be a function that returns useStore result (called at top level)
+  const useWatch = <K extends keyof TFormData>(field: K): TFormData[K] => {
+    return useStore(form.store, (s) => s.values[field]) as TFormData[K]
+  }
+
   const utilities: FormUtilities<TFormData> = {
     getValues: () => form.state.values,
 
@@ -177,11 +186,12 @@ export function useTanStackForm<TFormData>({
     },
 
     isDirty: () => {
-      // Compare current values with default values
       const current = JSON.stringify(form.state.values)
       const initial = JSON.stringify(defaultValues)
       return current !== initial
     },
+
+    useWatch,
   }
 
   return Object.assign(form, utilities)

@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
@@ -94,19 +95,181 @@ export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
 // ============================================================================
 
 export const getIssuesSchema = z.object({
-  status: issueStatusSchema.optional(),
-  priority: issuePrioritySchema.optional(),
+  status: z.union([issueStatusSchema, z.array(issueStatusSchema)]).optional(),
+  priority: z.union([issuePrioritySchema, z.array(issuePrioritySchema)]).optional(),
   type: issueTypeSchema.optional(),
   customerId: z.string().uuid().optional(),
   assignedToUserId: z.string().uuid().optional(),
+  /** Resolved client-side: 'me' = current user, 'unassigned' = null assignee */
+  assignedToFilter: z.enum(['me', 'unassigned']).optional(),
   search: z.string().optional(),
+  slaStatus: z.enum(['breached', 'at_risk']).optional(),
+  escalated: z.boolean().optional(),
   limit: z.number().int().min(1).max(100).default(50),
   offset: z.number().int().min(0).default(0),
 });
 
+export const getIssuesCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    status: z.union([issueStatusSchema, z.array(issueStatusSchema)]).optional(),
+    priority: z.union([issuePrioritySchema, z.array(issuePrioritySchema)]).optional(),
+    type: issueTypeSchema.optional(),
+    customerId: z.string().uuid().optional(),
+    assignedToUserId: z.string().uuid().optional(),
+    assignedToFilter: z.enum(['me', 'unassigned']).optional(),
+    search: z.string().optional(),
+    slaStatus: z.enum(['breached', 'at_risk']).optional(),
+    escalated: z.boolean().optional(),
+  })
+);
+
+export type GetIssuesCursorInput = z.infer<typeof getIssuesCursorSchema>;
+
 export const getIssueByIdSchema = z.object({
   issueId: z.string().uuid(),
 });
+
+// ============================================================================
+// UI / COMPONENT TYPES (per SCHEMA-TRACE.md - types in schemas, not components)
+// ============================================================================
+
+/** SLA metrics returned by server for issue list/kanban views */
+export interface IssueSlaMetrics {
+  responseDueAt?: Date | string | null;
+  resolutionDueAt?: Date | string | null;
+  responseBreached?: boolean;
+  resolutionBreached?: boolean;
+  isResponseAtRisk?: boolean;
+  isResolutionAtRisk?: boolean;
+}
+
+export interface IssueFiltersState extends Record<string, unknown> {
+  search: string;
+  status: IssueStatus[];
+  priority: IssuePriority[];
+  assignedTo: string | null;
+  customerId: string | null;
+}
+
+export interface IssueDetail {
+  id: string;
+  issueNumber: string;
+  title: string;
+  description: string | null;
+  status: IssueStatus;
+  priority: IssuePriority;
+  type: IssueType;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  resolvedAt?: Date | string | null;
+  customer?: { id: string; name: string } | null;
+  assignedTo?: { id: string; name: string } | null;
+  slaMetrics?: {
+    responseDueAt?: Date | string | null;
+    resolutionDueAt?: Date | string | null;
+    responseBreached?: boolean;
+    resolutionBreached?: boolean;
+    isResponseAtRisk?: boolean;
+    isResolutionAtRisk?: boolean;
+  } | null;
+  escalatedAt?: Date | string | null;
+  escalationReason?: string | null;
+  warrantyId?: string | null;
+}
+
+export interface IssueListItem {
+  id: string;
+  issueNumber: string;
+  title: string;
+  status: IssueStatus;
+  priority: IssuePriority;
+  type: IssueType;
+  createdAt: Date | string;
+  customer?: { name: string } | null;
+  assignedTo?: { name: string } | null;
+  slaMetrics?: {
+    responseBreached?: boolean;
+    resolutionBreached?: boolean;
+    isResponseAtRisk?: boolean;
+    isResolutionAtRisk?: boolean;
+  } | null;
+}
+
+export interface IssueKanbanItem {
+  id: string;
+  issueNumber: string;
+  title: string;
+  priority: IssuePriority;
+  status: IssueStatus;
+  type: IssueType;
+  customerId?: string | null;
+  customer?: { name: string } | null;
+  assignedTo?: { name: string | null; email: string } | null;
+  createdAt: Date | string;
+  /** SLA metrics from server (board may transform to flat slaStatus/slaResponseDue/slaResolutionDue) */
+  slaMetrics?: IssueSlaMetrics | null;
+  slaStatus?: 'on_track' | 'at_risk' | 'breached' | null;
+  slaResponseDue?: Date | string | null;
+  slaResolutionDue?: Date | string | null;
+}
+
+export type BulkAction =
+  | 'assign'
+  | 'change_priority'
+  | 'change_status'
+  | 'close'
+  | 'delete';
+
+export interface BulkActionEvent {
+  action: BulkAction;
+  issueIds: string[];
+  value?: string;
+}
+
+export interface StatusChangeResult {
+  confirmed: boolean;
+  note: string;
+  skipPromptForSession: boolean;
+}
+
+export type RelationType =
+  | 'blocks'
+  | 'blocked_by'
+  | 'duplicates'
+  | 'duplicated_by'
+  | 'relates_to';
+
+export interface RelatedIssue {
+  id: string;
+  issueNumber: string;
+  title: string;
+  status: string;
+  priority: string;
+  relationType: RelationType;
+}
+
+export interface PotentialDuplicate {
+  id: string;
+  issueNumber: string;
+  title: string;
+  status: string;
+  createdAt: Date | string;
+  similarity: number;
+}
+
+/** Kanban column config for issue board */
+export interface KanbanColumn {
+  id: IssueStatus;
+  title: string;
+  color: string;
+}
+
+/** Event when issue status changes via drag-drop */
+export interface StatusChangeEvent {
+  issueId: string;
+  fromStatus: IssueStatus;
+  toStatus: IssueStatus;
+}
 
 // ============================================================================
 // BARREL EXPORT

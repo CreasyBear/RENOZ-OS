@@ -49,7 +49,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
               <FormItem>
                 <FormLabel>Customer Name *</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Acme Corporation" {...field} />
+                  <Input placeholder="e.g., Acme Corporation…" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -63,7 +63,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
               <FormItem>
                 <FormLabel>Legal Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Acme Corporation Pty Ltd" {...field} />
+                  <Input placeholder="e.g., Acme Corporation Pty Ltd…" {...field} />
                 </FormControl>
                 <FormDescription>Full legal entity name if different</FormDescription>
                 <FormMessage />
@@ -155,7 +155,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
               <FormItem>
                 <FormLabel>Industry</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Construction, Healthcare" {...field} />
+                  <Input placeholder="e.g., Construction, Healthcare…" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -170,7 +170,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
                 <FormItem>
                   <FormLabel>ABN / Tax ID</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., 12 345 678 901" {...field} />
+                    <Input placeholder="e.g., 12 345 678 901…" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -184,7 +184,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
                 <FormItem>
                   <FormLabel>Registration Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., ACN 123 456 789" {...field} />
+                    <Input placeholder="e.g., ACN 123 456 789…" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -207,7 +207,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="info@company.com" {...field} />
+                  <Input type="email" placeholder="info@company.com" autoComplete="email" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -222,7 +222,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
                 <FormItem>
                   <FormLabel>Phone</FormLabel>
                   <FormControl>
-                    <Input placeholder="+61 2 1234 5678" {...field} />
+                    <Input type="tel" placeholder="+61 2 1234 5678" autoComplete="tel" inputMode="tel" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -236,7 +236,7 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
                 <FormItem>
                   <FormLabel>Website</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://www.company.com" {...field} />
+                    <Input type="url" placeholder="https://www.company.com" autoComplete="url" inputMode="url" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

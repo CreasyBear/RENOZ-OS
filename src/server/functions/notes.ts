@@ -251,7 +251,7 @@ export const processAudioNote = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    // TODO: Integrate with AI transcription service
+    // TODO(PHASE12-009): Integrate with AI transcription service
     // For now, just update the note with placeholder audio data
     const audioData: AudioNoteData = {
       fileUrl: data.audioFileUrl,

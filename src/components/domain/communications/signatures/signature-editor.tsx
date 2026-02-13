@@ -10,9 +10,6 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import {
   Bold,
   Italic,
@@ -23,8 +20,6 @@ import {
   AlignRight,
   List,
   ListOrdered,
-  Save,
-  Loader2,
   Eye,
   Edit2,
 } from "lucide-react";
@@ -36,58 +31,37 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { cn, sanitizeHtml } from "@/lib/utils";
 
 import {
   useCreateSignature,
   useUpdateSignature,
 } from "@/hooks/communications/use-signatures";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
+import {
+  signatureFormSchema,
+  type SignatureEditorProps,
+  type SignatureFormValues,
+} from "@/lib/schemas/communications";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextField,
+  CheckboxField,
+  FormField,
+  FormActions,
+  extractFieldError,
+} from "@/components/shared/forms";
 
-// ============================================================================
-// SCHEMAS
-// ============================================================================
-
-const signatureFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  content: z.string().min(1, "Signature content is required"),
-  isDefault: z.boolean(),
-});
-
-export type SignatureFormValues = z.infer<typeof signatureFormSchema>;
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface SignatureEditorProps {
-  signature?: {
-    id: string;
-    name: string;
-    content: string;
-    isDefault: boolean;
-  };
-  onSave?: () => void;
-  onCancel?: () => void;
-  className?: string;
-}
+// Re-export for consumers that import from this module
+export type { SignatureFormValues };
 
 // ============================================================================
 // COMPONENT
@@ -104,78 +78,87 @@ export function SignatureEditor({
   const createSignature = useCreateSignature();
   const updateSignature = useUpdateSignature();
 
-  const form = useForm<SignatureFormValues>({
-    resolver: zodResolver(signatureFormSchema),
+  const form = useTanStackForm<SignatureFormValues>({
+    schema: signatureFormSchema,
     defaultValues: {
       name: signature?.name ?? "",
       content: signature?.content ?? "",
       isDefault: signature?.isDefault ?? false,
     },
+    onSubmit: async (values) => {
+      if (signature?.id) {
+        updateSignature.mutate(
+          {
+            id: signature.id,
+            ...values,
+          },
+          {
+            onSuccess: () => {
+              toast.success("Signature updated");
+              onSave?.();
+            },
+            onError: (error) => {
+              toast.error("Failed to update signature", {
+                description: getUserFriendlyMessage(error as Error),
+              });
+            },
+          }
+        );
+      } else {
+        createSignature.mutate(
+          { ...values, isCompanyWide: false },
+          {
+            onSuccess: () => {
+              toast.success("Signature created");
+              onSave?.();
+            },
+            onError: (error) => {
+              toast.error("Failed to update signature", {
+                description: getUserFriendlyMessage(error as Error),
+              });
+            },
+          }
+        );
+      }
+    },
   });
 
-  const isPending =
-    createSignature.isPending || updateSignature.isPending;
+  const contentValue = form.useWatch("content");
 
-  const onSubmit = (values: SignatureFormValues) => {
-    if (signature?.id) {
-      updateSignature.mutate(
-        {
-          id: signature.id,
-          ...values,
-        },
-        {
-          onSuccess: () => {
-            toast.success("Signature updated");
-            onSave?.();
-          },
-          onError: (error) => {
-            toast.error(
-              error instanceof Error ? error.message : "Failed to update signature"
-            );
-          },
-        }
-      );
-    } else {
-      createSignature.mutate(
-        { ...values, isCompanyWide: false },
-        {
-          onSuccess: () => {
-            toast.success("Signature created");
-            onSave?.();
-          },
-          onError: (error) => {
-            toast.error(
-              error instanceof Error ? error.message : "Failed to create signature"
-            );
-          },
-        }
-      );
-    }
-  };
-
-  // Format command helper
   const execCommand = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     editorRef.current?.focus();
-    // Update form value after formatting
     if (editorRef.current) {
-      form.setValue("content", editorRef.current.innerHTML);
+      form.setFieldValue("content", editorRef.current.innerHTML);
     }
   };
 
-  // Handle editor content changes
   const handleEditorInput = () => {
     if (editorRef.current) {
-      form.setValue("content", editorRef.current.innerHTML);
+      form.setFieldValue("content", editorRef.current.innerHTML);
     }
   };
 
-  // Set initial editor content
   React.useEffect(() => {
-    if (editorRef.current && signature?.content) {
-      editorRef.current.innerHTML = signature.content;
+    if (signature) {
+      form.reset({
+        name: signature.name ?? "",
+        content: signature.content ?? "",
+        isDefault: signature.isDefault ?? false,
+      });
+      if (editorRef.current) {
+        editorRef.current.innerHTML = signature.content ?? "";
+      }
+    } else {
+      form.reset({ name: "", content: "", isDefault: false });
+      if (editorRef.current) {
+        editorRef.current.innerHTML = "";
+      }
     }
-  }, [signature?.content]);
+  }, [signature, form]);
+
+  const isPending =
+    createSignature.isPending || updateSignature.isPending;
 
   return (
     <Card className={className} aria-label="signature-editor">
@@ -188,37 +171,38 @@ export function SignatureEditor({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Name Field */}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Signature Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="My Signature"
-                      {...field}
-                      aria-label="signature-name"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="name">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Signature Name"
+                placeholder="My Signature"
+              />
+            )}
+          </form.Field>
 
-            {/* Editor with Tabs */}
-            <FormField
-              control={form.control}
-              name="content"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Signature Content</FormLabel>
+          <form.Field name="content">
+            {(field) => {
+              const error = extractFieldError(field);
+              return (
+                <FormField
+                  label="Signature Content"
+                  name={field.name}
+                  error={error}
+                  required
+                >
                   <Tabs
                     value={activeTab}
-                    onValueChange={(v) => setActiveTab(v as "edit" | "preview")}
+                    onValueChange={(v) =>
+                      setActiveTab(v as "edit" | "preview")
+                    }
                   >
                     <TabsList className="mb-2">
                       <TabsTrigger value="edit" className="gap-1">
@@ -232,7 +216,6 @@ export function SignatureEditor({
                     </TabsList>
 
                     <TabsContent value="edit" className="mt-0">
-                      {/* Formatting Toolbar */}
                       <div
                         className="flex flex-wrap gap-1 p-2 border border-b-0 rounded-t-md bg-muted/30"
                         role="toolbar"
@@ -291,26 +274,22 @@ export function SignatureEditor({
                         />
                       </div>
 
-                      {/* Editor Area */}
-                      <FormControl>
-                        <div
-                          ref={editorRef}
-                          contentEditable
-                          onInput={handleEditorInput}
-                          className={cn(
-                            "min-h-[200px] p-3 border rounded-b-md",
-                            "prose prose-sm max-w-none",
-                            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                            "[&_a]:text-primary [&_a]:underline"
-                          )}
-                          aria-label="signature-content"
-                          suppressContentEditableWarning
-                        />
-                      </FormControl>
+                      <div
+                        ref={editorRef}
+                        contentEditable
+                        onInput={handleEditorInput}
+                        className={cn(
+                          "min-h-[200px] p-3 border rounded-b-md",
+                          "prose prose-sm max-w-none",
+                          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                          "[&_a]:text-primary [&_a]:underline"
+                        )}
+                        aria-label="signature-content"
+                        suppressContentEditableWarning
+                      />
                     </TabsContent>
 
                     <TabsContent value="preview" className="mt-0">
-                      {/* Preview Area */}
                       <div
                         className="min-h-[200px] p-4 border rounded-md bg-muted/20"
                         aria-label="preview-panel"
@@ -321,65 +300,38 @@ export function SignatureEditor({
                         <div
                           className="prose prose-sm max-w-none"
                           dangerouslySetInnerHTML={{
-                            __html: form.watch("content") || "<p>No content</p>",
+                            __html:
+                              sanitizeHtml(contentValue) || "<p>No content</p>",
                           }}
                         />
                       </div>
                     </TabsContent>
                   </Tabs>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                </FormField>
+              );
+            }}
+          </form.Field>
 
-            {/* Default Checkbox */}
-            <FormField
-              control={form.control}
-              name="isDefault"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      aria-label="Set as default signature"
-                    />
-                  </FormControl>
-                  <FormLabel className="text-sm font-normal cursor-pointer">
-                    Set as my default signature
-                  </FormLabel>
-                </FormItem>
-              )}
-            />
+          <form.Field name="isDefault">
+            {(field) => (
+              <CheckboxField
+                field={field}
+                label="Set as my default signature"
+                className="flex flex-row items-center space-x-2 space-y-0"
+              />
+            )}
+          </form.Field>
 
-            {/* Actions */}
-            <div className="flex gap-2 justify-end pt-4">
-              {onCancel && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onCancel}
-                  disabled={isPending}
-                >
-                  Cancel
-                </Button>
-              )}
-              <Button type="submit" disabled={isPending} className="gap-2">
-                {isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    {signature?.id ? "Update" : "Create"} Signature
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </Form>
+          <FormActions
+            form={form}
+            submitLabel={signature?.id ? "Update Signature" : "Create Signature"}
+            cancelLabel="Cancel"
+            loadingLabel="Saving..."
+            onCancel={onCancel}
+            submitDisabled={isPending}
+            showCancel={!!onCancel}
+          />
+        </form>
       </CardContent>
     </Card>
   );

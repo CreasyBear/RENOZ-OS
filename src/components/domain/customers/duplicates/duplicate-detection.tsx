@@ -415,7 +415,7 @@ export function DuplicateDetection({
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            {isScanning ? 'Scanning...' : 'Scan Now'}
+            {isScanning ? 'Scanning…' : 'Scan Now'}
           </Button>
         </div>
       </div>

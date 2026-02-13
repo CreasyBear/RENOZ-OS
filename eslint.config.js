@@ -22,7 +22,8 @@ export default [
       '_Initiation/**',
       '_reference/**',
       '**/*.config.js',
-      '**/*.config.ts'
+      '**/*.config.ts',
+      '**/routeTree.gen.ts'
     ]
   },
   js.configs.recommended,
@@ -69,8 +70,12 @@ export default [
         ResizeObserver: 'readonly',
         MutationObserver: 'readonly',
         PerformanceObserver: 'readonly',
-        // Common Web APIs
+        // Common Web APIs (Node 18+ has fetch/Request/Response)
         fetch: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        // Node.js crypto (global in Node 19+)
+        crypto: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
         FormData: 'readonly',
@@ -88,7 +93,38 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         requestAnimationFrame: 'readonly',
-        cancelAnimationFrame: 'readonly'
+        cancelAnimationFrame: 'readonly',
+        // Browser dialogs and APIs
+        prompt: 'readonly',
+        confirm: 'readonly',
+        MediaRecorder: 'readonly',
+        // DOM types
+        Node: 'readonly',
+        HTMLImageElement: 'readonly',
+        HTMLSpanElement: 'readonly',
+        HTMLCanvasElement: 'readonly',
+        Window: 'readonly',
+        Image: 'readonly',
+        FileList: 'readonly',
+        // Fetch API (Node 18+)
+        AbortSignal: 'readonly',
+        Headers: 'readonly',
+        // Performance API (browser, Node)
+        performance: 'readonly',
+        // Encoding APIs (browser, Node 11+)
+        atob: 'readonly',
+        btoa: 'readonly',
+        TextDecoder: 'readonly',
+        TextEncoder: 'readonly',
+        // Streams (browser, Node 18+)
+        ReadableStream: 'readonly',
+        // File API (browser)
+        FileReader: 'readonly',
+        // XHR and AbortController (browser, Node 18+)
+        XMLHttpRequest: 'readonly',
+        AbortController: 'readonly',
+        // Storage API events
+        StorageEvent: 'readonly'
       }
     },
     plugins: {
@@ -106,7 +142,7 @@ export default [
       // Customize rules as needed
       'react/react-in-jsx-scope': 'off', // Not needed in React 17+
       'react/prop-types': 'off', // Using TypeScript for prop validation
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }],
       '@typescript-eslint/no-explicit-any': 'warn',
       'react-hooks/exhaustive-deps': 'warn'
     },
@@ -119,4 +155,11 @@ export default [
   // UI/UX Layout Rules
   layoutRules,
   pageLayoutVariantRules,
+  // Server files export server functions and constants, not React components
+  {
+    files: ['src/server/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ];

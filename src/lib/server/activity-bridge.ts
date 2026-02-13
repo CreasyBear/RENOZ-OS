@@ -9,6 +9,7 @@
  */
 
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { activities, type ActivityMetadata, type ActivitySource } from "drizzle/schema";
 
 // ============================================================================
@@ -131,11 +132,11 @@ export async function createEmailSentActivity(
       })
       .returning({ id: activities.id });
 
-    console.log(`[activity-bridge] Created email_sent activity: ${activity.id} for email ${emailId}`);
+    logger.debug('[activity-bridge] Created email_sent activity', { activityId: activity.id, emailId });
 
     return { success: true, activityId: activity.id };
   } catch (error) {
-    console.error("[activity-bridge] Failed to create email_sent activity:", error);
+    logger.error("[activity-bridge] Failed to create email_sent activity", error as Error, { emailId });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -194,11 +195,11 @@ export async function createEmailDeliveredActivity(
       })
       .returning({ id: activities.id });
 
-    console.log(`[activity-bridge] Created email_delivered activity: ${activity.id} for email ${emailId}`);
+    logger.debug('[activity-bridge] Created email_delivered activity', { activityId: activity.id, emailId });
 
     return { success: true, activityId: activity.id };
   } catch (error) {
-    console.error("[activity-bridge] Failed to create email_delivered activity:", error);
+    logger.error("[activity-bridge] Failed to create email_delivered activity", error as Error, { emailId });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -253,11 +254,11 @@ export async function createEmailOpenedActivity(
       })
       .returning({ id: activities.id });
 
-    console.log(`[activity-bridge] Created email_opened activity: ${activity.id} for email ${emailId}`);
+    logger.debug('[activity-bridge] Created email_opened activity', { activityId: activity.id, emailId });
 
     return { success: true, activityId: activity.id };
   } catch (error) {
-    console.error("[activity-bridge] Failed to create email_opened activity:", error);
+    logger.error("[activity-bridge] Failed to create email_opened activity", error as Error, { emailId });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -319,11 +320,11 @@ export async function createEmailClickedActivity(
       })
       .returning({ id: activities.id });
 
-    console.log(`[activity-bridge] Created email_clicked activity: ${activity.id} for email ${emailId}`);
+    logger.debug('[activity-bridge] Created email_clicked activity', { activityId: activity.id, emailId });
 
     return { success: true, activityId: activity.id };
   } catch (error) {
-    console.error("[activity-bridge] Failed to create email_clicked activity:", error);
+    logger.error("[activity-bridge] Failed to create email_clicked activity", error as Error, { emailId });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -403,11 +404,11 @@ export async function createEmailActivitiesBatch(
     // Single bulk insert
     await db.insert(activities).values(values);
 
-    console.log(`[activity-bridge] Batch created ${inputs.length} email_sent activities`);
+    logger.debug('[activity-bridge] Batch created email_sent activities', { count: inputs.length });
 
     return { success: true, count: inputs.length };
   } catch (error) {
-    console.error("[activity-bridge] Failed to batch create email_sent activities:", error);
+    logger.error("[activity-bridge] Failed to batch create email_sent activities", error as Error, { count: inputs.length });
     return {
       success: false,
       count: 0,
@@ -483,11 +484,11 @@ export async function createCallLoggedActivity(
       })
       .returning({ id: activities.id });
 
-    console.log(`[activity-bridge] Created call_logged activity: ${activity.id} for call ${callId}`);
+    logger.debug('[activity-bridge] Created call_logged activity', { activityId: activity.id, callId });
 
     return { success: true, activityId: activity.id };
   } catch (error) {
-    console.error("[activity-bridge] Failed to create call_logged activity:", error);
+    logger.error("[activity-bridge] Failed to create call_logged activity", error as Error, { callId });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -555,11 +556,11 @@ export async function createNoteAddedActivity(input: {
       })
       .returning({ id: activities.id });
 
-    console.log(`[activity-bridge] Created note_added activity: ${activity.id}`);
+    logger.debug('[activity-bridge] Created note_added activity', { activityId: activity.id });
 
     return { success: true, activityId: activity.id };
   } catch (error) {
-    console.error("[activity-bridge] Failed to create note_added activity:", error);
+    logger.error("[activity-bridge] Failed to create note_added activity", error as Error, { noteId });
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

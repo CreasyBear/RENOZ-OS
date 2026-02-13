@@ -7,6 +7,7 @@
  */
 import { createServerFn } from '@tanstack/react-start'
 import { eq, and, desc } from 'drizzle-orm'
+import { z } from 'zod'
 import { db } from '@/lib/db'
 import {
   emailTemplates,
@@ -21,10 +22,11 @@ import {
   cloneTemplateSchema,
   getVersionHistorySchema,
   restoreVersionSchema,
-  type TemplateVariable,
+  templateVariableSchema,
 } from '@/lib/schemas/communications'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
+import { NotFoundError } from '@/lib/server/errors'
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -38,34 +40,39 @@ export const createEmailTemplate = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update })
 
-    const [template] = await db
-      .insert(emailTemplates)
-      .values({
+    // Wrap template INSERT + version INSERT in transaction for atomicity
+    const template = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(emailTemplates)
+        .values({
+          organizationId: ctx.organizationId,
+          name: data.name,
+          description: data.description,
+          category: data.category,
+          subject: data.subject,
+          bodyHtml: data.bodyHtml,
+          variables: data.variables, // Zod schema validates array of TemplateVariable
+          isActive: true,
+          version: 1,
+          createdBy: ctx.user.id,
+        })
+        .returning()
+
+      // Create initial version
+      await tx.insert(emailTemplateVersions).values({
         organizationId: ctx.organizationId,
-        name: data.name,
-        description: data.description,
-        category: data.category,
-        subject: data.subject,
-        bodyHtml: data.bodyHtml,
-        variables: data.variables as TemplateVariable[],
-        isActive: true,
+        templateId: created.id,
         version: 1,
+        name: created.name,
+        description: created.description,
+        category: created.category,
+        subject: created.subject,
+        bodyHtml: created.bodyHtml,
+        variables: created.variables,
         createdBy: ctx.user.id,
       })
-      .returning()
 
-    // Create initial version
-    await db.insert(emailTemplateVersions).values({
-      organizationId: ctx.organizationId,
-      templateId: template.id,
-      version: 1,
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      subject: template.subject,
-      bodyHtml: template.bodyHtml,
-      variables: template.variables,
-      createdBy: ctx.user.id,
+      return created
     })
 
     return template
@@ -94,6 +101,7 @@ export const getEmailTemplates = createServerFn({ method: 'GET' })
       .from(emailTemplates)
       .where(and(...conditions))
       .orderBy(desc(emailTemplates.updatedAt))
+      .limit(100)
 
     return results
   })
@@ -128,53 +136,68 @@ export const updateEmailTemplate = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update })
 
-    const [existing] = await db
-      .select()
-      .from(emailTemplates)
-      .where(
-        and(
-          eq(emailTemplates.id, data.id),
-          eq(emailTemplates.organizationId, ctx.organizationId),
-        ),
-      )
-      .limit(1)
+    // Wrap SELECT + UPDATE + version INSERT in transaction for atomicity
+    const updated = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(emailTemplates)
+        .where(
+          and(
+            eq(emailTemplates.id, data.id),
+            eq(emailTemplates.organizationId, ctx.organizationId),
+          ),
+        )
+        .limit(1)
 
-    if (!existing) {
-      throw new Error('Template not found')
-    }
+      if (!existing) {
+        throw new NotFoundError('Template not found', 'email_template')
+      }
 
-    const updateData = {
-      name: data.name ?? existing.name,
-      description: data.description ?? existing.description,
-      category: data.category ?? existing.category,
-      subject: data.subject ?? existing.subject,
-      bodyHtml: data.bodyHtml ?? existing.bodyHtml,
-      variables: (data.variables ?? existing.variables) as TemplateVariable[],
-      isActive: data.isActive ?? existing.isActive,
-      version: data.createVersion ? existing.version + 1 : existing.version,
-      updatedBy: ctx.user.id,
-    }
+      const updatePayload = {
+        name: data.name ?? existing.name,
+        description: data.description ?? existing.description,
+        category: data.category ?? existing.category,
+        subject: data.subject ?? existing.subject,
+        bodyHtml: data.bodyHtml ?? existing.bodyHtml,
+        // Parse JSONB variables with Zod schema per SCHEMA-TRACE.md
+        // If updating, use new variables; otherwise parse existing from DB
+        variables: data.variables
+          ? data.variables // Already validated by Zod input schema
+          : z.array(templateVariableSchema).parse(existing.variables),
+        isActive: data.isActive ?? existing.isActive,
+        version: data.createVersion ? existing.version + 1 : existing.version,
+        updatedBy: ctx.user.id,
+      }
 
-    const [updated] = await db
-      .update(emailTemplates)
-      .set(updateData)
-      .where(eq(emailTemplates.id, data.id))
-      .returning()
+      // C06: Add orgId to UPDATE WHERE for tenant isolation
+      const [result] = await tx
+        .update(emailTemplates)
+        .set(updatePayload)
+        .where(
+          and(
+            eq(emailTemplates.id, data.id),
+            eq(emailTemplates.organizationId, ctx.organizationId),
+          ),
+        )
+        .returning()
 
-    if (data.createVersion) {
-      await db.insert(emailTemplateVersions).values({
-        organizationId: ctx.organizationId,
-        templateId: updated.id,
-        version: updated.version,
-        name: updated.name,
-        description: updated.description,
-        category: updated.category,
-        subject: updated.subject,
-        bodyHtml: updated.bodyHtml,
-        variables: updated.variables,
-        createdBy: ctx.user.id,
-      })
-    }
+      if (data.createVersion) {
+        await tx.insert(emailTemplateVersions).values({
+          organizationId: ctx.organizationId,
+          templateId: result.id,
+          version: result.version,
+          name: result.name,
+          description: result.description,
+          category: result.category,
+          subject: result.subject,
+          bodyHtml: result.bodyHtml,
+          variables: result.variables,
+          createdBy: ctx.user.id,
+        })
+      }
+
+      return result
+    })
 
     return updated
   })
@@ -198,7 +221,7 @@ export const deleteEmailTemplate = createServerFn({ method: 'POST' })
       .returning()
 
     if (!deleted) {
-      throw new Error('Template not found')
+      throw new NotFoundError('Template not found', 'email_template')
     }
 
     return { success: true }
@@ -212,49 +235,55 @@ export const cloneEmailTemplate = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update })
 
-    const [template] = await db
-      .select()
-      .from(emailTemplates)
-      .where(
-        and(
-          eq(emailTemplates.id, data.id),
-          eq(emailTemplates.organizationId, ctx.organizationId),
-        ),
-      )
-      .limit(1)
+    // Wrap SELECT + INSERT + version INSERT in transaction for atomicity
+    const cloned = await db.transaction(async (tx) => {
+      const [template] = await tx
+        .select()
+        .from(emailTemplates)
+        .where(
+          and(
+            eq(emailTemplates.id, data.id),
+            eq(emailTemplates.organizationId, ctx.organizationId),
+          ),
+        )
+        .limit(1)
 
-    if (!template) {
-      throw new Error('Template not found')
-    }
+      if (!template) {
+        throw new NotFoundError('Template not found', 'email_template')
+      }
 
-    const [cloned] = await db
-      .insert(emailTemplates)
-      .values({
+      const [result] = await tx
+        .insert(emailTemplates)
+        .values({
+          organizationId: ctx.organizationId,
+          name: data.newName,
+          description: template.description,
+          category: template.category,
+          subject: template.subject,
+          bodyHtml: template.bodyHtml,
+          // Parse JSONB variables with Zod schema per SCHEMA-TRACE.md
+          variables: z.array(templateVariableSchema).parse(template.variables),
+          isActive: template.isActive,
+          version: 1,
+          createdBy: ctx.user.id,
+        })
+        .returning()
+
+      // Create initial version for clone
+      await tx.insert(emailTemplateVersions).values({
         organizationId: ctx.organizationId,
-        name: data.newName,
-        description: template.description,
-        category: template.category,
-        subject: template.subject,
-        bodyHtml: template.bodyHtml,
-        variables: template.variables as TemplateVariable[],
-        isActive: template.isActive,
+        templateId: result.id,
         version: 1,
+        name: result.name,
+        description: result.description,
+        category: result.category,
+        subject: result.subject,
+        bodyHtml: result.bodyHtml,
+        variables: result.variables,
         createdBy: ctx.user.id,
       })
-      .returning()
 
-    // Create initial version for clone
-    await db.insert(emailTemplateVersions).values({
-      organizationId: ctx.organizationId,
-      templateId: cloned.id,
-      version: 1,
-      name: cloned.name,
-      description: cloned.description,
-      category: cloned.category,
-      subject: cloned.subject,
-      bodyHtml: cloned.bodyHtml,
-      variables: cloned.variables,
-      createdBy: ctx.user.id,
+      return result
     })
 
     return cloned
@@ -278,6 +307,7 @@ export const getTemplateVersionHistory = createServerFn({ method: 'GET' })
         ),
       )
       .orderBy(desc(emailTemplateVersions.createdAt))
+      .limit(50)
 
     return results
   })
@@ -302,9 +332,10 @@ export const restoreTemplateVersion = createServerFn({ method: 'POST' })
       .limit(1)
 
     if (!version) {
-      throw new Error('Version not found')
+      throw new NotFoundError('Version not found', 'email_template_version')
     }
 
+    // C05: Add orgId to UPDATE WHERE for tenant isolation
     const [updated] = await db
       .update(emailTemplates)
       .set({
@@ -313,11 +344,17 @@ export const restoreTemplateVersion = createServerFn({ method: 'POST' })
         category: version.category,
         subject: version.subject,
         bodyHtml: version.bodyHtml,
-        variables: version.variables as TemplateVariable[],
+        // Parse JSONB variables with Zod schema per SCHEMA-TRACE.md
+        variables: z.array(templateVariableSchema).parse(version.variables),
         version: version.version,
         updatedBy: ctx.user.id,
       })
-      .where(eq(emailTemplates.id, version.templateId))
+      .where(
+        and(
+          eq(emailTemplates.id, version.templateId),
+          eq(emailTemplates.organizationId, ctx.organizationId),
+        ),
+      )
       .returning()
 
     return updated

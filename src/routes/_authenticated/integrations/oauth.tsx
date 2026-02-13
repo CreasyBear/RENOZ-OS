@@ -19,6 +19,7 @@ import { Settings, BarChart3, Zap, Shield, Database, Activity } from 'lucide-rea
 import { OAuthConnectionManager } from '@/components/integrations/oauth/oauth-connection-manager';
 import { OAuthStatusDashboard } from '@/components/integrations/oauth/oauth-status-dashboard';
 import { useCurrentOrg } from '@/hooks/auth/use-current-org';
+import { logger } from '@/lib/logger';
 
 export const Route = createFileRoute('/_authenticated/integrations/oauth')({
   component: OAuthIntegrationsPage,
@@ -147,14 +148,14 @@ function OAuthIntegrationsPage() {
             <OAuthConnectionManager
               organizationId={currentOrg.id}
               onConnectionInitiated={(provider, services) => {
-                console.log(`Initiating ${provider} connection for services:`, services);
+                logger.debug('Initiating OAuth connection', { provider, services });
               }}
               onConnectionCompleted={(connection) => {
-                console.log('Connection completed:', connection);
+                logger.debug('Connection completed', { connection });
                 setActiveTab('dashboard'); // Switch to dashboard after connection
               }}
               onSyncCompleted={(result) => {
-                console.log('Sync completed:', result);
+                logger.debug('Sync completed', { result });
               }}
             />
           )}

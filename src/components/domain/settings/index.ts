@@ -35,14 +35,8 @@ export type { TargetFormProps } from './target-form';
 export { ScheduledReportForm } from './scheduled-report-form';
 export type { ScheduledReportFormProps } from './scheduled-report-form';
 
-// --- Organization Settings (Container/Presenter) ---
+// --- Organization Settings (Container) ---
 export { OrganizationSettingsContainer, UnifiedSettingsContainer } from './organization-settings-container';
-export {
-  OrganizationSettingsPresenter,
-  type OrganizationSettingsData,
-  type OrganizationSettingsCallbacks,
-  type OrganizationSettingsPresenterProps,
-} from './organization-settings-presenter';
 
 // --- Modular Settings Sections ---
 export {
@@ -50,12 +44,14 @@ export {
   AddressSettingsSection,
   RegionalSettingsSection,
   FinancialSettingsSection,
+  BrandingSettingsSection,
   LinkSettingsSection,
   type SectionProps,
   type GeneralSettingsData,
   type AddressSettingsData,
   type RegionalSettingsData,
   type FinancialSettingsData,
+  type BrandingSettingsData,
   type LinkSectionProps,
 } from './settings-sections';
 

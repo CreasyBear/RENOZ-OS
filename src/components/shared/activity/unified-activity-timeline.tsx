@@ -6,6 +6,10 @@
  */
 
 import * as React from 'react';
+import { Link } from '@tanstack/react-router';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
+import { formatRelativeTime, formatDate } from '@/lib/formatters';
 import {
   Plus,
   Pencil,
@@ -33,8 +37,10 @@ import {
   ArrowUpRight,
   Filter,
   AlertTriangle,
+  Inbox,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -45,10 +51,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { getActivityTypeConfig } from '@/lib/schemas/unified-activity';
+import { ENTITY_ICONS, ENTITY_LABELS } from './activity-config';
+import type { ActivityMetadata } from '@/lib/schemas/activities';
+import { isActivityEntityType, isActivityMetadata } from '@/lib/schemas/activities';
 
 // ============================================================================
 // ICON MAP
@@ -81,6 +91,11 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 // TYPES
 // ============================================================================
 
+/**
+ * Props for UnifiedActivityTimeline component
+ *
+ * @see ACTIVITY-TIMELINE-STANDARDS.md for design system patterns
+ */
 export interface UnifiedActivityTimelineProps {
   activities: UnifiedActivity[];
   isLoading?: boolean;
@@ -99,8 +114,67 @@ export interface UnifiedActivityTimelineProps {
   isCompletePending?: boolean;
   /** Show grouped by date with collapsible sections (for large timelines) */
   groupByDate?: boolean;
+  /** Optional link to the full activity feed for this context */
+  viewAllHref?: string;
+  /** Label for the view-all link (defaults to "View in Activity Feed") */
+  viewAllLabel?: string;
   /** Wrap in Card component (default true) */
   asCard?: boolean;
+  /**
+   * Use compact item display (for sidebars, widgets, mobile)
+   *
+   * Compact mode reduces padding, hides metadata, and uses smaller avatars.
+   * Ideal for constrained spaces like sidebars or mobile views.
+   *
+   * @example
+   * ```tsx
+   * <UnifiedActivityTimeline
+   *   activities={activities}
+   *   compact
+   *   height={400}
+   * />
+   * ```
+   */
+  compact?: boolean;
+  /**
+   * Minimum items before enabling virtualization (default: 50)
+   *
+   * Virtualization improves performance for large lists by only rendering
+   * visible items. Only activates when both `height` and threshold are met.
+   *
+   * @default 50
+   */
+  virtualizationThreshold?: number;
+  /**
+   * Height of the timeline container (required for virtualization)
+   *
+   * **When to use virtualization:**
+   * - Fixed-height containers (sidebars, modals, constrained areas)
+   * - Expected large activity lists (>50 items)
+   * - Performance issues with rendering many items
+   *
+   * **When NOT to use virtualization:**
+   * - Natural document flow (tabs, cards, unconstrained height)
+   * - Small activity lists (<50 items)
+   * - Height is unconstrained (component expands naturally)
+   *
+   * @example
+   * ```tsx
+   * // ✅ Fixed-height sidebar - use virtualization
+   * <UnifiedActivityTimeline
+   *   activities={activities}
+   *   height={600}
+   *   virtualizationThreshold={50}
+   * />
+   *
+   * // ✅ Tab content with natural flow - no virtualization needed
+   * <UnifiedActivityTimeline
+   *   activities={activities}
+   *   // height not provided - virtualization disabled
+   * />
+   * ```
+   */
+  height?: number | string;
   className?: string;
 }
 
@@ -115,37 +189,7 @@ interface Filters {
 // HELPERS
 // ============================================================================
 
-function formatRelativeTime(date: string | Date): string {
-  const now = new Date();
-  const then = typeof date === 'string' ? new Date(date) : date;
-  const diffMs = now.getTime() - then.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-  const diffWeek = Math.floor(diffDay / 7);
-  const diffMonth = Math.floor(diffDay / 30);
-
-  if (diffSec < 60) return 'Just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  if (diffWeek < 4) return `${diffWeek}w ago`;
-  if (diffMonth < 12) return `${diffMonth}mo ago`;
-  return then.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-}
-
-function formatDateTime(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString('en-AU', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+// Type guard imported from schema - no local definition needed
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
@@ -167,6 +211,7 @@ interface ActivityItemProps {
   onClick?: (activity: UnifiedActivity) => void;
   onComplete?: (activityId: string, outcome?: string) => void;
   isCompletePending?: boolean;
+  compact?: boolean;
 }
 
 // Priority metadata keys to show in summary
@@ -177,6 +222,7 @@ const METADATA_PRIORITY_KEYS = [
   'customerName', 'supplierName',
   'status', 'oldStatus', 'newStatus',
   'reason', 'assignedTo', 'installerName',
+  'recipientEmail', 'recipientName', 'subject', 'contentPreview',
 ];
 
 // Keys to hide from display
@@ -208,15 +254,17 @@ function formatMetadataValue(value: unknown): string | null {
 }
 
 function getMetadataSummary(metadata: unknown): Array<{ label: string; value: string }> {
-  if (!metadata || typeof metadata !== 'object') return [];
-  const meta = metadata as Record<string, unknown>;
+  if (!metadata || !isActivityMetadata(metadata)) return [];
+  // metadata is validated as ActivityMetadata via type guard
+  const meta = metadata;
 
   const entries: Array<{ key: string; label: string; value: string }> = [];
 
   // First pass: priority keys
   for (const key of METADATA_PRIORITY_KEYS) {
     if (key in meta && !METADATA_HIDDEN_KEYS.has(key)) {
-      const value = formatMetadataValue(meta[key]);
+      // Type-safe access: key is a known key of ActivityMetadata
+      const value = formatMetadataValue(meta[key as keyof ActivityMetadata]);
       if (value) {
         entries.push({ key, label: formatMetadataLabel(key), value });
       }
@@ -225,14 +273,14 @@ function getMetadataSummary(metadata: unknown): Array<{ label: string; value: st
 
   // Second pass: other keys (up to 4 total)
   if (entries.length < 4) {
-    for (const [key, val] of Object.entries(meta)) {
+    for (const [key, val] of Object.entries(meta) as [keyof ActivityMetadata, unknown][]) {
       if (entries.length >= 4) break;
       if (METADATA_HIDDEN_KEYS.has(key)) continue;
       if (entries.some((e) => e.key === key)) continue;
 
       const value = formatMetadataValue(val);
       if (value) {
-        entries.push({ key, label: formatMetadataLabel(key), value });
+        entries.push({ key: String(key), label: formatMetadataLabel(String(key)), value });
       }
     }
   }
@@ -240,7 +288,7 @@ function getMetadataSummary(metadata: unknown): Array<{ label: string; value: st
   return entries.slice(0, 4).map(({ label, value }) => ({ label, value }));
 }
 
-function ActivityItem({ activity, onClick, onComplete, isCompletePending }: ActivityItemProps) {
+const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onComplete, isCompletePending, compact = false }: ActivityItemProps) {
   const config = getActivityTypeConfig(activity.type);
   const Icon = iconMap[config.icon] || Activity;
 
@@ -261,13 +309,14 @@ function ActivityItem({ activity, onClick, onComplete, isCompletePending }: Acti
     <div
       className={cn(
         'relative flex gap-4 pb-6 last:pb-0',
+        compact && 'pb-3 gap-3',
         onClick && 'cursor-pointer hover:bg-muted/50 -mx-4 px-4 rounded-lg transition-colors',
         activity.isOverdue && 'bg-red-50/50 -mx-4 px-4 rounded-lg'
       )}
       onClick={() => onClick?.(activity)}
     >
       {/* Timeline line */}
-      <div className="absolute left-5 top-10 bottom-0 w-px bg-border last:hidden" />
+      <div className={cn('absolute left-5 bottom-0 w-px bg-border last:hidden', compact ? 'top-8' : 'top-10')} />
 
       {/* Icon or completion toggle */}
       <div className="relative z-10 flex flex-col items-center">
@@ -276,22 +325,24 @@ function ActivityItem({ activity, onClick, onComplete, isCompletePending }: Acti
             onClick={handleComplete}
             disabled={isCompletePending}
             className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all',
+              'flex shrink-0 items-center justify-center rounded-full transition-all',
+              compact ? 'h-8 w-8' : 'h-10 w-10',
               'bg-muted hover:bg-green-100 hover:scale-105',
               isCompletePending && 'opacity-50 cursor-not-allowed'
             )}
             title="Mark as complete"
           >
-            <Circle className="h-5 w-5 text-muted-foreground hover:text-green-600" />
+            <Circle className={cn('text-muted-foreground hover:text-green-600', compact ? 'h-4 w-4' : 'h-5 w-5')} />
           </button>
         ) : (
           <div
             className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
+              'flex shrink-0 items-center justify-center rounded-full',
+              compact ? 'h-8 w-8' : 'h-10 w-10',
               config.bgColor
             )}
           >
-            <Icon className={cn('h-5 w-5', config.color)} />
+            <Icon className={cn(config.color, compact ? 'h-4 w-4' : 'h-5 w-5')} />
           </div>
         )}
       </div>
@@ -391,7 +442,7 @@ function ActivityItem({ activity, onClick, onComplete, isCompletePending }: Acti
 
         {/* Footer */}
         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-          <span title={formatDateTime(activity.createdAt)}>
+          <span title={formatDate(activity.createdAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}>
             {formatRelativeTime(activity.createdAt)}
           </span>
 
@@ -411,7 +462,7 @@ function ActivityItem({ activity, onClick, onComplete, isCompletePending }: Acti
       </div>
     </div>
   );
-}
+});
 
 // ============================================================================
 // FILTER CONTROLS
@@ -464,9 +515,12 @@ function FilterControls({ filters, onFiltersChange, hasActiveFilters }: FilterCo
             <label className="text-sm font-medium">Source</label>
             <Select
               value={filters.source}
-              onValueChange={(value) =>
-                onFiltersChange({ ...filters, source: value as Filters['source'] })
-              }
+              onValueChange={(value) => {
+                // Type guard: Select returns string, but we validate it's a valid source
+                if (value === 'all' || value === 'audit' || value === 'planned') {
+                  onFiltersChange({ ...filters, source: value });
+                }
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All sources" />
@@ -577,9 +631,141 @@ function ErrorState({ error }: { error: Error }) {
 }
 
 // ============================================================================
+// VIRTUALIZED TIMELINE
+// ============================================================================
+
+interface VirtualizedTimelineProps {
+  items: Array<
+    | { type: 'date-header'; date: string; label: string; count: number }
+    | { type: 'entity-header'; entityType: string; label: string; count: number }
+    | { type: 'activity'; activity: UnifiedActivity }
+  >;
+  parentRef: React.RefObject<HTMLDivElement | null>;
+  compact?: boolean;
+  renderActivityItem: (activity: UnifiedActivity) => React.ReactNode;
+}
+
+function VirtualizedTimeline({
+  items,
+  parentRef,
+  compact = false,
+  renderActivityItem,
+}: VirtualizedTimelineProps) {
+  // eslint-disable-next-line react-hooks/incompatible-library -- useVirtualizer returns functions that cannot be memoized; known TanStack Virtual limitation
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: (index) => {
+      if (items.length === 0) return 0;
+      const item = items[index];
+      if (item.type === 'date-header') return 50;
+      if (item.type === 'entity-header') return 40;
+      return compact ? 60 : 80;
+    },
+    overscan: 10,
+  });
+
+  return (
+    <div
+      style={{
+        height: `${virtualizer.getTotalSize()}px`,
+        width: '100%',
+        position: 'relative',
+      }}
+    >
+      {virtualizer.getVirtualItems().map((virtualRow) => {
+        const item = items[virtualRow.index];
+        if (!item) return null;
+
+        return (
+          <div
+            key={virtualRow.key}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: `${virtualRow.size}px`,
+              transform: `translateY(${virtualRow.start}px)`,
+            }}
+          >
+            {item.type === 'date-header' ? (
+              <div
+                className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2.5 px-4 border-b border-border/50 text-muted-foreground flex items-center gap-2 text-xs font-medium uppercase tracking-wide"
+                role="heading"
+                aria-level={2}
+              >
+                <span className="text-sm font-semibold text-foreground">{item.label}</span>
+                <Badge variant="secondary" className="text-xs">
+                  {item.count}
+                </Badge>
+              </div>
+            ) : item.type === 'entity-header' ? (
+              <div className="flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-muted-foreground bg-muted/30 border-b border-border/30">
+                {(() => {
+                  const Icon = isActivityEntityType(item.entityType) ? ENTITY_ICONS[item.entityType] ?? Inbox : Inbox;
+                  return (
+                    <>
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{item.label}</span>
+                      <span className="text-muted-foreground/70">· {item.count}</span>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="ml-2 border-l-2 border-muted pl-4">
+                {renderActivityItem(item.activity)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
+/**
+ * Unified Activity Timeline Component
+ *
+ * Displays a combined timeline of audit trail activities and planned activities.
+ * Used in customer 360, opportunity detail, and other entity pages.
+ *
+ * **Performance:**
+ * - Virtualization automatically enabled when `height` prop is provided and item count exceeds threshold
+ * - Memoized ActivityItem components prevent unnecessary re-renders
+ * - Compact mode reduces rendering overhead for sidebars/widgets
+ *
+ * **Usage Guidelines:**
+ * - **Tab content / natural flow**: Don't provide `height` - component expands naturally
+ * - **Fixed-height containers**: Provide `height` prop for virtualization (sidebars, modals)
+ * - **Large lists**: Consider `groupByDate` for better organization
+ * - **Constrained spaces**: Use `compact` mode for sidebars or mobile views
+ *
+ * @example
+ * ```tsx
+ * // Tab content - natural flow (no virtualization)
+ * <UnifiedActivityTimeline
+ *   activities={activities}
+ *   isLoading={isLoading}
+ *   title="Activity Timeline"
+ * />
+ *
+ * // Fixed-height sidebar - use virtualization
+ * <UnifiedActivityTimeline
+ *   activities={activities}
+ *   height={600}
+ *   virtualizationThreshold={50}
+ *   compact
+ * />
+ * ```
+ *
+ * @see ACTIVITY-TIMELINE-STANDARDS.md for design system patterns
+ */
 export function UnifiedActivityTimeline({
   activities,
   isLoading = false,
@@ -595,6 +781,11 @@ export function UnifiedActivityTimeline({
   onComplete,
   isCompletePending = false,
   groupByDate = false,
+  viewAllHref,
+  viewAllLabel = 'View in Activity Feed',
+  compact = false,
+  virtualizationThreshold = 50,
+  height,
   asCard = true,
   className,
 }: UnifiedActivityTimelineProps) {
@@ -657,6 +848,97 @@ export function UnifiedActivityTimeline({
     !!filters.dateFrom ||
     !!filters.dateTo;
 
+  // Group by date if requested
+  const dateGroups = React.useMemo(() => {
+    if (!groupByDate) return null;
+
+    const groups: Record<string, UnifiedActivity[]> = {};
+    for (const activity of filteredActivities) {
+      const date = new Date(activity.createdAt).toISOString().split('T')[0];
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(activity);
+    }
+    return groups;
+  }, [filteredActivities, groupByDate]);
+
+  // Date label formatting per ACTIVITY-TIMELINE-STANDARDS.md Section 4
+  const getDateLabel = React.useCallback((date: Date): string => {
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    if (isThisWeek(date)) return format(date, 'EEEE'); // "Monday"
+    if (isThisYear(date)) return format(date, 'MMMM d'); // "January 15"
+    return format(date, 'MMMM d, yyyy'); // "January 15, 2024"
+  }, []);
+
+  // Render activity item with all props
+  const renderActivityItem = React.useCallback(
+    (activity: UnifiedActivity) => (
+      <ActivityItem
+        key={activity.id}
+        activity={activity}
+        onClick={onActivityClick}
+        onComplete={onComplete}
+        isCompletePending={isCompletePending}
+        compact={compact}
+      />
+    ),
+    [onActivityClick, onComplete, isCompletePending, compact]
+  );
+
+  // Build flat list for virtualization (only when needed)
+  const virtualItems = React.useMemo(() => {
+    if (filteredActivities.length === 0) return [];
+    
+    const items: Array<
+      | { type: 'date-header'; date: string; label: string; count: number }
+      | { type: 'entity-header'; entityType: string; label: string; count: number }
+      | { type: 'activity'; activity: UnifiedActivity }
+    > = [];
+
+    if (dateGroups) {
+      // Date-grouped view
+      const sortedDates = Object.keys(dateGroups).sort(
+        (a, b) => new Date(b).getTime() - new Date(a).getTime()
+      );
+      for (const date of sortedDates) {
+        items.push({
+          type: 'date-header',
+          date,
+          label: getDateLabel(new Date(date)),
+          count: dateGroups[date].length,
+        });
+        for (const activity of dateGroups[date]) {
+          items.push({ type: 'activity', activity });
+        }
+      }
+    } else if (entityGroups) {
+      // Entity-grouped view
+      for (const group of entityGroups) {
+        const entityLabel = isActivityEntityType(group.key) ? ENTITY_LABELS[group.key] ?? group.label : group.label;
+        items.push({
+          type: 'entity-header',
+          entityType: group.key,
+          label: entityLabel,
+          count: group.activities.length,
+        });
+        for (const activity of group.activities) {
+          items.push({ type: 'activity', activity });
+        }
+      }
+    } else {
+      // Flat list
+      for (const activity of filteredActivities) {
+        items.push({ type: 'activity', activity });
+      }
+    }
+
+    return items;
+  }, [filteredActivities, dateGroups, entityGroups, getDateLabel]);
+
+  // Determine if virtualization should be used
+  const useVirtualization = virtualItems.length > virtualizationThreshold && !!height;
+  const scrollParentRef = React.useRef<HTMLDivElement>(null);
+
   // Loading state
   if (isLoading) {
     if (!asCard) {
@@ -709,98 +991,97 @@ export function UnifiedActivityTimeline({
     );
   }
 
-  // Group by date if requested
-  const dateGroups = React.useMemo(() => {
-    if (!groupByDate) return null;
-
-    const groups: Record<string, UnifiedActivity[]> = {};
-    for (const activity of filteredActivities) {
-      const date = new Date(activity.createdAt).toISOString().split('T')[0];
-      if (!groups[date]) groups[date] = [];
-      groups[date].push(activity);
+  // Content rendering
+  const renderContent = () => {
+    if (filteredActivities.length === 0) {
+      return (
+        <EmptyState
+          message={emptyMessage}
+          description={emptyDescription}
+          hasFilters={hasActiveFilters}
+        />
+      );
     }
-    return groups;
-  }, [filteredActivities, groupByDate]);
 
-  const formatGroupDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    if (useVirtualization && height) {
+      // Virtualized view - hooks only called inside VirtualizedTimeline component
+      return (
+        <ScrollArea ref={scrollParentRef} style={{ height }} className="w-full">
+          <VirtualizedTimeline
+            items={virtualItems}
+            parentRef={scrollParentRef}
+            compact={compact}
+            renderActivityItem={renderActivityItem}
+          />
+        </ScrollArea>
+      );
+    }
 
-    if (date.toDateString() === today.toDateString()) return 'Today';
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString('en-AU', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
-    });
-  };
-
-  // Render activity item with all props
-  const renderActivityItem = (activity: UnifiedActivity) => (
-    <ActivityItem
-      key={activity.id}
-      activity={activity}
-      onClick={onActivityClick}
-      onComplete={onComplete}
-      isCompletePending={isCompletePending}
-    />
-  );
-
-  // Content
-  const content =
-    filteredActivities.length === 0 ? (
-      <EmptyState
-        message={emptyMessage}
-        description={emptyDescription}
-        hasFilters={hasActiveFilters}
-      />
-    ) : dateGroups ? (
+    // Non-virtualized view
+    if (dateGroups) {
       // Date-grouped view
-      <div className="space-y-4">
-        {Object.keys(dateGroups)
-          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-          .map((date) => (
-            <div key={date} className="space-y-0">
-              <div className="text-muted-foreground flex items-center gap-2 px-1 py-2 text-xs font-medium uppercase tracking-wide">
-                <span>{formatGroupDate(date)}</span>
-                <Badge variant="secondary" className="text-xs">
-                  {dateGroups[date].length}
-                </Badge>
+      return (
+        <div className="space-y-4">
+          {Object.keys(dateGroups)
+            .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+            .map((date) => (
+              <div key={date} className="space-y-0">
+                <div
+                  className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2.5 px-4 border-b border-border/50 text-muted-foreground flex items-center gap-2 text-xs font-medium uppercase tracking-wide"
+                  role="heading"
+                  aria-level={2}
+                >
+                  <span className="text-sm font-semibold text-foreground">{getDateLabel(new Date(date))}</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {dateGroups[date].length}
+                  </Badge>
+                </div>
+                <div className="ml-2 border-l-2 border-muted pl-4">
+                  {dateGroups[date].map(renderActivityItem)}
+                </div>
               </div>
-              <div className="ml-2 border-l-2 border-muted pl-4">
-                {dateGroups[date].map(renderActivityItem)}
-              </div>
-            </div>
-          ))}
-      </div>
-    ) : entityGroups ? (
+            ))}
+        </div>
+      );
+    }
+
+    if (entityGroups) {
       // Entity-grouped view
-      <div className="space-y-4">
-        {entityGroups.map((group) => (
-          <div key={group.key} className="space-y-0">
-            <div className="text-muted-foreground flex items-center gap-2 px-1 py-2 text-xs font-medium uppercase tracking-wide">
-              <span>{group.label}</span>
-              <span className="text-muted-foreground/70">- {group.activities.length}</span>
-            </div>
-            <div className="space-y-0">
-              {group.activities.map(renderActivityItem)}
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : (
-      // Flat list
+      return (
+        <div className="space-y-4">
+          {entityGroups.map((group) => {
+            const Icon = isActivityEntityType(group.key) ? ENTITY_ICONS[group.key] ?? Inbox : Inbox;
+            const entityLabel = isActivityEntityType(group.key) ? ENTITY_LABELS[group.key] ?? group.label : group.label;
+            return (
+              <div key={group.key} className="space-y-0">
+                <div className="flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-muted-foreground bg-muted/30 border-b border-border/30">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{entityLabel}</span>
+                  <span className="text-muted-foreground/70">· {group.activities.length}</span>
+                </div>
+                <div className="space-y-0">
+                  {group.activities.map(renderActivityItem)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // Flat list
+    return (
       <div className="space-y-0">
         {filteredActivities.map(renderActivityItem)}
       </div>
     );
+  };
+
+  const content = renderContent();
 
   // Header content
   const headerContent = (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-4">
       <div>
         <CardTitle>{title}</CardTitle>
         {description && (
@@ -810,13 +1091,23 @@ export function UnifiedActivityTimeline({
           </CardDescription>
         )}
       </div>
-      {showFilters && (
-        <FilterControls
-          filters={filters}
-          onFiltersChange={setFilters}
-          hasActiveFilters={hasActiveFilters}
-        />
-      )}
+      <div className="flex items-center gap-2">
+        {viewAllHref && (
+          <Link
+            to={viewAllHref}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+          >
+            {viewAllLabel}
+          </Link>
+        )}
+        {showFilters && (
+          <FilterControls
+            filters={filters}
+            onFiltersChange={setFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
+        )}
+      </div>
     </div>
   );
 

@@ -9,17 +9,18 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import type {
-  ListWarrantyClaimsInput,
-  CreateWarrantyClaimInput,
-  UpdateClaimStatusInput,
-  ApproveClaimInput,
-  DenyClaimInput,
-  ResolveClaimInput,
-  AssignClaimInput,
-  WarrantyClaimStatusValue,
-  WarrantyClaimTypeValue,
-  WarrantyClaimResolutionTypeValue,
+import {
+  isWarrantyClaimStatusValue,
+  type ListWarrantyClaimsInput,
+  type CreateWarrantyClaimInput,
+  type UpdateClaimStatusInput,
+  type ApproveClaimInput,
+  type DenyClaimInput,
+  type ResolveClaimInput,
+  type AssignClaimInput,
+  type WarrantyClaimStatusValue,
+  type WarrantyClaimTypeValue,
+  type WarrantyClaimResolutionTypeValue,
 } from '@/lib/schemas/warranty/claims';
 import {
   claimStatusConfig,
@@ -39,6 +40,7 @@ import {
   denyClaim,
   resolveClaim,
   assignClaim,
+  cancelWarrantyClaim,
 } from '@/server/functions/warranty';
 
 // ============================================================================
@@ -83,8 +85,8 @@ export {
 export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.list(options),
-    queryFn: () =>
-      listWarrantyClaims({
+    queryFn: async () => {
+      const result = await listWarrantyClaims({
         data: {
           ...options,
           page: options?.page ?? 1,
@@ -92,7 +94,11 @@ export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
           sortBy: options?.sortBy ?? 'submittedAt',
           sortOrder: options?.sortOrder ?? 'desc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: LIST_STALE_TIME,
   });
 }
@@ -103,8 +109,8 @@ export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
 export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.byWarranty(warrantyId ?? ''),
-    queryFn: () =>
-      listWarrantyClaims({
+    queryFn: async () => {
+      const result = await listWarrantyClaims({
         data: {
           warrantyId: warrantyId!,
           page: 1,
@@ -112,7 +118,11 @@ export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
           sortBy: 'submittedAt',
           sortOrder: 'desc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!warrantyId,
     staleTime: LIST_STALE_TIME,
   });
@@ -124,8 +134,8 @@ export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
 export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.byCustomer(customerId ?? ''),
-    queryFn: () =>
-      listWarrantyClaims({
+    queryFn: async () => {
+      const result = await listWarrantyClaims({
         data: {
           customerId: customerId!,
           page: 1,
@@ -133,7 +143,11 @@ export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
           sortBy: 'submittedAt',
           sortOrder: 'desc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!customerId,
     staleTime: LIST_STALE_TIME,
   });
@@ -149,7 +163,13 @@ export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
 export function useWarrantyClaim(claimId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.detail(claimId ?? ''),
-    queryFn: () => getWarrantyClaim({ data: { claimId: claimId! } }),
+    queryFn: async () => {
+      const result = await getWarrantyClaim({
+        data: { claimId: claimId! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!claimId,
     staleTime: DETAIL_STALE_TIME,
   });
@@ -202,9 +222,10 @@ export function useUpdateClaimStatus() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
       });
-      toast.success(
-        `Claim status updated to ${claimStatusConfig[result.status as WarrantyClaimStatusValue].label}`
-      );
+      const statusLabel = isWarrantyClaimStatusValue(result.status)
+        ? claimStatusConfig[result.status].label
+        : result.status;
+      toast.success(`Claim status updated to ${statusLabel}`);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to update status');
@@ -325,54 +346,33 @@ export function useAssignClaim() {
 }
 
 // ============================================================================
-// UTILITY FUNCTIONS
+// CANCEL CLAIM
 // ============================================================================
 
 /**
- * Format date for display (Australian format DD/MM/YYYY)
+ * Cancel a warranty claim (status-based cancellation from submitted/under_review)
  */
+export function useCancelWarrantyClaim() {
+  const queryClient = useQueryClient();
 
-/**
- * Calculate time until SLA due date
- */
-export function getSlaDueStatus(dueDate: Date | string | null): {
-  label: string;
-  isOverdue: boolean;
-  isAtRisk: boolean;
-} | null {
-  if (!dueDate) return null;
-
-  const due = typeof dueDate === 'string' ? new Date(dueDate) : dueDate;
-  const now = new Date();
-  const diffMs = due.getTime() - now.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMs < 0) {
-    const overdueHours = Math.abs(diffHours);
-    const overdueDays = Math.abs(diffDays);
-    return {
-      label: overdueDays > 0 ? `${overdueDays}d overdue` : `${overdueHours}h overdue`,
-      isOverdue: true,
-      isAtRisk: true,
-    };
-  }
-
-  if (diffDays > 0) {
-    return {
-      label: `${diffDays}d remaining`,
-      isOverdue: false,
-      isAtRisk: diffDays <= 1,
-    };
-  }
-
-  return {
-    label: `${diffHours}h remaining`,
-    isOverdue: false,
-    isAtRisk: diffHours <= 4,
-  };
+  return useMutation({
+    mutationFn: (data: { id: string; reason?: string }) =>
+      cancelWarrantyClaim({ data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.warrantyClaims.detail(variables.id),
+      });
+      toast.success('Claim cancelled');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel claim');
+    },
+  });
 }
 
-/**
- * Format currency for display (AUD)
- */
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+// Note: getSlaDueStatus lives in @/lib/warranty/claims-utils (canonical implementation)
+// for claim detail SLA tracking. Import from there when needed.

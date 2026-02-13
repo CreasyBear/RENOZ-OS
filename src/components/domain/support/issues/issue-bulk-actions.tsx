@@ -31,13 +31,9 @@ import {
 // TYPES
 // ============================================================================
 
-export type BulkAction = 'assign' | 'change_priority' | 'change_status' | 'close' | 'delete';
+import type { BulkActionEvent } from '@/lib/schemas/support/issues';
 
-export interface BulkActionEvent {
-  action: BulkAction;
-  issueIds: string[];
-  value?: string;
-}
+export type { BulkActionEvent };
 
 interface User {
   id: string;
@@ -73,7 +69,7 @@ export function IssueBulkActions({
   const [selectedPriority, setSelectedPriority] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
 
-  if (selectedCount === 0) return null;
+  if (selectedCount < 2) return null;
 
   const handleAssign = () => {
     if (selectedUserId) {

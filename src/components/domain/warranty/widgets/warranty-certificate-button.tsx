@@ -19,6 +19,7 @@
 import { FileText, Download, RefreshCw, ChevronDown, ExternalLink, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { openCertificateWindow } from '@/lib/warranty';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,7 +104,9 @@ export function WarrantyCertificateButton({
       return;
     }
     if (certificateUrl) {
-      window.open(certificateUrl, '_blank', 'noopener,noreferrer');
+      openCertificateWindow(certificateUrl, {
+        errorMessage: 'Failed to open certificate',
+      });
     }
   };
 

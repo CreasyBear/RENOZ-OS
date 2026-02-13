@@ -10,7 +10,11 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, sql, like, count } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, desc, asc, sql, ilike, count, isNull, inArray } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { containsPattern } from '@/lib/db/utils';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
   returnAuthorizations,
@@ -23,11 +27,14 @@ import { issues } from 'drizzle/schema/support/issues';
 import { orderLineItems, orders } from 'drizzle/schema/orders';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { PERMISSIONS } from '@/lib/auth/permissions';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import {
   createRmaSchema,
   updateRmaSchema,
   getRmaSchema,
   listRmasSchema,
+  listRmasCursorSchema,
   approveRmaSchema,
   rejectRmaSchema,
   receiveRmaSchema,
@@ -41,11 +48,28 @@ import {
 // HELPERS
 // ============================================================================
 
+/** Explicit column projection for rma_line_items (Drizzle best practice) */
+const rmaLineItemsProjection = {
+  id: rmaLineItems.id,
+  rmaId: rmaLineItems.rmaId,
+  orderLineItemId: rmaLineItems.orderLineItemId,
+  quantityReturned: rmaLineItems.quantityReturned,
+  itemReason: rmaLineItems.itemReason,
+  itemCondition: rmaLineItems.itemCondition,
+  serialNumber: rmaLineItems.serialNumber,
+  createdAt: rmaLineItems.createdAt,
+  updatedAt: rmaLineItems.updatedAt,
+};
+
 /**
- * Get next sequence number for RMA generation
+ * Get next sequence number for RMA generation.
+ * Must be called inside a transaction to prevent duplicate sequences.
  */
-async function getNextRmaSequence(organizationId: string): Promise<number> {
-  const [result] = await db
+async function getNextRmaSequence(
+  organizationId: string,
+  executor: typeof db = db
+): Promise<number> {
+  const [result] = await executor
     .select({
       maxSequence: sql<number>`COALESCE(MAX(${returnAuthorizations.sequenceNumber}), 0)`,
     })
@@ -67,15 +91,15 @@ export const createRma = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth();
 
-    // Get next sequence number and generate RMA number
-    const sequenceNumber = await getNextRmaSequence(ctx.organizationId);
-    const rmaNumber = generateRmaNumber(sequenceNumber);
-
     // Verify order exists and belongs to organization
     const [order] = await db
       .select()
       .from(orders)
-      .where(and(eq(orders.id, data.orderId), eq(orders.organizationId, ctx.organizationId)))
+      .where(and(
+        eq(orders.id, data.orderId),
+        eq(orders.organizationId, ctx.organizationId),
+        isNull(orders.deletedAt)
+      ))
       .limit(1);
 
     if (!order) {
@@ -98,8 +122,12 @@ export const createRma = createServerFn({ method: 'POST' })
     // Use customer from order if not explicitly provided
     const customerId = data.customerId ?? order.customerId;
 
-    // Create RMA in transaction
+    // Create RMA in transaction (sequence generation inside to prevent duplicates)
     const result = await db.transaction(async (tx) => {
+      // Get next sequence number inside transaction to prevent duplicate sequences
+      const sequenceNumber = await getNextRmaSequence(ctx.organizationId, tx as unknown as typeof db);
+      const rmaNumber = generateRmaNumber(sequenceNumber);
+
       // Insert RMA
       const [rma] = await tx
         .insert(returnAuthorizations)
@@ -130,7 +158,8 @@ export const createRma = createServerFn({ method: 'POST' })
           .where(
             and(
               eq(orderLineItems.orderId, data.orderId),
-              sql`${orderLineItems.id} = ANY(${lineItemIds})`
+              eq(orderLineItems.organizationId, ctx.organizationId),
+              inArray(orderLineItems.id, lineItemIds)
             )
           );
 
@@ -155,7 +184,10 @@ export const createRma = createServerFn({ method: 'POST' })
       }
 
       // Fetch complete RMA with line items
-      const lineItems = await tx.select().from(rmaLineItems).where(eq(rmaLineItems.rmaId, rma.id));
+      const lineItems = await tx
+        .select(rmaLineItemsProjection)
+        .from(rmaLineItems)
+        .where(eq(rmaLineItems.rmaId, rma.id));
 
       return { rma, lineItems };
     });
@@ -178,7 +210,7 @@ export const createRma = createServerFn({ method: 'POST' })
  */
 export const getRma = createServerFn({ method: 'GET' })
   .inputValidator(getRmaSchema)
-  .handler(async ({ data }): Promise<RmaResponse | null> => {
+  .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth();
 
     // Get RMA with related data
@@ -194,30 +226,39 @@ export const getRma = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!rma) {
-      return null;
+      throw new NotFoundError('RMA not found', 'rma');
     }
 
     // Get line items
-    const lineItems = await db.select().from(rmaLineItems).where(eq(rmaLineItems.rmaId, rma.id));
+    const lineItems = await db
+      .select(rmaLineItemsProjection)
+      .from(rmaLineItems)
+      .where(eq(rmaLineItems.rmaId, rma.id));
 
-    // Get customer if exists
+    // Get customer if exists — include orgId for multi-tenant isolation
     let customer = null;
     if (rma.customerId) {
       const [c] = await db
         .select({ id: customers.id, name: customers.name })
         .from(customers)
-        .where(eq(customers.id, rma.customerId))
+        .where(and(
+          eq(customers.id, rma.customerId),
+          eq(customers.organizationId, ctx.organizationId)
+        ))
         .limit(1);
       customer = c ?? null;
     }
 
-    // Get issue if exists
+    // Get issue if exists — include orgId for multi-tenant isolation
     let issue = null;
     if (rma.issueId) {
       const [i] = await db
         .select({ id: issues.id, title: issues.title })
         .from(issues)
-        .where(eq(issues.id, rma.issueId))
+        .where(and(
+          eq(issues.id, rma.issueId),
+          eq(issues.organizationId, ctx.organizationId)
+        ))
         .limit(1);
       issue = i ?? null;
     }
@@ -261,7 +302,7 @@ export const listRmas = createServerFn({ method: 'GET' })
       conditions.push(eq(returnAuthorizations.issueId, data.issueId));
     }
     if (data.search) {
-      conditions.push(like(returnAuthorizations.rmaNumber, `%${data.search}%`));
+      conditions.push(ilike(returnAuthorizations.rmaNumber, containsPattern(data.search)));
     }
 
     // Get total count
@@ -292,14 +333,14 @@ export const listRmas = createServerFn({ method: 'GET' })
       .limit(data.pageSize)
       .offset(offset);
 
-    // Fetch line items for all RMAs
+    // Fetch line items for all RMAs using inArray instead of raw SQL ANY()
     const rmaIds = rmas.map((r) => r.id);
     const allLineItems =
       rmaIds.length > 0
         ? await db
-            .select()
+            .select(rmaLineItemsProjection)
             .from(rmaLineItems)
-            .where(sql`${rmaLineItems.rmaId} = ANY(${rmaIds})`)
+            .where(inArray(rmaLineItems.rmaId, rmaIds))
         : [];
 
     // Group line items by RMA
@@ -322,6 +363,67 @@ export const listRmas = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(totalCount / data.pageSize),
       },
     };
+  });
+
+/**
+ * List RMAs with cursor pagination (recommended for large datasets).
+ */
+export const listRmasCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listRmasCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', status, reason, customerId, orderId, issueId, search } = data;
+
+    const conditions = [eq(returnAuthorizations.organizationId, ctx.organizationId)];
+    if (status) conditions.push(eq(returnAuthorizations.status, status));
+    if (reason) conditions.push(eq(returnAuthorizations.reason, reason));
+    if (customerId) conditions.push(eq(returnAuthorizations.customerId, customerId));
+    if (orderId) conditions.push(eq(returnAuthorizations.orderId, orderId));
+    if (issueId) conditions.push(eq(returnAuthorizations.issueId, issueId));
+    if (search) conditions.push(ilike(returnAuthorizations.rmaNumber, containsPattern(search)));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(returnAuthorizations.createdAt, returnAuthorizations.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const rmas = await db
+      .select()
+      .from(returnAuthorizations)
+      .where(and(...conditions))
+      .orderBy(orderDir(returnAuthorizations.createdAt), orderDir(returnAuthorizations.id))
+      .limit(pageSize + 1);
+
+    const { items: rmaRows, nextCursor, hasNextPage } = buildStandardCursorResponse(rmas, pageSize);
+
+    const rmaIds = rmaRows.map((r) => r.id);
+    const allLineItems =
+      rmaIds.length > 0
+        ? await db
+            .select(rmaLineItemsProjection)
+            .from(rmaLineItems)
+            .where(inArray(rmaLineItems.rmaId, rmaIds))
+        : [];
+
+    const lineItemsByRma = new Map<string, typeof allLineItems>();
+    for (const li of allLineItems) {
+      const existing = lineItemsByRma.get(li.rmaId) ?? [];
+      existing.push(li);
+      lineItemsByRma.set(li.rmaId, existing);
+    }
+
+    const items = rmaRows.map((rma) => ({
+      ...rma,
+      lineItems: (lineItemsByRma.get(rma.id) ?? []) as RmaLineItemResponse[],
+    })) as RmaResponse[];
+
+    return { items, nextCursor, hasNextPage };
   });
 
 // ============================================================================
@@ -369,7 +471,10 @@ export const updateRma = createServerFn({ method: 'POST' })
       .returning();
 
     // Get line items
-    const lineItems = await db.select().from(rmaLineItems).where(eq(rmaLineItems.rmaId, rmaId));
+    const lineItems = await db
+      .select(rmaLineItemsProjection)
+      .from(rmaLineItems)
+      .where(eq(rmaLineItems.rmaId, rmaId));
 
     return {
       ...updated,
@@ -393,13 +498,13 @@ export const getRmaByNumber = createServerFn({ method: 'GET' })
       })
       .refine((data) => data.rmaId || data.rmaNumber, 'Either rmaId or rmaNumber is required')
   )
-  .handler(async ({ data }): Promise<RmaResponse | null> => {
+  .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth();
 
-    // Build query based on provided identifier
+    // Build query based on provided identifier (refine ensures one of rmaId or rmaNumber is present)
     const condition = data.rmaId
       ? eq(returnAuthorizations.id, data.rmaId)
-      : like(returnAuthorizations.rmaNumber, `%${data.rmaNumber}%`);
+      : ilike(returnAuthorizations.rmaNumber, containsPattern(data.rmaNumber!));
 
     const [rma] = await db
       .select()
@@ -408,11 +513,15 @@ export const getRmaByNumber = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!rma) {
-      return null;
+      setResponseStatus(404);
+      throw new NotFoundError('RMA not found', 'returnAuthorization');
     }
 
     // Get line items
-    const lineItems = await db.select().from(rmaLineItems).where(eq(rmaLineItems.rmaId, rma.id));
+    const lineItems = await db
+      .select(rmaLineItemsProjection)
+      .from(rmaLineItems)
+      .where(eq(rmaLineItems.rmaId, rma.id));
 
     return {
       ...rma,
@@ -446,16 +555,17 @@ export const getRmasForIssue = createServerFn({ method: 'GET' })
           eq(returnAuthorizations.organizationId, ctx.organizationId)
         )
       )
-      .orderBy(desc(returnAuthorizations.createdAt));
+      .orderBy(desc(returnAuthorizations.createdAt))
+      .limit(100);
 
-    // Fetch line items for all RMAs
+    // Fetch line items for all RMAs using inArray instead of raw SQL ANY()
     const rmaIds = rmas.map((r) => r.id);
     const allLineItems =
       rmaIds.length > 0
         ? await db
-            .select()
+            .select(rmaLineItemsProjection)
             .from(rmaLineItems)
-            .where(sql`${rmaLineItems.rmaId} = ANY(${rmaIds})`)
+            .where(inArray(rmaLineItems.rmaId, rmaIds))
         : [];
 
     // Group line items by RMA
@@ -525,7 +635,7 @@ export const approveRma = createServerFn({ method: 'POST' })
 
     // Get line items
     const lineItems = await db
-      .select()
+      .select(rmaLineItemsProjection)
       .from(rmaLineItems)
       .where(eq(rmaLineItems.rmaId, data.rmaId));
 
@@ -586,7 +696,7 @@ export const rejectRma = createServerFn({ method: 'POST' })
 
     // Get line items
     const lineItems = await db
-      .select()
+      .select(rmaLineItemsProjection)
       .from(rmaLineItems)
       .where(eq(rmaLineItems.rmaId, data.rmaId));
 
@@ -659,7 +769,7 @@ export const receiveRma = createServerFn({ method: 'POST' })
 
     // Get line items
     const lineItems = await db
-      .select()
+      .select(rmaLineItemsProjection)
       .from(rmaLineItems)
       .where(eq(rmaLineItems.rmaId, data.rmaId));
 
@@ -733,7 +843,7 @@ export const processRma = createServerFn({ method: 'POST' })
 
     // Get line items
     const lineItems = await db
-      .select()
+      .select(rmaLineItemsProjection)
       .from(rmaLineItems)
       .where(eq(rmaLineItems.rmaId, data.rmaId));
 
@@ -741,4 +851,64 @@ export const processRma = createServerFn({ method: 'POST' })
       ...updated,
       lineItems: lineItems as RmaLineItemResponse[],
     } as RmaResponse;
+  });
+
+// ============================================================================
+// WORKFLOW: CANCEL RMA
+// ============================================================================
+
+/**
+ * Cancel an RMA (status-based cancellation)
+ */
+export const cancelRma = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    id: z.string().uuid(),
+    reason: z.string().optional(),
+  }))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.support?.delete ?? 'support:delete' });
+    const logger = createActivityLoggerWithContext(ctx);
+    const { id, reason } = data;
+
+    const existing = await db.query.returnAuthorizations.findFirst({
+      where: and(
+        eq(returnAuthorizations.id, id),
+        eq(returnAuthorizations.organizationId, ctx.organizationId)
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundError('RMA not found', 'rma');
+    }
+
+    // Guard: Only allow cancellation from requested or approved status
+    if (!['requested', 'approved'].includes(existing.status)) {
+      throw new ValidationError(`Cannot cancel RMA in '${existing.status}' status. Only requested or approved RMAs can be cancelled.`);
+    }
+
+    const [updated] = await db
+      .update(returnAuthorizations)
+      .set({
+        status: 'cancelled',
+        internalNotes: reason
+          ? `${existing.internalNotes ? existing.internalNotes + '\n' : ''}Cancellation reason: ${reason}`
+          : existing.internalNotes,
+        updatedBy: ctx.user.id,
+      })
+      .where(eq(returnAuthorizations.id, id))
+      .returning();
+
+    logger.logAsync({
+      entityType: 'rma',
+      entityId: id,
+      action: 'updated',
+      description: `Cancelled RMA: ${existing.rmaNumber}${reason ? ` - ${reason}` : ''}`,
+      metadata: {
+        previousStatus: existing.status,
+        newStatus: 'cancelled',
+        reason,
+      },
+    });
+
+    return updated;
   });

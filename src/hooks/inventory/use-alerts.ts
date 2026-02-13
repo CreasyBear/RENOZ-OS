@@ -53,7 +53,11 @@ export function useAlerts(options: UseAlertsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.inventory.alerts(filters),
-    queryFn: () => listAlerts({ data: filters }),
+    queryFn: async () => {
+      const result = await listAlerts({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -65,7 +69,13 @@ export function useAlerts(options: UseAlertsOptions = {}) {
 export function useAlert(alertId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.alert(alertId),
-    queryFn: () => getAlert({ data: { id: alertId } }),
+    queryFn: async () => {
+      const result = await getAlert({
+        data: { id: alertId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!alertId,
     staleTime: 60 * 1000,
   });
@@ -77,7 +87,11 @@ export function useAlert(alertId: string, enabled = true) {
 export function useTriggeredAlerts(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.triggeredAlerts(),
-    queryFn: () => getTriggeredAlerts(),
+    queryFn: async () => {
+      const result = await getTriggeredAlerts();
+      if (result == null) throw new Error('Triggered alerts returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000, // Auto-refresh every minute
@@ -90,7 +104,13 @@ export function useTriggeredAlerts(enabled = true) {
 export function useAlertAnalytics(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.alertAnalytics(),
-    queryFn: () => getAlertAnalytics({ data: {} }),
+    queryFn: async () => {
+      const result = await getAlertAnalytics({
+        data: {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

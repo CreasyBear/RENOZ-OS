@@ -4,7 +4,7 @@
  * Server functions for token refresh operations and automated token management.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { z } from 'zod';
 import {
   refreshOAuthTokens,
@@ -90,7 +90,7 @@ export type RefreshTokensResponse = RefreshTokensResponseSuccess | RefreshTokens
  * Can be called on-demand or for troubleshooting.
  */
 export async function refreshTokens(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: RefreshTokensRequest
 ): Promise<RefreshTokensResponse> {
   try {
@@ -138,7 +138,7 @@ export type BulkRefreshTokensResponse =
  * Designed for background jobs and maintenance operations.
  */
 export async function bulkRefreshTokensServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: BulkRefreshTokensRequest
 ): Promise<BulkRefreshTokensResponse> {
   try {
@@ -189,7 +189,7 @@ export type GetTokenRefreshStatsResponse =
  * Gets token refresh statistics for monitoring and alerting.
  */
 export async function getTokenRefreshStatsServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: GetTokenRefreshStatsRequest
 ): Promise<GetTokenRefreshStatsResponse> {
   try {
@@ -240,7 +240,7 @@ export type GetConnectionsNeedingRefreshResponse =
  * Useful for monitoring and manual intervention.
  */
 export async function getConnectionsNeedingRefreshServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: GetConnectionsNeedingRefreshRequest
 ): Promise<GetConnectionsNeedingRefreshResponse> {
   try {
@@ -291,7 +291,7 @@ export async function getConnectionsNeedingRefreshServer(
  * Designed to be called by a scheduler (cron job, queue system, etc.)
  */
 export async function scheduledTokenRefresh(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   options: {
     organizationId?: string;
     maxConcurrency?: number;

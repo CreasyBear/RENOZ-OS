@@ -57,11 +57,8 @@ function formatDate(date: Date | string): string {
 // TYPES
 // ============================================================================
 
-export interface QuoteDetailCustomer {
-  id: string;
-  name: string;
-  email?: string | null;
-}
+// QuoteDetailCustomer moved to schemas - import from there
+import type { QuoteDetailCustomer } from "@/lib/schemas/pipeline";
 
 export interface QuoteDetailOpportunity {
   id: string;
@@ -238,6 +235,7 @@ export const QuoteDetail = memo(function QuoteDetail({
                 <Link
                   to="/customers/$customerId"
                   params={{ customerId: opportunity.customer.id }}
+                  search={{}}
                   className="hover:underline"
                 >
                   {opportunity.customer.name}

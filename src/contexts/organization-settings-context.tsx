@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Context file exports provider + hook */
 /**
  * Organization Settings Context
  *
@@ -26,6 +27,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { OrganizationSettings } from "~/lib/schemas/auth";
+import { organizationSettingsSchema } from "~/lib/schemas/auth";
 
 /**
  * Default organization settings as fallback
@@ -64,10 +66,11 @@ const OrganizationSettingsContext = createContext<
 /**
  * Props for OrganizationSettingsProvider
  */
+/** Settings from API may have weekStartDay as number; context normalizes to WeekStartDay */
 interface OrganizationSettingsProviderProps {
   children: ReactNode;
   /** Organization settings from the API (may be partial or null) */
-  settings?: Partial<OrganizationSettings> | null;
+  settings?: Partial<OrganizationSettings> | Partial<{ weekStartDay?: number; timeFormat?: string; numberFormat?: string }> | null;
   /** Whether settings are loading */
   isLoading?: boolean;
   /** Error if settings failed to load */
@@ -99,21 +102,13 @@ export function OrganizationSettingsProvider({
   error = null,
 }: OrganizationSettingsProviderProps) {
   const value = useMemo<OrganizationSettingsContextValue>(() => {
+    const parsed = organizationSettingsSchema.safeParse({
+      ...DEFAULT_SETTINGS,
+      ...settings,
+    });
+    const data = parsed.success ? parsed.data : DEFAULT_SETTINGS;
     return {
-      // Apply defaults for any missing values
-      timezone: settings?.timezone ?? DEFAULT_SETTINGS.timezone,
-      locale: settings?.locale ?? DEFAULT_SETTINGS.locale,
-      currency: settings?.currency ?? DEFAULT_SETTINGS.currency,
-      dateFormat: settings?.dateFormat ?? DEFAULT_SETTINGS.dateFormat,
-      fiscalYearStart: settings?.fiscalYearStart ?? DEFAULT_SETTINGS.fiscalYearStart,
-      defaultPaymentTerms:
-        settings?.defaultPaymentTerms ?? DEFAULT_SETTINGS.defaultPaymentTerms,
-      timeFormat: settings?.timeFormat ?? DEFAULT_SETTINGS.timeFormat,
-      weekStartDay: settings?.weekStartDay ?? DEFAULT_SETTINGS.weekStartDay,
-      defaultTaxRate: settings?.defaultTaxRate ?? DEFAULT_SETTINGS.defaultTaxRate,
-      numberFormat: settings?.numberFormat ?? DEFAULT_SETTINGS.numberFormat,
-      portalBranding: settings?.portalBranding ?? DEFAULT_SETTINGS.portalBranding,
-      // Status
+      ...data,
       isLoading,
       error,
     };

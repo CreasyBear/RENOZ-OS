@@ -25,7 +25,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type {
+  RealtimeChannel,
+  RealtimePostgresChangesFilter,
+  RealtimePostgresChangesPayload,
+} from '@supabase/supabase-js';
 
 // Simplified payload type for our use case
 export interface RealtimePayload<T> {
@@ -148,8 +152,10 @@ export function useRealtimeSubscription<T = unknown>(
       ...(filter && { filter }),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    channel.on('postgres_changes', pgChangesConfig as any, (payload: any) => {
+    channel.on(
+      'postgres_changes',
+      pgChangesConfig as RealtimePostgresChangesFilter<'*'>,
+      (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
       // Check if aborted
       if (abortControllerRef.current?.signal.aborted) return;
 
@@ -161,13 +167,14 @@ export function useRealtimeSubscription<T = unknown>(
       // Call custom handler if provided with simplified payload
       if (onUpdate) {
         const simplifiedPayload: RealtimePayload<T> = {
-          eventType: payload.eventType,
-          new: payload.new || {},
-          old: payload.old || {},
+          eventType: payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE',
+          new: (payload.new || {}) as Partial<T>,
+          old: (payload.old || {}) as Partial<T>,
         };
         onUpdate(simplifiedPayload);
       }
-    });
+    }
+    );
 
     // Handle connection status
     channel.subscribe((status) => {

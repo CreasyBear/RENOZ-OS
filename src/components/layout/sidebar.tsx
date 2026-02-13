@@ -1,24 +1,29 @@
 /**
  * Sidebar Component
  *
- * Navigation sidebar with simplified architecture for battery installation CRM.
+ * Navigation sidebar with expanded domain coverage.
  *
  * Structure:
  * - Search (⌘K)
- * - Daily Work (Dashboard, My Tasks, Schedule)
- * - Sales (Customers, Pipeline, Orders)
+ * - Daily (Dashboard, My Tasks, Schedule)
+ * - Sales (Customers, Pipeline, Orders, Financial)
  * - Delivery (Projects, Installers)
- * - Active Projects (contextual, shows recent in-progress projects)
- * - Footer (Inventory, Support, Reports icons + Settings modal)
+ * - Operations (Inventory, Products, Suppliers, Procurement, Purchase Orders)
+ * - Communications (Inbox, Campaigns, Calls)
+ * - Support (Warranties, Claims, RMAs, Issues)
+ * - Admin (Users, Groups, Invitations, Audit, Activities, Approvals)
+ * - Active Projects (contextual)
+ * - Footer (Reports + Settings modal)
  *
  * @see src/lib/routing/routes.ts for navigation configuration
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useRouterState, Link } from '@tanstack/react-router'
 import {
   Settings,
   LogOut,
   Search,
+  LayoutDashboard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SidebarNavItem } from './sidebar-nav-item'
@@ -33,6 +38,7 @@ import {
   type SidebarCollapsible,
 } from './sidebar-provider'
 import { toast, useActiveProjects } from '@/hooks'
+import { useCurrentOrg } from '@/hooks/auth/use-current-org'
 import { useCurrentUser } from '@/hooks'
 import { hasAnyPermission, hasPermission, type Role } from '@/lib/auth/permissions'
 import {
@@ -42,6 +48,9 @@ import {
 } from '@/components/ui/tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsDialog } from './settings-dialog'
+import { queryKeys } from '@/lib/query-keys'
+import { useQueryClient } from '@tanstack/react-query'
+import { authErrorMessage, toAuthErrorCode } from '@/lib/auth/error-codes'
 
 // ============================================================================
 // TYPES
@@ -104,14 +113,68 @@ export function Sidebar({
   const signOut = useSignOut()
   const sidebarContext = useSidebarSafe()
   const { user } = useCurrentUser()
+  const { currentOrg } = useCurrentOrg()
+  const queryClient = useQueryClient()
   const router = useRouterState()
   const currentPath = router.location.pathname
 
   // Fetch active projects for contextual section
   const { data: activeProjects, isLoading: projectsLoading } = useActiveProjects(5)
 
-  // Settings dialog state
+  // Settings dialog state (user opens via gear icon, or from OAuth callback URL)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsInitialPane, setSettingsInitialPane] = useState<
+    'integrations' | undefined
+  >(undefined)
+
+  // Derive open/initialPane from URL when OAuth callback redirects with ?settingsOpen=integrations
+  const search = typeof window !== 'undefined' ? window.location.search : ''
+  const urlParams = new URLSearchParams(search)
+  const hasOAuthCallbackParams =
+    urlParams.get('settingsOpen') === 'integrations' || urlParams.get('oauth')
+  const settingsOpenFromUrl = urlParams.get('settingsOpen') === 'integrations'
+  const oauthParam = urlParams.get('oauth')
+  const errorParam = urlParams.get('error')
+
+  const effectiveSettingsOpen = settingsOpen || settingsOpenFromUrl
+  const effectiveInitialPane = settingsOpenFromUrl
+    ? 'integrations'
+    : settingsInitialPane
+
+  // Handle OAuth callback: open dialog, toast, invalidate, then clean URL.
+  // We must setState so the dialog stays open after navigate() clears the URL.
+  // Defer setState to avoid "setState in effect" lint; still runs before next paint.
+  useEffect(() => {
+    if (!hasOAuthCallbackParams) return
+
+    if (settingsOpenFromUrl) {
+      void Promise.resolve().then(() => {
+        setSettingsOpen(true)
+        setSettingsInitialPane('integrations')
+      })
+    }
+
+    if (oauthParam === 'success') {
+      toast.success('Account connected successfully')
+      if (currentOrg?.id) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.oauth.connections(currentOrg.id),
+        })
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.oauth.health(currentOrg.id),
+        })
+      }
+    } else if (oauthParam === 'failed') {
+      const message = authErrorMessage(toAuthErrorCode(errorParam))
+      toast.error('Connection failed', { description: message })
+    }
+
+    navigate({
+      to: router.location.pathname || '/',
+      search: {},
+      replace: true,
+    })
+  }, [hasOAuthCallbackParams, settingsOpenFromUrl, oauthParam, errorParam, currentOrg?.id, navigate, queryClient, router.location.pathname])
 
   // Use context if available, otherwise fall back to legacy props
   const isCollapsed = sidebarContext?.isCollapsed ?? legacyCollapsed ?? false
@@ -146,6 +209,10 @@ export function Sidebar({
       daily: [],
       sales: [],
       delivery: [],
+      operations: [],
+      communications: [],
+      support: [],
+      admin: [],
       footer: [],
     }
 
@@ -225,13 +292,21 @@ export function Sidebar({
       <nav className="flex-1 overflow-y-auto py-2" aria-label="Primary navigation">
         {showCollapsedView ? (
           // Collapsed view: flat list with icons only
-          <div className="px-2 space-y-1">
-            {[...groupedNavItems.daily, ...groupedNavItems.sales, ...groupedNavItems.delivery].map((item) => (
+          <div className="px-2 space-y-1 overflow-y-auto">
+            {[
+              ...groupedNavItems.daily,
+              ...groupedNavItems.sales,
+              ...groupedNavItems.delivery,
+              ...groupedNavItems.operations,
+              ...groupedNavItems.communications,
+              ...groupedNavItems.support,
+              ...groupedNavItems.admin,
+            ].map((item) => (
               <SidebarNavItem
                 key={item.path}
                 href={item.path}
                 label={item.title}
-                icon={item.icon!}
+                icon={item.icon ?? LayoutDashboard}
                 collapsed={true}
               />
             ))}
@@ -250,7 +325,7 @@ export function Sidebar({
                     key={item.path}
                     href={item.path}
                     label={item.title}
-                    icon={item.icon!}
+                    icon={item.icon ?? LayoutDashboard}
                     badge={item.badge}
                   />
                 ))}
@@ -268,7 +343,7 @@ export function Sidebar({
                     key={item.path}
                     href={item.path}
                     label={item.title}
-                    icon={item.icon!}
+                    icon={item.icon ?? LayoutDashboard}
                     badge={item.badge}
                   />
                 ))}
@@ -286,12 +361,92 @@ export function Sidebar({
                     key={item.path}
                     href={item.path}
                     label={item.title}
-                    icon={item.icon!}
+                    icon={item.icon ?? LayoutDashboard}
                     badge={item.badge}
                   />
                 ))}
               </div>
             </div>
+
+            {/* Operations */}
+            {groupedNavItems.operations.length > 0 && (
+              <div className="px-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
+                  Operations
+                </p>
+                <div className="space-y-0.5">
+                  {groupedNavItems.operations.map((item) => (
+                    <SidebarNavItem
+                      key={item.path}
+                      href={item.path}
+                      label={item.title}
+                      icon={item.icon ?? LayoutDashboard}
+                      badge={item.badge}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Communications */}
+            {groupedNavItems.communications.length > 0 && (
+              <div className="px-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
+                  Communications
+                </p>
+                <div className="space-y-0.5">
+                  {groupedNavItems.communications.map((item) => (
+                    <SidebarNavItem
+                      key={item.path}
+                      href={item.path}
+                      label={item.title}
+                      icon={item.icon ?? LayoutDashboard}
+                      badge={item.badge}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Support */}
+            {groupedNavItems.support.length > 0 && (
+              <div className="px-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
+                  Support
+                </p>
+                <div className="space-y-0.5">
+                  {groupedNavItems.support.map((item) => (
+                    <SidebarNavItem
+                      key={item.path}
+                      href={item.path}
+                      label={item.title}
+                      icon={item.icon ?? LayoutDashboard}
+                      badge={item.badge}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Admin */}
+            {groupedNavItems.admin.length > 0 && (
+              <div className="px-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">
+                  Admin
+                </p>
+                <div className="space-y-0.5">
+                  {groupedNavItems.admin.map((item) => (
+                    <SidebarNavItem
+                      key={item.path}
+                      href={item.path}
+                      label={item.title}
+                      icon={item.icon ?? LayoutDashboard}
+                      badge={item.badge}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Active Projects - Contextual Section */}
             <div className="px-3 border-t border-border pt-4">
@@ -348,9 +503,9 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* Footer - Icon buttons for secondary navigation */}
+      {/* Footer - Reports and Settings */}
       <div className="border-t border-border p-2">
-        {/* Footer nav items (Inventory, Support, Reports) */}
+        {/* Footer nav items (Reports) */}
         <div className={cn(
           'flex items-center gap-1 mb-2',
           showCollapsedView ? 'flex-col' : 'justify-center'
@@ -358,17 +513,20 @@ export function Sidebar({
           {groupedNavItems.footer.map((item) => (
             <Tooltip key={item.path} delayDuration={0}>
               <TooltipTrigger asChild>
-                <Link
-                  to={item.path}
-                  className={cn(
-                    'flex items-center justify-center rounded-lg p-2',
-                    'text-muted-foreground hover:text-foreground hover:bg-muted',
-                    'transition-colors duration-200',
-                    currentPath.startsWith(item.path) && 'bg-muted text-foreground'
-                  )}
-                >
-                  {item.icon && <item.icon className="h-5 w-5" />}
-                </Link>
+                {/* Use span wrapper to avoid TooltipTrigger asChild + TanStack Link SSR issues */}
+                <span>
+                  <Link
+                    to={item.path}
+                    className={cn(
+                      'flex items-center justify-center rounded-lg p-2',
+                      'text-muted-foreground hover:text-foreground hover:bg-muted',
+                      'transition-colors duration-200',
+                      currentPath.startsWith(item.path) && 'bg-muted text-foreground'
+                    )}
+                  >
+                    {item.icon && <item.icon className="h-5 w-5" />}
+                  </Link>
+                </span>
               </TooltipTrigger>
               <TooltipContent side={showCollapsedView ? 'right' : 'top'}>
                 {item.title}
@@ -432,7 +590,14 @@ export function Sidebar({
       )}
 
       {/* Settings Dialog */}
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={effectiveSettingsOpen}
+        onOpenChange={(open) => {
+          setSettingsOpen(open)
+          if (!open) setSettingsInitialPane(undefined)
+        }}
+        initialPane={effectiveInitialPane}
+      />
     </aside>
   )
 }

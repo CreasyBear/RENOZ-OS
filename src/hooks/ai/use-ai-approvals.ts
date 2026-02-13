@@ -115,7 +115,11 @@ export function useAIApprovals(options: UseAIApprovalsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.ai.approvals.list(filters),
-    queryFn: () => fetchPendingApprovals(filters),
+    queryFn: async () => {
+      const result = await fetchPendingApprovals(filters);
+      if (result == null) throw new Error('AI pending approvals returned no data');
+      return result;
+    },
     enabled,
     staleTime: 15 * 1000, // 15 seconds
     refetchInterval,

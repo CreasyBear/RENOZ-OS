@@ -10,30 +10,27 @@
  * - Two-Factor: Enable/disable 2FA (future)
  * - Security Events: Recent security activity
  *
- * @see src/server/functions/users.ts for user server functions
+ * @see src/hooks/users for session and activity hooks
  */
-import { createFileRoute, useLoaderData } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
-  listMySessions,
-  terminateSession,
-  terminateAllOtherSessions,
-  type SessionInfo,
-} from '@/server/functions/users/sessions';
-import { getMyActivity } from '@/server/functions/_shared/audit-logs';
+  useMySessions,
+  useTerminateSession,
+  useTerminateAllOtherSessions,
+  useMyActivity,
+} from '@/hooks/users';
 import { useMFA } from '@/hooks';
 import { MFAEnrollmentDialog } from '@/components/shared/mfa-enrollment-dialog';
 import { MFADisableDialog } from '@/components/shared/mfa-disable-dialog';
+import { PasswordChangeForm } from '@/components/auth/password-change-form';
 
 // UI Components
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks';
 
@@ -47,8 +44,6 @@ import {
   ShieldCheck,
   ShieldAlert,
   LogOut,
-  Eye,
-  EyeOff,
   Loader2,
   AlertTriangle,
   CheckCircle,
@@ -57,20 +52,13 @@ import {
 } from 'lucide-react';
 import { useConfirmation } from '@/hooks';
 
-// Route definition
-export const Route = createFileRoute('/_authenticated/settings/security' as any)({
+// Route definition - no loader, data fetching is done via hooks in component
+export const Route = createFileRoute('/_authenticated/settings/security')({
   component: SecuritySettings,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/settings" />
   ),
   pendingComponent: () => <SettingsCardsSkeleton sections={4} />,
-  loader: async () => {
-    const [sessions, activity] = await Promise.all([
-      listMySessions({ data: {} }),
-      getMyActivity({ data: { page: 1, pageSize: 10 } }),
-    ]);
-    return { sessions, securityEvents: activity.items };
-  },
 });
 
 // Security event type mapping for audit log actions
@@ -118,25 +106,17 @@ function getEventDescription(action: string, entityType: string | null): string 
 function SecuritySettings() {
   const confirm = useConfirmation();
 
-  // Loader data
-  const loaderData = useLoaderData({ from: '/_authenticated/settings/security' as any });
+  // Data fetching via hooks
+  const { data: sessions = [], isLoading: sessionsLoading } = useMySessions();
+  const { data: activityData, isLoading: activityLoading } = useMyActivity({ page: 1, pageSize: 10 });
+  const securityEvents = activityData?.items ?? [];
 
-  // Server functions
-  const terminateSessionFn = useServerFn(terminateSession);
-  const terminateAllFn = useServerFn(terminateAllOtherSessions);
+  // Session mutations
+  const terminateSessionMutation = useTerminateSession();
+  const terminateAllMutation = useTerminateAllOtherSessions();
 
-  // Password change state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-
-  // Session state - initialized from loader
-  const [sessions, setSessions] = useState<SessionInfo[]>(loaderData?.sessions ?? []);
-  const [terminatingSession, setTerminatingSession] = useState<string | null>(null);
-  const [terminatingAll, setTerminatingAll] = useState(false);
+  // Track which session is being terminated (for UI feedback)
+  const [terminatingSessionId, setTerminatingSessionId] = useState<string | null>(null);
 
   // MFA state
   const mfa = useMFA();
@@ -146,72 +126,8 @@ function SecuritySettings() {
   // Fetch MFA status on mount
   useEffect(() => {
     mfa.refreshStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Update sessions when loader data changes
-  useEffect(() => {
-    if (loaderData?.sessions) {
-      setSessions(loaderData.sessions);
-    }
-  }, [loaderData?.sessions]);
-
-  // Password strength calculation
-  const calculatePasswordStrength = (
-    password: string
-  ): { score: number; label: string; color: string } => {
-    if (!password) return { score: 0, label: '', color: 'bg-gray-200' };
-
-    let score = 0;
-    if (password.length >= 8) score += 1;
-    if (password.length >= 12) score += 1;
-    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
-    if (/\d/.test(password)) score += 1;
-    if (/[^a-zA-Z\d]/.test(password)) score += 1;
-
-    if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
-    if (score <= 2) return { score, label: 'Fair', color: 'bg-orange-500' };
-    if (score <= 3) return { score, label: 'Good', color: 'bg-yellow-500' };
-    if (score <= 4) return { score, label: 'Strong', color: 'bg-green-500' };
-    return { score, label: 'Very Strong', color: 'bg-green-600' };
-  };
-
-  const passwordStrength = calculatePasswordStrength(newPassword);
-
-  // Password requirements check
-  const passwordRequirements = [
-    { label: 'At least 8 characters', met: newPassword.length >= 8 },
-    { label: 'Contains uppercase letter', met: /[A-Z]/.test(newPassword) },
-    { label: 'Contains lowercase letter', met: /[a-z]/.test(newPassword) },
-    { label: 'Contains number', met: /\d/.test(newPassword) },
-    { label: 'Contains special character', met: /[^a-zA-Z\d]/.test(newPassword) },
-  ];
-
-  // Handle password change
-  const handlePasswordChange = async () => {
-    if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match');
-      return;
-    }
-
-    if (passwordStrength.score < 3) {
-      toast.error('Password is too weak. Please choose a stronger password.');
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      // In real implementation, call server function
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      toast.success('Password changed successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch {
-      toast.error('Failed to change password');
-    } finally {
-      setChangingPassword(false);
-    }
-  };
 
   // Handle session termination
   const handleTerminateSession = async (sessionId: string) => {
@@ -224,16 +140,20 @@ function SecuritySettings() {
     });
 
     if (confirmed.confirmed) {
-      setTerminatingSession(sessionId);
-      try {
-        await terminateSessionFn({ data: { id: sessionId } });
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-        toast.success('Session terminated');
-      } catch {
-        toast.error('Failed to terminate session');
-      } finally {
-        setTerminatingSession(null);
-      }
+      setTerminatingSessionId(sessionId);
+      terminateSessionMutation.mutate(
+        { id: sessionId },
+        {
+          onSuccess: () => {
+            toast.success('Session terminated');
+            setTerminatingSessionId(null);
+          },
+          onError: () => {
+            toast.error('Failed to terminate session');
+            setTerminatingSessionId(null);
+          },
+        }
+      );
     }
   };
 
@@ -247,16 +167,14 @@ function SecuritySettings() {
     });
 
     if (confirmed.confirmed) {
-      setTerminatingAll(true);
-      try {
-        await terminateAllFn({ data: {} });
-        setSessions((prev) => prev.filter((s) => s.isCurrent));
-        toast.success('Other sessions terminated');
-      } catch {
-        toast.error('Failed to terminate sessions');
-      } finally {
-        setTerminatingAll(false);
-      }
+      terminateAllMutation.mutate(undefined, {
+        onSuccess: () => {
+          toast.success('Other sessions terminated');
+        },
+        onError: () => {
+          toast.error('Failed to terminate sessions');
+        },
+      });
     }
   };
 
@@ -292,8 +210,10 @@ function SecuritySettings() {
     }
   };
 
-  // Security events from loader
-  const securityEvents = loaderData?.securityEvents ?? [];
+  // Show loading skeleton while data is being fetched
+  if (sessionsLoading || activityLoading) {
+    return <SettingsCardsSkeleton sections={4} />;
+  }
 
   return (
     <PageLayout variant="full-width">
@@ -306,125 +226,7 @@ function SecuritySettings() {
 
       <div className="space-y-6">
         {/* Password Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              Change Password
-            </CardTitle>
-            <CardDescription>
-              Update your password regularly to keep your account secure
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Current Password */}
-            <div className="space-y-2">
-              <Label htmlFor="current-password">Current Password</Label>
-              <div className="relative">
-                <Input
-                  id="current-password"
-                  type={showCurrentPassword ? 'text' : 'password'}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                >
-                  {showCurrentPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* New Password */}
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
-              <div className="relative">
-                <Input
-                  id="new-password"
-                  type={showNewPassword ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                >
-                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-
-              {/* Password Strength */}
-              {newPassword && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className={`h-full ${passwordStrength.color} transition-all`}
-                        style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-muted-foreground text-sm">{passwordStrength.label}</span>
-                  </div>
-
-                  {/* Requirements Checklist */}
-                  <div className="grid grid-cols-2 gap-1 text-xs">
-                    {passwordRequirements.map((req) => (
-                      <div
-                        key={req.label}
-                        className={`flex items-center gap-1 ${req.met ? 'text-green-600' : 'text-muted-foreground'}`}
-                      >
-                        {req.met ? (
-                          <CheckCircle className="h-3 w-3" />
-                        ) : (
-                          <div className="h-3 w-3 rounded-full border" />
-                        )}
-                        {req.label}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Confirm Password */}
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm New Password</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-              />
-              {confirmPassword && newPassword !== confirmPassword && (
-                <p className="text-xs text-red-500">Passwords do not match</p>
-              )}
-            </div>
-
-            <Button
-              onClick={handlePasswordChange}
-              disabled={
-                !currentPassword ||
-                !newPassword ||
-                !confirmPassword ||
-                newPassword !== confirmPassword ||
-                changingPassword
-              }
-            >
-              {changingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Change Password
-            </Button>
-          </CardContent>
-        </Card>
+        <PasswordChangeForm />
 
         {/* Active Sessions */}
         <Card>
@@ -435,16 +237,16 @@ function SecuritySettings() {
                   <Monitor className="h-5 w-5" />
                   Active Sessions
                 </CardTitle>
-                <CardDescription>Manage devices where you're signed in</CardDescription>
+                <CardDescription>Manage devices where you&apos;re signed in</CardDescription>
               </div>
               {sessions.filter((s) => !s.isCurrent).length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTerminateAllOthers}
-                  disabled={terminatingAll}
+                  disabled={terminateAllMutation.isPending}
                 >
-                  {terminatingAll ? (
+                  {terminateAllMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <LogOut className="mr-2 h-4 w-4" />
@@ -458,6 +260,7 @@ function SecuritySettings() {
             <div className="space-y-4">
               {sessions.map((session) => {
                 const DeviceIcon = getDeviceIcon(session.deviceType);
+                const isTerminating = terminatingSessionId === session.id;
                 return (
                   <div
                     key={session.id}
@@ -500,9 +303,9 @@ function SecuritySettings() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleTerminateSession(session.id)}
-                        disabled={terminatingSession === session.id}
+                        disabled={isTerminating}
                       >
-                        {terminatingSession === session.id ? (
+                        {isTerminating ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <LogOut className="h-4 w-4" />

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { createFileRoute } from '@tanstack/react-router';
+import { authErrorMessage, toAuthErrorCode } from '@/lib/auth/error-codes';
 
 export const Route = createFileRoute('/auth/error')({
   component: AuthError,
@@ -13,6 +14,7 @@ export const Route = createFileRoute('/auth/error')({
 
 function AuthError() {
   const params = Route.useSearch();
+  const errorCode = toAuthErrorCode(params?.error);
 
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
@@ -23,11 +25,7 @@ function AuthError() {
               <CardTitle className="text-2xl">Sorry, something went wrong.</CardTitle>
             </CardHeader>
             <CardContent>
-              {params?.error ? (
-                <p className="text-muted-foreground text-sm">Code error: {params.error}</p>
-              ) : (
-                <p className="text-muted-foreground text-sm">An unspecified error occurred.</p>
-              )}
+              <p className="text-muted-foreground text-sm">{authErrorMessage(errorCode)}</p>
             </CardContent>
           </Card>
         </div>

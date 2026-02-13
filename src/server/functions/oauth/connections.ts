@@ -5,7 +5,7 @@
  * organization-scoped access, and comprehensive audit logging.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { oauthConnections, oauthSyncLogs, oauthServicePermissions } from 'drizzle/schema/oauth';
@@ -85,7 +85,7 @@ export type CreateOAuthConnectionResponse =
  * Creates a new OAuth connection with encrypted token storage.
  */
 export async function createOAuthConnection(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: CreateOAuthConnectionRequest
 ): Promise<CreateOAuthConnectionResponse> {
   try {
@@ -177,7 +177,7 @@ export type GetOAuthConnectionResponse =
  * Retrieves an OAuth connection with decrypted token information.
  */
 export async function getOAuthConnection(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: GetOAuthConnectionRequest
 ): Promise<GetOAuthConnectionResponse> {
   try {
@@ -262,7 +262,7 @@ export type ListOAuthConnectionsResponse =
  * Lists OAuth connections for an organization with filtering options.
  */
 export async function listOAuthConnections(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: ListOAuthConnectionsRequest
 ): Promise<ListOAuthConnectionsResponse> {
   try {
@@ -353,7 +353,7 @@ export type UpdateOAuthConnectionResponse =
  * Updates an OAuth connection with validation and audit logging.
  */
 export async function updateOAuthConnection(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: UpdateOAuthConnectionRequest
 ): Promise<UpdateOAuthConnectionResponse> {
   try {
@@ -380,7 +380,7 @@ export async function updateOAuthConnection(
     }
 
     // Prepare update data
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
@@ -471,7 +471,7 @@ export type DeleteOAuthConnectionResponse =
  * Deletes an OAuth connection and cleans up related data.
  */
 export async function deleteOAuthConnection(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: DeleteOAuthConnectionRequest
 ): Promise<DeleteOAuthConnectionResponse> {
   try {
@@ -499,29 +499,26 @@ export async function deleteOAuthConnection(
       };
     }
 
-    // Delete service permissions (connection delete cascades in DB, but keep explicit cleanup)
-    await db
-      .delete(oauthServicePermissions)
-      .where(eq(oauthServicePermissions.connectionId, request.connectionId));
-
-    // Delete connection
-    await db.delete(oauthConnections).where(eq(oauthConnections.id, request.connectionId));
-
-    // Log deletion
-    await db.insert(oauthSyncLogs).values({
-      organizationId: request.organizationId,
-      connectionId: request.connectionId,
-      serviceType: connection.serviceType as 'calendar' | 'email' | 'contacts',
-      operation: 'connection_delete',
-      status: 'completed',
-      recordCount: 1,
-      metadata: {
-        userId: connection.userId,
-        provider: connection.provider,
-        cleanupPerformed: true,
-      },
-      startedAt: new Date(),
-      completedAt: new Date(),
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(oauthServicePermissions)
+        .where(eq(oauthServicePermissions.connectionId, request.connectionId));
+      await tx.delete(oauthConnections).where(eq(oauthConnections.id, request.connectionId));
+      await tx.insert(oauthSyncLogs).values({
+        organizationId: request.organizationId,
+        connectionId: request.connectionId,
+        serviceType: connection.serviceType as 'calendar' | 'email' | 'contacts',
+        operation: 'connection_delete',
+        status: 'completed',
+        recordCount: 1,
+        metadata: {
+          userId: connection.userId,
+          provider: connection.provider,
+          cleanupPerformed: true,
+        },
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
     });
 
     return {

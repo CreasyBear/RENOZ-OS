@@ -4,9 +4,7 @@
  * Advanced pricing management with bulk operations, margin analysis, and recommendations.
  */
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useForm as useTanStackForm } from "@tanstack/react-form";
 import {
   Calculator,
   TrendingUp,
@@ -38,15 +36,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { resolvePrice } from "@/server/functions/products/product-pricing";
+import { ComboboxField } from "@/components/shared/forms";
+import { useResolvePrice } from "@/hooks/products";
+import { useCustomers } from "@/hooks/customers";
 
-// Price calculation form schema
-const priceCalcSchema = z.object({
-  quantity: z.number().int().positive(),
-  customerId: z.string().optional(),
-});
+// ============================================================================
+// PRICING STRATEGY CONSTANTS
+// ============================================================================
 
-type PriceCalcValues = z.infer<typeof priceCalcSchema>;
+/**
+ * Pricing strategy multipliers for suggested prices.
+ * Based on cost-plus pricing methodology.
+ */
+const PRICING_STRATEGY_MULTIPLIERS = {
+  /** Competitive pricing: 25% markup on cost, or 5% discount on base price */
+  competitive: { costMultiplier: 1.25, basePriceDiscount: 0.95 },
+  /** Balanced pricing: 40% markup on cost, or base price */
+  balanced: { costMultiplier: 1.40, basePriceMultiplier: 1.0 },
+  /** Premium pricing: 60% markup on cost, or 10% premium on base price */
+  premium: { costMultiplier: 1.60, basePriceMultiplier: 1.10 },
+} as const;
 
 interface PricingEngineProps {
   productId: string;
@@ -98,26 +107,48 @@ export function PricingEngine({
   costPrice,
   onPriceUpdate,
 }: PricingEngineProps) {
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [calcResult, setCalcResult] = useState<{
-    finalPrice: number;
-    discount: number;
-    discountPercent: number;
-    source: string;
-  } | null>(null);
+  const [calcParams, setCalcParams] = useState<{ quantity: number; customerId?: string } | null>(null);
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   const [bulkAdjustment, setBulkAdjustment] = useState(0);
+  const [customerSearch, setCustomerSearch] = useState("");
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<PriceCalcValues>({
-    resolver: zodResolver(priceCalcSchema) as never,
+  // Fetch customers for combobox
+  const { data: customersData } = useCustomers({
+    search: customerSearch || undefined,
+    status: "active",
+    pageSize: 20,
+  });
+
+  // TanStack Form for price calculator (supports ComboboxField)
+  const calcForm = useTanStackForm({
     defaultValues: {
       quantity: 1,
+      customerId: "",
+    },
+    onSubmit: async ({ value }) => {
+      setCalcParams({
+        quantity: value.quantity,
+        customerId: value.customerId || undefined,
+      });
     },
   });
+
+  // Use price resolution hook (only enabled when params are set)
+  const { data: priceResult, isLoading: isCalculating } = useResolvePrice({
+    productId,
+    quantity: calcParams?.quantity ?? 1,
+    customerId: calcParams?.customerId,
+    enabled: !!calcParams,
+  });
+
+  const calcResult = priceResult
+    ? {
+        finalPrice: priceResult.finalPrice,
+        discount: priceResult.discount,
+        discountPercent: priceResult.discountPercent,
+        source: priceResult.source,
+      }
+    : null;
 
   // Current margin
   const margin = calculateMargin(basePrice, costPrice);
@@ -125,34 +156,17 @@ export function PricingEngine({
 
   // Suggested prices based on different strategies
   const suggestions = {
-    competitive: costPrice ? costPrice * 1.25 : basePrice * 0.95, // 25% markup
-    balanced: costPrice ? costPrice * 1.40 : basePrice, // 40% markup
-    premium: costPrice ? costPrice * 1.60 : basePrice * 1.10, // 60% markup
+    competitive: costPrice
+      ? costPrice * PRICING_STRATEGY_MULTIPLIERS.competitive.costMultiplier
+      : basePrice * PRICING_STRATEGY_MULTIPLIERS.competitive.basePriceDiscount,
+    balanced: costPrice
+      ? costPrice * PRICING_STRATEGY_MULTIPLIERS.balanced.costMultiplier
+      : basePrice * PRICING_STRATEGY_MULTIPLIERS.balanced.basePriceMultiplier,
+    premium: costPrice
+      ? costPrice * PRICING_STRATEGY_MULTIPLIERS.premium.costMultiplier
+      : basePrice * PRICING_STRATEGY_MULTIPLIERS.premium.basePriceMultiplier,
   };
 
-  // Calculate price for given quantity/customer
-  const onCalculate = async (data: PriceCalcValues) => {
-    setIsCalculating(true);
-    try {
-      const result = await resolvePrice({
-        data: {
-          productId,
-          quantity: data.quantity,
-          customerId: data.customerId || undefined,
-        },
-      });
-      setCalcResult({
-        finalPrice: result.finalPrice,
-        discount: result.discount,
-        discountPercent: result.discountPercent,
-        source: result.source,
-      });
-    } catch (error) {
-      console.error("Failed to calculate price:", error);
-    } finally {
-      setIsCalculating(false);
-    }
-  };
 
   // Apply bulk adjustment
   const handleBulkAdjust = () => {
@@ -310,28 +324,63 @@ export function PricingEngine({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onCalculate)} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              calcForm.handleSubmit();
+            }}
+            className="space-y-4"
+          >
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  {...register("quantity", { valueAsNumber: true })}
-                />
-                {errors.quantity && (
-                  <p className="text-sm text-destructive">{errors.quantity.message}</p>
+              <calcForm.Field
+                name="quantity"
+                validators={{
+                  onChange: ({ value }) =>
+                    !value || value < 1 ? "Quantity must be at least 1" : undefined,
+                }}
+              >
+                {(field) => (
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(parseInt(e.target.value) || 1)}
+                      onBlur={field.handleBlur}
+                    />
+                    {field.state.meta.errors.length > 0 && (
+                      <p className="text-sm text-destructive">
+                        {field.state.meta.errors[0]}
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customerId">Customer (optional)</Label>
-                <Input
-                  id="customerId"
-                  placeholder="Enter customer ID"
-                  {...register("customerId")}
-                />
-              </div>
+              </calcForm.Field>
+              <calcForm.Field name="customerId">
+                {(field) => (
+                  <div className="space-y-2">
+                    <Label>Customer (optional)</Label>
+                    <ComboboxField
+                      field={field}
+                      label=""
+                      loadOptions={async (search: string) => {
+                        setCustomerSearch(search);
+                        await new Promise((resolve) => setTimeout(resolve, 300)); // Debounce
+                        return (customersData?.items ?? []).map((c) => ({
+                          value: c.id,
+                          label: `${c.name}${c.email ? ` (${c.email})` : ""}`,
+                        }));
+                      }}
+                      placeholder="Search customers..."
+                      searchPlaceholder="Type to search..."
+                      allowClear
+                      debounceMs={300}
+                    />
+                  </div>
+                )}
+              </calcForm.Field>
             </div>
 
             <Button type="submit" disabled={isCalculating}>

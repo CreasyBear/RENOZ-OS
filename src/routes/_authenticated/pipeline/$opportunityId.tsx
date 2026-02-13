@@ -1,62 +1,22 @@
 /**
  * Opportunity Detail Route
  *
- * Complete opportunity management interface with tabs for Overview, Quote,
- * Activities, and Versions. Supports inline editing, stage management,
- * and quick actions (Send Quote, Mark Won/Lost, Convert to Order).
+ * Thin route layer that delegates to OpportunityDetailContainer.
+ * Container handles all data fetching, mutations, and state via composite hook.
  *
- * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-DETAIL-UI)
+ * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Edit, MoreHorizontal, Send, Trophy, XCircle, ArrowRight } from "lucide-react";
-import { useState } from "react";
-import { PageLayout, RouteErrorFallback } from "@/components/layout";
-import { PipelineDetailSkeleton } from "@/components/skeletons/pipeline";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toastSuccess, toastError } from "@/hooks";
-import { OpportunityDetail } from "@/components/domain/pipeline";
-import { OpportunityForm } from "@/components/domain/pipeline";
-import { WonLostDialog } from "@/components/domain/pipeline";
-import { StatusCell } from "@/components/shared/data-table";
-import { OPPORTUNITY_STAGE_CONFIG } from "@/components/domain/pipeline/opportunities/opportunity-status-config";
-import {
-  useOpportunity,
-  useUpdateOpportunity,
-  useDeleteOpportunity,
-  useUpdateOpportunityStage,
-  useConvertToOrder,
-  useSendQuote,
-} from "@/hooks/pipeline";
-import { useConfirmation } from "@/hooks";
-import { FormatAmount } from "@/components/shared/format";
-import type { OpportunityStage, UpdateOpportunity, Opportunity } from "@/lib/schemas/pipeline";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface GetOpportunityResponse {
-  opportunity: Opportunity;
-  customer: { id: string; name: string; email: string | null; phone: string | null; customerCode: string | null; type: string | null } | null;
-  contact: { id: string; firstName: string; lastName: string; email: string | null; phone: string | null; jobTitle: string | null } | null;
-  activities: Array<{ id: string; type: string; description: string; outcome: string | null; scheduledAt: string | null; completedAt: string | null; createdAt: string }>;
-  versions: Array<{ id: string; versionNumber: number; subtotal: number; taxAmount: number; total: number; notes: string | null; createdAt: string; items: Array<{ description: string; quantity: number; unitPriceCents: number; discountPercent?: number; totalCents: number }> }>;
-  winLossReason: { id: string; name: string; type: string; description: string | null } | null;
-}
+import { createFileRoute } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
+import { PipelineDetailSkeleton } from '@/components/skeletons/pipeline';
+import { OpportunityDetailContainer } from '@/components/domain/pipeline/opportunities/containers/opportunity-detail-container';
 
 // ============================================================================
 // ROUTE DEFINITION
 // ============================================================================
 
-export const Route = createFileRoute("/_authenticated/pipeline/$opportunityId")({
+export const Route = createFileRoute('/_authenticated/pipeline/$opportunityId')({
   component: OpportunityDetailPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/pipeline" />
@@ -72,318 +32,24 @@ export const Route = createFileRoute("/_authenticated/pipeline/$opportunityId")(
 });
 
 // ============================================================================
-// MAIN COMPONENT
+// PAGE COMPONENT
 // ============================================================================
 
 function OpportunityDetailPage() {
-  const navigate = useNavigate();
   const { opportunityId } = Route.useParams();
 
-  // UI State
-  const [isEditing, setIsEditing] = useState(false);
-  const [wonLostDialog, setWonLostDialog] = useState<{
-    open: boolean;
-    stage: "won" | "lost" | null;
-  }>({ open: false, stage: null });
-
-  // Fetch opportunity using centralized hook
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-  } = useOpportunity({ id: opportunityId }) as {
-    data: GetOpportunityResponse | undefined;
-    isLoading: boolean;
-    error: Error | null;
-    refetch: () => void;
-  };
-
-  // Mutations using centralized hooks (handle cache invalidation automatically)
-  const updateMutation = useUpdateOpportunity();
-  const stageChangeMutation = useUpdateOpportunityStage();
-  const deleteMutation = useDeleteOpportunity();
-  const convertToOrderMutation = useConvertToOrder();
-  const sendQuoteMutation = useSendQuote();
-  const confirm = useConfirmation();
-
-  // Handle stage change from Won/Lost dialog
-  const handleWonLostConfirm = async (
-    stage: "won" | "lost",
-    reason?: { winLossReasonId?: string; lostNotes?: string; competitorName?: string }
-  ) => {
-    try {
-      await stageChangeMutation.mutateAsync({ opportunityId, stage, reason });
-      toastSuccess("Stage updated successfully.");
-      setWonLostDialog({ open: false, stage: null });
-    } catch {
-      toastError("Failed to update stage. Please try again.");
-    }
-  };
-
-  // Handle update from form
-  // OpportunityForm passes Partial<OpportunityData> with nullable fields
-  // Convert to UpdateOpportunity format (undefined instead of null for optional strings)
-  const handleUpdate = async (updates: {
-    title?: string;
-    description?: string | null;
-    stage?: string;
-    probability?: number | null;
-    value?: number;
-    expectedCloseDate?: Date | string | null;
-    tags?: string[] | null;
-  }) => {
-    try {
-      const updatePayload: UpdateOpportunity = {
-        ...updates,
-        // Convert null to undefined for optional fields
-        description: updates.description ?? undefined,
-        stage: updates.stage as OpportunityStage | undefined,
-        probability: updates.probability ?? undefined,
-        // Convert Date to ISO string if needed
-        expectedCloseDate: updates.expectedCloseDate instanceof Date
-          ? updates.expectedCloseDate.toISOString().split('T')[0]
-          : updates.expectedCloseDate ?? undefined,
-        // Tags schema doesn't accept null, only undefined
-        tags: updates.tags ?? undefined,
-      };
-      await updateMutation.mutateAsync({ id: opportunityId, ...updatePayload });
-      toastSuccess("Opportunity updated successfully.");
-      setIsEditing(false);
-    } catch {
-      toastError("Failed to update opportunity. Please try again.");
-    }
-  };
-
-  // Handle delete
-  const handleDelete = async () => {
-    const result = await confirm.confirm({
-      title: "Delete Opportunity",
-      description: "Are you sure you want to delete this opportunity? This action cannot be undone.",
-      confirmLabel: "Delete",
-      variant: "destructive",
-    });
-    if (!result.confirmed) return;
-    try {
-      await deleteMutation.mutateAsync(opportunityId);
-      toastSuccess("Opportunity deleted.");
-      navigate({ to: "/pipeline" });
-    } catch {
-      toastError("Failed to delete opportunity. Please try again.");
-    }
-  };
-
-  // Handle convert to order
-  const handleConvertToOrder = async () => {
-    const result = await confirm.confirm({
-      title: "Convert to Order",
-      description: "This will convert the opportunity to an order. The opportunity must be marked as Won first. Continue?",
-      confirmLabel: "Convert",
-    });
-    if (!result.confirmed) return;
-    try {
-      await convertToOrderMutation.mutateAsync({ opportunityId });
-      toastSuccess("Opportunity conversion initiated.");
-      // TODO: Navigate to newly created order when Orders domain integration is complete
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : "Failed to convert opportunity. Please try again.");
-    }
-  };
-
-  // Handle send quote
-  const handleSendQuote = async () => {
-    // Get the latest quote version
-    const latestVersion = versions[versions.length - 1];
-    if (!latestVersion) {
-      toastError("No quote version available to send.");
-      return;
-    }
-    if (!customer?.email) {
-      toastError("Customer email is required to send quote.");
-      return;
-    }
-    try {
-      await sendQuoteMutation.mutateAsync({
-        opportunityId,
-        quoteVersionId: latestVersion.id,
-        recipientEmail: customer.email,
-        subject: `Quote for ${opportunity.title}`,
-      });
-      toastSuccess("Quote sent successfully.");
-    } catch {
-      toastError("Failed to send quote. Please try again.");
-    }
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <PageLayout variant="full-width">
-        <PageLayout.Header title="Loading..." />
-        <PageLayout.Content>
-          <div className="space-y-6">
-            <Skeleton className="h-12 w-1/3" />
-            <Skeleton className="h-8 w-1/4" />
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-        </PageLayout.Content>
-      </PageLayout>
-    );
-  }
-
-  // Error state
-  if (error || !data) {
-    return (
-      <PageLayout variant="full-width">
-        <PageLayout.Header title="Opportunity Not Found" />
-        <PageLayout.Content>
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">
-              The opportunity you're looking for doesn't exist or you don't have access.
-            </p>
-            <Button variant="outline" onClick={() => navigate({ to: "/pipeline" })}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Pipeline
-            </Button>
-          </div>
-        </PageLayout.Content>
-      </PageLayout>
-    );
-  }
-
-  const { opportunity, customer, contact, activities, versions, winLossReason } = data;
-  const isClosedStage = opportunity.stage === "won" || opportunity.stage === "lost";
-
   return (
-    <>
-      <PageLayout variant="full-width">
-        <PageLayout.Header
-          title={opportunity.title}
-          description={
-            <div className="flex items-center gap-3">
-              <StatusCell
-                status={opportunity.stage as OpportunityStage}
-                statusConfig={OPPORTUNITY_STAGE_CONFIG}
-                showIcon
-              />
-              <span className="text-muted-foreground">
-                {customer?.name ?? "Unknown Customer"}
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span className="font-medium">
-                <FormatAmount amount={opportunity.value} />
-              </span>
-              {opportunity.probability !== null && (
-                <>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">
-                    {opportunity.probability}% probability
-                  </span>
-                </>
-              )}
-            </div>
-          }
-          actions={
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => navigate({ to: "/pipeline" })}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-
-              {!isClosedStage && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditing(true)}
-                    disabled={isEditing}
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={handleSendQuote}
-                    disabled={sendQuoteMutation.isPending || versions.length === 0}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    Send Quote
-                  </Button>
-                </>
-              )}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {!isClosedStage && (
-                    <>
-                      <DropdownMenuItem onClick={() => setWonLostDialog({ open: true, stage: "won" })}>
-                        <Trophy className="mr-2 h-4 w-4 text-green-600" />
-                        Mark as Won
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setWonLostDialog({ open: true, stage: "lost" })}>
-                        <XCircle className="mr-2 h-4 w-4 text-red-600" />
-                        Mark as Lost
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={handleConvertToOrder}
-                        disabled={convertToOrderMutation.isPending}
-                      >
-                        <ArrowRight className="mr-2 h-4 w-4" />
-                        Convert to Order
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={handleDelete}
-                  >
-                    Delete Opportunity
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          }
-        />
-        <PageLayout.Content>
-          {isEditing ? (
-            <OpportunityForm
-              opportunity={opportunity}
-              customer={customer}
-              contact={contact}
-              onSave={handleUpdate}
-              onCancel={() => setIsEditing(false)}
-              isLoading={updateMutation.isPending}
-            />
-          ) : (
-            <OpportunityDetail
-              opportunity={opportunity}
-              customer={customer}
-              contact={contact}
-              activities={activities}
-              versions={versions}
-              winLossReason={winLossReason}
-              onRefresh={refetch}
-            />
-          )}
-        </PageLayout.Content>
-      </PageLayout>
-
-      {/* Won/Lost Dialog */}
-      <WonLostDialog
-        open={wonLostDialog.open}
-        type={wonLostDialog.stage ?? "won"}
-        opportunity={data?.opportunity ? { ...data.opportunity, expectedCloseDate: data.opportunity.expectedCloseDate ? new Date(data.opportunity.expectedCloseDate) : null, actualCloseDate: data.opportunity.actualCloseDate ? new Date(data.opportunity.actualCloseDate) : null, quoteExpiresAt: data.opportunity.quoteExpiresAt ? new Date(data.opportunity.quoteExpiresAt) : null, createdAt: new Date(data.opportunity.createdAt), updatedAt: new Date(data.opportunity.updatedAt), deletedAt: data.opportunity.deletedAt ? new Date(data.opportunity.deletedAt) : null } : null}
-        onConfirm={(reason) => handleWonLostConfirm(wonLostDialog.stage ?? "won", reason)}
-        onCancel={() => setWonLostDialog({ open: false, stage: null })}
-      />
-    </>
+    <OpportunityDetailContainer opportunityId={opportunityId}>
+      {({ headerActions, content }) => (
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title={null}
+            leading={<DetailPageBackButton to="/pipeline" aria-label="Back to pipeline" />}
+            actions={headerActions}
+          />
+          <PageLayout.Content>{content}</PageLayout.Content>
+        </PageLayout>
+      )}
+    </OpportunityDetailContainer>
   );
 }

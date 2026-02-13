@@ -43,6 +43,7 @@ import {
   deleteReminderTemplate,
   sendReminder,
   getReminderHistory,
+  getOrdersForReminders,
 } from '@/server/functions/financial/payment-reminders';
 import type {
   CreateReminderTemplateInput,
@@ -74,6 +75,7 @@ import {
   applyCreditNoteToInvoice,
   issueCreditNote,
   voidCreditNote,
+  generateCreditNotePdf,
 } from '@/server/functions/financial/credit-notes';
 import type { CreateCreditNoteInput, ApplyCreditNoteInput } from '@/lib/schemas';
 
@@ -111,7 +113,11 @@ export function useFinancialDashboardMetrics(options: UseFinancialDashboardMetri
 
   return useQuery({
     queryKey: queryKeys.financial.dashboardMetrics({ includePreviousPeriod }),
-    queryFn: () => fn({ data: { includePreviousPeriod } }),
+    queryFn: async () => {
+      const result = await fn({ data: { includePreviousPeriod } });
+      if (result == null) throw new Error('Financial dashboard metrics returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -140,7 +146,11 @@ export function useRevenueByPeriod(options: UseRevenueByPeriodOptions) {
       dateTo: params.dateTo,
       customerType: params.customerType,
     }),
-    queryFn: () => fn({ data: params }),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Revenue report returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -170,7 +180,11 @@ export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOption
       commercialOnly: params.commercialOnly,
       pageSize: params.pageSize,
     }),
-    queryFn: () => fn({ data: params }),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Top customers by revenue returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -198,7 +212,11 @@ export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = 
       customerType: params.customerType,
       pageSize: params.pageSize,
     }),
-    queryFn: () => fn({ data: params }),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Outstanding invoices returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -218,7 +236,11 @@ export function useARAgingReport(options: UseARAgingReportOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.financial.arAgingReport(filters),
-    queryFn: () => fn({ data: filters }),
+    queryFn: async () => {
+      const result = await fn({ data: filters });
+      if (result == null) throw new Error('AR aging report returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -229,7 +251,11 @@ export function useCustomerAgingDetail(customerId: string, enabled = true) {
 
   return useQuery({
     queryKey: queryKeys.financial.arAgingCustomer(customerId),
-    queryFn: () => fn({ data: { customerId } }),
+    queryFn: async () => {
+      const result = await fn({ data: { customerId } });
+      if (result == null) throw new Error('Customer aging detail returned no data');
+      return result;
+    },
     enabled: enabled && !!customerId,
     staleTime: 60 * 1000,
   });
@@ -244,7 +270,11 @@ export function useReminderTemplates() {
 
   return useQuery({
     queryKey: queryKeys.financial.reminderTemplates(),
-    queryFn: () => fn({ data: {} }),
+    queryFn: async () => {
+      const result = await fn({ data: {} });
+      if (result == null) throw new Error('Reminder templates returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -297,6 +327,34 @@ export function useSendPaymentReminder() {
   });
 }
 
+export interface UseOrdersForRemindersOptions {
+  page?: number;
+  pageSize?: number;
+  minDaysOverdue?: number;
+  matchTemplateDays?: boolean;
+  excludeAlreadyReminded?: boolean;
+  enabled?: boolean;
+}
+
+/**
+ * Fetch orders that are due for payment reminders.
+ */
+export function useOrdersForReminders(options: UseOrdersForRemindersOptions = {}) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(getOrdersForReminders);
+
+  return useQuery({
+    queryKey: queryKeys.financial.ordersForReminders(params),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Orders for reminders returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
 export interface UseReminderHistoryOptions {
   orderId?: string;
   customerId?: string;
@@ -309,7 +367,11 @@ export function useReminderHistory(options: UseReminderHistoryOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.financial.reminderHistory(filters),
-    queryFn: () => fn({ data: filters }),
+    queryFn: async () => {
+      const result = await fn({ data: filters });
+      if (result == null) throw new Error('Reminder history returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -332,7 +394,11 @@ export function useRecognitions(options: UseRecognitionsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.financial.recognitions(params.state),
-    queryFn: () => fn({ data: params }),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Revenue recognitions returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -351,7 +417,11 @@ export function useRecognitionSummary(options: UseRecognitionSummaryOptions) {
 
   return useQuery({
     queryKey: queryKeys.financial.recognitionSummary(dateFrom.toISOString(), dateTo.toISOString()),
-    queryFn: () => fn({ data: { dateFrom, dateTo, groupBy } }),
+    queryFn: async () => {
+      const result = await fn({ data: { dateFrom, dateTo, groupBy } });
+      if (result == null) throw new Error('Recognition summary returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -362,7 +432,11 @@ export function useDeferredRevenueBalance() {
 
   return useQuery({
     queryKey: queryKeys.financial.deferredBalance(),
-    queryFn: () => fn({ data: {} }),
+    queryFn: async () => {
+      const result = await fn({ data: {} });
+      if (result == null) throw new Error('Deferred revenue balance returned no data');
+      return result;
+    },
     staleTime: 60 * 1000,
   });
 }
@@ -397,7 +471,11 @@ export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.financial.xeroSyncs(params.status),
-    queryFn: () => fn({ data: params }),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Xero syncs returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -408,7 +486,11 @@ export function useXeroInvoiceStatus(orderId: string, enabled = true) {
 
   return useQuery({
     queryKey: queryKeys.financial.xeroStatus(orderId),
-    queryFn: () => fn({ data: { orderId } }),
+    queryFn: async () => {
+      const result = await fn({ data: { orderId } });
+      if (result == null) throw new Error('Xero invoice status returned no data');
+      return result;
+    },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
   });
@@ -447,7 +529,11 @@ export function useCreditNotes(options: UseCreditNotesOptions = {}) {
       customerId: params.customerId,
       orderId: params.orderId,
     }),
-    queryFn: () => fn({ data: params }),
+    queryFn: async () => {
+      const result = await fn({ data: params });
+      if (result == null) throw new Error('Credit notes list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -458,7 +544,11 @@ export function useCreditNote(id: string, enabled = true) {
 
   return useQuery({
     queryKey: queryKeys.financial.creditNoteDetail(id),
-    queryFn: () => fn({ data: { id } }),
+    queryFn: async () => {
+      const result = await fn({ data: { id } });
+      if (result == null) throw new Error('Credit note not found');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -482,8 +572,11 @@ export function useApplyCreditNote() {
 
   return useMutation({
     mutationFn: (data: ApplyCreditNoteInput) => fn({ data }),
-    onSuccess: () => {
+    onSuccess: (_, data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNoteDetail(data.creditNoteId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(data.orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
   });
 }
@@ -494,8 +587,9 @@ export function useIssueCreditNote() {
 
   return useMutation({
     mutationFn: (id: string) => fn({ data: { id } }),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNoteDetail(id) });
     },
   });
 }
@@ -507,9 +601,18 @@ export function useVoidCreditNote() {
   return useMutation({
     mutationFn: (params: { id: string; voidReason?: string }) =>
       fn({ data: { id: params.id, voidReason: params.voidReason ?? 'Voided by user' } }),
-    onSuccess: () => {
+    onSuccess: (_, params) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNoteDetail(params.id) });
     },
+  });
+}
+
+export function useGenerateCreditNotePdf() {
+  const fn = useServerFn(generateCreditNotePdf);
+
+  return useMutation({
+    mutationFn: (creditNoteId: string) => fn({ data: { id: creditNoteId } }),
   });
 }
 
@@ -522,7 +625,11 @@ export function usePaymentSchedule(orderId: string, enabled = true) {
 
   return useQuery({
     queryKey: queryKeys.financial.paymentScheduleDetail(orderId),
-    queryFn: () => fn({ data: { orderId } }),
+    queryFn: async () => {
+      const result = await fn({ data: { orderId } });
+      if (result == null) throw new Error('Payment schedule not found');
+      return result;
+    },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
   });
@@ -557,7 +664,11 @@ export function useStatements(options: UseStatementsOptions) {
 
   return useQuery({
     queryKey: queryKeys.financial.statements(customerId),
-    queryFn: () => listFn({ data: { customerId, page, pageSize } }),
+    queryFn: async () => {
+      const result = await listFn({ data: { customerId, page, pageSize } });
+      if (result == null) throw new Error('Statements list returned no data');
+      return result;
+    },
     enabled: enabled && !!customerId && customerId !== 'placeholder-customer-id',
     staleTime: 30 * 1000,
   });
@@ -570,8 +681,12 @@ export function useStatement(statementId: string, enabled = true) {
   const getFn = useServerFn(getStatement);
 
   return useQuery({
-    queryKey: [...queryKeys.financial.all, 'statement', statementId],
-    queryFn: () => getFn({ data: { id: statementId } }),
+    queryKey: queryKeys.financial.statement(statementId),
+    queryFn: async () => {
+      const result = await getFn({ data: { id: statementId } });
+      if (result == null) throw new Error('Statement not found');
+      return result;
+    },
     enabled: enabled && !!statementId,
     staleTime: 60 * 1000,
   });
@@ -589,8 +704,12 @@ export function useStatementHistory(
   const { page = 1, pageSize = 10, dateFrom, dateTo } = options;
 
   return useQuery({
-    queryKey: [...queryKeys.financial.statements(customerId), 'history', { page, pageSize, dateFrom, dateTo }],
-    queryFn: () => getHistoryFn({ data: { customerId, page, pageSize, dateFrom, dateTo } }),
+    queryKey: queryKeys.financial.statementHistory(customerId, { page, pageSize, dateFrom: dateFrom?.toISOString(), dateTo: dateTo?.toISOString() }),
+    queryFn: async () => {
+      const result = await getHistoryFn({ data: { customerId, page, pageSize, dateFrom, dateTo } });
+      if (result == null) throw new Error('Statement history returned no data');
+      return result;
+    },
     enabled: enabled && !!customerId,
     staleTime: 30 * 1000,
   });
@@ -651,6 +770,9 @@ export function useCreatePaymentPlan() {
   return useMutation({
     mutationFn: (data: CreatePaymentPlanInput) => fn({ data }),
     onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.financial.paymentSchedules(),
+      });
       queryClient.invalidateQueries({
         queryKey: queryKeys.financial.paymentScheduleDetail(variables.orderId),
       });

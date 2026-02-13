@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + showConfirmationToast */
 /**
  * ConfirmationToast Component
  *
@@ -64,6 +65,20 @@ function ConfirmationToastContent({
 
   const Icon = variant === 'destructive' ? Trash2 : AlertTriangle
 
+  const handleConfirm = useCallback(async () => {
+    setIsProcessing(true)
+
+    try {
+      await onConfirm?.()
+      toast.dismiss(toastId)
+      onConfirmComplete()
+    } catch {
+      toast.error('Action failed')
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [onConfirm, toastId, onConfirmComplete])
+
   // Handle countdown
   useEffect(() => {
     if (isPaused || isProcessing) return
@@ -82,7 +97,7 @@ function ConfirmationToastContent({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [isPaused, isProcessing, duration])
+  }, [isPaused, isProcessing, duration, handleConfirm])
 
   const handleUndo = useCallback(async () => {
     setIsProcessing(true)
@@ -99,20 +114,6 @@ function ConfirmationToastContent({
       setIsProcessing(false)
     }
   }, [onUndo, toastId, onUndoComplete])
-
-  const handleConfirm = useCallback(async () => {
-    setIsProcessing(true)
-
-    try {
-      await onConfirm?.()
-      toast.dismiss(toastId)
-      onConfirmComplete()
-    } catch {
-      toast.error('Action failed')
-    } finally {
-      setIsProcessing(false)
-    }
-  }, [onConfirm, toastId, onConfirmComplete])
 
   const handleDismiss = () => {
     handleConfirm()

@@ -50,3 +50,11 @@ export {
 } from "./activity-charts";
 export { ActivityHeatmap, type ActivityHeatmapProps } from "./activity-heatmap";
 export { ActivityLeaderboard, type ActivityLeaderboardProps } from "./activity-leaderboard";
+
+// Activity Logging (Input)
+export {
+  EntityActivityLogger,
+  type EntityActivityLoggerProps,
+  type ActivityLogData,
+  type ActivityType,
+} from "./entity-activity-logger";

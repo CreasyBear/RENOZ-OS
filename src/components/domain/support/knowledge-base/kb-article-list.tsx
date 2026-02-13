@@ -46,6 +46,18 @@ import type {
 } from '@/lib/schemas/support/knowledge-base';
 
 // ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+function isKbStatusOrAll(v: string): v is KbArticleStatus | 'all' {
+  return ['all', 'draft', 'published', 'archived'].includes(v);
+}
+
+function isSortBy(v: string): v is ListArticlesInput['sortBy'] {
+  return ['updatedAt', 'createdAt', 'title', 'viewCount'].includes(v);
+}
+
+// ============================================================================
 // STATUS BADGE
 // ============================================================================
 
@@ -248,7 +260,9 @@ export function KbArticleList({
 
         <Select
           value={status}
-          onValueChange={(value) => onStatusChange(value as KbArticleStatus | 'all')}
+          onValueChange={(value) => {
+            if (isKbStatusOrAll(value)) onStatusChange(value);
+          }}
         >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Status" />
@@ -263,7 +277,9 @@ export function KbArticleList({
 
         <Select
           value={sortBy}
-          onValueChange={(value) => onSortByChange(value as ListArticlesInput['sortBy'])}
+          onValueChange={(value) => {
+            if (isSortBy(value)) onSortByChange(value);
+          }}
         >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Sort by" />

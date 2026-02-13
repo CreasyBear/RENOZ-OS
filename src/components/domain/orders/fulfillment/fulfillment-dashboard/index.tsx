@@ -23,9 +23,13 @@ import { type FulfillmentFiltersState } from './fulfillment-filters';
 import { FulfillmentHeader } from './fulfillment-header';
 import type { InlineEditFormData } from '../../cards/order-card-inline-edit.schema';
 import { isOverdue, type FulfillmentStats } from './utils';
-import type { FulfillmentOrder } from './fulfillment-card';
+import type { FulfillmentOrder } from '@/lib/schemas/orders';
 import { Package, Truck } from 'lucide-react';
-import { logger } from '@/lib/logger';
+
+// Type guard for fulfillment order status
+function isValidFulfillmentStatus(status: string): status is FulfillmentOrder['status'] {
+  return ['confirmed', 'picking', 'picked', 'shipped', 'delivered', 'cancelled'].includes(status);
+}
 
 // Variant styles for fulfillment stat cards
 const STAT_CARD_STYLES = {
@@ -233,12 +237,16 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
           ? availableAssignees.find((a) => a.id === assignedUserId)
           : undefined;
 
-        const status = order.status as FulfillmentOrder['status'];
+        // Validate status is a valid fulfillment status
+        const status: FulfillmentOrder['status'] = isValidFulfillmentStatus(order.status)
+          ? order.status
+          : 'confirmed'; // Default fallback
         const priority = metadata.priority ?? 'normal';
 
         grouped[stage].push({
           id: order.id,
           orderNumber: order.orderNumber,
+          customerId: order.customerId ?? '', // Added for customer linking
           customerName: order.customer?.name || 'Unknown Customer',
           itemCount: order.itemCount || 0,
           total: order.total || 0,
@@ -341,12 +349,9 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
     setDateFilter(date);
   }, []);
 
-  const handleImport = useCallback(() => {
-    // TODO: Implement import functionality
-    logger.info('Import orders functionality triggered', {
-      domain: 'fulfillment-kanban',
-    });
-  }, []);
+  // Import functionality is available in the Fulfillment Overview dashboard
+  // This kanban view doesn't need import, so we don't pass onImport to the header
+  const handleImport = undefined;
 
   const handleExport = useCallback(async () => {
     const filtersToExport = exportFilters || filters;
@@ -423,8 +428,9 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
         />
       </div>
 
-      {/* Kanban Board */}
-      <FulfillmentBoard
+      {/* Kanban Board - min-w-0 constrains width so overflow-x-auto scrolls instead of page */}
+      <div className="min-w-0 overflow-x-auto">
+        <FulfillmentBoard
         ordersByStage={ordersByStage}
         onOrderMove={handleOrderMove}
         onViewOrder={onViewOrder || (() => {})}
@@ -446,6 +452,7 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
         inlineEditForm={inlineEditForm}
         inlineEditSubmitting={inlineEditSubmitting}
       />
+      </div>
     </div>
   );
 });

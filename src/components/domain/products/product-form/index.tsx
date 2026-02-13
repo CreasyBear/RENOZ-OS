@@ -15,8 +15,9 @@ import {
   SpecificationsSection,
   SEOSection,
 } from './sections';
-import type { ProductFormProps } from './types';
+import type { ProductFormProps, ProductFormValues } from './types';
 
+export type { ProductFormValues };
 export function ProductForm({ categories, onCancel, isEdit = false, form }: ProductFormProps) {
   const { control, handleSubmit, watch, errors, isDirty, isSubmitting, onFormSubmit } = form;
 

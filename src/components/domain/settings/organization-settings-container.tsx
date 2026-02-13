@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useOrganizationQuery, useUpdateOrganization, useUpdateOrganizationSettings } from "@/hooks/organizations";
 import { useOrganizationSettings } from "@/contexts/organization-settings-context";
 import {
@@ -20,36 +21,17 @@ import {
   AddressSettingsSection,
   RegionalSettingsSection,
   FinancialSettingsSection,
+  BrandingSettingsSection,
   type GeneralSettingsData,
   type AddressSettingsData,
   type RegionalSettingsData,
   type FinancialSettingsData,
+  type BrandingSettingsData,
 } from "./settings-sections";
-import {
-  PreferencesSettingsSection,
-  SecuritySettingsSection,
-  ApiTokensSettingsSection,
-  TargetsSettingsSection,
-  WinLossSettingsSection,
-  type PreferencesSettingsData,
-  type SecuritySettingsData,
-  type TargetsSettingsData,
-} from "./settings-sections-extended";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertCircle,
-  Building2,
-  MapPin,
-  Globe,
-  DollarSign,
-  Key,
-  Shield,
-  Target,
-  Wrench,
-  FileText,
-  FolderOpen,
-} from "lucide-react";
-import { toast } from "sonner";
+import { AlertCircle, Building2, MapPin, Globe, DollarSign, Palette } from "lucide-react";
+import { queryKeys } from "@/lib/query-keys";
+import { createOrganizationSectionHandlers } from "@/lib/settings/organization-section-handlers";
 
 // ============================================================================
 // SIDEBAR CONFIGURATION - All inline, no hrefs
@@ -68,18 +50,10 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
   { id: "address", label: "Address", icon: <MapPin className="w-4 h-4" />, group: "Organization" },
   { id: "regional", label: "Regional", icon: <Globe className="w-4 h-4" />, group: "Organization" },
   { id: "financial", label: "Financial", icon: <DollarSign className="w-4 h-4" />, group: "Organization" },
-  // Security & Access
-  { id: "security", label: "Security", icon: <Shield className="w-4 h-4" />, group: "Security & Access" },
-  { id: "api-tokens", label: "API Tokens", icon: <Key className="w-4 h-4" />, group: "Security & Access" },
-  // Operations
-  { id: "targets", label: "Targets", icon: <Target className="w-4 h-4" />, group: "Operations" },
-  { id: "win-loss", label: "Win/Loss Reasons", icon: <FileText className="w-4 h-4" />, group: "Operations" },
-  { id: "categories", label: "Categories", icon: <FolderOpen className="w-4 h-4" />, group: "Operations" },
-  // Preferences
-  { id: "preferences", label: "Preferences", icon: <Wrench className="w-4 h-4" />, group: "Preferences" },
+  { id: "branding", label: "Branding", icon: <Palette className="w-4 h-4" />, group: "Organization" },
 ];
 
-const SECTION_GROUPS = ["Organization", "Security & Access", "Operations", "Preferences"];
+const SECTION_GROUPS = ["Organization"];
 
 // ============================================================================
 // CONTAINER COMPONENT
@@ -91,6 +65,7 @@ export interface UnifiedSettingsContainerProps {
 
 export function UnifiedSettingsContainer({ initialSection = "general" }: UnifiedSettingsContainerProps) {
   const [activeSection, setActiveSection] = useState(initialSection);
+  const queryClient = useQueryClient();
 
   // Fetch organization data
   const { data: organization, isLoading: orgLoading, error: orgError } = useOrganizationQuery();
@@ -102,14 +77,22 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
   const updateOrganization = useUpdateOrganization();
   const updateSettings = useUpdateOrganizationSettings();
 
-  // Loading state
-  if (orgLoading) {
+  // Loading state (wait for both org and settings to avoid stale defaultValues)
+  if (orgLoading || settings.isLoading) {
     return <LoadingState />;
   }
 
   // Error state
-  if (orgError) {
-    return <ErrorState error={orgError} />;
+  if (orgError || settings.error) {
+    return (
+      <ErrorState
+        error={orgError ?? settings.error ?? new Error("Failed to load settings")}
+        onRetry={() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.organizations.current() });
+          queryClient.invalidateQueries({ queryKey: queryKeys.organizations.settings() });
+        }}
+      />
+    );
   }
 
   // ============================================================================
@@ -140,6 +123,7 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
     dateFormat: settings.dateFormat,
     timeFormat: settings.timeFormat,
     weekStartDay: settings.weekStartDay,
+    numberFormat: settings.numberFormat,
   };
 
   const financialData: FinancialSettingsData = {
@@ -148,31 +132,14 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
     defaultTaxRate: settings.defaultTaxRate ?? 0,
   };
 
-  const preferencesData: PreferencesSettingsData = {
-    theme: "system",
-    accentColor: "blue",
-    density: "comfortable",
-    notifications_email: true,
-    notifications_inApp: true,
-    notifications_sound: false,
-    tablePageSize: "25",
-    stickyHeaders: true,
-    reduceMotion: false,
+  const brandingData: BrandingSettingsData = {
+    logoUrl: settings.portalBranding?.logoUrl ?? "",
+    primaryColor: settings.portalBranding?.primaryColor ?? "",
+    secondaryColor: settings.portalBranding?.secondaryColor ?? "",
+    websiteUrl: settings.portalBranding?.websiteUrl ?? "",
   };
 
-  const securityData: SecuritySettingsData = {
-    twoFactorEnabled: false,
-    sessionTimeout: "60",
-    requirePasswordChange: false,
-    passwordExpiryDays: "never",
-  };
-
-  const targetsData: TargetsSettingsData = {
-    salesTarget: 10,
-    leadTarget: 50,
-    conversionTarget: 20,
-    revenueTarget: 100000,
-  };
+  const handlers = createOrganizationSectionHandlers(updateOrganization, updateSettings);
 
   // ============================================================================
   // SECTION RENDERING (only active section visible)
@@ -184,8 +151,7 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
         return (
           <GeneralSettingsSection
             data={generalData}
-            onSave={async (data) => { await updateOrganization.mutateAsync(data); }}
-            isSaving={updateOrganization.isPending}
+            onSave={handlers.onSaveGeneral}
           />
         );
 
@@ -193,19 +159,7 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
         return (
           <AddressSettingsSection
             data={addressData}
-            onSave={async (data) => {
-              await updateOrganization.mutateAsync({
-                address: {
-                  street1: data.addressLine1,
-                  street2: data.addressLine2,
-                  city: data.suburb,
-                  state: data.state,
-                  postalCode: data.postcode,
-                  country: data.country,
-                },
-              });
-            }}
-            isSaving={updateOrganization.isPending}
+            onSave={handlers.onSaveAddress}
           />
         );
 
@@ -213,17 +167,7 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
         return (
           <RegionalSettingsSection
             data={regionalData}
-            onSave={async (data) => {
-              await updateSettings.mutateAsync({
-                timezone: data.timezone,
-                locale: data.locale,
-                currency: data.currency,
-                dateFormat: data.dateFormat,
-                timeFormat: data.timeFormat as "12h" | "24h",
-                weekStartDay: data.weekStartDay,
-              });
-            }}
-            isSaving={updateSettings.isPending}
+            onSave={handlers.onSaveRegional}
           />
         );
 
@@ -231,86 +175,16 @@ export function UnifiedSettingsContainer({ initialSection = "general" }: Unified
         return (
           <FinancialSettingsSection
             data={financialData}
-            onSave={async (data) => {
-              await updateSettings.mutateAsync({
-                fiscalYearStart: data.fiscalYearStart,
-                defaultPaymentTerms: data.defaultPaymentTerms,
-                defaultTaxRate: data.defaultTaxRate,
-              });
-            }}
-            isSaving={updateSettings.isPending}
+            onSave={handlers.onSaveFinancial}
           />
         );
 
-      case "preferences":
+      case "branding":
         return (
-          <PreferencesSettingsSection
-            data={preferencesData}
-            onSave={async (key, value) => {
-              // TODO: Wire to preferences API/hook
-              console.log("Save preference:", key, value);
-              toast.success("Preference saved");
-            }}
+          <BrandingSettingsSection
+            data={brandingData}
+            onSave={handlers.onSaveBranding}
           />
-        );
-
-      case "security":
-        return (
-          <SecuritySettingsSection
-            data={securityData}
-            onSave={async (key, value) => {
-              // TODO: Wire to security API/hook
-              console.log("Save security setting:", key, value);
-              toast.success("Setting saved");
-            }}
-            onChangePassword={() => {
-              // TODO: Open password change dialog
-              toast.info("Password change dialog coming soon");
-            }}
-            onViewSessions={() => {
-              // TODO: Navigate to sessions view
-              toast.info("Sessions view coming soon");
-            }}
-          />
-        );
-
-      case "api-tokens":
-        return (
-          <ApiTokensSettingsSection
-            tokens={[]}
-            onCreateToken={() => toast.info("Create token dialog coming soon")}
-            onRevokeToken={(id) => console.log("Revoke token:", id)}
-          />
-        );
-
-      case "targets":
-        return (
-          <TargetsSettingsSection
-            data={targetsData}
-            onSave={async (data) => {
-              // TODO: Wire to targets API/hook
-              console.log("Save targets:", data);
-              toast.success("Targets saved");
-            }}
-          />
-        );
-
-      case "win-loss":
-        return (
-          <WinLossSettingsSection
-            reasons={[]}
-            onCreateReason={(type) => toast.info(`Create ${type} reason dialog coming soon`)}
-            onToggleReason={(id, isActive) => console.log("Toggle reason:", id, isActive)}
-            onDeleteReason={(id) => console.log("Delete reason:", id)}
-          />
-        );
-
-      case "categories":
-        return (
-          <div className="py-8 text-center text-muted-foreground">
-            <FolderOpen className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p className="text-sm">Categories management coming soon</p>
-          </div>
         );
 
       default:
@@ -377,7 +251,7 @@ function LoadingState() {
   );
 }
 
-function ErrorState({ error }: { error: Error }) {
+function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
@@ -385,7 +259,7 @@ function ErrorState({ error }: { error: Error }) {
       <p className="text-sm mt-1">{error.message}</p>
       <button
         type="button"
-        onClick={() => window.location.reload()}
+        onClick={onRetry}
         className="mt-4 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
       >
         Retry

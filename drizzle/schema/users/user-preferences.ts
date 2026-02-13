@@ -18,7 +18,12 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  auditColumns,
+  organizationColumn,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { users } from "./users";
 
 // ============================================================================
@@ -29,6 +34,9 @@ export const userPreferences = pgTable(
   "user_preferences",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+
+    // Organization scoping
+    ...organizationColumn,
 
     // User reference
     userId: uuid("user_id")
@@ -55,6 +63,9 @@ export const userPreferences = pgTable(
       table.key
     ),
 
+    // Organization queries
+    orgIdx: index("idx_user_preferences_org").on(table.organizationId),
+
     // User's preferences lookup
     userIdx: index("idx_user_preferences_user").on(table.userId),
 
@@ -63,6 +74,9 @@ export const userPreferences = pgTable(
       table.userId,
       table.category
     ),
+
+    // RLS Policies
+    ...standardRlsPolicies("user_preferences"),
   })
 );
 

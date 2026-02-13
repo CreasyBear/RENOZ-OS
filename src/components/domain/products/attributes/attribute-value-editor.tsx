@@ -29,7 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { setProductAttribute } from "@/server/functions/products/product-attributes";
+import { useSetProductAttribute } from "@/hooks/products";
+import { toastError } from "@/hooks";
 
 export interface AttributeDefinition {
   attributeId: string;
@@ -68,8 +69,8 @@ export function AttributeValueEditor({
   onOpenChange,
   onSaved,
 }: AttributeValueEditorProps) {
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const setAttributeMutation = useSetProductAttribute();
 
   const { control, handleSubmit, setValue, watch } = useForm<FormValues>({
     resolver: zodResolver(formSchema) as never,
@@ -78,6 +79,7 @@ export function AttributeValueEditor({
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
   const currentValue = watch("value");
 
 
@@ -85,30 +87,26 @@ export function AttributeValueEditor({
   const onSubmit = async (data: FormValues) => {
     if (!attribute) return;
 
-    setIsSaving(true);
     setError(null);
 
     try {
-      await setProductAttribute({
-        data: {
-          productId,
-          attributeId: attribute.attributeId,
-          value: data.value,
-        },
+      await setAttributeMutation.mutateAsync({
+        productId,
+        attributeId: attribute.attributeId,
+        value: data.value,
       });
       onSaved?.();
       onOpenChange(false);
     } catch (err) {
-      console.error("Failed to save attribute:", err);
-      setError(err instanceof Error ? err.message : "Failed to save attribute");
-    } finally {
-      setIsSaving(false);
+      const errorMessage = err instanceof Error ? err.message : "Failed to save attribute";
+      toastError(errorMessage);
+      setError(errorMessage);
     }
   };
 
   // Handle close
   const handleClose = () => {
-    if (!isSaving) {
+    if (!setAttributeMutation.isPending) {
       onOpenChange(false);
     }
   };
@@ -202,23 +200,32 @@ export function AttributeValueEditor({
           <Controller
             name="value"
             control={control}
-            render={({ field }) => (
-              <Select
-                value={(field.value as string) ?? ""}
-                onValueChange={(val) => field.onChange(val || null)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an option..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {attribute.options?.choices?.map((choice) => (
-                    <SelectItem key={choice.value} value={choice.value}>
-                      {choice.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            render={({ field }) => {
+              const choices = attribute.options?.choices ?? [];
+              return (
+                <Select
+                  value={(field.value as string) ?? ""}
+                  onValueChange={(val) => field.onChange(val || null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an option..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {choices.length === 0 ? (
+                      <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                        No options available
+                      </div>
+                    ) : (
+                      choices.map((choice) => (
+                        <SelectItem key={choice.value} value={choice.value}>
+                          {choice.label}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              );
+            }}
           />
         );
 
@@ -359,11 +366,11 @@ export function AttributeValueEditor({
           )}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isSaving}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={setAttributeMutation.isPending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? (
+            <Button type="submit" disabled={setAttributeMutation.isPending}>
+              {setAttributeMutation.isPending ? (
                 "Saving..."
               ) : (
                 <>

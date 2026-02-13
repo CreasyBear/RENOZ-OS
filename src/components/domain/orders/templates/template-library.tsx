@@ -7,8 +7,6 @@
  */
 
 import { memo, useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Search,
   Plus,
@@ -52,7 +50,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { listTemplates, deleteTemplate } from "@/server/functions/orders/order-templates";
+import { useOrderTemplates, useDeleteOrderTemplate } from "@/hooks/orders";
 
 // ============================================================================
 // TYPES
@@ -77,7 +75,6 @@ export const TemplateLibrary = memo(function TemplateLibrary({
   onUseTemplate,
   className,
 }: TemplateLibraryProps) {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -92,33 +89,16 @@ export const TemplateLibrary = memo(function TemplateLibrary({
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch templates
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.orders.templates(debouncedSearch),
-    queryFn: () =>
-      listTemplates({
-        data: {
-          search: debouncedSearch || undefined,
-          isActive: true,
-          page: 1,
-          pageSize: 50,
-        },
-      }),
+  // Fetch templates using hook
+  const { data, isLoading, error } = useOrderTemplates({
+    search: debouncedSearch || undefined,
+    isActive: true,
+    page: 1,
+    pageSize: 50,
   });
 
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteTemplate({ data: { id } }),
-    onSuccess: () => {
-      toastSuccess("Template deleted");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.templates() });
-      setDeleteDialogOpen(false);
-      setTemplateToDelete(null);
-    },
-    onError: () => {
-      toastError("Failed to delete template");
-    },
-  });
+  // Delete mutation hook
+  const deleteMutation = useDeleteOrderTemplate();
 
   const handleDelete = useCallback((id: string) => {
     setTemplateToDelete(id);
@@ -127,7 +107,16 @@ export const TemplateLibrary = memo(function TemplateLibrary({
 
   const confirmDelete = useCallback(() => {
     if (templateToDelete) {
-      deleteMutation.mutate(templateToDelete);
+      deleteMutation.mutate(templateToDelete, {
+        onSuccess: () => {
+          toastSuccess("Template deleted");
+          setDeleteDialogOpen(false);
+          setTemplateToDelete(null);
+        },
+        onError: () => {
+          toastError("Failed to delete template");
+        },
+      });
     }
   }, [templateToDelete, deleteMutation]);
 

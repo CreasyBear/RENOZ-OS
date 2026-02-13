@@ -6,16 +6,27 @@
  *
  * PERFORMANCE NOTE: Uses the % operator with GIN indexes for O(n) performance
  * instead of O(n²) self-joins. Each customer lookup uses the trigram index.
+ *
+ * RAW SQL USAGE (P2 - Documented Exception):
+ * - Uses `db.execute(sql`...`)` for complex pg_trgm queries that require:
+ *   - PostgreSQL-specific `similarity()` function
+ *   - `%` operator for trigram matching (requires GIN index)
+ *   - `SET pg_trgm.similarity_threshold` session configuration
+ *   - Complex CTEs with LATERAL joins for batch processing
+ * - These operations are not directly supported by Drizzle ORM query builder
+ * - Raw SQL is acceptable here for performance-critical fuzzy matching
  */
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, desc } from 'drizzle-orm';
+import { sql, eq, and, desc, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { customerMergeAudit } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { customerMergeAuditFilterSchema } from '@/lib/schemas/customers';
+import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination';
+import { customerMergeAuditFilterSchema, customerMergeAuditCursorSchema } from '@/lib/schemas/customers';
+import { flexibleJsonSchema } from '@/lib/schemas/_shared/patterns';
 
 // ============================================================================
 // SCHEMAS
@@ -31,6 +42,47 @@ export const scanDuplicatesInputSchema = z.object({
 });
 
 export type ScanDuplicatesInput = z.infer<typeof scanDuplicatesInputSchema>;
+
+/** Raw row shape from ranked_matches query (progressive scan) */
+interface RankedMatchRow {
+  source_id: string;
+  source_name: string;
+  source_code: string;
+  id: string;
+  customer_code: string;
+  name: string;
+  status: string;
+  lifetime_value: number | string;
+  created_at: Date | string;
+  email: string | null;
+  phone: string | null;
+  name_similarity: number;
+  rn: number;
+}
+
+/** Raw row shape from duplicate_matches SQL query */
+interface DuplicatePairRow {
+  customer1_id: string;
+  customer1_code: string;
+  customer1_name: string;
+  customer1_email: string | null;
+  customer1_phone: string | null;
+  customer1_status: string;
+  customer1_ltv: string | number;
+  customer1_created: Date;
+  customer2_id: string;
+  customer2_code: string;
+  customer2_name: string;
+  customer2_email: string | null;
+  customer2_phone: string | null;
+  customer2_status: string;
+  customer2_ltv: string | number;
+  customer2_created: Date;
+  match_score: string | number;
+  name_similarity: number;
+  email_similarity: number;
+  phone_similarity: number;
+}
 
 export interface DuplicatePair {
   id: string;
@@ -154,8 +206,11 @@ export const scanForDuplicates = createServerFn({ method: 'POST' })
       OFFSET ${offset}
     `);
 
+    const toDateString = (d: Date | string): string =>
+      d instanceof Date ? d.toISOString() : String(d);
+
     // Transform results into DuplicatePair format
-    const pairs: DuplicatePair[] = (duplicatePairs as any[]).map((row) => {
+    const pairs: DuplicatePair[] = (duplicatePairs as unknown as DuplicatePairRow[]).map((row) => {
       const matchReasons: string[] = [];
       if (row.name_similarity >= threshold) {
         matchReasons.push(`Name: ${Math.round(row.name_similarity * 100)}% similar`);
@@ -177,7 +232,7 @@ export const scanForDuplicates = createServerFn({ method: 'POST' })
           phone: row.customer1_phone,
           status: row.customer1_status,
           lifetimeValue: Number(row.customer1_ltv),
-          createdAt: row.customer1_created,
+          createdAt: toDateString(row.customer1_created),
         },
         customer2: {
           id: row.customer2_id,
@@ -187,7 +242,7 @@ export const scanForDuplicates = createServerFn({ method: 'POST' })
           phone: row.customer2_phone,
           status: row.customer2_status,
           lifetimeValue: Number(row.customer2_ltv),
-          createdAt: row.customer2_created,
+          createdAt: toDateString(row.customer2_created),
         },
         matchScore: Number(row.match_score),
         matchReasons,
@@ -305,7 +360,10 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
       ORDER BY source_id, name_similarity DESC
     `);
 
-    for (const match of allMatches as any[]) {
+    const toDateStr = (d: Date | string): string =>
+      d instanceof Date ? d.toISOString() : String(d);
+
+    for (const match of allMatches as unknown as RankedMatchRow[]) {
       const sourceCustomer = batchMap.get(match.source_id);
       if (sourceCustomer && match.name_similarity >= threshold) {
         pairs.push({
@@ -328,7 +386,7 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
             phone: match.phone,
             status: match.status,
             lifetimeValue: Number(match.lifetime_value),
-            createdAt: match.created_at,
+            createdAt: toDateStr(match.created_at),
           },
           matchScore: match.name_similarity,
           matchReasons: [`Name: ${Math.round(match.name_similarity * 100)}% similar`],
@@ -378,7 +436,7 @@ export const dismissDuplicatePair = createServerFn({ method: 'POST' })
   });
 
 /**
- * Get merge audit history
+ * Get merge audit history (OFFSET pagination)
  */
 export const getMergeHistory = createServerFn({ method: 'GET' })
   .inputValidator(customerMergeAuditFilterSchema)
@@ -403,8 +461,57 @@ export const getMergeHistory = createServerFn({ method: 'GET' })
     return {
       history: history.map((h) => ({
         ...h,
-        mergedData: h.mergedData as Record<string, {}> | null,
-        metadata: h.metadata as Record<string, {}> | null,
+        mergedData: h.mergedData != null ? flexibleJsonSchema.parse(h.mergedData) : null,
+        metadata: h.metadata != null ? flexibleJsonSchema.parse(h.metadata) : null,
       })),
     };
+  });
+
+/**
+ * Get merge audit history with cursor pagination (recommended for large datasets).
+ * Uses performedAt + id for stable sort.
+ */
+export const getMergeHistoryCursor = createServerFn({ method: 'GET' })
+  .inputValidator(customerMergeAuditCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', action, primaryCustomerId } = data;
+
+    const conditions = [eq(customerMergeAudit.organizationId, ctx.organizationId)];
+    if (action) conditions.push(eq(customerMergeAudit.action, action));
+    if (primaryCustomerId) conditions.push(eq(customerMergeAudit.primaryCustomerId, primaryCustomerId));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(
+            customerMergeAudit.performedAt,
+            customerMergeAudit.id,
+            cursorPosition,
+            sortOrder
+          )
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const history = await db
+      .select()
+      .from(customerMergeAudit)
+      .where(and(...conditions))
+      .orderBy(orderDir(customerMergeAudit.performedAt), orderDir(customerMergeAudit.id))
+      .limit(pageSize + 1);
+
+    return buildCursorResponse(
+      history.map((h) => ({
+        ...h,
+        mergedData: h.mergedData != null ? flexibleJsonSchema.parse(h.mergedData) : null,
+        metadata: h.metadata != null ? flexibleJsonSchema.parse(h.metadata) : null,
+      })),
+      pageSize,
+      (h) => h.performedAt,
+      (h) => h.id
+    );
   });

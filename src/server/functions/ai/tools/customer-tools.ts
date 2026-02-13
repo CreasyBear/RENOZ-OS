@@ -12,7 +12,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { eq, and, sql, desc, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, isNull, or, ilike } from 'drizzle-orm';
 import { customers, customerActivities, orders } from 'drizzle/schema';
 import { aiApprovals } from 'drizzle/schema/_ai';
 import {
@@ -28,6 +28,8 @@ import {
   formatResultSummary,
 } from '@/lib/ai/tools/formatters';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
+import { containsPattern, escapeLike } from '@/lib/db/utils';
+import { customersLogger } from '@/lib/logger';
 
 // ============================================================================
 // GET CUSTOMER TOOL
@@ -168,7 +170,7 @@ export const getCustomerTool = tool({
         },
       });
     } catch (error) {
-      console.error('Error in getCustomerTool:', error);
+      customersLogger.error('Error in getCustomerTool', error);
       return createErrorResult(
         'Failed to retrieve customer',
         'Try again or contact support if the issue persists',
@@ -223,15 +225,15 @@ export const searchCustomersTool = tool({
     }
 
     try {
-      // Build conditions
+      // Build conditions (use containsPattern for safe search)
+      const searchPattern = containsPattern(query);
       const conditions = [
         eq(customers.organizationId, ctx.organizationId),
         isNull(customers.deletedAt),
-        // Fuzzy search on name and email using ILIKE
-        sql`(
-          ${customers.name} ILIKE ${`%${query}%`}
-          OR ${customers.email} ILIKE ${`%${query}%`}
-        )`,
+        or(
+          ilike(customers.name, searchPattern),
+          ilike(customers.email, searchPattern)
+        )!,
       ];
 
       if (status) {
@@ -251,10 +253,10 @@ export const searchCustomersTool = tool({
         .from(customers)
         .where(and(...conditions))
         .orderBy(
-          // Prioritize exact name matches, then partial matches
+          // Prioritize exact name matches, then partial matches (escapeLike for safe prefix pattern)
           sql`CASE
             WHEN LOWER(${customers.name}) = LOWER(${query}) THEN 0
-            WHEN LOWER(${customers.name}) LIKE LOWER(${query + '%'}) THEN 1
+            WHEN LOWER(${customers.name}) LIKE LOWER(${escapeLike(query) + '%'}) THEN 1
             ELSE 2
           END`,
           customers.name
@@ -289,7 +291,7 @@ export const searchCustomersTool = tool({
         text: `${table}\n\n${summary}`,
       };
     } catch (error) {
-      console.error('Error in searchCustomersTool:', error);
+      customersLogger.error('Error in searchCustomersTool', error);
       yield {
         text: `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}. Try a different search query.`,
       };
@@ -412,7 +414,7 @@ export const updateCustomerNotesTool = tool({
         }
       );
     } catch (error) {
-      console.error('Error in updateCustomerNotesTool:', error);
+      customersLogger.error('Error in updateCustomerNotesTool', error);
       return createErrorResult(
         'Failed to create notes update draft',
         'Try again or contact support if the issue persists',

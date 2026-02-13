@@ -17,8 +17,6 @@ import {
   jsonb,
   index,
   uniqueIndex,
-  check,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { productTypeEnum, productStatusEnum, taxTypeEnum } from "../_shared/enums";
@@ -31,6 +29,9 @@ import {
   quantityColumn,
   fullTextSearchSql,
   numericCasted,
+  standardRlsPolicies,
+  nonNegativeCheck,
+  nullableNonNegativeCheck,
 } from "../_shared/patterns";
 import { categories } from "./categories";
 import { productPriceTiers, customerProductPrices } from "./product-pricing";
@@ -209,37 +210,11 @@ export const products = pgTable(
     tagsGinIdx: index("idx_products_tags_gin").using("gin", table.tags),
 
     // Price constraints
-    basePriceNonNegativeCheck: check(
-      "product_base_price_non_negative",
-      sql`${table.basePrice} >= 0`
-    ),
-    costPriceNonNegativeCheck: check(
-      "product_cost_price_non_negative",
-      sql`${table.costPrice} IS NULL OR ${table.costPrice} >= 0`
-    ),
+    basePriceNonNegativeCheck: nonNegativeCheck("product_base_price_non_negative", table.basePrice),
+    costPriceNonNegativeCheck: nullableNonNegativeCheck("product_cost_price_non_negative", table.costPrice),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("products_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("products_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("products_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("products_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("products"),
   })
 );
 

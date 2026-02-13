@@ -5,11 +5,9 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addDays } from 'date-fns';
 import { toast } from '@/lib/toast';
-import { queryKeys } from '@/lib/query-keys';
-import { createOrder } from '@/server/functions/orders/orders';
+import { useCreateOrder } from '@/hooks/orders';
 import type { WizardState } from '../types';
 import { User, Package, DollarSign, Truck, FileCheck } from 'lucide-react';
 import type { Step } from '../types';
@@ -48,16 +46,25 @@ interface UseOrderWizardOptions {
 export function useOrderWizard({ onComplete }: UseOrderWizardOptions) {
   const [currentStep, setCurrentStep] = useState(1);
   const [state, setState] = useState<WizardState>(initialState);
-  const queryClient = useQueryClient();
 
-  // Create order mutation
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!state.customer) throw new Error('Customer is required');
-      if (state.lineItems.length === 0) throw new Error('At least one item is required');
+  // Create order mutation using the hook from @/hooks/orders
+  const createOrderMutation = useCreateOrder();
 
-      return createOrder({
-        data: {
+  // Wrapper to transform wizard state into CreateOrder input
+  const createMutation = useMemo(() => ({
+    isPending: createOrderMutation.isPending,
+    mutate: () => {
+      if (!state.customer) {
+        toast.error('Customer is required');
+        return;
+      }
+      if (state.lineItems.length === 0) {
+        toast.error('At least one item is required');
+        return;
+      }
+
+      createOrderMutation.mutate(
+        {
           customerId: state.customer.id,
           status: 'draft',
           paymentStatus: 'pending',
@@ -87,6 +94,7 @@ export function useOrderWizard({ onComplete }: UseOrderWizardOptions) {
           shippingAmount: state.shippingAmount,
           internalNotes: state.internalNotes || undefined,
           customerNotes: state.customerNotes || undefined,
+          metadata: {},
           lineItems: state.lineItems.map((item) => ({
             productId: item.productId,
             lineNumber: item.lineNumber,
@@ -100,17 +108,18 @@ export function useOrderWizard({ onComplete }: UseOrderWizardOptions) {
             notes: item.notes,
           })),
         },
-      });
+        {
+          onSuccess: (result) => {
+            toast.success(`Order ${result.orderNumber} created`);
+            onComplete(result.id, result.orderNumber);
+          },
+          onError: (error) => {
+            toast.error(error instanceof Error ? error.message : 'Failed to create order');
+          },
+        }
+      );
     },
-    onSuccess: (result) => {
-      toast.success(`Order ${result.orderNumber} created`);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      onComplete(result.id, result.orderNumber);
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to create order');
-    },
-  });
+  }), [createOrderMutation, state, onComplete]);
 
   // Step validation
   const canProceed = useMemo(() => {

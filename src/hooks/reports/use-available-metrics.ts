@@ -44,7 +44,11 @@ export function useAvailableMetrics(options: UseAvailableMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.metrics.available(),
-    queryFn: () => getAllMetrics(),
+    queryFn: async () => {
+      const result = await getAllMetrics();
+      if (result == null) throw new Error('Available metrics returned no data');
+      return result;
+    },
     enabled,
     staleTime: Infinity, // Metric definitions don't change at runtime
     gcTime: 24 * 60 * 60 * 1000, // Keep in cache for 24 hours

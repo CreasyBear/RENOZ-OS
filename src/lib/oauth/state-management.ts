@@ -6,7 +6,7 @@
  */
 
 import crypto from 'node:crypto';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { and, eq, lt, sql } from 'drizzle-orm';
 import { oauthStates, type OAuthState as OAuthStateRecord } from 'drizzle/schema/oauth';
 import { decryptOAuthState, type OAuthStatePayload } from './token-encryption';
@@ -38,7 +38,7 @@ export interface PersistentOAuthState {
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -68,7 +68,7 @@ export async function validateOAuthState(
 }
 
 export async function validateOAuthStateWithDatabase(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   encryptedState: string,
   expectedOrganizationId?: string
 ): Promise<StateValidationResult> {
@@ -132,7 +132,7 @@ export async function validateOAuthStateWithDatabase(
 // ============================================================================
 
 export async function createPersistentOAuthState(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   params: {
     organizationId: string;
     userId: string;
@@ -144,7 +144,7 @@ export async function createPersistentOAuthState(
     pkceChallenge?: string;
     pkceMethod?: string;
     expiresAt?: Date;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<PersistentOAuthState> {
   const expiresAt = params.expiresAt || new Date(Date.now() + 15 * 60 * 1000);
@@ -184,12 +184,12 @@ export async function createPersistentOAuthState(
     expiresAt: new Date(state.expiresAt),
     createdAt: new Date(state.createdAt),
     updatedAt: new Date(state.updatedAt),
-    metadata: (state.metadata as Record<string, any>) || undefined,
+    metadata: (state.metadata as Record<string, unknown>) || undefined,
   };
 }
 
 export async function getPersistentOAuthState(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   stateId: string
 ): Promise<PersistentOAuthState | null> {
   const [state] = await db.select().from(oauthStates).where(eq(oauthStates.id, stateId)).limit(1);
@@ -212,16 +212,16 @@ export async function getPersistentOAuthState(
     expiresAt: new Date(state.expiresAt),
     createdAt: new Date(state.createdAt),
     updatedAt: new Date(state.updatedAt),
-    metadata: (state.metadata as Record<string, any>) || undefined,
+    metadata: (state.metadata as Record<string, unknown>) || undefined,
   };
 }
 
 export async function updatePersistentOAuthState(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   stateId: string,
   updates: {
     status?: 'pending' | 'active' | 'completed' | 'failed' | 'expired' | 'consumed';
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<PersistentOAuthState | null> {
   const [state] = await db
@@ -253,11 +253,11 @@ export async function updatePersistentOAuthState(
     expiresAt: new Date(state.expiresAt),
     createdAt: new Date(state.createdAt),
     updatedAt: new Date(state.updatedAt),
-    metadata: (state.metadata as Record<string, any>) || undefined,
+    metadata: (state.metadata as Record<string, unknown>) || undefined,
   };
 }
 
-export async function cleanupExpiredOAuthStates(db: PostgresJsDatabase<any>): Promise<number> {
+export async function cleanupExpiredOAuthStates(db: OAuthDatabase): Promise<number> {
   const now = new Date();
   const deleted = await db
     .delete(oauthStates)
@@ -267,7 +267,7 @@ export async function cleanupExpiredOAuthStates(db: PostgresJsDatabase<any>): Pr
   return deleted.length;
 }
 
-export async function cleanupOAuthStates(db: PostgresJsDatabase<any>): Promise<{
+export async function cleanupOAuthStates(db: OAuthDatabase): Promise<{
   expiredStates: number;
   failedConnections: number;
   orphanedLogs: number;
@@ -285,7 +285,7 @@ export async function cleanupOAuthStates(db: PostgresJsDatabase<any>): Promise<{
   };
 }
 
-export async function getOAuthStateCleanupStats(db: PostgresJsDatabase<any>): Promise<{
+export async function getOAuthStateCleanupStats(db: OAuthDatabase): Promise<{
   expiredStates: number;
   failedConnections: number;
   orphanedLogs: number;

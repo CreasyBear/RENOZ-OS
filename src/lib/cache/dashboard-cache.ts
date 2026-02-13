@@ -9,6 +9,7 @@
  */
 
 import { Redis } from '@upstash/redis';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // CONFIGURATION
@@ -59,7 +60,7 @@ function getRedis(): Redis | null {
 
   if (!url || !token) {
     if (!warnedMissingConfig) {
-      console.warn('[DashboardCache] Redis not configured');
+      logger.warn('[DashboardCache] Redis not configured');
       warnedMissingConfig = true;
     }
     return null;
@@ -92,7 +93,7 @@ export async function getMetrics<T = unknown>(params: DashboardCacheKey): Promis
   try {
     return await redis.get<T>(buildKey(params));
   } catch (error) {
-    console.error('[DashboardCache] Get error:', error);
+    logger.error('[DashboardCache] Get error', error as Error, {});
     return null;
   }
 }
@@ -108,7 +109,7 @@ export async function setMetrics<T = unknown>(params: DashboardCacheKey, data: T
     await redis.set(buildKey(params), data, { ex: DASHBOARD_CACHE_TTL.metrics });
     return true;
   } catch (error) {
-    console.error('[DashboardCache] Set error:', error);
+    logger.error('[DashboardCache] Set error', error as Error, {});
     return false;
   }
 }
@@ -123,7 +124,7 @@ export async function getCurrentState<T = unknown>(orgId: string): Promise<T | n
   try {
     return await redis.get<T>(`${CACHE_PREFIX}:current:${orgId}`);
   } catch (error) {
-    console.error('[DashboardCache] Get current state error:', error);
+    logger.error('[DashboardCache] Get current state error', error as Error, {});
     return null;
   }
 }
@@ -139,7 +140,7 @@ export async function setCurrentState<T = unknown>(orgId: string, data: T): Prom
     await redis.set(`${CACHE_PREFIX}:current:${orgId}`, data, { ex: DASHBOARD_CACHE_TTL.currentState });
     return true;
   } catch (error) {
-    console.error('[DashboardCache] Set current state error:', error);
+    logger.error('[DashboardCache] Set current state error', error as Error, {});
     return false;
   }
 }
@@ -160,7 +161,7 @@ export async function invalidateOrg(orgId: string): Promise<boolean> {
     }
     return true;
   } catch (error) {
-    console.error('[DashboardCache] Invalidate error:', error);
+    logger.error('[DashboardCache] Invalidate error', error as Error, {});
     return false;
   }
 }
@@ -214,7 +215,7 @@ export class DashboardCache {
       }
       return true;
     } catch (error) {
-      console.error('[DashboardCache] Invalidate all error:', error);
+      logger.error('[DashboardCache] Invalidate all error', error as Error, {});
       return false;
     }
   }

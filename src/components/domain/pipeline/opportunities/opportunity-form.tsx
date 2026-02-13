@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   STAGE_PROBABILITY_DEFAULTS,
   type OpportunityStage,
+  isValidOpportunityStage,
 } from "@/lib/schemas/pipeline";
 import { useOrgFormat } from "@/hooks/use-org-format";
 
@@ -92,7 +93,9 @@ export const OpportunityForm = memo(function OpportunityForm({
   // Form state
   const [title, setTitle] = useState(opportunity.title);
   const [description, setDescription] = useState(opportunity.description ?? "");
-  const [stage, setStage] = useState<OpportunityStage>(opportunity.stage as OpportunityStage);
+  const [stage, setStage] = useState<OpportunityStage>(() => {
+    return isValidOpportunityStage(opportunity.stage) ? opportunity.stage : 'new';
+  });
   const [probability, setProbability] = useState(opportunity.probability ?? 10);
   const [value, setValue] = useState(opportunity.value);
   const [expectedCloseDate, setExpectedCloseDate] = useState<string>(() => {

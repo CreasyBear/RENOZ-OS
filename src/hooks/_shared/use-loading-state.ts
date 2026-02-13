@@ -197,11 +197,11 @@ export function useFileUploadLoading() {
   const loading = useLoadingState();
 
   const uploadFile = useCallback(
-    async (
+    async <T>(
       file: File,
-      uploadFn: (file: File, onProgress: (progress: number) => void) => Promise<any>,
+      uploadFn: (file: File, onProgress: (progress: number) => void) => Promise<T>,
       options: {
-        onSuccess?: (result: any) => void;
+        onSuccess?: (result: T) => void;
         onError?: (error: Error) => void;
       } = {}
     ) => {
@@ -254,13 +254,13 @@ export function useBulkOperationLoading() {
   const loading = useLoadingState();
 
   const executeBulkOperation = useCallback(
-    async <T>(
+    async <T, R>(
       items: T[],
-      operation: (item: T, index: number) => Promise<any>,
+      operation: (item: T, index: number) => Promise<R>,
       options: {
         itemName?: string;
         onProgress?: (completed: number, total: number) => void;
-        onSuccess?: (results: any[]) => void;
+        onSuccess?: (results: R[]) => void;
         onError?: (error: Error, failedItem: T) => void;
         continueOnError?: boolean;
       } = {}
@@ -272,7 +272,7 @@ export function useBulkOperationLoading() {
         showProgress: true,
       });
 
-      const results: any[] = [];
+      const results: R[] = [];
       let completed = 0;
 
       for (const [index, item] of items.entries()) {

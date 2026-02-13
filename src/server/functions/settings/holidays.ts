@@ -9,7 +9,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, asc, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { organizationHolidays } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -17,6 +17,8 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { paginationSchema } from '@/lib/schemas';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -49,6 +51,13 @@ const listHolidaysSchema = paginationSchema.extend({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   includeRecurring: z.boolean().optional().default(true),
 });
+
+const listHolidaysCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    includeRecurring: z.boolean().optional().default(true),
+  })
+);
 
 const bulkCreateHolidaysSchema = z.object({
   holidays: z
@@ -124,6 +133,67 @@ export const listHolidays = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(count / pageSize),
       },
     };
+  });
+
+/**
+ * List holidays with cursor pagination (recommended for large datasets).
+ * Uses date + id for stable sort.
+ */
+export const listHolidaysCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listHolidaysCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+
+    const { cursor, pageSize = 20, sortOrder = 'asc', year, includeRecurring } = data;
+
+    const conditions = [eq(organizationHolidays.organizationId, ctx.organizationId)];
+
+    if (year) {
+      const startDate = `${year}-01-01`;
+      const endDate = `${year}-12-31`;
+      conditions.push(gte(organizationHolidays.date, startDate));
+      conditions.push(lte(organizationHolidays.date, endDate));
+    }
+
+    if (!includeRecurring) {
+      conditions.push(eq(organizationHolidays.isRecurring, false));
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(organizationHolidays.date, organizationHolidays.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const holidays = await db
+      .select({
+        id: organizationHolidays.id,
+        organizationId: organizationHolidays.organizationId,
+        name: organizationHolidays.name,
+        date: organizationHolidays.date,
+        isRecurring: organizationHolidays.isRecurring,
+        description: organizationHolidays.description,
+        createdAt: organizationHolidays.createdAt,
+        updatedAt: organizationHolidays.updatedAt,
+      })
+      .from(organizationHolidays)
+      .where(and(...conditions))
+      .orderBy(orderDir(organizationHolidays.date), orderDir(organizationHolidays.id))
+      .limit(pageSize + 1);
+
+    return buildCursorResponse(
+      holidays,
+      pageSize,
+      (h) => {
+        const d = h.date as string | Date;
+        return typeof d === 'string' ? d : d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+      },
+      (h) => h.id
+    );
   });
 
 // ============================================================================

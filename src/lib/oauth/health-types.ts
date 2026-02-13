@@ -39,7 +39,7 @@ export interface ServiceHealthCheck {
   responseTime?: number;
   lastChecked: Date;
   errorMessage?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface ConnectionHealthCheck {
@@ -51,7 +51,7 @@ export interface ConnectionHealthCheck {
   lastChecked: Date;
   nextCheckDue: Date;
   consecutiveFailures: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface HealthCheckResult {
@@ -135,7 +135,7 @@ export interface HealthAlert {
     | 'rate_limited'
     | 'quota_exceeded';
   message: string;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   createdAt: Date;
   acknowledgedAt?: Date;
   resolvedAt?: Date;
@@ -247,7 +247,7 @@ export function isHealthIssue(status: ConnectionHealthStatus | ServiceHealthStat
     ServiceHealthStatus.TIMEOUT,
   ];
 
-  return problematicStatuses.includes(status as any);
+  return problematicStatuses.includes(status);
 }
 
 /**

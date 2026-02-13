@@ -203,7 +203,10 @@ export function RmaList({
           {/* Status filter */}
           <Select
             value={statusFilter}
-            onValueChange={(value) => onStatusFilterChange(value as RmaStatus | 'all')}
+            onValueChange={(value) => {
+              const opt = STATUS_OPTIONS.find((o) => o.value === value);
+              if (opt) onStatusFilterChange(opt.value);
+            }}
           >
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Status" />
@@ -220,7 +223,10 @@ export function RmaList({
           {/* Reason filter */}
           <Select
             value={reasonFilter}
-            onValueChange={(value) => onReasonFilterChange(value as RmaReason | 'all')}
+            onValueChange={(value) => {
+              const opt = REASON_OPTIONS.find((o) => o.value === value);
+              if (opt) onReasonFilterChange(opt.value);
+            }}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Reason" />

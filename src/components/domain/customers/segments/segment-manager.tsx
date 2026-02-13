@@ -52,6 +52,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { FormatAmount } from '@/components/shared/format'
+import { formatDate } from '@/lib/formatters'
 
 // ============================================================================
 // TYPES
@@ -86,14 +87,6 @@ interface SegmentManagerProps {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-AU', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
 
 function getHealthColor(score: number): string {
   if (score >= 80) return 'text-green-600'
@@ -178,13 +171,13 @@ function SegmentRow({
       </TableCell>
       <TableCell>
         <span className="text-sm text-muted-foreground">
-          {formatDate(segment.updatedAt)}
+          {formatDate(segment.updatedAt, { locale: 'en-AU' })}
         </span>
       </TableCell>
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" aria-label="Segment actions">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -377,7 +370,7 @@ export function SegmentManager({
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search segments..."
+            placeholder="Search segments…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"

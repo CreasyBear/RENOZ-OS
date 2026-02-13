@@ -165,3 +165,31 @@ export interface XeroInvoicePayload {
   // Payment terms
   lineAmountTypes: 'Exclusive'; // Tax exclusive
 }
+
+/**
+ * Invoice with Xero sync status information.
+ * Returned by listInvoicesBySyncStatus server function.
+ */
+export interface InvoiceWithSyncStatus {
+  orderId: string;
+  orderNumber: string;
+  orderDate: Date;
+  total: number;
+  customerId: string;
+  customerName: string;
+  xeroInvoiceId: string | null;
+  xeroSyncStatus: XeroSyncStatus;
+  xeroSyncError: string | null;
+  lastXeroSyncAt: Date | null;
+  xeroInvoiceUrl: string | null;
+}
+
+/**
+ * Response from listInvoicesBySyncStatus server function.
+ */
+export interface ListInvoicesBySyncStatusResponse {
+  invoices: InvoiceWithSyncStatus[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

@@ -15,6 +15,7 @@ import {
   useCreateContact,
   useCreateAddress,
 } from '@/hooks/customers'
+import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
 
 // ============================================================================
@@ -155,9 +156,9 @@ function NewCustomerPage() {
 
       // Note: useCreateCustomer hook handles cache invalidation
       toast.success('Customer created successfully')
-      navigate({ to: '/customers/$customerId', params: { customerId: customer.id } })
+      navigate({ to: '/customers/$customerId', params: { customerId: customer.id }, search: {} })
     } catch (error) {
-      console.error('Failed to create customer:', error)
+      logger.error('Failed to create customer', error as Error, { context: 'customers-new' })
       toast.error('Failed to create customer')
     }
   }

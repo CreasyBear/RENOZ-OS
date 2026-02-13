@@ -37,6 +37,11 @@ import {
   FolderKanban,
   CalendarDays,
   ListChecks,
+  TrendingUp,
+  Inbox,
+  Phone,
+  UserPlus,
+  ScrollText,
 } from 'lucide-react'
 import { PERMISSIONS, type PermissionAction } from '@/lib/auth/permissions'
 
@@ -44,7 +49,15 @@ import { PERMISSIONS, type PermissionAction } from '@/lib/auth/permissions'
 // TYPES
 // ============================================================================
 
-export type NavGroup = 'daily' | 'sales' | 'delivery' | 'footer'
+export type NavGroup =
+  | 'daily'
+  | 'sales'
+  | 'delivery'
+  | 'operations'
+  | 'communications'
+  | 'support'
+  | 'admin'
+  | 'footer'
 
 export interface RouteMetadata {
   /** Display title for the route */
@@ -191,7 +204,7 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
   },
 
   // ============================================================================
-  // FOOTER - Icon-only quick access
+  // OPERATIONS - Inventory, products, and procurement
   // ============================================================================
   '/inventory': {
     title: 'Inventory',
@@ -200,17 +213,218 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     requiredPermission: 'inventory.read',
     showInNav: true,
     navOrder: 30,
-    navGroup: 'footer',
+    navGroup: 'operations',
   },
+  '/products': {
+    title: 'Products',
+    icon: Package,
+    description: 'Product catalog and inventory levels',
+    requiredPermission: 'product.read',
+    showInNav: true,
+    navOrder: 31,
+    navGroup: 'operations',
+  },
+  '/suppliers': {
+    title: 'Suppliers',
+    icon: Truck,
+    description: 'Supplier management and purchase orders',
+    requiredPermission: PERMISSIONS.suppliers.read,
+    showInNav: true,
+    navOrder: 32,
+    navGroup: 'operations',
+  },
+  '/procurement': {
+    title: 'Procurement',
+    icon: FileText,
+    description: 'Purchase orders and procurement dashboard',
+    requiredPermission: PERMISSIONS.suppliers.read,
+    showInNav: true,
+    navOrder: 33,
+    navGroup: 'operations',
+  },
+  '/purchase-orders': {
+    title: 'Purchase Orders',
+    icon: Truck,
+    description: 'Manage purchase orders',
+    requiredPermission: PERMISSIONS.suppliers.read,
+    showInNav: true,
+    navOrder: 34,
+    navGroup: 'operations',
+  },
+
+  // ============================================================================
+  // COMMUNICATIONS - Email, campaigns, and calls
+  // ============================================================================
+  '/communications': {
+    title: 'Communications',
+    icon: Mail,
+    description: 'Email campaigns and communication logs',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 40,
+    navGroup: 'communications',
+  },
+  '/communications/inbox': {
+    title: 'Inbox',
+    icon: Inbox,
+    description: 'Unified communications inbox',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 41,
+    navGroup: 'communications',
+    parent: '/communications',
+  },
+  '/communications/campaigns': {
+    title: 'Campaigns',
+    icon: Mail,
+    description: 'Email campaigns',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 42,
+    navGroup: 'communications',
+    parent: '/communications',
+  },
+  '/communications/calls': {
+    title: 'Calls',
+    icon: Phone,
+    description: 'Follow-up calls',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 43,
+    navGroup: 'communications',
+    parent: '/communications',
+  },
+
+  // ============================================================================
+  // SUPPORT - Warranties, claims, RMAs, issues
+  // ============================================================================
   '/support': {
     title: 'Support',
     icon: Headphones,
     description: 'Warranties, claims, and customer support',
-    requiredPermission: 'support.read',
+    requiredPermission: PERMISSIONS.support.read,
     showInNav: true,
-    navOrder: 31,
-    navGroup: 'footer',
+    navOrder: 50,
+    navGroup: 'support',
   },
+  '/support/warranties': {
+    title: 'Warranties',
+    icon: Shield,
+    description: 'Warranty policies and certificates',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 51,
+    navGroup: 'support',
+    parent: '/support',
+  },
+  '/support/claims': {
+    title: 'Warranty Claims',
+    icon: Shield,
+    description: 'Review and manage warranty claims',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 52,
+    navGroup: 'support',
+    parent: '/support',
+  },
+  '/support/rmas': {
+    title: 'RMAs',
+    icon: Truck,
+    description: 'Return merchandise authorizations',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 53,
+    navGroup: 'support',
+    parent: '/support',
+  },
+  '/support/issues': {
+    title: 'Issues',
+    icon: Headphones,
+    description: 'Issue tracking and escalations',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: true,
+    navOrder: 54,
+    navGroup: 'support',
+    parent: '/support',
+  },
+
+  // ============================================================================
+  // ADMIN - Users, groups, approvals, audit
+  // Routes use requireAdmin (owner/admin only); sidebar shows items only to those roles.
+  // audit.read aligns with requireAdmin; Approvals uses suppliers.approve for PO approvers.
+  // ============================================================================
+  '/admin': {
+    title: 'Admin',
+    icon: Shield,
+    description: 'User management, groups, and audit logs',
+    requiredPermission: PERMISSIONS.audit.read,
+    showInNav: true,
+    navOrder: 60,
+    navGroup: 'admin',
+  },
+  '/admin/users': {
+    title: 'Users',
+    icon: Users,
+    description: 'Manage users and permissions',
+    requiredPermission: PERMISSIONS.audit.read,
+    showInNav: true,
+    navOrder: 61,
+    navGroup: 'admin',
+    parent: '/admin',
+  },
+  '/admin/groups': {
+    title: 'Groups',
+    icon: Users,
+    description: 'Manage permission groups',
+    requiredPermission: PERMISSIONS.audit.read,
+    showInNav: true,
+    navOrder: 62,
+    navGroup: 'admin',
+    parent: '/admin',
+  },
+  '/admin/invitations': {
+    title: 'Invitations',
+    icon: UserPlus,
+    description: 'Pending user invitations',
+    requiredPermission: PERMISSIONS.audit.read,
+    showInNav: true,
+    navOrder: 63,
+    navGroup: 'admin',
+    parent: '/admin',
+  },
+  '/admin/audit': {
+    title: 'Audit',
+    icon: ScrollText,
+    description: 'Audit logs and activity',
+    requiredPermission: PERMISSIONS.audit.read,
+    showInNav: true,
+    navOrder: 64,
+    navGroup: 'admin',
+    parent: '/admin',
+  },
+  '/admin/activities': {
+    title: 'Activities',
+    icon: Activity,
+    description: 'Activity feed and logs',
+    requiredPermission: PERMISSIONS.audit.read,
+    showInNav: true,
+    navOrder: 65,
+    navGroup: 'admin',
+    parent: '/admin',
+  },
+  '/approvals': {
+    title: 'Approvals',
+    icon: CheckSquare,
+    description: 'Pending approvals and delegations',
+    requiredPermission: PERMISSIONS.suppliers.approve,
+    showInNav: true,
+    navOrder: 66,
+    navGroup: 'admin',
+  },
+
+  // ============================================================================
+  // FOOTER - Reports and quick access
+  // ============================================================================
   '/reports': {
     title: 'Reports',
     icon: BarChart3,
@@ -221,8 +435,72 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
       PERMISSIONS.report.viewFinancial,
     ],
     showInNav: true,
-    navOrder: 32,
+    navOrder: 70,
     navGroup: 'footer',
+  },
+  '/reports/job-costing': {
+    title: 'Job Costing',
+    breadcrumb: 'Job Costing',
+    description: 'Job profitability and cost analysis',
+    requiredPermission: PERMISSIONS.report.viewOperations,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/expiring-warranties': {
+    title: 'Expiring Warranties',
+    icon: BarChart3,
+    description: 'Upcoming warranty expirations',
+    requiredPermission: PERMISSIONS.report.viewOperations,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/warranties': {
+    title: 'Warranty Reports',
+    icon: BarChart3,
+    description: 'Warranty performance and claims reporting',
+    requiredPermission: PERMISSIONS.report.viewOperations,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/pipeline-forecast': {
+    title: 'Pipeline Forecast',
+    icon: BarChart3,
+    description: 'Pipeline forecasting and revenue projections',
+    requiredPermission: PERMISSIONS.report.viewSales,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/win-loss': {
+    title: 'Win/Loss Analysis',
+    icon: BarChart3,
+    description: 'Analyze won and lost opportunities',
+    requiredPermission: PERMISSIONS.report.viewSales,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/procurement': {
+    title: 'Procurement Reports',
+    icon: BarChart3,
+    description: 'Procurement spend and supplier reporting',
+    requiredPermission: PERMISSIONS.report.viewOperations,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/customers': {
+    title: 'Customer Reports',
+    icon: BarChart3,
+    description: 'Customer growth and retention reporting',
+    requiredPermission: PERMISSIONS.report.viewSales,
+    showInNav: false,
+    parent: '/reports',
+  },
+  '/reports/financial': {
+    title: 'Financial Reports',
+    icon: BarChart3,
+    description: 'Financial reporting and KPI analysis',
+    requiredPermission: PERMISSIONS.report.viewFinancial,
+    showInNav: false,
+    parent: '/reports',
   },
 
   // ============================================================================
@@ -236,14 +514,6 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     showInNav: false, // Accessible from Orders page
     parent: '/orders',
   },
-  '/products': {
-    title: 'Products',
-    icon: Package,
-    description: 'Product catalog',
-    requiredPermission: 'product.read',
-    showInNav: false, // Accessible from Inventory
-    parent: '/inventory',
-  },
   '/jobs': {
     title: 'Jobs',
     icon: Wrench,
@@ -251,36 +521,12 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     requiredPermission: 'job.read',
     showInNav: false,
   },
-  '/suppliers': {
-    title: 'Suppliers',
-    icon: Truck,
-    description: 'Supplier management and purchase orders',
-    requiredPermission: 'suppliers.read',
-    showInNav: false, // Accessible from Inventory
-    parent: '/inventory',
-  },
-  '/procurement': {
-    title: 'Procurement',
-    icon: FileText,
-    description: 'Purchase orders and procurement dashboard',
-    requiredPermission: PERMISSIONS.suppliers.read,
-    showInNav: false, // Accessible from Inventory
-    parent: '/inventory',
-  },
-  '/purchase-orders': {
-    title: 'Purchase Orders',
-    icon: Truck,
-    description: 'Manage purchase orders',
-    requiredPermission: PERMISSIONS.suppliers.read,
-    showInNav: false, // Accessible from Inventory
-    parent: '/inventory',
-  },
-  '/communications': {
-    title: 'Communications',
-    icon: Mail,
-    description: 'Email campaigns and communication logs',
+  '/support/dashboard': {
+    title: 'Support Dashboard',
+    icon: Headphones,
+    description: 'Support metrics, queues, and SLAs',
     requiredPermission: PERMISSIONS.support.read,
-    showInNav: false, // Accessible from Support
+    showInNav: false,
     parent: '/support',
   },
   '/financial': {
@@ -288,35 +534,39 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     icon: DollarSign,
     description: 'AR aging, revenue, and payment management',
     requiredPermission: 'financial.read',
-    showInNav: false, // Accessible from Reports or Settings
+    showInNav: true, // Now primary navigation entry
+    navOrder: 13,
+    navGroup: 'sales',
   },
-  '/activities': {
-    title: 'Activities',
-    icon: Activity,
-    description: 'Activity feed and logs',
-    requiredPermission: 'activity.read',
-    showInNav: false, // Admin function
+  '/financial/invoices': {
+    title: 'Invoices',
+    icon: FileText,
+    description: 'Manage and track customer invoices',
+    requiredPermission: 'financial.read',
+    showInNav: false, // Accessible from Financial landing
+    parent: '/financial',
   },
-  '/approvals': {
-    title: 'Approvals',
-    icon: CheckSquare,
-    description: 'Pending approvals and delegations',
-    requiredPermission: PERMISSIONS.suppliers.approve,
-    showInNav: false, // Admin function
+  '/financial/invoices/$invoiceId': {
+    title: 'Invoice Detail',
+    icon: FileText,
+    description: 'View invoice details and manage payment',
+    requiredPermission: 'financial.read',
+    showInNav: false,
+    parent: '/financial/invoices',
   },
-  '/admin': {
-    title: 'Admin',
-    icon: Shield,
-    description: 'User management, groups, and audit logs',
-    requiredPermission: 'user.read',
-    showInNav: false, // Settings submenu
+  '/financial/analytics': {
+    title: 'Financial Analytics',
+    icon: TrendingUp,
+    description: 'Revenue trends, KPIs, and financial insights',
+    requiredPermission: 'financial.read',
+    showInNav: false, // Accessible from Financial landing
+    parent: '/financial',
   },
-
   // User routes (not in main nav)
   '/profile': {
     title: 'Profile',
     icon: User,
-    description: 'Your profile settings',
+    description: 'Your profile settings and account details',
     showInNav: false,
   },
   '/settings': {
@@ -407,9 +657,33 @@ export const NAV_GROUPS: NavGroupConfig[] = [
     defaultExpanded: true,
   },
   {
+    key: 'operations',
+    title: 'Operations',
+    description: 'Inventory, products, and procurement',
+    defaultExpanded: true,
+  },
+  {
+    key: 'communications',
+    title: 'Communications',
+    description: 'Email, campaigns, and calls',
+    defaultExpanded: true,
+  },
+  {
+    key: 'support',
+    title: 'Support',
+    description: 'Warranties, claims, and customer support',
+    defaultExpanded: true,
+  },
+  {
+    key: 'admin',
+    title: 'Admin',
+    description: 'Users, groups, and audit',
+    defaultExpanded: true,
+  },
+  {
     key: 'footer',
-    title: 'More',
-    description: 'Inventory, support, and reports',
+    title: 'Reports',
+    description: 'Reports and analytics',
     defaultExpanded: false,
   },
 ]
@@ -423,6 +697,10 @@ export function getNavRoutesByGroup(): Record<NavGroup, Array<{ path: string } &
     daily: [],
     sales: [],
     delivery: [],
+    operations: [],
+    communications: [],
+    support: [],
+    admin: [],
     footer: [],
   }
 
@@ -432,6 +710,24 @@ export function getNavRoutesByGroup(): Record<NavGroup, Array<{ path: string } &
   }
 
   return grouped
+}
+
+/**
+ * Get all routes searchable in the command palette.
+ * Includes both nav routes and hidden routes (suppliers, settings, etc.)
+ * Excludes public routes (login, sign-up).
+ */
+export function getSearchableRoutes(): Array<{ path: string } & RouteMetadata> {
+  return Object.entries(ROUTE_METADATA)
+    .filter(([path, meta]) => {
+      // Exclude public routes
+      if (PUBLIC_ROUTES.some(r => path === r)) return false
+      // Must have a title and description to be useful in search
+      if (!meta.description) return false
+      return true
+    })
+    .sort((a, b) => (a[1].navOrder ?? 999) - (b[1].navOrder ?? 999))
+    .map(([path, meta]) => ({ path, ...meta }))
 }
 
 /**

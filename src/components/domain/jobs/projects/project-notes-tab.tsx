@@ -62,7 +62,7 @@ import { useUserLookup } from '@/hooks/users';
 import { NoteCreateDialog, NoteEditDialog } from './note-dialogs';
 
 // Types
-import type { ProjectNote, ProjectNoteType, ProjectNoteStatus, NoteTranscriptSegment } from 'drizzle/schema';
+import type { ProjectNote, ProjectNoteType, ProjectNoteStatus, NoteTranscriptSegment } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES
@@ -398,10 +398,10 @@ function NotesSummaryCards({ notes }: { notes: NoteWithAuthor[] }) {
     const total = notes.length;
     
     // By type
-    const byType = notes.reduce((acc, note) => {
+    const byType = notes.reduce<Record<string, number>>((acc, note) => {
       acc[note.noteType] = (acc[note.noteType] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>);
+    }, {});
     
     // By status
     const processing = notes.filter(n => n.status === 'processing').length;
@@ -409,6 +409,7 @@ function NotesSummaryCards({ notes }: { notes: NoteWithAuthor[] }) {
     
     // Recent (last 7 days)
     const recent = notes.filter(n => {
+      // eslint-disable-next-line react-hooks/purity -- Date.now() for relative time; stable per mount
       const days = (Date.now() - new Date(n.createdAt).getTime()) / (1000 * 60 * 60 * 24);
       return days <= 7;
     }).length;
@@ -603,7 +604,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       try {
         await deleteNote.mutateAsync(note.id);
         toast.success('Note deleted');
-      } catch (err) {
+      } catch {
         toast.error('Failed to delete note');
       }
     }

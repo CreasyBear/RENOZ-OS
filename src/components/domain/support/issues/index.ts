@@ -1,16 +1,42 @@
 /**
  * Issue Management Components
+ *
+ * Components for issue tracking, kanban boards, filtering, and detail views.
  */
+
+// Detail View (Container/Presenter pattern)
+export { IssueDetailContainer } from './issue-detail-container';
+export { IssueDetailView } from './issue-detail-view';
+
+// Status & Configuration
 export { ISSUE_STATUS_CONFIG } from './issue-status-config';
+
+// Bulk Actions
 export { IssueBulkActions } from './issue-bulk-actions';
 export type { BulkActionEvent } from './issue-bulk-actions';
+
+// Warnings & Alerts
 export { IssueDuplicateWarning } from './issue-duplicate-warning';
+
+// Kanban Board
 export { IssueKanbanBoard } from './issue-kanban-board';
 export { IssueKanbanCard } from './issue-kanban-card';
 export type { IssueKanbanItem } from './issue-kanban-card';
-export { IssueQuickFilters, getFilterDescription } from './issue-quick-filters';
+
+// Filtering
+export {
+  IssueQuickFilters,
+  getFilterDescription,
+  quickFilterFromSearch,
+  quickFilterToSearch,
+} from './issue-quick-filters';
+export { IssueActivityTimelineContainer } from './issue-activity-timeline-container';
 export type { QuickFilter } from './issue-quick-filters';
+
+// Related Issues
 export { IssueRelatedIssues } from './issue-related-issues';
+
+// Dialogs
 export { IssueStatusChangeDialog } from './issue-status-change-dialog';
 export type { StatusChangeResult } from './issue-status-change-dialog';
 export { IssueTemplateFormDialog } from './issue-template-form-dialog';

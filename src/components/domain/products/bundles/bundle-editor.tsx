@@ -3,7 +3,7 @@
  *
  * Edit bundle components with drag-and-drop reordering, quantity adjustment, and validation.
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Plus,
   Trash2,
@@ -40,29 +40,14 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ComponentSelector } from "./component-selector";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import {
-  getBundleComponents,
-  addBundleComponent,
-  updateBundleComponent,
-  removeBundleComponent,
-  calculateBundlePrice,
-  validateBundle,
-} from "@/server/functions/products/product-bundles";
-
-interface BundleComponent {
-  id: string;
-  componentProductId: string;
-  quantity: number;
-  isOptional: boolean;
-  sortOrder: number;
-  componentProduct: {
-    id: string;
-    sku: string;
-    name: string;
-    basePrice: number | null;
-    type: string;
-    status: string;
-  };
-}
+  useBundleComponents,
+  useCalculateBundlePrice,
+  useValidateBundle,
+  useAddBundleComponent,
+  useUpdateBundleComponent,
+  useRemoveBundleComponent,
+  type BundleComponent,
+} from "@/hooks/products";
 
 interface BundleEditorProps {
   bundleProductId: string;
@@ -86,56 +71,33 @@ export function BundleEditor({
   bundlePrice,
   onComponentsChange,
 }: BundleEditorProps) {
-  const [components, setComponents] = useState<BundleComponent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [deletingComponent, setDeletingComponent] = useState<BundleComponent | null>(null);
-  const [validation, setValidation] = useState<{
-    valid: boolean;
-    errors: string[];
-    warnings: string[];
-  } | null>(null);
-  const [priceBreakdown, setPriceBreakdown] = useState<{
-    componentTotal: number;
-    savings: number;
-    savingsPercent: number;
-  } | null>(null);
 
-  // Load bundle components
-  const loadComponents = async () => {
-    setIsLoading(true);
-    try {
-      const result = await getBundleComponents({ data: { bundleProductId } });
-      setComponents(result.components);
-      setPriceBreakdown({
-        componentTotal: result.calculatedPrice,
-        savings: result.calculatedPrice - bundlePrice,
-        savingsPercent:
-          result.calculatedPrice > 0
-            ? ((result.calculatedPrice - bundlePrice) / result.calculatedPrice) * 100
-            : 0,
-      });
-    } catch (error) {
-      console.error("Failed to load components:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Queries
+  const { data: componentsData, isLoading } = useBundleComponents({
+    bundleProductId,
+  });
+  const { data: priceData } = useCalculateBundlePrice({
+    bundleProductId,
+  });
+  const { data: validation, refetch: refetchValidation } = useValidateBundle({
+    bundleProductId,
+  });
 
-  // Validate bundle
-  const runValidation = async () => {
-    try {
-      const result = await validateBundle({ data: { bundleProductId } });
-      setValidation(result);
-    } catch (error) {
-      console.error("Failed to validate bundle:", error);
-    }
-  };
+  // Mutations
+  const addComponent = useAddBundleComponent();
+  const updateComponent = useUpdateBundleComponent();
+  const removeComponent = useRemoveBundleComponent();
 
-  useEffect(() => {
-    loadComponents();
-    runValidation();
-  }, [bundleProductId]);
+  const components = componentsData?.components ?? [];
+  const priceBreakdown = priceData
+    ? {
+        componentTotal: priceData.componentTotal,
+        savings: priceData.componentTotal - bundlePrice,
+        savingsPercent: priceData.savingsPercent,
+      }
+    : null;
 
   // Add components from selector
   const handleAddComponents = async (
@@ -146,80 +108,62 @@ export function BundleEditor({
     }>
   ) => {
     for (const c of newComponents) {
-      try {
-        await addBundleComponent({
-          data: {
-            bundleProductId,
-            component: {
-              componentProductId: c.product.id,
-              quantity: c.quantity,
-              isOptional: c.isOptional,
-            },
-          },
-        });
-      } catch (error) {
-        console.error("Failed to add component:", error);
-      }
+      await addComponent.mutateAsync({
+        bundleProductId,
+        component: {
+          componentProductId: c.product.id,
+          quantity: c.quantity,
+          isOptional: c.isOptional,
+        },
+      });
     }
-    loadComponents();
-    runValidation();
     onComponentsChange?.();
   };
 
   // Update component quantity
-  const handleQuantityChange = async (component: BundleComponent, quantity: number) => {
+  const handleQuantityChange = (component: BundleComponent, quantity: number) => {
     if (quantity < 1) return;
-    try {
-      await updateBundleComponent({
-        data: { id: component.id, quantity },
-      });
-      setComponents((prev) =>
-        prev.map((c) => (c.id === component.id ? { ...c, quantity } : c))
-      );
-      // Recalculate price
-      const priceResult = await calculateBundlePrice({
-        data: { bundleProductId, includeOptional: false },
-      });
-      setPriceBreakdown({
-        componentTotal: priceResult.componentTotal,
-        savings: priceResult.componentTotal - bundlePrice,
-        savingsPercent: priceResult.savingsPercent,
-      });
-      onComponentsChange?.();
-    } catch (error) {
-      console.error("Failed to update quantity:", error);
-    }
+    updateComponent.mutate(
+      {
+        id: component.id,
+        quantity,
+        bundleProductId,
+      },
+      {
+        onSuccess: () => onComponentsChange?.(),
+      }
+    );
   };
 
   // Toggle optional status
-  const handleToggleOptional = async (component: BundleComponent) => {
-    try {
-      await updateBundleComponent({
-        data: { id: component.id, isOptional: !component.isOptional },
-      });
-      setComponents((prev) =>
-        prev.map((c) =>
-          c.id === component.id ? { ...c, isOptional: !c.isOptional } : c
-        )
-      );
-      onComponentsChange?.();
-    } catch (error) {
-      console.error("Failed to toggle optional:", error);
-    }
+  const handleToggleOptional = (component: BundleComponent) => {
+    updateComponent.mutate(
+      {
+        id: component.id,
+        isOptional: !component.isOptional,
+        bundleProductId,
+      },
+      {
+        onSuccess: () => onComponentsChange?.(),
+      }
+    );
   };
 
   // Remove component
-  const handleRemove = async () => {
+  const handleRemove = () => {
     if (!deletingComponent) return;
-    try {
-      await removeBundleComponent({ data: { id: deletingComponent.id } });
-      setComponents((prev) => prev.filter((c) => c.id !== deletingComponent.id));
-      setDeletingComponent(null);
-      runValidation();
-      onComponentsChange?.();
-    } catch (error) {
-      console.error("Failed to remove component:", error);
-    }
+    removeComponent.mutate(
+      {
+        id: deletingComponent.id,
+        bundleProductId,
+      },
+      {
+        onSuccess: () => {
+          setDeletingComponent(null);
+          onComponentsChange?.();
+        },
+      }
+    );
   };
 
   // Calculate line total
@@ -272,21 +216,21 @@ export function BundleEditor({
                   variant="ghost"
                   size="sm"
                   className="ml-auto h-7"
-                  onClick={runValidation}
+                  onClick={() => refetchValidation()}
                 >
                   <RefreshCw className="h-3 w-3" />
                 </Button>
               </div>
               {validation.errors.length > 0 && (
                 <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
-                  {validation.errors.map((e, i) => (
+                  {validation.errors.map((e: string, i: number) => (
                     <li key={i}>{e}</li>
                   ))}
                 </ul>
               )}
               {validation.warnings.length > 0 && (
                 <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
-                  {validation.warnings.map((w, i) => (
+                  {validation.warnings.map((w: string, i: number) => (
                     <li key={i}>{w}</li>
                   ))}
                 </ul>

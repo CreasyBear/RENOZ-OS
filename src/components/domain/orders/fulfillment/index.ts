@@ -15,6 +15,11 @@ export { ConfirmDeliveryDialog } from './confirm-delivery-dialog';
 export { ShipOrderDialog } from './ship-order-dialog';
 
 // ============================================================================
+// SHARED COMPONENTS
+// ============================================================================
+export { SerialPicker } from './serial-picker';
+
+// ============================================================================
 // LISTS
 // ============================================================================
 export { ShipmentList } from './shipment-list';

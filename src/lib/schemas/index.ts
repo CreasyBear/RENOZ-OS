@@ -14,6 +14,7 @@ export * from "./_shared";
 export * from "./customers";
 export * from "./products";
 export * from "./orders";
+export * from "./invoices";
 
 // Pipeline and inventory
 export * from "./pipeline";
@@ -22,6 +23,8 @@ export * from "./inventory";
 // Auth and multi-tenancy
 export * from "./auth";
 export * from "./users";
+// Resolve UserProfile conflict: auth (Zod-inferred) wins over users (interface)
+export type { UserProfile } from "./auth";
 
 // Activity audit trail
 export * from "./activities";
@@ -41,9 +44,114 @@ export * from "./financial";
 export * from "./reports";
 export * from "./analytics";
 export * from "./dashboard";
+// Resolve ActivityItem conflict: users wins over dashboard
+export type { ActivityItem } from "./users";
 
-// Settings
-export * from "./settings";
+// Settings - explicit export to avoid conflicts with pipeline (WinLossReason) and products (Category)
+export type {
+  GeneralSettingsData,
+  AddressSettingsData,
+  FinancialSettingsData,
+  BrandingSettingsData,
+  PreferencesSettingsData,
+  EmailSettingsData,
+  SecuritySettingsData,
+  ApiToken,
+  SettingsCategory,
+  TargetsSettingsData,
+  SettingsWinLossReason,
+  SettingType,
+  SetSystemSetting,
+  SetSystemSettings,
+  SystemSetting,
+  DaySchedule,
+  WeeklySchedule,
+  CreateBusinessHours,
+  UpdateBusinessHours,
+  BusinessHours,
+  CreateHoliday,
+  UpdateHoliday,
+  ListHolidaysQuery,
+  Holiday,
+  CustomFieldType,
+  CustomFieldEntityType,
+  CustomFieldOption,
+  CustomFieldValidation,
+  CustomFieldMetadata,
+  CreateCustomField,
+  UpdateCustomField,
+  ListCustomFieldsQuery,
+  CustomField,
+  SetCustomFieldValue,
+  SetCustomFieldValues,
+  DataExportFormat,
+  DataExportStatus,
+  DataExportableEntity,
+  CreateDataExport,
+  ListDataExportsQuery,
+  DataExport,
+  XeroSyncStatus,
+  SyncInvoiceToXeroInput,
+  ResyncInvoiceInput,
+  XeroPaymentUpdate,
+  XeroPaymentUpdates,
+  GetInvoiceXeroStatusInput,
+  ListInvoicesBySyncStatusInput,
+  XeroSyncResult,
+  InvoiceXeroStatus,
+  XeroLineItem,
+  XeroInvoicePayload,
+  InvoiceWithSyncStatus,
+  ListInvoicesBySyncStatusResponse,
+} from "./settings";
+export {
+  settingTypeValues,
+  settingTypeSchema,
+  getSystemSettingsSchema,
+  getSystemSettingSchema,
+  setSystemSettingSchema,
+  setSystemSettingsSchema,
+  systemSettingSchema,
+  dayScheduleSchema,
+  weeklyScheduleSchema,
+  createBusinessHoursSchema,
+  updateBusinessHoursSchema,
+  businessHoursSchema,
+  createHolidaySchema,
+  updateHolidaySchema,
+  listHolidaysSchema,
+  holidaySchema,
+  customFieldTypeValues,
+  customFieldTypeSchema,
+  customFieldEntityTypeValues,
+  customFieldEntityTypeSchema,
+  customFieldOptionSchema,
+  customFieldValidationSchema,
+  customFieldMetadataSchema,
+  createCustomFieldSchema,
+  updateCustomFieldSchema,
+  listCustomFieldsSchema,
+  customFieldSchema,
+  setCustomFieldValueSchema,
+  setCustomFieldValuesSchema,
+  dataExportFormatValues,
+  dataExportFormatSchema,
+  dataExportStatusValues,
+  dataExportStatusSchema,
+  dataExportableEntityValues,
+  dataExportableEntitySchema,
+  createDataExportSchema,
+  listDataExportsSchema,
+  dataExportSchema,
+  xeroSyncStatusValues,
+  xeroSyncStatusSchema,
+  syncInvoiceToXeroSchema,
+  resyncInvoiceSchema,
+  xeroPaymentUpdateSchema,
+  xeroPaymentUpdatesSchema,
+  getInvoiceXeroStatusSchema,
+  listInvoicesBySyncStatusSchema,
+} from "./settings";
 
 // Suppliers and procurement
 export * from "./suppliers";

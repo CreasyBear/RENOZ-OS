@@ -14,6 +14,7 @@
  */
 
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { activities, type ActivityChanges, type ActivityMetadata } from "drizzle/schema";
 import type { ActivityAction, ActivityEntityType } from "./schemas/activities";
 
@@ -69,6 +70,14 @@ export interface ComputeChangesParams<T extends Record<string, unknown>> {
   excludeFields?: (keyof T)[];
   /** Sensitive fields to mask in the audit log */
   sensitiveFields?: (keyof T)[];
+}
+
+/**
+ * Typed helper for excludeFields when passing string[] to computeChanges.
+ * Centralizes the cast required by ComputeChangesParams generic typing.
+ */
+export function excludeFieldsForActivity<T>(fields: readonly string[]): (keyof T)[] {
+  return [...fields] as (keyof T)[];
 }
 
 // ============================================================================
@@ -201,7 +210,7 @@ export class ActivityLogger {
       }
 
       // Log error but don't throw - activity logging should not fail the main operation
-      console.error("[ActivityLogger] Failed to log activity:", error, {
+      logger.error("[ActivityLogger] Failed to log activity", error, {
         entityType,
         entityId,
         action,

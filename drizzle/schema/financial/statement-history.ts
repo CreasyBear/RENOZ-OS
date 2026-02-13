@@ -23,13 +23,14 @@ import {
   timestamp,
   index,
   integer,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
+  softDeleteColumn,
   currencyColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { customers } from "../customers/customers";
 import { organizations } from "../settings/organizations";
@@ -97,6 +98,7 @@ export const statementHistory = pgTable(
     // Tracking
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
     // Multi-tenant queries
@@ -122,27 +124,7 @@ export const statementHistory = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("statement_history_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("statement_history_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("statement_history_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("statement_history_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("statement_history"),
   })
 );
 

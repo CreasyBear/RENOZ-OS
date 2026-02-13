@@ -41,7 +41,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { StatusBadge } from '@/components/shared';
 import { AlertCircle, FileWarning, Shield } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { WarrantyClaimTypeValue } from '@/lib/schemas/warranty/claims';
+import {
+  isWarrantyClaimTypeValue,
+  type WarrantyClaimTypeValue,
+} from '@/lib/schemas/warranty';
 import { claimTypeConfig } from '@/lib/warranty/claims-utils';
 
 // ============================================================================
@@ -236,7 +239,9 @@ export function WarrantyClaimFormDialog({
               </Label>
               <Select
                 value={claimType}
-                onValueChange={(value) => setClaimType(value as WarrantyClaimTypeValue)}
+                onValueChange={(value) =>
+                setClaimType(isWarrantyClaimTypeValue(value) ? value : claimType)
+              }
               >
                 <SelectTrigger id="claimType" className="w-full">
                   <SelectValue placeholder="Select the type of issue" />

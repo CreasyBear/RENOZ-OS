@@ -38,6 +38,7 @@ import {
 import { setContext } from '@/lib/ai/artifacts';
 import type { UserContext } from '@/lib/ai/prompts/shared';
 import type { ToolSet } from 'ai';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -255,11 +256,11 @@ export async function POST({ request }: { request: Request }) {
             createdAt: new Date().toISOString(),
           });
         } catch (error) {
-          console.error('[Chat API] onFinish error:', error);
+          logger.error('[Chat API] onFinish error', error as Error, {});
         }
       },
       onError: (error) => {
-        console.error('[Chat API] Stream error:', error);
+        logger.error('[Chat API] Stream error', error as Error, {});
         return 'An error occurred while processing your request.';
       },
     });
@@ -267,7 +268,7 @@ export async function POST({ request }: { request: Request }) {
     // Return streaming response
     return createUIMessageStreamResponse({ stream });
   } catch (error) {
-    console.error('[API /ai/chat] Error:', error);
+    logger.error('[API /ai/chat] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {

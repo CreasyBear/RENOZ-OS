@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { AlertCircle, CheckCircle, Send, XCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { ApprovalSubmitDialog } from './approval-submit-dialog';
 import { ApprovalConfirmDialog } from './approval-confirm-dialog';
 import type { ApprovalActionBarOrder } from '@/lib/schemas/approvals';
@@ -49,6 +50,7 @@ export function ApprovalActionBar({
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const { formatDate } = useOrgFormat();
 
   // Draft status - show submit for approval
   if (order.status === 'draft') {
@@ -93,18 +95,13 @@ export function ApprovalActionBar({
     return (
       <>
         <div className="space-y-4">
-          <Alert variant="default" className="border-orange-200 bg-orange-50">
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-            <AlertTitle className="text-orange-800">Awaiting Your Approval</AlertTitle>
-            <AlertDescription className="text-orange-700">
+          <Alert variant="default">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Awaiting Your Approval</AlertTitle>
+            <AlertDescription>
               {order.submittedBy ? (
                 <>
-                  Submitted by {order.submittedBy.name} on{' '}
-                  {new Date(order.submittedBy.date).toLocaleDateString('en-AU', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
+                  Submitted by {order.submittedBy.name} on {formatDate(order.submittedBy.date, { format: 'short' })}
                 </>
               ) : (
                 'This purchase order requires your approval before it can be sent.'
@@ -124,7 +121,8 @@ export function ApprovalActionBar({
           <div className="flex gap-3">
             <Button
               size="lg"
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              variant="default"
+              className="flex-1"
               onClick={() => setApproveDialogOpen(true)}
               disabled={!canApprove || isProcessing}
             >
@@ -133,8 +131,8 @@ export function ApprovalActionBar({
             </Button>
             <Button
               size="lg"
-              variant="outline"
-              className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground flex-1"
+              variant="destructive"
+              className="flex-1"
               onClick={() => setRejectDialogOpen(true)}
               disabled={!canApprove || isProcessing}
             >
@@ -175,10 +173,10 @@ export function ApprovalActionBar({
   if (order.status === 'approved') {
     return (
       <div className="space-y-4">
-        <Alert variant="default" className="border-green-200 bg-green-50">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertTitle className="text-green-800">Order Approved</AlertTitle>
-          <AlertDescription className="text-green-700">
+        <Alert variant="default">
+          <CheckCircle className="h-4 w-4" />
+          <AlertTitle>Order Approved</AlertTitle>
+          <AlertDescription>
             This order has been approved and is ready to send to the supplier.
           </AlertDescription>
         </Alert>

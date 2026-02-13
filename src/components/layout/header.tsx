@@ -6,14 +6,15 @@
  * Features:
  * - Breadcrumbs based on current route
  * - Search trigger with Cmd+K hint
- * - Notification bell (placeholder)
+ * - Notification bell (opens notification center popover)
  * - User avatar dropdown
  * - Responsive layout
  */
-import { Bell, Search, Menu, Sparkles } from 'lucide-react'
+import { Search, Menu, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Breadcrumbs } from './breadcrumbs'
 import { UserMenu } from './user-menu'
+import { NotificationCenterContainer } from '@/components/domain/notifications'
 
 interface HeaderProps {
   onMobileMenuClick?: () => void
@@ -109,26 +110,8 @@ export function Header({ onMobileMenuClick, onAIClick }: HeaderProps) {
           <Sparkles className="h-5 w-5" aria-hidden="true" />
         </button>
 
-        {/* Notifications - placeholder */}
-        <button
-          type="button"
-          className={cn(
-            'relative p-2 rounded-lg text-muted-foreground',
-            'hover:bg-muted transition-colors duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-ring'
-          )}
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" aria-hidden="true" />
-          {/* Notification badge with subtle pulse */}
-          <span
-            className={cn(
-              'absolute top-1 right-1 h-2 w-2 rounded-full',
-              'bg-destructive animate-pulse'
-            )}
-            aria-hidden="true"
-          />
-        </button>
+        {/* Notifications */}
+        <NotificationCenterContainer />
 
         {/* User menu */}
         <UserMenu />

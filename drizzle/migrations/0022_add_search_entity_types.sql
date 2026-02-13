@@ -1,0 +1,5 @@
+-- Extend search entity type check constraints to include invoice, installer, purchase_order, rma
+ALTER TABLE "search_index" DROP CONSTRAINT IF EXISTS "search_index_entity_type_check";--> statement-breakpoint
+ALTER TABLE "search_index" ADD CONSTRAINT "search_index_entity_type_check" CHECK ("search_index"."entity_type" IN ('customer', 'contact', 'order', 'opportunity', 'product', 'inventory', 'supplier', 'warranty', 'issue', 'user', 'email', 'call', 'job', 'job_assignment', 'warranty_claim', 'quote', 'shipment', 'invoice', 'installer', 'purchase_order', 'rma'));--> statement-breakpoint
+ALTER TABLE "search_index_outbox" DROP CONSTRAINT IF EXISTS "search_outbox_entity_type_check";--> statement-breakpoint
+ALTER TABLE "search_index_outbox" ADD CONSTRAINT "search_outbox_entity_type_check" CHECK ("search_index_outbox"."entity_type" IN ('customer', 'contact', 'order', 'opportunity', 'product', 'inventory', 'supplier', 'warranty', 'issue', 'user', 'email', 'call', 'job', 'job_assignment', 'warranty_claim', 'quote', 'shipment', 'invoice', 'installer', 'purchase_order', 'rma'));

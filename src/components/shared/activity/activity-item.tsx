@@ -13,10 +13,13 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -34,6 +37,7 @@ import type {
   ActivityAction,
   ActivityEntityType,
 } from "@/lib/schemas/activities";
+import { isActivityMetadata } from "@/lib/schemas/activities";
 import { formatDistanceToNow, format } from "date-fns";
 
 type MetadataEntry = {
@@ -41,6 +45,18 @@ type MetadataEntry = {
   label: string;
   value: string;
   isComplex: boolean;
+};
+
+type QuickLink = {
+  label: string;
+  href: string;
+  icon: typeof Mail;
+};
+
+type RelatedEntity = {
+  entityType: ActivityEntityType;
+  entityId: string;
+  entityName?: string | null;
 };
 
 const METADATA_SUMMARY_KEYS = [
@@ -76,7 +92,7 @@ export interface ActivityItemProps {
   /** Show compact view without expandable details */
   compact?: boolean;
   /** Custom link generator for entity - defaults to standard routes */
-  getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string;
+  getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string | null;
   className?: string;
 }
 
@@ -134,9 +150,10 @@ function formatMetadataValue(value: unknown): { text: string; isComplex: boolean
 }
 
 function getMetadataEntries(metadata: ActivityWithUser["metadata"]): MetadataEntry[] {
-  if (!metadata || typeof metadata !== "object") return [];
+  if (!metadata || !isActivityMetadata(metadata)) return [];
 
-  const metadataObj = metadata as Record<string, unknown>;
+  // metadata is validated as ActivityMetadata via type guard
+  const metadataObj = metadata;
 
   // Check which resolved names exist
   const hasCustomerName = !!metadataObj.customerName;
@@ -183,18 +200,78 @@ function getMetadataSummary(entries: MetadataEntry[]): MetadataEntry[] {
   return unique.slice(0, 3);
 }
 
-function getDefaultEntityLink(entityType: ActivityEntityType, entityId: string): string {
-  // Map entity types to routes
-  const routeMap: Partial<Record<ActivityEntityType, string>> = {
-    customer: `/customers/${entityId}`,
-    contact: `/contacts/${entityId}`,
-    order: `/orders/${entityId}`,
-    opportunity: `/pipeline/${entityId}`,
-    product: `/products/${entityId}`,
-    supplier: `/suppliers/${entityId}`,
-    warranty: `/warranties/${entityId}`,
+// Import centralized utility instead of duplicating route mapping
+import { getEntityLink } from '@/lib/activities/activity-navigation';
+
+function buildRelatedEntities(
+  activity: ActivityWithUser
+): RelatedEntity[] {
+  // metadata is already typed as ActivityMetadata | null from ActivityWithUser
+  const metadata = activity.metadata ?? null;
+  if (!metadata) return [];
+  
+  const related: RelatedEntity[] = [];
+
+  const pushRelated = (
+    entityType: ActivityEntityType,
+    entityId?: unknown,
+    entityName?: unknown
+  ) => {
+    if (typeof entityId !== "string" || !entityId) return;
+    if (activity.entityType === entityType && activity.entityId === entityId) return;
+    if (!getEntityLink(entityType, entityId)) return;
+    related.push({
+      entityType,
+      entityId,
+      entityName: typeof entityName === "string" ? entityName : null,
+    });
   };
-  return routeMap[entityType] ?? "#";
+
+  pushRelated("customer", metadata.customerId, metadata.customerName);
+  pushRelated("order", metadata.orderId, metadata.orderNumber);
+  pushRelated("opportunity", metadata.opportunityId, metadata.opportunityTitle);
+  pushRelated("project", metadata.projectId, metadata.projectTitle);
+  pushRelated("product", metadata.productId, metadata.productName);
+  pushRelated("warranty", metadata.warrantyId, metadata.warrantyNumber);
+
+  return related;
+}
+
+function buildCommsActions(activity: ActivityWithUser): QuickLink[] {
+  // metadata is already typed as ActivityMetadata | null from ActivityWithUser
+  const metadata = activity.metadata ?? {};
+  const actions: QuickLink[] = [];
+
+  const customerId = typeof metadata.customerId === "string" ? metadata.customerId : null;
+  const hasEmailContext =
+    typeof metadata.emailId === "string" || typeof metadata.recipientEmail === "string";
+  const hasCallContext = typeof metadata.callId === "string";
+
+  if (customerId) {
+    actions.push({
+      label: "Email customer",
+      href: `/communications/emails?customerId=${customerId}`,
+      icon: Mail,
+    });
+  }
+
+  if (hasEmailContext) {
+    actions.push({
+      label: "Email history",
+      href: "/communications/emails/history",
+      icon: Mail,
+    });
+  }
+
+  if (hasCallContext) {
+    actions.push({
+      label: "Scheduled calls",
+      href: "/communications/calls",
+      icon: Phone,
+    });
+  }
+
+  return actions;
 }
 
 // ============================================================================
@@ -228,13 +305,25 @@ function EntityLink({
   entityType: ActivityEntityType;
   entityId: string;
   entityName?: string | null;
-  getLink?: (entityType: ActivityEntityType, entityId: string) => string;
+  getLink?: (entityType: ActivityEntityType, entityId: string) => string | null;
 }) {
   const Icon = ENTITY_ICONS[entityType] ?? FileText;
   const typeLabel = ENTITY_LABELS[entityType] ?? "Activity";
   // Use entity name if available, otherwise fall back to type label
   const displayLabel = entityName ?? typeLabel;
-  const href = getLink?.(entityType, entityId) ?? getDefaultEntityLink(entityType, entityId);
+  const href = getLink?.(entityType, entityId) ?? getEntityLink(entityType, entityId);
+
+  if (!href) {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+        <span>{displayLabel}</span>
+        <Badge variant="outline" className="ml-1 h-5 px-1.5 text-[10px] font-normal">
+          Link unavailable
+        </Badge>
+      </span>
+    );
+  }
 
   return (
     <Link
@@ -287,6 +376,14 @@ export function ActivityItem({
   );
   const hasMetadata = metadataEntries.length > 0;
   const hasDetails = Boolean(hasChanges || hasMetadata);
+  const relatedEntities = React.useMemo(
+    () => buildRelatedEntities(activity),
+    [activity]
+  );
+  const commsActions = React.useMemo(
+    () => buildCommsActions(activity),
+    [activity]
+  );
 
   const createdAt = new Date(activity.createdAt);
   const relativeTime = formatDistanceToNow(createdAt, { addSuffix: true });
@@ -400,6 +497,45 @@ export function ActivityItem({
                     <span className="ml-1 font-medium">{item.value}</span>
                   </Badge>
                 ))}
+              </div>
+            )}
+
+            {(relatedEntities.length > 0 || commsActions.length > 0) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {relatedEntities.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Related:</span>
+                    {relatedEntities.map((entity) => (
+                      <EntityLink
+                        key={`${entity.entityType}-${entity.entityId}`}
+                        entityType={entity.entityType}
+                        entityId={entity.entityId}
+                        entityName={entity.entityName}
+                        getLink={getEntityLink}
+                      />
+                    ))}
+                  </div>
+                )}
+                {commsActions.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {commsActions.map((action) => {
+                      const Icon = action.icon;
+                      return (
+                        <Link
+                          key={action.label}
+                          to={action.href}
+                          className={cn(
+                            buttonVariants({ variant: "outline", size: "sm" }),
+                            "h-7 px-2.5 text-xs"
+                          )}
+                        >
+                          <Icon className="mr-1.5 h-3.5 w-3.5" />
+                          {action.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

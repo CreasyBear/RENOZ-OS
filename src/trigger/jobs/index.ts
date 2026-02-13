@@ -54,6 +54,11 @@ export {
   type GenerateWorkOrderPdfPayload,
 } from "./generate-work-order-pdf";
 
+export {
+  generatePackingSlipPdf,
+  type GeneratePackingSlipPdfPayload,
+} from "./generate-packing-slip-pdf";
+
 // Legacy exports (v2 naming convention)
 export { generateQuotePdf as generateQuotePdfJob } from "./generate-quote-pdf";
 export { generateInvoicePdf as generateInvoicePdfJob } from "./generate-invoice-pdf";
@@ -61,6 +66,7 @@ export { generateWarrantyCertificatePdf as generateWarrantyCertificatePdfJob } f
 export { generateCompletionCertificatePdf as generateCompletionCertificatePdfJob } from "./generate-completion-certificate-pdf";
 export { generateDeliveryNotePdf as generateDeliveryNotePdfJob } from "./generate-delivery-note-pdf";
 export { generateWorkOrderPdf as generateWorkOrderPdfJob } from "./generate-work-order-pdf";
+export { generatePackingSlipPdf as generatePackingSlipPdfJob } from "./generate-packing-slip-pdf";
 
 // ============================================================================
 // EMAIL TASKS
@@ -115,6 +121,11 @@ export {
   processScheduledCallsJob,
   processOverdueCallsJob,
 } from "./process-scheduled-calls";
+
+export {
+  processPaymentRemindersTask,
+  type ProcessPaymentRemindersResult,
+} from "./process-payment-reminders";
 
 // ============================================================================
 // XERO INTEGRATION
@@ -187,6 +198,7 @@ export {
 export {
   cleanupPendingUploadsTask,
   cleanupSoftDeletedFilesTask,
+  cleanupExpiredExportsTask,
   // Types
   type CleanupResult,
   // Legacy exports
@@ -203,6 +215,22 @@ export {
   // Legacy export
   processResendWebhookJob,
 } from "./process-resend-webhook";
+
+// ============================================================================
+// INBOX EMAIL SYNC
+// ============================================================================
+
+export {
+  syncInboxEmailsTask,
+  // Types
+  type SyncInboxEmailsPayload,
+  type SyncInboxEmailsResult,
+} from "./sync-inbox-emails";
+
+export { syncInboxEmailsScheduled } from "./sync-inbox-emails-scheduled";
+
+// Legacy exports
+export { syncInboxEmailsTask as syncInboxEmailsJob } from "./sync-inbox-emails";
 
 // ============================================================================
 // SCHEDULED MAINTENANCE TASKS (already v3)
@@ -227,6 +255,7 @@ import { generateWarrantyCertificatePdf } from "./generate-warranty-certificate-
 import { generateCompletionCertificatePdf } from "./generate-completion-certificate-pdf";
 import { generateDeliveryNotePdf } from "./generate-delivery-note-pdf";
 import { generateWorkOrderPdf } from "./generate-work-order-pdf";
+import { generatePackingSlipPdf } from "./generate-packing-slip-pdf";
 import {
   sendOrderConfirmation,
   sendShippingNotification,
@@ -242,6 +271,7 @@ import {
   processScheduledCallsTask,
   processOverdueCallsTask,
 } from "./process-scheduled-calls";
+import { processPaymentRemindersTask } from "./process-payment-reminders";
 import { syncXeroInvoiceTask, syncXeroContactTask } from "./sync-xero";
 import {
   processScheduledReportsTask,
@@ -256,8 +286,10 @@ import { warmDashboardCacheTask, warmOrgCacheTask } from "./cache-warming";
 import {
   cleanupPendingUploadsTask,
   cleanupSoftDeletedFilesTask,
+  cleanupExpiredExportsTask,
 } from "./cleanup-files";
 import { processResendWebhookTask } from "./process-resend-webhook";
+import { syncInboxEmailsTask } from "./sync-inbox-emails";
 import { expireInvitationsTask } from "./expire-invitations";
 import { autoEscalateApprovalsTask } from "./auto-escalate-approvals";
 import { checkInventoryAlertsTask } from "./check-inventory-alerts";
@@ -278,6 +310,7 @@ export const tasks = [
   // Operational Documents
   generateDeliveryNotePdf,
   generateWorkOrderPdf,
+  generatePackingSlipPdf,
   // Email
   sendOrderConfirmation,
   sendShippingNotification,
@@ -291,6 +324,8 @@ export const tasks = [
   // Scheduled Calls
   processScheduledCallsTask,
   processOverdueCallsTask,
+  // Payment Reminders
+  processPaymentRemindersTask,
   // Xero
   syncXeroInvoiceTask,
   syncXeroContactTask,
@@ -306,8 +341,11 @@ export const tasks = [
   // File Cleanup
   cleanupPendingUploadsTask,
   cleanupSoftDeletedFilesTask,
+  cleanupExpiredExportsTask,
   // Resend
   processResendWebhookTask,
+  // Inbox Email Sync
+  syncInboxEmailsTask,
   // Scheduled Maintenance
   expireInvitationsTask,
   autoEscalateApprovalsTask,

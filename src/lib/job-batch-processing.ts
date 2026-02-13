@@ -5,6 +5,14 @@
  * Adapted from midday job batch processing patterns.
  */
 
+import { logger } from '@/lib/logger';
+import type { JsonValue } from '@/lib/schemas/_shared/patterns';
+import type {
+  JobBatchOperation,
+  JobBatchResult,
+  JobRollbackData,
+} from '@/lib/schemas/jobs/job-batch';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -117,19 +125,7 @@ export async function processJobBatch<T, R>(
 // JOB-SPECIFIC BATCH OPERATIONS
 // ============================================================================
 
-export interface JobBatchOperation {
-  id: string;
-  type: 'create' | 'update' | 'delete' | 'reschedule' | 'assign';
-  data: any;
-}
-
-export interface JobBatchResult {
-  operationId: string;
-  success: boolean;
-  result?: any;
-  error?: string;
-  duration: number;
-}
+export type { JobBatchOperation, JobBatchResult };
 
 /**
  * Process job operations in batches with rollback support.
@@ -144,7 +140,7 @@ export async function processJobOperations(
   } = {}
 ): Promise<{
   results: JobBatchResult[];
-  rollbackData?: any[];
+  rollbackData?: JobRollbackData[];
   summary: {
     total: number;
     successful: number;
@@ -154,7 +150,7 @@ export async function processJobOperations(
 }> {
   const { batchSize = 10, onProgress, onError, enableRollback = false } = options;
 
-  const rollbackData: any[] = [];
+  const rollbackData: JobRollbackData[] = [];
   const results: JobBatchResult[] = [];
   const startTime = Date.now();
 
@@ -181,24 +177,24 @@ export async function processJobOperations(
           const operationStart = Date.now();
 
           try {
-            let result: any;
+            let result: Record<string, unknown> | undefined;
 
             // Route to appropriate handler based on operation type
             switch (operation.type) {
               case 'create':
-                result = await handleJobCreate(operation.data);
+                result = (await handleJobCreate(operation.data)) as Record<string, unknown>;
                 break;
               case 'update':
-                result = await handleJobUpdate(operation.data);
+                result = (await handleJobUpdate(operation.data)) as Record<string, unknown>;
                 break;
               case 'delete':
-                result = await handleJobDelete(operation.data);
+                result = (await handleJobDelete(operation.data)) as Record<string, unknown>;
                 break;
               case 'reschedule':
-                result = await handleJobReschedule(operation.data);
+                result = (await handleJobReschedule(operation.data)) as Record<string, unknown>;
                 break;
               case 'assign':
-                result = await handleJobAssign(operation.data);
+                result = (await handleJobAssign(operation.data)) as Record<string, unknown>;
                 break;
               default:
                 throw new Error(`Unknown operation type: ${operation.type}`);
@@ -209,15 +205,15 @@ export async function processJobOperations(
               rollbackData.push({
                 operationId: operation.id,
                 type: operation.type,
-                originalData: operation.data,
-                result,
+                originalData: operation.data as Record<string, JsonValue>,
+                result: result as Record<string, JsonValue>,
               });
             }
 
             batchResults.push({
               operationId: operation.id,
               success: true,
-              result,
+              result: result as Record<string, JsonValue>,
               duration: Date.now() - operationStart,
             });
           } catch (error) {
@@ -259,37 +255,34 @@ export async function processJobOperations(
   };
 }
 
-// ============================================================================
-// PLACEHOLDER HANDLERS (TO BE INTEGRATED WITH ACTUAL SERVER FUNCTIONS)
-// ============================================================================
 
-async function handleJobCreate(data: any): Promise<any> {
+async function handleJobCreate(data: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Placeholder - integrate with actual job creation logic
-  console.log('Creating job:', data);
+  logger.debug('Creating job', { data });
   return { id: `job-${Date.now()}`, ...data };
 }
 
-async function handleJobUpdate(data: any): Promise<any> {
+async function handleJobUpdate(data: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Placeholder - integrate with actual job update logic
-  console.log('Updating job:', data);
+  logger.debug('Updating job', { data });
   return { updated: true, ...data };
 }
 
-async function handleJobDelete(data: any): Promise<any> {
+async function handleJobDelete(data: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Placeholder - integrate with actual job deletion logic
-  console.log('Deleting job:', data);
+  logger.debug('Deleting job', { data });
   return { deleted: true, ...data };
 }
 
-async function handleJobReschedule(data: any): Promise<any> {
+async function handleJobReschedule(data: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Placeholder - integrate with actual job rescheduling logic
-  console.log('Rescheduling job:', data);
+  logger.debug('Rescheduling job', { data });
   return { rescheduled: true, ...data };
 }
 
-async function handleJobAssign(data: any): Promise<any> {
+async function handleJobAssign(data: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Placeholder - integrate with actual job assignment logic
-  console.log('Assigning job:', data);
+  logger.debug('Assigning job', { data });
   return { assigned: true, ...data };
 }
 

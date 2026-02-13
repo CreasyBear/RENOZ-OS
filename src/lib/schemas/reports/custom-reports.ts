@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // INTERFACES
@@ -71,6 +72,11 @@ export const listCustomReportsSchema = z.object({
 });
 
 export type ListCustomReportsInput = z.infer<typeof listCustomReportsSchema>;
+
+export const listCustomReportsCursorSchema = cursorPaginationSchema.merge(
+  z.object({ isShared: z.boolean().optional(), search: z.string().optional() })
+);
+export type ListCustomReportsCursorInput = z.infer<typeof listCustomReportsCursorSchema>;
 
 // ============================================================================
 // GET CUSTOM REPORT

@@ -19,6 +19,8 @@
  * Or use the shared UnifiedActivityTimeline directly for more control.
  */
 import { useEffect } from 'react';
+import { formatDate } from '@/lib/formatters';
+import { logger } from '@/lib/logger';
 import {
   Phone,
   Mail,
@@ -96,14 +98,15 @@ function formatRelativeTime(date: string): string {
 }
 
 function formatDateTime(date: string): string {
-  return new Date(date).toLocaleString('en-AU', {
+  return formatDate(date, {
+    locale: 'en-AU',
     weekday: 'short',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  })
+  });
 }
 
 function formatDuration(minutes: number): string {
@@ -195,7 +198,7 @@ export function ActivityTimeline({ activities }: ActivityTimelineProps) {
   // Deprecation warning
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.warn(
+      logger.warn(
         '[DEPRECATED] ActivityTimeline from @/components/domain/customers/activity-timeline is deprecated. ' +
         'Use CustomerActivityTimelineContainer from @/components/domain/customers or ' +
         'UnifiedActivityTimeline from @/components/shared/activity instead.'

@@ -90,8 +90,8 @@ function SkillBadge({
     <div
       className={cn(
         'flex items-center gap-1.5 px-2 py-1 rounded-full text-xs',
-        isRequired && 'bg-green-100 text-green-800 border border-green-200',
-        isPreferred && !isRequired && 'bg-blue-50 text-blue-700 border border-blue-200',
+        isRequired && 'bg-success/10 text-success border border-success/20',
+        isPreferred && !isRequired && 'bg-info/10 text-info border border-info/20',
         !isRequired && !isPreferred && 'bg-muted text-muted-foreground'
       )}
     >
@@ -117,7 +117,7 @@ function SkillBadge({
 
 function ConflictWarning({ warning }: { warning: string }) {
   return (
-    <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
+    <div className="flex items-start gap-1.5 text-xs text-warning-foreground bg-warning/10 px-2 py-1 rounded">
       <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
       <span>{warning}</span>
     </div>
@@ -141,7 +141,7 @@ function ReasonBadge({ reason }: { reason: string }) {
     );
 
   return (
-    <div className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full">
+    <div className="flex items-center gap-1 text-xs text-success bg-success/10 px-2 py-1 rounded-full">
       {icon}
       <span>{reason}</span>
     </div>
@@ -262,7 +262,7 @@ function SuggestionCard({
         <div className="mt-4 space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Match Score</span>
-            <span className={cn('font-medium', matchQuality === 'excellent' && 'text-green-600')}>
+            <span className={cn('font-medium', matchQuality === 'excellent' && 'text-success')}>
               {suggestion.score}%
             </span>
           </div>
@@ -475,8 +475,8 @@ export function InstallerSuggestionPanel({
             {/* Excellent Matches */}
             {excellentMatches.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-green-700 flex items-center gap-1.5">
-                  <Star className="h-3 w-3 fill-green-700" />
+                <h4 className="text-xs font-medium text-success flex items-center gap-1.5">
+                  <Star className="h-3 w-3 fill-success" />
                   Best Matches ({excellentMatches.length})
                 </h4>
                 {excellentMatches.map((suggestion, index) => (
@@ -497,7 +497,7 @@ export function InstallerSuggestionPanel({
             {/* Good Matches */}
             {goodMatches.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-blue-700 flex items-center gap-1.5">
+                <h4 className="text-xs font-medium text-info flex items-center gap-1.5">
                   <CheckCircle className="h-3 w-3" />
                   Good Matches ({goodMatches.length})
                 </h4>
@@ -519,7 +519,7 @@ export function InstallerSuggestionPanel({
             {/* Fair Matches */}
             {fairMatches.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-amber-700 flex items-center gap-1.5">
+                <h4 className="text-xs font-medium text-warning-foreground flex items-center gap-1.5">
                   <AlertTriangle className="h-3 w-3" />
                   Alternative Options ({fairMatches.length})
                 </h4>

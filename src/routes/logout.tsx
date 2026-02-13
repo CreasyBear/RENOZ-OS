@@ -8,6 +8,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { PageLayout } from '@/components/layout/page-layout'
+import { invalidateAuthCache } from '@/lib/auth/route-auth'
 
 export const Route = createFileRoute('/logout')({
   component: LogoutPage,
@@ -29,9 +30,10 @@ function LogoutPage() {
           return
         }
 
+        invalidateAuthCache()
         // Redirect to login page after successful logout
-        navigate({ to: '/login', search: { redirect: undefined } })
-      } catch (err) {
+        navigate({ to: '/login', search: { redirect: undefined }, replace: true })
+      } catch {
         setError('An unexpected error occurred during logout.')
         setIsLoading(false)
       }
@@ -51,7 +53,7 @@ function LogoutPage() {
             </div>
             <div className="text-center">
               <button
-                onClick={() => navigate({ to: '/login', search: { redirect: undefined } })}
+                onClick={() => navigate({ to: '/login', search: { redirect: undefined }, replace: true })}
                 className="font-medium text-primary hover:text-primary/80"
               >
                 Go to Login

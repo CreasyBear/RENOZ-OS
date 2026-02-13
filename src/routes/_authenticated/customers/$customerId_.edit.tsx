@@ -27,8 +27,14 @@ import {
   useUpdateAddress,
   useDeleteAddress,
 } from '@/hooks/customers'
+import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import type {
+  CustomerWithRelations,
+  CustomerDetailContact,
+  CustomerDetailAddress,
+} from '@/lib/schemas/customers'
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -50,64 +56,50 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId_/edi
 })
 
 // ============================================================================
-// MAIN COMPONENT
+// EDIT FORM (keyed by customer.id so state resets when customer changes)
 // ============================================================================
 
-function EditCustomerPage() {
-  const { customerId } = Route.useParams()
+function EditCustomerFormContent({
+  customer,
+  customerId,
+  availableTags,
+  onSuccess,
+}: {
+  customer: CustomerWithRelations
+  customerId: string
+  availableTags: { id: string; name: string; color: string }[]
+  onSuccess: () => void
+}) {
   const navigate = useNavigate()
 
-  // Local state for contacts and addresses
-  const [contacts, setContacts] = useState<ManagedContact[]>([])
-  const [addresses, setAddresses] = useState<ManagedAddress[]>([])
-  const [hasInitialized, setHasInitialized] = useState(false)
-
-  // Fetch customer data using centralized hook
-  const { data: customer, isLoading: isLoadingCustomer, error } = useCustomer({ id: customerId })
-
-  // Fetch available tags using centralized hook
-  const { data: tagsData } = useCustomerTags()
-
-  const availableTags = tagsData?.map((t) => ({
-    id: t.id,
-    name: t.name,
-    color: t.color,
-  })) ?? []
-
-  // Initialize contacts and addresses from customer data
-  useEffect(() => {
-    if (customer && !hasInitialized) {
-      setContacts(
-        customer.contacts.map((c) => ({
-          id: c.id,
-          firstName: c.firstName,
-          lastName: c.lastName,
-          email: c.email ?? undefined,
-          phone: c.phone ?? undefined,
-          mobile: c.mobile ?? undefined,
-          title: c.title ?? undefined,
-          department: c.department ?? undefined,
-          isPrimary: c.isPrimary,
-          decisionMaker: c.decisionMaker,
-          influencer: c.influencer ?? false,
-        }))
-      )
-      setAddresses(
-        customer.addresses.map((a) => ({
-          id: a.id,
-          type: a.type as 'billing' | 'shipping' | 'service' | 'headquarters',
-          isPrimary: a.isPrimary,
-          street1: a.street1,
-          street2: a.street2 ?? undefined,
-          city: a.city,
-          state: a.state ?? undefined,
-          postcode: a.postcode,
-          country: a.country,
-        }))
-      )
-      setHasInitialized(true)
-    }
-  }, [customer, hasInitialized])
+  const [contacts, setContacts] = useState<ManagedContact[]>(() =>
+    customer.contacts.map((c: CustomerDetailContact) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      email: c.email ?? undefined,
+      phone: c.phone ?? undefined,
+      mobile: c.mobile ?? undefined,
+      title: c.title ?? undefined,
+      department: c.department ?? undefined,
+      isPrimary: c.isPrimary,
+      decisionMaker: c.decisionMaker,
+      influencer: c.influencer ?? false,
+    }))
+  )
+  const [addresses, setAddresses] = useState<ManagedAddress[]>(() =>
+    customer.addresses.map((a: CustomerDetailAddress) => ({
+      id: a.id,
+      type: a.type as 'billing' | 'shipping' | 'service' | 'headquarters',
+      isPrimary: a.isPrimary,
+      street1: a.street1,
+      street2: a.street2 ?? undefined,
+      city: a.city,
+      state: a.state ?? undefined,
+      postcode: a.postcode,
+      country: a.country,
+    }))
+  )
 
   // Update customer using centralized hook (handles cache invalidation)
   const updateCustomerMutation = useUpdateCustomer()
@@ -163,7 +155,7 @@ function EditCustomerPage() {
       })
 
       // Handle contacts - sync with server
-      const existingContactIds = customer.contacts.map((c) => c.id)
+      const existingContactIds = customer.contacts.map((c: CustomerDetailContact) => c.id)
       const currentContactIds = contacts.filter((c) => !c.isNew).map((c) => c.id)
 
       // Delete removed contacts
@@ -207,7 +199,7 @@ function EditCustomerPage() {
       }
 
       // Handle addresses - sync with server
-      const existingAddressIds = customer.addresses.map((a) => a.id)
+      const existingAddressIds = customer.addresses.map((a: CustomerDetailAddress) => a.id)
       const currentAddressIds = addresses.filter((a) => !a.isNew).map((a) => a.id)
 
       // Delete removed addresses
@@ -246,17 +238,16 @@ function EditCustomerPage() {
         }
       }
 
-      // Note: useUpdateCustomer hook handles cache invalidation
       toast.success('Customer updated successfully')
-      navigate({ to: '/customers/$customerId', params: { customerId } })
+      onSuccess()
     } catch (error) {
-      console.error('Failed to update customer:', error)
+      logger.error('Failed to update customer', error as Error, { context: 'customers-edit' })
       toast.error('Failed to update customer')
     }
   }
 
   const handleCancel = () => {
-    navigate({ to: '/customers/$customerId', params: { customerId } })
+    navigate({ to: '/customers/$customerId', params: { customerId }, search: {} })
   }
 
   const isLoading =
@@ -268,48 +259,11 @@ function EditCustomerPage() {
     updateAddressMutation.isPending ||
     deleteAddressMutation.isPending
 
-  // Determine title and content based on state
-  const title = isLoadingCustomer 
-    ? "Loading..." 
-    : error || !customer 
-      ? "Customer Not Found" 
-      : `Edit ${customer.name}`
-  
-  const description = !isLoadingCustomer && !error && customer 
-    ? `${customer.customerCode} · ${customer.type}` 
-    : undefined
-
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title={title}
-        description={description}
-        actions={
-          !isLoadingCustomer && !error && customer ? (
-            <Button variant="ghost" onClick={handleCancel}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Customer
-            </Button>
-          ) : undefined
-        }
-      />
-      <PageLayout.Content>
-        {isLoadingCustomer ? (
-          <FormSkeleton sections={3} />
-        ) : error || !customer ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">
-              The customer you're trying to edit doesn't exist or you don't have access.
-            </p>
-            <Button variant="outline" onClick={() => navigate({ to: '/customers' })}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Customers
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <CustomerForm
+    <div className="space-y-6">
+      <CustomerForm
               mode="edit"
+              customerId={customerId}
               defaultValues={{
                 name: customer.name,
                 legalName: customer.legalName ?? undefined,
@@ -333,19 +287,99 @@ function EditCustomerPage() {
               availableTags={availableTags}
             />
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <ContactManager
-                contacts={contacts}
-                onChange={setContacts}
-                disabled={isLoading}
-              />
-              <AddressManager
-                addresses={addresses}
-                onChange={setAddresses}
-                disabled={isLoading}
-              />
-            </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ContactManager
+          contacts={contacts}
+          onChange={setContacts}
+          disabled={isLoading}
+        />
+        <AddressManager
+          addresses={addresses}
+          onChange={setAddresses}
+          disabled={isLoading}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+function EditCustomerPage() {
+  const { customerId } = Route.useParams()
+  const navigate = useNavigate()
+
+  const { data: customer, isLoading: isLoadingCustomer, error } = useCustomer({ id: customerId })
+  const { data: tagsData } = useCustomerTags()
+
+  const availableTags = tagsData?.map((t) => ({
+    id: t.id,
+    name: t.name,
+    color: t.color,
+  })) ?? []
+
+  const title = isLoadingCustomer
+    ? 'Loading...'
+    : error || !customer
+      ? 'Customer Not Found'
+      : `Edit ${customer.name}`
+
+  const description = !isLoadingCustomer && !error && customer
+    ? `${customer.customerCode} · ${customer.type}`
+    : undefined
+
+  return (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title={title}
+        description={description}
+        actions={
+          !isLoadingCustomer && !error && customer ? (
+            <Button variant="ghost" onClick={() => navigate({ to: '/customers/$customerId', params: { customerId }, search: {} })}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Customer
+            </Button>
+          ) : undefined
+        }
+      />
+      <PageLayout.Content>
+        {isLoadingCustomer ? (
+          <FormSkeleton sections={3} />
+        ) : error || !customer ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">
+              The customer you&apos;re trying to edit doesn&apos;t exist or you don&apos;t have access.
+            </p>
+            <Button variant="outline" onClick={() => navigate({ to: '/customers' })}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Customers
+            </Button>
           </div>
+        ) : (
+          <EditCustomerFormContent
+            key={customer.id}
+            customer={{
+              ...customer,
+              tags: customer.tags ?? [],
+              legalName: customer.legalName ?? undefined,
+              email: customer.email ?? undefined,
+              phone: customer.phone ?? undefined,
+              website: customer.website ?? undefined,
+              size: customer.size ?? undefined,
+              industry: customer.industry ?? undefined,
+              taxId: customer.taxId ?? undefined,
+              registrationNumber: customer.registrationNumber ?? undefined,
+              parentId: customer.parentId ?? undefined,
+              creditLimit: customer.creditLimit ?? undefined,
+              creditHoldReason: customer.creditHoldReason ?? undefined,
+              customFields: (customer.customFields ?? undefined) as Record<string, string | number | boolean | null> | undefined,
+            }}
+            customerId={customerId}
+            availableTags={availableTags}
+            onSuccess={() => navigate({ to: '/customers/$customerId', params: { customerId }, search: {} })}
+          />
         )}
       </PageLayout.Content>
     </PageLayout>

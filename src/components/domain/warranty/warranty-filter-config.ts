@@ -21,13 +21,17 @@ import type { FilterBarConfig, FilterOption } from "@/components/shared/filters"
 // TYPES
 // ============================================================================
 
-export type WarrantyStatus = "active" | "expiring_soon" | "expired" | "voided" | "transferred";
-export type WarrantyPolicyType = "battery_performance" | "inverter_manufacturer" | "installation_workmanship";
+// Import types from schemas per SCHEMA-TRACE.md
+import type { WarrantyStatus } from '@/lib/schemas/warranty';
+import type { WarrantyPolicyTypeValue } from '@/lib/schemas/warranty/policies';
+
+// Re-export for convenience
+export type { WarrantyStatus };
 
 export interface WarrantyFiltersState extends Record<string, unknown> {
   search: string;
   status: WarrantyStatus | null;
-  policyType: WarrantyPolicyType | null;
+  policyType: WarrantyPolicyTypeValue | null;
   customerId: string | null;
 }
 
@@ -50,7 +54,7 @@ export const WARRANTY_STATUS_OPTIONS: FilterOption<WarrantyStatus>[] = [
   { value: "transferred", label: "Transferred", icon: ArrowRightLeft },
 ];
 
-export const WARRANTY_POLICY_TYPE_OPTIONS: FilterOption<WarrantyPolicyType>[] = [
+export const WARRANTY_POLICY_TYPE_OPTIONS: FilterOption<WarrantyPolicyTypeValue>[] = [
   { value: "battery_performance", label: "Battery Performance" },
   { value: "inverter_manufacturer", label: "Inverter Manufacturer" },
   { value: "installation_workmanship", label: "Installation Workmanship" },

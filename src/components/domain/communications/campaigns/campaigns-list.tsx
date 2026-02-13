@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
   Mail,
@@ -22,8 +22,9 @@ import {
   Play,
   Pause,
   Copy,
+  Send,
 } from "lucide-react";
-import { CampaignStatusBadge, type CampaignStatus } from "./campaign-status-badge";
+import { CampaignStatusBadge } from "./campaign-status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -59,55 +60,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { calculatePercentage } from "@/lib/communications/campaign-utils";
+import { useTableSelection } from "@/components/shared/data-table/hooks/use-table-selection";
+import { CheckboxCell } from "@/components/shared/data-table/cells/checkbox-cell";
+import { BulkActionsBar } from "@/components/shared/data-table/bulk-actions-bar";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface CampaignListItem {
-  id: string;
-  name: string;
-  templateType: string;
-  status: CampaignStatus;
-  recipientCount: number;
-  sentCount: number;
-  openCount: number;
-  clickCount: number;
-  bounceCount: number;
-  failedCount: number;
-  scheduledAt: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-}
+import type {
+  CampaignListItem,
+  CampaignsListProps,
+} from "@/lib/schemas/communications";
 
-/**
- * Props for the CampaignsList presenter component.
- * All data is passed from the container route.
- */
-export interface CampaignsListProps {
-  /** @source useCampaigns() in communications/campaigns/index.tsx */
-  campaigns: CampaignListItem[];
-  /** @source useCampaigns().isLoading in container */
-  isLoading: boolean;
-  /** @source useCancelCampaign handler in container */
-  onCancel: (id: string) => Promise<void>;
-  /** @source useDeleteCampaign handler in container */
-  onDelete: (id: string) => Promise<void>;
-  /** @source navigate handler in container */
-  onView: (id: string) => void;
-  /** @source navigate handler in container */
-  onCreate: () => void;
-  /** @source useState(statusFilter) in container */
-  statusFilter?: string;
-  /** @source setStatusFilter in container */
-  onStatusFilterChange: (status: string | undefined) => void;
-  /** @source useCancelCampaign.isPending in container */
-  isCancelling?: boolean;
-  /** @source useDeleteCampaign.isPending in container */
-  isDeleting?: boolean;
-  className?: string;
-}
+// Re-export types for backward compatibility
+export type { CampaignListItem, CampaignsListProps };
 
 // ============================================================================
 // SKELETON COMPONENT
@@ -211,7 +179,7 @@ function StatCell({
   icon: typeof Mail;
   variant?: "default" | "success" | "warning" | "error";
 }) {
-  const percentage = total && total > 0 ? Math.round((value / total) * 100) : 0;
+  const percentage = total !== undefined ? calculatePercentage(value, total) : 0;
 
   const variantColors = {
     default: "text-muted-foreground",
@@ -244,13 +212,35 @@ export function CampaignsList({
   onDelete,
   onView,
   onCreate,
+  onDuplicate,
+  onTestSend,
+  onBulkDelete,
+  onBulkPause,
+  onBulkResume,
   isCancelling: _isCancelling = false,
   isDeleting: _isDeleting = false,
+  isDuplicating = false,
+  isTestSending = false,
+  isBulkDeleting = false,
+  isBulkPausing = false,
+  isBulkResuming = false,
   className,
 }: CampaignsListProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [, setTestSendDialogOpen] = useState(false);
+  const [, setBulkDeleteDialogOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+
+  // Bulk selection
+  const selection = useTableSelection({
+    items: campaigns,
+  });
+
+  const selectedCampaigns = useMemo(
+    () => campaigns.filter((c) => selection.selectedIds.has(c.id)),
+    [campaigns, selection.selectedIds]
+  );
 
   const handleCancelCampaign = async () => {
     if (!selectedCampaignId) return;
@@ -272,6 +262,47 @@ export function CampaignsList({
     }
   };
 
+  // Filter IDs by status for bulk actions (must be declared before callbacks that use them)
+  const pauseableIds = useMemo(
+    () => selectedCampaigns.filter((c) => c.status === "sending").map((c) => c.id),
+    [selectedCampaigns]
+  );
+
+  const resumableIds = useMemo(
+    () => selectedCampaigns.filter((c) => c.status === "paused").map((c) => c.id),
+    [selectedCampaigns]
+  );
+
+  const handleBulkPause = useCallback(async () => {
+    if (!onBulkPause || pauseableIds.length === 0) return;
+    try {
+      await onBulkPause(pauseableIds);
+      selection.clearSelection();
+    } catch {
+      // Error handled by parent
+    }
+  }, [onBulkPause, pauseableIds, selection]);
+
+  const handleBulkResume = useCallback(async () => {
+    if (!onBulkResume || resumableIds.length === 0) return;
+    try {
+      await onBulkResume(resumableIds);
+      selection.clearSelection();
+    } catch {
+      // Error handled by parent
+    }
+  }, [onBulkResume, resumableIds, selection]);
+
+  const canBulkPause = useMemo(
+    () => selectedCampaigns.some((c) => c.status === "sending"),
+    [selectedCampaigns]
+  );
+
+  const canBulkResume = useMemo(
+    () => selectedCampaigns.some((c) => c.status === "paused"),
+    [selectedCampaigns]
+  );
+
   if (isLoading) {
     return <CampaignsListSkeleton />;
   }
@@ -290,10 +321,60 @@ export function CampaignsList({
         </Button>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selection.selectedIds.size >= 2 && (
+        <BulkActionsBar
+          selectedCount={selection.selectedIds.size}
+          onClear={selection.clearSelection}
+        >
+          {canBulkPause && onBulkPause && pauseableIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkPause}
+              disabled={isBulkPausing}
+            >
+              <Pause className="h-4 w-4 mr-2" />
+              {isBulkPausing ? "Pausing..." : `Pause ${pauseableIds.length}`}
+            </Button>
+          )}
+          {canBulkResume && onBulkResume && resumableIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkResume}
+              disabled={isBulkResuming}
+            >
+              <Play className="h-4 w-4 mr-2" />
+              {isBulkResuming ? "Resuming..." : `Resume ${resumableIds.length}`}
+            </Button>
+          )}
+          {onBulkDelete && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+              disabled={isBulkDeleting}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {isBulkDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          )}
+        </BulkActionsBar>
+      )}
+
       <div className="rounded-md border">
         <Table aria-label="Email campaigns list">
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[50px]">
+                <CheckboxCell
+                  checked={selection.isAllSelected}
+                  indeterminate={selection.selectedIds.size > 0 && !selection.isAllSelected}
+                  onChange={(checked) => selection.handleSelectAll(checked)}
+                  ariaLabel="Select all campaigns"
+                />
+              </TableHead>
               <TableHead className="w-[250px]">Campaign</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">
@@ -315,11 +396,20 @@ export function CampaignsList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {campaigns.map((campaign) => (
+            {campaigns.map((campaign, index) => (
               <TableRow
                 key={campaign.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => onView(campaign.id)}
+                className={cn(
+                  "cursor-pointer hover:bg-muted/50",
+                  selection.selectedIds.has(campaign.id) && "bg-muted/50"
+                )}
+                onClick={(e) => {
+                  // Don't navigate if clicking checkbox
+                  if ((e.target as HTMLElement).closest('[role="checkbox"]')) {
+                    return;
+                  }
+                  onView(campaign.id);
+                }}
                 tabIndex={0}
                 role="button"
                 aria-label={`View campaign: ${campaign.name}`}
@@ -330,6 +420,22 @@ export function CampaignsList({
                   }
                 }}
               >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <CheckboxCell
+                    checked={selection.selectedIds.has(campaign.id)}
+                    onChange={(checked) => {
+                      selection.handleSelect(campaign.id, checked);
+                      selection.setLastClickedIndex(index);
+                    }}
+                    onShiftClick={() => {
+                      if (selection.lastClickedIndex !== null) {
+                        selection.handleShiftClickRange(selection.lastClickedIndex, index);
+                      }
+                      selection.setLastClickedIndex(index);
+                    }}
+                    ariaLabel={`Select campaign ${campaign.name}`}
+                  />
+                </TableCell>
                 <TableCell>
                   <div>
                     <div className="font-medium">{campaign.name}</div>
@@ -393,10 +499,27 @@ export function CampaignsList({
                         <Eye className="h-4 w-4 mr-2" />
                         View Details
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Copy className="h-4 w-4 mr-2" />
-                        Duplicate
-                      </DropdownMenuItem>
+                      {onDuplicate && (
+                        <DropdownMenuItem
+                          onClick={() => onDuplicate(campaign.id)}
+                          disabled={isDuplicating}
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          {isDuplicating ? "Duplicating..." : "Duplicate"}
+                        </DropdownMenuItem>
+                      )}
+                      {onTestSend && (campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "paused") && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedCampaignId(campaign.id);
+                            setTestSendDialogOpen(true);
+                          }}
+                          disabled={isTestSending}
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Send Test Email
+                        </DropdownMenuItem>
+                      )}
                       {campaign.status === "sending" && (
                         <DropdownMenuItem
                           onClick={() => {

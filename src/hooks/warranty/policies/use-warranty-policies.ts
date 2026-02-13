@@ -59,7 +59,13 @@ const DETAIL_STALE_TIME = 60 * 1000; // 60 seconds for details
 export function useWarrantyPolicies(options?: GetWarrantyPoliciesInput) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.list(options),
-    queryFn: () => listWarrantyPolicies({ data: options ?? {} }),
+    queryFn: async () => {
+      const result = await listWarrantyPolicies({
+        data: options ?? {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: LIST_STALE_TIME,
   });
 }
@@ -70,7 +76,13 @@ export function useWarrantyPolicies(options?: GetWarrantyPoliciesInput) {
 export function useWarrantyPoliciesWithSla(options?: GetWarrantyPoliciesInput) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.listWithSla(options),
-    queryFn: () => getWarrantyPoliciesWithSla({ data: options ?? {} }),
+    queryFn: async () => {
+      const result = await getWarrantyPoliciesWithSla({
+        data: options ?? {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: LIST_STALE_TIME,
   });
 }
@@ -85,7 +97,13 @@ export function useWarrantyPoliciesWithSla(options?: GetWarrantyPoliciesInput) {
 export function useWarrantyPolicy(policyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.detail(policyId ?? ''),
-    queryFn: () => getWarrantyPolicy({ data: { policyId: policyId! } }),
+    queryFn: async () => {
+      const result = await getWarrantyPolicy({
+        data: { policyId: policyId! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!policyId,
     staleTime: DETAIL_STALE_TIME,
   });
@@ -101,7 +119,13 @@ export function useWarrantyPolicy(policyId: string | undefined) {
 export function useDefaultWarrantyPolicy(type: WarrantyPolicyTypeValue | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.default(type!),
-    queryFn: () => getDefaultWarrantyPolicy({ data: { type: type! } }),
+    queryFn: async () => {
+      const result = await getDefaultWarrantyPolicy({
+        data: { type: type! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!type,
     staleTime: DETAIL_STALE_TIME,
   });
@@ -118,7 +142,11 @@ export function useDefaultWarrantyPolicy(type: WarrantyPolicyTypeValue | undefin
 export function useResolveWarrantyPolicy(params: ResolveWarrantyPolicyInput) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.resolve(params),
-    queryFn: () => resolveWarrantyPolicy({ data: params }),
+    queryFn: async () => {
+      const result = await resolveWarrantyPolicy({ data: params });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!(params.productId || params.categoryId || params.type),
     staleTime: DETAIL_STALE_TIME,
   });

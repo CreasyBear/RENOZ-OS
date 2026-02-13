@@ -13,9 +13,13 @@ import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { systemSettings, SETTING_CATEGORIES, SETTING_KEYS } from 'drizzle/schema';
+import { setResponseStatus } from '@tanstack/react-start/server';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs';
+import type { AuditEntityType } from '@/lib/schemas/settings';
+import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -93,16 +97,16 @@ export const getSystemSettings = createServerFn({ method: 'GET' })
       .orderBy(systemSettings.category, systemSettings.key);
 
     // Group by category for easier consumption
-    const grouped: Record<string, Record<string, {}>> = {};
+    const grouped: Record<string, Record<string, FlexibleJson>> = {};
     for (const setting of settings) {
       if (!grouped[setting.category]) {
         grouped[setting.category] = {};
       }
-      grouped[setting.category][setting.key] = setting.value as {};
+      grouped[setting.category][setting.key] = setting.value as FlexibleJson;
     }
 
     return {
-      settings: settings.map((s) => ({ ...s, value: s.value as {} })),
+      settings: settings.map((s) => ({ ...s, value: s.value as FlexibleJson })),
       grouped,
     };
   });
@@ -143,13 +147,14 @@ export const getSystemSetting = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!setting) {
-      return null;
+      setResponseStatus(404);
+      throw new NotFoundError('System setting not found', 'systemSetting');
     }
 
     return {
       ...setting,
-      value: setting.value as {},
-      metadata: setting.metadata as {},
+      value: setting.value as FlexibleJson,
+      metadata: setting.metadata as FlexibleJson,
     };
   });
 
@@ -164,7 +169,7 @@ export const getSystemSetting = createServerFn({ method: 'GET' })
 export const setSystemSetting = createServerFn({ method: 'POST' })
   .inputValidator(setSettingSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Check if setting exists
     const [existing] = await db
@@ -191,7 +196,7 @@ export const setSystemSetting = createServerFn({ method: 'POST' })
           description: data.description,
           isPublic: data.isPublic,
           updatedBy: ctx.user.id,
-          version: sql`version + 1`,
+          version: sql`${systemSettings.version} + 1`,
         })
         .where(eq(systemSettings.id, existing.id))
         .returning();
@@ -201,7 +206,7 @@ export const setSystemSetting = createServerFn({ method: 'POST' })
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
         action: 'setting.update',
-        entityType: 'setting' as any, // Using custom entity type
+        entityType: 'setting',
         entityId: updated.id,
         oldValues: { category: data.category, key: data.key, value: oldValue },
         newValues: { category: data.category, key: data.key, value: data.value },
@@ -211,7 +216,7 @@ export const setSystemSetting = createServerFn({ method: 'POST' })
         id: updated.id,
         category: updated.category,
         key: updated.key,
-        value: updated.value as {},
+        value: updated.value as FlexibleJson,
         type: updated.type,
         description: updated.description,
         isPublic: updated.isPublic,
@@ -240,7 +245,7 @@ export const setSystemSetting = createServerFn({ method: 'POST' })
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
         action: 'setting.create',
-        entityType: 'setting' as any,
+        entityType: 'setting' as AuditEntityType,
         entityId: created.id,
         newValues: { category: data.category, key: data.key, value: data.value },
       });
@@ -249,7 +254,7 @@ export const setSystemSetting = createServerFn({ method: 'POST' })
         id: created.id,
         category: created.category,
         key: created.key,
-        value: created.value as {},
+        value: created.value as FlexibleJson,
         type: created.type,
         description: created.description,
         isPublic: created.isPublic,
@@ -270,13 +275,13 @@ export const setSystemSetting = createServerFn({ method: 'POST' })
 export const setSystemSettings = createServerFn({ method: 'POST' })
   .inputValidator(setSettingsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const results: Array<{
       id: string;
       category: string;
       key: string;
-      value: {};
+      value: FlexibleJson;
     }> = [];
 
     for (const setting of data.settings) {
@@ -299,7 +304,7 @@ export const setSystemSettings = createServerFn({ method: 'POST' })
             value: setting.value,
             type: setting.type,
             updatedBy: ctx.user.id,
-            version: sql`version + 1`,
+            version: sql`${systemSettings.version} + 1`,
           })
           .where(eq(systemSettings.id, existing.id))
           .returning({
@@ -309,7 +314,7 @@ export const setSystemSettings = createServerFn({ method: 'POST' })
             value: systemSettings.value,
           });
 
-        results.push({ ...updated, value: updated.value as {} });
+        results.push({ ...updated, value: updated.value as FlexibleJson });
       } else {
         const [created] = await db
           .insert(systemSettings)
@@ -329,7 +334,7 @@ export const setSystemSettings = createServerFn({ method: 'POST' })
             value: systemSettings.value,
           });
 
-        results.push({ ...created, value: created.value as {} });
+        results.push({ ...created, value: created.value as FlexibleJson });
       }
     }
 
@@ -338,7 +343,7 @@ export const setSystemSettings = createServerFn({ method: 'POST' })
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
       action: 'setting.batch_update',
-      entityType: 'setting' as any,
+      entityType: 'setting' as AuditEntityType,
       newValues: {
         count: results.length,
         categories: [...new Set(data.settings.map((s) => s.category))],
@@ -359,7 +364,7 @@ export const setSystemSettings = createServerFn({ method: 'POST' })
 export const deleteSystemSetting = createServerFn({ method: 'POST' })
   .inputValidator(deleteSettingSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const deleted = await db
       .delete(systemSettings)
@@ -377,7 +382,7 @@ export const deleteSystemSetting = createServerFn({ method: 'POST' })
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
         action: 'setting.delete',
-        entityType: 'setting' as any,
+        entityType: 'setting' as AuditEntityType,
         entityId: deleted[0].id,
         oldValues: { category: data.category, key: data.key },
       });

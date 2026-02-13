@@ -6,8 +6,11 @@ import type {
   WarrantyClaimStatusValue,
   WarrantyClaimTypeValue,
   WarrantyClaimResolutionTypeValue,
+  SlaDueStatus,
 } from '@/lib/schemas/warranty/claims';
 import type { SemanticColor } from '@/lib/status';
+
+export type { SlaDueStatus };
 
 /**
  * Semantic status config for warranty claims.
@@ -23,7 +26,18 @@ export const claimStatusConfig: Record<
   approved: { label: 'Approved', variant: 'success' },
   denied: { label: 'Denied', variant: 'error' },
   resolved: { label: 'Resolved', variant: 'success' },
+  cancelled: { label: 'Cancelled', variant: 'neutral' },
 };
+
+/**
+ * Get claim status config for EntityHeader (Zone 1 consistency).
+ */
+export function getClaimStatusConfigForEntityHeader(
+  status: WarrantyClaimStatusValue
+): { value: string; variant: SemanticColor } {
+  const config = claimStatusConfig[status];
+  return { value: status, variant: config.variant };
+}
 
 export const claimTypeConfig: Record<
   WarrantyClaimTypeValue,
@@ -65,16 +79,14 @@ export const resolutionTypeConfig: Record<
   },
 };
 
+import { formatDateAustralian } from './date-utils';
+
 /**
  * Format date for display (Australian format DD/MM/YYYY).
+ * Uses consolidated date utility.
  */
 export function formatClaimDate(dateString: string | Date): string {
-  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-  return date.toLocaleDateString('en-AU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return formatDateAustralian(dateString, 'numeric');
 }
 
 /**
@@ -100,17 +112,6 @@ export function formatClaimCost(cost: number | null | undefined): string {
     style: 'currency',
     currency: 'AUD',
   }).format(cost);
-}
-
-/**
- * SLA due status result
- */
-export interface SlaDueStatus {
-  status: 'on_track' | 'at_risk' | 'breached' | 'completed';
-  label: string;
-  color: string;
-  timeRemaining?: number; // seconds
-  percentComplete?: number;
 }
 
 /**

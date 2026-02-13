@@ -175,7 +175,7 @@ export function FilterEmptyState({
                       )}
                     >
                       <span>
-                        Remove "{filter.value}"
+                        Remove &quot;{filter.value}&quot;
                       </span>
                       <span className="text-muted-foreground">
                         ({filter.countIfRemoved} result{filter.countIfRemoved !== 1 ? "s" : ""})

@@ -31,28 +31,12 @@ import { StatusCell } from "@/components/shared/data-table";
 import { ItemDetail, type ItemDetailData } from "./item-detail";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import { FORECAST_ACCURACY_CONFIG, getForecastAccuracyLevel } from "./inventory-status-config";
+import { getMovementReferenceLink } from './movement-reference-links';
+import type { QualityRecord } from '@/lib/schemas/inventory';
 
 // ============================================================================
 // UTILITIES
 // ============================================================================
-
-/**
- * Generate a link URL for a movement reference
- */
-function getMovementReferenceLink(
-  referenceType: string | null | undefined,
-  referenceId: string | null | undefined
-): string | null {
-  if (!referenceType || !referenceId) return null;
-
-  const routeMap: Record<string, (id: string) => string> = {
-    order: (id) => `/orders/${id}`,
-    purchase_order: (id) => `/purchase-orders/${id}`,
-  };
-
-  const routeBuilder = routeMap[referenceType];
-  return routeBuilder ? routeBuilder(referenceId) : null;
-}
 
 /**
  * Format reference type for display
@@ -74,6 +58,7 @@ export interface MovementRecord {
   newQuantity: number;
   referenceType?: string;
   referenceId?: string;
+  referenceNumber?: string;
   reason?: string;
   notes?: string;
   performedBy: string;
@@ -103,14 +88,8 @@ export interface ForecastData {
   accuracy?: number;
 }
 
-export interface QualityRecord {
-  id: string;
-  inspectionDate: Date;
-  inspectorName: string;
-  result: "pass" | "fail" | "conditional";
-  notes?: string;
-  defects?: string[];
-}
+/** Re-export for backward compatibility */
+export type { QualityRecord } from '@/lib/schemas/inventory';
 
 interface ItemTabsProps {
   item: ItemDetailData;
@@ -297,20 +276,23 @@ export const ItemTabs = memo(function ItemTabs({
                             {movement.referenceType && (
                               (() => {
                                 const referenceLink = getMovementReferenceLink(movement.referenceType, movement.referenceId);
+                                const displayLabel = movement.referenceNumber
+                                  ? movement.referenceNumber
+                                  : formatReferenceType(movement.referenceType);
                                 return referenceLink ? (
                                   <Link
-                                    to={referenceLink as any}
+                                    {...referenceLink}
                                     className="inline-flex items-center gap-1"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <Badge variant="outline" className="text-xs hover:bg-accent transition-colors cursor-pointer">
-                                      {formatReferenceType(movement.referenceType)}
+                                      {displayLabel}
                                       <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
                                     </Badge>
                                   </Link>
                                 ) : (
                                   <Badge variant="outline" className="text-xs">
-                                    {formatReferenceType(movement.referenceType)}
+                                    {displayLabel}
                                   </Badge>
                                 );
                               })()

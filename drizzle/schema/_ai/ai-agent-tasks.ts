@@ -17,13 +17,15 @@ import {
   timestamp,
   index,
   check,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { organizations } from "../settings/organizations";
 import { users } from "../users";
 import { aiAgentTaskStatusEnum, aiAgentNameEnum } from "./enums";
-import { currencyColumnNullable } from "../_shared/patterns";
+import {
+  currencyColumnNullable,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 
 // ============================================================================
 // INTERFACES
@@ -148,27 +150,7 @@ export const aiAgentTasks = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("ai_agent_tasks_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("ai_agent_tasks_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("ai_agent_tasks_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("ai_agent_tasks_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("ai_agent_tasks"),
   })
 );
 

@@ -10,12 +10,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { ReportDashboardSkeleton } from "@/components/skeletons/reports";
 import { PipelineForecastPage } from "@/components/domain/reports/pipeline-forecast-page";
+import { pipelineForecastSearchSchema } from "@/lib/schemas/reports/pipeline-forecast";
 
 // ============================================================================
 // ROUTE
 // ============================================================================
 
 export const Route = createFileRoute("/_authenticated/reports/pipeline-forecast")({
+  validateSearch: pipelineForecastSearchSchema,
   component: PipelineForecastRoute,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/reports" />

@@ -233,7 +233,13 @@ export function RmaCreateDialog({
           {/* Reason selection */}
           <div className="space-y-2">
             <Label htmlFor="reason">Return Reason</Label>
-            <Select value={reason} onValueChange={(v) => setReason(v as RmaReason)}>
+            <Select
+              value={reason}
+              onValueChange={(v) => {
+                const opt = REASON_OPTIONS.find((o) => o.value === v);
+                if (opt) setReason(opt.value);
+              }}
+            >
               <SelectTrigger id="reason">
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>
@@ -288,7 +294,7 @@ export function RmaCreateDialog({
                         <Checkbox
                           id={`item-${item.id}`}
                           checked={isSelected}
-                          onCheckedChange={(checked) => toggleItem(item, checked as boolean)}
+                          onCheckedChange={(checked) => toggleItem(item, checked === true)}
                         />
                         <label htmlFor={`item-${item.id}`} className="flex-1 cursor-pointer">
                           <div className="font-medium">{item.productName}</div>

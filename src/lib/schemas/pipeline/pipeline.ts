@@ -15,6 +15,7 @@ import {
   idParamSchema,
   currencySchema,
 } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
@@ -194,6 +195,13 @@ export const opportunityListQuerySchema = paginationSchema.merge(opportunityFilt
 
 export type OpportunityListQuery = z.infer<typeof opportunityListQuerySchema>;
 
+/**
+ * Cursor-based pagination query for opportunities (recommended for large datasets).
+ */
+export const opportunityCursorQuerySchema = cursorPaginationSchema.merge(opportunityFilterSchema);
+
+export type OpportunityCursorQuery = z.infer<typeof opportunityCursorQuerySchema>;
+
 // ============================================================================
 // WIN/LOSS REASONS
 // ============================================================================
@@ -237,6 +245,14 @@ export const winLossReasonFilterSchema = z.object({
 });
 
 export type WinLossReasonFilter = z.infer<typeof winLossReasonFilterSchema>;
+
+export const winLossDialogSchema = z.object({
+  winLossReasonId: z.string().min(1, 'Reason is required'),
+  lostNotes: z.string().max(2000).optional(),
+  competitorName: z.string().max(100).optional(),
+});
+
+export type WinLossDialog = z.infer<typeof winLossDialogSchema>;
 
 // ============================================================================
 // OPPORTUNITY ACTIVITIES
@@ -569,3 +585,66 @@ export type OpportunityActivityParams = z.infer<typeof opportunityActivityParams
 
 export const quoteVersionParamsSchema = idParamSchema;
 export type QuoteVersionParams = z.infer<typeof quoteVersionParamsSchema>;
+
+// ============================================================================
+// OPPORTUNITY TABLE ITEM (for list views)
+// ============================================================================
+
+export interface OpportunityTableItem {
+  id: string;
+  title: string;
+  customerId: string;
+  stage: OpportunityStage;
+  value: number;
+  probability: number | null;
+  expectedCloseDate: Date | null;
+  daysInStage: number;
+  createdAt: Date;
+  updatedAt: Date;
+  customer?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+// ============================================================================
+// QUOTE DETAIL TYPES (for quote detail views)
+// ============================================================================
+
+export interface QuoteDetailCustomer {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  customerCode?: string | null;
+  type?: string | null;
+}
+
+export interface QuoteVersionSummary {
+  id: string;
+  versionNumber: number;
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  notes: string | null;
+  createdAt: string | Date;
+  items: QuoteLineItem[];
+}
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+/**
+ * Type guard for OpportunityStage
+ */
+export function isValidOpportunityStage(value: unknown): value is OpportunityStage {
+  return typeof value === 'string' && opportunityStageValues.includes(value as OpportunityStage);
+}
+
+/**
+ * Type guard for OpportunityMetadata
+ */
+export function isValidOpportunityMetadata(value: unknown): value is OpportunityMetadata {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

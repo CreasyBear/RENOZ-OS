@@ -9,11 +9,8 @@
  * @source useSuppliers hook for supplier data
  */
 
-import { useState, useEffect } from "react";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Truck, Loader2 } from "lucide-react";
+import { useState, useEffect, startTransition } from "react";
+import { Truck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,21 +19,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
 import type { ReorderRecommendation } from "./reorder-recommendations";
+import {
+  createPOFromAlertFormSchema,
+  type CreatePOFromAlertFormValues,
+} from "@/lib/schemas/inventory";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  SelectField,
+  NumberField,
+  TextareaField,
+  FormActions,
+} from "@/components/shared/forms";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -53,24 +50,25 @@ interface CreatePOFromRecommendationDialogProps {
   onSuccess?: () => void;
 }
 
-const createPOSchema = z.object({
-  supplierId: z.string().min(1, "Select a supplier"),
-  quantity: z.number().int().positive("Quantity must be at least 1"),
-  unitPrice: z.number().positive("Price must be positive"),
-  notes: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof createPOSchema>;
+type FormValues = CreatePOFromAlertFormValues;
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
-/**
- * Create Purchase Order from Recommendation Dialog
- *
- * Presenter component - receives data via props, no direct data fetching.
- */
+function getUrgencyColor(urgency: string) {
+  switch (urgency) {
+    case "critical":
+      return "bg-red-100 text-red-800 border-red-200";
+    case "high":
+      return "bg-orange-100 text-orange-800 border-orange-200";
+    case "medium":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    default:
+      return "bg-blue-100 text-blue-800 border-blue-200";
+  }
+}
+
 export function CreatePOFromRecommendationDialog({
   recommendation,
   open,
@@ -79,29 +77,57 @@ export function CreatePOFromRecommendationDialog({
 }: CreatePOFromRecommendationDialogProps) {
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch suppliers for dropdown
   const { data: suppliersData, isLoading: loadingSuppliers } = useSuppliers({
     enabled: open,
   });
   const suppliers = suppliersData?.items ?? [];
 
-  // PO creation mutation
   const createPO = useCreatePurchaseOrder();
 
-  // Default quantity from recommendation
   const defaultQuantity = recommendation?.recommendedQuantity ?? 10;
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(createPOSchema),
+  const form = useTanStackForm<FormValues>({
+    schema: createPOFromAlertFormSchema,
     defaultValues: {
       supplierId: "",
       quantity: defaultQuantity,
       unitPrice: 0,
       notes: "",
     },
+    onSubmit: async (values) => {
+      if (!recommendation) return;
+
+      setError(null);
+
+      try {
+        await createPO.mutateAsync({
+          supplierId: values.supplierId,
+          items: [
+            {
+              productId: recommendation.productId,
+              productName: recommendation.productName,
+              productSku: recommendation.productSku,
+              quantity: values.quantity,
+              unitPrice: values.unitPrice,
+              notes: values.notes,
+            },
+          ],
+          notes: values.notes,
+          expectedDeliveryDate: new Date(
+            Date.now() + 14 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+        });
+
+        onOpenChange(false);
+        onSuccess?.();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to create purchase order"
+        );
+      }
+    },
   });
 
-  // Reset form when recommendation changes
   useEffect(() => {
     if (recommendation && open) {
       form.reset({
@@ -110,56 +136,26 @@ export function CreatePOFromRecommendationDialog({
         unitPrice: 0,
         notes: `Auto-generated from reorder recommendation. Current stock: ${recommendation.currentStock}, Recommended: ${recommendation.recommendedQuantity}`,
       });
-      setError(null);
+      startTransition(() => setError(null));
     }
   }, [recommendation, open, form]);
 
-  const onSubmit = async (values: FormValues) => {
-    if (!recommendation) return;
-
+  const handleClose = () => {
+    form.reset();
     setError(null);
-
-    try {
-      await createPO.mutateAsync({
-        supplierId: values.supplierId,
-        items: [
-          {
-            productId: recommendation.productId,
-            productName: recommendation.productName,
-            productSku: recommendation.productSku,
-            quantity: values.quantity,
-            unitPrice: values.unitPrice,
-            notes: values.notes,
-          },
-        ],
-        notes: values.notes,
-        expectedDeliveryDate: new Date(
-          Date.now() + 14 * 24 * 60 * 60 * 1000
-        ).toISOString(), // Default 2 weeks
-      });
-
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create purchase order");
-    }
+    onOpenChange(false);
   };
 
-  const getUrgencyColor = (urgency: string) => {
-    switch (urgency) {
-      case "critical":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "high":
-        return "bg-orange-100 text-orange-800 border-orange-200";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-blue-100 text-blue-800 border-blue-200";
-    }
-  };
+  const supplierOptions = suppliers.map((s) => ({
+    value: s.id,
+    label: s.name,
+  }));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => (isOpen ? onOpenChange(true) : handleClose())}
+    >
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -178,7 +174,9 @@ export function CreatePOFromRecommendationDialog({
         {recommendation && (
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{recommendation.productName}</span>
+              <span className="text-sm font-medium">
+                {recommendation.productName}
+              </span>
               <Badge className={getUrgencyColor(recommendation.urgency)}>
                 {recommendation.urgency}
               </Badge>
@@ -198,7 +196,9 @@ export function CreatePOFromRecommendationDialog({
               </div>
               <div className="flex justify-between">
                 <span>Recommended Qty:</span>
-                <span className="font-medium">{recommendation.recommendedQuantity}</span>
+                <span className="font-medium">
+                  {recommendation.recommendedQuantity}
+                </span>
               </div>
               {recommendation.daysUntilStockout !== null && (
                 <div className="flex justify-between">
@@ -218,87 +218,65 @@ export function CreatePOFromRecommendationDialog({
           </div>
         )}
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {/* Supplier Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="supplier">
-              Supplier <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={form.watch("supplierId")}
-              onValueChange={(value) => form.setValue("supplierId", value)}
-              disabled={loadingSuppliers || createPO.isPending}
-            >
-              <SelectTrigger id="supplier">
-                <SelectValue placeholder="Select a supplier" />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((supplier) => (
-                  <SelectItem key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.formState.errors.supplierId && (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.supplierId.message}
-              </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="supplierId">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Supplier"
+                options={supplierOptions}
+                placeholder={
+                  loadingSuppliers ? "Loading..." : "Select a supplier"
+                }
+                required
+                disabled={loadingSuppliers || createPO.isPending}
+              />
             )}
-          </div>
+          </form.Field>
 
-          {/* Quantity */}
-          <div className="space-y-2">
-            <Label htmlFor="quantity">
-              Quantity <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="quantity"
-              type="number"
-              min={1}
-              {...form.register("quantity", { valueAsNumber: true })}
-              disabled={createPO.isPending}
-            />
-            {form.formState.errors.quantity && (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.quantity.message}
-              </p>
+          <form.Field name="quantity">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Quantity"
+                min={1}
+                required
+                disabled={createPO.isPending}
+              />
             )}
-          </div>
+          </form.Field>
 
-          {/* Unit Price */}
-          <div className="space-y-2">
-            <Label htmlFor="unitPrice">
-              Unit Price ($) <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="unitPrice"
-              type="number"
-              step="0.01"
-              min={0.01}
-              {...form.register("unitPrice", { valueAsNumber: true })}
-              disabled={createPO.isPending}
-            />
-            {form.formState.errors.unitPrice && (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.unitPrice.message}
-              </p>
+          <form.Field name="unitPrice">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Unit Price ($)"
+                min={0.01}
+                step={0.01}
+                required
+                disabled={createPO.isPending}
+              />
             )}
-          </div>
+          </form.Field>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              {...form.register("notes")}
-              disabled={createPO.isPending}
-              rows={3}
-              placeholder="Optional notes for this purchase order"
-            />
-          </div>
+          <form.Field name="notes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Notes"
+                placeholder="Optional notes for this purchase order"
+                rows={3}
+                disabled={createPO.isPending}
+              />
+            )}
+          </form.Field>
 
-          {/* Error Alert */}
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -306,27 +284,14 @@ export function CreatePOFromRecommendationDialog({
           )}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={createPO.isPending}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createPO.isPending || loadingSuppliers}>
-              {createPO.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Truck className="mr-2 h-4 w-4" />
-                  Create Purchase Order
-                </>
-              )}
-            </Button>
+            <FormActions
+              form={form}
+              submitLabel="Create Purchase Order"
+              cancelLabel="Cancel"
+              loadingLabel="Creating..."
+              onCancel={handleClose}
+              submitDisabled={createPO.isPending || loadingSuppliers}
+            />
           </DialogFooter>
         </form>
       </DialogContent>

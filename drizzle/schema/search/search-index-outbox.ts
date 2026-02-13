@@ -14,10 +14,12 @@ import {
   index,
   uniqueIndex,
   check,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 
 export interface SearchIndexOutboxPayload {
@@ -46,6 +48,10 @@ const SEARCH_ENTITY_TYPES = [
   "warranty_claim",
   "quote",
   "shipment",
+  "invoice",
+  "installer",
+  "purchase_order",
+  "rma",
 ];
 
 export const searchIndexOutbox = pgTable(
@@ -100,27 +106,7 @@ export const searchIndexOutbox = pgTable(
       "search_outbox_status_check",
       sql`${table.status} IN ('pending','processing','failed','completed')`
     ),
-    selectPolicy: pgPolicy("search_outbox_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("search_outbox_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("search_outbox_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("search_outbox_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("search_outbox"),
   })
 );
 

@@ -143,7 +143,7 @@ export function ApiTokensSettingsPresenter({
               <div>
                 <span className="font-medium text-green-800">Token Created!</span>
                 <p className="text-sm text-green-700 mt-1">
-                  Copy this token now. You won't be able to see it again.
+                  Copy this token now. You won&apos;t be able to see it again.
                 </p>
               </div>
               <Button variant="ghost" size="sm" onClick={onDismissNewToken}>×</Button>

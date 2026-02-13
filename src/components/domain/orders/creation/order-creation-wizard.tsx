@@ -237,10 +237,13 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
         </p>
       </div>
 
-      {/* Line Items Summary */}
+      {/* Line Items Summary - editable qty and unit price */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Line Items</CardTitle>
+          <CardDescription>
+            Adjust quantity and unit price for each item
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -253,7 +256,7 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {state.lineItems.map((item) => (
+              {state.lineItems.map((item, index) => (
                 <TableRow key={item.productId}>
                   <TableCell>
                     <div>
@@ -265,9 +268,45 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
-                    {formatPrice(item.unitPrice)}
+                    <Input
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const qty = parseFloat(e.target.value) || 0;
+                        setState((s) => ({
+                          ...s,
+                          lineItems: s.lineItems.map((li, i) =>
+                            i === index ? { ...li, quantity: qty } : li
+                          ),
+                        }));
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="h-8 w-20 text-right font-mono"
+                      inputMode="decimal"
+                    />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={item.unitPrice}
+                      onChange={(e) => {
+                        const price = parseFloat(e.target.value) || 0;
+                        setState((s) => ({
+                          ...s,
+                          lineItems: s.lineItems.map((li, i) =>
+                            i === index ? { ...li, unitPrice: price } : li
+                          ),
+                        }));
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="h-8 w-24 text-right font-mono"
+                      inputMode="decimal"
+                    />
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {formatPrice(item.quantity * item.unitPrice)}
@@ -413,7 +452,7 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
           <CardTitle className="text-base">Shipping Address</CardTitle>
           <CardDescription>
             {customerAddress
-              ? "Use customer's address or enter a different one"
+              ? "Use customer&apos;s address or enter a different one"
               : "Enter the shipping address"}
           </CardDescription>
         </CardHeader>
@@ -442,7 +481,7 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
                 className="h-4 w-4 rounded border-gray-300"
               />
               <Label htmlFor="use-customer-address" className="font-normal">
-                Use customer's address
+                Use customer&apos;s address
               </Label>
             </div>
           )}

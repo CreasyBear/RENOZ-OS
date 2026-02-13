@@ -51,11 +51,9 @@ const statusConfig: Record<IssueStatus, StatusConfig> = {
 // COMPONENT
 // ============================================================================
 
-export interface StatusChangeResult {
-  confirmed: boolean;
-  note: string;
-  skipPromptForSession: boolean;
-}
+import type { StatusChangeResult } from '@/lib/schemas/support/issues';
+
+export type { StatusChangeResult };
 
 interface IssueStatusChangeDialogProps {
   open: boolean;
@@ -160,7 +158,7 @@ export function IssueStatusChangeDialog({
             <Checkbox
               id="skip-prompt"
               checked={skipPrompt}
-              onCheckedChange={(checked) => setSkipPrompt(checked as boolean)}
+              onCheckedChange={(checked) => setSkipPrompt(checked === true)}
             />
             <Label htmlFor="skip-prompt" className="text-muted-foreground text-sm">
               Don&apos;t show this dialog for the rest of this session

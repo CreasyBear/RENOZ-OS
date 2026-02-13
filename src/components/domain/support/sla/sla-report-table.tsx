@@ -17,18 +17,9 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import type { SlaReportRow } from '@/lib/schemas/support/sla';
 
-export interface SlaReportRow {
-  issueType: string;
-  total: number;
-  responseBreached: number;
-  resolutionBreached: number;
-  resolved: number;
-  responseBreachRate: number;
-  resolutionBreachRate: number;
-  avgResponseTimeSeconds: number | null;
-  avgResolutionTimeSeconds: number | null;
-}
+export type { SlaReportRow };
 
 interface SlaReportTableProps {
   data: SlaReportRow[] | null;

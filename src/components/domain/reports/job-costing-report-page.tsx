@@ -4,6 +4,7 @@
  * Profitability analysis for battery installation jobs.
  */
 import { useState, useMemo, useCallback } from 'react';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { type ColumnDef } from '@tanstack/react-table';
 import {
   DollarSign,
@@ -18,16 +19,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { DomainFilterBar, type FilterBarConfig } from '@/components/shared/filters';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,8 +36,49 @@ import { useJobCostingReport } from '@/hooks';
 import { useCustomers } from '@/hooks';
 import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
 import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
+import { ReportFavoriteButton } from './report-favorite-button';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import type { JobProfitabilityResult } from '@/lib/schemas';
+import type { JobCostingReportSearch } from '@/lib/schemas/reports/job-costing';
+import type { NavigateFn } from '@/hooks/filters';
+
+type JobCostingFilterState = {
+  period: string;
+  customerId: string | null;
+  jobType: string | null;
+  status: string | null;
+};
+
+const JOB_COSTING_FILTER_DEFAULTS: JobCostingFilterState = {
+  period: 'this-month',
+  customerId: null,
+  jobType: null,
+  status: 'completed',
+};
+
+const PERIOD_LABELS: Record<string, string> = {
+  'this-month': 'This Month',
+  'last-month': 'Last Month',
+  'this-quarter': 'This Quarter',
+  'this-year': 'This Year',
+  'all-time': 'All Time',
+};
+
+const JOB_TYPE_LABELS: Record<string, string> = {
+  installation: 'Installation',
+  service: 'Service',
+  warranty: 'Warranty',
+  inspection: 'Inspection',
+  commissioning: 'Commissioning',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  completed: 'Completed',
+  in_progress: 'In Progress',
+  scheduled: 'Scheduled',
+  on_hold: 'On Hold',
+  cancelled: 'Cancelled',
+};
 
 // ============================================================================
 // HELPERS
@@ -63,11 +98,12 @@ function getDateRange(period: string): { dateFrom: string; dateTo: string } {
       startDate.setMonth(startDate.getMonth() - 1, 1);
       endDate.setDate(0); // Last day of previous month
       break;
-    case 'this-quarter':
+    case 'this-quarter': {
       const quarterStart = Math.floor(now.getMonth() / 3) * 3;
       startDate.setMonth(quarterStart, 1);
       endDate.setMonth(quarterStart + 3, 0);
       break;
+    }
     case 'this-year':
       startDate.setMonth(0, 1);
       endDate.setMonth(11, 31);
@@ -92,15 +128,161 @@ function formatPercent(value: number): string {
  * @source hooks/useJobCostingReport, useCustomers
  */
 export function JobCostingReportPage() {
-  // Filter state
-  const [period, setPeriod] = useState('this-month');
-  const [customerId, setCustomerId] = useState<string | undefined>(undefined);
-  const [jobType, setJobType] = useState<string | undefined>(undefined);
-  const [status, setStatus] = useState<string | undefined>('completed');
+  const search = useSearch({
+    from: '/_authenticated/reports/job-costing',
+  }) as JobCostingReportSearch;
+  const navigate = useNavigate();
+  const navigateFn = useCallback<NavigateFn>(
+    ({ to, search: nextSearch }) =>
+      navigate({
+        to,
+        search: () => nextSearch,
+      }),
+    [navigate]
+  );
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const { formatCurrency } = useOrgFormat();
-  const formatCurrencyDisplay = (value: number) =>
-    formatCurrency(value, { cents: false, showCents: true });
+  const formatCurrencyDisplay = useCallback(
+    (value: number) => formatCurrency(value, { cents: false, showCents: true }),
+    [formatCurrency]
+  );
+
+  const period = search.period;
+  const customerFilter = search.customerId ?? 'all';
+  const jobTypeFilter = search.jobType;
+  const statusFilter = search.status;
+  const customerId = customerFilter === 'all' ? undefined : customerFilter;
+
+  const updateSearch = useCallback(
+    (updates: Partial<JobCostingReportSearch>) => {
+      navigateFn({
+        to: '.',
+        search: {
+          ...search,
+          ...updates,
+        },
+      });
+    },
+    [navigateFn, search]
+  );
+
+  const filterState: JobCostingFilterState = useMemo(
+    () => ({
+      period,
+      customerId: customerFilter === 'all' ? null : customerFilter,
+      jobType: jobTypeFilter === 'all' ? null : jobTypeFilter,
+      status: statusFilter === 'all' ? null : statusFilter,
+    }),
+    [customerFilter, jobTypeFilter, period, statusFilter]
+  );
+
+  const { data: customersData } = useCustomers({ pageSize: 100 });
+
+  const customerOptions = useMemo(
+    () =>
+      (customersData?.items ?? []).map((customer) => ({
+        value: customer.id,
+        label: customer.name,
+      })),
+    [customersData?.items]
+  );
+
+  const filterConfig: FilterBarConfig<JobCostingFilterState> = useMemo(
+    () => ({
+      filters: [
+        {
+          key: 'period',
+          label: 'Period',
+          type: 'select',
+          primary: true,
+          options: Object.entries(PERIOD_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          })),
+          formatChip: (value) =>
+            value === JOB_COSTING_FILTER_DEFAULTS.period
+              ? ''
+              : PERIOD_LABELS[value as string] ?? String(value),
+        },
+        {
+          key: 'customerId',
+          label: 'Customer',
+          type: 'select',
+          primary: true,
+          options: customerOptions,
+          placeholder: 'All customers',
+          allLabel: 'All Customers',
+          formatChip: (value) => {
+            if (!value) return '';
+            return (
+              customerOptions.find((option) => option.value === value)?.label ??
+              String(value)
+            );
+          },
+        },
+        {
+          key: 'jobType',
+          label: 'Job Type',
+          type: 'select',
+          primary: true,
+          options: Object.entries(JOB_TYPE_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          })),
+          placeholder: 'All types',
+          allLabel: 'All Types',
+          formatChip: (value) =>
+            value ? JOB_TYPE_LABELS[value as string] ?? String(value) : '',
+        },
+        {
+          key: 'status',
+          label: 'Status',
+          type: 'select',
+          primary: true,
+          options: Object.entries(STATUS_LABELS).map(([value, label]) => ({
+            value,
+            label,
+          })),
+          placeholder: 'All statuses',
+          allLabel: 'All Statuses',
+          formatChip: (value) =>
+            value === JOB_COSTING_FILTER_DEFAULTS.status
+              ? ''
+              : STATUS_LABELS[value as string] ?? String(value),
+        },
+      ],
+      labels: {
+        period: 'Period',
+        customerId: 'Customer',
+        jobType: 'Job Type',
+        status: 'Status',
+      },
+    }),
+    [customerOptions]
+  );
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      filterState.period !== JOB_COSTING_FILTER_DEFAULTS.period ||
+      filterState.status !== JOB_COSTING_FILTER_DEFAULTS.status ||
+      filterState.customerId !== JOB_COSTING_FILTER_DEFAULTS.customerId ||
+      filterState.jobType !== JOB_COSTING_FILTER_DEFAULTS.jobType
+    );
+  }, [filterState]);
+
+  const handleFilterChange = useCallback(
+    (nextFilters: JobCostingFilterState) => {
+      updateSearch({
+        period: nextFilters.period as JobCostingReportSearch['period'],
+        customerId: nextFilters.customerId ?? 'all',
+        jobType: (nextFilters.jobType ??
+          'all') as JobCostingReportSearch['jobType'],
+        status: (nextFilters.status ??
+          'all') as JobCostingReportSearch['status'],
+      });
+    },
+    [updateSearch]
+  );
 
   // Derived date range
   const { dateFrom, dateTo } = useMemo(() => getDateRange(period), [period]);
@@ -115,14 +297,14 @@ export function JobCostingReportPage() {
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     customerId,
-    jobType: jobType as
+    jobType: (jobTypeFilter === 'all' ? undefined : jobTypeFilter) as
       | 'installation'
       | 'service'
       | 'warranty'
       | 'inspection'
       | 'commissioning'
       | undefined,
-    status: status as
+    status: (statusFilter === 'all' ? undefined : statusFilter) as
       | 'scheduled'
       | 'in_progress'
       | 'completed'
@@ -133,8 +315,6 @@ export function JobCostingReportPage() {
     offset: 0,
   });
 
-  // Fetch customers for filter dropdown
-  const { data: customersData } = useCustomers({ pageSize: 100 });
   const createScheduledReport = useCreateScheduledReport();
   const generateReport = useGenerateReport();
 
@@ -221,19 +401,47 @@ export function JobCostingReportPage() {
       {
         accessorKey: 'jobNumber',
         header: 'Job',
-        cell: ({ row }) => (
-          <div>
-            <span className="font-medium">{row.original.jobNumber}</span>
-            <div className="text-muted-foreground line-clamp-1 text-sm">
-              {row.original.jobTitle}
-            </div>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const { projectId, jobNumber, jobTitle } = row.original;
+          const content = (
+            <>
+              <span className="font-medium">{jobNumber}</span>
+              <div className="text-muted-foreground line-clamp-1 text-sm">
+                {jobTitle}
+              </div>
+            </>
+          );
+          return projectId ? (
+            <Link
+              to="/projects/$projectId"
+              params={{ projectId }}
+              className="block hover:underline focus:rounded focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {content}
+            </Link>
+          ) : (
+            <div>{content}</div>
+          );
+        },
       },
       {
         accessorKey: 'customerName',
         header: 'Customer',
-        cell: ({ row }) => <span className="text-sm">{row.original.customerName}</span>,
+        cell: ({ row }) => {
+          const { customerId, customerName } = row.original;
+          return customerId ? (
+            <Link
+              to="/customers/$customerId"
+              params={{ customerId }}
+              search={{}}
+              className="text-sm text-primary hover:underline"
+            >
+              {customerName}
+            </Link>
+          ) : (
+            <span className="text-sm">{customerName}</span>
+          );
+        },
       },
       {
         accessorKey: 'jobType',
@@ -370,6 +578,7 @@ export function JobCostingReportPage() {
           Job Costing Export
         </div>
         <div className="flex items-center gap-2">
+          <ReportFavoriteButton reportType="job-costing" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -478,83 +687,26 @@ export function JobCostingReportPage() {
           </Card>
         </div>
 
-        {/* Filters */}
-        <div className="mb-6 flex flex-wrap items-end gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="period">Period</Label>
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger id="period" className="w-[180px]">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="this-month">This Month</SelectItem>
-                <SelectItem value="last-month">Last Month</SelectItem>
-                <SelectItem value="this-quarter">This Quarter</SelectItem>
-                <SelectItem value="this-year">This Year</SelectItem>
-                <SelectItem value="all-time">All Time</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="customer">Customer</Label>
-            <Select
-              value={customerId ?? 'all'}
-              onValueChange={(v) => setCustomerId(v === 'all' ? undefined : v)}
-            >
-              <SelectTrigger id="customer" className="w-[200px]">
-                <SelectValue placeholder="All customers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Customers</SelectItem>
-                {customersData?.items.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="jobType">Job Type</Label>
-            <Select
-              value={jobType ?? 'all'}
-              onValueChange={(v) => setJobType(v === 'all' ? undefined : v)}
-            >
-              <SelectTrigger id="jobType" className="w-[160px]">
-                <SelectValue placeholder="All types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="installation">Installation</SelectItem>
-                <SelectItem value="service">Service</SelectItem>
-                <SelectItem value="warranty">Warranty</SelectItem>
-                <SelectItem value="inspection">Inspection</SelectItem>
-                <SelectItem value="commissioning">Commissioning</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select
-              value={status ?? 'all'}
-              onValueChange={(v) => setStatus(v === 'all' ? undefined : v)}
-            >
-              <SelectTrigger id="status" className="w-[160px]">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="on_hold">On Hold</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <DomainFilterBar
+          config={filterConfig}
+          filters={filterState}
+          onFiltersChange={handleFilterChange}
+          defaultFilters={JOB_COSTING_FILTER_DEFAULTS}
+          showResultCount={false}
+          showPresets={false}
+          showChips={hasActiveFilters}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>Filters sync to the URL for shareable views.</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleFilterChange(JOB_COSTING_FILTER_DEFAULTS)}
+            disabled={!hasActiveFilters}
+            className="h-7 px-2 text-xs"
+          >
+            Reset filters
+          </Button>
         </div>
 
       {/* Data Table */}

@@ -9,6 +9,9 @@ import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   QRCode,
+  FixedDocumentHeader,
+  pageMargins,
+  fixedHeaderClearance,
   fontSize,
   spacing,
   colors,
@@ -32,6 +35,7 @@ export interface DeliveryNoteLineItem {
   isFragile?: boolean;
   weight?: number | null;
   dimensions?: string | null;
+  serialNumbers?: string[];
 }
 
 export interface DeliveryNoteDocumentData {
@@ -78,14 +82,15 @@ export interface DeliveryNotePdfDocumentProps extends DeliveryNotePdfTemplatePro
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32,
-    paddingBottom: 32,
-    paddingLeft: 40,
-    paddingRight: 40,
+    paddingTop: pageMargins.top,
+    paddingBottom: pageMargins.bottom,
+    paddingLeft: pageMargins.left,
+    paddingRight: pageMargins.right,
     backgroundColor: colors.background.white,
   },
   content: {
     flex: 1,
+    marginTop: fixedHeaderClearance,
   },
 
   // Header
@@ -226,8 +231,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   checkbox: {
-    width: 14,
-    height: 14,
+    width: 18,
+    height: 18,
     borderWidth: 1,
     borderColor: colors.border.medium,
     marginRight: spacing.sm,
@@ -243,6 +248,25 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
+  },
+  serialNumberRow: {
+    flexDirection: "row" as const,
+    paddingLeft: 44, // checkbox (30) + item col (14 approx)
+    paddingVertical: 2,
+  },
+  serialNumberLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    marginRight: 4,
+  },
+  serialNumberValues: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    flex: 1,
   },
   colCheckbox: { width: 30 },
   colItem: { width: 30 },
@@ -312,6 +336,11 @@ function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplatePro
 
   return (
     <Page size="A4" style={styles.page}>
+      <FixedDocumentHeader
+        orgName={organization.name}
+        documentType="Delivery Note"
+        documentNumber={data.documentNumber}
+      />
       <View style={styles.content}>
         {/* QR Code */}
         {qrCodeDataUrl && (
@@ -331,7 +360,7 @@ function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplatePro
                   {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
                 </Text>
                 <Text style={styles.companyDetail}>
-                  {organization.address.city}, {organization.address.state} {organization.address.postalCode}
+                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
                 </Text>
               </>
             )}
@@ -366,14 +395,14 @@ function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplatePro
           {data.shippingAddress && (
             <>
               {data.shippingAddress.contactName && (
-                <Text style={styles.deliverToDetail}>Attn: {data.shippingAddress.contactName}</Text>
+                <Text style={styles.deliverToDetail}>{`Attn: ${data.shippingAddress.contactName}`}</Text>
               )}
               <Text style={styles.deliverToDetail}>
                 {data.shippingAddress.addressLine1}
                 {data.shippingAddress.addressLine2 ? `, ${data.shippingAddress.addressLine2}` : ""}
               </Text>
               <Text style={styles.deliverToDetail}>
-                {data.shippingAddress.city}, {data.shippingAddress.state} {data.shippingAddress.postalCode}
+                {`${data.shippingAddress.city}, ${data.shippingAddress.state} ${data.shippingAddress.postalCode}`}
               </Text>
               {data.shippingAddress.contactPhone && (
                 <Text style={styles.deliverToDetail}>{data.shippingAddress.contactPhone}</Text>
@@ -409,17 +438,27 @@ function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplatePro
           </View>
 
           {data.lineItems.map((item, index) => (
-            <View key={item.id} style={styles.tableRow} wrap={true}>
-              <View style={styles.colCheckbox}>
-                <View style={styles.checkbox} />
+            <View key={item.id} wrap={true}>
+              <View style={styles.tableRow}>
+                <View style={styles.colCheckbox}>
+                  <View style={styles.checkbox} />
+                </View>
+                <Text style={[styles.tableCell, styles.colItem]}>{String(index + 1)}</Text>
+                <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "-"}</Text>
+                <View style={styles.colDescription}>
+                  <Text style={styles.tableCell}>{item.description}</Text>
+                  {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
+                </View>
+                <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
               </View>
-              <Text style={[styles.tableCell, styles.colItem]}>{index + 1}</Text>
-              <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "-"}</Text>
-              <View style={styles.colDescription}>
-                <Text style={styles.tableCell}>{item.description}</Text>
-                {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
-              </View>
-              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
+              {item.serialNumbers && item.serialNumbers.length > 0 && (
+                <View style={styles.serialNumberRow}>
+                  <Text style={styles.serialNumberLabel}>Serial Numbers:</Text>
+                  <Text style={styles.serialNumberValues}>
+                    {item.serialNumbers.join(", ")}
+                  </Text>
+                </View>
+              )}
             </View>
           ))}
         </View>
@@ -468,6 +507,8 @@ export function DeliveryNotePdfDocument({
         title={`Delivery Note ${data.documentNumber}`}
         author={organization.name}
         subject={`Delivery Note for Order ${data.orderNumber}`}
+        language="en-AU"
+        keywords={`delivery note, ${data.documentNumber}, ${data.orderNumber}`}
         creator="Renoz"
       >
         <DeliveryNoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} />

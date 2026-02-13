@@ -16,6 +16,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listInstallers,
+  listAllActiveInstallers,
   getInstaller,
   createInstallerProfile,
   updateInstallerProfile,
@@ -36,9 +37,11 @@ import {
   checkAvailability,
   getInstallerWorkload,
   suggestInstallers,
+  updateInstallerStatusBatch,
 } from '@/server/functions/installers';
 import type {
   InstallerListQuery,
+  InstallerListItem,
   SuggestInstallersInput,
 } from '@/lib/schemas/jobs/installers';
 
@@ -58,7 +61,11 @@ export function useInstallers(options: UseInstallersOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.installers.list(filters),
-    queryFn: () => listInstallers({ data: filters as InstallerListQuery }),
+    queryFn: async () => {
+      const result = await listInstallers({ data: filters as InstallerListQuery });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -66,27 +73,26 @@ export function useInstallers(options: UseInstallersOptions = {}) {
 
 /**
  * Get all active installers (for dropdowns, small datasets)
+ * Uses dedicated server function without pagination (Finding #17)
  */
 export function useAllInstallers(enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.installers.lists(), 'all-active'],
+    queryKey: queryKeys.installers.allActive(),
     queryFn: async () => {
-      const allResults: InstallerListItem[] = [];
-      let page = 1;
-      let hasMore = true;
-
-      while (hasMore && page < 20) {
-        const result = await listInstallers({
-          data: { page, pageSize: 100, status: 'active' } as InstallerListQuery,
-        });
-        allResults.push(...(result.items as InstallerListItem[]));
-        hasMore =
-          result.items.length === 100 &&
-          allResults.length < result.pagination.totalItems;
-        page++;
-      }
-
-      return allResults;
+      const result = await listAllActiveInstallers();
+      // Map to InstallerListItem format
+      return result.map((item) => ({
+        id: item.id,
+        userId: item.userId,
+        name: item.name,
+        email: item.email,
+        status: item.status,
+        yearsExperience: item.yearsExperience,
+        vehicleType: item.vehicleType,
+        maxJobsPerDay: item.maxJobsPerDay,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })) as InstallerListItem[];
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -97,105 +103,19 @@ export function useAllInstallers(enabled = true) {
 // DETAIL HOOKS
 // ============================================================================
 
-export interface InstallerListItem {
-  id: string;
-  user?: {
-    id: string;
-    name: string | null;
-    email: string;
-    avatarUrl?: string;
-  };
-  status: string;
-  yearsExperience: number;
-  maxJobsPerDay: number;
-  vehicleType: string;
-}
-
-export interface InstallerDetail extends InstallerListItem {
-  vehicleReg: string | null;
-  equipment: string[];
-  maxTravelKm: number | null;
-  workingHours: Record<string, { start: string; end: string; working: boolean }>;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
-  emergencyContactRelationship: string | null;
-  notes: string | null;
-  certifications: Certification[];
-  skills: Skill[];
-  territories: Territory[];
-  blockouts: Blockout[];
-}
-
-export interface Certification {
-  id: string;
-  certificationType: string;
-  licenseNumber: string | null;
-  issuingAuthority: string | null;
-  issueDate: string | null;
-  expiryDate: string | null;
-  isVerified: boolean;
-  documentUrl: string | null;
-}
-
-export interface Skill {
-  id: string;
-  skill: string;
-  proficiencyLevel: number;
-  yearsExperience: number;
-  projectsCompleted: number;
-  isVerified: boolean;
-}
-
-export interface Territory {
-  id: string;
-  postcode: string;
-  suburb: string | null;
-  state: string | null;
-  priority: number;
-}
-
-export interface Blockout {
-  id: string;
-  startDate: string;
-  endDate: string;
-  reason: string | null;
-  blockoutType: string | null;
-}
-
-export interface AvailabilityResult {
-  installerId: string;
-  dateRange: { startDate: string; endDate: string };
-  availability: Record<
-    string,
-    { available: boolean; reason?: string; existingJobs: number }
-  >;
-  maxJobsPerDay: number;
-}
-
-export interface WorkloadResult {
-  installerId: string;
-  activeProjects: number;
-  upcomingVisits: number;
-  thisWeekVisits: number;
-}
-
-export interface Suggestion {
-  installerId: string;
-  name: string;
-  score: number;
-  skills: Skill[];
-  yearsExperience: number;
-  reasons: string[];
-  warnings: string[];
-}
-
 /**
  * Get single installer with full profile
  */
 export function useInstaller(installerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.installers.detail(installerId),
-    queryFn: () => getInstaller({ data: { id: installerId } }),
+    queryFn: async () => {
+      const result = await getInstaller({
+        data: { id: installerId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!installerId,
     staleTime: 30 * 1000,
   });
@@ -216,10 +136,14 @@ export function useInstallerAvailability(
 ) {
   return useQuery({
     queryKey: queryKeys.installers.availability(installerId, startDate, endDate),
-    queryFn: () =>
-      checkAvailability({
+    queryFn: async () => {
+      const result = await checkAvailability({
         data: { installerId, startDate: startDate!, endDate: endDate! },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!installerId && !!startDate && !!endDate,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -231,7 +155,13 @@ export function useInstallerAvailability(
 export function useInstallerWorkload(installerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.installers.workload(installerId),
-    queryFn: () => getInstallerWorkload({ data: { id: installerId } }),
+    queryFn: async () => {
+      const result = await getInstallerWorkload({
+        data: { id: installerId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!installerId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -248,10 +178,14 @@ export function useSuggestInstallers(
   const normalizedOptions: Omit<SuggestInstallersInput, 'postcode'> = { limit: 5, ...options };
   return useQuery({
     queryKey: queryKeys.installers.suggestions(postcode, normalizedOptions),
-    queryFn: () =>
-      suggestInstallers({
+    queryFn: async () => {
+      const result = await suggestInstallers({
         data: { postcode, ...normalizedOptions },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!postcode,
     staleTime: 5 * 60 * 1000, // 5 minutes - suggestions don't change often
   });
@@ -326,6 +260,7 @@ export function useCreateCertification() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.installers.detail(data.installerId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -336,9 +271,14 @@ export function useUpdateCertification() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      // Invalidation handled by component refetching
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.certifications(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -349,8 +289,14 @@ export function useVerifyCertification() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.certifications(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -361,8 +307,14 @@ export function useDeleteCertification() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.certifications(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -384,6 +336,7 @@ export function useCreateSkill() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.installers.detail(data.installerId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -394,8 +347,14 @@ export function useUpdateSkill() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.skills(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -406,8 +365,14 @@ export function useDeleteSkill() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.skills(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -429,6 +394,7 @@ export function useCreateTerritory() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.installers.detail(data.installerId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -439,8 +405,14 @@ export function useUpdateTerritory() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.territories(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -451,8 +423,14 @@ export function useDeleteTerritory() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.territories(data.installerId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -471,12 +449,17 @@ export function useCreateBlockout() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.installers.blockouts(data.installerId),
       });
+      // Invalidate all availability queries for this installer (date ranges may vary)
       queryClient.invalidateQueries({
-        queryKey: queryKeys.installers.availability(data.installerId),
+        predicate: (query) =>
+          query.queryKey[0] === 'installers' &&
+          query.queryKey[1] === 'availability' &&
+          query.queryKey[2] === data.installerId,
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.installers.detail(data.installerId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -487,8 +470,21 @@ export function useUpdateBlockout() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.blockouts(data.installerId),
+      });
+      // Invalidate all availability queries for this installer (date ranges may have changed)
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'installers' &&
+          query.queryKey[1] === 'availability' &&
+          query.queryKey[2] === data.installerId,
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
     },
   });
 }
@@ -499,8 +495,49 @@ export function useDeleteBlockout() {
 
   return useMutation({
     mutationFn: serverFn,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.blockouts(data.installerId),
+      });
+      // Invalidate all availability queries for this installer
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'installers' &&
+          query.queryKey[1] === 'availability' &&
+          query.queryKey[2] === data.installerId,
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.installers.detail(data.installerId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
+    },
+  });
+}
+
+// ============================================================================
+// BULK MUTATIONS
+// ============================================================================
+
+/**
+ * Bulk update installer statuses
+ * Used for list-level bulk operations
+ */
+export function useUpdateInstallerStatusBatch() {
+  const queryClient = useQueryClient();
+  const serverFn = useServerFn(updateInstallerStatusBatch);
+
+  return useMutation({
+    mutationFn: serverFn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.all });
+      // Invalidate all installer lists (status affects list display)
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
+      // Invalidate all detail queries (status is shown in detail view)
+      queryClient.invalidateQueries({ queryKey: queryKeys.installers.details() });
+      // Invalidate suggestions (status affects availability)
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === 'installers' && query.queryKey[1] === 'suggestions',
+      });
     },
   });
 }

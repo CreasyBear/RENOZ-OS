@@ -5,19 +5,24 @@
  * with responsive switching, loading states, and pagination.
  */
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Package, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DataTableSkeleton,
   DataTableEmpty,
 } from "@/components/shared/data-table";
+import { FilterEmptyState } from "@/components/shared/filter-empty-state";
+import { countActiveFilters } from "@/components/shared/filters/types";
+import { buildFilterItems } from "@/components/shared/filters/build-filter-items";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { OrdersTablePresenter } from "./orders-table-presenter";
 import { OrdersMobileCards } from "./orders-mobile-cards";
-import type { OrderTableItem } from "./order-columns";
+import type { OrderTableItem } from "@/lib/schemas/orders";
+import type { OrderFiltersState } from "./order-filter-config";
+import { ORDER_FILTER_CONFIG, DEFAULT_ORDER_FILTERS } from "./order-filter-config";
 
 export interface OrdersListPresenterProps {
   /** Orders to display */
@@ -26,6 +31,16 @@ export interface OrdersListPresenterProps {
   isLoading: boolean;
   /** Error state */
   error: Error | null;
+  /** Retry handler for error state */
+  onRetry?: () => void;
+  /** Current filters */
+  filters?: OrderFiltersState;
+  /** Update filters handler */
+  onFiltersChange?: (filters: OrderFiltersState) => void;
+  /** Clear all filters handler */
+  onClearFilters?: () => void;
+  /** Create order handler (for empty state CTA) */
+  onCreateOrder?: () => void;
   /** Set of selected order IDs */
   selectedIds: Set<string>;
   /** Whether all items are selected */
@@ -57,6 +72,8 @@ export interface OrdersListPresenterProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
+  /** When creating RMA from issue - preserve in order links */
+  fromIssueId?: string;
   /** Additional className */
   className?: string;
 }
@@ -168,6 +185,11 @@ export const OrdersListPresenter = memo(function OrdersListPresenter({
   orders,
   isLoading,
   error,
+  onRetry,
+  filters,
+  onFiltersChange,
+  onClearFilters,
+  onCreateOrder,
   selectedIds,
   isAllSelected,
   isPartiallySelected,
@@ -185,8 +207,28 @@ export const OrdersListPresenter = memo(function OrdersListPresenter({
   pageSize,
   total,
   onPageChange,
+  fromIssueId,
   className,
 }: OrdersListPresenterProps) {
+  // Check if filters are active
+  const hasActiveFilters = useMemo(() => {
+    if (!filters) return false;
+    return countActiveFilters(filters, ["search"]) > 0;
+  }, [filters]);
+
+  // Build filter items for FilterEmptyState using shared utility
+  const filterItems = useMemo(() => {
+    if (!filters || !hasActiveFilters || !onFiltersChange) return [];
+    
+    return buildFilterItems({
+      filters,
+      config: ORDER_FILTER_CONFIG,
+      defaultFilters: DEFAULT_ORDER_FILTERS,
+      onFiltersChange,
+      excludeKeys: ["search"],
+    });
+  }, [filters, hasActiveFilters, onFiltersChange]);
+
   // Error state
   if (error) {
     return (
@@ -194,6 +236,7 @@ export const OrdersListPresenter = memo(function OrdersListPresenter({
         variant="error"
         title="Failed to load orders"
         description={error.message ?? "An unexpected error occurred"}
+        action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
     );
@@ -202,28 +245,48 @@ export const OrdersListPresenter = memo(function OrdersListPresenter({
   // Loading state
   if (isLoading) {
     return (
-      <div className={cn("space-y-4", className)}>
+      <div className={cn("space-y-3", className)}>
         <DesktopSkeleton />
         <MobileSkeleton />
       </div>
     );
   }
 
-  // Empty state
+  // Empty state - use FilterEmptyState if filters are active, otherwise use DataTableEmpty
   if (orders.length === 0) {
+    // If filters are active, use FilterEmptyState
+    if (hasActiveFilters && filterItems.length > 0 && onClearFilters) {
+      return (
+        <div className={cn("py-12", className)}>
+          <FilterEmptyState
+            entityName="orders"
+            filters={filterItems}
+            onClearAll={onClearFilters}
+          />
+        </div>
+      );
+    }
+
+    // First visit / no filters - use DataTableEmpty with CTA
     return (
       <DataTableEmpty
-        variant="no-results"
+        variant="empty"
         icon={Package}
-        title="No orders found"
-        description="No orders match the current filters"
+        title="No orders yet"
+        description={total === 0 
+          ? "Create your first order to get started with order management."
+          : "No orders match your current search or filters."}
+        action={onCreateOrder ? {
+          label: "Create Order",
+          onClick: onCreateOrder,
+        } : undefined}
         className={className}
       />
     );
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-3", className)}>
       {/* Desktop Table */}
       <div className="hidden md:block">
         <OrdersTablePresenter
@@ -241,6 +304,7 @@ export const OrdersListPresenter = memo(function OrdersListPresenter({
           onViewOrder={onViewOrder}
           onDuplicateOrder={onDuplicateOrder}
           onDeleteOrder={onDeleteOrder}
+          fromIssueId={fromIssueId}
         />
       </div>
 

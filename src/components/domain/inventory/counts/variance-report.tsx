@@ -81,7 +81,7 @@ export const VarianceReport = memo(function VarianceReport({
       .filter((item) => item.countedQuantity !== null)
       .map((item) => {
         const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
-        const unitCost = 0; // TODO: Get from inventory item
+        const unitCost = item.unitCost ?? 0;
         return {
           ...item,
           variance,
@@ -256,6 +256,8 @@ export const VarianceReport = memo(function VarianceReport({
                   <TableHead className="text-center" />
                   <TableHead className="text-right">Counted</TableHead>
                   <TableHead className="text-right">Variance</TableHead>
+                  <TableHead className="text-right">Unit Cost</TableHead>
+                  <TableHead className="text-right">Variance Value</TableHead>
                   <TableHead>Reason</TableHead>
                   {(onApproveItem || onRejectItem) && (
                     <TableHead className="w-[100px]" />
@@ -312,6 +314,20 @@ export const VarianceReport = memo(function VarianceReport({
                         {item.variance > 0 ? "+" : ""}
                         {item.variance}
                       </Badge>
+                    </TableCell>
+
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrencyDisplay(item.unitCost ?? 0)}
+                    </TableCell>
+
+                    <TableCell
+                      className={cn(
+                        "text-right tabular-nums",
+                        item.varianceValue > 0 && "text-green-600",
+                        item.varianceValue < 0 && "text-red-600"
+                      )}
+                    >
+                      {formatCurrencyDisplay(item.varianceValue)}
                     </TableCell>
 
                     <TableCell>

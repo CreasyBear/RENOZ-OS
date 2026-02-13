@@ -109,6 +109,9 @@ export const processScheduledCallsTask = schedules.task({
             customerName,
             scheduledAt: call.scheduledAt.toISOString(),
             purpose: call.purpose,
+            actionUrl: '/communications/calls',
+            entityType: 'scheduled_call',
+            entityId: call.id,
           },
         });
 
@@ -218,6 +221,9 @@ export const processOverdueCallsTask = schedules.task({
             customerName,
             scheduledAt: call.scheduledAt.toISOString(),
             purpose: call.purpose,
+            actionUrl: '/communications/calls',
+            entityType: 'scheduled_call',
+            entityId: call.id,
           },
         });
 

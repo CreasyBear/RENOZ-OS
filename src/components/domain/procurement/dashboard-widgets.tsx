@@ -21,47 +21,17 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormatAmount } from '@/components/shared/format';
+import { ErrorState } from '@/components/shared/error-state';
+import type {
+  SpendMetrics,
+  OrderMetrics,
+  SupplierMetrics,
+  ApprovalItem,
+} from '@/lib/schemas/procurement';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface SpendMetrics {
-  totalSpend: number;
-  monthlySpend: number;
-  budgetTotal: number;
-  budgetUsed: number;
-  trendPercent: number;
-  trendDirection: 'up' | 'down';
-}
-
-interface OrderMetrics {
-  totalOrders: number;
-  pendingApproval: number;
-  awaitingDelivery: number;
-  completedThisMonth: number;
-}
-
-interface SupplierMetrics {
-  totalSuppliers: number;
-  activeSuppliers: number;
-  avgRating: number;
-  topPerformers: Array<{
-    id: string;
-    name: string;
-    rating: number;
-  }>;
-}
-
-interface ApprovalItem {
-  id: string;
-  poNumber: string;
-  supplierName: string;
-  amount: number;
-  currency: string;
-  submittedAt: string;
-  priority: 'normal' | 'high' | 'urgent';
-}
 
 interface DashboardWidgetsProps {
   spendMetrics?: SpendMetrics;
@@ -69,6 +39,18 @@ interface DashboardWidgetsProps {
   supplierMetrics?: SupplierMetrics;
   pendingApprovals?: ApprovalItem[];
   isLoading?: boolean;
+  errors?: {
+    spend?: Error | null;
+    orders?: Error | null;
+    suppliers?: Error | null;
+    approvals?: Error | null;
+    alerts?: Error | null;
+  };
+  onRefresh?: () => void;
+  onRefreshSpend?: () => void;
+  onRefreshOrders?: () => void;
+  onRefreshSuppliers?: () => void;
+  onRefreshApprovals?: () => void;
 }
 
 // ============================================================================
@@ -95,10 +77,29 @@ function WidgetSkeleton() {
 
 interface SpendWidgetProps {
   metrics: SpendMetrics;
+  error?: Error | null;
+  onRetry?: () => void;
 }
 
-function SpendOverviewWidget({ metrics }: SpendWidgetProps) {
-  const budgetPercent = (metrics.budgetUsed / metrics.budgetTotal) * 100;
+function SpendOverviewWidget({ metrics, error, onRetry }: SpendWidgetProps) {
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <ErrorState
+            title="Failed to load spend metrics"
+            message={error.message || 'Unable to load spend data.'}
+            onRetry={onRetry}
+            className="py-4"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+  // Calculate budget percentage, handling zero budget (budget tracking not implemented)
+  const budgetPercent = metrics.budgetTotal > 0 
+    ? (metrics.budgetUsed / metrics.budgetTotal) * 100 
+    : 0;
   const isTrendUp = metrics.trendDirection === 'up';
 
   return (
@@ -144,9 +145,26 @@ function SpendOverviewWidget({ metrics }: SpendWidgetProps) {
 
 interface OrderWidgetProps {
   metrics: OrderMetrics;
+  error?: Error | null;
+  onRetry?: () => void;
 }
 
-function OrderStatusWidget({ metrics }: OrderWidgetProps) {
+function OrderStatusWidget({ metrics, error, onRetry }: OrderWidgetProps) {
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <ErrorState
+            title="Failed to load order metrics"
+            message={error.message || 'Unable to load order status data.'}
+            onRetry={onRetry}
+            className="py-4"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -168,15 +186,19 @@ function OrderStatusWidget({ metrics }: OrderWidgetProps) {
           <Link
             to="/purchase-orders"
             search={{ status: 'ordered' }}
-            className="rounded-lg bg-blue-50 p-2 transition-colors hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
+            className="rounded-lg bg-blue-50 p-2 transition-colors hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40 cursor-pointer"
           >
             <div className="text-lg font-bold text-blue-600">{metrics.awaitingDelivery}</div>
             <div className="text-muted-foreground text-[10px]">Ordered</div>
           </Link>
-          <div className="rounded-lg bg-green-50 p-2 dark:bg-green-950/20">
+          <Link
+            to="/purchase-orders"
+            search={{ status: 'received' }}
+            className="rounded-lg bg-green-50 p-2 transition-colors hover:bg-green-100 dark:bg-green-950/20 dark:hover:bg-green-950/40"
+          >
             <div className="text-lg font-bold text-green-600">{metrics.completedThisMonth}</div>
             <div className="text-muted-foreground text-[10px]">Received</div>
-          </div>
+          </Link>
         </div>
       </CardContent>
     </Card>
@@ -189,9 +211,25 @@ function OrderStatusWidget({ metrics }: OrderWidgetProps) {
 
 interface SupplierWidgetProps {
   metrics: SupplierMetrics;
+  error?: Error | null;
+  onRetry?: () => void;
 }
 
-function SupplierPerformanceWidget({ metrics }: SupplierWidgetProps) {
+function SupplierPerformanceWidget({ metrics, error, onRetry }: SupplierWidgetProps) {
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <ErrorState
+            title="Failed to load supplier metrics"
+            message={error.message || 'Unable to load supplier performance data.'}
+            onRetry={onRetry}
+            className="py-4"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -238,9 +276,25 @@ function SupplierPerformanceWidget({ metrics }: SupplierWidgetProps) {
 
 interface ApprovalWidgetProps {
   items: ApprovalItem[];
+  error?: Error | null;
+  onRetry?: () => void;
 }
 
-function ApprovalQueueWidget({ items }: ApprovalWidgetProps) {
+function ApprovalQueueWidget({ items, error, onRetry }: ApprovalWidgetProps) {
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <ErrorState
+            title="Failed to load approvals"
+            message={error.message || 'Unable to load pending approvals.'}
+            onRetry={onRetry}
+            className="py-4"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
   const priorityConfig = {
     normal: { label: 'Normal', variant: 'secondary' as const },
     high: { label: 'High', variant: 'default' as const },
@@ -313,6 +367,12 @@ function DashboardWidgets({
   supplierMetrics,
   pendingApprovals = [],
   isLoading = false,
+  errors = {},
+  onRefresh,
+  onRefreshSpend,
+  onRefreshOrders,
+  onRefreshSuppliers,
+  onRefreshApprovals,
 }: DashboardWidgetsProps) {
   if (isLoading) {
     return (
@@ -327,7 +387,22 @@ function DashboardWidgets({
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {spendMetrics ? (
-        <SpendOverviewWidget metrics={spendMetrics} />
+        <SpendOverviewWidget 
+          metrics={spendMetrics}
+          error={errors.spend}
+          onRetry={onRefreshSpend ?? onRefresh}
+        />
+      ) : errors.spend ? (
+        <Card>
+          <CardContent className="pt-6">
+            <ErrorState
+              title="Failed to load spend metrics"
+              message={errors.spend.message || 'Unable to load spend data.'}
+              onRetry={onRefreshSpend ?? onRefresh}
+              className="py-4"
+            />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
@@ -338,7 +413,22 @@ function DashboardWidgets({
       )}
 
       {orderMetrics ? (
-        <OrderStatusWidget metrics={orderMetrics} />
+        <OrderStatusWidget 
+          metrics={orderMetrics}
+          error={errors.orders}
+          onRetry={onRefreshOrders ?? onRefresh}
+        />
+      ) : errors.orders ? (
+        <Card>
+          <CardContent className="pt-6">
+            <ErrorState
+              title="Failed to load order metrics"
+              message={errors.orders.message || 'Unable to load order data.'}
+              onRetry={onRefreshOrders ?? onRefresh}
+              className="py-4"
+            />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
@@ -349,7 +439,22 @@ function DashboardWidgets({
       )}
 
       {supplierMetrics ? (
-        <SupplierPerformanceWidget metrics={supplierMetrics} />
+        <SupplierPerformanceWidget 
+          metrics={supplierMetrics}
+          error={errors.suppliers}
+          onRetry={onRefreshSuppliers ?? onRefresh}
+        />
+      ) : errors.suppliers ? (
+        <Card>
+          <CardContent className="pt-6">
+            <ErrorState
+              title="Failed to load supplier metrics"
+              message={errors.suppliers.message || 'Unable to load supplier data.'}
+              onRetry={onRefreshSuppliers ?? onRefresh}
+              className="py-4"
+            />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
@@ -359,7 +464,11 @@ function DashboardWidgets({
         </Card>
       )}
 
-      <ApprovalQueueWidget items={pendingApprovals} />
+      <ApprovalQueueWidget 
+        items={pendingApprovals}
+        error={errors.approvals}
+        onRetry={onRefreshApprovals ?? onRefresh}
+      />
     </div>
   );
 }
@@ -371,4 +480,4 @@ export {
   SupplierPerformanceWidget,
   ApprovalQueueWidget,
 };
-export type { DashboardWidgetsProps, SpendMetrics, OrderMetrics, SupplierMetrics, ApprovalItem };
+export type { DashboardWidgetsProps };

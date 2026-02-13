@@ -2,17 +2,15 @@
  * Inventory Detail Container
  *
  * Handles data fetching, mutations, and state management for inventory detail view.
- * Implements render props pattern for flexible header/action composition.
+ * Uses the useInventoryDetail composite hook following DETAIL-VIEW-STANDARDS.md.
  *
- * @source item from useInventoryItem hook
- * @source movements from useInventoryMovements hook
- * @source activities from useUnifiedActivities hook
+ * @source useInventoryDetail composite hook
  *
  * @see STANDARDS.md - Container/Presenter pattern
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   Edit,
   ArrowLeftRight,
@@ -20,10 +18,8 @@ import {
   Trash2,
   MoreHorizontal,
   Printer,
-  Package,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -43,23 +39,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { cn } from '@/lib/utils';
-import { toastSuccess, toastError, toast } from '@/hooks';
-import {
-  useInventoryItem,
-  useInventoryMovements,
-  useAdjustInventory,
-  useTransferInventory,
-  useProductForecast,
-  useQualityInspections,
-} from '@/hooks/inventory';
-import { useLocations } from '@/hooks/inventory/use-locations';
-import { useUpdateProduct } from '@/hooks/products';
-import { useUnifiedActivities } from '@/hooks/activities';
-import type { UpdateProduct } from '@/lib/schemas/products';
+import { EntityActivityLogger } from '@/components/shared/activity';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
+import { DisabledButtonWithTooltip } from '@/components/shared/disabled-with-tooltip';
+import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
+import { useInventoryDetail } from '@/hooks/inventory/use-inventory-detail';
+import { useTrackView } from '@/hooks/search';
 import { InventoryDetailView } from '../views/inventory-detail-view';
 import type { ItemDetailData } from '../item-detail';
-import type { MovementRecord, CostLayer, ForecastData, QualityRecord } from '../item-tabs';
+import type { MovementRecord, CostLayer, QualityRecord } from '../item-tabs';
+import type { MovementWithRelations, InventoryCostLayerRow } from '@/lib/schemas/inventory';
 import {
   StockTransferDialog,
   type TransferFormData,
@@ -75,8 +64,6 @@ import { InventoryItemEditDialog } from '../inventory-item-edit-dialog';
 // ============================================================================
 
 export interface InventoryDetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
   /** Header action buttons */
   headerActions: React.ReactNode;
   /** Main content */
@@ -95,40 +82,6 @@ export interface InventoryDetailContainerProps {
   /** Additional CSS classes */
   className?: string;
 }
-
-// ============================================================================
-// STATUS DETAIL CONFIG (for header badge)
-// ============================================================================
-
-const INVENTORY_STATUS_DETAIL_CONFIG: Record<
-  string,
-  { label: string; color: string }
-> = {
-  available: {
-    label: 'Available',
-    color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
-  },
-  allocated: {
-    label: 'Allocated',
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-  },
-  sold: {
-    label: 'Sold',
-    color: 'bg-secondary text-secondary-foreground',
-  },
-  damaged: {
-    label: 'Damaged',
-    color: 'bg-destructive/10 text-destructive',
-  },
-  returned: {
-    label: 'Returned',
-    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
-  },
-  quarantined: {
-    label: 'Quarantined',
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
-  },
-};
 
 // ============================================================================
 // LOADING SKELETON
@@ -158,83 +111,38 @@ export function InventoryDetailContainer({
   className,
 }: InventoryDetailContainerProps) {
   // ─────────────────────────────────────────────────────────────────────────
-  // State
+  // Composite Hook
   // ─────────────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('overview');
-  const [showMetaPanel, setShowMetaPanel] = useState(true);
-  const [showTransferDialog, setShowTransferDialog] = useState(false);
-  const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const detail = useInventoryDetail(itemId);
+  const { dismiss, isAlertDismissed } = useAlertDismissals();
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Panel Toggle Handler
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleToggleMetaPanel = useCallback(() => {
-    setShowMetaPanel((prev) => !prev);
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Data Fetching
-  // ─────────────────────────────────────────────────────────────────────────
-  const {
-    data: itemData,
-    isLoading: isLoadingItem,
-    error: itemError,
-    refetch: refetchItem,
-  } = useInventoryItem(itemId);
-
-  const { data: movementsData, isLoading: isLoadingMovements } =
-    useInventoryMovements(itemId);
-
-  const { locations } = useLocations({
-    autoFetch: true,
-    initialFilters: { active: true },
-  });
-
-  // Fetch product forecasts
-  const productId = itemData?.item?.productId;
-  const { data: forecastData, isLoading: isLoadingForecasts } = useProductForecast(
-    productId ?? '',
-    { period: 'weekly', days: 90 },
-    !!productId
-  );
-
-  // Fetch quality inspections
-  const { data: qualityData, isLoading: isLoadingQuality } =
-    useQualityInspections(itemId);
-
-  // Fetch activities
-  const {
-    activities,
-    isLoading: activitiesLoading,
-    error: activitiesError,
-  } = useUnifiedActivities({
+  const { onLogActivity, loggerProps } = useEntityActivityLogging({
     entityType: 'inventory',
     entityId: itemId,
+    entityLabel: `Inventory: ${detail.item?.product?.name ?? itemId}`,
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Mutations
-  // ─────────────────────────────────────────────────────────────────────────
-  const adjustMutation = useAdjustInventory();
-  const transferMutation = useTransferInventory();
-  const updateProductMutation = useUpdateProduct();
+  useTrackView('inventory', detail.item?.id, detail.item?.product?.name, detail.item?.product?.sku ?? undefined, `/inventory/${itemId}`);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Data Transformation
+  // Filter Dismissed Alerts
   // ─────────────────────────────────────────────────────────────────────────
-  const item = itemData?.item;
+  const visibleAlerts = useMemo(() => {
+    return detail.alerts.filter((alert) => !isAlertDismissed(alert.id));
+  }, [detail.alerts, isAlertDismissed]);
 
-  // Transform to ItemDetailData
+  // ─────────────────────────────────────────────────────────────────────────
+  // Transform item to ItemDetailData
+  // ─────────────────────────────────────────────────────────────────────────
   const itemDetailData: ItemDetailData | null = useMemo(() => {
-    if (!item) return null;
+    if (!detail.item) return null;
+    const item = detail.item;
     return {
       id: item.id,
       productId: item.productId,
       productName: item.product?.name ?? 'Unknown Product',
       productSku: item.product?.sku ?? 'N/A',
-      productDescription: item.product?.description ?? undefined,
+      productDescription: typeof item.product?.description === 'string' ? item.product.description : undefined,
       locationId: item.locationId,
       locationName: item.location?.name ?? 'Unknown Location',
       locationCode: item.location?.locationCode ?? 'N/A',
@@ -250,182 +158,105 @@ export function InventoryDetailContainer({
       createdAt: item.createdAt ? new Date(item.createdAt) : undefined,
       updatedAt: item.updatedAt ? new Date(item.updatedAt) : undefined,
     };
-  }, [item]);
+  }, [detail.item]);
 
-  // Transform movements data
+  // ─────────────────────────────────────────────────────────────────────────
+  // Transform movements for view
+  // ─────────────────────────────────────────────────────────────────────────
+  const MOVEMENT_TYPES = ['receive', 'allocate', 'deallocate', 'pick', 'ship', 'adjust', 'return', 'transfer'] as const;
   const movements: MovementRecord[] = useMemo(() => {
-    return (
-      movementsData?.movements?.map((m: any) => ({
+    return (detail.movements as MovementWithRelations[]).map((m) => {
+      const movementType = MOVEMENT_TYPES.includes(m.movementType as (typeof MOVEMENT_TYPES)[number])
+        ? (m.movementType as MovementRecord['movementType'])
+        : 'adjust';
+      return {
         id: m.id,
-        movementType: m.movementType,
+        movementType,
         quantity: m.quantity,
-        previousQuantity: m.previousQuantity,
-        newQuantity: m.newQuantity,
-        referenceType: m.referenceType,
-        referenceId: m.referenceId,
-        reason: m.metadata?.reason ?? m.notes,
-        notes: m.notes,
+        previousQuantity: m.previousQuantity ?? 0,
+        newQuantity: m.newQuantity ?? 0,
+        referenceType: m.referenceType ?? undefined,
+        referenceId: m.referenceId ?? undefined,
+        referenceNumber: m.referenceNumber ?? undefined,
+        reason: (typeof m.metadata?.reason === 'string' ? m.metadata.reason : m.notes) ?? undefined,
+        notes: m.notes ?? undefined,
         performedBy: m.performedByName ?? 'Unknown',
         performedAt: new Date(m.createdAt),
         unitCost: m.unitCost ? Number(m.unitCost) : undefined,
         totalCost: m.totalCost ? Number(m.totalCost) : undefined,
-      })) ?? []
-    );
-  }, [movementsData]);
+      };
+    });
+  }, [detail.movements]);
 
-  // Transform cost layers from item data
+  // ─────────────────────────────────────────────────────────────────────────
+  // Transform cost layers for view
+  // ─────────────────────────────────────────────────────────────────────────
   const costLayers: CostLayer[] = useMemo(() => {
-    return (
-      itemData?.costLayers?.map((l: any) => ({
-        id: l.id,
-        receivedAt: new Date(l.receivedAt),
-        quantityReceived: l.quantityReceived,
-        quantityRemaining: l.quantityRemaining,
-        unitCost: Number(l.unitCost),
-        totalCost: l.quantityRemaining * Number(l.unitCost),
-        referenceType: l.referenceType,
-        referenceId: l.referenceId,
-        expiryDate: l.expiryDate ? new Date(l.expiryDate) : undefined,
-      })) ?? []
-    );
-  }, [itemData]);
-
-  // Transform forecasts data
-  const forecasts: ForecastData[] = useMemo(() => {
-    if (!forecastData?.forecasts) return [];
-    return forecastData.forecasts.map((f: any) => ({
-      period: new Date(f.forecastDate).toLocaleDateString('en-AU', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      forecastedDemand: f.demandQuantity,
-      actualDemand: f.actualDemand ?? undefined,
-      variance: f.actualDemand ? f.demandQuantity - f.actualDemand : undefined,
-      variancePercent: f.actualDemand
-        ? ((f.demandQuantity - f.actualDemand) / f.actualDemand) * 100
-        : undefined,
-      accuracy: f.forecastAccuracy ?? undefined,
+    return (detail.costLayers as InventoryCostLayerRow[]).map((l) => ({
+      id: l.id,
+      receivedAt: new Date(l.receivedAt),
+      quantityReceived: l.quantityReceived,
+      quantityRemaining: l.quantityRemaining,
+      unitCost: Number(l.unitCost),
+      totalCost: l.quantityRemaining * Number(l.unitCost),
+      referenceType: l.referenceType ?? undefined,
+      referenceId: l.referenceId ?? undefined,
+      expiryDate: l.expiryDate ? new Date(l.expiryDate) : undefined,
     }));
-  }, [forecastData]);
+  }, [detail.costLayers]);
 
-  // Transform quality inspections data
+  // NOTE: Forecasts removed - product-level concern
+  // See Product Inventory View at /products/{productId}?tab=inventory
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Transform quality records for view
+  // ─────────────────────────────────────────────────────────────────────────
   const qualityRecords: QualityRecord[] = useMemo(() => {
-    if (!qualityData?.inspections) return [];
-    return qualityData.inspections.map((q: any) => ({
-      id: q.id,
-      inspectionDate: new Date(q.inspectionDate),
-      inspectorName: q.inspectorName,
-      result: q.result,
-      notes: q.notes ?? undefined,
-      defects: q.defects ?? undefined,
-    }));
-  }, [qualityData]);
+    return detail.qualityRecords;
+  }, [detail.qualityRecords]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────
-  const handleAdjust = useCallback(
-    async (data: AdjustmentFormData) => {
-      try {
-        await adjustMutation.mutateAsync({
-          productId: data.productId,
-          locationId: data.locationId,
-          adjustmentQty: data.adjustmentQty,
-          reason: data.reason,
-          notes: data.notes,
-        });
-        toastSuccess('Inventory adjusted successfully');
-        await refetchItem();
-        setShowAdjustmentDialog(false);
-      } catch {
-        toastError('Failed to adjust inventory');
-      }
-    },
-    [adjustMutation, refetchItem]
-  );
+  const handleAdjust = async (data: AdjustmentFormData) => {
+    await detail.handleAdjust({
+      productId: data.productId,
+      locationId: data.locationId,
+      adjustmentQty: data.adjustmentQty,
+      reason: data.reason,
+      notes: data.notes,
+    });
+  };
 
-  const handleTransfer = useCallback(
-    async (data: TransferFormData) => {
-      try {
-        await transferMutation.mutateAsync({
-          productId: data.productId,
-          fromLocationId: data.fromLocationId,
-          toLocationId: data.toLocationId,
-          quantity: data.quantity,
-          reason: data.reason,
-          notes: data.reason,
-        });
-        toastSuccess('Inventory transferred successfully');
-        setShowTransferDialog(false);
-        onBack?.();
-      } catch {
-        toastError('Failed to transfer inventory');
-      }
-    },
-    [transferMutation, onBack]
-  );
+  const handleTransfer = async (data: TransferFormData) => {
+    await detail.handleTransfer({
+      productId: data.productId,
+      fromLocationId: data.fromLocationId,
+      toLocationId: data.toLocationId,
+      quantity: data.quantity,
+      reason: data.reason,
+      notes: data.reason,
+    });
+    onBack?.();
+  };
 
-  const handleEdit = useCallback(() => {
+  const handleEdit = () => {
     if (onEdit) {
       onEdit();
     } else {
-      setShowEditDialog(true);
+      detail.setEditDialogOpen(true);
     }
-  }, [onEdit]);
-
-  const handleEditSubmit = useCallback(
-    async (data: UpdateProduct) => {
-      if (!item?.productId) {
-        throw new Error('Product ID not found');
-      }
-      try {
-        await updateProductMutation.mutateAsync({
-          id: item.productId,
-          data,
-        });
-        toastSuccess('Product updated successfully');
-        await refetchItem();
-        setShowEditDialog(false);
-      } catch {
-        toastError('Failed to update product');
-      }
-    },
-    [item?.productId, updateProductMutation, refetchItem]
-  );
-
-  const handleDelete = useCallback(async () => {
-    toast.info('Delete functionality not available', {
-      description:
-        'To remove inventory, use the Adjust feature to set quantity to zero.',
-    });
-    setShowDeleteDialog(false);
-  }, []);
-
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Derived State
-  // ─────────────────────────────────────────────────────────────────────────
-  const statusConfig = useMemo(() => {
-    if (!itemDetailData) return null;
-    return (
-      INVENTORY_STATUS_DETAIL_CONFIG[itemDetailData.status] ??
-      INVENTORY_STATUS_DETAIL_CONFIG.available
-    );
-  }, [itemDetailData]);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
   // ─────────────────────────────────────────────────────────────────────────
-  if (isLoadingItem) {
+  if (detail.isLoading) {
     const loadingContent = <InventoryDetailSkeleton />;
     if (children) {
       return (
         <>
           {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
             headerActions: <Skeleton className="h-10 w-32" />,
             content: loadingContent,
           })}
@@ -438,12 +269,12 @@ export function InventoryDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Error
   // ─────────────────────────────────────────────────────────────────────────
-  if (itemError || !item || !itemDetailData) {
+  if (detail.error || !detail.item || !itemDetailData) {
     const errorContent = (
       <ErrorState
         title="Inventory item not found"
         message="The inventory item you're looking for doesn't exist or has been deleted."
-        onRetry={() => refetchItem()}
+        onRetry={() => detail.refetch()}
         retryLabel="Try Again"
       />
     );
@@ -451,7 +282,6 @@ export function InventoryDetailContainer({
       return (
         <>
           {children({
-            headerTitle: 'Item Not Found',
             headerActions: null,
             content: errorContent,
           })}
@@ -464,29 +294,21 @@ export function InventoryDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Header Elements
   // ─────────────────────────────────────────────────────────────────────────
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <span className="text-xl font-semibold">{itemDetailData.productName}</span>
-      {statusConfig && (
-        <Badge className={cn('gap-1', statusConfig.color)}>
-          <Package className="h-3 w-3" />
-          {statusConfig.label}
-        </Badge>
-      )}
-    </div>
-  );
-
   const headerActions = (
     <div className="flex items-center gap-2">
       {/* Primary Actions */}
-      <Button variant="outline" onClick={() => setShowAdjustmentDialog(true)}>
+      <Button variant="outline" onClick={detail.actions.onAdjust}>
         <SlidersHorizontal className="h-4 w-4 mr-2" />
         Adjust
       </Button>
-      <Button variant="outline" onClick={() => setShowTransferDialog(true)}>
+      <DisabledButtonWithTooltip
+        variant="outline"
+        onClick={detail.actions.onTransfer}
+        disabledReason={detail.transferDisabledReason}
+      >
         <ArrowLeftRight className="h-4 w-4 mr-2" />
         Transfer
-      </Button>
+      </DisabledButtonWithTooltip>
 
       {/* More Actions */}
       <DropdownMenu>
@@ -501,13 +323,13 @@ export function InventoryDetailContainer({
             <Edit className="h-4 w-4 mr-2" />
             Edit Product
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handlePrint}>
+          <DropdownMenuItem onClick={detail.actions.onPrint}>
             <Printer className="h-4 w-4 mr-2" />
             Print
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => setShowDeleteDialog(true)}
+            onClick={detail.actions.onDelete}
             className="text-destructive"
           >
             <Trash2 className="h-4 w-4 mr-2" />
@@ -527,89 +349,90 @@ export function InventoryDetailContainer({
         item={itemDetailData}
         movements={movements}
         costLayers={costLayers}
-        forecasts={forecasts}
         qualityRecords={qualityRecords}
-        reorderPoint={10}
-        maxStockLevel={100}
-        safetyStock={5}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        showMetaPanel={showMetaPanel}
-        onToggleMetaPanel={handleToggleMetaPanel}
-        activities={activities}
-        activitiesLoading={activitiesLoading}
-        activitiesError={activitiesError}
-        isLoadingMovements={isLoadingMovements}
-        isLoadingCostLayers={false}
-        isLoadingForecasts={isLoadingForecasts}
-        isLoadingQuality={isLoadingQuality}
+        alerts={visibleAlerts}
+        onDismissAlert={dismiss}
+        activeTab={detail.activeTab}
+        onTabChange={detail.onTabChange}
+        showMetaPanel={detail.showSidebar}
+        onToggleMetaPanel={detail.toggleSidebar}
+        activities={detail.activities}
+        activitiesLoading={detail.activitiesLoading}
+        activitiesError={detail.activitiesError}
+        onLogActivity={onLogActivity}
+        isLoadingMovements={detail.movementsLoading}
+        isLoadingCostLayers={detail.costLayersLoading}
+        isLoadingQuality={detail.qualityLoading}
+        counts={detail.counts}
         className={className}
       />
 
+      <EntityActivityLogger {...loggerProps} />
+
       {/* Transfer Dialog */}
       <StockTransferDialog
-        open={showTransferDialog}
-        onClose={() => setShowTransferDialog(false)}
+        open={detail.transferDialogOpen}
+        onClose={() => detail.setTransferDialogOpen(false)}
         item={{
-          id: item.id,
-          productId: item.productId,
-          productName: item.product?.name ?? 'Unknown Product',
-          productSku: item.product?.sku ?? 'N/A',
-          locationId: item.locationId,
-          locationName: item.location?.name ?? 'Unknown Location',
-          quantityOnHand: item.quantityOnHand ?? 0,
-          quantityAvailable: item.quantityAvailable ?? 0,
-          unitCost: item.unitCost ? Number(item.unitCost) : undefined,
+          id: detail.item.id,
+          productId: detail.item.productId,
+          productName: detail.item.product?.name ?? 'Unknown Product',
+          productSku: detail.item.product?.sku ?? 'N/A',
+          locationId: detail.item.locationId,
+          locationName: detail.item.location?.name ?? 'Unknown Location',
+          quantityOnHand: detail.item.quantityOnHand ?? 0,
+          quantityAvailable: detail.item.quantityAvailable ?? 0,
+          unitCost: detail.item.unitCost ? Number(detail.item.unitCost) : undefined,
         }}
-        locations={locations}
+        locations={detail.locations}
         onTransfer={handleTransfer}
-        isLoading={transferMutation.isPending}
+        isLoading={detail.isTransferring}
       />
 
       {/* Adjustment Dialog */}
       <StockAdjustmentDialog
-        open={showAdjustmentDialog}
-        onClose={() => setShowAdjustmentDialog(false)}
+        open={detail.adjustDialogOpen}
+        onClose={() => detail.setAdjustDialogOpen(false)}
         item={{
-          id: item.id,
-          productId: item.productId,
-          productName: item.product?.name ?? 'Unknown Product',
-          productSku: item.product?.sku ?? 'N/A',
-          locationId: item.locationId,
-          locationName: item.location?.name ?? 'Unknown Location',
-          quantityOnHand: item.quantityOnHand ?? 0,
-          quantityAvailable: item.quantityAvailable ?? 0,
-          unitCost: item.unitCost ? Number(item.unitCost) : undefined,
+          id: detail.item.id,
+          productId: detail.item.productId,
+          productName: detail.item.product?.name ?? 'Unknown Product',
+          productSku: detail.item.product?.sku ?? 'N/A',
+          locationId: detail.item.locationId,
+          locationName: detail.item.location?.name ?? 'Unknown Location',
+          quantityOnHand: detail.item.quantityOnHand ?? 0,
+          quantityAvailable: detail.item.quantityAvailable ?? 0,
+          unitCost: detail.item.unitCost ? Number(detail.item.unitCost) : undefined,
         }}
         onAdjust={handleAdjust}
-        isLoading={adjustMutation.isPending}
+        isLoading={detail.isAdjusting}
       />
 
       {/* Edit Dialog */}
-      {item?.product && (
+      {detail.item?.product && (
         <InventoryItemEditDialog
-          open={showEditDialog}
-          onClose={() => setShowEditDialog(false)}
+          open={detail.editDialogOpen}
+          onClose={() => detail.setEditDialogOpen(false)}
           product={{
-            id: item.productId,
-            sku: item.product.sku,
-            name: item.product.name,
-            description: item.product.description,
-            barcode: item.product.barcode,
-            basePrice: item.product.basePrice,
-            costPrice: item.product.costPrice,
-            weight: item.product.weight,
-            isActive: item.product.isActive,
-            isSellable: item.product.isSellable,
-            trackInventory: item.product.trackInventory,
+            id: detail.item.productId,
+            sku: detail.item.product.sku,
+            name: detail.item.product.name,
+            description: typeof detail.item.product.description === 'string' ? detail.item.product.description : undefined,
+            barcode: typeof detail.item.product.barcode === 'string' ? detail.item.product.barcode : undefined,
+            basePrice: typeof detail.item.product.basePrice === 'number' ? detail.item.product.basePrice : 0,
+            costPrice: typeof detail.item.product.costPrice === 'number' ? detail.item.product.costPrice : undefined,
+            weight: typeof detail.item.product.weight === 'number' ? detail.item.product.weight : undefined,
+            isActive: Boolean(detail.item.product.isActive),
+            isSellable: Boolean(detail.item.product.isSellable),
+            trackInventory: Boolean(detail.item.product.trackInventory),
           }}
-          onSubmit={handleEditSubmit}
-          isLoading={updateProductMutation.isPending}
+          onSubmit={detail.handleEditProduct}
+          isLoading={detail.isUpdatingProduct}
         />
       )}
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialog open={detail.deleteDialogOpen} onOpenChange={detail.setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Inventory Item</AlertDialogTitle>
@@ -626,7 +449,7 @@ export function InventoryDetailContainer({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={detail.handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
@@ -641,16 +464,17 @@ export function InventoryDetailContainer({
   // Render: With Render Props or Default
   // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
   // Default rendering (standalone usage)
   return (
     <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
-        {headerActions}
-      </div>
+      {headerActions && (
+        <div className="flex items-center justify-end mb-4">
+          {headerActions}
+        </div>
+      )}
       {content}
     </div>
   );

@@ -17,13 +17,15 @@ import {
   timestamp,
   index,
   uniqueIndex,
-  pgPolicy,
   check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { pgEnum } from "drizzle-orm/pg-core";
 import { userRoleEnum } from "../_shared/enums";
-import { auditColumns } from "../_shared/patterns";
+import {
+  auditColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "./users";
 
@@ -113,27 +115,7 @@ export const userInvitations = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("user_invitations_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("user_invitations_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("user_invitations_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("user_invitations_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("user_invitations"),
   })
 );
 

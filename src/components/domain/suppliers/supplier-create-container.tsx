@@ -12,6 +12,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { SupplierForm, type SupplierFormData, type SupplierFormErrors } from './supplier-form';
 import { useCreateSupplier } from '@/hooks/suppliers';
 import { toast } from '@/lib/toast';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -69,8 +70,10 @@ export function SupplierCreateContainer() {
   // Handlers
   const handleChange = useCallback((field: keyof SupplierFormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when field is edited
-    if (errors[field as keyof SupplierFormErrors]) {
+    // Clear error when field is edited (type guard for error fields)
+    const hasError = (f: keyof SupplierFormData): f is keyof SupplierFormErrors =>
+      ['name', 'email', 'website', 'primaryContactEmail'].includes(f);
+    if (hasError(field) && errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   }, [errors]);
@@ -134,7 +137,7 @@ export function SupplierCreateContainer() {
       
       navigate({ to: '/suppliers/$supplierId', params: { supplierId: result.id } });
     } catch (error) {
-      console.error('Failed to create supplier:', error);
+      logger.error('Failed to create supplier', error);
       toast.error('Failed to create supplier', {
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });

@@ -63,7 +63,13 @@ export function useKbCategories({
 
   return useQuery({
     queryKey: queryKeys.support.kbCategoryList(filters),
-    queryFn: () => listCategories({ data: { ...filters, includeArticleCount } }),
+    queryFn: async () => {
+      const result = await listCategories({
+        data: { ...filters, includeArticleCount } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -77,7 +83,13 @@ export interface UseKbCategoryOptions {
 export function useKbCategory({ categoryId, enabled = true }: UseKbCategoryOptions) {
   return useQuery({
     queryKey: queryKeys.support.kbCategoryDetail(categoryId),
-    queryFn: () => getCategory({ data: { categoryId } }),
+    queryFn: async () => {
+      const result = await getCategory({
+        data: { categoryId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!categoryId,
     staleTime: 5 * 60 * 1000,
   });
@@ -157,8 +169,8 @@ export function useKbArticles({
 
   return useQuery({
     queryKey: queryKeys.support.kbArticleList(filters),
-    queryFn: () =>
-      listArticles({
+    queryFn: async () => {
+      const result = await listArticles({
         data: {
           ...filters,
           page: page ?? 1,
@@ -166,7 +178,11 @@ export function useKbArticles({
           sortBy: sortBy ?? 'updatedAt',
           sortOrder: sortOrder ?? 'desc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -185,7 +201,13 @@ export function useKbArticle({
 }: UseKbArticleOptions) {
   return useQuery({
     queryKey: queryKeys.support.kbArticleDetail(articleId),
-    queryFn: () => getArticle({ data: { articleId, incrementViews } }),
+    queryFn: async () => {
+      const result = await getArticle({
+        data: { articleId, incrementViews } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!articleId,
     staleTime: 60 * 1000,
   });

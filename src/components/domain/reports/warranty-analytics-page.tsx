@@ -8,16 +8,12 @@ import { useState, useCallback, useMemo } from 'react';
 import { useSearch, useNavigate } from '@tanstack/react-router';
 import { format, subDays } from 'date-fns';
 
-import {
-  useWarrantyAnalyticsDashboard,
-  useExportWarrantyAnalytics,
-  type WarrantyAnalyticsFilter,
-} from '@/hooks';
+import { useWarrantyAnalyticsDashboard, useExportWarrantyAnalytics } from '@/hooks';
 import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
 import { toast } from '@/hooks';
 import {
   WarrantyAnalyticsView,
-  type SearchParams,
+  type WarrantyAnalyticsSearchParams,
   type FilterOption,
   type AnalyticsFilterBadge,
 } from './warranty-analytics-view';
@@ -26,7 +22,7 @@ import {
 // CONSTANTS
 // ============================================================================
 
-const RANGE_OPTIONS: FilterOption<SearchParams['range']>[] = [
+const RANGE_OPTIONS: FilterOption<WarrantyAnalyticsSearchParams['range']>[] = [
   { value: '7', label: 'Last 7 days' },
   { value: '30', label: 'Last 30 days' },
   { value: '60', label: 'Last 60 days' },
@@ -35,14 +31,14 @@ const RANGE_OPTIONS: FilterOption<SearchParams['range']>[] = [
   { value: 'all', label: 'All time' },
 ];
 
-const WARRANTY_TYPE_OPTIONS: FilterOption<SearchParams['warrantyType']>[] = [
+const WARRANTY_TYPE_OPTIONS: FilterOption<WarrantyAnalyticsSearchParams['warrantyType']>[] = [
   { value: 'all', label: 'All Warranty Types' },
   { value: 'battery_performance', label: 'Battery Performance' },
   { value: 'inverter_manufacturer', label: 'Inverter Manufacturer' },
   { value: 'installation_workmanship', label: 'Installation Workmanship' },
 ];
 
-const CLAIM_TYPE_OPTIONS: FilterOption<SearchParams['claimType']>[] = [
+const CLAIM_TYPE_OPTIONS: FilterOption<WarrantyAnalyticsSearchParams['claimType']>[] = [
   { value: 'all', label: 'All Claim Types' },
   { value: 'cell_degradation', label: 'Cell Degradation' },
   { value: 'bms_fault', label: 'BMS Fault' },
@@ -51,7 +47,7 @@ const CLAIM_TYPE_OPTIONS: FilterOption<SearchParams['claimType']>[] = [
   { value: 'other', label: 'Other' },
 ];
 
-const DEFAULT_FILTERS: SearchParams = {
+const DEFAULT_FILTERS: WarrantyAnalyticsSearchParams = {
   range: '30',
   warrantyType: 'all',
   claimType: 'all',
@@ -66,7 +62,7 @@ export function WarrantyAnalyticsPage() {
   const navigate = useNavigate({ from: '/reports/warranties' });
 
   // Local filter state for mobile sheet
-  const [mobileFilters, setMobileFilters] = useState<SearchParams>(search);
+  const [mobileFilters, setMobileFilters] = useState<WarrantyAnalyticsSearchParams>(search);
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
   // Calculate date range from selection
@@ -87,8 +83,8 @@ export function WarrantyAnalyticsPage() {
   const dashboard = useWarrantyAnalyticsDashboard({
     startDate: dateRange.startDate,
     endDate: dateRange.endDate,
-    warrantyType: search.warrantyType as WarrantyAnalyticsFilter['warrantyType'],
-    claimType: search.claimType as WarrantyAnalyticsFilter['claimType'],
+    warrantyType: search.warrantyType,
+    claimType: search.claimType,
     trendMonths: 6,
   });
 
@@ -106,7 +102,7 @@ export function WarrantyAnalyticsPage() {
 
   // Update search params
   const updateSearch = useCallback(
-    (updates: Partial<SearchParams>) => {
+    (updates: Partial<WarrantyAnalyticsSearchParams>) => {
       navigate({
         search: (prev) => ({ ...prev, ...updates }),
       });
@@ -119,7 +115,7 @@ export function WarrantyAnalyticsPage() {
     navigate({ search: mobileFilters });
   }, [navigate, mobileFilters]);
 
-  const handleMobileFilterChange = useCallback((updates: Partial<SearchParams>) => {
+  const handleMobileFilterChange = useCallback((updates: Partial<WarrantyAnalyticsSearchParams>) => {
     setMobileFilters((prev) => ({ ...prev, ...updates }));
   }, []);
 
@@ -146,8 +142,8 @@ export function WarrantyAnalyticsPage() {
       exportMutation.mutate({
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        warrantyType: search.warrantyType as WarrantyAnalyticsFilter['warrantyType'],
-        claimType: search.claimType as WarrantyAnalyticsFilter['claimType'],
+        warrantyType: search.warrantyType,
+        claimType: search.claimType,
         format,
       });
     },

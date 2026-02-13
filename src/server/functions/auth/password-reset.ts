@@ -5,6 +5,7 @@ import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { checkPasswordResetRateLimit, RateLimitError } from '@/lib/auth/rate-limit';
+import { authLogger } from '@/lib/logger';
 
 const passwordResetInputSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -34,7 +35,7 @@ export const requestPasswordReset = createServerFn({ method: 'POST' })
       });
 
       if (error) {
-        console.error('[requestPasswordReset] Error:', error);
+        authLogger.error('[requestPasswordReset] Error', new Error(error.message), {});
         // Don't reveal if email exists or not
       }
 
@@ -51,7 +52,7 @@ export const requestPasswordReset = createServerFn({ method: 'POST' })
         };
       }
 
-      console.error('[requestPasswordReset] Unexpected error:', err);
+      authLogger.error('[requestPasswordReset] Unexpected error', err as Error, {});
       return {
         success: false,
         error: 'An unexpected error occurred. Please try again.',

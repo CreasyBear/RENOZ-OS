@@ -35,6 +35,8 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { uploadFile, createSignedUrl } from '@/lib/storage';
+import { warrantyLogger } from '@/lib/logger';
+import { isWarrantyStatusValue } from '@/lib/schemas/warranty';
 import {
   generateWarrantyCertificateSchema,
   getWarrantyCertificateSchema,
@@ -48,8 +50,8 @@ import {
   renderPdfToBuffer,
   WarrantyCertificatePdfDocument,
   type WarrantyCertificateData,
-  type DocumentOrganization,
 } from '@/lib/documents';
+import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
 
 // ============================================================================
 // CONSTANTS
@@ -208,8 +210,7 @@ export const generateWarrantyCertificate = createServerFn({ method: 'POST' })
         };
       }
 
-      const { warranty, customer, product, policy, organization, address } =
-        warrantyData[0];
+      const { warranty, customer, product, policy, address } = warrantyData[0];
 
       const items = await db
         .select({
@@ -276,19 +277,11 @@ export const generateWarrantyCertificate = createServerFn({ method: 'POST' })
         warrantyDuration: `${policy.durationMonths} Months`,
         coverageType: policy.type,
         terms: policy.terms ? JSON.stringify(policy.terms) : undefined,
-        status: (warranty.status as WarrantyCertificateData['status']) || 'active',
+        status: isWarrantyStatusValue(warranty.status) ? warranty.status : 'active',
       };
 
-      // Build organization data for branding
-      const orgData: DocumentOrganization = {
-        id: organization.id,
-        name: organization.name,
-        email: organization.email,
-        phone: organization.phone,
-        taxId: organization.abn,
-        currency: 'AUD',
-        locale: 'en-AU',
-      };
+      // Fetch organization with pre-fetched logo for PDF rendering
+      const orgData = await fetchOrganizationForDocument(ctx.organizationId);
 
       // 3. Render certificate to PDF
       const { buffer: pdfBuffer } = await renderPdfToBuffer(
@@ -324,7 +317,7 @@ export const generateWarrantyCertificate = createServerFn({ method: 'POST' })
         generatedAt: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('[warranty-certificate] Generation failed:', error);
+      warrantyLogger.error('Certificate generation failed', error, { warrantyId });
       return {
         success: false,
         certificateUrl: null,
@@ -409,10 +402,11 @@ export const regenerateWarrantyCertificate = createServerFn({ method: 'POST' })
     const { warrantyId, reason } = data;
 
     // Log regeneration reason for audit (includes user info from auth context)
-    console.log(
-      `[warranty-certificate] Regenerating certificate for warranty ${warrantyId}` +
-        ` by user ${ctx.user.id}${reason ? `: ${reason}` : ''}`
-    );
+    warrantyLogger.info('Regenerating certificate', {
+      warrantyId,
+      userId: ctx.user.id,
+      reason: reason ?? undefined,
+    });
 
     // Delegate to generateWarrantyCertificate with forceRegenerate=true
     return generateWarrantyCertificate({

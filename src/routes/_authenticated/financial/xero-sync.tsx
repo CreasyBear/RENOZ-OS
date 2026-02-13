@@ -14,10 +14,8 @@ import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
-import {
-  XeroSyncStatus,
-  type InvoiceWithSyncStatus,
-} from '@/components/domain/financial/xero-sync-status';
+import { XeroSyncStatus } from '@/components/domain/financial/xero-sync-status';
+import type { InvoiceWithSyncStatus } from '@/lib/schemas';
 import { useXeroSyncs, useResyncXeroInvoice } from '@/hooks/financial';
 import type { XeroSyncStatus as SyncStatus } from '@/lib/schemas';
 

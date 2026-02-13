@@ -9,13 +9,10 @@
  * @see SUPP-SUPPLIER-DETAIL story
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
-import { buttonVariants } from '@/components/ui/button';
 import { SupplierDetailContainer } from '@/components/domain/suppliers';
-import { cn } from '@/lib/utils';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -50,26 +47,14 @@ function SupplierDetailPage() {
         onViewPurchaseOrders={() => navigate({ to: '/purchase-orders', search: { supplierId } })}
         onCreatePurchaseOrder={() => navigate({ to: '/purchase-orders/create', search: { supplierId } })}
       >
-        {({ headerTitle, headerActions, content }) => (
+        {({ headerActions, content }) => (
           <>
             <PageLayout.Header
-              title={headerTitle}
-              actions={
-                <div className="flex items-center gap-2">
-                  <Link
-                    to="/suppliers"
-                    className={cn(buttonVariants({ variant: 'outline' }))}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Link>
-                  {headerActions}
-                </div>
-              }
+              title={null}
+              leading={<DetailPageBackButton to="/suppliers" aria-label="Back to suppliers" />}
+              actions={headerActions}
             />
-            <PageLayout.Content className="p-0">
-              {content}
-            </PageLayout.Content>
+            <PageLayout.Content className="p-0">{content}</PageLayout.Content>
           </>
         )}
       </SupplierDetailContainer>

@@ -10,8 +10,9 @@
 
 'use client';
 
+import { Link } from '@tanstack/react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -174,18 +175,14 @@ export function CsatLowRatingAlerts({
 
               {/* Actions */}
               <div className="flex flex-col gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => {
-                    // Navigate to issue detail - will be connected when support routes are created
-                    window.location.href = `/issues/${feedback.issueId}`;
-                  }}
+                <Link
+                  to="/support/issues/$issueId"
+                  params={{ issueId: feedback.issueId }}
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
                 >
                   <ExternalLink className="mr-1 h-3 w-3" />
                   View
-                </Button>
+                </Link>
               </div>
             </div>
           </Alert>

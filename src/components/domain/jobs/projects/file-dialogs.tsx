@@ -146,8 +146,8 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
         setUploadProgress(0);
         onSuccess?.();
       } catch (error) {
-        console.error('Upload error:', error);
-        toast.error('Failed to upload file');
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        toast.error(`Failed to upload file: ${message}`);
       } finally {
         setIsUploading(false);
         setUploadProgress(0);

@@ -1,16 +1,8 @@
-import { UpdatePasswordForm } from '~/components/update-password-form';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/reset-password')({
-  component: UpdatePassword,
+  beforeLoad: () => {
+    throw redirect({ to: '/update-password', replace: true });
+  },
+  component: () => null,
 });
-
-function UpdatePassword() {
-  return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <UpdatePasswordForm />
-      </div>
-    </div>
-  );
-}

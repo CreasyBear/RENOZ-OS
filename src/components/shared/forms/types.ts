@@ -1,21 +1,19 @@
 /**
  * Form Field Types
  *
- * Simplified types for TanStack Form field integration.
- * Uses permissive typing to work with TanStack Form's FieldApi.
+ * TanStack Form field integration using FormFieldWithType<T> per community best practices.
+ * @see https://github.com/TanStack/form/discussions/1240
  *
  * @example
  * ```tsx
- * // Fields automatically receive correct types from form.Field
  * <form.Field name="email">
  *   {(field) => <TextField field={field} label="Email" />}
  * </form.Field>
- *
- * <form.Field name="quantity">
- *   {(field) => <NumberField field={field} label="Quantity" />}
- * </form.Field>
  * ```
  */
+
+import type { FC } from 'react'
+import type { FieldApi } from '@tanstack/form-core'
 
 /**
  * Validation error from Zod or TanStack Form.
@@ -31,18 +29,12 @@ export interface FieldState<T = string> {
   value: T
   meta: {
     isTouched: boolean
-    errors: (ValidationError | string)[]
+    errors: (string | ValidationError | undefined)[]
   }
 }
 
 /**
  * Generic field interface for form components.
- * Uses permissive typing to work with TanStack Form's FieldApi.
- *
- * TanStack Form's FieldApi has 22+ generic parameters, so we use a
- * minimal interface that captures only what our field components need.
- *
- * @template T - The type of the field value (string, number, boolean, Date, etc.)
  */
 export interface FormFieldApi<T = string> {
   name: string
@@ -52,32 +44,29 @@ export interface FormFieldApi<T = string> {
 }
 
 /**
- * Loose field type that accepts TanStack Form's FieldApi.
- * Use this in component props to accept any TanStack Form field.
- *
- * @example
- * ```tsx
- * interface MyFieldProps {
- *   field: AnyFieldApi
- * }
- * ```
+ * Field API type for form components. Uses `any` for the value type to accept
+ * both strict (string) and loose (string | null | undefined) fields - avoids
+ * contravariance issues in FieldListeners when passing fields from form.Field.
+ * @see https://github.com/TanStack/form/discussions/1240
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyFieldApi<T = any> = {
-  name: string
-  state: {
-    /** Value can be T, null, or undefined for optional/nullable fields */
-    value: T | null | undefined
-    meta: {
-      isTouched: boolean
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      errors: any[]
-    }
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleChange: (value: any) => void
-  handleBlur: () => void
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type FormFieldWithType<_T = string> = FieldApi<any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any, any>
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Props for a form field component that receives field from form.Field render prop.
+ */
+export type FormFieldProps<T, P extends Record<string, unknown> = Record<string, unknown>> = P & {
+  field: FormFieldWithType<T>
 }
+
+/**
+ * Form field component type - use for type-safe reusable field components.
+ */
+export type FormField<T, P extends Record<string, unknown> = Record<string, unknown>> = FC<FormFieldProps<T, P>>
+
+/** @deprecated Use FormFieldWithType<T> for new code. Kept for backwards compatibility. */
+export type AnyFieldApi<T = unknown> = FormFieldWithType<T>
 
 // ============================================================================
 // TYPED FIELD API ALIASES

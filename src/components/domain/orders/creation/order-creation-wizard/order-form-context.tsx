@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Context file exports provider + hook */
 /**
  * Order Form Context
  *
@@ -146,6 +147,7 @@ export function OrderFormProvider({
 
   // Watch form data for calculations
   // Note: watch() returns partial data during edits, type assertion is safe here
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
   const formData = form.watch() as OrderFormData;
 
   // Template management

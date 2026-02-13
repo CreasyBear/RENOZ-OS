@@ -8,10 +8,12 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
+import { setResponseStatus } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { generatedDocuments } from 'drizzle/schema';
 import {
@@ -128,6 +130,7 @@ export const getGeneratedDocuments = createServerFn({ method: 'GET' })
         fileSize: generatedDocuments.fileSize,
         generatedAt: generatedDocuments.generatedAt,
         generatedById: generatedDocuments.generatedById,
+        regenerationCount: generatedDocuments.regenerationCount,
         createdAt: generatedDocuments.createdAt,
       })
       .from(generatedDocuments)
@@ -166,7 +169,8 @@ export const getGeneratedDocumentById = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!document) {
-      return null;
+      setResponseStatus(404);
+      throw new NotFoundError('Generated document not found', 'generatedDocument');
     }
 
     return document;
@@ -187,7 +191,8 @@ const documentCountsSchema = z.object({
 /**
  * Get counts of documents by type for an entity
  *
- * Useful for showing badges/counts in UI tabs.
+ * With the unique constraint on (org, entity, docType), each count will be 0 or 1.
+ * This effectively tells you which document types exist for the entity.
  */
 export const getDocumentCountsByType = createServerFn({ method: 'GET' })
   .inputValidator(documentCountsSchema)

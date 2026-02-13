@@ -17,7 +17,6 @@ import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AcceptInvitationRouteImport } from './routes/accept-invitation'
-import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalIndexRouteImport } from './routes/portal/index'
@@ -25,7 +24,6 @@ import { Route as PortalConfirmRouteImport } from './routes/portal/confirm'
 import { Route as FeedbackTokenRouteImport } from './routes/feedback.$token'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthConfirmRouteImport } from './routes/auth/confirm'
-import { Route as ProtectedProtectedRouteImport } from './routes/_protected/protected'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authenticated/support/index'
@@ -39,9 +37,11 @@ import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedProcurementIndexRouteImport } from './routes/_authenticated/procurement/index'
 import { Route as AuthenticatedPipelineIndexRouteImport } from './routes/_authenticated/pipeline/index'
 import { Route as AuthenticatedOrdersIndexRouteImport } from './routes/_authenticated/orders/index'
+import { Route as AuthenticatedOnboardingIndexRouteImport } from './routes/_authenticated/onboarding/index'
 import { Route as AuthenticatedMyTasksIndexRouteImport } from './routes/_authenticated/my-tasks/index'
 import { Route as AuthenticatedMobileIndexRouteImport } from './routes/_authenticated/mobile/index'
 import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs/index'
+import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices/index'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index'
 import { Route as AuthenticatedInstallersIndexRouteImport } from './routes/_authenticated/installers/index'
 import { Route as AuthenticatedFinancialIndexRouteImport } from './routes/_authenticated/financial/index'
@@ -77,6 +77,7 @@ import { Route as AuthenticatedReportsWinLossRouteImport } from './routes/_authe
 import { Route as AuthenticatedReportsWarrantiesRouteImport } from './routes/_authenticated/reports/warranties'
 import { Route as AuthenticatedReportsPipelineForecastRouteImport } from './routes/_authenticated/reports/pipeline-forecast'
 import { Route as AuthenticatedReportsJobCostingRouteImport } from './routes/_authenticated/reports/job-costing'
+import { Route as AuthenticatedReportsFinancialRouteImport } from './routes/_authenticated/reports/financial'
 import { Route as AuthenticatedReportsExpiringWarrantiesRouteImport } from './routes/_authenticated/reports/expiring-warranties'
 import { Route as AuthenticatedPurchaseOrdersCreateRouteImport } from './routes/_authenticated/purchase-orders/create'
 import { Route as AuthenticatedPurchaseOrdersPoIdRouteImport } from './routes/_authenticated/purchase-orders/$poId'
@@ -84,6 +85,7 @@ import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_au
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products/new'
 import { Route as AuthenticatedProductsImportRouteImport } from './routes/_authenticated/products/import'
 import { Route as AuthenticatedProductsProductIdRouteImport } from './routes/_authenticated/products/$productId'
+import { Route as AuthenticatedProcurementReceivingRouteImport } from './routes/_authenticated/procurement/receiving'
 import { Route as AuthenticatedProcurementDashboardRouteImport } from './routes/_authenticated/procurement/dashboard'
 import { Route as AuthenticatedPipelineNewRouteImport } from './routes/_authenticated/pipeline/new'
 import { Route as AuthenticatedPipelineOpportunityIdRouteImport } from './routes/_authenticated/pipeline/$opportunityId'
@@ -96,11 +98,12 @@ import { Route as AuthenticatedMobileCountingRouteImport } from './routes/_authe
 import { Route as AuthenticatedJobsTimelineRouteImport } from './routes/_authenticated/jobs/timeline'
 import { Route as AuthenticatedJobsKanbanRouteImport } from './routes/_authenticated/jobs/kanban'
 import { Route as AuthenticatedJobsCalendarRouteImport } from './routes/_authenticated/jobs/calendar'
+import { Route as AuthenticatedInvoicesInvoiceIdRouteImport } from './routes/_authenticated/invoices/$invoiceId'
 import { Route as AuthenticatedInventoryReceivingRouteImport } from './routes/_authenticated/inventory/receiving'
 import { Route as AuthenticatedInventoryLocationsRouteImport } from './routes/_authenticated/inventory/locations'
 import { Route as AuthenticatedInventoryForecastingRouteImport } from './routes/_authenticated/inventory/forecasting'
-import { Route as AuthenticatedInventoryDashboardRouteImport } from './routes/_authenticated/inventory/dashboard'
 import { Route as AuthenticatedInventoryCountsRouteImport } from './routes/_authenticated/inventory/counts'
+import { Route as AuthenticatedInventoryBrowserRouteImport } from './routes/_authenticated/inventory/browser'
 import { Route as AuthenticatedInventoryAnalyticsRouteImport } from './routes/_authenticated/inventory/analytics'
 import { Route as AuthenticatedInventoryAlertsRouteImport } from './routes/_authenticated/inventory/alerts'
 import { Route as AuthenticatedInventoryItemIdRouteImport } from './routes/_authenticated/inventory/$itemId'
@@ -111,7 +114,6 @@ import { Route as AuthenticatedFinancialStatementsRouteImport } from './routes/_
 import { Route as AuthenticatedFinancialRevenueRouteImport } from './routes/_authenticated/financial/revenue'
 import { Route as AuthenticatedFinancialRemindersRouteImport } from './routes/_authenticated/financial/reminders'
 import { Route as AuthenticatedFinancialPaymentPlansRouteImport } from './routes/_authenticated/financial/payment-plans'
-import { Route as AuthenticatedFinancialCreditNotesRouteImport } from './routes/_authenticated/financial/credit-notes'
 import { Route as AuthenticatedFinancialArAgingRouteImport } from './routes/_authenticated/financial/ar-aging'
 import { Route as AuthenticatedCustomersNewRouteImport } from './routes/_authenticated/customers/new'
 import { Route as AuthenticatedCustomersDuplicatesRouteImport } from './routes/_authenticated/customers/duplicates'
@@ -123,8 +125,12 @@ import { Route as AuthenticatedSupportIssuesIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedSupportClaimsIndexRouteImport } from './routes/_authenticated/support/claims/index'
 import { Route as AuthenticatedReportsProcurementIndexRouteImport } from './routes/_authenticated/reports/procurement/index'
 import { Route as AuthenticatedReportsCustomersIndexRouteImport } from './routes/_authenticated/reports/customers/index'
+import { Route as AuthenticatedFinancialInvoicesIndexRouteImport } from './routes/_authenticated/financial/invoices/index'
+import { Route as AuthenticatedFinancialCreditNotesIndexRouteImport } from './routes/_authenticated/financial/credit-notes/index'
+import { Route as AuthenticatedFinancialAnalyticsIndexRouteImport } from './routes/_authenticated/financial/analytics/index'
 import { Route as AuthenticatedCustomersSegmentsIndexRouteImport } from './routes/_authenticated/customers/segments/index'
 import { Route as AuthenticatedCommunicationsSignaturesIndexRouteImport } from './routes/_authenticated/communications/signatures/index'
+import { Route as AuthenticatedCommunicationsInboxIndexRouteImport } from './routes/_authenticated/communications/inbox/index'
 import { Route as AuthenticatedCommunicationsEmailsIndexRouteImport } from './routes/_authenticated/communications/emails/index'
 import { Route as AuthenticatedCommunicationsCampaignsIndexRouteImport } from './routes/_authenticated/communications/campaigns/index'
 import { Route as AuthenticatedCommunicationsCallsIndexRouteImport } from './routes/_authenticated/communications/calls/index'
@@ -133,6 +139,9 @@ import { Route as AuthenticatedAdminInvitationsIndexRouteImport } from './routes
 import { Route as AuthenticatedAdminGroupsIndexRouteImport } from './routes/_authenticated/admin/groups/index'
 import { Route as AuthenticatedAdminAuditIndexRouteImport } from './routes/_authenticated/admin/audit/index'
 import { Route as AuthenticatedAdminActivitiesIndexRouteImport } from './routes/_authenticated/admin/activities/index'
+import { Route as ApiTrackOpenEmailIdRouteImport } from './routes/api/track/open.$emailId'
+import { Route as ApiOauthSyncConnectionIdRouteImport } from './routes/api/oauth/sync.$connectionId'
+import { Route as ApiAiCostBudgetRouteImport } from './routes/api/ai/cost.budget'
 import { Route as AuthenticatedSupportWarrantiesWarrantyIdRouteImport } from './routes/_authenticated/support/warranties/$warrantyId'
 import { Route as AuthenticatedSupportRmasRmaIdRouteImport } from './routes/_authenticated/support/rmas/$rmaId'
 import { Route as AuthenticatedSupportIssuesNewRouteImport } from './routes/_authenticated/support/issues/new'
@@ -142,16 +151,25 @@ import { Route as AuthenticatedSuppliersSupplierIdEditRouteImport } from './rout
 import { Route as AuthenticatedProductsProductIdEditRouteImport } from './routes/_authenticated/products/$productId/edit'
 import { Route as AuthenticatedPipelineQuotesQuoteIdRouteImport } from './routes/_authenticated/pipeline/quotes/$quoteId'
 import { Route as AuthenticatedJobsAssignmentsAssignmentIdRouteImport } from './routes/_authenticated/jobs/assignments/$assignmentId'
+import { Route as AuthenticatedFinancialInvoicesInvoiceIdRouteImport } from './routes/_authenticated/financial/invoices/$invoiceId'
+import { Route as AuthenticatedFinancialCreditNotesCreditNoteIdRouteImport } from './routes/_authenticated/financial/credit-notes/$creditNoteId'
 import { Route as AuthenticatedCustomersCustomerIdEditRouteImport } from './routes/_authenticated/customers/$customerId_.edit'
 import { Route as AuthenticatedCommunicationsSettingsPreferencesRouteImport } from './routes/_authenticated/communications/settings/preferences'
+import { Route as AuthenticatedCommunicationsSettingsInboxAccountsRouteImport } from './routes/_authenticated/communications/settings/inbox-accounts'
+import { Route as AuthenticatedCommunicationsEmailsHistoryRouteImport } from './routes/_authenticated/communications/emails/history'
 import { Route as AuthenticatedCommunicationsCampaignsNewRouteImport } from './routes/_authenticated/communications/campaigns/new'
+import { Route as AuthenticatedCommunicationsCampaignsAnalyticsRouteImport } from './routes/_authenticated/communications/campaigns/analytics'
 import { Route as AuthenticatedCommunicationsCampaignsCampaignIdRouteImport } from './routes/_authenticated/communications/campaigns/$campaignId'
 import { Route as AuthenticatedAdminUsersInviteRouteImport } from './routes/_authenticated/admin/users/invite'
 import { Route as AuthenticatedAdminUsersImportRouteImport } from './routes/_authenticated/admin/users/import'
 import { Route as AuthenticatedAdminUsersUserIdRouteImport } from './routes/_authenticated/admin/users/$userId'
 import { Route as AuthenticatedAdminGroupsGroupIdRouteImport } from './routes/_authenticated/admin/groups/$groupId'
 import { Route as AuthenticatedCommunicationsEmailsTemplatesIndexRouteImport } from './routes/_authenticated/communications/emails/templates/index'
+import { Route as ApiTrackClickEmailIdLinkIdRouteImport } from './routes/api/track/click.$emailId.$linkId'
+import { Route as ApiAiAgentTaskIdStatusRouteImport } from './routes/api/ai/agent.$taskId.status'
 import { Route as AuthenticatedProjectsProjectIdVisitsVisitIdRouteImport } from './routes/_authenticated/projects/$projectId.visits/$visitId'
+import { Route as AuthenticatedCommunicationsSettingsInboxAccountsCallbackRouteImport } from './routes/_authenticated/communications/settings/inbox-accounts/callback'
+import { Route as AuthenticatedCommunicationsCampaignsCampaignIdEditRouteImport } from './routes/_authenticated/communications/campaigns/$campaignId/edit'
 
 const UpdatePasswordRoute = UpdatePasswordRouteImport.update({
   id: '/update-password',
@@ -193,10 +211,6 @@ const AcceptInvitationRoute = AcceptInvitationRouteImport.update({
   path: '/accept-invitation',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProtectedRoute = ProtectedRouteImport.update({
-  id: '/_protected',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -230,11 +244,6 @@ const AuthConfirmRoute = AuthConfirmRouteImport.update({
   id: '/auth/confirm',
   path: '/auth/confirm',
   getParentRoute: () => rootRouteImport,
-} as any)
-const ProtectedProtectedRoute = ProtectedProtectedRouteImport.update({
-  id: '/protected',
-  path: '/protected',
-  getParentRoute: () => ProtectedRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -312,6 +321,12 @@ const AuthenticatedOrdersIndexRoute =
     path: '/orders/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedOnboardingIndexRoute =
+  AuthenticatedOnboardingIndexRouteImport.update({
+    id: '/onboarding/',
+    path: '/onboarding/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedMyTasksIndexRoute =
   AuthenticatedMyTasksIndexRouteImport.update({
     id: '/my-tasks/',
@@ -329,6 +344,12 @@ const AuthenticatedJobsIndexRoute = AuthenticatedJobsIndexRouteImport.update({
   path: '/jobs/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedInvoicesIndexRoute =
+  AuthenticatedInvoicesIndexRouteImport.update({
+    id: '/invoices/',
+    path: '/invoices/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedInventoryIndexRoute =
   AuthenticatedInventoryIndexRouteImport.update({
     id: '/inventory/',
@@ -538,6 +559,12 @@ const AuthenticatedReportsJobCostingRoute =
     path: '/reports/job-costing',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedReportsFinancialRoute =
+  AuthenticatedReportsFinancialRouteImport.update({
+    id: '/reports/financial',
+    path: '/reports/financial',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedReportsExpiringWarrantiesRoute =
   AuthenticatedReportsExpiringWarrantiesRouteImport.update({
     id: '/reports/expiring-warranties',
@@ -578,6 +605,12 @@ const AuthenticatedProductsProductIdRoute =
   AuthenticatedProductsProductIdRouteImport.update({
     id: '/products/$productId',
     path: '/products/$productId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProcurementReceivingRoute =
+  AuthenticatedProcurementReceivingRouteImport.update({
+    id: '/procurement/receiving',
+    path: '/procurement/receiving',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProcurementDashboardRoute =
@@ -651,6 +684,12 @@ const AuthenticatedJobsCalendarRoute =
     path: '/jobs/calendar',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedInvoicesInvoiceIdRoute =
+  AuthenticatedInvoicesInvoiceIdRouteImport.update({
+    id: '/invoices/$invoiceId',
+    path: '/invoices/$invoiceId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedInventoryReceivingRoute =
   AuthenticatedInventoryReceivingRouteImport.update({
     id: '/inventory/receiving',
@@ -669,16 +708,16 @@ const AuthenticatedInventoryForecastingRoute =
     path: '/inventory/forecasting',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedInventoryDashboardRoute =
-  AuthenticatedInventoryDashboardRouteImport.update({
-    id: '/inventory/dashboard',
-    path: '/inventory/dashboard',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedInventoryCountsRoute =
   AuthenticatedInventoryCountsRouteImport.update({
     id: '/inventory/counts',
     path: '/inventory/counts',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryBrowserRoute =
+  AuthenticatedInventoryBrowserRouteImport.update({
+    id: '/inventory/browser',
+    path: '/inventory/browser',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedInventoryAnalyticsRoute =
@@ -739,12 +778,6 @@ const AuthenticatedFinancialPaymentPlansRoute =
   AuthenticatedFinancialPaymentPlansRouteImport.update({
     id: '/financial/payment-plans',
     path: '/financial/payment-plans',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedFinancialCreditNotesRoute =
-  AuthenticatedFinancialCreditNotesRouteImport.update({
-    id: '/financial/credit-notes',
-    path: '/financial/credit-notes',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedFinancialArAgingRoute =
@@ -813,6 +846,24 @@ const AuthenticatedReportsCustomersIndexRoute =
     path: '/reports/customers/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedFinancialInvoicesIndexRoute =
+  AuthenticatedFinancialInvoicesIndexRouteImport.update({
+    id: '/financial/invoices/',
+    path: '/financial/invoices/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialCreditNotesIndexRoute =
+  AuthenticatedFinancialCreditNotesIndexRouteImport.update({
+    id: '/financial/credit-notes/',
+    path: '/financial/credit-notes/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialAnalyticsIndexRoute =
+  AuthenticatedFinancialAnalyticsIndexRouteImport.update({
+    id: '/financial/analytics/',
+    path: '/financial/analytics/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCustomersSegmentsIndexRoute =
   AuthenticatedCustomersSegmentsIndexRouteImport.update({
     id: '/customers/segments/',
@@ -823,6 +874,12 @@ const AuthenticatedCommunicationsSignaturesIndexRoute =
   AuthenticatedCommunicationsSignaturesIndexRouteImport.update({
     id: '/communications/signatures/',
     path: '/communications/signatures/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsInboxIndexRoute =
+  AuthenticatedCommunicationsInboxIndexRouteImport.update({
+    id: '/communications/inbox/',
+    path: '/communications/inbox/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedCommunicationsEmailsIndexRoute =
@@ -873,6 +930,22 @@ const AuthenticatedAdminActivitiesIndexRoute =
     path: '/admin/activities/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const ApiTrackOpenEmailIdRoute = ApiTrackOpenEmailIdRouteImport.update({
+  id: '/api/track/open/$emailId',
+  path: '/api/track/open/$emailId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOauthSyncConnectionIdRoute =
+  ApiOauthSyncConnectionIdRouteImport.update({
+    id: '/api/oauth/sync/$connectionId',
+    path: '/api/oauth/sync/$connectionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAiCostBudgetRoute = ApiAiCostBudgetRouteImport.update({
+  id: '/api/ai/cost/budget',
+  path: '/api/ai/cost/budget',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSupportWarrantiesWarrantyIdRoute =
   AuthenticatedSupportWarrantiesWarrantyIdRouteImport.update({
     id: '/support/warranties/$warrantyId',
@@ -927,6 +1000,18 @@ const AuthenticatedJobsAssignmentsAssignmentIdRoute =
     path: '/jobs/assignments/$assignmentId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedFinancialInvoicesInvoiceIdRoute =
+  AuthenticatedFinancialInvoicesInvoiceIdRouteImport.update({
+    id: '/financial/invoices/$invoiceId',
+    path: '/financial/invoices/$invoiceId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialCreditNotesCreditNoteIdRoute =
+  AuthenticatedFinancialCreditNotesCreditNoteIdRouteImport.update({
+    id: '/financial/credit-notes/$creditNoteId',
+    path: '/financial/credit-notes/$creditNoteId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCustomersCustomerIdEditRoute =
   AuthenticatedCustomersCustomerIdEditRouteImport.update({
     id: '/customers/$customerId_/edit',
@@ -939,10 +1024,28 @@ const AuthenticatedCommunicationsSettingsPreferencesRoute =
     path: '/communications/settings/preferences',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCommunicationsSettingsInboxAccountsRoute =
+  AuthenticatedCommunicationsSettingsInboxAccountsRouteImport.update({
+    id: '/communications/settings/inbox-accounts',
+    path: '/communications/settings/inbox-accounts',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsEmailsHistoryRoute =
+  AuthenticatedCommunicationsEmailsHistoryRouteImport.update({
+    id: '/communications/emails/history',
+    path: '/communications/emails/history',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCommunicationsCampaignsNewRoute =
   AuthenticatedCommunicationsCampaignsNewRouteImport.update({
     id: '/communications/campaigns/new',
     path: '/communications/campaigns/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsCampaignsAnalyticsRoute =
+  AuthenticatedCommunicationsCampaignsAnalyticsRouteImport.update({
+    id: '/communications/campaigns/analytics',
+    path: '/communications/campaigns/analytics',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedCommunicationsCampaignsCampaignIdRoute =
@@ -981,11 +1084,34 @@ const AuthenticatedCommunicationsEmailsTemplatesIndexRoute =
     path: '/communications/emails/templates/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const ApiTrackClickEmailIdLinkIdRoute =
+  ApiTrackClickEmailIdLinkIdRouteImport.update({
+    id: '/api/track/click/$emailId/$linkId',
+    path: '/api/track/click/$emailId/$linkId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAiAgentTaskIdStatusRoute = ApiAiAgentTaskIdStatusRouteImport.update({
+  id: '/api/ai/agent/$taskId/status',
+  path: '/api/ai/agent/$taskId/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedProjectsProjectIdVisitsVisitIdRoute =
   AuthenticatedProjectsProjectIdVisitsVisitIdRouteImport.update({
     id: '/visits/$visitId',
     path: '/visits/$visitId',
     getParentRoute: () => AuthenticatedProjectsProjectIdRoute,
+  } as any)
+const AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute =
+  AuthenticatedCommunicationsSettingsInboxAccountsCallbackRouteImport.update({
+    id: '/callback',
+    path: '/callback',
+    getParentRoute: () => AuthenticatedCommunicationsSettingsInboxAccountsRoute,
+  } as any)
+const AuthenticatedCommunicationsCampaignsCampaignIdEditRoute =
+  AuthenticatedCommunicationsCampaignsCampaignIdEditRouteImport.update({
+    id: '/edit',
+    path: '/edit',
+    getParentRoute: () => AuthenticatedCommunicationsCampaignsCampaignIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -1000,7 +1126,6 @@ export interface FileRoutesByFullPath {
   '/update-password': typeof UpdatePasswordRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
-  '/protected': typeof ProtectedProtectedRoute
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/error': typeof AuthErrorRoute
   '/feedback/$token': typeof FeedbackTokenRoute
@@ -1011,7 +1136,6 @@ export interface FileRoutesByFullPath {
   '/customers/duplicates': typeof AuthenticatedCustomersDuplicatesRoute
   '/customers/new': typeof AuthenticatedCustomersNewRoute
   '/financial/ar-aging': typeof AuthenticatedFinancialArAgingRoute
-  '/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesRoute
   '/financial/payment-plans': typeof AuthenticatedFinancialPaymentPlansRoute
   '/financial/reminders': typeof AuthenticatedFinancialRemindersRoute
   '/financial/revenue': typeof AuthenticatedFinancialRevenueRoute
@@ -1022,11 +1146,12 @@ export interface FileRoutesByFullPath {
   '/inventory/$itemId': typeof AuthenticatedInventoryItemIdRoute
   '/inventory/alerts': typeof AuthenticatedInventoryAlertsRoute
   '/inventory/analytics': typeof AuthenticatedInventoryAnalyticsRoute
+  '/inventory/browser': typeof AuthenticatedInventoryBrowserRoute
   '/inventory/counts': typeof AuthenticatedInventoryCountsRoute
-  '/inventory/dashboard': typeof AuthenticatedInventoryDashboardRoute
   '/inventory/forecasting': typeof AuthenticatedInventoryForecastingRoute
   '/inventory/locations': typeof AuthenticatedInventoryLocationsRoute
   '/inventory/receiving': typeof AuthenticatedInventoryReceivingRoute
+  '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/jobs/calendar': typeof AuthenticatedJobsCalendarRoute
   '/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
   '/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
@@ -1039,6 +1164,7 @@ export interface FileRoutesByFullPath {
   '/pipeline/$opportunityId': typeof AuthenticatedPipelineOpportunityIdRoute
   '/pipeline/new': typeof AuthenticatedPipelineNewRoute
   '/procurement/dashboard': typeof AuthenticatedProcurementDashboardRoute
+  '/procurement/receiving': typeof AuthenticatedProcurementReceivingRoute
   '/products/$productId': typeof AuthenticatedProductsProductIdRouteWithChildren
   '/products/import': typeof AuthenticatedProductsImportRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
@@ -1046,6 +1172,7 @@ export interface FileRoutesByFullPath {
   '/purchase-orders/$poId': typeof AuthenticatedPurchaseOrdersPoIdRoute
   '/purchase-orders/create': typeof AuthenticatedPurchaseOrdersCreateRoute
   '/reports/expiring-warranties': typeof AuthenticatedReportsExpiringWarrantiesRoute
+  '/reports/financial': typeof AuthenticatedReportsFinancialRoute
   '/reports/job-costing': typeof AuthenticatedReportsJobCostingRoute
   '/reports/pipeline-forecast': typeof AuthenticatedReportsPipelineForecastRoute
   '/reports/warranties': typeof AuthenticatedReportsWarrantiesRoute
@@ -1081,9 +1208,11 @@ export interface FileRoutesByFullPath {
   '/financial/': typeof AuthenticatedFinancialIndexRoute
   '/installers/': typeof AuthenticatedInstallersIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/jobs/': typeof AuthenticatedJobsIndexRoute
   '/mobile/': typeof AuthenticatedMobileIndexRoute
   '/my-tasks/': typeof AuthenticatedMyTasksIndexRoute
+  '/onboarding/': typeof AuthenticatedOnboardingIndexRoute
   '/orders/': typeof AuthenticatedOrdersIndexRoute
   '/pipeline/': typeof AuthenticatedPipelineIndexRoute
   '/procurement/': typeof AuthenticatedProcurementIndexRoute
@@ -1099,10 +1228,15 @@ export interface FileRoutesByFullPath {
   '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
   '/admin/users/import': typeof AuthenticatedAdminUsersImportRoute
   '/admin/users/invite': typeof AuthenticatedAdminUsersInviteRoute
-  '/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  '/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRouteWithChildren
+  '/communications/campaigns/analytics': typeof AuthenticatedCommunicationsCampaignsAnalyticsRoute
   '/communications/campaigns/new': typeof AuthenticatedCommunicationsCampaignsNewRoute
+  '/communications/emails/history': typeof AuthenticatedCommunicationsEmailsHistoryRoute
+  '/communications/settings/inbox-accounts': typeof AuthenticatedCommunicationsSettingsInboxAccountsRouteWithChildren
   '/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/customers/$customerId/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
+  '/financial/credit-notes/$creditNoteId': typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
+  '/financial/invoices/$invoiceId': typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   '/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
@@ -1112,6 +1246,9 @@ export interface FileRoutesByFullPath {
   '/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
   '/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
   '/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
+  '/api/ai/cost/budget': typeof ApiAiCostBudgetRoute
+  '/api/oauth/sync/$connectionId': typeof ApiOauthSyncConnectionIdRoute
+  '/api/track/open/$emailId': typeof ApiTrackOpenEmailIdRoute
   '/admin/activities/': typeof AuthenticatedAdminActivitiesIndexRoute
   '/admin/audit/': typeof AuthenticatedAdminAuditIndexRoute
   '/admin/groups/': typeof AuthenticatedAdminGroupsIndexRoute
@@ -1120,15 +1257,23 @@ export interface FileRoutesByFullPath {
   '/communications/calls/': typeof AuthenticatedCommunicationsCallsIndexRoute
   '/communications/campaigns/': typeof AuthenticatedCommunicationsCampaignsIndexRoute
   '/communications/emails/': typeof AuthenticatedCommunicationsEmailsIndexRoute
+  '/communications/inbox/': typeof AuthenticatedCommunicationsInboxIndexRoute
   '/communications/signatures/': typeof AuthenticatedCommunicationsSignaturesIndexRoute
   '/customers/segments/': typeof AuthenticatedCustomersSegmentsIndexRoute
+  '/financial/analytics/': typeof AuthenticatedFinancialAnalyticsIndexRoute
+  '/financial/credit-notes/': typeof AuthenticatedFinancialCreditNotesIndexRoute
+  '/financial/invoices/': typeof AuthenticatedFinancialInvoicesIndexRoute
   '/reports/customers/': typeof AuthenticatedReportsCustomersIndexRoute
   '/reports/procurement/': typeof AuthenticatedReportsProcurementIndexRoute
   '/support/claims/': typeof AuthenticatedSupportClaimsIndexRoute
   '/support/issues/': typeof AuthenticatedSupportIssuesIndexRoute
   '/support/rmas/': typeof AuthenticatedSupportRmasIndexRoute
   '/support/warranties/': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/communications/campaigns/$campaignId/edit': typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
+  '/communications/settings/inbox-accounts/callback': typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   '/projects/$projectId/visits/$visitId': typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
+  '/api/ai/agent/$taskId/status': typeof ApiAiAgentTaskIdStatusRoute
+  '/api/track/click/$emailId/$linkId': typeof ApiTrackClickEmailIdLinkIdRoute
   '/communications/emails/templates/': typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -1142,7 +1287,6 @@ export interface FileRoutesByTo {
   '/sign-up-success': typeof SignUpSuccessRoute
   '/update-password': typeof UpdatePasswordRoute
   '/profile': typeof AuthenticatedProfileRoute
-  '/protected': typeof ProtectedProtectedRoute
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/error': typeof AuthErrorRoute
   '/feedback/$token': typeof FeedbackTokenRoute
@@ -1153,7 +1297,6 @@ export interface FileRoutesByTo {
   '/customers/duplicates': typeof AuthenticatedCustomersDuplicatesRoute
   '/customers/new': typeof AuthenticatedCustomersNewRoute
   '/financial/ar-aging': typeof AuthenticatedFinancialArAgingRoute
-  '/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesRoute
   '/financial/payment-plans': typeof AuthenticatedFinancialPaymentPlansRoute
   '/financial/reminders': typeof AuthenticatedFinancialRemindersRoute
   '/financial/revenue': typeof AuthenticatedFinancialRevenueRoute
@@ -1164,11 +1307,12 @@ export interface FileRoutesByTo {
   '/inventory/$itemId': typeof AuthenticatedInventoryItemIdRoute
   '/inventory/alerts': typeof AuthenticatedInventoryAlertsRoute
   '/inventory/analytics': typeof AuthenticatedInventoryAnalyticsRoute
+  '/inventory/browser': typeof AuthenticatedInventoryBrowserRoute
   '/inventory/counts': typeof AuthenticatedInventoryCountsRoute
-  '/inventory/dashboard': typeof AuthenticatedInventoryDashboardRoute
   '/inventory/forecasting': typeof AuthenticatedInventoryForecastingRoute
   '/inventory/locations': typeof AuthenticatedInventoryLocationsRoute
   '/inventory/receiving': typeof AuthenticatedInventoryReceivingRoute
+  '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/jobs/calendar': typeof AuthenticatedJobsCalendarRoute
   '/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
   '/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
@@ -1181,6 +1325,7 @@ export interface FileRoutesByTo {
   '/pipeline/$opportunityId': typeof AuthenticatedPipelineOpportunityIdRoute
   '/pipeline/new': typeof AuthenticatedPipelineNewRoute
   '/procurement/dashboard': typeof AuthenticatedProcurementDashboardRoute
+  '/procurement/receiving': typeof AuthenticatedProcurementReceivingRoute
   '/products/$productId': typeof AuthenticatedProductsProductIdRouteWithChildren
   '/products/import': typeof AuthenticatedProductsImportRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
@@ -1188,6 +1333,7 @@ export interface FileRoutesByTo {
   '/purchase-orders/$poId': typeof AuthenticatedPurchaseOrdersPoIdRoute
   '/purchase-orders/create': typeof AuthenticatedPurchaseOrdersCreateRoute
   '/reports/expiring-warranties': typeof AuthenticatedReportsExpiringWarrantiesRoute
+  '/reports/financial': typeof AuthenticatedReportsFinancialRoute
   '/reports/job-costing': typeof AuthenticatedReportsJobCostingRoute
   '/reports/pipeline-forecast': typeof AuthenticatedReportsPipelineForecastRoute
   '/reports/warranties': typeof AuthenticatedReportsWarrantiesRoute
@@ -1223,9 +1369,11 @@ export interface FileRoutesByTo {
   '/financial': typeof AuthenticatedFinancialIndexRoute
   '/installers': typeof AuthenticatedInstallersIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
+  '/invoices': typeof AuthenticatedInvoicesIndexRoute
   '/jobs': typeof AuthenticatedJobsIndexRoute
   '/mobile': typeof AuthenticatedMobileIndexRoute
   '/my-tasks': typeof AuthenticatedMyTasksIndexRoute
+  '/onboarding': typeof AuthenticatedOnboardingIndexRoute
   '/orders': typeof AuthenticatedOrdersIndexRoute
   '/pipeline': typeof AuthenticatedPipelineIndexRoute
   '/procurement': typeof AuthenticatedProcurementIndexRoute
@@ -1241,10 +1389,15 @@ export interface FileRoutesByTo {
   '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
   '/admin/users/import': typeof AuthenticatedAdminUsersImportRoute
   '/admin/users/invite': typeof AuthenticatedAdminUsersInviteRoute
-  '/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  '/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRouteWithChildren
+  '/communications/campaigns/analytics': typeof AuthenticatedCommunicationsCampaignsAnalyticsRoute
   '/communications/campaigns/new': typeof AuthenticatedCommunicationsCampaignsNewRoute
+  '/communications/emails/history': typeof AuthenticatedCommunicationsEmailsHistoryRoute
+  '/communications/settings/inbox-accounts': typeof AuthenticatedCommunicationsSettingsInboxAccountsRouteWithChildren
   '/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/customers/$customerId/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
+  '/financial/credit-notes/$creditNoteId': typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
+  '/financial/invoices/$invoiceId': typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   '/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
@@ -1254,6 +1407,9 @@ export interface FileRoutesByTo {
   '/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
   '/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
   '/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
+  '/api/ai/cost/budget': typeof ApiAiCostBudgetRoute
+  '/api/oauth/sync/$connectionId': typeof ApiOauthSyncConnectionIdRoute
+  '/api/track/open/$emailId': typeof ApiTrackOpenEmailIdRoute
   '/admin/activities': typeof AuthenticatedAdminActivitiesIndexRoute
   '/admin/audit': typeof AuthenticatedAdminAuditIndexRoute
   '/admin/groups': typeof AuthenticatedAdminGroupsIndexRoute
@@ -1262,22 +1418,29 @@ export interface FileRoutesByTo {
   '/communications/calls': typeof AuthenticatedCommunicationsCallsIndexRoute
   '/communications/campaigns': typeof AuthenticatedCommunicationsCampaignsIndexRoute
   '/communications/emails': typeof AuthenticatedCommunicationsEmailsIndexRoute
+  '/communications/inbox': typeof AuthenticatedCommunicationsInboxIndexRoute
   '/communications/signatures': typeof AuthenticatedCommunicationsSignaturesIndexRoute
   '/customers/segments': typeof AuthenticatedCustomersSegmentsIndexRoute
+  '/financial/analytics': typeof AuthenticatedFinancialAnalyticsIndexRoute
+  '/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesIndexRoute
+  '/financial/invoices': typeof AuthenticatedFinancialInvoicesIndexRoute
   '/reports/customers': typeof AuthenticatedReportsCustomersIndexRoute
   '/reports/procurement': typeof AuthenticatedReportsProcurementIndexRoute
   '/support/claims': typeof AuthenticatedSupportClaimsIndexRoute
   '/support/issues': typeof AuthenticatedSupportIssuesIndexRoute
   '/support/rmas': typeof AuthenticatedSupportRmasIndexRoute
   '/support/warranties': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/communications/campaigns/$campaignId/edit': typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
+  '/communications/settings/inbox-accounts/callback': typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   '/projects/$projectId/visits/$visitId': typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
+  '/api/ai/agent/$taskId/status': typeof ApiAiAgentTaskIdStatusRoute
+  '/api/track/click/$emailId/$linkId': typeof ApiTrackClickEmailIdLinkIdRoute
   '/communications/emails/templates': typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
-  '/_protected': typeof ProtectedRouteWithChildren
   '/accept-invitation': typeof AcceptInvitationRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -1288,7 +1451,6 @@ export interface FileRoutesById {
   '/update-password': typeof UpdatePasswordRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
-  '/_protected/protected': typeof ProtectedProtectedRoute
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/error': typeof AuthErrorRoute
   '/feedback/$token': typeof FeedbackTokenRoute
@@ -1299,7 +1461,6 @@ export interface FileRoutesById {
   '/_authenticated/customers/duplicates': typeof AuthenticatedCustomersDuplicatesRoute
   '/_authenticated/customers/new': typeof AuthenticatedCustomersNewRoute
   '/_authenticated/financial/ar-aging': typeof AuthenticatedFinancialArAgingRoute
-  '/_authenticated/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesRoute
   '/_authenticated/financial/payment-plans': typeof AuthenticatedFinancialPaymentPlansRoute
   '/_authenticated/financial/reminders': typeof AuthenticatedFinancialRemindersRoute
   '/_authenticated/financial/revenue': typeof AuthenticatedFinancialRevenueRoute
@@ -1310,11 +1471,12 @@ export interface FileRoutesById {
   '/_authenticated/inventory/$itemId': typeof AuthenticatedInventoryItemIdRoute
   '/_authenticated/inventory/alerts': typeof AuthenticatedInventoryAlertsRoute
   '/_authenticated/inventory/analytics': typeof AuthenticatedInventoryAnalyticsRoute
+  '/_authenticated/inventory/browser': typeof AuthenticatedInventoryBrowserRoute
   '/_authenticated/inventory/counts': typeof AuthenticatedInventoryCountsRoute
-  '/_authenticated/inventory/dashboard': typeof AuthenticatedInventoryDashboardRoute
   '/_authenticated/inventory/forecasting': typeof AuthenticatedInventoryForecastingRoute
   '/_authenticated/inventory/locations': typeof AuthenticatedInventoryLocationsRoute
   '/_authenticated/inventory/receiving': typeof AuthenticatedInventoryReceivingRoute
+  '/_authenticated/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/_authenticated/jobs/calendar': typeof AuthenticatedJobsCalendarRoute
   '/_authenticated/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
   '/_authenticated/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
@@ -1327,6 +1489,7 @@ export interface FileRoutesById {
   '/_authenticated/pipeline/$opportunityId': typeof AuthenticatedPipelineOpportunityIdRoute
   '/_authenticated/pipeline/new': typeof AuthenticatedPipelineNewRoute
   '/_authenticated/procurement/dashboard': typeof AuthenticatedProcurementDashboardRoute
+  '/_authenticated/procurement/receiving': typeof AuthenticatedProcurementReceivingRoute
   '/_authenticated/products/$productId': typeof AuthenticatedProductsProductIdRouteWithChildren
   '/_authenticated/products/import': typeof AuthenticatedProductsImportRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
@@ -1334,6 +1497,7 @@ export interface FileRoutesById {
   '/_authenticated/purchase-orders/$poId': typeof AuthenticatedPurchaseOrdersPoIdRoute
   '/_authenticated/purchase-orders/create': typeof AuthenticatedPurchaseOrdersCreateRoute
   '/_authenticated/reports/expiring-warranties': typeof AuthenticatedReportsExpiringWarrantiesRoute
+  '/_authenticated/reports/financial': typeof AuthenticatedReportsFinancialRoute
   '/_authenticated/reports/job-costing': typeof AuthenticatedReportsJobCostingRoute
   '/_authenticated/reports/pipeline-forecast': typeof AuthenticatedReportsPipelineForecastRoute
   '/_authenticated/reports/warranties': typeof AuthenticatedReportsWarrantiesRoute
@@ -1369,9 +1533,11 @@ export interface FileRoutesById {
   '/_authenticated/financial/': typeof AuthenticatedFinancialIndexRoute
   '/_authenticated/installers/': typeof AuthenticatedInstallersIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/_authenticated/jobs/': typeof AuthenticatedJobsIndexRoute
   '/_authenticated/mobile/': typeof AuthenticatedMobileIndexRoute
   '/_authenticated/my-tasks/': typeof AuthenticatedMyTasksIndexRoute
+  '/_authenticated/onboarding/': typeof AuthenticatedOnboardingIndexRoute
   '/_authenticated/orders/': typeof AuthenticatedOrdersIndexRoute
   '/_authenticated/pipeline/': typeof AuthenticatedPipelineIndexRoute
   '/_authenticated/procurement/': typeof AuthenticatedProcurementIndexRoute
@@ -1387,10 +1553,15 @@ export interface FileRoutesById {
   '/_authenticated/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
   '/_authenticated/admin/users/import': typeof AuthenticatedAdminUsersImportRoute
   '/_authenticated/admin/users/invite': typeof AuthenticatedAdminUsersInviteRoute
-  '/_authenticated/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  '/_authenticated/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRouteWithChildren
+  '/_authenticated/communications/campaigns/analytics': typeof AuthenticatedCommunicationsCampaignsAnalyticsRoute
   '/_authenticated/communications/campaigns/new': typeof AuthenticatedCommunicationsCampaignsNewRoute
+  '/_authenticated/communications/emails/history': typeof AuthenticatedCommunicationsEmailsHistoryRoute
+  '/_authenticated/communications/settings/inbox-accounts': typeof AuthenticatedCommunicationsSettingsInboxAccountsRouteWithChildren
   '/_authenticated/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/_authenticated/customers/$customerId_/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
+  '/_authenticated/financial/credit-notes/$creditNoteId': typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
+  '/_authenticated/financial/invoices/$invoiceId': typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   '/_authenticated/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   '/_authenticated/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/_authenticated/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
@@ -1400,6 +1571,9 @@ export interface FileRoutesById {
   '/_authenticated/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
   '/_authenticated/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
   '/_authenticated/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
+  '/api/ai/cost/budget': typeof ApiAiCostBudgetRoute
+  '/api/oauth/sync/$connectionId': typeof ApiOauthSyncConnectionIdRoute
+  '/api/track/open/$emailId': typeof ApiTrackOpenEmailIdRoute
   '/_authenticated/admin/activities/': typeof AuthenticatedAdminActivitiesIndexRoute
   '/_authenticated/admin/audit/': typeof AuthenticatedAdminAuditIndexRoute
   '/_authenticated/admin/groups/': typeof AuthenticatedAdminGroupsIndexRoute
@@ -1408,15 +1582,23 @@ export interface FileRoutesById {
   '/_authenticated/communications/calls/': typeof AuthenticatedCommunicationsCallsIndexRoute
   '/_authenticated/communications/campaigns/': typeof AuthenticatedCommunicationsCampaignsIndexRoute
   '/_authenticated/communications/emails/': typeof AuthenticatedCommunicationsEmailsIndexRoute
+  '/_authenticated/communications/inbox/': typeof AuthenticatedCommunicationsInboxIndexRoute
   '/_authenticated/communications/signatures/': typeof AuthenticatedCommunicationsSignaturesIndexRoute
   '/_authenticated/customers/segments/': typeof AuthenticatedCustomersSegmentsIndexRoute
+  '/_authenticated/financial/analytics/': typeof AuthenticatedFinancialAnalyticsIndexRoute
+  '/_authenticated/financial/credit-notes/': typeof AuthenticatedFinancialCreditNotesIndexRoute
+  '/_authenticated/financial/invoices/': typeof AuthenticatedFinancialInvoicesIndexRoute
   '/_authenticated/reports/customers/': typeof AuthenticatedReportsCustomersIndexRoute
   '/_authenticated/reports/procurement/': typeof AuthenticatedReportsProcurementIndexRoute
   '/_authenticated/support/claims/': typeof AuthenticatedSupportClaimsIndexRoute
   '/_authenticated/support/issues/': typeof AuthenticatedSupportIssuesIndexRoute
   '/_authenticated/support/rmas/': typeof AuthenticatedSupportRmasIndexRoute
   '/_authenticated/support/warranties/': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/_authenticated/communications/campaigns/$campaignId/edit': typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
+  '/_authenticated/communications/settings/inbox-accounts/callback': typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   '/_authenticated/projects/$projectId/visits/$visitId': typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
+  '/api/ai/agent/$taskId/status': typeof ApiAiAgentTaskIdStatusRoute
+  '/api/track/click/$emailId/$linkId': typeof ApiTrackClickEmailIdLinkIdRoute
   '/_authenticated/communications/emails/templates/': typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 export interface FileRouteTypes {
@@ -1433,7 +1615,6 @@ export interface FileRouteTypes {
     | '/update-password'
     | '/profile'
     | '/settings'
-    | '/protected'
     | '/auth/confirm'
     | '/auth/error'
     | '/feedback/$token'
@@ -1444,7 +1625,6 @@ export interface FileRouteTypes {
     | '/customers/duplicates'
     | '/customers/new'
     | '/financial/ar-aging'
-    | '/financial/credit-notes'
     | '/financial/payment-plans'
     | '/financial/reminders'
     | '/financial/revenue'
@@ -1455,11 +1635,12 @@ export interface FileRouteTypes {
     | '/inventory/$itemId'
     | '/inventory/alerts'
     | '/inventory/analytics'
+    | '/inventory/browser'
     | '/inventory/counts'
-    | '/inventory/dashboard'
     | '/inventory/forecasting'
     | '/inventory/locations'
     | '/inventory/receiving'
+    | '/invoices/$invoiceId'
     | '/jobs/calendar'
     | '/jobs/kanban'
     | '/jobs/timeline'
@@ -1472,6 +1653,7 @@ export interface FileRouteTypes {
     | '/pipeline/$opportunityId'
     | '/pipeline/new'
     | '/procurement/dashboard'
+    | '/procurement/receiving'
     | '/products/$productId'
     | '/products/import'
     | '/products/new'
@@ -1479,6 +1661,7 @@ export interface FileRouteTypes {
     | '/purchase-orders/$poId'
     | '/purchase-orders/create'
     | '/reports/expiring-warranties'
+    | '/reports/financial'
     | '/reports/job-costing'
     | '/reports/pipeline-forecast'
     | '/reports/warranties'
@@ -1514,9 +1697,11 @@ export interface FileRouteTypes {
     | '/financial/'
     | '/installers/'
     | '/inventory/'
+    | '/invoices/'
     | '/jobs/'
     | '/mobile/'
     | '/my-tasks/'
+    | '/onboarding/'
     | '/orders/'
     | '/pipeline/'
     | '/procurement/'
@@ -1533,9 +1718,14 @@ export interface FileRouteTypes {
     | '/admin/users/import'
     | '/admin/users/invite'
     | '/communications/campaigns/$campaignId'
+    | '/communications/campaigns/analytics'
     | '/communications/campaigns/new'
+    | '/communications/emails/history'
+    | '/communications/settings/inbox-accounts'
     | '/communications/settings/preferences'
     | '/customers/$customerId/edit'
+    | '/financial/credit-notes/$creditNoteId'
+    | '/financial/invoices/$invoiceId'
     | '/jobs/assignments/$assignmentId'
     | '/pipeline/quotes/$quoteId'
     | '/products/$productId/edit'
@@ -1545,6 +1735,9 @@ export interface FileRouteTypes {
     | '/support/issues/new'
     | '/support/rmas/$rmaId'
     | '/support/warranties/$warrantyId'
+    | '/api/ai/cost/budget'
+    | '/api/oauth/sync/$connectionId'
+    | '/api/track/open/$emailId'
     | '/admin/activities/'
     | '/admin/audit/'
     | '/admin/groups/'
@@ -1553,15 +1746,23 @@ export interface FileRouteTypes {
     | '/communications/calls/'
     | '/communications/campaigns/'
     | '/communications/emails/'
+    | '/communications/inbox/'
     | '/communications/signatures/'
     | '/customers/segments/'
+    | '/financial/analytics/'
+    | '/financial/credit-notes/'
+    | '/financial/invoices/'
     | '/reports/customers/'
     | '/reports/procurement/'
     | '/support/claims/'
     | '/support/issues/'
     | '/support/rmas/'
     | '/support/warranties/'
+    | '/communications/campaigns/$campaignId/edit'
+    | '/communications/settings/inbox-accounts/callback'
     | '/projects/$projectId/visits/$visitId'
+    | '/api/ai/agent/$taskId/status'
+    | '/api/track/click/$emailId/$linkId'
     | '/communications/emails/templates/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1575,7 +1776,6 @@ export interface FileRouteTypes {
     | '/sign-up-success'
     | '/update-password'
     | '/profile'
-    | '/protected'
     | '/auth/confirm'
     | '/auth/error'
     | '/feedback/$token'
@@ -1586,7 +1786,6 @@ export interface FileRouteTypes {
     | '/customers/duplicates'
     | '/customers/new'
     | '/financial/ar-aging'
-    | '/financial/credit-notes'
     | '/financial/payment-plans'
     | '/financial/reminders'
     | '/financial/revenue'
@@ -1597,11 +1796,12 @@ export interface FileRouteTypes {
     | '/inventory/$itemId'
     | '/inventory/alerts'
     | '/inventory/analytics'
+    | '/inventory/browser'
     | '/inventory/counts'
-    | '/inventory/dashboard'
     | '/inventory/forecasting'
     | '/inventory/locations'
     | '/inventory/receiving'
+    | '/invoices/$invoiceId'
     | '/jobs/calendar'
     | '/jobs/kanban'
     | '/jobs/timeline'
@@ -1614,6 +1814,7 @@ export interface FileRouteTypes {
     | '/pipeline/$opportunityId'
     | '/pipeline/new'
     | '/procurement/dashboard'
+    | '/procurement/receiving'
     | '/products/$productId'
     | '/products/import'
     | '/products/new'
@@ -1621,6 +1822,7 @@ export interface FileRouteTypes {
     | '/purchase-orders/$poId'
     | '/purchase-orders/create'
     | '/reports/expiring-warranties'
+    | '/reports/financial'
     | '/reports/job-costing'
     | '/reports/pipeline-forecast'
     | '/reports/warranties'
@@ -1656,9 +1858,11 @@ export interface FileRouteTypes {
     | '/financial'
     | '/installers'
     | '/inventory'
+    | '/invoices'
     | '/jobs'
     | '/mobile'
     | '/my-tasks'
+    | '/onboarding'
     | '/orders'
     | '/pipeline'
     | '/procurement'
@@ -1675,9 +1879,14 @@ export interface FileRouteTypes {
     | '/admin/users/import'
     | '/admin/users/invite'
     | '/communications/campaigns/$campaignId'
+    | '/communications/campaigns/analytics'
     | '/communications/campaigns/new'
+    | '/communications/emails/history'
+    | '/communications/settings/inbox-accounts'
     | '/communications/settings/preferences'
     | '/customers/$customerId/edit'
+    | '/financial/credit-notes/$creditNoteId'
+    | '/financial/invoices/$invoiceId'
     | '/jobs/assignments/$assignmentId'
     | '/pipeline/quotes/$quoteId'
     | '/products/$productId/edit'
@@ -1687,6 +1896,9 @@ export interface FileRouteTypes {
     | '/support/issues/new'
     | '/support/rmas/$rmaId'
     | '/support/warranties/$warrantyId'
+    | '/api/ai/cost/budget'
+    | '/api/oauth/sync/$connectionId'
+    | '/api/track/open/$emailId'
     | '/admin/activities'
     | '/admin/audit'
     | '/admin/groups'
@@ -1695,21 +1907,28 @@ export interface FileRouteTypes {
     | '/communications/calls'
     | '/communications/campaigns'
     | '/communications/emails'
+    | '/communications/inbox'
     | '/communications/signatures'
     | '/customers/segments'
+    | '/financial/analytics'
+    | '/financial/credit-notes'
+    | '/financial/invoices'
     | '/reports/customers'
     | '/reports/procurement'
     | '/support/claims'
     | '/support/issues'
     | '/support/rmas'
     | '/support/warranties'
+    | '/communications/campaigns/$campaignId/edit'
+    | '/communications/settings/inbox-accounts/callback'
     | '/projects/$projectId/visits/$visitId'
+    | '/api/ai/agent/$taskId/status'
+    | '/api/track/click/$emailId/$linkId'
     | '/communications/emails/templates'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
-    | '/_protected'
     | '/accept-invitation'
     | '/forgot-password'
     | '/login'
@@ -1720,7 +1939,6 @@ export interface FileRouteTypes {
     | '/update-password'
     | '/_authenticated/profile'
     | '/_authenticated/settings'
-    | '/_protected/protected'
     | '/auth/confirm'
     | '/auth/error'
     | '/feedback/$token'
@@ -1731,7 +1949,6 @@ export interface FileRouteTypes {
     | '/_authenticated/customers/duplicates'
     | '/_authenticated/customers/new'
     | '/_authenticated/financial/ar-aging'
-    | '/_authenticated/financial/credit-notes'
     | '/_authenticated/financial/payment-plans'
     | '/_authenticated/financial/reminders'
     | '/_authenticated/financial/revenue'
@@ -1742,11 +1959,12 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/$itemId'
     | '/_authenticated/inventory/alerts'
     | '/_authenticated/inventory/analytics'
+    | '/_authenticated/inventory/browser'
     | '/_authenticated/inventory/counts'
-    | '/_authenticated/inventory/dashboard'
     | '/_authenticated/inventory/forecasting'
     | '/_authenticated/inventory/locations'
     | '/_authenticated/inventory/receiving'
+    | '/_authenticated/invoices/$invoiceId'
     | '/_authenticated/jobs/calendar'
     | '/_authenticated/jobs/kanban'
     | '/_authenticated/jobs/timeline'
@@ -1759,6 +1977,7 @@ export interface FileRouteTypes {
     | '/_authenticated/pipeline/$opportunityId'
     | '/_authenticated/pipeline/new'
     | '/_authenticated/procurement/dashboard'
+    | '/_authenticated/procurement/receiving'
     | '/_authenticated/products/$productId'
     | '/_authenticated/products/import'
     | '/_authenticated/products/new'
@@ -1766,6 +1985,7 @@ export interface FileRouteTypes {
     | '/_authenticated/purchase-orders/$poId'
     | '/_authenticated/purchase-orders/create'
     | '/_authenticated/reports/expiring-warranties'
+    | '/_authenticated/reports/financial'
     | '/_authenticated/reports/job-costing'
     | '/_authenticated/reports/pipeline-forecast'
     | '/_authenticated/reports/warranties'
@@ -1801,9 +2021,11 @@ export interface FileRouteTypes {
     | '/_authenticated/financial/'
     | '/_authenticated/installers/'
     | '/_authenticated/inventory/'
+    | '/_authenticated/invoices/'
     | '/_authenticated/jobs/'
     | '/_authenticated/mobile/'
     | '/_authenticated/my-tasks/'
+    | '/_authenticated/onboarding/'
     | '/_authenticated/orders/'
     | '/_authenticated/pipeline/'
     | '/_authenticated/procurement/'
@@ -1820,9 +2042,14 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/users/import'
     | '/_authenticated/admin/users/invite'
     | '/_authenticated/communications/campaigns/$campaignId'
+    | '/_authenticated/communications/campaigns/analytics'
     | '/_authenticated/communications/campaigns/new'
+    | '/_authenticated/communications/emails/history'
+    | '/_authenticated/communications/settings/inbox-accounts'
     | '/_authenticated/communications/settings/preferences'
     | '/_authenticated/customers/$customerId_/edit'
+    | '/_authenticated/financial/credit-notes/$creditNoteId'
+    | '/_authenticated/financial/invoices/$invoiceId'
     | '/_authenticated/jobs/assignments/$assignmentId'
     | '/_authenticated/pipeline/quotes/$quoteId'
     | '/_authenticated/products/$productId/edit'
@@ -1832,6 +2059,9 @@ export interface FileRouteTypes {
     | '/_authenticated/support/issues/new'
     | '/_authenticated/support/rmas/$rmaId'
     | '/_authenticated/support/warranties/$warrantyId'
+    | '/api/ai/cost/budget'
+    | '/api/oauth/sync/$connectionId'
+    | '/api/track/open/$emailId'
     | '/_authenticated/admin/activities/'
     | '/_authenticated/admin/audit/'
     | '/_authenticated/admin/groups/'
@@ -1840,22 +2070,29 @@ export interface FileRouteTypes {
     | '/_authenticated/communications/calls/'
     | '/_authenticated/communications/campaigns/'
     | '/_authenticated/communications/emails/'
+    | '/_authenticated/communications/inbox/'
     | '/_authenticated/communications/signatures/'
     | '/_authenticated/customers/segments/'
+    | '/_authenticated/financial/analytics/'
+    | '/_authenticated/financial/credit-notes/'
+    | '/_authenticated/financial/invoices/'
     | '/_authenticated/reports/customers/'
     | '/_authenticated/reports/procurement/'
     | '/_authenticated/support/claims/'
     | '/_authenticated/support/issues/'
     | '/_authenticated/support/rmas/'
     | '/_authenticated/support/warranties/'
+    | '/_authenticated/communications/campaigns/$campaignId/edit'
+    | '/_authenticated/communications/settings/inbox-accounts/callback'
     | '/_authenticated/projects/$projectId/visits/$visitId'
+    | '/api/ai/agent/$taskId/status'
+    | '/api/track/click/$emailId/$linkId'
     | '/_authenticated/communications/emails/templates/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
-  ProtectedRoute: typeof ProtectedRouteWithChildren
   AcceptInvitationRoute: typeof AcceptInvitationRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
@@ -1869,6 +2106,11 @@ export interface RootRouteChildren {
   FeedbackTokenRoute: typeof FeedbackTokenRoute
   PortalConfirmRoute: typeof PortalConfirmRoute
   PortalIndexRoute: typeof PortalIndexRoute
+  ApiAiCostBudgetRoute: typeof ApiAiCostBudgetRoute
+  ApiOauthSyncConnectionIdRoute: typeof ApiOauthSyncConnectionIdRoute
+  ApiTrackOpenEmailIdRoute: typeof ApiTrackOpenEmailIdRoute
+  ApiAiAgentTaskIdStatusRoute: typeof ApiAiAgentTaskIdStatusRoute
+  ApiTrackClickEmailIdLinkIdRoute: typeof ApiTrackClickEmailIdLinkIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1929,13 +2171,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInvitationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_protected': {
-      id: '/_protected'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof ProtectedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -1984,13 +2219,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/confirm'
       preLoaderRoute: typeof AuthConfirmRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_protected/protected': {
-      id: '/_protected/protected'
-      path: '/protected'
-      fullPath: '/protected'
-      preLoaderRoute: typeof ProtectedProtectedRouteImport
-      parentRoute: typeof ProtectedRoute
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -2083,6 +2311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrdersIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/onboarding/': {
+      id: '/_authenticated/onboarding/'
+      path: '/onboarding'
+      fullPath: '/onboarding/'
+      preLoaderRoute: typeof AuthenticatedOnboardingIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/my-tasks/': {
       id: '/_authenticated/my-tasks/'
       path: '/my-tasks'
@@ -2102,6 +2337,13 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/jobs/'
       preLoaderRoute: typeof AuthenticatedJobsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/invoices/': {
+      id: '/_authenticated/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof AuthenticatedInvoicesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory/': {
@@ -2349,6 +2591,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsJobCostingRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/reports/financial': {
+      id: '/_authenticated/reports/financial'
+      path: '/reports/financial'
+      fullPath: '/reports/financial'
+      preLoaderRoute: typeof AuthenticatedReportsFinancialRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports/expiring-warranties': {
       id: '/_authenticated/reports/expiring-warranties'
       path: '/reports/expiring-warranties'
@@ -2396,6 +2645,13 @@ declare module '@tanstack/react-router' {
       path: '/products/$productId'
       fullPath: '/products/$productId'
       preLoaderRoute: typeof AuthenticatedProductsProductIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/procurement/receiving': {
+      id: '/_authenticated/procurement/receiving'
+      path: '/procurement/receiving'
+      fullPath: '/procurement/receiving'
+      preLoaderRoute: typeof AuthenticatedProcurementReceivingRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/procurement/dashboard': {
@@ -2482,6 +2738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedJobsCalendarRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/invoices/$invoiceId': {
+      id: '/_authenticated/invoices/$invoiceId'
+      path: '/invoices/$invoiceId'
+      fullPath: '/invoices/$invoiceId'
+      preLoaderRoute: typeof AuthenticatedInvoicesInvoiceIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/inventory/receiving': {
       id: '/_authenticated/inventory/receiving'
       path: '/inventory/receiving'
@@ -2503,18 +2766,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInventoryForecastingRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/inventory/dashboard': {
-      id: '/_authenticated/inventory/dashboard'
-      path: '/inventory/dashboard'
-      fullPath: '/inventory/dashboard'
-      preLoaderRoute: typeof AuthenticatedInventoryDashboardRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/inventory/counts': {
       id: '/_authenticated/inventory/counts'
       path: '/inventory/counts'
       fullPath: '/inventory/counts'
       preLoaderRoute: typeof AuthenticatedInventoryCountsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/browser': {
+      id: '/_authenticated/inventory/browser'
+      path: '/inventory/browser'
+      fullPath: '/inventory/browser'
+      preLoaderRoute: typeof AuthenticatedInventoryBrowserRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory/analytics': {
@@ -2585,13 +2848,6 @@ declare module '@tanstack/react-router' {
       path: '/financial/payment-plans'
       fullPath: '/financial/payment-plans'
       preLoaderRoute: typeof AuthenticatedFinancialPaymentPlansRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/financial/credit-notes': {
-      id: '/_authenticated/financial/credit-notes'
-      path: '/financial/credit-notes'
-      fullPath: '/financial/credit-notes'
-      preLoaderRoute: typeof AuthenticatedFinancialCreditNotesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/financial/ar-aging': {
@@ -2671,6 +2927,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsCustomersIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/financial/invoices/': {
+      id: '/_authenticated/financial/invoices/'
+      path: '/financial/invoices'
+      fullPath: '/financial/invoices/'
+      preLoaderRoute: typeof AuthenticatedFinancialInvoicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/credit-notes/': {
+      id: '/_authenticated/financial/credit-notes/'
+      path: '/financial/credit-notes'
+      fullPath: '/financial/credit-notes/'
+      preLoaderRoute: typeof AuthenticatedFinancialCreditNotesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/analytics/': {
+      id: '/_authenticated/financial/analytics/'
+      path: '/financial/analytics'
+      fullPath: '/financial/analytics/'
+      preLoaderRoute: typeof AuthenticatedFinancialAnalyticsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/customers/segments/': {
       id: '/_authenticated/customers/segments/'
       path: '/customers/segments'
@@ -2683,6 +2960,13 @@ declare module '@tanstack/react-router' {
       path: '/communications/signatures'
       fullPath: '/communications/signatures/'
       preLoaderRoute: typeof AuthenticatedCommunicationsSignaturesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/inbox/': {
+      id: '/_authenticated/communications/inbox/'
+      path: '/communications/inbox'
+      fullPath: '/communications/inbox/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsInboxIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/communications/emails/': {
@@ -2740,6 +3024,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/activities/'
       preLoaderRoute: typeof AuthenticatedAdminActivitiesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/track/open/$emailId': {
+      id: '/api/track/open/$emailId'
+      path: '/api/track/open/$emailId'
+      fullPath: '/api/track/open/$emailId'
+      preLoaderRoute: typeof ApiTrackOpenEmailIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/sync/$connectionId': {
+      id: '/api/oauth/sync/$connectionId'
+      path: '/api/oauth/sync/$connectionId'
+      fullPath: '/api/oauth/sync/$connectionId'
+      preLoaderRoute: typeof ApiOauthSyncConnectionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/cost/budget': {
+      id: '/api/ai/cost/budget'
+      path: '/api/ai/cost/budget'
+      fullPath: '/api/ai/cost/budget'
+      preLoaderRoute: typeof ApiAiCostBudgetRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/support/warranties/$warrantyId': {
       id: '/_authenticated/support/warranties/$warrantyId'
@@ -2804,6 +3109,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedJobsAssignmentsAssignmentIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/financial/invoices/$invoiceId': {
+      id: '/_authenticated/financial/invoices/$invoiceId'
+      path: '/financial/invoices/$invoiceId'
+      fullPath: '/financial/invoices/$invoiceId'
+      preLoaderRoute: typeof AuthenticatedFinancialInvoicesInvoiceIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/credit-notes/$creditNoteId': {
+      id: '/_authenticated/financial/credit-notes/$creditNoteId'
+      path: '/financial/credit-notes/$creditNoteId'
+      fullPath: '/financial/credit-notes/$creditNoteId'
+      preLoaderRoute: typeof AuthenticatedFinancialCreditNotesCreditNoteIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/customers/$customerId_/edit': {
       id: '/_authenticated/customers/$customerId_/edit'
       path: '/customers/$customerId/edit'
@@ -2818,11 +3137,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommunicationsSettingsPreferencesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/communications/settings/inbox-accounts': {
+      id: '/_authenticated/communications/settings/inbox-accounts'
+      path: '/communications/settings/inbox-accounts'
+      fullPath: '/communications/settings/inbox-accounts'
+      preLoaderRoute: typeof AuthenticatedCommunicationsSettingsInboxAccountsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/emails/history': {
+      id: '/_authenticated/communications/emails/history'
+      path: '/communications/emails/history'
+      fullPath: '/communications/emails/history'
+      preLoaderRoute: typeof AuthenticatedCommunicationsEmailsHistoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/communications/campaigns/new': {
       id: '/_authenticated/communications/campaigns/new'
       path: '/communications/campaigns/new'
       fullPath: '/communications/campaigns/new'
       preLoaderRoute: typeof AuthenticatedCommunicationsCampaignsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/campaigns/analytics': {
+      id: '/_authenticated/communications/campaigns/analytics'
+      path: '/communications/campaigns/analytics'
+      fullPath: '/communications/campaigns/analytics'
+      preLoaderRoute: typeof AuthenticatedCommunicationsCampaignsAnalyticsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/communications/campaigns/$campaignId': {
@@ -2867,12 +3207,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommunicationsEmailsTemplatesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/track/click/$emailId/$linkId': {
+      id: '/api/track/click/$emailId/$linkId'
+      path: '/api/track/click/$emailId/$linkId'
+      fullPath: '/api/track/click/$emailId/$linkId'
+      preLoaderRoute: typeof ApiTrackClickEmailIdLinkIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/agent/$taskId/status': {
+      id: '/api/ai/agent/$taskId/status'
+      path: '/api/ai/agent/$taskId/status'
+      fullPath: '/api/ai/agent/$taskId/status'
+      preLoaderRoute: typeof ApiAiAgentTaskIdStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/projects/$projectId/visits/$visitId': {
       id: '/_authenticated/projects/$projectId/visits/$visitId'
       path: '/visits/$visitId'
       fullPath: '/projects/$projectId/visits/$visitId'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdVisitsVisitIdRouteImport
       parentRoute: typeof AuthenticatedProjectsProjectIdRoute
+    }
+    '/_authenticated/communications/settings/inbox-accounts/callback': {
+      id: '/_authenticated/communications/settings/inbox-accounts/callback'
+      path: '/callback'
+      fullPath: '/communications/settings/inbox-accounts/callback'
+      preLoaderRoute: typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRouteImport
+      parentRoute: typeof AuthenticatedCommunicationsSettingsInboxAccountsRoute
+    }
+    '/_authenticated/communications/campaigns/$campaignId/edit': {
+      id: '/_authenticated/communications/campaigns/$campaignId/edit'
+      path: '/edit'
+      fullPath: '/communications/campaigns/$campaignId/edit'
+      preLoaderRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRouteImport
+      parentRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
     }
   }
 }
@@ -2973,6 +3341,36 @@ const AuthenticatedSuppliersSupplierIdRouteWithChildren =
     AuthenticatedSuppliersSupplierIdRouteChildren,
   )
 
+interface AuthenticatedCommunicationsCampaignsCampaignIdRouteChildren {
+  AuthenticatedCommunicationsCampaignsCampaignIdEditRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
+}
+
+const AuthenticatedCommunicationsCampaignsCampaignIdRouteChildren: AuthenticatedCommunicationsCampaignsCampaignIdRouteChildren =
+  {
+    AuthenticatedCommunicationsCampaignsCampaignIdEditRoute:
+      AuthenticatedCommunicationsCampaignsCampaignIdEditRoute,
+  }
+
+const AuthenticatedCommunicationsCampaignsCampaignIdRouteWithChildren =
+  AuthenticatedCommunicationsCampaignsCampaignIdRoute._addFileChildren(
+    AuthenticatedCommunicationsCampaignsCampaignIdRouteChildren,
+  )
+
+interface AuthenticatedCommunicationsSettingsInboxAccountsRouteChildren {
+  AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute: typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
+}
+
+const AuthenticatedCommunicationsSettingsInboxAccountsRouteChildren: AuthenticatedCommunicationsSettingsInboxAccountsRouteChildren =
+  {
+    AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute:
+      AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute,
+  }
+
+const AuthenticatedCommunicationsSettingsInboxAccountsRouteWithChildren =
+  AuthenticatedCommunicationsSettingsInboxAccountsRoute._addFileChildren(
+    AuthenticatedCommunicationsSettingsInboxAccountsRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
@@ -2981,7 +3379,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCustomersDuplicatesRoute: typeof AuthenticatedCustomersDuplicatesRoute
   AuthenticatedCustomersNewRoute: typeof AuthenticatedCustomersNewRoute
   AuthenticatedFinancialArAgingRoute: typeof AuthenticatedFinancialArAgingRoute
-  AuthenticatedFinancialCreditNotesRoute: typeof AuthenticatedFinancialCreditNotesRoute
   AuthenticatedFinancialPaymentPlansRoute: typeof AuthenticatedFinancialPaymentPlansRoute
   AuthenticatedFinancialRemindersRoute: typeof AuthenticatedFinancialRemindersRoute
   AuthenticatedFinancialRevenueRoute: typeof AuthenticatedFinancialRevenueRoute
@@ -2992,11 +3389,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryItemIdRoute: typeof AuthenticatedInventoryItemIdRoute
   AuthenticatedInventoryAlertsRoute: typeof AuthenticatedInventoryAlertsRoute
   AuthenticatedInventoryAnalyticsRoute: typeof AuthenticatedInventoryAnalyticsRoute
+  AuthenticatedInventoryBrowserRoute: typeof AuthenticatedInventoryBrowserRoute
   AuthenticatedInventoryCountsRoute: typeof AuthenticatedInventoryCountsRoute
-  AuthenticatedInventoryDashboardRoute: typeof AuthenticatedInventoryDashboardRoute
   AuthenticatedInventoryForecastingRoute: typeof AuthenticatedInventoryForecastingRoute
   AuthenticatedInventoryLocationsRoute: typeof AuthenticatedInventoryLocationsRoute
   AuthenticatedInventoryReceivingRoute: typeof AuthenticatedInventoryReceivingRoute
+  AuthenticatedInvoicesInvoiceIdRoute: typeof AuthenticatedInvoicesInvoiceIdRoute
   AuthenticatedJobsCalendarRoute: typeof AuthenticatedJobsCalendarRoute
   AuthenticatedJobsKanbanRoute: typeof AuthenticatedJobsKanbanRoute
   AuthenticatedJobsTimelineRoute: typeof AuthenticatedJobsTimelineRoute
@@ -3009,6 +3407,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPipelineOpportunityIdRoute: typeof AuthenticatedPipelineOpportunityIdRoute
   AuthenticatedPipelineNewRoute: typeof AuthenticatedPipelineNewRoute
   AuthenticatedProcurementDashboardRoute: typeof AuthenticatedProcurementDashboardRoute
+  AuthenticatedProcurementReceivingRoute: typeof AuthenticatedProcurementReceivingRoute
   AuthenticatedProductsProductIdRoute: typeof AuthenticatedProductsProductIdRouteWithChildren
   AuthenticatedProductsImportRoute: typeof AuthenticatedProductsImportRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
@@ -3016,6 +3415,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPurchaseOrdersPoIdRoute: typeof AuthenticatedPurchaseOrdersPoIdRoute
   AuthenticatedPurchaseOrdersCreateRoute: typeof AuthenticatedPurchaseOrdersCreateRoute
   AuthenticatedReportsExpiringWarrantiesRoute: typeof AuthenticatedReportsExpiringWarrantiesRoute
+  AuthenticatedReportsFinancialRoute: typeof AuthenticatedReportsFinancialRoute
   AuthenticatedReportsJobCostingRoute: typeof AuthenticatedReportsJobCostingRoute
   AuthenticatedReportsPipelineForecastRoute: typeof AuthenticatedReportsPipelineForecastRoute
   AuthenticatedReportsWarrantiesRoute: typeof AuthenticatedReportsWarrantiesRoute
@@ -3036,9 +3436,11 @@ interface AuthenticatedRouteChildren {
   AuthenticatedFinancialIndexRoute: typeof AuthenticatedFinancialIndexRoute
   AuthenticatedInstallersIndexRoute: typeof AuthenticatedInstallersIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
+  AuthenticatedInvoicesIndexRoute: typeof AuthenticatedInvoicesIndexRoute
   AuthenticatedJobsIndexRoute: typeof AuthenticatedJobsIndexRoute
   AuthenticatedMobileIndexRoute: typeof AuthenticatedMobileIndexRoute
   AuthenticatedMyTasksIndexRoute: typeof AuthenticatedMyTasksIndexRoute
+  AuthenticatedOnboardingIndexRoute: typeof AuthenticatedOnboardingIndexRoute
   AuthenticatedOrdersIndexRoute: typeof AuthenticatedOrdersIndexRoute
   AuthenticatedPipelineIndexRoute: typeof AuthenticatedPipelineIndexRoute
   AuthenticatedProcurementIndexRoute: typeof AuthenticatedProcurementIndexRoute
@@ -3053,10 +3455,15 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAdminUsersUserIdRoute: typeof AuthenticatedAdminUsersUserIdRoute
   AuthenticatedAdminUsersImportRoute: typeof AuthenticatedAdminUsersImportRoute
   AuthenticatedAdminUsersInviteRoute: typeof AuthenticatedAdminUsersInviteRoute
-  AuthenticatedCommunicationsCampaignsCampaignIdRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  AuthenticatedCommunicationsCampaignsCampaignIdRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdRouteWithChildren
+  AuthenticatedCommunicationsCampaignsAnalyticsRoute: typeof AuthenticatedCommunicationsCampaignsAnalyticsRoute
   AuthenticatedCommunicationsCampaignsNewRoute: typeof AuthenticatedCommunicationsCampaignsNewRoute
+  AuthenticatedCommunicationsEmailsHistoryRoute: typeof AuthenticatedCommunicationsEmailsHistoryRoute
+  AuthenticatedCommunicationsSettingsInboxAccountsRoute: typeof AuthenticatedCommunicationsSettingsInboxAccountsRouteWithChildren
   AuthenticatedCommunicationsSettingsPreferencesRoute: typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   AuthenticatedCustomersCustomerIdEditRoute: typeof AuthenticatedCustomersCustomerIdEditRoute
+  AuthenticatedFinancialCreditNotesCreditNoteIdRoute: typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
+  AuthenticatedFinancialInvoicesInvoiceIdRoute: typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   AuthenticatedJobsAssignmentsAssignmentIdRoute: typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   AuthenticatedPipelineQuotesQuoteIdRoute: typeof AuthenticatedPipelineQuotesQuoteIdRoute
   AuthenticatedSupportClaimsClaimIdRoute: typeof AuthenticatedSupportClaimsClaimIdRoute
@@ -3072,8 +3479,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCommunicationsCallsIndexRoute: typeof AuthenticatedCommunicationsCallsIndexRoute
   AuthenticatedCommunicationsCampaignsIndexRoute: typeof AuthenticatedCommunicationsCampaignsIndexRoute
   AuthenticatedCommunicationsEmailsIndexRoute: typeof AuthenticatedCommunicationsEmailsIndexRoute
+  AuthenticatedCommunicationsInboxIndexRoute: typeof AuthenticatedCommunicationsInboxIndexRoute
   AuthenticatedCommunicationsSignaturesIndexRoute: typeof AuthenticatedCommunicationsSignaturesIndexRoute
   AuthenticatedCustomersSegmentsIndexRoute: typeof AuthenticatedCustomersSegmentsIndexRoute
+  AuthenticatedFinancialAnalyticsIndexRoute: typeof AuthenticatedFinancialAnalyticsIndexRoute
+  AuthenticatedFinancialCreditNotesIndexRoute: typeof AuthenticatedFinancialCreditNotesIndexRoute
+  AuthenticatedFinancialInvoicesIndexRoute: typeof AuthenticatedFinancialInvoicesIndexRoute
   AuthenticatedReportsCustomersIndexRoute: typeof AuthenticatedReportsCustomersIndexRoute
   AuthenticatedReportsProcurementIndexRoute: typeof AuthenticatedReportsProcurementIndexRoute
   AuthenticatedSupportClaimsIndexRoute: typeof AuthenticatedSupportClaimsIndexRoute
@@ -3092,8 +3503,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCustomersDuplicatesRoute: AuthenticatedCustomersDuplicatesRoute,
   AuthenticatedCustomersNewRoute: AuthenticatedCustomersNewRoute,
   AuthenticatedFinancialArAgingRoute: AuthenticatedFinancialArAgingRoute,
-  AuthenticatedFinancialCreditNotesRoute:
-    AuthenticatedFinancialCreditNotesRoute,
   AuthenticatedFinancialPaymentPlansRoute:
     AuthenticatedFinancialPaymentPlansRoute,
   AuthenticatedFinancialRemindersRoute: AuthenticatedFinancialRemindersRoute,
@@ -3106,12 +3515,13 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryItemIdRoute: AuthenticatedInventoryItemIdRoute,
   AuthenticatedInventoryAlertsRoute: AuthenticatedInventoryAlertsRoute,
   AuthenticatedInventoryAnalyticsRoute: AuthenticatedInventoryAnalyticsRoute,
+  AuthenticatedInventoryBrowserRoute: AuthenticatedInventoryBrowserRoute,
   AuthenticatedInventoryCountsRoute: AuthenticatedInventoryCountsRoute,
-  AuthenticatedInventoryDashboardRoute: AuthenticatedInventoryDashboardRoute,
   AuthenticatedInventoryForecastingRoute:
     AuthenticatedInventoryForecastingRoute,
   AuthenticatedInventoryLocationsRoute: AuthenticatedInventoryLocationsRoute,
   AuthenticatedInventoryReceivingRoute: AuthenticatedInventoryReceivingRoute,
+  AuthenticatedInvoicesInvoiceIdRoute: AuthenticatedInvoicesInvoiceIdRoute,
   AuthenticatedJobsCalendarRoute: AuthenticatedJobsCalendarRoute,
   AuthenticatedJobsKanbanRoute: AuthenticatedJobsKanbanRoute,
   AuthenticatedJobsTimelineRoute: AuthenticatedJobsTimelineRoute,
@@ -3126,6 +3536,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPipelineNewRoute: AuthenticatedPipelineNewRoute,
   AuthenticatedProcurementDashboardRoute:
     AuthenticatedProcurementDashboardRoute,
+  AuthenticatedProcurementReceivingRoute:
+    AuthenticatedProcurementReceivingRoute,
   AuthenticatedProductsProductIdRoute:
     AuthenticatedProductsProductIdRouteWithChildren,
   AuthenticatedProductsImportRoute: AuthenticatedProductsImportRoute,
@@ -3137,6 +3549,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedPurchaseOrdersCreateRoute,
   AuthenticatedReportsExpiringWarrantiesRoute:
     AuthenticatedReportsExpiringWarrantiesRoute,
+  AuthenticatedReportsFinancialRoute: AuthenticatedReportsFinancialRoute,
   AuthenticatedReportsJobCostingRoute: AuthenticatedReportsJobCostingRoute,
   AuthenticatedReportsPipelineForecastRoute:
     AuthenticatedReportsPipelineForecastRoute,
@@ -3160,9 +3573,11 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedFinancialIndexRoute: AuthenticatedFinancialIndexRoute,
   AuthenticatedInstallersIndexRoute: AuthenticatedInstallersIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
+  AuthenticatedInvoicesIndexRoute: AuthenticatedInvoicesIndexRoute,
   AuthenticatedJobsIndexRoute: AuthenticatedJobsIndexRoute,
   AuthenticatedMobileIndexRoute: AuthenticatedMobileIndexRoute,
   AuthenticatedMyTasksIndexRoute: AuthenticatedMyTasksIndexRoute,
+  AuthenticatedOnboardingIndexRoute: AuthenticatedOnboardingIndexRoute,
   AuthenticatedOrdersIndexRoute: AuthenticatedOrdersIndexRoute,
   AuthenticatedPipelineIndexRoute: AuthenticatedPipelineIndexRoute,
   AuthenticatedProcurementIndexRoute: AuthenticatedProcurementIndexRoute,
@@ -3178,13 +3593,23 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminUsersImportRoute: AuthenticatedAdminUsersImportRoute,
   AuthenticatedAdminUsersInviteRoute: AuthenticatedAdminUsersInviteRoute,
   AuthenticatedCommunicationsCampaignsCampaignIdRoute:
-    AuthenticatedCommunicationsCampaignsCampaignIdRoute,
+    AuthenticatedCommunicationsCampaignsCampaignIdRouteWithChildren,
+  AuthenticatedCommunicationsCampaignsAnalyticsRoute:
+    AuthenticatedCommunicationsCampaignsAnalyticsRoute,
   AuthenticatedCommunicationsCampaignsNewRoute:
     AuthenticatedCommunicationsCampaignsNewRoute,
+  AuthenticatedCommunicationsEmailsHistoryRoute:
+    AuthenticatedCommunicationsEmailsHistoryRoute,
+  AuthenticatedCommunicationsSettingsInboxAccountsRoute:
+    AuthenticatedCommunicationsSettingsInboxAccountsRouteWithChildren,
   AuthenticatedCommunicationsSettingsPreferencesRoute:
     AuthenticatedCommunicationsSettingsPreferencesRoute,
   AuthenticatedCustomersCustomerIdEditRoute:
     AuthenticatedCustomersCustomerIdEditRoute,
+  AuthenticatedFinancialCreditNotesCreditNoteIdRoute:
+    AuthenticatedFinancialCreditNotesCreditNoteIdRoute,
+  AuthenticatedFinancialInvoicesInvoiceIdRoute:
+    AuthenticatedFinancialInvoicesInvoiceIdRoute,
   AuthenticatedJobsAssignmentsAssignmentIdRoute:
     AuthenticatedJobsAssignmentsAssignmentIdRoute,
   AuthenticatedPipelineQuotesQuoteIdRoute:
@@ -3210,10 +3635,18 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedCommunicationsCampaignsIndexRoute,
   AuthenticatedCommunicationsEmailsIndexRoute:
     AuthenticatedCommunicationsEmailsIndexRoute,
+  AuthenticatedCommunicationsInboxIndexRoute:
+    AuthenticatedCommunicationsInboxIndexRoute,
   AuthenticatedCommunicationsSignaturesIndexRoute:
     AuthenticatedCommunicationsSignaturesIndexRoute,
   AuthenticatedCustomersSegmentsIndexRoute:
     AuthenticatedCustomersSegmentsIndexRoute,
+  AuthenticatedFinancialAnalyticsIndexRoute:
+    AuthenticatedFinancialAnalyticsIndexRoute,
+  AuthenticatedFinancialCreditNotesIndexRoute:
+    AuthenticatedFinancialCreditNotesIndexRoute,
+  AuthenticatedFinancialInvoicesIndexRoute:
+    AuthenticatedFinancialInvoicesIndexRoute,
   AuthenticatedReportsCustomersIndexRoute:
     AuthenticatedReportsCustomersIndexRoute,
   AuthenticatedReportsProcurementIndexRoute:
@@ -3231,22 +3664,9 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
-interface ProtectedRouteChildren {
-  ProtectedProtectedRoute: typeof ProtectedProtectedRoute
-}
-
-const ProtectedRouteChildren: ProtectedRouteChildren = {
-  ProtectedProtectedRoute: ProtectedProtectedRoute,
-}
-
-const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
-  ProtectedRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
-  ProtectedRoute: ProtectedRouteWithChildren,
   AcceptInvitationRoute: AcceptInvitationRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
@@ -3260,6 +3680,11 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackTokenRoute: FeedbackTokenRoute,
   PortalConfirmRoute: PortalConfirmRoute,
   PortalIndexRoute: PortalIndexRoute,
+  ApiAiCostBudgetRoute: ApiAiCostBudgetRoute,
+  ApiOauthSyncConnectionIdRoute: ApiOauthSyncConnectionIdRoute,
+  ApiTrackOpenEmailIdRoute: ApiTrackOpenEmailIdRoute,
+  ApiAiAgentTaskIdStatusRoute: ApiAiAgentTaskIdStatusRoute,
+  ApiTrackClickEmailIdLinkIdRoute: ApiTrackClickEmailIdLinkIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -20,7 +20,12 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  auditColumns,
+  organizationColumn,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { users } from "./users";
 
 // ============================================================================
@@ -59,6 +64,9 @@ export const userOnboarding = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
+    // Organization scoping
+    ...organizationColumn,
+
     // User reference
     userId: uuid("user_id")
       .notNull()
@@ -92,6 +100,9 @@ export const userOnboarding = pgTable(
       table.stepKey
     ),
 
+    // Organization queries
+    orgIdx: index("idx_user_onboarding_org").on(table.organizationId),
+
     // User's onboarding progress
     userIdx: index("idx_user_onboarding_user").on(table.userId),
 
@@ -103,6 +114,9 @@ export const userOnboarding = pgTable(
 
     // Step analytics
     stepKeyIdx: index("idx_user_onboarding_step_key").on(table.stepKey),
+
+    // RLS Policies
+    ...standardRlsPolicies("user_onboarding"),
   })
 );
 

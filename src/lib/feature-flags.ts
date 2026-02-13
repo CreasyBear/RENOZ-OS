@@ -5,6 +5,8 @@
  * Allows safe deployment of new features and rollback if needed.
  */
 
+import { logger } from '@/lib/logger';
+
 // Feature flag configuration
 export const FEATURE_FLAGS = {
   // Supplier domain features
@@ -41,5 +43,5 @@ export const environment = {
 
 // Debug logging for feature flags
 if (FEATURE_FLAGS.DEBUG_MODE) {
-  console.log('Feature Flags:', FEATURE_FLAGS);
+  logger.debug('Feature Flags', { flags: FEATURE_FLAGS });
 }

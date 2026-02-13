@@ -13,6 +13,7 @@ import {
   spacing,
   letterSpacing,
   borderRadius,
+  pageMargins,
   FONT_FAMILY,
   FONT_WEIGHTS,
 } from "./theme";
@@ -123,11 +124,46 @@ const styles = StyleSheet.create({
   pillTextError: {
     color: "#C62828",
   },
+
+  // Fixed header (repeats on every page)
+  fixedHeader: {
+    position: "absolute" as const,
+    top: pageMargins.top - 8,
+    left: pageMargins.left,
+    right: pageMargins.right,
+    flexDirection: "row" as const,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
+  },
+  fixedHeaderOrg: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+  },
+  fixedHeaderDoc: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+  },
 });
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+export interface FixedDocumentHeaderProps {
+  /** Organization name */
+  orgName: string;
+  /** Document type (e.g. "Quote", "Invoice") */
+  documentType: string;
+  /** Document number (e.g. "Q-2024-001") */
+  documentNumber: string;
+}
 
 export interface DocumentHeaderProps {
   /** Document title (e.g., "QUOTE", "INVOICE") */
@@ -149,7 +185,26 @@ export interface DocumentHeaderProps {
 }
 
 // ============================================================================
-// COMPONENT
+// FIXED DOCUMENT HEADER (repeats on every page)
+// ============================================================================
+
+export function FixedDocumentHeader({
+  orgName,
+  documentType,
+  documentNumber,
+}: FixedDocumentHeaderProps) {
+  return (
+    <View fixed style={styles.fixedHeader}>
+      <Text style={styles.fixedHeaderOrg}>{orgName}</Text>
+      <Text style={styles.fixedHeaderDoc}>
+        {documentType} {documentNumber}
+      </Text>
+    </View>
+  );
+}
+
+// ============================================================================
+// DOCUMENT HEADER (flowing, full meta)
 // ============================================================================
 
 export function DocumentHeader({
@@ -175,10 +230,13 @@ export function DocumentHeader({
 
   return (
     <View style={styles.container}>
-      {/* Logo Section */}
+      {/* Logo Section - prefer logoDataUrl (pre-fetched) over logoUrl */}
       <View style={styles.logoSection}>
-        {organization.branding?.logoUrl ? (
-          <Image src={organization.branding.logoUrl} style={styles.logo} />
+        {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+          <Image
+            src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+            style={styles.logo}
+          />
         ) : (
           <Text style={styles.logoPlaceholder}>
             {organization.name}

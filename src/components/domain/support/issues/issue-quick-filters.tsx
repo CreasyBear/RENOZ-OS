@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + filter config */
 /**
  * Issue Quick Filters
  *
@@ -6,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-008
  */
 
-import { User, Users, AlertTriangle, Clock, Inbox, CheckCircle2 } from 'lucide-react';
+import { User, Users, AlertTriangle, AlertCircle, Clock, Inbox, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,8 @@ import { Button } from '@/components/ui/button';
 
 export type QuickFilter =
   | 'all'
+  | 'overdue_sla'
+  | 'escalated'
   | 'my_issues'
   | 'unassigned'
   | 'sla_at_risk'
@@ -31,11 +34,23 @@ interface FilterOption {
 }
 
 // ============================================================================
-// FILTER OPTIONS
+// FILTER OPTIONS (triage chips first per DOMAIN-LANDING-STANDARDS)
 // ============================================================================
 
 const filterOptions: FilterOption[] = [
-  { id: 'all', label: 'All Issues', icon: Inbox, description: 'Show all issues' },
+  { id: 'all', label: 'All', icon: Inbox, description: 'Show all issues' },
+  {
+    id: 'overdue_sla',
+    label: 'Overdue SLA',
+    icon: AlertCircle,
+    description: 'SLA breached',
+  },
+  {
+    id: 'escalated',
+    label: 'Escalated',
+    icon: AlertTriangle,
+    description: 'Escalated issues',
+  },
   { id: 'my_issues', label: 'My Issues', icon: User, description: 'Assigned to me' },
   {
     id: 'unassigned',
@@ -46,7 +61,7 @@ const filterOptions: FilterOption[] = [
   {
     id: 'sla_at_risk',
     label: 'SLA At Risk',
-    icon: AlertTriangle,
+    icon: Clock,
     description: 'SLA deadlines approaching',
   },
   {
@@ -113,9 +128,55 @@ export function IssueQuickFilters({
 }
 
 // ============================================================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS (URL sync)
 // ============================================================================
 
 export function getFilterDescription(filter: QuickFilter): string {
   return filterOptions.find((o) => o.id === filter)?.description ?? '';
+}
+
+/** Derive QuickFilter from URL search params */
+export function quickFilterFromSearch(
+  search: {
+    slaStatus?: string;
+    escalated?: boolean;
+    assignedToUserId?: string;
+    quickFilter?: QuickFilter;
+  },
+  currentUserId?: string
+): QuickFilter {
+  // quickFilter takes precedence when present
+  if (search.quickFilter) return search.quickFilter;
+  if (search.slaStatus === 'breached') return 'overdue_sla';
+  if (search.escalated === true) return 'escalated';
+  if (search.assignedToUserId && search.assignedToUserId === currentUserId) return 'my_issues';
+  return 'all';
+}
+
+/** Map QuickFilter click to URL search params */
+export function quickFilterToSearch(
+  filter: QuickFilter,
+  currentUserId?: string
+): Record<string, string | boolean | undefined> {
+  switch (filter) {
+    case 'overdue_sla':
+      return { quickFilter: 'overdue_sla', slaStatus: 'breached', escalated: undefined, assignedToUserId: undefined };
+    case 'escalated':
+      return { quickFilter: 'escalated', slaStatus: undefined, escalated: true, assignedToUserId: undefined };
+    case 'my_issues':
+      return currentUserId
+        ? { quickFilter: 'my_issues', slaStatus: undefined, escalated: undefined, assignedToUserId: currentUserId }
+        : { quickFilter: 'all' };
+    case 'unassigned':
+      return { quickFilter: 'unassigned', slaStatus: undefined, escalated: undefined, assignedToUserId: undefined };
+    case 'sla_at_risk':
+      return { quickFilter: 'sla_at_risk', slaStatus: undefined, escalated: undefined, assignedToUserId: undefined };
+    case 'high_priority':
+      return { quickFilter: 'high_priority', slaStatus: undefined, escalated: undefined, assignedToUserId: undefined };
+    case 'recent':
+      return { quickFilter: 'recent', slaStatus: undefined, escalated: undefined, assignedToUserId: undefined };
+    case 'all':
+    default:
+      return { quickFilter: undefined, slaStatus: undefined, escalated: undefined, assignedToUserId: undefined };
+  }
 }

@@ -231,7 +231,7 @@ export function LineItems({
           </View>
 
           <View style={styles.colQuantity}>
-            <Text style={styles.quantity}>{item.quantity}</Text>
+            <Text style={styles.quantity}>{String(item.quantity)}</Text>
           </View>
 
           <View style={styles.colPrice}>

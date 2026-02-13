@@ -5,14 +5,13 @@ dist-ssr
 *.local
 count.txt
 .env
+.env.local
+.env.*.local
 .nitro
 .tanstack
 .wrangler
-_reference/
-.claude/
-.cursor/
-_Initiation/
-_development/
-docs/**
-!docs/migrations/**
-skills/
+build-output.log
+
+# Vercel
+.vercel
+.output

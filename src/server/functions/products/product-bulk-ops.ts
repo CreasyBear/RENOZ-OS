@@ -597,25 +597,34 @@ export const bulkAdjustPrices = createServerFn({ method: 'POST' })
         data.adjustment.applyTo === 'costPrice' || data.adjustment.applyTo === 'both';
 
       // Single UPDATE using CASE/WHEN for percentage adjustments
-      await db.execute(sql`
-        UPDATE products
-        SET
-          base_price = CASE
-            WHEN ${applyToBase}
-            THEN ROUND(CAST(base_price AS numeric) * ${multiplier}, 2)::text
-            ELSE base_price
-          END,
-          cost_price = CASE
-            WHEN ${applyToCost} AND cost_price IS NOT NULL AND CAST(cost_price AS numeric) > 0
-            THEN ROUND(CAST(cost_price AS numeric) * ${multiplier}, 2)::text
-            ELSE cost_price
-          END,
-          updated_by = ${ctx.user.id},
-          updated_at = NOW()
-        WHERE id = ANY(${data.productIds}::uuid[])
-          AND organization_id = ${ctx.organizationId}
-          AND deleted_at IS NULL
-      `);
+      // SECURITY: Use Drizzle's sql template with proper parameterization
+      const basePriceUpdate = applyToBase
+        ? sql`ROUND(CAST(${products.basePrice} AS numeric) * ${multiplier}, 2)::text`
+        : products.basePrice;
+
+      const costPriceUpdate = applyToCost
+        ? sql`CASE
+            WHEN ${products.costPrice} IS NOT NULL AND CAST(${products.costPrice} AS numeric) > 0
+            THEN ROUND(CAST(${products.costPrice} AS numeric) * ${multiplier}, 2)::text
+            ELSE ${products.costPrice}
+          END`
+        : products.costPrice;
+
+      await db
+        .update(products)
+        .set({
+          basePrice: basePriceUpdate,
+          costPrice: costPriceUpdate,
+          updatedBy: ctx.user.id,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(products.organizationId, ctx.organizationId),
+            inArray(products.id, data.productIds),
+            isNull(products.deletedAt)
+          )
+        );
 
       updatedCount = currentProducts.length;
     } else {

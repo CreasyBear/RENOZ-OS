@@ -4,7 +4,7 @@
  * Manage product attribute definitions (admin interface).
  * Create, edit, and delete attribute schemas.
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,6 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { toastError } from "@/hooks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,11 +67,11 @@ import {
 } from "@/components/ui/collapsible";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
-  listAttributes,
-  createAttribute,
-  updateAttribute,
-  deleteAttribute,
-} from "@/server/functions/products/product-attributes";
+  useProductAttributeDefinitions,
+  useCreateAttributeDefinition,
+  useUpdateAttributeDefinition,
+  useDeleteAttributeDefinition,
+} from "@/hooks/products";
 
 // Types
 const ATTRIBUTE_TYPES = [
@@ -131,14 +132,20 @@ const attributeFormSchema = z.object({
 type AttributeFormValues = z.infer<typeof attributeFormSchema>;
 
 export function AttributeDefinitions({ onAttributesChange }: AttributeDefinitionsProps) {
-  const [attributes, setAttributes] = useState<AttributeDefinition[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAttribute, setEditingAttribute] = useState<AttributeDefinition | null>(null);
   const [deletingAttribute, setDeletingAttribute] = useState<AttributeDefinition | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [optionsExpanded, setOptionsExpanded] = useState(false);
+
+  // TanStack Query hooks
+  const { data: attributesData = [], isLoading } = useProductAttributeDefinitions({ activeOnly: false });
+  const createMutation = useCreateAttributeDefinition();
+  const updateMutation = useUpdateAttributeDefinition();
+  const deleteMutation = useDeleteAttributeDefinition();
+
+  const attributes = attributesData as AttributeDefinition[];
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isDeleting = deleteMutation.isPending;
 
   const {
     register,
@@ -167,24 +174,8 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
     name: "choices",
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
   const watchType = watch("attributeType");
-
-  // Load attributes
-  const loadAttributes = async () => {
-    setIsLoading(true);
-    try {
-      const result = await listAttributes({ data: { activeOnly: false } });
-      setAttributes(result as AttributeDefinition[]);
-    } catch (error) {
-      console.error("Failed to load attributes:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAttributes();
-  }, []);
 
   // Open form for new attribute
   const handleNew = () => {
@@ -226,7 +217,6 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
 
   // Submit form
   const onSubmit = async (data: AttributeFormValues) => {
-    setIsSaving(true);
     try {
       // Build options object
       const options: AttributeDefinition["options"] = {};
@@ -240,41 +230,36 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
 
       if (editingAttribute) {
         // Update existing
-        await updateAttribute({
-          data: {
-            id: editingAttribute.id,
-            name: data.name,
-            description: data.description,
-            options: Object.keys(options).length > 0 ? options : undefined,
-            isRequired: data.isRequired,
-            isFilterable: data.isFilterable,
-            isSearchable: data.isSearchable,
-            sortOrder: data.sortOrder,
-          },
+        await updateMutation.mutateAsync({
+          id: editingAttribute.id,
+          name: data.name,
+          description: data.description,
+          options: Object.keys(options).length > 0 ? options : undefined,
+          isRequired: data.isRequired,
+          isFilterable: data.isFilterable,
+          isSearchable: data.isSearchable,
+          sortOrder: data.sortOrder,
         });
       } else {
         // Create new
-        await createAttribute({
-          data: {
-            name: data.name,
-            attributeType: data.attributeType,
-            description: data.description,
-            options: Object.keys(options).length > 0 ? options : undefined,
-            isRequired: data.isRequired,
-            isFilterable: data.isFilterable,
-            isSearchable: data.isSearchable,
-            sortOrder: data.sortOrder,
-          },
+        await createMutation.mutateAsync({
+          name: data.name,
+          attributeType: data.attributeType,
+          description: data.description,
+          options: Object.keys(options).length > 0 ? options : undefined,
+          isRequired: data.isRequired,
+          isFilterable: data.isFilterable,
+          isSearchable: data.isSearchable,
+          sortOrder: data.sortOrder,
         });
       }
 
-      await loadAttributes();
       setIsFormOpen(false);
       onAttributesChange?.();
     } catch (error) {
-      console.error("Failed to save attribute:", error);
-    } finally {
-      setIsSaving(false);
+      toastError(
+        error instanceof Error ? error.message : "Failed to save attribute"
+      );
     }
   };
 
@@ -282,32 +267,29 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
   const handleDelete = async () => {
     if (!deletingAttribute) return;
 
-    setIsDeleting(true);
     try {
-      await deleteAttribute({ data: { id: deletingAttribute.id } });
-      await loadAttributes();
+      await deleteMutation.mutateAsync(deletingAttribute.id);
       setDeletingAttribute(null);
       onAttributesChange?.();
     } catch (error) {
-      console.error("Failed to delete attribute:", error);
-    } finally {
-      setIsDeleting(false);
+      toastError(
+        error instanceof Error ? error.message : "Failed to delete attribute"
+      );
     }
   };
 
   // Toggle attribute active status
   const handleToggleActive = async (attr: AttributeDefinition) => {
     try {
-      await updateAttribute({
-        data: {
-          id: attr.id,
-          isActive: !attr.isActive,
-        },
+      await updateMutation.mutateAsync({
+        id: attr.id,
+        isActive: !attr.isActive,
       });
-      await loadAttributes();
       onAttributesChange?.();
     } catch (error) {
-      console.error("Failed to toggle attribute:", error);
+      toastError(
+        error instanceof Error ? error.message : "Failed to toggle attribute"
+      );
     }
   };
 
@@ -656,7 +638,7 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Attribute</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingAttribute?.name}"? This will also
+              Are you sure you want to delete &quot;{deletingAttribute?.name}&quot;? This will also
               remove all values for this attribute from all products. This action cannot be
               undone.
             </AlertDialogDescription>

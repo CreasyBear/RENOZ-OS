@@ -27,10 +27,14 @@ export function useQualityInspections(
 ) {
   return useQuery({
     queryKey: queryKeys.inventory.qualityInspections(inventoryId),
-    queryFn: () =>
-      listQualityInspections({
+    queryFn: async () => {
+      const result = await listQualityInspections({
         data: { inventoryId, page: 1, pageSize: 50 },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!inventoryId,
     staleTime: 60 * 1000,
   });

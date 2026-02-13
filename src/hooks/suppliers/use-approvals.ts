@@ -23,6 +23,7 @@ import {
   bulkApproveApprovals,
   escalateApproval,
   delegateApproval,
+  revokeDelegation,
   evaluateApprovalRules,
 } from '@/server/functions/suppliers/approvals';
 import type {
@@ -31,8 +32,9 @@ import type {
   RejectInput,
   EscalateInput,
   DelegateInput,
+  RevokeDelegationInput,
   BulkApproveInput,
-} from '@/server/functions/suppliers/approvals';
+} from '@/lib/schemas/approvals';
 
 // ============================================================================
 // QUERY HOOKS
@@ -51,10 +53,21 @@ export function usePendingApprovals(options: UsePendingApprovalsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.approvals.pending(filters),
-    queryFn: () => listPendingApprovals({ data: filters as ListPendingApprovalsInput }),
+    queryFn: async () => {
+      const result = await listPendingApprovals({ data: filters as ListPendingApprovalsInput });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000, // Refresh every minute for real-time feel
+    refetchInterval: (_query) => {
+      // Only refetch when tab is visible (not hidden)
+      if (typeof document !== 'undefined' && document.hidden) {
+        return false;
+      }
+      // Refetch every 2 minutes (reduced from 1 minute)
+      return 2 * 60 * 1000;
+    },
   });
 }
 
@@ -73,7 +86,13 @@ export function useApprovalDetails(
 
   return useQuery({
     queryKey: queryKeys.approvals.detail(approvalId),
-    queryFn: () => getApprovalDetails({ data: { approvalId } }),
+    queryFn: async () => {
+      const result = await getApprovalDetails({
+        data: { approvalId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!approvalId,
     staleTime: 60 * 1000,
   });
@@ -88,7 +107,13 @@ export function useApprovalHistory(purchaseOrderId: string, options: { enabled?:
 
   return useQuery({
     queryKey: queryKeys.approvals.history(purchaseOrderId),
-    queryFn: () => getApprovalHistory({ data: { purchaseOrderId } }),
+    queryFn: async () => {
+      const result = await getApprovalHistory({
+        data: { purchaseOrderId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!purchaseOrderId,
     staleTime: 60 * 1000,
   });
@@ -103,7 +128,11 @@ export function useMyApprovalStats(options: { enabled?: boolean } = {}) {
 
   return useQuery({
     queryKey: queryKeys.approvals.stats(),
-    queryFn: () => getApprovalStats({}),
+    queryFn: async () => {
+      const result = await getApprovalStats({});
+      if (result == null) throw new Error('Approval stats returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -252,19 +281,19 @@ export function useDelegateApproval() {
 }
 
 /**
- * Revoke a delegation (placeholder - would need server function).
- * For now, this is a no-op that can be implemented when needed.
+ * Revoke a delegation, returning the approval to the original approver.
+ * Can be called by either the original delegator or the current delegatee.
  */
 export function useRevokeDelegation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (_approvalId: string) => {
-      // TODO: Implement revokeDelegation server function
-      throw new Error('Revoke delegation not yet implemented');
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
+    mutationFn: (data: RevokeDelegationInput) => revokeDelegation({ data }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.approvals.detail(variables.approvalId),
+      });
     },
   });
 }

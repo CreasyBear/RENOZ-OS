@@ -16,10 +16,10 @@ import {
   checklistTemplates,
   jobChecklists,
   jobChecklistItems,
-  jobAssignments,
   users,
   type ChecklistTemplateItem,
 } from 'drizzle/schema';
+import { verifyJobExists } from '@/server/functions/_shared/entity-verification';
 import {
   listChecklistTemplatesSchema,
   createChecklistTemplateSchema,
@@ -62,23 +62,6 @@ async function verifyTemplateAccess(templateId: string, organizationId: string) 
   }
 
   return template;
-}
-
-/**
- * Verify job belongs to the user's organization.
- */
-async function verifyJobAccess(jobId: string, organizationId: string) {
-  const [job] = await db
-    .select({ id: jobAssignments.id })
-    .from(jobAssignments)
-    .where(and(eq(jobAssignments.id, jobId), eq(jobAssignments.organizationId, organizationId)))
-    .limit(1);
-
-  if (!job) {
-    throw new NotFoundError('Job not found');
-  }
-
-  return job;
 }
 
 /**
@@ -171,7 +154,8 @@ export const listChecklistTemplates = createServerFn({ method: 'GET' })
       })
       .from(checklistTemplates)
       .where(and(...conditions))
-      .orderBy(checklistTemplates.name);
+      .orderBy(checklistTemplates.name)
+      .limit(100);
 
     return {
       templates: templates.map(toTemplateResponse),
@@ -343,78 +327,83 @@ export const applyChecklistToJob = createServerFn({ method: 'POST' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
-    // Get the template
-    const [template] = await db
-      .select({
-        id: checklistTemplates.id,
-        name: checklistTemplates.name,
-        items: checklistTemplates.items,
-      })
-      .from(checklistTemplates)
-      .where(
-        and(
-          eq(checklistTemplates.id, data.templateId),
-          eq(checklistTemplates.organizationId, ctx.organizationId),
-          eq(checklistTemplates.isActive, true)
+    // Wrap checklist creation in a transaction for atomicity
+    const checklistId = await db.transaction(async (tx) => {
+      // Get the template
+      const [template] = await tx
+        .select({
+          id: checklistTemplates.id,
+          name: checklistTemplates.name,
+          items: checklistTemplates.items,
+        })
+        .from(checklistTemplates)
+        .where(
+          and(
+            eq(checklistTemplates.id, data.templateId),
+            eq(checklistTemplates.organizationId, ctx.organizationId),
+            eq(checklistTemplates.isActive, true)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!template) {
-      throw new NotFoundError('Checklist template not found or inactive');
-    }
+      if (!template) {
+        throw new NotFoundError('Checklist template not found or inactive');
+      }
 
-    // Check if job already has a checklist
-    const [existing] = await db
-      .select({ id: jobChecklists.id })
-      .from(jobChecklists)
-      .where(
-        and(
-          eq(jobChecklists.jobId, data.jobId),
-          eq(jobChecklists.organizationId, ctx.organizationId)
+      // Check if job already has a checklist
+      const [existing] = await tx
+        .select({ id: jobChecklists.id })
+        .from(jobChecklists)
+        .where(
+          and(
+            eq(jobChecklists.jobId, data.jobId),
+            eq(jobChecklists.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (existing) {
-      throw new ValidationError('Job already has a checklist applied');
-    }
+      if (existing) {
+        throw new ValidationError('Job already has a checklist applied');
+      }
 
-    // Create the job checklist
-    const [checklist] = await db
-      .insert(jobChecklists)
-      .values({
-        organizationId: ctx.organizationId,
-        jobId: data.jobId,
-        templateId: template.id,
-        templateName: template.name,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
-
-    // Create checklist items from template
-    const items = template.items as ChecklistTemplateItem[];
-    if (items.length > 0) {
-      await db.insert(jobChecklistItems).values(
-        items.map((item) => ({
+      // Create the job checklist
+      const [checklist] = await tx
+        .insert(jobChecklists)
+        .values({
           organizationId: ctx.organizationId,
-          checklistId: checklist.id,
-          itemText: item.text,
-          itemDescription: item.description ?? null,
-          requiresPhoto: item.requiresPhoto ?? false,
-          position: item.position,
-          isCompleted: false,
+          jobId: data.jobId,
+          templateId: template.id,
+          templateName: template.name,
           createdBy: ctx.user.id,
           updatedBy: ctx.user.id,
-        }))
-      );
-    }
+        })
+        .returning();
+
+      // Create checklist items from template
+      const items = template.items as ChecklistTemplateItem[];
+      if (items.length > 0) {
+        await tx.insert(jobChecklistItems).values(
+          items.map((item) => ({
+            organizationId: ctx.organizationId,
+            checklistId: checklist.id,
+            itemText: item.text,
+            itemDescription: item.description ?? null,
+            requiresPhoto: item.requiresPhoto ?? false,
+            position: item.position,
+            isCompleted: false,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          }))
+        );
+      }
+
+      return checklist.id;
+    });
 
     // Return the full checklist with items
-    return getJobChecklistById(checklist.id, ctx.organizationId);
+    return getJobChecklistById(checklistId, ctx.organizationId);
   });
 
 // ============================================================================
@@ -512,7 +501,7 @@ export const getJobChecklist = createServerFn({ method: 'GET' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Get the checklist
     const [checklist] = await db

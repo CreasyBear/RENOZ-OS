@@ -15,7 +15,12 @@ import {
   addBomItem,
   updateBomItem,
   removeBomItem,
+  removeBomItems,
+  updateBomItemsStatus,
+  importBomFromCsv,
+  importBomFromOrder,
 } from '@/server/functions/project-bom';
+import type { GetProjectBomResponse } from '@/lib/schemas/jobs/project-bom';
 
 // ============================================================================
 // QUERY HOOKS
@@ -30,9 +35,15 @@ export interface UseProjectBomOptions {
  * Get project BOM with items
  */
 export function useProjectBom({ projectId, enabled = true }: UseProjectBomOptions) {
-  return useQuery({
+  return useQuery<GetProjectBomResponse>({
     queryKey: queryKeys.projects.bom(projectId),
-    queryFn: () => getProjectBom({ data: { projectId } }),
+    queryFn: async () => {
+      const result = await getProjectBom({
+        data: { projectId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -72,6 +83,10 @@ export function useAddBomItem(projectId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
       });
+      // Invalidate alerts (bom_items_pending alert depends on BOM item count)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
+      });
     },
   });
 }
@@ -89,6 +104,10 @@ export function useUpdateBomItem(projectId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
       });
+      // Invalidate alerts (bom_items_pending alert depends on quantityOrdered)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
+      });
     },
   });
 }
@@ -105,6 +124,94 @@ export function useRemoveBomItem(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
+      });
+      // Invalidate alerts (bom_items_pending alert depends on BOM item count)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Remove multiple BOM items (batch)
+ */
+export function useRemoveBomItems(projectId: string) {
+  const queryClient = useQueryClient();
+  const removeFn = useServerFn(removeBomItems);
+
+  return useMutation({
+    mutationFn: (params: { data: { itemIds: string[] } }) => removeFn(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.bom(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Update status for multiple BOM items
+ */
+export function useUpdateBomItemsStatus(projectId: string) {
+  const queryClient = useQueryClient();
+  const updateFn = useServerFn(updateBomItemsStatus);
+
+  return useMutation({
+    mutationFn: (params: {
+      data: { itemIds: string[]; status: 'planned' | 'ordered' | 'received' | 'allocated' | 'installed' };
+    }) => updateFn(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.bom(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Import BOM from CSV
+ * CSV format: sku,quantity[,unitCost] (header row optional)
+ */
+export function useImportBomFromCsv(projectId: string) {
+  const queryClient = useQueryClient();
+  const importFn = useServerFn(importBomFromCsv);
+
+  return useMutation({
+    mutationFn: (csvContent: string) =>
+      importFn({ data: { projectId, csvContent } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.bom(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
+      });
+    },
+  });
+}
+
+/**
+ * Import BOM from linked project order
+ */
+export function useImportBomFromOrder(projectId: string) {
+  const queryClient = useQueryClient();
+  const importFn = useServerFn(importBomFromOrder);
+
+  return useMutation({
+    mutationFn: () => importFn({ data: { projectId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.bom(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.alerts(projectId),
       });
     },
   });

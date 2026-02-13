@@ -15,3 +15,5 @@ export type {
   MobileWidgetConfig,
   MobileDashboardPage,
 } from './mobile-dashboard';
+
+export { MobileDashboardContainer } from './mobile-dashboard-container';

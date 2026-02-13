@@ -20,11 +20,11 @@
  */
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
-import type { AnyFieldApi } from "./types"
+import type { FormFieldWithType } from "./types"
 
 export interface TextFieldProps {
   /** TanStack Form field instance */
-  field: AnyFieldApi<string>
+  field: FormFieldWithType<string | null | undefined>
   /** Field label */
   label: string
   /** Placeholder text */
@@ -33,8 +33,14 @@ export interface TextFieldProps {
   required?: boolean
   /** Helper text */
   description?: string
-  /** Input type (text, password, etc.) */
-  type?: "text" | "password" | "tel" | "url"
+  /** Input type (text, password, date, etc.) */
+  type?: "text" | "password" | "tel" | "url" | "email" | "date"
+  /** Autocomplete attribute for form autofill */
+  autocomplete?: string
+  /** Input mode for mobile keyboards */
+  inputMode?: "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search"
+  /** Whether to disable spellcheck */
+  spellCheck?: boolean
   /** Additional class names for the wrapper */
   className?: string
   /** Disabled state */
@@ -50,6 +56,9 @@ export function TextField({
   required,
   description,
   type = "text",
+  autocomplete,
+  inputMode,
+  spellCheck,
   className,
   disabled,
   onBlur,
@@ -61,6 +70,27 @@ export function TextField({
   const error = typeof rawError === 'string'
     ? rawError
     : rawError?.message
+
+  // Auto-detect autocomplete and inputMode based on type if not provided
+  const autoAutocomplete = autocomplete ?? (
+    type === "email" ? "email" :
+    type === "tel" ? "tel" :
+    type === "url" ? "url" :
+    undefined
+  )
+
+  const autoInputMode = inputMode ?? (
+    type === "tel" ? "tel" :
+    type === "email" ? "email" :
+    type === "url" ? "url" :
+    undefined
+  )
+
+  // Auto-disable spellcheck for email, tel, url, codes
+  const autoSpellCheck = spellCheck ?? (
+    type === "email" || type === "tel" || type === "url" ? false :
+    undefined
+  )
 
   return (
     <FormField
@@ -81,6 +111,9 @@ export function TextField({
           onBlur?.()
         }}
         disabled={disabled}
+        autoComplete={autoAutocomplete}
+        inputMode={autoInputMode}
+        spellCheck={autoSpellCheck}
       />
     </FormField>
   )

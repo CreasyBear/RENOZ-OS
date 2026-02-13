@@ -16,7 +16,8 @@
  * @see src/lib/schemas/reports/scheduled-reports.ts for validation
  */
 
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState, startTransition } from 'react';
+import { toast } from 'sonner';
 import { useForm } from '@tanstack/react-form';
 import { Loader2, Plus, X, Mail, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
+  createScheduledReportSchema,
   reportFrequencyValues,
   reportFormatValues,
   reportComparisonPeriodValues,
@@ -56,7 +58,7 @@ import {
   type ReportFormat,
   type CreateScheduledReportInput,
 } from '@/lib/schemas/reports/scheduled-reports';
-import type { ScheduledReport } from 'drizzle/schema/reports/scheduled-reports';
+import type { ScheduledReport } from '@/lib/schemas/reports/scheduled-reports';
 
 // ============================================================================
 // TYPES
@@ -78,6 +80,20 @@ export interface ScheduledReportFormProps {
 }
 
 type FormValues = CreateScheduledReportInput;
+
+type ReportComparisonPeriod = 'previous_period' | 'previous_year' | 'none';
+
+function isReportFrequency(v: string): v is ReportFrequency {
+  return (reportFrequencyValues as readonly string[]).includes(v);
+}
+
+function isReportFormat(v: string): v is ReportFormat {
+  return (reportFormatValues as readonly string[]).includes(v);
+}
+
+function isReportComparisonPeriod(v: string): v is ReportComparisonPeriod {
+  return (reportComparisonPeriodValues as readonly string[]).includes(v);
+}
 
 // ============================================================================
 // CONSTANTS
@@ -122,6 +138,12 @@ const AVAILABLE_METRICS = [
   { id: 'quote_win_rate', label: 'Quote Win Rate', description: 'Percentage of accepted quotes' },
   { id: 'kwh_deployed', label: 'kWh Deployed', description: 'Total kWh from installations' },
   { id: 'active_installations', label: 'Active Installations', description: 'Current installation jobs' },
+  // Health score metrics
+  { id: 'avg_health_score', label: 'Average Health Score', description: 'Average customer health score' },
+  { id: 'health_score_distribution_excellent', label: 'Excellent Health Count', description: 'Customers with health score 80-100' },
+  { id: 'health_score_distribution_good', label: 'Good Health Count', description: 'Customers with health score 60-79' },
+  { id: 'health_score_distribution_fair', label: 'Fair Health Count', description: 'Customers with health score 40-59' },
+  { id: 'health_score_distribution_at_risk', label: 'At Risk Count', description: 'Customers with health score 0-39' },
 ];
 
 // ============================================================================
@@ -201,7 +223,13 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
       ? reportToFormValues(report)
       : getDefaultFormValues(defaultValues),
     onSubmit: async ({ value }) => {
-      await onSubmit(value as CreateScheduledReportInput);
+      const result = createScheduledReportSchema.safeParse(value);
+      if (!result.success) {
+        const firstError = result.error.issues[0];
+        toast.error(firstError?.message ?? 'Please fix the form errors');
+        return;
+      }
+      await onSubmit(result.data);
       onOpenChange(false);
     },
   });
@@ -212,8 +240,10 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
       form.reset(
         report ? reportToFormValues(report) : getDefaultFormValues(defaultValues)
       );
-      setEmailInput('');
-      setEmailError('');
+      startTransition(() => {
+        setEmailInput('');
+        setEmailError('');
+      });
     }
   }, [open, report, form, defaultValues]);
 
@@ -328,7 +358,7 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
                   <Label htmlFor={field.name}>Frequency *</Label>
                   <Select
                     value={field.state.value}
-                    onValueChange={(value) => field.handleChange(value as ReportFrequency)}
+                    onValueChange={(value) => isReportFrequency(value) && field.handleChange(value)}
                   >
                     <SelectTrigger id={field.name}>
                       <SelectValue placeholder="Select frequency" />
@@ -357,7 +387,7 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
                   <Label htmlFor={field.name}>Format *</Label>
                   <Select
                     value={field.state.value}
-                    onValueChange={(value) => field.handleChange(value as ReportFormat)}
+                    onValueChange={(value) => isReportFormat(value) && field.handleChange(value)}
                   >
                     <SelectTrigger id={field.name}>
                       <SelectValue placeholder="Select format" />
@@ -564,7 +594,7 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
                         <Select
                           value={field.state.value}
                           onValueChange={(value) =>
-                            field.handleChange(value as 'previous_period' | 'previous_year' | 'none')
+                            isReportComparisonPeriod(value) && field.handleChange(value)
                           }
                         >
                           <SelectTrigger id="comparisonPeriod">

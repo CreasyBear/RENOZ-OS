@@ -12,6 +12,7 @@
 import { memo } from 'react';
 import { useDashboardMetrics } from '@/hooks/dashboard';
 import { useOrgFormat } from '@/hooks/use-org-format';
+import { serializeDateForUrl } from '@/hooks/filters/use-filter-url-state';
 import type { DateRange } from '@/lib/utils/date-presets';
 
 // Widget components
@@ -83,8 +84,8 @@ const WIDGET_METADATA: Record<string, {
 
 function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
   const { data: metrics, isLoading, error } = useDashboardMetrics({
-    dateFrom: dateRange.from.toISOString().split('T')[0],
-    dateTo: dateRange.to.toISOString().split('T')[0],
+    dateFrom: serializeDateForUrl(dateRange.from),
+    dateTo: serializeDateForUrl(dateRange.to),
   });
 
   const { formatCurrency, formatNumber } = useOrgFormat();
@@ -174,8 +175,8 @@ function ChartWidgetRenderer({
   dateRange: DateRange;
 }) {
   const { data: metrics, isLoading, error } = useDashboardMetrics({
-    dateFrom: dateRange.from.toISOString().split('T')[0],
-    dateTo: dateRange.to.toISOString().split('T')[0],
+    dateFrom: serializeDateForUrl(dateRange.from),
+    dateTo: serializeDateForUrl(dateRange.to),
   });
 
   const meta = WIDGET_METADATA[type];
@@ -235,8 +236,8 @@ function ChartWidgetRenderer({
 
 function ActivityFeedWidget({ dateRange }: { dateRange: DateRange }) {
   const { data: metrics, isLoading, error } = useDashboardMetrics({
-    dateFrom: dateRange.from.toISOString().split('T')[0],
-    dateTo: dateRange.to.toISOString().split('T')[0],
+    dateFrom: serializeDateForUrl(dateRange.from),
+    dateTo: serializeDateForUrl(dateRange.to),
   });
 
   const activities = metrics?.recentActivity ?? [];

@@ -19,7 +19,7 @@
 
 import bcrypt from "bcrypt";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { apiTokens, activities } from "../../../../drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
@@ -31,6 +31,7 @@ import {
   type ApiTokenListItem,
   type ApiTokenScope,
 } from "@/lib/schemas/auth";
+import { logger } from "@/lib/logger";
 
 /** bcrypt cost factor - 12 is recommended for 2024+ */
 const BCRYPT_ROUNDS = 12;
@@ -165,6 +166,11 @@ export const listApiTokens = createServerFn({ method: "GET" }).handler(
     // Build query based on role
     const isAdmin = ctx.role === "owner" || ctx.role === "admin";
 
+    const conditions = [eq(apiTokens.organizationId, ctx.organizationId)];
+    if (!isAdmin) {
+      conditions.push(eq(apiTokens.userId, ctx.user.id));
+    }
+
     const tokens = await db
       .select({
         id: apiTokens.id,
@@ -177,13 +183,8 @@ export const listApiTokens = createServerFn({ method: "GET" }).handler(
         revokedAt: apiTokens.revokedAt,
       })
       .from(apiTokens)
-      .where(
-        and(
-          eq(apiTokens.organizationId, ctx.organizationId),
-          isAdmin ? undefined : eq(apiTokens.userId, ctx.user.id)
-        )
-      )
-      .orderBy(apiTokens.createdAt);
+      .where(and(...conditions))
+      .orderBy(desc(apiTokens.createdAt));
 
     const now = new Date();
 
@@ -333,7 +334,7 @@ export async function validateApiToken(token: string) {
     .update(apiTokens)
     .set({ lastUsedAt: new Date() })
     .where(eq(apiTokens.id, tokenRecord.id))
-    .catch(console.error);
+    .catch((err) => logger.error('API token lastUsedAt update failed', err));
 
   return tokenRecord;
 }

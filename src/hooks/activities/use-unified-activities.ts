@@ -12,8 +12,9 @@ import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { transformAuditActivity, transformPlannedActivity } from '@/lib/schemas/unified-activity';
 import { getEntityActivities } from '@/server/functions/activities/activities';
 import { getCustomerActivities } from '@/server/customers';
+import { getCustomerEmailActivities } from '@/server/functions/communications/customer-communications';
 import { queryKeys } from '@/lib/query-keys';
-import type { ActivityEntityType } from '@/lib/schemas/activities';
+import { isActivityEntityType } from '@/lib/schemas/activities';
 
 // ============================================================================
 // HOOK
@@ -44,14 +45,22 @@ export function useUnifiedActivities({
   } = useQuery({
     queryKey: queryKeys.unifiedActivities.entityAudit(entityType, entityId),
     queryFn: async () => {
+      // Validate entityType before use
+      if (!isActivityEntityType(entityType)) {
+        throw new Error(`Invalid entity type: ${entityType}`);
+      }
+      
       const result = await getEntityActivities({
         data: {
-          entityType: entityType as ActivityEntityType,
+          entityType,
           entityId,
           pageSize,
         },
       });
-      return result.items.map((item) => transformAuditActivity(item as Parameters<typeof transformAuditActivity>[0]));
+      // transformAuditActivity expects Activity & { user?: ... }
+      // ActivityWithUser extends Activity and has compatible user structure
+      // The user property structure matches exactly, so we can pass directly
+      return result.items.map((item) => transformAuditActivity(item));
     },
     enabled: enabled && !!entityId,
   });
@@ -72,38 +81,59 @@ export function useUnifiedActivities({
           customerId: entityId,
         },
       });
-      // Transform planned activities to unified format
       return result.map((item) => transformPlannedActivity(item));
     },
     enabled: enabled && !!entityId && entityType === 'customer',
   });
 
-  // Merge and sort activities
+  // Fetch email activities (only for customer entity type)
+  const {
+    data: emailData,
+    isLoading: isLoadingEmails,
+    error: emailError,
+  } = useQuery({
+    queryKey: queryKeys.unifiedActivities.entityEmails(entityId),
+    queryFn: async () => {
+      const result = await getCustomerEmailActivities({
+        data: {
+          customerId: entityId,
+          limit: 50,
+        },
+      });
+      return result;
+    },
+    enabled: enabled && !!entityId && entityType === 'customer',
+  });
+
+  // Merge and sort activities (audit + planned + emails)
   const activities: UnifiedActivity[] = (() => {
     const audit = auditData || [];
     const planned = plannedData || [];
+    const emails = emailData || [];
 
-    // Combine and sort by createdAt (newest first)
-    return [...audit, ...planned].sort((a, b) => {
+    return [...audit, ...planned, ...emails].sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   })();
 
   return {
     activities,
-    isLoading: isLoadingAudit || isLoadingPlanned,
-    error: auditError || plannedError,
-    hasError: !!auditError || !!plannedError,
+    isLoading: isLoadingAudit || isLoadingPlanned || isLoadingEmails,
+    error: auditError || plannedError || emailError,
+    hasError: !!auditError || !!plannedError || !!emailError,
   };
 }
 
 // ============================================================================
-// MOCK DATA HELPER (for development/testing)
+// MOCK DATA HELPER (development only — tree-shaken from production builds)
 // ============================================================================
 
 export function useMockUnifiedActivities(
   options: UseUnifiedActivitiesOptions & { mockData?: UnifiedActivity[] } = { entityType: '', entityId: '' }
 ) {
+  if (!import.meta.env.DEV) {
+    throw new Error('useMockUnifiedActivities is only available in development');
+  }
   const { mockData } = options;
 
   return {

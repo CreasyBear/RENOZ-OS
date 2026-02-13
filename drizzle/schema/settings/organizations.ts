@@ -48,6 +48,10 @@ export interface OrganizationSettings {
   onboardingChecklistDismissedAt?: string;
   /** User ID who dismissed the onboarding checklist */
   onboardingChecklistDismissedBy?: string;
+  /** Xero integration: sales account code (default 200) */
+  xeroSalesAccount?: string;
+  /** Xero integration: tax type for GST (default OUTPUT) */
+  xeroTaxType?: string;
 }
 
 export interface OrganizationBranding {

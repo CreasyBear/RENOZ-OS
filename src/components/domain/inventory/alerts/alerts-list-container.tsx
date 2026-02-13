@@ -18,7 +18,6 @@
 import { useCallback, useMemo, useState, useRef } from "react";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   useAlerts,
   useToggleAlertActive,
@@ -87,15 +86,23 @@ export function AlertsListContainer({
     // Handle both array response and paginated response
     const rawData = Array.isArray(alertsData) ? alertsData : (alertsData?.alerts ?? []);
 
-    // Cast to AlertTableItem (server returns compatible shape)
+    // Server returns AlertWithDetails[] which is compatible with AlertTableItem
+    // Both types match the database schema structure
     return rawData as AlertTableItem[];
   }, [alertsData]);
 
   const toggleActiveMutation = useToggleAlertActive();
   const deleteMutation = useDeleteAlert();
 
+  // Type guard for sort fields
+  const isValidSortField = (field: string): field is SortField => {
+    return ["alertType", "isActive", "lastTriggeredAt", "createdAt"].includes(field);
+  };
+
   // Handle sort toggle
   const handleSort = useCallback((field: string) => {
+    if (!isValidSortField(field)) return;
+    
     setSortField((currentField) => {
       if (currentField === field) {
         // Toggle direction
@@ -106,7 +113,7 @@ export function AlertsListContainer({
       setSortDirection(
         ["lastTriggeredAt", "createdAt"].includes(field) ? "desc" : "asc"
       );
-      return field as SortField;
+      return field;
     });
   }, []);
 
@@ -201,11 +208,10 @@ export function AlertsListContainer({
 
   return (
     <>
-      <ConfirmationDialog />
       <AlertsListPresenter
         alerts={alerts}
         isLoading={isLoading}
-        error={error as Error | null}
+        error={error ?? null}
         sortField={sortField}
         sortDirection={sortDirection}
         onSort={handleSort}

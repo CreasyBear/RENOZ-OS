@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + config */
 /**
  * SLA Status Badge Component
  *
@@ -13,27 +14,9 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Clock, AlertTriangle, XCircle, CheckCircle, PauseCircle } from 'lucide-react';
+import type { SlaStatusType, SlaBadgeProps } from '@/lib/schemas/support/sla';
 
-export type SlaStatusType =
-  | 'on_track'
-  | 'at_risk'
-  | 'breached'
-  | 'paused'
-  | 'resolved'
-  | 'responded';
-
-export interface SlaBadgeProps {
-  /** Current SLA status */
-  status: SlaStatusType;
-  /** Optional label override */
-  label?: string;
-  /** Show icon alongside text */
-  showIcon?: boolean;
-  /** Additional CSS classes */
-  className?: string;
-  /** Size variant */
-  size?: 'sm' | 'default';
-}
+export type { SlaStatusType };
 
 const statusConfig: Record<
   SlaStatusType,

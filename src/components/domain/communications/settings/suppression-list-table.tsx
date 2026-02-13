@@ -47,7 +47,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
-import { toast } from "@/hooks";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
 import {
   useSuppressionList,
   useRemoveSuppression,
@@ -65,6 +66,7 @@ export interface SuppressionListTableProps {
   className?: string;
 }
 
+type SuppressionReasonFilter = SuppressionReason | "all";
 type SortField = 'email' | 'reason' | 'bounceType' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
@@ -177,7 +179,7 @@ export const SuppressionListTable = memo(function SuppressionListTable({
   // Filter state
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [reason, setReason] = useState<SuppressionReason | "all">("all");
+  const [reason, setReason] = useState<SuppressionReasonFilter>("all");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
     field: 'createdAt',
@@ -231,13 +233,17 @@ export const SuppressionListTable = memo(function SuppressionListTable({
       toast.success("Email removed from suppression list");
       setDeleteTarget(null);
     } catch (err) {
-      toast.error("Failed to remove from suppression list");
+      toast.error("Failed to remove from suppression list", {
+        description: getUserFriendlyMessage(err as Error),
+      });
     }
   }, [deleteTarget, removeMutation]);
 
   const handleReasonChange = useCallback((value: string) => {
-    setReason(value as SuppressionReason | "all");
-    setPage(1);
+    if (value === "all" || value === "bounce" || value === "complaint" || value === "unsubscribe" || value === "manual") {
+      setReason(value as SuppressionReasonFilter);
+      setPage(1);
+    }
   }, []);
 
   // Sort items client-side

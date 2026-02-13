@@ -22,6 +22,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toastError } from '@/hooks';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -63,7 +65,8 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
       await onBulkDecision(decision, comments);
       handleOpenChange(false);
     } catch (error) {
-      console.error('Bulk decision error:', error);
+      logger.error('Bulk decision error', error);
+      toastError(error instanceof Error ? error.message : 'Failed to submit bulk decision');
     } finally {
       setIsSubmitting(false);
     }
@@ -147,19 +150,18 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
 
           <div className="flex gap-2">
             <Button
-              variant="outline"
+              variant="destructive"
               onClick={() => handleBulkDecision('reject')}
               disabled={isSubmitting}
-              className="text-red-600 hover:text-red-700"
             >
               <XCircle className="mr-2 h-4 w-4" />
               Reject All
             </Button>
 
             <Button
+              variant="default"
               onClick={() => handleBulkDecision('approve')}
               disabled={isSubmitting}
-              className="bg-green-600 hover:bg-green-700"
             >
               <CheckCircle className="mr-2 h-4 w-4" />
               Approve All

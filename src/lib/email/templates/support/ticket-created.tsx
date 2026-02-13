@@ -122,7 +122,7 @@ export function TicketCreated(props: TicketCreatedProps) {
                 margin: 0,
               }}
             >
-              We've Received Your Request
+              We&apos;ve Received Your Request
             </Text>
             <Text
               style={{
@@ -152,7 +152,7 @@ export function TicketCreated(props: TicketCreatedProps) {
                 lineHeight: "1.5",
               }}
             >
-              Thank you for reaching out. We've received your support request and
+              Thank you for reaching out. We&apos;ve received your support request and
               our team is reviewing it.
             </Text>
 
@@ -278,7 +278,7 @@ export function TicketCreated(props: TicketCreatedProps) {
                       border: `1px solid ${emailTheme.light.border}`,
                     }}
                   >
-                    "{descriptionPreview}"
+                    &quot;{descriptionPreview}&quot;
                   </Text>
                 </>
               )}
@@ -310,7 +310,7 @@ export function TicketCreated(props: TicketCreatedProps) {
                   margin: "4px 0 0 0",
                 }}
               >
-                We'll get back to you as soon as possible
+                We&apos;ll get back to you as soon as possible
               </Text>
             </Section>
 

@@ -57,7 +57,11 @@ export function useCalendarJobs(input: ListCalendarJobsInput) {
       input.endDate,
       { installerIds: input.installerIds, statuses: input.statuses }
     ),
-    queryFn: () => listFn({ data: input }),
+    queryFn: async () => {
+      const result = await listFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     refetchOnWindowFocus: true,
   });
 }
@@ -70,7 +74,11 @@ export function useUnscheduledJobs(input: ListUnscheduledJobsInput = { limit: 50
 
   return useQuery({
     queryKey: queryKeys.jobCalendar.unscheduledList({ limit: input.limit, offset: input.offset }),
-    queryFn: () => listFn({ data: input }),
+    queryFn: async () => {
+      const result = await listFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
   });
 }
 
@@ -82,7 +90,11 @@ export function useCalendarInstallers() {
 
   return useQuery({
     queryKey: queryKeys.jobCalendar.installers({}),
-    queryFn: () => listFn({}),
+    queryFn: async () => {
+      const result = await listFn({});
+      if (result == null) throw new Error('Schedule list returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -103,7 +115,11 @@ export function useTimelineJobs(input: ListTimelineJobsInput) {
       input.endDate,
       { installerIds: input.installerIds, statuses: input.statuses }
     ),
-    queryFn: () => listFn({ data: input }),
+    queryFn: async () => {
+      const result = await listFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     refetchOnWindowFocus: true,
   });
 }
@@ -116,7 +132,11 @@ export function useTimelineStats(input: ListTimelineJobsInput) {
 
   return useQuery({
     queryKey: queryKeys.jobCalendar.timelineStats(input.startDate, input.endDate),
-    queryFn: () => statsFn({ data: input }),
+    queryFn: async () => {
+      const result = await statsFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -201,7 +221,11 @@ export function useCalendarTasksForKanban(input: ListCalendarJobsInput) {
       input.endDate,
       { installerIds: input.installerIds, statuses: input.statuses }
     ),
-    queryFn: () => listFn({ data: input }),
+    queryFn: async () => {
+      const result = await listFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     refetchOnWindowFocus: true,
   });
 }
@@ -238,7 +262,7 @@ export function useJobCalendarKanban(input: ListCalendarJobsInput) {
         },
       };
     });
-  }, [query.data?.tasks]);
+  }, [query.data]);
 
   return {
     ...query,
@@ -334,7 +358,11 @@ export function useCalendarOAuthConnection() {
   
   return useQuery({
     queryKey: queryKeys.jobCalendar.oauth.connection(),
-    queryFn: () => getConnectionFn(),
+    queryFn: async () => {
+      const result = await getConnectionFn();
+      if (result == null) throw new Error('Calendar connection returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   });
@@ -348,7 +376,11 @@ export function useAvailableCalendars() {
   
   return useQuery({
     queryKey: queryKeys.jobCalendar.oauth.calendars(),
-    queryFn: () => listCalendarsFn(),
+    queryFn: async () => {
+      const result = await listCalendarsFn();
+      if (result == null) throw new Error('Calendars list returned no data');
+      return result;
+    },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
 }
@@ -491,7 +523,7 @@ export function useCalendarOAuthStatus() {
  */
 export function useCalendarSyncStats(organizationId: string) {
   return useQuery({
-    queryKey: [...queryKeys.jobCalendar.oauth.status(), 'stats', organizationId] as const,
+    queryKey: queryKeys.jobCalendar.oauth.stats(organizationId),
     queryFn: async () => {
       // This would query the OAuth sync logs for calendar operations
       return {

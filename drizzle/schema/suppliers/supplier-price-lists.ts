@@ -10,14 +10,12 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   integer,
   date,
   boolean,
   timestamp,
-  check,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -27,6 +25,14 @@ import {
   auditColumns,
   currencyColumn,
   percentageColumn,
+  standardRlsPolicies,
+  nonNegativeCheck,
+  positiveCheck,
+  nullableNonNegativeCheck,
+  numericRangeCheck,
+  dateRangeCheck,
+  rangeCheck,
+  sqlCurrentDate,
 } from "../_shared/patterns";
 import { suppliers } from "./suppliers";
 import { products } from "../products/products";
@@ -81,7 +87,7 @@ export const supplierPriceLists = pgTable(
     discountValue: currencyColumn("discount_value"),
 
     // Validity period
-    effectiveDate: date("effective_date").notNull().default(sql`CURRENT_DATE`),
+    effectiveDate: date("effective_date").notNull().default(sqlCurrentDate()),
     expiryDate: date("expiry_date"),
 
     // Preference flags
@@ -161,63 +167,25 @@ export const supplierPriceLists = pgTable(
     ),
 
     // Price must be non-negative
-    priceCheck: check(
-      "supplier_price_lists_price_non_negative",
-      sql`${table.price} >= 0`
-    ),
+    priceCheck: nonNegativeCheck("supplier_price_lists_price_non_negative", table.price),
 
     // Min quantity must be positive
-    minQuantityCheck: check(
-      "supplier_price_lists_min_quantity_positive",
-      sql`${table.minQuantity} > 0`
-    ),
+    minQuantityCheck: positiveCheck("supplier_price_lists_min_quantity_positive", table.minQuantity),
 
     // Max quantity must be >= min quantity
-    quantityRangeCheck: check(
-      "supplier_price_lists_quantity_range",
-      sql`${table.maxQuantity} IS NULL OR ${table.maxQuantity} >= ${table.minQuantity}`
-    ),
+    quantityRangeCheck: numericRangeCheck("supplier_price_lists_quantity_range", table.minQuantity, table.maxQuantity),
 
     // Expiry date must be after effective date
-    dateRangeCheck: check(
-      "supplier_price_lists_date_range",
-      sql`${table.expiryDate} IS NULL OR ${table.expiryDate} > ${table.effectiveDate}`
-    ),
+    dateRangeCheckConstraint: dateRangeCheck("supplier_price_lists_date_range", table.effectiveDate, table.expiryDate),
 
     // Discount percent range (0-100)
-    discountCheck: check(
-      "supplier_price_lists_discount_range",
-      sql`${table.discountPercent} IS NULL OR (${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100)`
-    ),
+    discountCheck: rangeCheck("supplier_price_lists_discount_range", table.discountPercent, 0, 100),
 
     // Lead time must be non-negative
-    leadTimeCheck: check(
-      "supplier_price_lists_lead_time_non_negative",
-      sql`${table.leadTimeDays} IS NULL OR ${table.leadTimeDays} >= 0`
-    ),
+    leadTimeCheck: nullableNonNegativeCheck("supplier_price_lists_lead_time_non_negative", table.leadTimeDays),
 
     // RLS Policies
-    selectPolicy: pgPolicy("supplier_price_lists_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("supplier_price_lists_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("supplier_price_lists_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("supplier_price_lists_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("supplier_price_lists"),
   })
 );
 
@@ -300,27 +268,7 @@ export const supplierPriceHistory = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("supplier_price_history_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("supplier_price_history_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("supplier_price_history_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("supplier_price_history_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("supplier_price_history"),
   })
 );
 

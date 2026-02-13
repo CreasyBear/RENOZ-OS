@@ -42,10 +42,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
-  createPriceTier,
-  updatePriceTier,
-  deletePriceTier,
-} from "@/server/functions/products/product-pricing";
+  useCreatePriceTier,
+  useUpdatePriceTier,
+  useDeletePriceTier,
+} from "@/hooks/products";
+import type { PriceTier } from "@/lib/schemas/products";
 
 // Tier form schema
 const tierFormSchema = z.object({
@@ -63,15 +64,6 @@ const tierFormSchema = z.object({
 );
 
 type TierFormValues = z.infer<typeof tierFormSchema>;
-
-interface PriceTier {
-  id: string;
-  minQuantity: number;
-  maxQuantity: number | null;
-  price: number | null;
-  discountPercent: number | null;
-  isActive: boolean;
-}
 
 interface PriceTiersProps {
   productId: string;
@@ -93,7 +85,13 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTier, setEditingTier] = useState<PriceTier | null>(null);
   const [deletingTier, setDeletingTier] = useState<PriceTier | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Use mutation hooks
+  const createMutation = useCreatePriceTier();
+  const updateMutation = useUpdatePriceTier();
+  const deleteMutation = useDeletePriceTier();
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   const {
     control,
@@ -103,7 +101,7 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
     watch,
     formState: { errors },
   } = useForm<TierFormValues>({
-    resolver: zodResolver(tierFormSchema) as never,
+    resolver: zodResolver(tierFormSchema),
     defaultValues: {
       minQuantity: 1,
       maxQuantity: null,
@@ -113,6 +111,7 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch(); known limitation
   const watchPrice = watch("price");
   const watchDiscount = watch("discountPercent");
 
@@ -148,52 +147,46 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
   };
 
   // Submit form
-  const onSubmit = async (data: TierFormValues) => {
-    setIsSubmitting(true);
-    try {
-      if (editingTier) {
-        await updatePriceTier({
-          data: {
-            id: editingTier.id,
-            ...data,
-            maxQuantity: data.maxQuantity ?? undefined,
-            price: data.price ?? undefined,
-            discountPercent: data.discountPercent ?? undefined,
+  const onSubmit = (data: TierFormValues) => {
+    const tierData = {
+      ...data,
+      maxQuantity: data.maxQuantity ?? undefined,
+      price: data.price ?? undefined,
+      discountPercent: data.discountPercent ?? undefined,
+    };
+
+    if (editingTier) {
+      updateMutation.mutate(
+        { id: editingTier.id, ...tierData },
+        {
+          onSuccess: () => {
+            setIsDialogOpen(false);
+            onTiersChange?.();
           },
-        });
-      } else {
-        await createPriceTier({
-          data: {
-            productId,
-            ...data,
-            maxQuantity: data.maxQuantity ?? undefined,
-            price: data.price ?? undefined,
-            discountPercent: data.discountPercent ?? undefined,
+        }
+      );
+    } else {
+      createMutation.mutate(
+        { productId, ...tierData },
+        {
+          onSuccess: () => {
+            setIsDialogOpen(false);
+            onTiersChange?.();
           },
-        });
-      }
-      setIsDialogOpen(false);
-      onTiersChange?.();
-    } catch (error) {
-      console.error("Failed to save tier:", error);
-    } finally {
-      setIsSubmitting(false);
+        }
+      );
     }
   };
 
   // Delete tier
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deletingTier) return;
-    setIsSubmitting(true);
-    try {
-      await deletePriceTier({ data: { id: deletingTier.id } });
-      setDeletingTier(null);
-      onTiersChange?.();
-    } catch (error) {
-      console.error("Failed to delete tier:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    deleteMutation.mutate(deletingTier.id, {
+      onSuccess: () => {
+        setDeletingTier(null);
+        onTiersChange?.();
+      },
+    });
   };
 
   // Calculate effective price for a tier

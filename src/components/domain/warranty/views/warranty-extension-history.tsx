@@ -30,47 +30,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { CalendarPlus, History, AlertCircle, RefreshCw } from 'lucide-react';
 import { formatDateAustralian } from '@/lib/warranty/date-utils';
-import type { WarrantyExtensionTypeValue } from '@/lib/schemas/warranty/extensions';
 import { FormatAmount } from '@/components/shared/format/format-amount';
+import type {
+  WarrantyExtensionTypeValue,
+  WarrantyExtensionItem,
+  WarrantyExtensionHistoryProps,
+  WarrantyExtensionHistoryCompactProps,
+} from '@/lib/schemas/warranty';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface WarrantyExtensionHistoryProps {
-  /** The warranty ID to show extensions for */
-  warrantyId: string;
-  /** Original expiry date of the warranty */
-  originalExpiryDate?: Date | string;
-  /** Callback to open extend warranty dialog */
-  onExtendClick?: () => void;
-  /** Whether to show the extend button in the header */
-  showExtendButton?: boolean;
-  /** Optional CSS class name */
-  className?: string;
-  /** From route container (useWarrantyExtensions). */
-  extensions?: WarrantyExtensionItem[];
-  /** From route container (useWarrantyExtensions). */
-  isLoading?: boolean;
-  /** From route container (useWarrantyExtensions). */
-  isError?: boolean;
-  /** From route container (useWarrantyExtensions). */
-  onRetry?: () => void;
-}
-
-export interface WarrantyExtensionItem {
-  id: string;
-  warrantyId: string;
-  warrantyNumber: string;
-  extensionType: WarrantyExtensionTypeValue;
-  extensionMonths: number;
-  previousExpiryDate: string;
-  newExpiryDate: string;
-  price: number | null;
-  notes: string | null;
-  approvedById: string | null;
-  createdAt: string;
-}
+// Re-export for convenience
+export type { WarrantyExtensionItem, WarrantyExtensionHistoryProps, WarrantyExtensionHistoryCompactProps };
 
 // ============================================================================
 // EXTENSION TYPE BADGE
@@ -182,7 +151,7 @@ export function WarrantyExtensionHistory({
   isError,
   onRetry,
 }: WarrantyExtensionHistoryProps) {
-  const extensionItems = extensions ?? [];
+  const extensionItems = React.useMemo(() => extensions ?? [], [extensions]);
 
   // Calculate total months extended
   const totalMonthsExtended = React.useMemo(() => {
@@ -294,17 +263,6 @@ export function WarrantyExtensionHistory({
 // ============================================================================
 // COMPACT VERSION (for inline display)
 // ============================================================================
-
-export interface WarrantyExtensionHistoryCompactProps {
-  /** The warranty ID to show extensions for */
-  warrantyId: string;
-  /** Maximum number of items to show */
-  maxItems?: number;
-  /** From route container (useWarrantyExtensions). */
-  extensions?: WarrantyExtensionItem[];
-  /** From route container (useWarrantyExtensions). */
-  isLoading?: boolean;
-}
 
 export function WarrantyExtensionHistoryCompact({
   warrantyId: _warrantyId,

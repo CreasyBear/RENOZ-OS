@@ -12,7 +12,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, ilike, desc, asc, sql } from "drizzle-orm";
+import { eq, and, ilike, desc, asc, sql, isNull, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
 import { projects, projectMembers } from "drizzle/schema";
@@ -35,6 +35,8 @@ import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
 import { computeChanges } from "@/lib/activity-logger";
+import { logger as appLogger } from "@/lib/logger";
+import { generateProjectHandoverPackPdf } from "@/server/functions/documents";
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -52,6 +54,40 @@ const PROJECT_EXCLUDED_FIELDS: string[] = [
   "version",
   "organizationId",
 ];
+
+/**
+ * Valid status transitions for projects.
+ * Terminal states (completed, cancelled) cannot transition to other states.
+ *
+ * @see docs/design-system/PROJECTS-DOMAIN-PHILOSOPHY.md Part 2.1 Status Lifecycle
+ */
+const PROJECT_STATUS_TRANSITIONS: Record<string, string[]> = {
+  quoting: ["approved", "cancelled"],
+  approved: ["in_progress", "on_hold", "cancelled"],
+  in_progress: ["on_hold", "completed", "cancelled"],
+  on_hold: ["in_progress", "cancelled"],
+  completed: [], // Terminal state
+  cancelled: [], // Terminal state
+};
+
+/**
+ * Validates that a status transition is allowed.
+ * @throws Error if the transition is invalid
+ */
+function validateStatusTransition(
+  currentStatus: string,
+  newStatus: string
+): void {
+  if (currentStatus === newStatus) return; // No change, always valid
+
+  const allowedTransitions = PROJECT_STATUS_TRANSITIONS[currentStatus] ?? [];
+  if (!allowedTransitions.includes(newStatus)) {
+    throw new Error(
+      `Invalid status transition: cannot change from "${currentStatus}" to "${newStatus}". ` +
+        `Allowed transitions from "${currentStatus}": ${allowedTransitions.length ? allowedTransitions.join(", ") : "none (terminal state)"}`
+    );
+  }
+}
 
 // ============================================================================
 // PROJECT CRUD
@@ -99,11 +135,11 @@ export const getProjects = createServerFn({ method: "GET" })
     const whereClause = and(...conditions);
 
     // Get total count
-    const countResult = await db
-      .select({ count: sql<number>`count(*)` })
+    const [countRow] = await db
+      .select({ count: count() })
       .from(projects)
       .where(whereClause);
-    const totalItems = Number(countResult[0]?.count ?? 0);
+    const totalItems = countRow?.count ?? 0;
 
     // Get paginated results
     const offset = (page - 1) * pageSize;
@@ -120,7 +156,38 @@ export const getProjects = createServerFn({ method: "GET" })
     const orderDirection = sortOrder === "asc" ? asc : desc;
 
     const items = await db
-      .select()
+      .select({
+        id: projects.id,
+        organizationId: projects.organizationId,
+        projectNumber: projects.projectNumber,
+        title: projects.title,
+        description: projects.description,
+        projectType: projects.projectType,
+        status: projects.status,
+        priority: projects.priority,
+        customerId: projects.customerId,
+        orderId: projects.orderId,
+        siteAddress: projects.siteAddress,
+        scope: projects.scope,
+        outcomes: projects.outcomes,
+        keyFeatures: projects.keyFeatures,
+        startDate: projects.startDate,
+        targetCompletionDate: projects.targetCompletionDate,
+        actualCompletionDate: projects.actualCompletionDate,
+        progressPercent: projects.progressPercent,
+        estimatedTotalValue: projects.estimatedTotalValue,
+        actualTotalCost: projects.actualTotalCost,
+        metadata: projects.metadata,
+        customerSatisfactionRating: projects.customerSatisfactionRating,
+        customerFeedback: projects.customerFeedback,
+        handoverPackUrl: projects.handoverPackUrl,
+        version: projects.version,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+        createdBy: projects.createdBy,
+        updatedBy: projects.updatedBy,
+        deletedAt: projects.deletedAt,
+      })
       .from(projects)
       .where(whereClause)
       .orderBy(orderDirection(orderColumn))
@@ -195,7 +262,38 @@ export const getProjectsCursor = createServerFn({ method: "GET" })
     const orderDirection = sortOrder === "asc" ? asc : desc;
 
     const results = await db
-      .select()
+      .select({
+        id: projects.id,
+        organizationId: projects.organizationId,
+        projectNumber: projects.projectNumber,
+        title: projects.title,
+        description: projects.description,
+        projectType: projects.projectType,
+        status: projects.status,
+        priority: projects.priority,
+        customerId: projects.customerId,
+        orderId: projects.orderId,
+        siteAddress: projects.siteAddress,
+        scope: projects.scope,
+        outcomes: projects.outcomes,
+        keyFeatures: projects.keyFeatures,
+        startDate: projects.startDate,
+        targetCompletionDate: projects.targetCompletionDate,
+        actualCompletionDate: projects.actualCompletionDate,
+        progressPercent: projects.progressPercent,
+        estimatedTotalValue: projects.estimatedTotalValue,
+        actualTotalCost: projects.actualTotalCost,
+        metadata: projects.metadata,
+        customerSatisfactionRating: projects.customerSatisfactionRating,
+        customerFeedback: projects.customerFeedback,
+        handoverPackUrl: projects.handoverPackUrl,
+        version: projects.version,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+        createdBy: projects.createdBy,
+        updatedBy: projects.updatedBy,
+        deletedAt: projects.deletedAt,
+      })
       .from(projects)
       .where(whereClause)
       .orderBy(orderDirection(projects.createdAt), orderDirection(projects.id))
@@ -238,35 +336,40 @@ export const createProject = createServerFn({ method: "POST" })
     // Generate project number (PRJ-XXXX format)
     const projectNumber = await generateProjectNumber(ctx.organizationId);
 
-    const [project] = await db
-      .insert(projects)
-      .values({
-        organizationId: ctx.organizationId,
-        projectNumber,
-        title: data.title,
-        description: data.description,
-        projectType: data.projectType,
-        priority: data.priority,
-        customerId: data.customerId,
-        orderId: data.orderId,
-        siteAddress: data.siteAddress,
-        scope: data.scope,
-        outcomes: data.outcomes,
-        keyFeatures: data.keyFeatures,
-        startDate: data.startDate,
-        targetCompletionDate: data.targetCompletionDate,
-        estimatedTotalValue: data.estimatedTotalValue?.toString(),
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+    // Create project and add owner atomically
+    const project = await db.transaction(async (tx) => {
+      const [newProject] = await tx
+        .insert(projects)
+        .values({
+          organizationId: ctx.organizationId,
+          projectNumber,
+          title: data.title,
+          description: data.description,
+          projectType: data.projectType,
+          priority: data.priority,
+          customerId: data.customerId,
+          orderId: data.orderId,
+          siteAddress: data.siteAddress,
+          scope: data.scope,
+          outcomes: data.outcomes,
+          keyFeatures: data.keyFeatures,
+          startDate: data.startDate,
+          targetCompletionDate: data.targetCompletionDate,
+          estimatedTotalValue: data.estimatedTotalValue?.toString(),
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
 
-    // Add creator as project owner
-    await db.insert(projectMembers).values({
-      organizationId: ctx.organizationId,
-      projectId: project.id,
-      userId: ctx.user.id,
-      role: "owner",
+      // Add creator as project owner
+      await tx.insert(projectMembers).values({
+        organizationId: ctx.organizationId,
+        projectId: newProject.id,
+        userId: ctx.user.id,
+        role: "owner",
+      });
+
+      return newProject;
     });
 
     // Log project creation
@@ -314,6 +417,11 @@ export const updateProject = createServerFn({ method: "POST" })
 
     if (!existingProject) {
       throw new Error("Project not found");
+    }
+
+    // Validate status transition if status is being changed
+    if (updates.status && updates.status !== existingProject.status) {
+      validateStatusTransition(existingProject.status, updates.status);
     }
 
     const before = existingProject;
@@ -369,11 +477,12 @@ export const deleteProject = createServerFn({ method: "POST" })
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify project exists and belongs to organization
+    // Verify project exists and belongs to organization (exclude already-deleted)
     const existingProject = await db.query.projects.findFirst({
       where: and(
         eq(projects.id, data.projectId),
-        eq(projects.organizationId, ctx.organizationId)
+        eq(projects.organizationId, ctx.organizationId),
+        isNull(projects.deletedAt)
       ),
     });
 
@@ -386,6 +495,7 @@ export const deleteProject = createServerFn({ method: "POST" })
       .update(projects)
       .set({
         status: "cancelled",
+        deletedAt: new Date(),
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
       })
@@ -564,11 +674,20 @@ export const completeProject = createServerFn({ method: "POST" })
       updateData.actualTotalCost = data.actualTotalCost.toString();
     }
 
-    // TODO: Generate handover pack if requested
-    if (data.generateHandoverPack) {
-      // Handover pack generation would be implemented here
-      // For now, we'll just set a placeholder URL
-      updateData.handoverPackUrl = `/api/handover/${data.projectId}`;
+    // Generate handover pack if requested (completed status only)
+    if (data.generateHandoverPack && data.status === "completed") {
+      try {
+        const result = await generateProjectHandoverPackPdf({
+          data: { projectId: data.projectId },
+        });
+        updateData.handoverPackUrl = result.url;
+      } catch (error) {
+        // Log but don't block completion
+        appLogger.error("Handover pack generation failed", error, {
+          domain: "projects",
+          projectId: data.projectId,
+        });
+      }
     }
 
     const [updatedProject] = await db

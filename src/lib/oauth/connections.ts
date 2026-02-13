@@ -4,7 +4,7 @@
  * Shared helpers for creating and updating OAuth connection records.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { and, eq, sql } from 'drizzle-orm';
 import { oauthConnections, oauthServicePermissions, oauthSyncLogs } from 'drizzle/schema/oauth';
 import { encryptOAuthToken } from './token-encryption';
@@ -17,7 +17,7 @@ export interface OAuthConnectionTokens {
 }
 
 export async function createOAuthConnections(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   params: {
     organizationId: string;
     userId: string;
@@ -89,7 +89,7 @@ export async function createOAuthConnections(
 }
 
 export async function updateOAuthConnectionTokens(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   params: {
     organizationId: string;
     connectionId: string;

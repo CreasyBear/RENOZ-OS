@@ -156,6 +156,53 @@ export function formatContactName(firstName: string, lastName: string): string {
 }
 
 /**
+ * Get initials from a name string or firstName/lastName pair
+ * Handles both signatures to eliminate DRY violations
+ * 
+ * @example
+ * getInitials("John Doe") // "JD"
+ * getInitials("John", "Doe") // "JD"
+ * getInitials("Mary Jane Watson") // "MJ"
+ */
+export function getInitials(nameOrFirstName: string, lastName?: string): string {
+  if (lastName !== undefined) {
+    // Two-parameter signature: firstName, lastName
+    return `${nameOrFirstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  }
+  // Single-parameter signature: full name string
+  return nameOrFirstName
+    .split(' ')
+    .map((n) => n.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+/**
+ * Calculate days since a given date string
+ * Returns null if date is null/undefined
+ */
+export function calculateDaysSince(dateString: string | null | undefined): number | null {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Capitalize first letter of a string
+ * 
+ * @example
+ * capitalizeFirst("hello") // "Hello"
+ * capitalizeFirst("HELLO") // "HELLO" (preserves rest)
+ */
+export function capitalizeFirst(str: string): string {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
  * Format full address
  */
 export function formatAddress(address: {
@@ -332,16 +379,18 @@ export function sortCustomers(
       case 'healthScore':
         comparison = (a.healthScore ?? 0) - (b.healthScore ?? 0)
         break
-      case 'lifetimeValue':
+      case 'lifetimeValue': {
         const aValue = typeof a.lifetimeValue === 'string' ? parseFloat(a.lifetimeValue) : (a.lifetimeValue ?? 0)
         const bValue = typeof b.lifetimeValue === 'string' ? parseFloat(b.lifetimeValue) : (b.lifetimeValue ?? 0)
         comparison = aValue - bValue
         break
-      case 'lastOrderDate':
+      }
+      case 'lastOrderDate': {
         const aDate = a.lastOrderDate ? new Date(a.lastOrderDate).getTime() : 0
         const bDate = b.lastOrderDate ? new Date(b.lastOrderDate).getTime() : 0
         comparison = aDate - bDate
         break
+      }
       case 'createdAt':
         comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         break

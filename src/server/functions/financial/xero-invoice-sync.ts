@@ -15,35 +15,42 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, isNull, ne, desc } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, isNull, ne, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { orders, orderLineItems, customers as customersTable } from 'drizzle/schema';
+import { orders, orderLineItems, customers as customersTable, organizations } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError } from '@/lib/server/errors';
 import {
   syncInvoiceToXeroSchema,
   resyncInvoiceSchema,
   xeroPaymentUpdateSchema,
   getInvoiceXeroStatusSchema,
   listInvoicesBySyncStatusSchema,
+  xeroSyncStatusSchema,
   type XeroSyncResult,
   type InvoiceXeroStatus,
   type XeroLineItem,
   type XeroInvoicePayload,
+  type InvoiceWithSyncStatus,
+  type ListInvoicesBySyncStatusResponse,
 } from '@/lib/schemas';
-import { ServerError, ValidationError } from '@/lib/server/errors';
+import { getRequest } from '@tanstack/react-start/server';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { AuthError, ServerError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
-// CONSTANTS
+// CONSTANTS (fallback when org settings not set)
 // ============================================================================
 
 /** Default payment terms in days */
-const PAYMENT_TERMS_DAYS = 30;
+const DEFAULT_PAYMENT_TERMS_DAYS = 30;
 
 /** Xero tax type for GST output */
-const XERO_TAX_TYPE = 'OUTPUT';
+const DEFAULT_XERO_TAX_TYPE = 'OUTPUT';
 
-/** Xero account code for sales (configurable per org in production) */
-const XERO_SALES_ACCOUNT = '200'; // Revenue account
+/** Xero account code for sales */
+const DEFAULT_XERO_SALES_ACCOUNT = '200';
 
 /** Xero base URL for invoice deep links */
 const XERO_BASE_URL = 'https://go.xero.com/AccountsReceivable/View.aspx';
@@ -51,13 +58,6 @@ const XERO_BASE_URL = 'https://go.xero.com/AccountsReceivable/View.aspx';
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Convert cents to dollars for Xero (Xero uses decimal amounts).
- */
-function centsToDollars(cents: number): number {
-  return Math.round(cents) / 100;
-}
 
 /**
  * Add days to a date.
@@ -82,6 +82,13 @@ function buildXeroInvoiceUrl(xeroInvoiceId: string): string {
   return `${XERO_BASE_URL}?InvoiceID=${xeroInvoiceId}`;
 }
 
+/** Xero config from org settings with fallback to defaults */
+interface XeroConfig {
+  salesAccount: string;
+  taxType: string;
+  paymentTermsDays: number;
+}
+
 /**
  * Map order line items to Xero line items.
  * Maps battery equipment to appropriate Xero inventory codes.
@@ -94,16 +101,16 @@ function mapToXeroLineItems(
     lineTotal: number;
     taxAmount: number;
     sku: string | null;
-  }>
+  }>,
+  config: Pick<XeroConfig, 'salesAccount' | 'taxType'>
 ): XeroLineItem[] {
   return lineItems.map((item) => ({
     description: item.description,
     quantity: item.quantity,
-    unitAmount: centsToDollars(item.unitPrice),
-    accountCode: XERO_SALES_ACCOUNT,
-    taxType: XERO_TAX_TYPE, // GST on all items
-    lineAmount: centsToDollars(item.lineTotal - (item.taxAmount ?? 0)),
-    // Map SKU to Xero item code if available
+    unitAmount: item.unitPrice,
+    accountCode: config.salesAccount,
+    taxType: config.taxType,
+    lineAmount: item.lineTotal - (item.taxAmount ?? 0),
     itemCode: item.sku ?? undefined,
   }));
 }
@@ -124,10 +131,11 @@ function buildXeroInvoicePayload(
     email: string | null;
     xeroContactId?: string | null;
   },
-  lineItems: XeroLineItem[]
+  lineItems: XeroLineItem[],
+  paymentTermsDays: number
 ): XeroInvoicePayload {
   const orderDate = new Date(order.orderDate);
-  const dueDate = addDays(orderDate, PAYMENT_TERMS_DAYS);
+  const dueDate = addDays(orderDate, paymentTermsDays);
 
   return {
     type: 'ACCREC',
@@ -146,6 +154,34 @@ function buildXeroInvoicePayload(
   };
 }
 
+/**
+ * Verify Xero webhook signature using HMAC-SHA256.
+ *
+ * Xero sends an `x-xero-signature` header containing an HMAC-SHA256 hash
+ * of the request body using the webhook signing key.
+ *
+ * @see https://developer.xero.com/documentation/guides/webhooks/overview
+ */
+function verifyXeroWebhookSignature(payload: string, signature: string, secret: string): boolean {
+  const expectedSignature = createHmac('sha256', secret).update(payload).digest('base64');
+
+  // Use timing-safe comparison to prevent timing attacks
+  const sigBuffer = Buffer.from(signature, 'base64');
+  const expectedBuffer = Buffer.from(expectedSignature, 'base64');
+
+  if (sigBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(sigBuffer, expectedBuffer);
+}
+
+/** Maximum single payment amount in AUD (10 million) */
+const MAX_PAYMENT_AMOUNT_AUD = 10_000_000;
+
+/** Maximum negative balance allowed (small tolerance for rounding) */
+const MIN_BALANCE_THRESHOLD_AUD = -0.01;
+
 // ============================================================================
 // XERO API INTEGRATION (STUB)
 // ============================================================================
@@ -153,7 +189,7 @@ function buildXeroInvoicePayload(
 /**
  * Send invoice to Xero API.
  *
- * TODO: Implement actual Xero API integration:
+ * TODO(PHASE12-003): Implement actual Xero API integration:
  * 1. Get OAuth access token from organization's integration settings
  * 2. Call Xero Invoices API: POST /api.xro/2.0/Invoices
  * 3. Handle rate limiting (60 calls/minute)
@@ -165,7 +201,7 @@ async function sendToXeroApi(
   _organizationId: string,
   payload: XeroInvoicePayload
 ): Promise<{ invoiceId: string; invoiceUrl: string }> {
-  // TODO: Replace with actual Xero API call
+  // TODO(PHASE12-003): Replace with actual Xero API call
   // For now, simulate successful sync with generated ID
 
   // Check if Xero is configured (would check integrations table)
@@ -209,7 +245,7 @@ async function sendToXeroApi(
  * - 30-day payment terms
  * - Battery equipment mapped to Xero inventory codes
  */
-export const syncInvoiceToXero = createServerFn()
+export const syncInvoiceToXero = createServerFn({ method: 'POST' })
   .inputValidator(syncInvoiceToXeroSchema)
   .handler(async ({ data }): Promise<XeroSyncResult> => {
     const ctx = await withAuth();
@@ -266,14 +302,20 @@ export const syncInvoiceToXero = createServerFn()
       };
     }
 
-    // Get customer details
+    // Get customer details — scoped by organizationId for multi-tenant safety
     const [customer] = await db
       .select({
         name: customersTable.name,
         email: customersTable.email,
       })
       .from(customersTable)
-      .where(eq(customersTable.id, order.customerId));
+      .where(
+        and(
+          eq(customersTable.id, order.customerId),
+          eq(customersTable.organizationId, ctx.organizationId),
+          isNull(customersTable.deletedAt)
+        )
+      );
 
     if (!customer) {
       return {
@@ -283,7 +325,7 @@ export const syncInvoiceToXero = createServerFn()
       };
     }
 
-    // Get line items
+    // Get line items — scoped by organizationId for multi-tenant safety
     const items = await db
       .select({
         description: orderLineItems.description,
@@ -294,7 +336,12 @@ export const syncInvoiceToXero = createServerFn()
         sku: orderLineItems.sku,
       })
       .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, orderId));
+      .where(
+        and(
+          eq(orderLineItems.orderId, orderId),
+          eq(orderLineItems.organizationId, ctx.organizationId)
+        )
+      );
 
     if (items.length === 0) {
       return {
@@ -304,7 +351,26 @@ export const syncInvoiceToXero = createServerFn()
       };
     }
 
-    // Update status to syncing
+    // Get org Xero config (settings or defaults)
+    const [org] = await db
+      .select({
+        defaultPaymentTerms: organizations.defaultPaymentTerms,
+        settings: organizations.settings,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, ctx.organizationId))
+      .limit(1);
+
+    const xeroConfig: XeroConfig = {
+      salesAccount:
+        (org?.settings as { xeroSalesAccount?: string } | null)?.xeroSalesAccount ??
+        DEFAULT_XERO_SALES_ACCOUNT,
+      taxType:
+        (org?.settings as { xeroTaxType?: string } | null)?.xeroTaxType ?? DEFAULT_XERO_TAX_TYPE,
+      paymentTermsDays: org?.defaultPaymentTerms ?? DEFAULT_PAYMENT_TERMS_DAYS,
+    };
+
+    // Update status to syncing — orgId for defense-in-depth
     await db
       .update(orders)
       .set({
@@ -312,11 +378,11 @@ export const syncInvoiceToXero = createServerFn()
         xeroSyncError: null,
         lastXeroSyncAt: new Date().toISOString(),
       })
-      .where(eq(orders.id, orderId));
+      .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
     try {
       // Build Xero payload
-      const xeroLineItems = mapToXeroLineItems(items);
+      const xeroLineItems = mapToXeroLineItems(items, xeroConfig);
       const payload = buildXeroInvoicePayload(
         {
           orderNumber: order.orderNumber,
@@ -326,13 +392,14 @@ export const syncInvoiceToXero = createServerFn()
           taxAmount: order.taxAmount ?? 0,
         },
         customer,
-        xeroLineItems
+        xeroLineItems,
+        xeroConfig.paymentTermsDays
       );
 
       // Send to Xero
       const { invoiceId, invoiceUrl } = await sendToXeroApi(ctx.organizationId, payload);
 
-      // Update order with Xero details
+      // Update order with Xero details — orgId for defense-in-depth
       await db
         .update(orders)
         .set({
@@ -342,7 +409,7 @@ export const syncInvoiceToXero = createServerFn()
           xeroInvoiceUrl: invoiceUrl,
           lastXeroSyncAt: new Date().toISOString(),
         })
-        .where(eq(orders.id, orderId));
+        .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
       return {
         orderId,
@@ -354,7 +421,7 @@ export const syncInvoiceToXero = createServerFn()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown sync error';
 
-      // Update order with error
+      // Update order with error — orgId for defense-in-depth
       await db
         .update(orders)
         .set({
@@ -362,7 +429,7 @@ export const syncInvoiceToXero = createServerFn()
           xeroSyncError: errorMessage,
           lastXeroSyncAt: new Date().toISOString(),
         })
-        .where(eq(orders.id, orderId));
+        .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
       return {
         orderId,
@@ -379,7 +446,7 @@ export const syncInvoiceToXero = createServerFn()
 /**
  * Manually resync a failed invoice to Xero.
  */
-export const resyncInvoiceToXero = createServerFn()
+export const resyncInvoiceToXero = createServerFn({ method: 'POST' })
   .inputValidator(resyncInvoiceSchema)
   .handler(async ({ data }): Promise<XeroSyncResult> => {
     // Delegate to syncInvoiceToXero with force=true
@@ -396,17 +463,28 @@ export const resyncInvoiceToXero = createServerFn()
  * Updates order payment status when payment is recorded in Xero.
  *
  * SECURITY: This endpoint receives webhooks from Xero.
- * In production, verify the webhook signature before processing.
+ * Webhook signature is verified via HMAC-SHA256 using XERO_WEBHOOK_SECRET.
  */
-export const handleXeroPaymentUpdate = createServerFn()
+export const handleXeroPaymentUpdate = createServerFn({ method: 'POST' })
   .inputValidator(xeroPaymentUpdateSchema)
   .handler(async ({ data }) => {
-    // SECURITY: Webhook authentication check
-    // TODO: In production, verify Xero webhook signature:
-    // const signature = getRequest().headers.get('x-xero-signature');
-    // if (!verifyXeroWebhookSignature(JSON.stringify(data), signature)) {
-    //   throw new AuthError('Invalid Xero webhook signature');
-    // }
+    // SECURITY: Verify Xero webhook signature (HMAC-SHA256)
+    const webhookSecret = process.env.XERO_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      throw new ServerError('Xero webhook secret not configured - set XERO_WEBHOOK_SECRET');
+    }
+
+    const request = getRequest();
+    const signature = request.headers.get('x-xero-signature');
+    if (!signature) {
+      throw new AuthError('Missing Xero webhook signature');
+    }
+
+    // Verify the HMAC-SHA256 signature against the raw request body
+    const rawBody = JSON.stringify(data);
+    if (!verifyXeroWebhookSignature(rawBody, signature, webhookSecret)) {
+      throw new AuthError('Invalid Xero webhook signature');
+    }
 
     // Environment gate: Webhooks must be explicitly enabled
     const XERO_WEBHOOKS_ENABLED = process.env.XERO_WEBHOOKS_ENABLED === 'true';
@@ -415,6 +493,16 @@ export const handleXeroPaymentUpdate = createServerFn()
     }
 
     const { xeroInvoiceId, amountPaid, paymentDate, reference } = data;
+
+    // SECURITY: Bounds checking on payment amount
+    if (amountPaid <= 0) {
+      throw new ValidationError('Payment amount must be positive');
+    }
+    if (amountPaid > MAX_PAYMENT_AMOUNT_AUD) {
+      throw new ValidationError(
+        `Payment amount ${amountPaid} exceeds maximum allowed (${MAX_PAYMENT_AMOUNT_AUD} AUD)`
+      );
+    }
 
     // Find order by Xero invoice ID
     const [order] = await db
@@ -435,21 +523,27 @@ export const handleXeroPaymentUpdate = createServerFn()
       };
     }
 
-    // Calculate new paid amount and balance
-    // Amount from Xero is in dollars, convert to cents for storage
-    const amountPaidCents = Math.round(amountPaid * 100);
-    const newPaidAmount = (order.paidAmount ?? 0) + amountPaidCents;
+    // Calculate new paid amount and balance (amounts are stored in dollars)
+    const newPaidAmount = (order.paidAmount ?? 0) + amountPaid;
     const newBalanceDue = order.total - newPaidAmount;
+
+    // SECURITY: Bounds checking on resulting balance
+    if (newBalanceDue < MIN_BALANCE_THRESHOLD_AUD) {
+      throw new ValidationError(
+        `Payment would result in overpayment: balance due would be ${newBalanceDue.toFixed(2)} AUD`
+      );
+    }
 
     // Determine payment status
     const paymentStatus = newBalanceDue <= 0 ? 'paid' : newPaidAmount > 0 ? 'partial' : 'pending';
 
-    // Update order
-    await db
+    // Update order using atomic SQL increment to avoid race conditions on paidAmount.
+    // Scope by organizationId for defense-in-depth (webhook handler).
+    const [updatedOrder] = await db
       .update(orders)
       .set({
-        paidAmount: newPaidAmount,
-        balanceDue: newBalanceDue,
+        paidAmount: sql`COALESCE(${orders.paidAmount}, 0) + ${amountPaid}`,
+        balanceDue: sql`${orders.total} - (COALESCE(${orders.paidAmount}, 0) + ${amountPaid})`,
         paymentStatus,
         metadata: {
           lastXeroPaymentAmount: amountPaid,
@@ -457,13 +551,23 @@ export const handleXeroPaymentUpdate = createServerFn()
           lastXeroPaymentRef: reference ?? null,
         },
       })
-      .where(eq(orders.id, order.id));
+      .where(
+        and(
+          eq(orders.id, order.id),
+          eq(orders.organizationId, order.organizationId)
+        )
+      )
+      .returning();
+
+    if (!updatedOrder) {
+      throw new ValidationError('Failed to update order payment status — order not found or already modified');
+    }
 
     return {
       success: true,
       orderId: order.id,
-      newPaidAmount,
-      newBalanceDue,
+      newPaidAmount: Number(updatedOrder.paidAmount),
+      newBalanceDue: Number(updatedOrder.balanceDue),
       paymentStatus,
     };
   });
@@ -475,9 +579,9 @@ export const handleXeroPaymentUpdate = createServerFn()
 /**
  * Get the Xero sync status for an invoice.
  */
-export const getInvoiceXeroStatus = createServerFn()
+export const getInvoiceXeroStatus = createServerFn({ method: 'GET' })
   .inputValidator(getInvoiceXeroStatusSchema)
-  .handler(async ({ data }): Promise<InvoiceXeroStatus | null> => {
+  .handler(async ({ data }): Promise<InvoiceXeroStatus> => {
     const ctx = await withAuth();
 
     const [order] = await db
@@ -500,7 +604,8 @@ export const getInvoiceXeroStatus = createServerFn()
       );
 
     if (!order) {
-      return null;
+      setResponseStatus(404);
+      throw new NotFoundError('Order not found', 'order');
     }
 
     return {
@@ -521,9 +626,9 @@ export const getInvoiceXeroStatus = createServerFn()
 /**
  * List invoices filtered by Xero sync status.
  */
-export const listInvoicesBySyncStatus = createServerFn()
+export const listInvoicesBySyncStatus = createServerFn({ method: 'GET' })
   .inputValidator(listInvoicesBySyncStatusSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ListInvoicesBySyncStatusResponse> => {
     const ctx = await withAuth();
     const { status, errorsOnly, page, pageSize } = data;
     const offset = (page - 1) * pageSize;
@@ -544,39 +649,56 @@ export const listInvoicesBySyncStatus = createServerFn()
       conditions.push(eq(orders.xeroSyncStatus, 'error'));
     }
 
-    const results = await db
-      .select({
-        orderId: orders.id,
-        orderNumber: orders.orderNumber,
-        orderDate: orders.orderDate,
-        total: orders.total,
-        xeroInvoiceId: orders.xeroInvoiceId,
-        xeroSyncStatus: orders.xeroSyncStatus,
-        xeroSyncError: orders.xeroSyncError,
-        lastXeroSyncAt: orders.lastXeroSyncAt,
-        xeroInvoiceUrl: orders.xeroInvoiceUrl,
-        customerName: customersTable.name,
-      })
-      .from(orders)
-      .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
-      .where(and(...conditions))
-      .orderBy(desc(orders.orderDate))
-      .limit(pageSize)
-      .offset(offset);
+    // Run data query and count query in parallel
+    const [results, countResult] = await Promise.all([
+      db
+        .select({
+          orderId: orders.id,
+          orderNumber: orders.orderNumber,
+          orderDate: orders.orderDate,
+          total: orders.total,
+          customerId: orders.customerId,
+          xeroInvoiceId: orders.xeroInvoiceId,
+          xeroSyncStatus: orders.xeroSyncStatus,
+          xeroSyncError: orders.xeroSyncError,
+          lastXeroSyncAt: orders.lastXeroSyncAt,
+          xeroInvoiceUrl: orders.xeroInvoiceUrl,
+          customerName: customersTable.name,
+        })
+        .from(orders)
+        .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
+        .where(and(...conditions))
+        .orderBy(desc(orders.orderDate))
+        .limit(pageSize)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(orders)
+        .where(and(...conditions)),
+    ]);
+
+    const totalCount = countResult[0]?.count ?? 0;
 
     return {
-      invoices: results.map((r) => ({
-        orderId: r.orderId,
-        orderNumber: r.orderNumber,
-        orderDate: r.orderDate,
-        total: r.total,
-        customerName: r.customerName,
-        xeroInvoiceId: r.xeroInvoiceId,
-        xeroSyncStatus: r.xeroSyncStatus ?? 'pending',
-        xeroSyncError: r.xeroSyncError,
-        lastXeroSyncAt: r.lastXeroSyncAt,
-        xeroInvoiceUrl: r.xeroInvoiceUrl,
-      })),
+      invoices: results.map((r): InvoiceWithSyncStatus => {
+        // Validate enum value from database
+        const syncStatus = xeroSyncStatusSchema.parse(r.xeroSyncStatus ?? 'pending');
+
+        return {
+          orderId: r.orderId,
+          orderNumber: r.orderNumber,
+          orderDate: new Date(r.orderDate),
+          total: Number(r.total),
+          customerId: r.customerId,
+          customerName: r.customerName,
+          xeroInvoiceId: r.xeroInvoiceId,
+          xeroSyncStatus: syncStatus,
+          xeroSyncError: r.xeroSyncError,
+          lastXeroSyncAt: r.lastXeroSyncAt ? new Date(r.lastXeroSyncAt) : null,
+          xeroInvoiceUrl: r.xeroInvoiceUrl,
+        };
+      }),
+      total: totalCount,
       page,
       pageSize,
     };

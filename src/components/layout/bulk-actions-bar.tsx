@@ -58,8 +58,8 @@ export function BulkActionsBar({
   actions,
   className,
 }: BulkActionsBarProps) {
-  // Don't render if nothing selected
-  if (selectedCount === 0) {
+  // Don't render unless 2+ items selected (bulk implies multiple)
+  if (selectedCount < 2) {
     return null
   }
 

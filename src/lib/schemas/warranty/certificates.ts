@@ -7,7 +7,9 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-004b
  */
 
+import type { ReactNode } from 'react';
 import { z } from 'zod';
+import type { WarrantyPolicyTypeValue } from './policies';
 
 // ============================================================================
 // GENERATE WARRANTY CERTIFICATE
@@ -61,6 +63,66 @@ export type RegenerateWarrantyCertificateInput = z.infer<
 // ============================================================================
 // RESPONSE TYPES
 // ============================================================================
+
+/**
+ * Coverage details from the warranty policy
+ */
+export interface WarrantyCoverageDetails {
+  coverage?: string[];
+  exclusions?: string[];
+  claimRequirements?: string[];
+  transferable?: boolean;
+  proratedAfterMonths?: number;
+}
+
+/**
+ * Customer address information for warranty certificate
+ */
+export interface WarrantyCertificateCustomerAddress {
+  street?: string;
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+}
+
+/**
+ * Props for the warranty certificate template
+ */
+export interface WarrantyCertificateProps {
+  warrantyNumber: string;
+  registrationDate: string | Date;
+  customerName: string;
+  customerAddress?: WarrantyCertificateCustomerAddress;
+  customerEmail?: string;
+  customerPhone?: string;
+  productName: string;
+  productSerial?: string;
+  productCategory?: string;
+  productSku?: string;
+  items?: Array<{
+    id: string;
+    productName: string | null;
+    productSku: string | null;
+    productSerial: string | null;
+  }>;
+  policyType: WarrantyPolicyTypeValue;
+  policyName: string;
+  durationMonths: number;
+  cycleLimit?: number;
+  expiryDate: string | Date;
+  coverageDetails?: WarrantyCoverageDetails;
+  slaResponseHours?: number;
+  slaResolutionDays?: number;
+  verificationUrl?: string;
+  logoUrl?: string;
+  companyName?: string;
+  supportEmail?: string;
+  supportPhone?: string;
+  companyWebsite?: string;
+  companyAbn?: string;
+  children?: ReactNode;
+}
 
 /**
  * Response from certificate generation operations.

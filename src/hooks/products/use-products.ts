@@ -9,6 +9,7 @@
  * @see src/server/functions/products/products.ts
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
@@ -27,7 +28,14 @@ import {
   parseImportFile,
   importProducts,
 } from '@/server/functions/products';
-import { bulkDeleteProducts } from '@/server/functions/products/product-bulk-ops';
+import { searchProducts } from '@/server/functions/products/product-search';
+import {
+  bulkDeleteProducts,
+  bulkUpdateProducts,
+  bulkAdjustPrices,
+  exportProducts,
+  getImportTemplate,
+} from '@/server/functions/products/product-bulk-ops';
 
 // ============================================================================
 // TYPES
@@ -61,7 +69,11 @@ export function useProducts(options: UseProductsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.products.list(filters),
-    queryFn: () => listProducts({ data: filters as Record<string, unknown> }),
+    queryFn: async () => {
+      const result = await listProducts({ data: filters as Record<string, unknown> });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -71,25 +83,63 @@ export function useProducts(options: UseProductsOptions = {}) {
  * Fetch single product with all related data
  */
 export function useProduct(productId: string, enabled = true) {
-  return useQuery({
+  return useQuery<GetProductResponse>({
     queryKey: queryKeys.products.detail(productId),
-    queryFn: () => getProduct({ data: { id: productId } }),
+    queryFn: async () => {
+      const result = await getProduct({ data: { id: productId } });
+      if (result == null) throw new Error('Query returned no data');
+
+      return result;
+    },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,
   });
 }
 
+import type { GetProductResponse, ProductSearchResult } from '@/lib/schemas/products';
+
 /**
- * Search products by query string
+ * Search products by query string (quick search via quickSearchProducts)
  */
 export function useProductSearch(
   query: string,
   options: { categoryId?: string; limit?: number } = {},
   enabled = true
 ) {
+  return useQuery<ProductSearchResult>({
+    queryKey: queryKeys.products.search(query, options),
+    queryFn: async () => {
+      const result = await quickSearchProducts({ data: { q: query, ...options } });
+      if (result == null) throw new Error('Product search returned no data');
+      return result as ProductSearchResult;
+    },
+    enabled: enabled && query.length >= 2,
+    staleTime: 30 * 1000,
+  });
+}
+
+export interface UseSearchProductsOptions {
+  query: string;
+  limit?: number;
+  categoryId?: string;
+  enabled?: boolean;
+}
+
+/**
+ * Full-text product search (searchProducts) for dialogs and advanced search.
+ */
+export function useSearchProducts(options: UseSearchProductsOptions) {
+  const { query, limit = 10, categoryId, enabled = true } = options;
+
   return useQuery({
-    queryKey: [...queryKeys.products.all, 'search', query, options],
-    queryFn: () => quickSearchProducts({ data: { q: query, ...options } }),
+    queryKey: queryKeys.products.search(query, { limit, categoryId }),
+    queryFn: async () => {
+      const result = await searchProducts({
+        data: { query, limit, ...(categoryId ? { categoryId } : {}) },
+      });
+      if (result == null) throw new Error('Product search returned no data');
+      return result;
+    },
     enabled: enabled && query.length >= 2,
     staleTime: 30 * 1000,
   });
@@ -104,7 +154,11 @@ export function useCategories(
 ) {
   return useQuery({
     queryKey: queryKeys.categories.list(),
-    queryFn: () => listCategories({ data: options }),
+    queryFn: async () => {
+      const result = await listCategories({ data: options });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -116,7 +170,11 @@ export function useCategories(
 export function useCategoryTree(enabled = true) {
   return useQuery({
     queryKey: queryKeys.categories.tree(),
-    queryFn: () => getCategoryTree(),
+    queryFn: async () => {
+      const result = await getCategoryTree();
+      if (result == null) throw new Error('Category tree returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -131,12 +189,18 @@ export function useCategoryTree(enabled = true) {
  */
 export function useCreateProduct() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   return useMutation({
     mutationFn: (data: Parameters<typeof createProduct>[0]['data']) =>
       createProduct({ data }),
-    onSuccess: () => {
-      toast.success('Product created');
+    onSuccess: (newProduct) => {
+      toast.success('Product created', {
+        action: {
+          label: 'View Product',
+          onClick: () => navigate({ to: '/products/$productId', params: { productId: newProduct.id } }),
+        },
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
     },
     onError: (error: Error) => {
@@ -150,12 +214,18 @@ export function useCreateProduct() {
  */
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Omit<Parameters<typeof updateProduct>[0]['data'], 'id'> }) =>
       updateProduct({ data: { id, ...data } }),
     onSuccess: (_, variables) => {
-      toast.success('Product updated');
+      toast.success('Product updated', {
+        action: {
+          label: 'View Product',
+          onClick: () => navigate({ to: '/products/$productId', params: { productId: variables.id } }),
+        },
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.id) });
     },
@@ -173,9 +243,10 @@ export function useDeleteProduct() {
 
   return useMutation({
     mutationFn: (productId: string) => deleteProduct({ data: { id: productId } }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Product deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables) });
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to delete product');
@@ -211,11 +282,17 @@ export function useBulkDeleteProducts() {
  */
 export function useDuplicateProduct() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   return useMutation({
     mutationFn: (productId: string) => duplicateProduct({ data: { id: productId } }),
     onSuccess: (newProduct) => {
-      toast.success('Product duplicated successfully');
+      toast.success('Product duplicated successfully', {
+        action: {
+          label: 'View Product',
+          onClick: () => navigate({ to: '/products/$productId', params: { productId: newProduct.id } }),
+        },
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       return newProduct;
     },
@@ -299,15 +376,19 @@ export function useProductsForJobMaterials(options: UseProductsForJobMaterialsOp
 
   return useQuery({
     queryKey: queryKeys.products.jobMaterials(jobId),
-    queryFn: () =>
-      listProducts({
+    queryFn: async () => {
+      const result = await listProducts({
         data: {
           page: 1,
           pageSize: 200,
           sortBy: 'name',
           sortOrder: 'asc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!jobId,
     staleTime: 60 * 1000,
     select: (data) =>
@@ -386,6 +467,7 @@ export interface ImportProductsResult {
  */
 export function useImportProducts() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   return useMutation({
     mutationFn: (data: {
@@ -406,12 +488,121 @@ export function useImportProducts() {
       skipErrors?: boolean;
     }) => importProducts({ data }),
     onSuccess: (result) => {
-      toast.success(`Import complete: ${result.created} created, ${result.updated} updated`);
+      toast.success(`Import complete: ${result.created} created, ${result.updated} updated`, {
+        action: {
+          label: 'View Products',
+          onClick: () => navigate({ to: '/products' }),
+        },
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       return result as ImportProductsResult;
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to import products');
     },
+  });
+}
+
+// ============================================================================
+// BULK UPDATE HOOKS
+// ============================================================================
+
+export interface BulkUpdateProductsInput {
+  productIds: string[];
+  updates: {
+    status?: 'active' | 'inactive' | 'discontinued';
+    categoryId?: string | null;
+  };
+}
+
+/**
+ * Bulk update multiple products' status or category
+ */
+export function useBulkUpdateProducts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: BulkUpdateProductsInput) =>
+      bulkUpdateProducts({ data }),
+    onSuccess: (_result, variables) => {
+      toast.success(`Updated ${variables.productIds.length} product${variables.productIds.length > 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      // Invalidate individual product caches
+      variables.productIds.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
+      });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update products');
+    },
+  });
+}
+
+export type BulkAdjustPricesInput = {
+  productIds: string[];
+  adjustment:
+    | { type: 'percentage'; value: number; applyTo?: 'basePrice' | 'costPrice' | 'both' }
+    | { type: 'fixed'; basePrice?: number; costPrice?: number };
+};
+
+/**
+ * Bulk adjust prices for multiple products
+ */
+export function useBulkAdjustPrices() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: BulkAdjustPricesInput) =>
+      bulkAdjustPrices({ data }),
+    onSuccess: (_, variables) => {
+      toast.success(`Adjusted prices for ${variables.productIds.length} product${variables.productIds.length > 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      // Invalidate individual product caches
+      variables.productIds.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
+      });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to adjust prices');
+    },
+  });
+}
+
+export interface ExportProductsOptions {
+  productIds?: string[];
+  filters?: ProductFilters;
+  format?: 'csv' | 'xlsx';
+}
+
+/**
+ * Export products to CSV or Excel
+ */
+export function useExportProducts() {
+  return useMutation({
+    mutationFn: (options: ExportProductsOptions) =>
+      exportProducts({ data: options }),
+    onSuccess: () => {
+      toast.success('Export complete');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to export products');
+    },
+  });
+}
+
+/**
+ * Get the import template for CSV uploads
+ */
+export function useImportTemplate() {
+  return useQuery({
+    queryKey: queryKeys.products.bulk.template(),
+    queryFn: async () => {
+      const result = await getImportTemplate({
+        data: {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    staleTime: 24 * 60 * 60 * 1000, // 24 hours - template doesn't change often
   });
 }

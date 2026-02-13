@@ -78,6 +78,34 @@ export const SHORTCUTS: KeyboardShortcut[] = [
     category: 'Navigation',
     description: 'Navigate to orders',
   },
+  {
+    id: 'go-pipeline',
+    label: 'Go to Pipeline',
+    keys: ['G', 'P'],
+    category: 'Navigation',
+    description: 'Navigate to pipeline',
+  },
+  {
+    id: 'go-projects',
+    label: 'Go to Projects',
+    keys: ['G', 'J'],
+    category: 'Navigation',
+    description: 'Navigate to projects',
+  },
+  {
+    id: 'go-schedule',
+    label: 'Go to Schedule',
+    keys: ['G', 'S'],
+    category: 'Navigation',
+    description: 'Navigate to schedule',
+  },
+  {
+    id: 'go-inbox',
+    label: 'Go to Inbox',
+    keys: ['G', 'I'],
+    category: 'Navigation',
+    description: 'Navigate to inbox',
+  },
 
   // Action shortcuts
   {

@@ -7,8 +7,6 @@
  */
 
 import { memo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   ClipboardCheck,
   Check,
@@ -54,10 +52,11 @@ import { cn } from "@/lib/utils";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import { toastSuccess, toastError } from "@/hooks";
 import {
-  getAmendment,
-  approveAmendment,
-  rejectAmendment,
-} from "@/server/functions/orders/order-amendments";
+  useAmendment,
+  useApproveAmendment,
+  useRejectAmendment,
+  useApplyAmendment,
+} from "@/hooks/orders";
 import type { AmendmentChanges, ItemChange, FinancialImpact, AmendmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -105,7 +104,6 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
   amendmentId,
   onSuccess,
 }: AmendmentReviewDialogProps) {
-  const queryClient = useQueryClient();
   const { formatCurrency } = useOrgFormat();
   const formatCurrencyDisplay = (amount: number) =>
     formatCurrency(amount, { cents: false, showCents: true });
@@ -115,75 +113,89 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
 
-  // Fetch amendment details
-  const { data: amendment, isLoading } = useQuery<AmendmentDetail>({
-    queryKey: queryKeys.orders.amendmentDetail(amendmentId),
-    queryFn: () => getAmendment({ data: { id: amendmentId } }) as Promise<AmendmentDetail>,
+  // Fetch amendment details using hook
+  const { data: amendment, isLoading } = useAmendment({
+    amendmentId,
     enabled: open,
-  });
+  }) as { data: AmendmentDetail | undefined; isLoading: boolean };
 
-  // Approve mutation
-  const approveMutation = useMutation({
-    mutationFn: async () => {
-      return approveAmendment({
-        data: {
-          amendmentId,
-          notes: approvalNotes ? { note: approvalNotes } : undefined,
+  // Mutation hooks
+  const approveMutation = useApproveAmendment();
+  const rejectMutation = useRejectAmendment();
+  const applyMutation = useApplyAmendment();
+
+  // Handle approve
+  const handleApprove = () => {
+    approveMutation.mutate(
+      {
+        amendmentId,
+        notes: approvalNotes ? { note: approvalNotes } : undefined,
+      },
+      {
+        onSuccess: () => {
+          applyMutation.mutate(
+            { amendmentId },
+            {
+              onSuccess: () => {
+                toastSuccess("Amendment approved and applied");
+                onOpenChange(false);
+                onSuccess?.();
+                setApprovalNotes("");
+              },
+              onError: (error) => {
+                toastError(
+                  error instanceof Error
+                    ? error.message
+                    : "Approved, but failed to apply amendment"
+                );
+              },
+            }
+          );
         },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Amendment approved");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(amendmentId) });
-      onOpenChange(false);
-      onSuccess?.();
-      // Reset form
-      setApprovalNotes("");
-    },
-    onError: (error) => {
-      toastError(
-        error instanceof Error ? error.message : "Failed to approve amendment"
-      );
-    },
-  });
-
-  // Reject mutation
-  const rejectMutation = useMutation({
-    mutationFn: async () => {
-      if (!rejectionReason.trim()) {
-        throw new Error("Please provide a rejection reason");
+        onError: (error) => {
+          toastError(
+            error instanceof Error ? error.message : "Failed to approve amendment"
+          );
+        },
       }
-      return rejectAmendment({
-        data: {
-          amendmentId,
-          reason: rejectionReason.trim(),
+    );
+  };
+
+  // Handle reject
+  const handleReject = () => {
+    if (!rejectionReason.trim()) {
+      toastError("Please provide a rejection reason");
+      return;
+    }
+    rejectMutation.mutate(
+      {
+        amendmentId,
+        reason: rejectionReason.trim(),
+      },
+      {
+        onSuccess: () => {
+          toastSuccess("Amendment rejected");
+          onOpenChange(false);
+          onSuccess?.();
+          setRejectionReason("");
+          setShowRejectForm(false);
         },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Amendment rejected");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(amendmentId) });
-      onOpenChange(false);
-      onSuccess?.();
-      // Reset form
-      setRejectionReason("");
-      setShowRejectForm(false);
-    },
-    onError: (error) => {
-      toastError(
-        error instanceof Error ? error.message : "Failed to reject amendment"
-      );
-    },
-  });
+        onError: (error) => {
+          toastError(
+            error instanceof Error ? error.message : "Failed to reject amendment"
+          );
+        },
+      }
+    );
+  };
 
   const changes = amendment?.changes as AmendmentChanges | undefined;
   const itemChanges = changes?.itemChanges || [];
   const financialImpact = changes?.financialImpact as FinancialImpact | undefined;
   const isPending = amendment?.status === "requested";
 
-  const isPendingMutation = approveMutation.isPending || rejectMutation.isPending;
+  const isPendingMutation =
+    approveMutation.isPending || rejectMutation.isPending || applyMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -469,7 +481,7 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                 Reject
               </Button>
               <Button
-                onClick={() => approveMutation.mutate()}
+                onClick={handleApprove}
                 disabled={isPendingMutation}
               >
                 {approveMutation.isPending ? (
@@ -489,7 +501,7 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
           {isPending && showRejectForm && (
             <Button
               variant="destructive"
-              onClick={() => rejectMutation.mutate()}
+              onClick={handleReject}
               disabled={isPendingMutation || !rejectionReason.trim()}
             >
               {rejectMutation.isPending ? (

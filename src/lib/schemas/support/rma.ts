@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
@@ -174,6 +175,18 @@ export const listRmasSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 export type ListRmasInput = z.infer<typeof listRmasSchema>;
+
+export const listRmasCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    status: rmaStatusSchema.optional(),
+    reason: rmaReasonSchema.optional(),
+    customerId: z.string().uuid().optional(),
+    orderId: z.string().uuid().optional(),
+    issueId: z.string().uuid().optional(),
+    search: z.string().max(100).optional(),
+  })
+);
+export type ListRmasCursorInput = z.infer<typeof listRmasCursorSchema>;
 
 // ============================================================================
 // RESPONSE TYPES

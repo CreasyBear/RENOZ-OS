@@ -2,21 +2,24 @@
  * PDF Font Registration
  *
  * Registers fonts for @react-pdf/renderer to use in PDF generation.
- * Using Google Fonts CDN for Inter font family.
+ * Uses local font files per react-pdf skill: remote URLs do NOT work.
+ *
+ * Fonts are stored in public/fonts/inter/ and downloaded via:
+ *   node scripts/download-pdf-fonts.mjs
  *
  * @see https://react-pdf.org/fonts
- *
- * Note: For production reliability, consider bundling fonts locally
- * in public/fonts/ to avoid CDN failures.
  */
+import path from "path";
 import { Font } from "@react-pdf/renderer";
 
 // ============================================================================
-// FONT REGISTRATION
+// FONT PATHS (local files required — remote URLs do not work with react-pdf)
 // ============================================================================
 
+const FONTS_BASE = path.join(process.cwd(), "public", "fonts", "inter");
+
 /**
- * Register Inter font family from Google Fonts CDN
+ * Register Inter font family from local TTF files
  *
  * Weights registered:
  * - 400 (Regular) - Body text
@@ -28,39 +31,27 @@ import { Font } from "@react-pdf/renderer";
 Font.register({
   family: "Inter",
   fonts: [
+    { src: path.join(FONTS_BASE, "Inter-Regular.ttf"), fontWeight: 400 },
     {
-      src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2Bg-4.ttf",
-      fontWeight: 400,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v19/UcCM3FwrK3iLTcvneQg7Ca725JhhKnNqk4j1ebLhAm8SrXTc2dthjQ.ttf",
+      src: path.join(FONTS_BASE, "Inter-Italic.ttf"),
       fontWeight: 400,
       fontStyle: "italic",
     },
+    { src: path.join(FONTS_BASE, "Inter-Medium.ttf"), fontWeight: 500 },
     {
-      src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fMZhrib2Bg-4.ttf",
-      fontWeight: 500,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v19/UcCM3FwrK3iLTcvneQg7Ca725JhhKnNqk4j1ebLhAm8SrXTc69thjQ.ttf",
+      src: path.join(FONTS_BASE, "Inter-MediumItalic.ttf"),
       fontWeight: 500,
       fontStyle: "italic",
     },
+    { src: path.join(FONTS_BASE, "Inter-SemiBold.ttf"), fontWeight: 600 },
     {
-      src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYMZhrib2Bg-4.ttf",
-      fontWeight: 600,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v19/UcCM3FwrK3iLTcvneQg7Ca725JhhKnNqk4j1ebLhAm8SrXTcB9xhjQ.ttf",
+      src: path.join(FONTS_BASE, "Inter-SemiBoldItalic.ttf"),
       fontWeight: 600,
       fontStyle: "italic",
     },
+    { src: path.join(FONTS_BASE, "Inter-Bold.ttf"), fontWeight: 700 },
     {
-      src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
-      fontWeight: 700,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/inter/v19/UcCM3FwrK3iLTcvneQg7Ca725JhhKnNqk4j1ebLhAm8SrXTcPtxhjQ.ttf",
+      src: path.join(FONTS_BASE, "Inter-BoldItalic.ttf"),
       fontWeight: 700,
       fontStyle: "italic",
     },

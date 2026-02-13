@@ -6,6 +6,7 @@
 
 import { db } from '@/lib/db';
 import { handleOAuthCallback } from '@/lib/oauth/flow';
+import { toAuthErrorCode } from '@/lib/auth/error-codes';
 
 export async function GET({ request }: { request: Request }) {
   const url = new URL(request.url);
@@ -28,7 +29,7 @@ export async function GET({ request }: { request: Request }) {
   redirect.searchParams.set('oauth', result.success ? 'success' : 'failed');
 
   if (!result.success) {
-    redirect.searchParams.set('error', result.error);
+    redirect.searchParams.set('error', toAuthErrorCode(result.error));
   }
 
   return new Response(null, {

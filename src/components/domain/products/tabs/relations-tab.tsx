@@ -232,7 +232,7 @@ export function ProductRelationsTab({
             <div>
               <dt className="font-medium">Cross-Sell</dt>
               <dd className="text-muted-foreground">
-                Products to suggest during checkout ("Customers also bought")
+                Products to suggest during checkout (&quot;Customers also bought&quot;)
               </dd>
             </div>
             <div>

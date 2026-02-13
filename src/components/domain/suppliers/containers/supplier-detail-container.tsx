@@ -13,25 +13,8 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import {
-  Edit,
-  Printer,
-  MoreHorizontal,
-  XCircle,
-  Building2,
-  Package,
-  FileText,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Printer, Package, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,27 +26,27 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { cn } from '@/lib/utils';
+import { EntityHeaderActions } from '@/components/shared';
+import { EntityActivityLogger } from '@/components/shared/activity';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toastSuccess, toastError } from '@/hooks';
 import {
   useSupplier,
   useDeleteSupplier,
   usePurchaseOrders,
+  usePriceLists,
 } from '@/hooks/suppliers';
 import { useUnifiedActivities } from '@/hooks/activities';
-import { SupplierDetailView } from '../views/supplier-detail-view';
-import { SUPPLIER_STATUS_CONFIG } from '../supplier-status-config';
-import type { SupplierStatus } from '@/lib/schemas/suppliers';
+import { useTrackView } from '@/hooks/search';
+import { SupplierDetailView, type SupplierDetailHeaderConfig } from '../views/supplier-detail-view';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface SupplierDetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
-  /** Header action buttons */
-  headerActions: React.ReactNode;
+  /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
+  headerActions?: React.ReactNode;
   /** Main content */
   content: React.ReactNode;
 }
@@ -144,6 +127,14 @@ export function SupplierDetailContainer({
     refetch,
   } = useSupplier(supplierId);
 
+  const { onLogActivity, loggerProps } = useEntityActivityLogging({
+    entityType: 'supplier',
+    entityId: supplierId,
+    entityLabel: `Supplier: ${supplier?.name ?? supplierId}`,
+  });
+
+  useTrackView('supplier', supplier?.id, supplier?.name, supplier?.email ?? undefined, `/suppliers/${supplierId}`);
+
   const {
     data: purchaseOrdersData,
     isLoading: purchaseOrdersLoading,
@@ -162,6 +153,19 @@ export function SupplierDetailContainer({
     entityId: supplierId,
   });
 
+  const {
+    data: priceListsData,
+    isLoading: priceListsLoading,
+  } = usePriceLists({
+    supplierId,
+    status: 'active',
+    page: 1,
+    pageSize: 50,
+    sortBy: 'productName',
+    sortOrder: 'asc',
+    enabled: !!supplierId,
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
   // Mutations
   // ─────────────────────────────────────────────────────────────────────────
@@ -176,8 +180,10 @@ export function SupplierDetailContainer({
       toastSuccess('Supplier deleted');
       setDeleteDialogOpen(false);
       onBack?.();
-    } catch {
-      toastError('Failed to delete supplier');
+    } catch (error) {
+      toastError(
+        error instanceof Error ? error.message : 'Failed to delete supplier'
+      );
     }
   }, [deleteMutation, supplierId, onBack]);
 
@@ -188,11 +194,6 @@ export function SupplierDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Derived State
   // ─────────────────────────────────────────────────────────────────────────
-  const statusConfig = useMemo(() => {
-    if (!supplier) return null;
-    return SUPPLIER_STATUS_CONFIG[supplier.status as SupplierStatus] ?? SUPPLIER_STATUS_CONFIG.active;
-  }, [supplier]);
-
   // Transform purchase orders for the view
   const purchaseOrders = useMemo(() => {
     if (!purchaseOrdersData?.items) return [];
@@ -201,9 +202,22 @@ export function SupplierDetailContainer({
       poNumber: po.poNumber,
       status: po.status,
       totalAmount: Number(po.totalAmount),
+      currency: po.currency ?? undefined,
       createdAt: po.createdAt,
     }));
   }, [purchaseOrdersData]);
+
+  const priceAgreements = useMemo(() => {
+    const items = priceListsData?.items ?? [];
+    return items.map((item) => ({
+      id: item.id,
+      productName: item.productName ?? 'Unknown product',
+      productSku: item.productSku ?? undefined,
+      agreedPrice: Number(item.effectivePrice ?? item.price ?? item.basePrice ?? 0),
+      validFrom: item.effectiveDate,
+      validTo: item.expiryDate ?? item.effectiveDate,
+    }));
+  }, [priceListsData]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
@@ -211,15 +225,7 @@ export function SupplierDetailContainer({
   if (isLoading) {
     const loadingContent = <SupplierDetailSkeleton />;
     if (children) {
-      return (
-        <>
-          {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
-            headerActions: <Skeleton className="h-10 w-32" />,
-            content: loadingContent,
-          })}
-        </>
-      );
+      return <>{children({ headerActions: <Skeleton className="h-10 w-32" />, content: loadingContent })}</>;
     }
     return loadingContent;
   }
@@ -237,87 +243,40 @@ export function SupplierDetailContainer({
       />
     );
     if (children) {
-      return (
-        <>
-          {children({
-            headerTitle: 'Supplier Not Found',
-            headerActions: null,
-            content: errorContent,
-          })}
-        </>
-      );
+      return <>{children({ headerActions: null, content: errorContent })}</>;
     }
     return errorContent;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render: Header Elements
+  // Render: Header Config (for EntityHeader in SupplierDetailView)
   // ─────────────────────────────────────────────────────────────────────────
-  const StatusIcon = statusConfig?.icon ?? Building2;
+  const headerConfig: SupplierDetailHeaderConfig = {
+    onEdit: onEdit ?? undefined,
+    onDelete: supplier.status === 'active' ? () => setDeleteDialogOpen(true) : undefined,
+    secondaryActions: [
+      ...(onViewPurchaseOrders
+        ? [{ label: 'View Purchase Orders', onClick: onViewPurchaseOrders, icon: <Package className="h-4 w-4" /> }]
+        : []),
+      ...(onCreatePurchaseOrder
+        ? [{ label: 'Create Purchase Order', onClick: onCreatePurchaseOrder, icon: <FileText className="h-4 w-4" /> }]
+        : []),
+      { label: 'Print', onClick: handlePrint, icon: <Printer className="h-4 w-4" /> },
+    ],
+  };
 
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <span className="text-xl font-semibold">{supplier.name}</span>
-      {statusConfig && (
-        <Badge className={cn('gap-1', statusConfig.color)}>
-          <StatusIcon className="h-3 w-3" />
-          {statusConfig.label}
-        </Badge>
-      )}
-    </div>
-  );
+  // When using render props (layout pattern), actions go in PageLayout.Header
+  const headerConfigForView = children
+    ? { onEdit: undefined, onDelete: undefined, secondaryActions: [] as typeof headerConfig.secondaryActions }
+    : headerConfig;
 
-  const headerActions = (
-    <div className="flex items-center gap-2">
-      {/* Primary Action */}
-      {onEdit && (
-        <Button variant="outline" onClick={onEdit}>
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
-        </Button>
-      )}
-
-      {/* More Actions */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">More actions</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {onViewPurchaseOrders && (
-            <DropdownMenuItem onClick={onViewPurchaseOrders}>
-              <Package className="h-4 w-4 mr-2" />
-              View Purchase Orders
-            </DropdownMenuItem>
-          )}
-          {onCreatePurchaseOrder && (
-            <DropdownMenuItem onClick={onCreatePurchaseOrder}>
-              <FileText className="h-4 w-4 mr-2" />
-              Create Purchase Order
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </DropdownMenuItem>
-          {supplier.status === 'active' && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
+  const headerActions = children ? (
+    <EntityHeaderActions
+      onEdit={headerConfig.onEdit}
+      onDelete={headerConfig.onDelete}
+      secondaryActions={headerConfig.secondaryActions}
+    />
+  ) : undefined;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Main Content
@@ -340,15 +299,19 @@ export function SupplierDetailContainer({
         onTabChange={setActiveTab}
         showMetaPanel={showMetaPanel}
         onToggleMetaPanel={handleToggleMetaPanel}
+        headerConfig={headerConfigForView}
         purchaseOrders={purchaseOrders}
         purchaseOrdersLoading={purchaseOrdersLoading}
-        priceAgreements={[]} // TODO: Add price agreements hook when available
-        priceAgreementsLoading={false}
+        priceAgreements={priceAgreements}
+        priceAgreementsLoading={priceListsLoading}
         activities={activities}
         activitiesLoading={activitiesLoading}
         activitiesError={activitiesError}
+        onLogActivity={onLogActivity}
         className={className}
       />
+
+      <EntityActivityLogger {...loggerProps} />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -379,19 +342,11 @@ export function SupplierDetailContainer({
   // Render: With Render Props or Default
   // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
   // Default rendering (standalone usage)
-  return (
-    <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
-        {headerActions}
-      </div>
-      {content}
-    </div>
-  );
+  return <div className={className}>{content}</div>;
 }
 
 export default SupplierDetailContainer;

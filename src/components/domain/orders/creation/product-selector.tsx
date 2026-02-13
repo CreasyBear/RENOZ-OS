@@ -8,8 +8,6 @@
  */
 
 import { memo, useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Search,
   Package,
@@ -40,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { listProducts } from "@/server/functions/products/products";
+import { useProducts } from "@/hooks/products";
 import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
@@ -75,6 +73,7 @@ interface Product {
   type: string;
   status: string;
   trackInventory: boolean;
+  isSerialized: boolean;
 }
 
 // ============================================================================
@@ -100,18 +99,12 @@ export const ProductSelector = memo(function ProductSelector({
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch products
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.products.list({ search: debouncedSearch, categoryId: categoryFilter, status: "active" }),
-    queryFn: () =>
-      listProducts({
-        data: {
-          page: 1,
-          pageSize: 50,
-          search: debouncedSearch || undefined,
-          status: "active",
-        },
-      }),
+  // Fetch products using hook
+  const { data, isLoading, error } = useProducts({
+    page: 1,
+    pageSize: 50,
+    search: debouncedSearch || undefined,
+    status: "active",
   });
 
   const products = (data?.products ?? []) as Product[];

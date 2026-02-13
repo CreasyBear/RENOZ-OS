@@ -13,10 +13,13 @@ import {
   integer,
   date,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  auditColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { warranties } from "./warranties";
 import { products } from "../products/products";
@@ -78,27 +81,7 @@ export const warrantyItems = pgTable(
     warrantyIdx: index("idx_warranty_items_warranty").on(table.warrantyId),
 
     // RLS policies
-    selectPolicy: pgPolicy("warranty_items_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("warranty_items_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("warranty_items_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("warranty_items_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("warranty_items"),
   })
 );
 

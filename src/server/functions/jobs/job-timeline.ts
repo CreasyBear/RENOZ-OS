@@ -131,7 +131,8 @@ export const listTimelineJobs = createServerFn({ method: 'GET' })
       .innerJoin(users, eq(jobAssignments.installerId, users.id))
       .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
       .where(and(...conditions))
-      .orderBy(jobAssignments.scheduledDate, jobAssignments.scheduledTime);
+      .orderBy(jobAssignments.scheduledDate, jobAssignments.scheduledTime)
+      .limit(500);
 
     // Convert to timeline items with span calculations
     const timelineItems: TimelineJobItem[] = jobs.map((row) => {

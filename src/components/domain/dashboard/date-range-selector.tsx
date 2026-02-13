@@ -52,6 +52,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { useDashboardDateRange } from "./dashboard-context";
 
 // ============================================================================
 // TYPES
@@ -518,8 +519,6 @@ export function ConnectedDateRangeSelector({
   className?: string;
   showPresetLabel?: boolean;
 }) {
-  // Import here to avoid circular dependencies
-  const { useDashboardDateRange } = require("./dashboard-context");
   const { dateRange, preset, setDateRange, setPreset } = useDashboardDateRange();
 
   return (

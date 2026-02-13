@@ -13,31 +13,9 @@ import { SlaBadge, getSlaStatus, type SlaStatusType } from './sla-badge';
 import { cn } from '@/lib/utils';
 import { Clock, CheckCircle, AlertTriangle, Timer } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import type { SlaStatusData } from '@/lib/schemas/support/sla';
 
-export interface SlaStatusData {
-  // From sla_tracking
-  status: string;
-  isPaused: boolean;
-  responseBreached: boolean;
-  resolutionBreached: boolean;
-  responseDueAt: Date | null;
-  resolutionDueAt: Date | null;
-  respondedAt?: Date | null;
-  resolvedAt?: Date | null;
-
-  // Computed values from SlaStateSnapshot
-  isResponseAtRisk: boolean;
-  isResolutionAtRisk: boolean;
-  responseTimeRemaining: number | null;
-  resolutionTimeRemaining: number | null;
-  responsePercentComplete: number | null;
-  resolutionPercentComplete: number | null;
-  responseTimeElapsed?: number | null;
-  resolutionTimeElapsed?: number | null;
-
-  // Configuration name
-  configurationName?: string;
-}
+export type { SlaStatusData };
 
 interface SlaStatusCardProps {
   slaData: SlaStatusData | null;

@@ -13,6 +13,7 @@
 import { task, schedules, logger } from "@trigger.dev/sdk/v3";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { logger as appLogger } from "@/lib/logger";
 import { DashboardCache } from "@/lib/cache/dashboard-cache";
 
 // ============================================================================
@@ -98,11 +99,9 @@ async function refreshMaterializedView(
     // Use CONCURRENTLY for zero-lock refresh
     await db.execute(sql.raw(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${viewName}`));
     return { success: true, durationMs: Date.now() - startTime };
-  } catch (error) {
+  } catch {
     // If CONCURRENTLY fails (e.g., no unique index), fall back to regular refresh
-    console.warn(
-      `[DashboardRefresh] CONCURRENTLY failed for ${viewName}, using regular refresh`
-    );
+    appLogger.warn('[DashboardRefresh] CONCURRENTLY failed, using regular refresh', { viewName });
     await db.execute(sql.raw(`REFRESH MATERIALIZED VIEW ${viewName}`));
     return { success: true, durationMs: Date.now() - startTime };
   }

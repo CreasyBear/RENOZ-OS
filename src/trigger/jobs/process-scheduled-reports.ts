@@ -11,13 +11,14 @@
  * @see https://trigger.dev/docs/v3/tasks
  */
 import { task, schedules, logger } from "@trigger.dev/sdk/v3";
+import { logger as appLogger } from "@/lib/logger";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { scheduledReports } from "drizzle/schema/reports";
 import { orders } from "drizzle/schema/orders/orders";
 import { customers } from "drizzle/schema/customers/customers";
 import { opportunities } from "drizzle/schema/pipeline";
-import { organizations } from "drizzle/schema/settings/organizations";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import { warranties } from "drizzle/schema/warranty/warranties";
 import { warrantyClaims } from "drizzle/schema/warranty/warranty-claims";
 import { slaTracking } from "drizzle/schema/support/sla-tracking";
@@ -25,7 +26,6 @@ import { uploadFile, createSignedUrl } from "@/lib/storage";
 import {
   renderPdfToBuffer,
   ReportSummaryPdfDocument,
-  type DocumentOrganization,
 } from "@/lib/documents";
 import { Resend } from "resend";
 import { createHash } from "crypto";
@@ -33,11 +33,6 @@ import { TextEncoder } from "util";
 import { createElement } from "react";
 import type { ReactElement } from "react";
 import type { DocumentProps } from "@react-pdf/renderer";
-import type {
-  OrganizationAddress,
-  OrganizationBranding,
-  OrganizationSettings,
-} from "drizzle/schema/settings/organizations";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -116,21 +111,13 @@ interface MetricValues {
   warranty_value: number;
   kwh_deployed: number;
   active_installations: number;
+  // Health score metrics
+  avg_health_score: number;
+  health_score_distribution_excellent: number;
+  health_score_distribution_good: number;
+  health_score_distribution_fair: number;
+  health_score_distribution_at_risk: number;
   [key: string]: number;
-}
-
-interface OrganizationRow {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  abn: string | null;
-  address: OrganizationAddress | null;
-  currency: string;
-  locale: string;
-  branding: OrganizationBranding | null;
-  settings: OrganizationSettings | null;
 }
 
 /**
@@ -412,6 +399,96 @@ async function calculateMetrics(
           break;
         }
 
+        // Health score metrics
+        case "avg_health_score": {
+          const [result] = await db
+            .select({
+              avg: sql<number>`COALESCE(AVG(${customers.healthScore}), 0)`,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, organizationId),
+                sql`${customers.healthScore} IS NOT NULL`,
+                sql`${customers.deletedAt} IS NULL`
+              )
+            );
+          results.avg_health_score = Number(result?.avg ?? 0);
+          break;
+        }
+
+        case "health_score_distribution_excellent": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, organizationId),
+                sql`${customers.healthScore} >= 80`,
+                sql`${customers.healthScore} <= 100`,
+                sql`${customers.deletedAt} IS NULL`
+              )
+            );
+          results.health_score_distribution_excellent = Number(result?.count ?? 0);
+          break;
+        }
+
+        case "health_score_distribution_good": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, organizationId),
+                sql`${customers.healthScore} >= 60`,
+                sql`${customers.healthScore} < 80`,
+                sql`${customers.deletedAt} IS NULL`
+              )
+            );
+          results.health_score_distribution_good = Number(result?.count ?? 0);
+          break;
+        }
+
+        case "health_score_distribution_fair": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, organizationId),
+                sql`${customers.healthScore} >= 40`,
+                sql`${customers.healthScore} < 60`,
+                sql`${customers.deletedAt} IS NULL`
+              )
+            );
+          results.health_score_distribution_fair = Number(result?.count ?? 0);
+          break;
+        }
+
+        case "health_score_distribution_at_risk": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, organizationId),
+                sql`${customers.healthScore} >= 0`,
+                sql`${customers.healthScore} < 40`,
+                sql`${customers.deletedAt} IS NULL`
+              )
+            );
+          results.health_score_distribution_at_risk = Number(result?.count ?? 0);
+          break;
+        }
+
         // Placeholder for metrics that require additional schema
         case "quote_win_rate":
         case "kwh_deployed":
@@ -420,7 +497,7 @@ async function calculateMetrics(
           break;
       }
     } catch (error) {
-      console.error(`Failed to calculate metric ${metricId}:`, error);
+      appLogger.error(`Failed to calculate metric ${metricId}`, error);
       results[metricId] = 0;
     }
   }
@@ -448,7 +525,8 @@ function formatMetricValue(metricId: string, value: number): string {
     case "quote_win_rate":
     case "win_rate":
     case "sla_compliance":
-      return `${value.toFixed(1)}%`;
+    case "avg_health_score":
+      return `${value.toFixed(1)}${metricId === 'avg_health_score' ? '' : '%'}`;
     default:
       return value.toLocaleString();
   }
@@ -476,6 +554,11 @@ function getMetricLabel(metricId: string): string {
     warranty_value: "Warranty Value",
     kwh_deployed: "kWh Deployed",
     active_installations: "Active Installations",
+    avg_health_score: "Average Health Score",
+    health_score_distribution_excellent: "Excellent Health (80-100)",
+    health_score_distribution_good: "Good Health (60-79)",
+    health_score_distribution_fair: "Fair Health (40-59)",
+    health_score_distribution_at_risk: "At Risk Health (0-39)",
   };
   return labels[metricId] ?? metricId;
 }
@@ -689,39 +772,6 @@ function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function buildDocumentOrganization(org: OrganizationRow): DocumentOrganization {
-  const address = org.address as OrganizationAddress | null;
-  const branding = org.branding as OrganizationBranding | null;
-
-  return {
-    id: org.id,
-    name: org.name,
-    email: org.email,
-    phone: org.phone,
-    website: org.website || branding?.websiteUrl,
-    taxId: org.abn,
-    currency: org.currency || "AUD",
-    locale: org.locale || "en-AU",
-    address: address
-      ? {
-          addressLine1: address.street1,
-          addressLine2: address.street2,
-          city: address.city,
-          state: address.state,
-          postalCode: address.postalCode,
-          country: address.country,
-        }
-      : undefined,
-    branding: {
-      logoUrl: branding?.logoUrl,
-      primaryColor: branding?.primaryColor,
-      secondaryColor: branding?.secondaryColor,
-      websiteUrl: branding?.websiteUrl,
-    },
-    settings: org.settings ?? undefined,
-  };
-}
-
 function hashEmail(email: string): string {
   return createHash("sha256").update(email.toLowerCase().trim()).digest("hex").slice(0, 8);
 }
@@ -847,27 +897,7 @@ export const processScheduledReportsTask = schedules.task({
           metricCount: Object.keys(metrics).length,
         });
 
-        const [org] = await db
-          .select({
-            id: organizations.id,
-            name: organizations.name,
-            email: organizations.email,
-            phone: organizations.phone,
-            website: organizations.website,
-            abn: organizations.abn,
-            address: organizations.address,
-            currency: organizations.currency,
-            locale: organizations.locale,
-            branding: organizations.branding,
-            settings: organizations.settings,
-          })
-          .from(organizations)
-          .where(eq(organizations.id, report.organizationId))
-          .limit(1);
-
-        if (!org) {
-          throw new Error(`Organization ${report.organizationId} not found`);
-        }
+        const orgData = await fetchOrganizationForDocument(report.organizationId);
 
         // Generate report content based on format
         let content: string;
@@ -886,7 +916,6 @@ export const processScheduledReportsTask = schedules.task({
             contentBody = content;
             break;
           case "pdf": {
-            const orgData = buildDocumentOrganization(org);
             const pdfElement = createElement(ReportSummaryPdfDocument, {
               organization: orgData,
               data: {
@@ -948,7 +977,7 @@ export const processScheduledReportsTask = schedules.task({
               format: report.format,
               dateFrom,
               dateTo,
-              organizationName: org?.name ?? null,
+              organizationName: orgData.name,
             });
           } catch (error) {
             logger.error("Failed to send report email", {
@@ -1078,28 +1107,6 @@ export const generateReportTask = task({
       metricIds
     );
 
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
     // Generate report content
     let content: string;
     let contentBody: string | ArrayBuffer;
@@ -1117,7 +1124,7 @@ export const generateReportTask = task({
         contentBody = content;
         break;
       case "pdf": {
-        const orgData = buildDocumentOrganization(org);
+        const orgData = await fetchOrganizationForDocument(organizationId);
         const pdfElement = createElement(ReportSummaryPdfDocument, {
           organization: orgData,
           data: {

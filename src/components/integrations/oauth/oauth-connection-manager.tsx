@@ -53,6 +53,8 @@ interface SyncResult {
 
 interface OAuthConnectionManagerProps {
   organizationId: string;
+  /** URL to redirect to after OAuth callback. Defaults to /?settingsOpen=integrations for settings dialog usage. */
+  redirectUrl?: string;
   onConnectionInitiated?: (provider: string, services: string[]) => void;
   onConnectionCompleted?: (connection: OAuthConnection) => void;
   onSyncCompleted?: (result: SyncResult) => void;
@@ -60,6 +62,7 @@ interface OAuthConnectionManagerProps {
 
 export function OAuthConnectionManager({
   organizationId,
+  redirectUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/?settingsOpen=integrations`,
   onConnectionInitiated,
   onSyncCompleted,
 }: OAuthConnectionManagerProps) {
@@ -76,7 +79,7 @@ export function OAuthConnectionManager({
   } = useQuery({
     queryKey: queryKeys.oauth.connections(organizationId),
     queryFn: async () => {
-      const response = await fetch('/api/oauth/connections');
+      const response = await fetch('/api/oauth/connections', { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Failed to fetch connections');
       }
@@ -96,7 +99,7 @@ export function OAuthConnectionManager({
   const { data: healthStatuses } = useQuery({
     queryKey: queryKeys.oauth.health(organizationId),
     queryFn: async () => {
-      const response = await fetch('/api/oauth/health');
+      const response = await fetch('/api/oauth/health', { credentials: 'include' });
       if (!response.ok) {
         return {} as Record<string, ConnectionHealth>;
       }
@@ -110,14 +113,14 @@ export function OAuthConnectionManager({
   // Mutation for initiating OAuth flow
   const initiateConnectionMutation = useMutation({
     mutationFn: async ({ provider, services }: { provider: string; services: string[] }) => {
-      // Would call OAuth initiation API
       const response = await fetch('/api/oauth/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           provider,
           services,
-          redirectUrl: `${window.location.origin}/integrations/oauth`,
+          redirectUrl,
         }),
       });
 
@@ -142,10 +145,10 @@ export function OAuthConnectionManager({
   // Mutation for disconnecting OAuth connection
   const disconnectMutation = useMutation({
     mutationFn: async (connectionId: string) => {
-      // Would call connection deletion API
       const response = await fetch(`/api/oauth/connections/${connectionId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -174,10 +177,10 @@ export function OAuthConnectionManager({
       connectionId: string;
       fullSync?: boolean;
     }) => {
-      // Would call sync API
       const response = await fetch(`/api/oauth/sync/${connectionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ fullSync }),
       });
 

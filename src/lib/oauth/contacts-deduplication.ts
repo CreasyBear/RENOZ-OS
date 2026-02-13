@@ -83,13 +83,13 @@ export interface DuplicateGroup {
 export interface FieldConflict {
   field: string;
   values: Array<{
-    value: any;
+    value: unknown;
     sourceContactId: string;
     confidence: number;
   }>;
   resolution?: {
     strategy: string;
-    value: any;
+    value: unknown;
     reason: string;
   };
 }
@@ -560,7 +560,7 @@ function findFieldConflicts(canonical: Contact, duplicates: Contact[]): FieldCon
 
   for (const field of fieldsToCheck) {
     const canonicalValue = field.getValue(canonical);
-    const conflictingValues = new Set<any>();
+    const conflictingValues = new Set<unknown>();
 
     for (const duplicate of duplicates) {
       const duplicateValue = field.getValue(duplicate);
@@ -603,13 +603,13 @@ export function mergeDuplicateContacts(
   // Apply conflict resolution strategy
   for (const conflict of duplicateGroup.conflicts) {
     const resolution = resolveFieldConflict(conflict, config.conflictResolution);
-    (merged as any)[conflict.field] = resolution.value;
+    (merged as Record<string, unknown>)[conflict.field] = resolution.value;
 
     if (config.preserveOriginalData) {
       merged.metadata = {
         ...merged.metadata,
         mergeConflicts: {
-          ...merged.metadata?.mergeConflicts,
+          ...(merged.metadata?.mergeConflicts ?? {}),
           [conflict.field]: conflict.values,
         },
       };
@@ -634,7 +634,7 @@ export function mergeDuplicateContacts(
 function resolveFieldConflict(
   conflict: FieldConflict,
   strategy: DeduplicationConfig['conflictResolution']
-): { value: any; reason: string } {
+): { value: unknown; reason: string } {
   switch (strategy) {
     case 'newest_wins':
       // Choose the value from the most recently updated contact
@@ -643,10 +643,11 @@ function resolveFieldConflict(
     case 'oldest_wins':
       return { value: conflict.values[conflict.values.length - 1].value, reason: 'oldest_wins' };
 
-    case 'most_complete':
+    case 'most_complete': {
       // Choose the most complete/most confident value
       const sorted = conflict.values.sort((a, b) => b.confidence - a.confidence);
       return { value: sorted[0].value, reason: 'most_complete' };
+    }
 
     case 'manual':
     default:

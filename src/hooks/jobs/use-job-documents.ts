@@ -38,7 +38,13 @@ export function useJobDocuments(options: UseJobDocumentsOptions) {
 
   return useQuery({
     queryKey: queryKeys.jobDocuments.list(jobAssignmentId),
-    queryFn: () => listJobDocuments({ data: { jobAssignmentId } }),
+    queryFn: async () => {
+      const result = await listJobDocuments({
+        data: { jobAssignmentId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!jobAssignmentId,
     staleTime: 30 * 1000,
   });

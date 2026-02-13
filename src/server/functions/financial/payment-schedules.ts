@@ -8,13 +8,14 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, asc, isNull, lte, inArray } from 'drizzle-orm';
+import { eq, and, asc, isNull, lte, inArray, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { paymentSchedules, orders, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { formatAmount } from '@/lib/currency';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
+import { calculateGst } from '@/lib/utils/financial';
 import {
   createPaymentPlanSchema,
   recordInstallmentPaymentSchema,
@@ -22,7 +23,10 @@ import {
   overdueInstallmentsQuerySchema,
   updateInstallmentSchema,
   deletePaymentPlanSchema,
+  paymentPlanTypeSchema,
+  installmentStatusSchema,
   type PaymentPlanType,
+  type PaymentScheduleResponse,
 } from '@/lib/schemas';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
@@ -42,23 +46,9 @@ const PAYMENT_SCHEDULE_EXCLUDED_FIELDS: string[] = [
 
 type PaymentScheduleRecord = typeof paymentSchedules.$inferSelect;
 
-interface PaymentPlanSummary {
-  orderId: string;
-  planType: string;
-  totalAmount: number;
-  paidAmount: number;
-  remainingAmount: number;
-  installmentCount: number;
-  paidCount: number;
-  overdueCount: number;
-  nextDueDate: Date | null;
-  nextDueAmount: number | null;
-  installments: PaymentScheduleRecord[];
-}
-
 interface OverdueInstallmentWithRelations extends PaymentScheduleRecord {
-  order: typeof orders.$inferSelect | null;
-  customer: typeof customers.$inferSelect | null;
+  order: { id: string; orderNumber: string | null; total: number; status: string } | null;
+  customer: { id: string; name: string; email: string | null } | null;
   daysOverdue: number;
 }
 
@@ -66,12 +56,6 @@ interface OverdueInstallmentWithRelations extends PaymentScheduleRecord {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Calculate GST (10%) from amount.
- */
-function calculateGst(amount: number): number {
-  return Math.round(amount * 0.1 * 100) / 100;
-}
 
 /**
  * Add days to a date.
@@ -80,6 +64,27 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+/**
+ * Mark installments as overdue (internal helper).
+ * Used by listOverdueInstallments lazy-update. Idempotent.
+ */
+async function markInstallmentsOverdueInternal(
+  organizationId: string,
+  installmentIds: string[],
+  updatedBy: string
+): Promise<void> {
+  if (installmentIds.length === 0) return;
+  await db
+    .update(paymentSchedules)
+    .set({ status: 'overdue', updatedBy })
+    .where(
+      and(
+        inArray(paymentSchedules.id, installmentIds),
+        eq(paymentSchedules.organizationId, organizationId)
+      )
+    );
 }
 
 /**
@@ -199,7 +204,7 @@ function generatePresetInstallments(
  */
 export const createPaymentPlan = createServerFn({ method: 'POST' })
   .inputValidator(createPaymentPlanSchema)
-  .handler(async ({ data }): Promise<PaymentPlanSummary> => {
+  .handler(async ({ data }): Promise<PaymentScheduleResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.financial.create });
 
     // Get order (outside transaction - read-only)
@@ -312,13 +317,14 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
       metadata: {
         orderId: data.orderId,
         orderNumber: order[0].orderNumber ?? undefined,
+        customerId: order[0].customerId, // Include for customer timeline visibility
         planType: data.planType,
         total: Number(totalAmount),
         installmentCount: insertedInstallments.length,
       },
     });
 
-    // Return summary
+    // Return summary (matches PaymentScheduleResponse structure)
     return {
       orderId: data.orderId,
       planType: data.planType,
@@ -332,7 +338,26 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
         ? new Date(insertedInstallments[0].dueDate)
         : null,
       nextDueAmount: insertedInstallments[0]?.amount ?? null,
-      installments: insertedInstallments,
+      installments: insertedInstallments.map((inst) => ({
+        id: inst.id,
+        organizationId: inst.organizationId,
+        orderId: inst.orderId,
+        planType: inst.planType,
+        installmentNo: inst.installmentNo,
+        description: inst.description,
+        dueDate: new Date(inst.dueDate), // Convert string to Date
+        amount: Number(inst.amount),
+        gstAmount: Number(inst.gstAmount),
+        status: inst.status,
+        paidAmount: inst.paidAmount,
+        paidAt: inst.paidAt ? new Date(inst.paidAt) : null,
+        paymentReference: inst.paymentReference,
+        notes: inst.notes,
+        createdBy: inst.createdBy ?? '', // Ensure non-null for schema compliance
+        updatedBy: inst.updatedBy ?? '', // Ensure non-null for schema compliance
+        createdAt: inst.createdAt,
+        updatedAt: inst.updatedAt,
+      })),
     };
   });
 
@@ -345,7 +370,7 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
  */
 export const getPaymentSchedule = createServerFn({ method: 'GET' })
   .inputValidator(getPaymentScheduleSchema)
-  .handler(async ({ data }): Promise<PaymentPlanSummary | null> => {
+  .handler(async ({ data }): Promise<PaymentScheduleResponse | null> => {
     const ctx = await withAuth();
 
     // Get installments
@@ -364,8 +389,18 @@ export const getPaymentSchedule = createServerFn({ method: 'GET' })
       return null;
     }
 
-    // Get order for total
-    const order = await db.select().from(orders).where(eq(orders.id, data.orderId)).limit(1);
+    // Get order for total — scoped by organizationId for multi-tenant safety
+    const order = await db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, data.orderId),
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      )
+      .limit(1);
 
     const totalAmount = order[0]?.total || 0;
     const paidAmount = installments.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
@@ -380,9 +415,12 @@ export const getPaymentSchedule = createServerFn({ method: 'GET' })
     // Find next due installment
     const nextDue = installments.find((i) => i.status !== 'paid');
 
+    // Validate enum values from database
+    const planType = paymentPlanTypeSchema.parse(installments[0].planType);
+
     return {
       orderId: data.orderId,
-      planType: installments[0].planType,
+      planType,
       totalAmount,
       paidAmount,
       remainingAmount: totalAmount - paidAmount,
@@ -391,7 +429,32 @@ export const getPaymentSchedule = createServerFn({ method: 'GET' })
       overdueCount,
       nextDueDate: nextDue ? new Date(nextDue.dueDate) : null,
       nextDueAmount: nextDue?.amount ?? null,
-      installments,
+      installments: installments.map((inst) => {
+        // Validate enum values from database
+        const validatedPlanType = paymentPlanTypeSchema.parse(inst.planType);
+        const validatedStatus = installmentStatusSchema.parse(inst.status);
+
+        return {
+          id: inst.id,
+          organizationId: inst.organizationId,
+          orderId: inst.orderId,
+          planType: validatedPlanType,
+          installmentNo: inst.installmentNo,
+          description: inst.description,
+          dueDate: new Date(inst.dueDate),
+          amount: Number(inst.amount),
+          gstAmount: Number(inst.gstAmount),
+          status: validatedStatus,
+          paidAmount: inst.paidAmount ? Number(inst.paidAmount) : null,
+          paidAt: inst.paidAt,
+          paymentReference: inst.paymentReference,
+          notes: inst.notes,
+          createdBy: inst.createdBy ?? '', // Ensure non-null for schema compliance
+          updatedBy: inst.updatedBy ?? '', // Ensure non-null for schema compliance
+          createdAt: inst.createdAt,
+          updatedAt: inst.updatedAt,
+        };
+      }),
     };
   });
 
@@ -462,16 +525,35 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
         .where(eq(paymentSchedules.id, data.installmentId))
         .returning();
 
-      // Get all installments for order to calculate total paid
+      if (!updatedInstallment) {
+        throw new NotFoundError('Payment installment not found or already modified', 'paymentSchedule');
+      }
+
+      // Get all installments for order to calculate total paid — scoped by organizationId
       const allInstallments = await tx
         .select({ paidAmount: paymentSchedules.paidAmount })
         .from(paymentSchedules)
-        .where(eq(paymentSchedules.orderId, orderId));
+        .where(
+          and(
+            eq(paymentSchedules.orderId, orderId),
+            eq(paymentSchedules.organizationId, ctx.organizationId)
+          )
+        );
 
       const totalPaid = allInstallments.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
 
-      // Update order's paid amount and balance
-      const order = await tx.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+      // Update order's paid amount and balance — scoped by organizationId for multi-tenant safety
+      const order = await tx
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.id, orderId),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .limit(1);
 
       if (order.length > 0) {
         const orderTotal = order[0].total || 0;
@@ -485,10 +567,27 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
             paymentStatus: balanceDue <= 0 ? 'paid' : 'partial',
             updatedBy: ctx.user.id,
           })
-          .where(eq(orders.id, orderId));
+          .where(
+            and(
+              eq(orders.id, orderId),
+              eq(orders.organizationId, ctx.organizationId)
+            )
+          );
       }
 
-      return updatedInstallment;
+      // Get order for customerId (inside transaction to avoid extra query) — scoped by organizationId
+      const [orderRecord] = await tx
+        .select({ customerId: orders.customerId })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.id, orderId),
+            eq(orders.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      return { updatedInstallment, customerId: orderRecord?.customerId };
     });
 
     // Activity logging
@@ -500,21 +599,20 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
       description: `Recorded payment of ${formatAmount({ currency: 'AUD', amount: data.paidAmount })} for installment`,
       changes: computeChanges({
         before: installment[0],
-        after: updated,
+        after: updated.updatedInstallment,
         excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
       }),
       metadata: {
         orderId,
+        customerId: updated.customerId, // Include for customer timeline visibility
         installmentId: data.installmentId,
         installmentNo: installment[0].installmentNo,
-        paidAmount: data.paidAmount,
-        newTotalPaid: newPaidAmount,
-        isPaid,
-        paymentReference: data.paymentReference,
+        paidAmount: newPaidAmount, // Total paid amount after this payment
+        amount: data.paidAmount,   // This specific payment amount
       },
     });
 
-    return updated;
+    return updated.updatedInstallment;
   });
 
 // ============================================================================
@@ -537,65 +635,84 @@ export const getOverdueInstallments = createServerFn({ method: 'GET' })
     const today = new Date();
     const cutoffDate = addDays(today, -minDaysOverdue);
 
-    // Build base query with joins
+    // Build where conditions
+    const conditions = [
+      eq(paymentSchedules.organizationId, ctx.organizationId),
+      inArray(paymentSchedules.status, ['pending', 'due', 'overdue']),
+      lte(paymentSchedules.dueDate, cutoffDate.toISOString().split('T')[0]),
+    ];
+    if (customerId) {
+      conditions.push(eq(customers.id, customerId));
+    }
+    const whereClause = and(...conditions);
+
+    // Build count conditions (without customer join)
+    const countConditions = [
+      eq(paymentSchedules.organizationId, ctx.organizationId),
+      inArray(paymentSchedules.status, ['pending', 'due', 'overdue']),
+      lte(paymentSchedules.dueDate, cutoffDate.toISOString().split('T')[0]),
+    ];
+    if (customerId) {
+      countConditions.push(eq(orders.customerId, customerId));
+    }
+    const countWhereClause = and(...countConditions);
+
+    // Build base query with joins — select explicit columns instead of full table objects
+    // to avoid over-fetching all columns from orders and customers
     const results = await db
       .select({
         installment: paymentSchedules,
-        order: orders,
-        customer: customers,
+        orderNumber: orders.orderNumber,
+        orderId: orders.id,
+        orderTotal: orders.total,
+        orderStatus: orders.status,
+        customerId: customers.id,
+        customerName: customers.name,
+        customerEmail: customers.email,
       })
       .from(paymentSchedules)
       .innerJoin(orders, eq(paymentSchedules.orderId, orders.id))
       .innerJoin(customers, eq(orders.customerId, customers.id))
-      .where(
-        and(
-          eq(paymentSchedules.organizationId, ctx.organizationId),
-          inArray(paymentSchedules.status, ['pending', 'due', 'overdue']),
-          lte(paymentSchedules.dueDate, cutoffDate.toISOString().split('T')[0]),
-          customerId ? eq(customers.id, customerId) : sql`TRUE`
-        )
-      )
+      .where(whereClause)
       .orderBy(asc(paymentSchedules.dueDate))
       .limit(limit)
       .offset(offset);
 
     // Get total count
     const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: count() })
       .from(paymentSchedules)
       .innerJoin(orders, eq(paymentSchedules.orderId, orders.id))
-      .where(
-        and(
-          eq(paymentSchedules.organizationId, ctx.organizationId),
-          inArray(paymentSchedules.status, ['pending', 'due', 'overdue']),
-          lte(paymentSchedules.dueDate, cutoffDate.toISOString().split('T')[0]),
-          customerId ? eq(orders.customerId, customerId) : sql`TRUE`
-        )
-      );
+      .where(countWhereClause);
 
-    const total = countResult[0]?.count ?? 0;
+    const total = Number(countResult[0]?.count ?? 0);
 
     // Calculate days overdue for each
-    const items: OverdueInstallmentWithRelations[] = results.map((row) => {
+    const items = results.map((row) => {
       const dueDate = new Date(row.installment.dueDate);
       const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
       return {
         ...row.installment,
-        order: row.order,
-        customer: row.customer,
+        order: {
+          id: row.orderId,
+          orderNumber: row.orderNumber,
+          total: row.orderTotal,
+          status: row.orderStatus,
+        },
+        customer: {
+          id: row.customerId,
+          name: row.customerName,
+          email: row.customerEmail,
+        },
         daysOverdue,
       };
-    });
+    }) as OverdueInstallmentWithRelations[];
 
-    // Update status to overdue for items that need it
+    // Lazy-update: mark as overdue (same transaction boundary as read).
     const overdueIds = items.filter((i) => i.status !== 'overdue').map((i) => i.id);
-
     if (overdueIds.length > 0) {
-      await db
-        .update(paymentSchedules)
-        .set({ status: 'overdue', updatedBy: ctx.user.id })
-        .where(inArray(paymentSchedules.id, overdueIds));
+      await markInstallmentsOverdueInternal(ctx.organizationId, overdueIds, ctx.user.id);
     }
 
     // Calculate totals
@@ -745,7 +862,7 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
 
       // Count before delete
       const countResult = await tx
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: count() })
         .from(paymentSchedules)
         .where(
           and(
@@ -769,6 +886,18 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
       return { deleted: deleteCount };
     });
 
+    // Get order for customerId — scoped by organizationId for multi-tenant safety
+    const [order] = await db
+      .select({ customerId: orders.customerId })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, data.orderId),
+          eq(orders.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
     logger.logAsync({
@@ -778,6 +907,7 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
       description: `Deleted payment plan (${result.deleted} installments)`,
       metadata: {
         orderId: data.orderId,
+        customerId: order?.customerId, // Include for customer timeline visibility
         planType: existingPlan?.planType,
         deletedCount: result.deleted,
       },

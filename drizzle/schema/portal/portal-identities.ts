@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   pgPolicy,
   check,
+  pgSchema,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { organizations } from "../settings/organizations";
@@ -20,6 +21,11 @@ import { customers, contacts } from "../customers/customers";
 import { jobAssignments } from "../jobs/job-assignments";
 import { timestampColumns } from "../_shared/patterns";
 import { portalIdentityStatusEnum, portalScopeEnum } from "../_shared/enums";
+
+const authSchema = pgSchema("auth");
+const authUsers = authSchema.table("users", {
+  id: uuid("id").primaryKey(),
+});
 
 export const portalIdentities = pgTable(
   "portal_identities",
@@ -30,7 +36,9 @@ export const portalIdentities = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
 
-    authUserId: uuid("auth_user_id").notNull(), // Supabase auth.users.id
+    authUserId: uuid("auth_user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }), // Supabase auth.users.id
 
     scope: portalScopeEnum("scope").notNull(),
     status: portalIdentityStatusEnum("status").notNull().default("active"),

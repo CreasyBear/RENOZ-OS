@@ -20,7 +20,6 @@ import {
   check,
   index,
   uniqueIndex,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { purchaseOrderStatusEnum } from "../_shared/enums";
@@ -29,6 +28,9 @@ import {
   auditColumns,
   softDeleteColumn,
   currencyColumn,
+  numericCasted,
+  standardRlsPolicies,
+  sqlCurrentDate,
 } from "../_shared/patterns";
 import { suppliers, type SupplierAddress } from "./suppliers";
 import { users } from "../users/users";
@@ -69,7 +71,7 @@ export const purchaseOrders = pgTable(
 
     // Status and dates
     status: purchaseOrderStatusEnum("status").notNull().default("draft"),
-    orderDate: date("order_date").notNull().default(sql`CURRENT_DATE`),
+    orderDate: date("order_date").notNull().default(sqlCurrentDate()),
     requiredDate: date("required_date"),
     expectedDeliveryDate: date("expected_delivery_date"),
     actualDeliveryDate: date("actual_delivery_date"),
@@ -87,6 +89,8 @@ export const purchaseOrders = pgTable(
 
     // Business terms
     currency: text("currency").notNull().default("AUD"),
+    exchangeRate: numericCasted("exchange_rate", { precision: 12, scale: 6 }), // 1 PO currency = X org currency
+    exchangeDate: date("exchange_date"), // Date rate was applied
     paymentTerms: text("payment_terms"),
 
     // Order workflow - who created and ordered
@@ -200,27 +204,7 @@ export const purchaseOrders = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("purchase_orders_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("purchase_orders_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("purchase_orders_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("purchase_orders_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("purchase_orders"),
   })
 );
 

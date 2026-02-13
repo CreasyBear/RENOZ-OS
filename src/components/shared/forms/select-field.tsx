@@ -23,7 +23,7 @@
  */
 import { FormField } from "./form-field"
 import { cn } from "~/lib/utils"
-import type { AnyFieldApi } from "./types"
+import type { FormFieldWithType } from "./types"
 
 export interface SelectOption {
   value: string
@@ -33,7 +33,7 @@ export interface SelectOption {
 
 export interface SelectFieldProps {
   /** TanStack Form field instance */
-  field: AnyFieldApi<string>
+  field: FormFieldWithType<string | null | undefined>
   /** Field label */
   label: string
   /** Select options */

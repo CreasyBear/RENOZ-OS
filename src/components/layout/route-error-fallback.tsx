@@ -7,10 +7,12 @@
  * Security: Does NOT expose stack traces in production.
  */
 import { useEffect } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouter } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, RefreshCw, ArrowLeft, Home } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 interface RouteErrorFallbackProps {
@@ -24,13 +26,15 @@ export function RouteErrorFallback({
   parentRoute = '/',
   onRetry,
 }: RouteErrorFallbackProps) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
   // Log error - in production, send to monitoring service
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') {
-      // TODO: Send to Sentry or similar
-      console.error('[Route Error]', error.message);
+      logger.error('[Route Error]', error, { message: error.message });
     } else {
-      console.error('[Route Error]', error);
+      logger.error('[Route Error]', error, { stack: error.stack });
     }
   }, [error]);
 
@@ -38,7 +42,9 @@ export function RouteErrorFallback({
     if (onRetry) {
       onRetry();
     } else {
-      window.location.reload();
+      // Invalidate all queries and reload route data instead of full page reload
+      queryClient.invalidateQueries();
+      router.invalidate();
     }
   };
 
@@ -58,8 +64,11 @@ export function RouteErrorFallback({
 
           {/* Only show error details in development */}
           {process.env.NODE_ENV !== 'production' && (
-            <div className="rounded bg-destructive/10 p-3 font-mono text-xs text-destructive">
-              {error.message}
+            <div className="rounded bg-destructive/10 p-3 font-mono text-xs text-destructive space-y-2">
+              <div className="font-semibold">{error.message}</div>
+              <pre className="whitespace-pre-wrap text-[10px] max-h-40 overflow-auto">
+                {error.stack}
+              </pre>
             </div>
           )}
 

@@ -8,6 +8,8 @@
 import { ArrowUp, Check, Clock, ClipboardList, FileText, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, EmptyStateContainer } from '@/components/shared/empty-state';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { cn } from '@/lib/utils';
 import type { ApprovalEvent, ApprovalRule, ApprovalEventType } from '@/lib/schemas/approvals';
 
@@ -103,17 +105,6 @@ function HistorySkeleton() {
 // EMPTY STATE
 // ============================================================================
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-8 text-center">
-      <ClipboardList className="text-muted-foreground mb-3 h-10 w-10" />
-      <p className="font-medium">No Approval History</p>
-      <p className="text-muted-foreground text-sm">
-        This order has not been submitted for approval yet.
-      </p>
-    </div>
-  );
-}
 
 // ============================================================================
 // CURRENT STATUS INDICATOR
@@ -161,6 +152,7 @@ function CurrentStatus({ status }: { status: string }) {
 
 function TimelineEvent({ event, isLast }: { event: ApprovalEvent; isLast: boolean }) {
   const config = eventConfig[event.type];
+  const { formatDate } = useOrgFormat();
 
   return (
     <div className="flex gap-3">
@@ -172,16 +164,7 @@ function TimelineEvent({ event, isLast }: { event: ApprovalEvent; isLast: boolea
         <div className="flex items-baseline justify-between gap-2">
           <p className={cn('text-sm font-medium', config.color)}>{config.label}</p>
           <time className="text-muted-foreground text-xs">
-            {new Date(event.date).toLocaleDateString('en-AU', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            })}{' '}
-            at{' '}
-            {new Date(event.date).toLocaleTimeString('en-AU', {
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
+            {formatDate(event.date, { format: 'short', includeTime: true })}
           </time>
         </div>
         <p className="text-muted-foreground mt-0.5 text-sm">
@@ -271,7 +254,13 @@ export function ApprovalHistory({
 
       {/* Timeline */}
       {events.length === 0 ? (
-        <EmptyState />
+        <EmptyStateContainer variant="inline">
+          <EmptyState
+            icon={ClipboardList}
+            title="No Approval History"
+            message="This order has not been submitted for approval yet."
+          />
+        </EmptyStateContainer>
       ) : (
         <div className="mt-4">
           {events.map((event, index) => (

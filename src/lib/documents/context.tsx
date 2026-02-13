@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Context file exports provider + hook */
 /**
  * Organization Document Context
  *
@@ -98,8 +99,8 @@ const OrgDocumentContext = createContext<OrgDocumentContextValue | null>(null);
  *   const { organization, primaryColor } = useOrgDocument();
  *   return (
  *     <View>
- *       {organization.branding.logoUrl && (
- *         <Image src={organization.branding.logoUrl} />
+ *       {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) && (
+ *         <Image src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!} />
  *       )}
  *       <Text style={{ color: primaryColor }}>{organization.name}</Text>
  *     </View>

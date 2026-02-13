@@ -17,6 +17,8 @@ import { logger } from '@/lib/logger';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  /** Called when user clicks "Back to Orders" — use navigate({ to: '/orders' }) per WORKFLOW-CONTINUITY §8 */
+  onGoToOrders?: () => void;
 }
 
 interface State {
@@ -50,8 +52,10 @@ export class FulfillmentErrorBoundary extends Component<Props, State> {
     });
 
     // Send to error monitoring service (Sentry) if available
-    if (typeof window !== 'undefined' && (window as any).Sentry) {
-      (window as any).Sentry.captureException(error, {
+    const win = typeof window !== 'undefined' ? window : null;
+    const Sentry = win && 'Sentry' in win ? (win as Window & { Sentry: { captureException: (err: Error, opts?: object) => void } }).Sentry : null;
+    if (Sentry) {
+      Sentry.captureException(error, {
         tags: {
           component: 'fulfillment-error-boundary',
           domain: 'fulfillment-kanban',
@@ -70,7 +74,11 @@ export class FulfillmentErrorBoundary extends Component<Props, State> {
   };
 
   handleGoHome = () => {
-    window.location.href = '/orders';
+    if (this.props.onGoToOrders) {
+      this.props.onGoToOrders();
+    } else {
+      window.location.href = '/orders';
+    }
   };
 
   render() {

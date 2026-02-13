@@ -24,9 +24,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { type DocumentType } from '@/lib/documents/types';
 import {
   generateOrderQuotePdf,
   generateOrderInvoicePdf,
+  generateOrderProFormaPdf,
   generateOrderPackingSlipPdf,
   generateOrderDeliveryNotePdf,
   generateOrderDocument,
@@ -36,7 +38,8 @@ import {
 // TYPES
 // ============================================================================
 
-export type OrderDocumentType = 'quote' | 'invoice' | 'packing-slip' | 'delivery-note';
+/** Re-export DocumentType as OrderDocumentType for backwards compatibility */
+export type OrderDocumentType = DocumentType;
 
 export interface GenerateOrderDocumentResult {
   orderId: string;
@@ -57,6 +60,11 @@ export interface GenerateOrderQuoteInput {
 export interface GenerateOrderInvoiceInput {
   orderId: string;
   dueDate?: string;
+  regenerate?: boolean;
+}
+
+export interface GenerateOrderProFormaInput {
+  orderId: string;
   regenerate?: boolean;
 }
 
@@ -154,6 +162,10 @@ export function useGenerateOrderQuote() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(result.orderId),
       });
+      // Also invalidate document history so Documents tab updates
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', result.orderId),
+      });
     },
   });
 }
@@ -184,6 +196,49 @@ export function useGenerateOrderInvoice() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(result.orderId),
+      });
+      // Also invalidate document history so Documents tab updates
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', result.orderId),
+      });
+    },
+  });
+}
+
+// ============================================================================
+// PRO-FORMA INVOICE GENERATION
+// ============================================================================
+
+/**
+ * Generate Pro-Forma Invoice PDF for an order synchronously.
+ *
+ * @example
+ * ```tsx
+ * const { mutate, isPending, data } = useGenerateOrderProForma();
+ *
+ * <Button
+ *   onClick={() => mutate({ orderId })}
+ *   disabled={isPending}
+ * >
+ *   {isPending ? 'Generating...' : 'Generate Pro-Forma'}
+ * </Button>
+ *
+ * {data?.url && <a href={data.url} target="_blank">Download Pro-Forma</a>}
+ * ```
+ */
+export function useGenerateOrderProForma() {
+  const queryClient = useQueryClient();
+  const generateFn = useServerFn(generateOrderProFormaPdf);
+
+  return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderProFormaInput>({
+    mutationFn: (input) => generateFn({ data: input }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(result.orderId),
+      });
+      // Also invalidate document history so Documents tab updates
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', result.orderId),
       });
     },
   });
@@ -218,6 +273,10 @@ export function useGenerateOrderPackingSlip() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(result.orderId),
       });
+      // Also invalidate document history so Documents tab updates
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', result.orderId),
+      });
     },
   });
 }
@@ -248,6 +307,10 @@ export function useGenerateOrderDeliveryNote() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(result.orderId),
+      });
+      // Also invalidate document history so Documents tab updates
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', result.orderId),
       });
     },
   });

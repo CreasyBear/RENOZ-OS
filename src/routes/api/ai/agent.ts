@@ -16,6 +16,7 @@ import { checkRateLimit, createRateLimitResponse } from '@/lib/ai/ratelimit';
 import { checkBudget, createBudgetExceededResponse } from '@/server/functions/ai/utils/budget';
 import { estimateCost } from '@/server/functions/ai/utils/cost';
 import { queueAgentTask } from '@/trigger/jobs/ai-agent-task';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -131,7 +132,7 @@ export async function POST({ request }: { request: Request }) {
       { status: 202, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('[API /ai/agent] Error:', error);
+    logger.error('[API /ai/agent] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {

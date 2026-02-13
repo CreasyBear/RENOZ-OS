@@ -2,6 +2,11 @@
  * Pipeline Domain Components
  *
  * Exports all pipeline-related UI components.
+ *
+ * NOTE: As of this version, the pipeline board uses shared kanban components.
+ * The old custom column and card components have been deprecated.
+ *
+ * @see docs/design-system/KANBAN-STANDARDS.md
  */
 
 // --- Container Components ---
@@ -12,15 +17,8 @@ export {
 
 // --- Core Components ---
 export { PipelineBoard, type PipelineBoardProps } from './pipeline-board';
-export { PipelineColumn, type PipelineColumnProps } from './pipeline-column';
-export {
-  PipelineColumnVirtualized,
-  type PipelineColumnVirtualizedProps,
-} from './pipeline-column-virtualized';
-export {
-  PipelineColumnSummary,
-  type PipelineColumnSummaryProps,
-} from './pipeline-column-summary';
+// NOTE: PipelineColumn, PipelineColumnVirtualized, PipelineColumnSummary have been
+// replaced by shared kanban components. See pipeline-board.tsx for usage.
 export {
   PipelineListView,
   type PipelineListViewProps,
@@ -46,20 +44,19 @@ export {
 
 // --- Quotes ---
 export * from './quotes';
-export type { QuoteBuilderContainerProps, QuoteBuilderPresenterProps } from './quotes/quote-builder';
-export type { QuoteVersionHistoryContainerProps, QuoteVersionHistoryPresenterProps } from './quotes/quote-version-history';
-export type { QuotePdfPreviewContainerProps, QuotePdfPreviewPresenterProps } from './quotes/quote-pdf-preview';
 export type { QuoteValidityBadgeProps } from './quotes/quote-validity-badge';
 export type { ExtendValidityDialogProps } from './quotes/extend-validity-dialog';
-export type { ExpiredQuotesAlertContainerProps, ExpiredQuotesAlertPresenterProps } from './quotes/expired-quotes-alert';
-export type { QuickQuoteFormContainerProps, QuickQuoteFormPresenterProps } from './quotes/quick-quote-form';
 export type { QuickQuoteDialogProps } from './quotes/quick-quote-dialog';
+
+// NOTE: Deprecated presenter type exports removed (containers export their own types):
+// - QuoteBuilderContainerProps/PresenterProps: Use QuoteBuilderContainer from quotes barrel
+// - QuoteVersionHistoryContainerProps/PresenterProps: Use QuoteVersionHistoryContainer from quotes barrel
+// - QuotePdfPreviewContainerProps/PresenterProps: Use QuotePdfPreviewContainer from quotes barrel
+// - ExpiredQuotesAlertContainerProps/PresenterProps: Use ExpiredQuotesAlertContainer from quotes barrel
+// - QuickQuoteFormContainerProps/PresenterProps: Use QuickQuoteFormContainer from quotes barrel
 
 // --- Opportunities ---
 export * from './opportunities';
-export type { OpportunityCardProps } from './opportunities/opportunity-card';
-/** @deprecated Use OpportunityDetailViewProps instead */
-export type { OpportunityDetailProps } from './opportunities/opportunity-detail';
 export type { OpportunityFormProps } from './opportunities/opportunity-form';
 export type {
   OpportunityDetailContainerProps,
@@ -70,5 +67,8 @@ export type { OpportunityDetailViewProps } from './opportunities/views/opportuni
 // --- Activities ---
 export * from './activities';
 export type { ActivityLoggerProps } from './activities/activity-logger';
-export type { ActivityTimelineProps } from './activities/activity-timeline';
 export type { FollowUpSchedulerProps } from './activities/follow-up-scheduler';
+
+// NOTE: Deprecated type exports removed:
+// - OpportunityDetailProps: Use OpportunityDetailViewProps instead
+// - ActivityTimelineProps: Component deprecated, use OpportunityActivityTimelineContainer

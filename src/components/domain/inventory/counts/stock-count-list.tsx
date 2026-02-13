@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTableEmpty } from "@/components/shared/data-table";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -270,11 +271,13 @@ export const StockCountList = memo(function StockCountList({
   // Empty state
   if (counts.length === 0) {
     return (
-      <div className={cn("text-center py-12", className)}>
-        <ClipboardList className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-        <p className="mt-4 text-sm text-muted-foreground">
-          No stock counts found
-        </p>
+      <div className={cn("py-12", className)}>
+        <DataTableEmpty
+          variant="empty"
+          icon={ClipboardList}
+          title="No stock counts found"
+          description="Create a stock count to begin tracking inventory accuracy."
+        />
       </div>
     );
   }
@@ -426,7 +429,7 @@ export const StockCountList = memo(function StockCountList({
                       {onDelete && count.status === "draft" && (
                         <DropdownMenuItem
                           onClick={() => onDelete(count)}
-                          className="text-destructive focus:text-destructive"
+                          className="text-destructive focus-visible:text-destructive"
                         >
                           <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
                           Delete

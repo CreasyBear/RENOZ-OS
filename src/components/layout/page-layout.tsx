@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Layout exports compound components + variants */
 /**
  * PageLayout Component
  *
@@ -7,7 +8,8 @@
  * - container: max-width with center alignment (default)
  * - full-width: no max-width, full horizontal space
  * - narrow: narrower max-width for forms
- * - with-sidebar: detail page with side panel
+ * - with-sidebar: detail page with side panel (right)
+ * - with-left-sidebar: list page with left filter/sidebar (Products, Schedule)
  *
  * @example
  * ```tsx
@@ -41,13 +43,14 @@ import {
   DrawerClose,
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 import { X } from 'lucide-react'
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type PageLayoutVariant = 'container' | 'full-width' | 'narrow' | 'with-sidebar'
+type PageLayoutVariant = 'container' | 'full-width' | 'narrow' | 'with-sidebar' | 'with-left-sidebar'
 
 interface PageLayoutContextValue {
   variant: PageLayoutVariant
@@ -62,10 +65,12 @@ interface PageLayoutProps {
 interface PageHeaderProps {
   /**
    * Page title. Set to `null` for detail pages where EntityHeader displays the title.
-   * When null, only actions are rendered (if provided).
+   * When null, leading and/or actions are rendered.
    */
   title: ReactNode | null
   description?: ReactNode
+  /** Left slot for detail pages (e.g. Back button). Use with title=null. */
+  leading?: ReactNode
   actions?: ReactNode
   className?: string
 }
@@ -84,6 +89,11 @@ interface PageSidebarProps {
   isOpen?: boolean
   /** Callback when the mobile drawer open state changes */
   onOpenChange?: (open: boolean) => void
+}
+
+interface PageLeftSidebarProps {
+  children: ReactNode
+  className?: string
 }
 
 // ============================================================================
@@ -109,6 +119,7 @@ const containerStyles: Record<PageLayoutVariant, string> = {
   'full-width': 'px-4 sm:px-6 lg:px-8',
   narrow: 'max-w-3xl mx-auto px-4 sm:px-6',
   'with-sidebar': 'px-4 sm:px-6 lg:px-8',
+  'with-left-sidebar': 'px-4 sm:px-6 lg:px-8',
 }
 
 // ============================================================================
@@ -127,22 +138,39 @@ const containerStyles: Record<PageLayoutVariant, string> = {
 function PageHeader({
   title,
   description,
+  leading,
   actions,
   className,
 }: PageHeaderProps) {
+  const { variant } = usePageLayout();
+
   // Don't render header if title is explicitly null (detail pages use EntityHeader instead)
   if (title === null) {
-    return actions ? (
-      <div className={cn('py-4 flex justify-end', className)}>
-        <div className="flex items-center gap-3">{actions}</div>
+    if (!leading && !actions) return null
+    return (
+      <div
+        className={cn(
+          'py-4 flex flex-wrap items-center justify-between gap-4 overflow-x-hidden',
+          className
+        )}
+      >
+        {leading ? (
+          <div className="min-w-0 shrink-0">{leading}</div>
+        ) : actions ? (
+          <div className="min-w-0 flex-1" aria-hidden />
+        ) : null}
+        {actions && (
+          <div className="flex items-center gap-3 shrink-0">{actions}</div>
+        )}
       </div>
-    ) : null
+    )
   }
 
   return (
     <div
       className={cn(
         'py-6 border-b border-border',
+        variant === 'with-left-sidebar' && 'lg:pl-[17rem]',
         className
       )}
     >
@@ -172,8 +200,9 @@ function PageContent({ children, className }: PageContentProps) {
   return (
     <div
       className={cn(
-        'py-6',
+        'py-6 min-w-0',
         variant === 'with-sidebar' && 'lg:pr-80',
+        variant === 'with-left-sidebar' && 'lg:pl-[17rem]',
         className
       )}
     >
@@ -216,7 +245,7 @@ function PageSidebar({
   const isMobile = useIsMobile()
 
   if (variant !== 'with-sidebar') {
-    console.warn('PageLayout.Sidebar should only be used with variant="with-sidebar"')
+    logger.warn('PageLayout.Sidebar should only be used with variant="with-sidebar"')
     return null
   }
 
@@ -262,6 +291,35 @@ function PageSidebar({
 }
 
 /**
+ * Left sidebar for list pages (Products categories, Schedule past-due).
+ * Fixed on left, hidden on mobile. Header and Content get lg:pl-[17rem] to align.
+ */
+function PageLeftSidebar({ children, className }: PageLeftSidebarProps) {
+  const { variant } = usePageLayout()
+
+  if (variant !== 'with-left-sidebar') {
+    logger.warn('PageLayout.LeftSidebar should only be used with variant="with-left-sidebar"')
+    return null
+  }
+
+  return (
+    <aside
+      className={cn(
+        'hidden lg:fixed lg:top-16 lg:bottom-0 lg:w-64 lg:z-30',
+        'lg:overflow-y-auto lg:border-r lg:border-border',
+        'bg-background p-4',
+        className
+      )}
+      style={{
+        left: 'var(--app-sidebar-width, 0)',
+      }}
+    >
+      {children}
+    </aside>
+  )
+}
+
+/**
  * PageLayout root component.
  */
 function PageLayoutRoot({ children, variant = 'container', className }: PageLayoutProps) {
@@ -285,10 +343,18 @@ export const PageLayout = Object.assign(PageLayoutRoot, {
   Header: PageHeader,
   Content: PageContent,
   Sidebar: PageSidebar,
+  LeftSidebar: PageLeftSidebar,
 })
 
 // Export hook for accessing layout context
 export { usePageLayout }
 
 // Export types for consumers
-export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps, PageSidebarProps }
+export type {
+  PageLayoutVariant,
+  PageLayoutProps,
+  PageHeaderProps,
+  PageContentProps,
+  PageSidebarProps,
+  PageLeftSidebarProps,
+}

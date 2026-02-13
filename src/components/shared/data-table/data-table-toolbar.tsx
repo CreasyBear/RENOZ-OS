@@ -105,7 +105,7 @@ export const DataTableToolbar = memo(function DataTableToolbar<TData>({
       </div>
 
       <div className="flex items-center gap-2">
-        {selectedCount > 0 && bulkActions}
+        {selectedCount >= 2 && bulkActions}
         {actions}
       </div>
     </div>

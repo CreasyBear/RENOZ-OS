@@ -474,7 +474,7 @@ export function BulkOperationsModal({
   const deleteOp = operations.find((op): op is DeleteOperationConfig => op.type === 'delete');
   const customOps = operations.filter((op): op is CustomOperationConfig => op.type === 'custom');
 
-  if (selectedCount === 0) {
+  if (selectedCount < 2) {
     if (variant === 'card') {
       return (
         <Card className={className}>

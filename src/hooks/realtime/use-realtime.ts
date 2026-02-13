@@ -132,6 +132,7 @@ export function useRealtimeBroadcast<T = unknown>(
   const channelRef = useRef<RealtimeChannel | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const connectRef = useRef<() => void>(() => {})
 
   // Clear reconnect timeout
   const clearReconnectTimeout = useCallback(() => {
@@ -227,7 +228,7 @@ export function useRealtimeBroadcast<T = unknown>(
 
             reconnectTimeoutRef.current = setTimeout(() => {
               setReconnectAttempts((prev) => prev + 1)
-              connect()
+              connectRef.current()
             }, delay)
           }
           break
@@ -251,6 +252,10 @@ export function useRealtimeBroadcast<T = unknown>(
     clearReconnectTimeout,
   ])
 
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
+
   // Reconnect helper (resets attempts)
   const reconnect = useCallback(() => {
     setReconnectAttempts(0)
@@ -259,6 +264,7 @@ export function useRealtimeBroadcast<T = unknown>(
 
   // Setup and cleanup
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- connect() sets up subscription
     connect()
 
     return () => {

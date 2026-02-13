@@ -8,7 +8,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, count, sql, gte, isNull } from 'drizzle-orm';
+import { eq, and, count, sql, gte, isNull, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { issues } from 'drizzle/schema/support/issues';
@@ -51,6 +51,12 @@ export interface SupportMetricsResponse {
     openedThisWeek: number;
     closedThisWeek: number;
     netChange: number;
+  };
+  /** Triage counts for filter chips (Overdue SLA, Escalated, My Issues) */
+  triage: {
+    overdueSla: number;
+    escalated: number;
+    myIssues: number;
   };
 }
 
@@ -225,6 +231,32 @@ export const getSupportMetrics = createServerFn({ method: 'GET' })
     const openedThisWeek = openedThisWeekResult?.count ?? 0;
     const closedThisWeek = closedThisWeekResult?.count ?? 0;
 
+    // === Triage Counts (for filter chips) ===
+
+    // Escalated issues
+    const [escalatedResult] = await db
+      .select({ count: count() })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.organizationId, ctx.organizationId),
+          isNotNull(issues.escalatedAt),
+          isNull(issues.deletedAt)
+        )
+      );
+
+    // My Issues (assigned to current user)
+    const [myIssuesResult] = await db
+      .select({ count: count() })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.organizationId, ctx.organizationId),
+          eq(issues.assignedToUserId, ctx.user.id),
+          isNull(issues.deletedAt)
+        )
+      );
+
     return {
       overview: {
         openIssues: openResult?.count ?? 0,
@@ -251,6 +283,11 @@ export const getSupportMetrics = createServerFn({ method: 'GET' })
         openedThisWeek,
         closedThisWeek,
         netChange: openedThisWeek - closedThisWeek,
+      },
+      triage: {
+        overdueSla: breached,
+        escalated: escalatedResult?.count ?? 0,
+        myIssues: myIssuesResult?.count ?? 0,
       },
     };
   });

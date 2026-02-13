@@ -14,9 +14,11 @@ import {
   getExpiringWarranties,
   getExpiringWarrantiesReport,
   getExpiringWarrantiesFilterOptions,
-  type GetExpiringWarrantiesResult,
-  type ExpiringWarrantiesReportResult,
 } from '@/server/functions/warranty/core/warranties';
+import type {
+  GetExpiringWarrantiesResult,
+  ExpiringWarrantiesReportResult,
+} from '@/lib/schemas/warranty/warranties';
 
 // ============================================================================
 // QUERY KEYS
@@ -56,7 +58,13 @@ export function useExpiringWarranties(options?: UseExpiringWarrantiesOptions) {
 
   return useQuery<GetExpiringWarrantiesResult>({
     queryKey: queryKeys.expiringWarranties.list({ days, limit, sortOrder }),
-    queryFn: () => getExpiringWarranties({ data: { days, limit, sortOrder } }),
+    queryFn: async () => {
+      const result = await getExpiringWarranties({
+        data: { days, limit, sortOrder } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     // Stale after 5 minutes since warranty expiry changes slowly
     staleTime: 5 * 60 * 1000,
@@ -105,10 +113,14 @@ export function useExpiringWarrantiesReport(options?: UseExpiringWarrantiesRepor
       page,
       limit,
     }),
-    queryFn: () =>
-      getExpiringWarrantiesReport({
+    queryFn: async () => {
+      const result = await getExpiringWarrantiesReport({
         data: { days, customerId, productId, status, sortBy, page, limit },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 2 * 60 * 1000, // 2 minutes for report data
   });
@@ -120,7 +132,11 @@ export function useExpiringWarrantiesReport(options?: UseExpiringWarrantiesRepor
 export function useExpiringWarrantiesFilterOptions() {
   return useQuery({
     queryKey: queryKeys.expiringWarrantiesReport.filterOptions,
-    queryFn: () => getExpiringWarrantiesFilterOptions(),
+    queryFn: async () => {
+      const result = await getExpiringWarrantiesFilterOptions();
+      if (result == null) throw new Error('Expiring warranties filter options returned no data');
+      return result;
+    },
     staleTime: 10 * 60 * 1000, // 10 minutes for filter options
   });
 }
@@ -133,4 +149,4 @@ export type {
   GetExpiringWarrantiesResult,
   ExpiringWarrantiesReportResult,
   ExpiringWarrantyItem,
-} from '@/server/functions/warranty/core/warranties';
+} from '@/lib/schemas/warranty/warranties';

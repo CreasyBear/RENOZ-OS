@@ -6,63 +6,53 @@
  * Pure UI component for claim details and timeline.
  */
 
+import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
-  FileWarning,
-  Shield,
   User,
   Package,
   Calendar,
   Clock,
   CheckCircle2,
-  XCircle,
   AlertTriangle,
   DollarSign,
   Battery,
+  PanelRight,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
-import { formatClaimDateTime, formatClaimCost, resolutionTypeConfig, type SlaDueStatus } from '@/lib/warranty/claims-utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
+import {
+  formatClaimDateTime,
+  formatClaimCost,
+  getClaimStatusConfigForEntityHeader,
+  resolutionTypeConfig,
+} from '@/lib/warranty/claims-utils';
+import {
+  useAlertDismissals,
+  generateAlertIdWithValue,
+} from '@/hooks/_shared/use-alert-dismissals';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface WarrantyClaimDetailViewProps {
-  claim: {
-    id: string;
-    claimNumber: string;
-    claimType: string;
-    status: string;
-    description: string;
-    cost: number | null;
-    submittedAt: string | Date;
-    updatedAt?: string | Date;
-    resolvedAt?: string | Date | null;
-    approvedAt?: string | Date | null;
-    denialReason?: string | null;
-    resolutionType?: string | null;
-    resolutionNotes?: string | null;
-    notes?: string | null;
-    cycleCountAtClaim?: number | null;
-    customerId: string;
-    product?: { id?: string | null; name?: string | null } | null;
-    warrantyId: string;
-    warranty?: { warrantyNumber?: string | null } | null;
-    customer?: { name?: string | null } | null;
-    approvedByUser?: { name?: string | null; email?: string | null } | null;
-    slaTracking?: {
-      responseDueAt?: Date | string | null;
-      resolutionDueAt?: Date | string | null;
-      respondedAt?: Date | string | null;
-      resolvedAt?: Date | string | null;
-    } | null;
-  };
-  responseSla: SlaDueStatus | null;
-  resolutionSla: SlaDueStatus | null;
-}
+// Import types from schemas per SCHEMA-TRACE.md
+import {
+  isWarrantyClaimResolutionTypeValue,
+  isWarrantyClaimStatusValue,
+  type WarrantyClaimDetailViewProps,
+} from '@/lib/schemas/warranty';
+import { EntityHeader } from '@/components/shared/detail-view';
 
 // ============================================================================
 // VIEW
@@ -70,325 +60,543 @@ export interface WarrantyClaimDetailViewProps {
 
 export function WarrantyClaimDetailView({
   claim,
+  primaryAction,
+  secondaryActions = [],
   responseSla,
   resolutionSla,
 }: WarrantyClaimDetailViewProps) {
-  return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <Card className="lg:col-span-2">
+  const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { dismiss, isAlertDismissed } = useAlertDismissals();
+
+  const alerts = useMemo(() => {
+    const items: Array<{
+      id: string;
+      tone: 'critical' | 'warning';
+      title: string;
+      description: string;
+      actionLabel: string;
+      onAction: () => void;
+    }> = [];
+
+    if (responseSla?.status === 'breached') {
+      items.push({
+        id: generateAlertIdWithValue(
+          'warranty_claim',
+          claim.id,
+          'response_sla_breached',
+          responseSla.label
+        ),
+        tone: 'critical',
+        title: 'Response SLA breached',
+        description: responseSla.label,
+        actionLabel: 'View SLA',
+        onAction: () => setActiveTab('sla'),
+      });
+    } else if (responseSla?.status === 'at_risk') {
+      items.push({
+        id: generateAlertIdWithValue(
+          'warranty_claim',
+          claim.id,
+          'response_sla_at_risk',
+          responseSla.label
+        ),
+        tone: 'warning',
+        title: 'Response SLA at risk',
+        description: responseSla.label,
+        actionLabel: 'View SLA',
+        onAction: () => setActiveTab('sla'),
+      });
+    }
+
+    if (resolutionSla?.status === 'breached') {
+      items.push({
+        id: generateAlertIdWithValue(
+          'warranty_claim',
+          claim.id,
+          'resolution_sla_breached',
+          resolutionSla.label
+        ),
+        tone: 'critical',
+        title: 'Resolution SLA breached',
+        description: resolutionSla.label,
+        actionLabel: 'View SLA',
+        onAction: () => setActiveTab('sla'),
+      });
+    } else if (resolutionSla?.status === 'at_risk') {
+      items.push({
+        id: generateAlertIdWithValue(
+          'warranty_claim',
+          claim.id,
+          'resolution_sla_at_risk',
+          resolutionSla.label
+        ),
+        tone: 'warning',
+        title: 'Resolution SLA at risk',
+        description: resolutionSla.label,
+        actionLabel: 'View SLA',
+        onAction: () => setActiveTab('sla'),
+      });
+    }
+
+    return items;
+  }, [claim.id, resolutionSla, responseSla]);
+
+  const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
+
+  const stages = [
+    { id: 'submitted', label: 'Submitted' },
+    { id: 'under_review', label: 'Under Review' },
+    { id: 'approved', label: 'Approved' },
+    { id: 'resolved', label: 'Resolved' },
+  ];
+
+  const stageIndex = stages.findIndex((stage) => stage.id === claim.status);
+  const isTerminal = claim.status === 'denied' || claim.status === 'cancelled';
+
+  const productContent = claim.product?.id ? (
+    <Link
+      to="/products/$productId"
+      params={{ productId: claim.product?.id }}
+      className="text-primary hover:underline"
+    >
+      {claim.product?.name ?? 'Unknown Product'}
+    </Link>
+  ) : (
+    <span>{claim.product?.name ?? 'Unknown Product'}</span>
+  );
+
+  const sidebarContent = (
+    <div className="space-y-6">
+      <Card>
         <CardHeader>
-          <CardTitle>Claim Details</CardTitle>
+          <CardTitle className="text-sm">Claim Summary</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                Customer
-              </Label>
-              <div className="flex items-center gap-2">
-                <User className="text-muted-foreground h-4 w-4" />
-                <Link
-                  to="/customers/$customerId"
-                  params={{ customerId: claim.customerId }}
-                  className="text-primary hover:underline"
-                >
-                  {claim.customer?.name ?? 'Unknown Customer'}
-                </Link>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                Product
-              </Label>
-              <div className="flex items-center gap-2">
-                <Package className="text-muted-foreground h-4 w-4" />
-                <Link
-                  to="/products/$productId"
-                  params={{ productId: claim.product?.id ?? '' }}
-                  className="text-primary hover:underline"
-                >
-                  {claim.product?.name ?? 'Unknown Product'}
-                </Link>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                Warranty
-              </Label>
-              <div className="flex items-center gap-2">
-                <Shield className="text-muted-foreground h-4 w-4" />
-                <Link
-                  to="/support/warranties/$warrantyId"
-                  params={{ warrantyId: claim.warrantyId }}
-                  className="text-primary hover:underline"
-                >
-                  {claim.warranty?.warrantyNumber}
-                </Link>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                Submitted
-              </Label>
-              <div className="flex items-center gap-2">
-                <Calendar className="text-muted-foreground h-4 w-4" />
-                <span>{formatClaimDateTime(claim.submittedAt)}</span>
-              </div>
-            </div>
-
-            {claim.cycleCountAtClaim !== null && (
-              <div className="space-y-1">
-                <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                  Cycle Count at Claim
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Battery className="text-muted-foreground h-4 w-4" />
-                  <span>{claim.cycleCountAtClaim?.toLocaleString()} cycles</span>
-                </div>
-              </div>
-            )}
-
-            {claim.cost !== null && (
-              <div className="space-y-1">
-                <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                  Resolution Cost
-                </Label>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="text-muted-foreground h-4 w-4" />
-                  <span>{formatClaimCost(claim.cost)}</span>
-                </div>
-              </div>
-            )}
+        <CardContent className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Claim #</span>
+            <span className="font-mono">{claim.claimNumber}</span>
           </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-              Description
-            </Label>
-            <p className="text-sm whitespace-pre-wrap">{claim.description}</p>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Status</span>
+            <span className="capitalize">{claim.status.replace(/_/g, ' ')}</span>
           </div>
-
-          {claim.resolutionType && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                  Resolution
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Badge className={resolutionTypeConfig[claim.resolutionType as keyof typeof resolutionTypeConfig]?.color ?? ''}>
-                    {resolutionTypeConfig[claim.resolutionType as keyof typeof resolutionTypeConfig]?.label ?? claim.resolutionType}
-                  </Badge>
-                  {claim.resolutionNotes && (
-                    <span className="text-muted-foreground text-sm">
-                      - {claim.resolutionNotes}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {claim.denialReason && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                  Denial Reason
-                </Label>
-                <p className="text-destructive text-sm">{claim.denialReason}</p>
-              </div>
-            </>
-          )}
-
-          {claim.notes && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                  Notes
-                </Label>
-                <pre className="text-muted-foreground font-sans text-sm whitespace-pre-wrap">
-                  {claim.notes}
-                </pre>
-              </div>
-            </>
-          )}
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Submitted</span>
+            <span>{formatClaimDateTime(claim.submittedAt)}</span>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            SLA Status
-          </CardTitle>
+          <CardTitle className="text-sm">Warranty</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-              Response SLA
-            </Label>
-            {claim.slaTracking?.respondedAt ? (
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span>Responded {formatClaimDateTime(claim.slaTracking.respondedAt)}</span>
-              </div>
-            ) : responseSla ? (
-              <div className="flex items-center gap-2 text-sm">
-                {responseSla.status === 'breached' ? (
-                  <AlertTriangle className="text-destructive h-4 w-4" />
-                ) : responseSla.status === 'at_risk' ? (
-                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                ) : (
-                  <Clock className="text-muted-foreground h-4 w-4" />
-                )}
-                <span
-                  className={
-                    responseSla.status === 'breached'
-                      ? 'text-destructive'
-                      : responseSla.status === 'at_risk'
-                        ? 'text-yellow-600'
-                        : ''
-                  }
-                >
-                  {responseSla.label}
-                </span>
-              </div>
-            ) : (
-              <span className="text-muted-foreground text-sm">No SLA configured</span>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-              Resolution SLA
-            </Label>
-            {claim.slaTracking?.resolvedAt ? (
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span>Resolved {formatClaimDateTime(claim.slaTracking.resolvedAt)}</span>
-              </div>
-            ) : resolutionSla ? (
-              <div className="flex items-center gap-2 text-sm">
-                {resolutionSla.status === 'breached' ? (
-                  <AlertTriangle className="text-destructive h-4 w-4" />
-                ) : resolutionSla.status === 'at_risk' ? (
-                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                ) : (
-                  <Clock className="text-muted-foreground h-4 w-4" />
-                )}
-                <span
-                  className={
-                    resolutionSla.status === 'breached'
-                      ? 'text-destructive'
-                      : resolutionSla.status === 'at_risk'
-                        ? 'text-yellow-600'
-                        : ''
-                  }
-                >
-                  {resolutionSla.label}
-                </span>
-              </div>
-            ) : (
-              <span className="text-muted-foreground text-sm">No SLA configured</span>
-            )}
-          </div>
-
-          <Separator />
-
-          <div className="space-y-1">
-            <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-              Timeline
-            </Label>
-            <div className="space-y-3 pt-2">
-              <TimelineItem
-                icon={<FileWarning className="h-4 w-4" />}
-                title="Submitted"
-                date={claim.submittedAt}
-                isComplete
-              />
-              <TimelineItem
-                icon={<Clock className="h-4 w-4" />}
-                title="Under Review"
-                date={claim.slaTracking?.respondedAt ?? undefined}
-                isComplete={claim.status !== 'under_review'}
-              />
-              {(claim.status === 'approved' || claim.status === 'resolved') && (
-                <TimelineItem
-                  icon={<CheckCircle2 className="h-4 w-4" />}
-                  title="Approved"
-                  date={claim.approvedAt ?? undefined}
-                  user={claim.approvedByUser?.name ?? claim.approvedByUser?.email ?? undefined}
-                  isComplete
-                />
-              )}
-              {claim.status === 'denied' && (
-                <TimelineItem
-                  icon={<XCircle className="h-4 w-4" />}
-                  title="Denied"
-                  date={claim.updatedAt}
-                  isComplete
-                  variant="destructive"
-                />
-              )}
-              {claim.status === 'resolved' && (
-                <TimelineItem
-                  icon={<CheckCircle2 className="h-4 w-4" />}
-                  title="Resolved"
-                  date={claim.resolvedAt ?? undefined}
-                  isComplete
-                  variant="success"
-                />
-              )}
-            </div>
+        <CardContent className="space-y-2 text-sm">
+          <Link
+            to="/support/warranties/$warrantyId"
+            params={{ warrantyId: claim.warrantyId }}
+            className="text-primary hover:underline"
+          >
+            Warranty {claim.warranty?.warrantyNumber ?? ''}
+          </Link>
+          <div className="text-muted-foreground">
+            Customer: {claim.customer?.name ?? 'Unknown'}
           </div>
         </CardContent>
       </Card>
     </div>
   );
-}
-
-// ============================================================================
-// TIMELINE ITEM
-// ============================================================================
-
-interface TimelineItemProps {
-  icon: React.ReactNode;
-  title: string;
-  date?: string | Date | null;
-  user?: string | null;
-  isComplete?: boolean;
-  variant?: 'default' | 'success' | 'destructive';
-}
-
-function TimelineItem({
-  icon,
-  title,
-  date,
-  user,
-  isComplete,
-  variant = 'default',
-}: TimelineItemProps) {
-  const colorClasses = {
-    default: isComplete ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-    success: 'bg-green-500 text-white',
-    destructive: 'bg-destructive text-destructive-foreground',
-  };
 
   return (
-    <div className="flex items-start gap-3">
-      <div className={`rounded-full p-1.5 ${colorClasses[variant]}`}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{title}</p>
-        {date && <p className="text-muted-foreground text-xs">{formatClaimDateTime(date)}</p>}
-        {user && <p className="text-muted-foreground text-xs">by {user}</p>}
-      </div>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <main className="min-w-0 space-y-6">
+        {/* Zone 1: Header — EntityHeader for consistency with warranty/issue/RMA */}
+        <section className="flex flex-col gap-4">
+          <EntityHeader
+            name={`Claim ${claim.claimNumber}`}
+            subtitle={
+              <>
+                {claim.product?.name ?? 'Unknown Product'} · Warranty {claim.warranty?.warrantyNumber ?? ''}
+              </>
+            }
+            avatarFallback="C"
+            status={
+              isWarrantyClaimStatusValue(claim.status)
+                ? getClaimStatusConfigForEntityHeader(claim.status)
+                : { value: claim.status, variant: 'neutral' as const }
+            }
+            primaryAction={primaryAction}
+            secondaryActions={secondaryActions}
+            trailingContent={
+              <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
+                    aria-label="Toggle claim sidebar"
+                  >
+                    <PanelRight className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[320px]">
+                  <SheetHeader>
+                    <SheetTitle>Claim details</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-4 space-y-6">{sidebarContent}</div>
+                </SheetContent>
+              </Sheet>
+            }
+          />
+
+          <div className="rounded-lg border bg-background p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">Claim progress</div>
+              {isTerminal && (
+                <Badge variant="destructive" className="capitalize">
+                  {claim.status.replace(/_/g, ' ')}
+                </Badge>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              {stages.map((stage, index) => {
+                const isCompleted = stageIndex >= index && !isTerminal;
+                const isCurrent = stage.id === claim.status;
+                return (
+                  <div key={stage.id} className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded-full border text-xs font-medium',
+                        isCompleted && 'border-primary bg-primary text-primary-foreground',
+                        isCurrent && !isCompleted && 'border-primary text-primary',
+                        !isCompleted && !isCurrent && 'border-muted-foreground/30 text-muted-foreground'
+                      )}
+                    >
+                      {isCompleted ? '✓' : '•'}
+                    </div>
+                    <span
+                      className={cn(
+                        'text-xs',
+                        isCompleted && 'text-foreground',
+                        !isCompleted && 'text-muted-foreground'
+                      )}
+                    >
+                      {stage.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {visibleAlerts.length > 0 && (
+          <section className="space-y-2">
+            {visibleAlerts.map((alert) => (
+              <Alert
+                key={alert.id}
+                variant={alert.tone === 'critical' ? 'destructive' : 'default'}
+              >
+                <AlertDescription className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">{alert.title}</div>
+                    <div className="text-sm text-muted-foreground">{alert.description}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={alert.onAction}>
+                      {alert.actionLabel}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Dismiss alert"
+                      onClick={() => dismiss(alert.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            ))}
+          </section>
+        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full justify-start gap-2">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="sla">SLA</TabsTrigger>
+          </TabsList>
+
+          {activeTab === 'overview' && (
+            <TabsContent value="overview" className="mt-4">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Claim Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Customer
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <User className="text-muted-foreground h-4 w-4" />
+                          <Link
+                            to="/customers/$customerId"
+                            params={{ customerId: claim.customerId }}
+                            search={{}}
+                            className="text-primary hover:underline"
+                          >
+                            {claim.customer?.name ?? 'Unknown Customer'}
+                          </Link>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Product
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Package className="text-muted-foreground h-4 w-4" />
+                          {productContent}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Warranty
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to="/support/warranties/$warrantyId"
+                            params={{ warrantyId: claim.warrantyId }}
+                            className="text-primary hover:underline"
+                          >
+                            {claim.warranty?.warrantyNumber}
+                          </Link>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Submitted
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="text-muted-foreground h-4 w-4" />
+                          <span>{formatClaimDateTime(claim.submittedAt)}</span>
+                        </div>
+                      </div>
+
+                      {claim.cycleCountAtClaim !== null && (
+                        <div className="space-y-1">
+                          <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                            Cycle Count at Claim
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Battery className="text-muted-foreground h-4 w-4" />
+                            <span>{claim.cycleCountAtClaim?.toLocaleString()} cycles</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {claim.cost !== null && (
+                        <div className="space-y-1">
+                          <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                            Resolution Cost
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="text-muted-foreground h-4 w-4" />
+                            <span>{formatClaimCost(claim.cost)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                        Description
+                      </Label>
+                      <p className="text-sm whitespace-pre-wrap">{claim.description}</p>
+                    </div>
+
+                    {claim.resolutionType && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                            Resolution
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              className={
+                                isWarrantyClaimResolutionTypeValue(claim.resolutionType)
+                                  ? resolutionTypeConfig[claim.resolutionType]?.color ?? ''
+                                  : ''
+                              }
+                            >
+                              {isWarrantyClaimResolutionTypeValue(claim.resolutionType)
+                                ? resolutionTypeConfig[claim.resolutionType]?.label ?? claim.resolutionType
+                                : claim.resolutionType}
+                            </Badge>
+                            {claim.resolutionNotes && (
+                              <span className="text-muted-foreground text-sm">
+                                - {claim.resolutionNotes}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {claim.denialReason && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                            Denial Reason
+                          </Label>
+                          <p className="text-destructive text-sm">{claim.denialReason}</p>
+                        </div>
+                      </>
+                    )}
+
+                    {claim.notes && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                            Notes
+                          </Label>
+                          <pre className="text-muted-foreground font-sans text-sm whitespace-pre-wrap">
+                            {claim.notes}
+                          </pre>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Claim Links</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <Link
+                      to="/support/warranties/$warrantyId"
+                      params={{ warrantyId: claim.warrantyId }}
+                      className="text-primary hover:underline"
+                    >
+                      View warranty
+                    </Link>
+                    <Link
+                      to="/customers/$customerId"
+                      params={{ customerId: claim.customerId }}
+                      search={{}}
+                      className="text-primary hover:underline"
+                    >
+                      View customer
+                    </Link>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+
+          {activeTab === 'sla' && (
+            <TabsContent value="sla" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    SLA Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                      Response SLA
+                    </Label>
+                    {claim.slaTracking?.respondedAt ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <span>Responded {formatClaimDateTime(claim.slaTracking.respondedAt)}</span>
+                      </div>
+                    ) : responseSla ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        {responseSla.status === 'breached' ? (
+                          <AlertTriangle className="text-destructive h-4 w-4" />
+                        ) : responseSla.status === 'at_risk' ? (
+                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        ) : (
+                          <Clock className="text-muted-foreground h-4 w-4" />
+                        )}
+                        <span
+                          className={
+                            responseSla.status === 'breached'
+                              ? 'text-destructive'
+                              : responseSla.status === 'at_risk'
+                                ? 'text-yellow-600'
+                                : ''
+                          }
+                        >
+                          {responseSla.label}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No response SLA configured.</span>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                      Resolution SLA
+                    </Label>
+                    {claim.slaTracking?.resolvedAt ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <span>Resolved {formatClaimDateTime(claim.slaTracking.resolvedAt)}</span>
+                      </div>
+                    ) : resolutionSla ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        {resolutionSla.status === 'breached' ? (
+                          <AlertTriangle className="text-destructive h-4 w-4" />
+                        ) : resolutionSla.status === 'at_risk' ? (
+                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        ) : (
+                          <Clock className="text-muted-foreground h-4 w-4" />
+                        )}
+                        <span
+                          className={
+                            resolutionSla.status === 'breached'
+                              ? 'text-destructive'
+                              : resolutionSla.status === 'at_risk'
+                                ? 'text-yellow-600'
+                                : ''
+                          }
+                        >
+                          {resolutionSla.label}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No resolution SLA configured.</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+        </Tabs>
+      </main>
+
+      <aside className="hidden lg:block sticky top-20 h-fit max-h-[calc(100vh-6rem)] overflow-y-auto">
+        {sidebarContent}
+      </aside>
     </div>
   );
 }

@@ -8,19 +8,27 @@
 // ============================================================================
 // REPORT PAGES
 // ============================================================================
+export {
+  ReportsLandingContent,
+  ReportsLandingHeaderActions,
+} from './reports-landing-content';
 export { ReportsIndexPage } from './reports-index-page';
 export { CustomerReportsPage } from './customer-reports-page';
 export { WarrantyAnalyticsPage } from './warranty-analytics-page';
 export {
   WarrantyAnalyticsView,
   type WarrantyAnalyticsViewProps,
-  type SearchParams,
   type FilterOption,
   type AnalyticsFilterBadge,
 } from './warranty-analytics-view';
+export type { WarrantyAnalyticsSearchParams as SearchParams } from '@/lib/schemas/reports/warranty-analytics';
 export { PipelineForecastPage } from './pipeline-forecast-page';
 export { JobCostingReportPage } from './job-costing-report-page';
-export { ExpiringWarrantiesReportPage } from './expiring-warranties-page';
+export {
+  ExpiringWarrantiesReportPage,
+  type ExpiringWarrantiesReportPageProps,
+} from './expiring-warranties-page';
+export { FinancialSummaryPage } from './financial-summary-page';
 export { ProcurementReportsPage } from './procurement-reports-page';
 
 // ============================================================================
@@ -43,3 +51,8 @@ export {
   type ProcurementReportsProps,
   type ProcurementAnalytics,
 } from './procurement-reports';
+
+// ============================================================================
+// REPORT FAVORITES
+// ============================================================================
+export { ReportFavoriteButton, type ReportFavoriteButtonProps } from './report-favorite-button';

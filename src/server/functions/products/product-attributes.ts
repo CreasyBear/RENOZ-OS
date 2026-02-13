@@ -548,14 +548,15 @@ export const setProductAttribute = createServerFn({ method: 'POST' })
       return { success: true };
     }
 
-    // Upsert the value
+    // Upsert the value (guaranteed defined after null check above)
+    const value = validation.normalizedValue!;
     await db
       .insert(productAttributeValues)
       .values({
         organizationId: ctx.organizationId,
         productId: data.productId,
         attributeId: data.attributeId,
-        value: validation.normalizedValue as typeof productAttributeValues.$inferInsert.value,
+        value,
       })
       .onConflictDoUpdate({
         target: [
@@ -564,7 +565,7 @@ export const setProductAttribute = createServerFn({ method: 'POST' })
           productAttributeValues.attributeId,
         ],
         set: {
-          value: validation.normalizedValue as typeof productAttributeValues.$inferInsert.value,
+          value,
           updatedAt: new Date(),
         },
       });
@@ -688,7 +689,7 @@ export const setProductAttributes = createServerFn({ method: 'POST' })
               organizationId: ctx.organizationId,
               productId: data.productId,
               attributeId: item.attributeId,
-              value: item.value as typeof productAttributeValues.$inferInsert.value,
+              value: item.value as string | number | boolean | string[] | null,
             }))
           )
           .onConflictDoUpdate({

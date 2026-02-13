@@ -10,6 +10,8 @@
 import { z } from 'zod';
 import { filterSchema, idParamSchema } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import type { UseInfiniteQueryResult, InfiniteData } from '@tanstack/react-query';
+import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
@@ -41,6 +43,7 @@ export const activityEntityTypeValues = [
   'supplier',
   'warranty',
   'issue',
+  'rma',
   'user',
   'email',
   'call',
@@ -71,6 +74,27 @@ export const activitySourceSchema = z.enum(activitySourceValues);
 export type ActivityAction = z.infer<typeof activityActionSchema>;
 export type ActivityEntityType = z.infer<typeof activityEntityTypeSchema>;
 export type ActivitySource = z.infer<typeof activitySourceSchema>;
+
+// ============================================================================
+// ACTIVITY LOGGING SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for logging a manual activity on any entity.
+ * Used by the EntityActivityLogger component.
+ * Entity types match activityEntityTypeValues from this file.
+ */
+export const logEntityActivitySchema = z.object({
+  entityType: activityEntityTypeSchema,
+  entityId: z.string().uuid(),
+  activityType: z.enum(['call', 'email', 'meeting', 'note', 'follow_up']),
+  description: z.string().min(1).max(2000),
+  outcome: z.string().max(1000).optional(),
+  scheduledAt: z.coerce.date().optional(),
+  isFollowUp: z.boolean().default(false),
+});
+
+export type LogEntityActivityInput = z.infer<typeof logEntityActivitySchema>;
 
 // ============================================================================
 // ACTIVITY CHANGES
@@ -116,11 +140,11 @@ export const activityMetadataSchema = z.object({
   permission: z.string().optional(),
 
   // Entity context fields
-  customerId: z.string().optional(),
+  customerId: z.string().uuid().optional(),
   customerName: z.string().optional(),
-  orderId: z.string().optional(),
+  orderId: z.string().uuid().optional(),
   orderNumber: z.string().optional(),
-  opportunityId: z.string().optional(),
+  opportunityId: z.string().uuid().optional(),
   opportunityTitle: z.string().optional(),
 
   // Email activity fields
@@ -289,6 +313,22 @@ export const activityWithUserSchema = activitySchema.extend({
 export type ActivityWithUser = z.infer<typeof activityWithUserSchema>;
 
 // ============================================================================
+// HOOK RETURN TYPES
+// ============================================================================
+
+/**
+ * Return type for useActivityFeed hook.
+ * Uses UseInfiniteQueryResult from TanStack Query with InfiniteData wrapper.
+ */
+export type ActivityFeedResult = UseInfiniteQueryResult<InfiniteData<CursorPaginatedResponse<ActivityWithUser>>>;
+
+/**
+ * Return type for useEntityActivities hook.
+ * Uses UseInfiniteQueryResult from TanStack Query with InfiniteData wrapper.
+ */
+export type EntityActivitiesResult = UseInfiniteQueryResult<InfiniteData<CursorPaginatedResponse<ActivityWithUser>>>;
+
+// ============================================================================
 // ACTIVITY FILTERS
 // ============================================================================
 
@@ -384,6 +424,30 @@ export const activityStatsQuerySchema = z.object({
 
 export type ActivityStatsQuery = z.infer<typeof activityStatsQuerySchema>;
 
+// ============================================================================
+// ACTIVITY FEED GROUPING TYPES
+// ============================================================================
+
+/**
+ * Entity group within a date group.
+ * Groups activities by entity type within a single date.
+ */
+export interface ActivityEntityGroup {
+  entityType: ActivityEntityType;
+  label: string;
+  activities: ActivityWithUser[];
+}
+
+/**
+ * Date group containing entity groups.
+ * Groups activities by date, with nested entity grouping.
+ */
+export interface ActivityDateGroup {
+  date: Date;
+  label: string;
+  entities: ActivityEntityGroup[];
+}
+
 /**
  * Activity statistics result.
  */
@@ -416,6 +480,12 @@ export const activityLeaderboardItemSchema = z.object({
 });
 
 export type ActivityLeaderboardItem = z.infer<typeof activityLeaderboardItemSchema>;
+
+/**
+ * Leaderboard entry type (alias for ActivityLeaderboardItem for component usage).
+ * This matches the structure returned by getActivityLeaderboard server function.
+ */
+export type LeaderboardEntry = ActivityLeaderboardItem;
 
 // ============================================================================
 // ACTIVITY EXPORT
@@ -454,3 +524,31 @@ export const activityExportResponseSchema = z.object({
 });
 
 export type ActivityExportResponse = z.infer<typeof activityExportResponseSchema>;
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+/**
+ * Type guard for ActivityAction enum values.
+ * Use this instead of type assertions to ensure runtime safety.
+ */
+export function isActivityAction(value: unknown): value is ActivityAction {
+  return activityActionSchema.safeParse(value).success;
+}
+
+/**
+ * Type guard for ActivityEntityType enum values.
+ * Use this instead of type assertions to ensure runtime safety.
+ */
+export function isActivityEntityType(value: unknown): value is ActivityEntityType {
+  return activityEntityTypeSchema.safeParse(value).success;
+}
+
+/**
+ * Type guard for ActivityMetadata.
+ * Validates that the value matches the ActivityMetadata schema.
+ */
+export function isActivityMetadata(value: unknown): value is ActivityMetadata {
+  return activityMetadataSchema.safeParse(value).success;
+}

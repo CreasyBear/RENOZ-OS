@@ -58,7 +58,7 @@ export const FilterSelect = memo(function FilterSelect<T extends string>({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL_VALUE}>{allLabel}</SelectItem>
-          {options.map((option) => (
+          {(options ?? []).map((option) => (
             <SelectItem key={String(option.value)} value={String(option.value)}>
               <span className="flex items-center gap-2">
                 {option.icon && (

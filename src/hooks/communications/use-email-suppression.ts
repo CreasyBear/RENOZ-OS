@@ -9,6 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { QUERY_CONFIG } from "@/lib/constants";
 import {
   getSuppressionList,
   isEmailSuppressed,
@@ -48,8 +49,8 @@ export function useSuppressionList(options: UseSuppressionListOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.communications.emailSuppression.list(filters),
-    queryFn: () =>
-      getSuppressionList({
+    queryFn: async () => {
+      const result = await getSuppressionList({
         data: {
           reason: filters.reason,
           search: filters.search,
@@ -59,9 +60,13 @@ export function useSuppressionList(options: UseSuppressionListOptions = {}) {
           sortBy: filters.sortBy ?? "createdAt",
           sortOrder: filters.sortOrder ?? "desc",
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 30 * 1000, // 30 seconds - suppression list updates infrequently
+    staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
   });
 }
 
@@ -90,9 +95,15 @@ export function useCheckSuppression(options: UseCheckSuppressionOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.emailSuppression.check(email),
-    queryFn: () => isEmailSuppressed({ data: { email } }),
+    queryFn: async () => {
+      const result = await isEmailSuppressed({
+        data: { email } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!email,
-    staleTime: 60 * 1000, // 1 minute - cached for performance
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
   });
 }
 

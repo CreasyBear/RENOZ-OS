@@ -9,7 +9,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   jsonb,
   text,
@@ -17,7 +16,10 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "./organizations";
 
 // ============================================================================
@@ -73,34 +75,14 @@ export const businessHoursConfig = pgTable(
 
     ...timestampColumns,
   },
-  (table) => [
+  (table) => ({
     // Only one default per org
-    uniqueIndex("idx_business_hours_org_default")
+    orgDefaultIdx: uniqueIndex("idx_business_hours_org_default")
       .on(table.organizationId, table.isDefault)
       .where(sql`${table.isDefault} = true`),
     // RLS Policies
-    pgPolicy("business_hours_config_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("business_hours_config_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("business_hours_config_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("business_hours_config_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("business_hours_config"),
+  })
 );
 
 // ============================================================================

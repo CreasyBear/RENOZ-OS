@@ -64,6 +64,10 @@ export * from './use-quick-log';
 // Scheduled emails
 export * from './use-scheduled-emails';
 
+// Unified inbox
+export * from './use-inbox';
+export * from './use-inbox-actions';
+
 // Email suppression (Resend integration)
 export * from './use-email-suppression';
 

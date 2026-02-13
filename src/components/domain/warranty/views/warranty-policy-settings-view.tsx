@@ -8,39 +8,7 @@
 
 import { WarrantyPolicyList } from './warranty-policy-list';
 import { WarrantyPolicyFormDialog } from '../dialogs/warranty-policy-form-dialog';
-import type { WarrantyPolicy, WarrantyPolicyTerms } from 'drizzle/schema';
-import type { WarrantyPolicyTypeValue } from '@/lib/schemas/warranty/policies';
-
-export interface WarrantyPolicyFormPayload {
-  policyId?: string;
-  name: string;
-  description: string | null;
-  type: WarrantyPolicyTypeValue;
-  durationMonths: number;
-  cycleLimit: number | null;
-  terms: WarrantyPolicyTerms;
-  isDefault: boolean;
-  isActive: boolean;
-}
-
-export interface WarrantyPolicySettingsViewProps {
-  policies: WarrantyPolicy[];
-  isLoading?: boolean;
-  error?: Error | null;
-  onRetry?: () => void;
-  onDeletePolicy?: (policy: WarrantyPolicy) => void;
-  onSetDefault?: (policy: WarrantyPolicy) => void;
-  onSeedDefaults?: () => void;
-  isSeedingDefaults?: boolean;
-  pendingDefaultPolicyId?: string | null;
-  onCreatePolicy?: () => void;
-  onEditPolicy?: (policy: WarrantyPolicy) => void;
-  dialogOpen: boolean;
-  editingPolicy: WarrantyPolicy | null;
-  onDialogOpenChange: (open: boolean) => void;
-  onSubmitPolicy: (payload: WarrantyPolicyFormPayload) => Promise<void>;
-  isSubmitting?: boolean;
-}
+import type { WarrantyPolicySettingsViewProps } from '@/lib/schemas/warranty';
 
 export function WarrantyPolicySettingsView({
   policies,

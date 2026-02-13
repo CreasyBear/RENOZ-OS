@@ -225,7 +225,10 @@ export function IssueTemplateList({
         {/* Type filter */}
         <Select
           value={typeFilter}
-          onValueChange={(value) => onTypeFilterChange(value as IssueType | 'all')}
+          onValueChange={(value) => {
+            const opt = TYPE_OPTIONS.find((o) => o.value === value);
+            if (opt) onTypeFilterChange(opt.value);
+          }}
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Type" />

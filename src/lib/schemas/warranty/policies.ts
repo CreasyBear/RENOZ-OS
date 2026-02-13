@@ -20,6 +20,12 @@ export const warrantyPolicyTypeSchema = z.enum([
 ]);
 export type WarrantyPolicyTypeValue = z.infer<typeof warrantyPolicyTypeSchema>;
 
+export function isWarrantyPolicyTypeValue(
+  v: unknown
+): v is WarrantyPolicyTypeValue {
+  return warrantyPolicyTypeSchema.safeParse(v).success;
+}
+
 // ============================================================================
 // WARRANTY POLICY TERMS
 // ============================================================================
@@ -134,3 +140,76 @@ export const seedDefaultPoliciesSchema = z.object({
 });
 
 export type SeedDefaultPoliciesInput = z.infer<typeof seedDefaultPoliciesSchema>;
+
+// ============================================================================
+// CLIENT-SAFE TYPE DEFINITIONS
+// (Duplicated from drizzle schema to avoid client/server bundling issues)
+// ============================================================================
+
+/**
+ * Warranty policy terms stored as JSONB.
+ * Client-safe version of WarrantyPolicyTerms from drizzle/schema.
+ */
+export interface WarrantyPolicyTerms {
+  coverage?: string[];
+  exclusions?: string[];
+  claimRequirements?: string[];
+  transferable?: boolean;
+  proratedAfterMonths?: number;
+  [key: string]: string | string[] | number | boolean | null | undefined;
+}
+
+/**
+ * Warranty policy record.
+ * Client-safe version of WarrantyPolicy from drizzle/schema.
+ */
+export interface WarrantyPolicy {
+  id: string;
+  organizationId: string;
+  name: string;
+  description: string | null;
+  type: 'battery_performance' | 'inverter_manufacturer' | 'installation_workmanship';
+  durationMonths: number;
+  cycleLimit: number | null;
+  terms: WarrantyPolicyTerms | null;
+  slaConfigurationId: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+/** Form payload for create/update warranty policy */
+export interface WarrantyPolicyFormPayload {
+  policyId?: string;
+  name: string;
+  description: string | null;
+  type: WarrantyPolicyTypeValue;
+  durationMonths: number;
+  cycleLimit: number | null;
+  terms: WarrantyPolicyTerms;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+/** Props for WarrantyPolicySettingsView */
+export interface WarrantyPolicySettingsViewProps {
+  policies: WarrantyPolicy[];
+  isLoading?: boolean;
+  error?: Error | null;
+  onRetry?: () => void;
+  onDeletePolicy?: (policy: WarrantyPolicy) => void;
+  onSetDefault?: (policy: WarrantyPolicy) => void;
+  onSeedDefaults?: () => void;
+  isSeedingDefaults?: boolean;
+  pendingDefaultPolicyId?: string | null;
+  onCreatePolicy?: () => void;
+  onEditPolicy?: (policy: WarrantyPolicy) => void;
+  dialogOpen: boolean;
+  editingPolicy: WarrantyPolicy | null;
+  onDialogOpenChange: (open: boolean) => void;
+  onSubmitPolicy: (payload: WarrantyPolicyFormPayload) => Promise<void>;
+  isSubmitting?: boolean;
+}

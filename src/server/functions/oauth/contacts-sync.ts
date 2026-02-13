@@ -5,7 +5,7 @@
  * Implements the complete contacts sync workflow with conflict resolution.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, notInArray, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { oauthConnections, oauthSyncLogs, oauthContacts } from 'drizzle/schema/oauth';
@@ -15,6 +15,7 @@ import {
   type Contact,
   type ContactSearchOptions,
 } from '@/lib/oauth/contacts-client';
+import { logger } from '@/lib/logger';
 import {
   deduplicateContacts,
   mergeDuplicateContacts,
@@ -99,7 +100,7 @@ export interface SyncContactsResponseSuccess {
   success: true;
   result: ContactSyncResult & {
     deduplicationResult?: DeduplicationResult;
-    crmIntegrationResult?: any; // Would integrate with actual CRM
+    crmIntegrationResult?: unknown; // Would integrate with actual CRM
   };
 }
 
@@ -115,7 +116,7 @@ export type SyncContactsResponse = SyncContactsResponseSuccess | SyncContactsRes
  * Includes deduplication, CRM integration, and comprehensive logging.
  */
 export async function syncContacts(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: SyncContactsRequest
 ): Promise<SyncContactsResponse> {
   const startTime = Date.now();
@@ -383,7 +384,7 @@ export async function syncContacts(
         completedAt: new Date(),
       });
     } catch (logError) {
-      console.error('Failed to log contacts sync failure:', logError);
+      logger.error('Failed to log contacts sync failure', logError as Error, {});
     }
 
     return {
@@ -401,7 +402,7 @@ export interface ResolveContactDuplicatesRequest {
   organizationId: string;
   connectionId: string;
   externalIds: string[];
-  resolutions: Record<string, any>; // Field -> Resolved value mapping
+  resolutions: Record<string, unknown>; // Field -> Resolved value mapping
 }
 
 export interface ResolveContactDuplicatesResponseSuccess {
@@ -409,7 +410,7 @@ export interface ResolveContactDuplicatesResponseSuccess {
   result: {
     mergedContactId: string;
     deletedContactIds: string[];
-    resolutionsApplied: Record<string, any>;
+    resolutionsApplied: Record<string, unknown>;
   };
 }
 
@@ -426,7 +427,7 @@ export type ResolveContactDuplicatesResponse =
  * Manually resolves duplicate contacts with custom field mappings.
  */
 export async function resolveContactDuplicates(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: ResolveContactDuplicatesRequest
 ): Promise<ResolveContactDuplicatesResponse> {
   try {
@@ -461,7 +462,7 @@ export async function resolveContactDuplicates(
         emails: mergedEmails,
         phones: mergedPhones,
         raw: {
-          ...(primary.raw as Record<string, any>),
+          ...(primary.raw as Record<string, unknown>),
           resolutions: validated.resolutions,
         },
         updatedAt: new Date(),
@@ -532,7 +533,7 @@ export type BulkContactsSyncResponse =
  * Performs bulk contacts sync across multiple connections.
  */
 export async function bulkContactsSync(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: BulkContactsSyncRequest
 ): Promise<BulkContactsSyncResponse> {
   try {
@@ -666,7 +667,7 @@ export async function bulkContactsSync(
 // ============================================================================
 
 async function findExistingContact(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   externalId: string,
   connectionId: string
 ): Promise<{ id: string; updatedAt: Date } | null> {
@@ -683,8 +684,8 @@ async function findExistingContact(
 }
 
 async function storeContact(
-  db: PostgresJsDatabase<any>,
-  connection: any,
+  db: OAuthDatabase,
+  connection: { id: string; organizationId: string },
   contact: Contact
 ): Promise<void> {
   await db.insert(oauthContacts).values({
@@ -694,13 +695,13 @@ async function storeContact(
     fullName: contact.displayName,
     emails: contact.emails.map((email) => email.address),
     phones: contact.phones.map((phone) => phone.number),
-    raw: contact as unknown as Record<string, any>,
+    raw: contact as unknown as Record<string, unknown>,
   });
 }
 
 async function updateContact(
-  db: PostgresJsDatabase<any>,
-  connection: any,
+  db: OAuthDatabase,
+  connection: { id: string; organizationId: string },
   contact: Contact
 ): Promise<void> {
   await db
@@ -709,7 +710,7 @@ async function updateContact(
       fullName: contact.displayName,
       emails: contact.emails.map((email) => email.address),
       phones: contact.phones.map((phone) => phone.number),
-      raw: contact as unknown as Record<string, any>,
+      raw: contact as unknown as Record<string, unknown>,
       updatedAt: new Date(),
     })
     .where(and(eq(oauthContacts.connectionId, connection.id), eq(oauthContacts.externalId, contact.externalId)));
@@ -723,7 +724,7 @@ function checkContactNeedsUpdate(
 }
 
 async function markDeletedContacts(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   connectionId: string,
   activeExternalIds: Set<string>
 ): Promise<number> {

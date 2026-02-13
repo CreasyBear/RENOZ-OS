@@ -15,9 +15,20 @@ export {
 export {
   InventoryDetailView,
   type InventoryDetailViewProps,
-  type LocationStock,
-  type SupplierInfo,
 } from './views/inventory-detail-view';
+
+// --- New Item Tracking Components (5-zone layout) ---
+export {
+  ItemLifecycleProgress,
+  OrderAssociationCard,
+  ItemLifecycleTimeline,
+  type ItemLifecycleProgressProps,
+  type OrderAssociationCardProps,
+  type ItemLifecycleTimelineProps,
+  type OrderAssociation,
+  type LifecycleEvent,
+  type ItemLifecycleStage,
+} from './components';
 
 // --- Status Configs ---
 export {
@@ -71,6 +82,9 @@ export {
 } from './view-modes';
 
 export { InventoryBrowser } from './inventory-browser';
+
+// --- Dashboards ---
+export { UnifiedInventoryDashboard } from './unified-inventory-dashboard';
 
 export { ItemDetail, type ItemDetailData } from './item-detail';
 

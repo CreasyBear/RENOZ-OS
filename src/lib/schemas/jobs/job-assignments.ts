@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (must match drizzle schema)
@@ -157,6 +158,17 @@ export const listJobAssignmentsSchema = z.object({
 });
 
 export type ListJobAssignmentsInput = z.infer<typeof listJobAssignmentsSchema>;
+
+/**
+ * Cursor-based list schema for job assignments (recommended for large datasets).
+ */
+const jobAssignmentCursorFiltersSchema = jobAssignmentFiltersSchema.omit({ limit: true, offset: true });
+export const listJobAssignmentsCursorSchema = z.object({
+  organizationId: z.string().uuid(),
+  filters: cursorPaginationSchema.merge(jobAssignmentCursorFiltersSchema).optional(),
+});
+
+export type ListJobAssignmentsCursorInput = z.infer<typeof listJobAssignmentsCursorSchema>;
 
 // ============================================================================
 // GET JOB ASSIGNMENT

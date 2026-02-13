@@ -5,9 +5,14 @@
  * Clear, professional quote presentation.
  */
 
-import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import { useMemo } from "react";
+import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
 import {
   PageNumber,
+  FixedDocumentHeader,
+  ExternalLinkIcon,
+  pageMargins,
+  fixedHeaderClearance,
   fontSize,
   spacing,
   colors,
@@ -25,14 +30,15 @@ import type { QuoteDocumentData, DocumentOrganization } from "../../types";
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32,
-    paddingBottom: 32,
-    paddingLeft: 40,
-    paddingRight: 40,
+    paddingTop: pageMargins.top,
+    paddingBottom: pageMargins.bottom,
+    paddingLeft: pageMargins.left,
+    paddingRight: pageMargins.right,
     backgroundColor: colors.background.white,
   },
   content: {
     flex: 1,
+    marginTop: fixedHeaderClearance,
   },
 
   // Header
@@ -173,7 +179,10 @@ const styles = StyleSheet.create({
   colDescription: { flex: 4 },
   colQty: { flex: 0.8, textAlign: "center" },
   colPrice: { flex: 1.2, textAlign: "right" },
+  colTax: { flex: 0.8, textAlign: "right" },
   colTotal: { flex: 1.2, textAlign: "right" },
+  // When tax column is shown, adjust description width
+  colDescriptionWithTax: { flex: 3.5 },
 
   // Summary
   summarySection: {
@@ -300,6 +309,8 @@ const styles = StyleSheet.create({
 export interface QuotePdfTemplateProps {
   data: QuoteDocumentData;
   qrCodeDataUrl?: string;
+  /** URL for "View online" link (e.g. from getQuoteViewUrl) */
+  viewOnlineUrl?: string;
 }
 
 export interface QuotePdfDocumentProps extends QuotePdfTemplateProps {
@@ -310,16 +321,26 @@ export interface QuotePdfDocumentProps extends QuotePdfTemplateProps {
 // COMPONENT
 // ============================================================================
 
-function QuoteContent({ data }: QuotePdfTemplateProps) {
+function QuoteContent({ data, viewOnlineUrl }: QuotePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const { order } = data;
 
+  // eslint-disable-next-line react-hooks/purity -- cached "now" for PDF render is intentional
+  const now = useMemo(() => Date.now(), []);
   const daysUntilExpiry = Math.ceil(
-    (new Date(data.validUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    (new Date(data.validUntil).getTime() - now) / (1000 * 60 * 60 * 24)
   );
+
+  // Check if any line items have per-item tax rates
+  const hasPerItemTax = order.lineItems.some(item => item.taxRate != null);
 
   return (
     <Page size="A4" style={styles.page}>
+      <FixedDocumentHeader
+        orgName={organization.name}
+        documentType="Quote"
+        documentNumber={data.documentNumber}
+      />
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.headerRow}>
@@ -332,7 +353,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
                   {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
                 </Text>
                 <Text style={styles.companyDetail}>
-                  {organization.address.city}, {organization.address.state} {organization.address.postalCode}
+                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
                 </Text>
                 {organization.phone && (
                   <Text style={styles.companyDetail}>{organization.phone}</Text>
@@ -365,7 +386,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
 
             {daysUntilExpiry <= 7 && daysUntilExpiry >= 0 && (
               <View style={styles.expiryBadge}>
-                <Text style={styles.expiryText}>Expires in {daysUntilExpiry} days</Text>
+                <Text style={styles.expiryText}>{`Expires in ${daysUntilExpiry} days`}</Text>
               </View>
             )}
           </View>
@@ -382,7 +403,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
                 {order.billingAddress.addressLine2 ? `, ${order.billingAddress.addressLine2}` : ""}
               </Text>
               <Text style={styles.quoteToDetail}>
-                {order.billingAddress.city}, {order.billingAddress.state} {order.billingAddress.postalCode}
+                {`${order.billingAddress.city}, ${order.billingAddress.state} ${order.billingAddress.postalCode}`}
               </Text>
             </>
           )}
@@ -391,22 +412,30 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
         {/* Line Items */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
+            <Text style={[styles.tableHeaderCell, hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
             <Text style={[styles.tableHeaderCell, styles.colPrice]}>Price</Text>
+            {hasPerItemTax && (
+              <Text style={[styles.tableHeaderCell, styles.colTax]}>Tax %</Text>
+            )}
             <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount</Text>
           </View>
 
           {order.lineItems.map((item) => (
             <View key={item.id} style={styles.tableRow} wrap={true}>
-              <View style={styles.colDescription}>
+              <View style={hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription}>
                 <Text style={styles.tableCell}>{item.description}</Text>
                 {item.sku && <Text style={styles.tableCellMuted}>{item.sku}</Text>}
               </View>
-              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
               <Text style={[styles.tableCell, styles.colPrice]}>
                 {formatCurrencyForPdf(item.unitPrice, organization.currency, locale)}
               </Text>
+              {hasPerItemTax && (
+                <Text style={[styles.tableCell, styles.colTax]}>
+                  {item.taxRate != null ? `${item.taxRate}%` : "-"}
+                </Text>
+              )}
               <Text style={[styles.tableCell, styles.colTotal]}>
                 {formatCurrencyForPdf(item.total, organization.currency, locale)}
               </Text>
@@ -415,7 +444,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
         </View>
 
         {/* Summary */}
-        <View style={styles.summarySection}>
+        <View style={styles.summarySection} wrap={false}>
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
@@ -434,7 +463,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
             )}
             
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tax ({order.taxRate || 0}%)</Text>
+              <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
               <Text style={styles.summaryValue}>
                 {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
               </Text>
@@ -453,12 +482,14 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
         {data.terms && (
           <View style={styles.termsSection}>
             <Text style={styles.termsLabel}>Terms & Conditions</Text>
-            <Text style={styles.termsText}>{data.terms}</Text>
+            <Text style={styles.termsText} orphans={2} widows={2}>
+              {data.terms}
+            </Text>
           </View>
         )}
 
         {/* Acceptance */}
-        <View style={styles.acceptanceSection}>
+        <View style={styles.acceptanceSection} wrap={false}>
           <Text style={styles.acceptanceTitle}>Acceptance</Text>
           <Text style={styles.acceptanceText}>
             Please sign below to accept this quote. By accepting, you agree to the terms and conditions outlined above. 
@@ -475,6 +506,15 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
             </View>
           </View>
         </View>
+
+        {viewOnlineUrl && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg }}>
+            <ExternalLinkIcon size={10} color={colors.status.info} />
+            <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
+              <Text>View online</Text>
+            </Link>
+          </View>
+        )}
       </View>
 
       <PageNumber documentNumber={data.documentNumber} />
@@ -489,6 +529,8 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
 export function QuotePdfDocument({
   organization,
   data,
+  qrCodeDataUrl,
+  viewOnlineUrl,
 }: QuotePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -497,8 +539,10 @@ export function QuotePdfDocument({
         author={organization.name}
         subject={`Quote for ${data.order.customer.name}`}
         creator="Renoz"
+        language="en-AU"
+        keywords={`quote, ${data.documentNumber}, ${data.order.customer.name}`}
       >
-        <QuoteContent data={data} />
+        <QuoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
       </Document>
     </OrgDocumentProvider>
   );

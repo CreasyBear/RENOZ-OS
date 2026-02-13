@@ -19,10 +19,13 @@ import {
   index,
   uniqueIndex,
   pgEnum,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  auditColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { slaConfigurations } from "../support/sla-configurations";
 import { users } from "../users/users";
@@ -95,52 +98,32 @@ export const warrantyPolicies = pgTable(
     ...auditColumns,
     ...timestampColumns,
   },
-  (table) => [
+  (table) => ({
     // Unique policy name per org
-    uniqueIndex("idx_warranty_policies_name_org").on(
+    nameOrgUnique: uniqueIndex("idx_warranty_policies_name_org").on(
       table.organizationId,
       table.name
     ),
 
     // Quick lookup by org
-    index("idx_warranty_policies_org").on(table.organizationId),
+    orgIdx: index("idx_warranty_policies_org").on(table.organizationId),
 
     // Quick lookup by type
-    index("idx_warranty_policies_type").on(table.organizationId, table.type),
+    typeIdx: index("idx_warranty_policies_type").on(table.organizationId, table.type),
 
     // Default policy lookup
-    index("idx_warranty_policies_default").on(
+    defaultIdx: index("idx_warranty_policies_default").on(
       table.organizationId,
       table.type,
       table.isDefault
     ),
 
     // SLA configuration lookup
-    index("idx_warranty_policies_sla").on(table.slaConfigurationId),
+    slaIdx: index("idx_warranty_policies_sla").on(table.slaConfigurationId),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("warranty_policies_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranty_policies_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranty_policies_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("warranty_policies_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("warranty_policies"),
+  })
 );
 
 // ============================================================================

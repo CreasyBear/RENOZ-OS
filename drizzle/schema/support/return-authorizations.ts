@@ -22,6 +22,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "../users";
@@ -47,6 +48,7 @@ export const rmaStatusEnum = pgEnum("rma_status", [
   "received",
   "processed",
   "rejected",
+  "cancelled",
 ]);
 
 /**
@@ -159,28 +161,31 @@ export const returnAuthorizations = pgTable(
     ...timestampColumns,
     ...auditColumns,
   },
-  (table) => [
+  (table) => ({
     // Unique RMA number per organization
-    uniqueIndex("idx_rma_number_org_unique").on(
+    rmaNumberOrgUnique: uniqueIndex("idx_rma_number_org_unique").on(
       table.organizationId,
       table.rmaNumber
     ),
 
     // Find RMAs by issue
-    index("idx_rma_issue").on(table.issueId),
+    rmaIssueIdx: index("idx_rma_issue").on(table.issueId),
 
     // Find RMAs by customer
-    index("idx_rma_customer").on(table.customerId),
+    rmaCustomerIdx: index("idx_rma_customer").on(table.customerId),
 
     // Find RMAs by order
-    index("idx_rma_order").on(table.orderId),
+    rmaOrderIdx: index("idx_rma_order").on(table.orderId),
 
     // Find RMAs by status
-    index("idx_rma_org_status").on(table.organizationId, table.status),
+    rmaOrgStatusIdx: index("idx_rma_org_status").on(table.organizationId, table.status),
 
     // Find recent RMAs
-    index("idx_rma_org_created").on(table.organizationId, table.createdAt),
-  ]
+    rmaOrgCreatedIdx: index("idx_rma_org_created").on(table.organizationId, table.createdAt),
+
+    // RLS Policies
+    ...standardRlsPolicies("return_authorizations"),
+  })
 );
 
 // ============================================================================
@@ -338,11 +343,12 @@ export function generateRmaNumber(sequenceNumber: number): string {
  * Valid status transitions for RMA workflow
  */
 export const RMA_STATUS_TRANSITIONS: Record<string, string[]> = {
-  requested: ["approved", "rejected"],
-  approved: ["received", "rejected"],
+  requested: ["approved", "rejected", "cancelled"],
+  approved: ["received", "rejected", "cancelled"],
   received: ["processed"],
   processed: [], // Terminal state
   rejected: [], // Terminal state
+  cancelled: [], // Terminal state
 };
 
 /**

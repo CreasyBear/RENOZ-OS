@@ -19,9 +19,8 @@ export {
 export {
   QuoteDetailView,
   type QuoteDetailViewProps,
-  type QuoteDetailCustomer,
-  type QuoteVersionSummary,
 } from './views/quote-detail-view';
+export type { QuoteDetailCustomer, QuoteVersionSummary } from '@/lib/schemas/pipeline';
 
 // ============================================================================
 // DETAIL - Legacy (for backwards compatibility)

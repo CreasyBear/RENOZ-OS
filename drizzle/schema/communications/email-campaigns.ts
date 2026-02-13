@@ -17,11 +17,14 @@ import {
   timestamp,
   integer,
   uniqueIndex,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { campaignStatusEnum, campaignRecipientStatusEnum } from "../_shared/enums";
-import { timestampColumns } from "../_shared/patterns";
+import type { JsonObjectWire } from "../_shared/types";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { users } from "../users/users";
 import { contacts } from "../customers/customers";
 import { organizations } from "../settings/organizations";
@@ -92,8 +95,8 @@ export interface CampaignRecipientCriteria {
   customerIds?: string[];
   /** Exclude specific contact IDs */
   excludeContactIds?: string[];
-  /** Additional SQL-like filters */
-  customFilters?: Record<string, unknown>;
+  /** Additional SQL-like filters. Wire type per SCHEMA-TRACE.md §4 (satisfies ServerFn JSON boundary) */
+  customFilters?: JsonObjectWire;
 }
 
 // ============================================================================
@@ -162,27 +165,7 @@ export const emailCampaigns = pgTable(
     creatorIdx: index("idx_email_campaigns_creator").on(table.createdById),
 
     // RLS Policies
-    selectPolicy: pgPolicy("email_campaigns_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("email_campaigns_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("email_campaigns_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("email_campaigns_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("email_campaigns"),
   })
 );
 
@@ -212,7 +195,7 @@ export const campaignRecipients = pgTable(
     name: text("name"),
 
     // Per-recipient template variables (merged with campaign template data)
-    recipientData: jsonb("recipient_data").$type<Record<string, unknown>>().default({}),
+    recipientData: jsonb("recipient_data").$type<JsonObjectWire>().default({}),
 
     // Delivery status
     status: campaignRecipientStatusEnum("status").notNull().default("pending"),
@@ -261,27 +244,7 @@ export const campaignRecipients = pgTable(
     orgIdx: index("idx_campaign_recipients_org").on(table.organizationId),
 
     // RLS Policies
-    selectPolicy: pgPolicy("campaign_recipients_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("campaign_recipients_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("campaign_recipients_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("campaign_recipients_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("campaign_recipients"),
   })
 );
 
@@ -307,3 +270,12 @@ export const campaignRecipientsRelations = relations(campaignRecipients, ({ one 
     references: [contacts.id],
   }),
 }));
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export type EmailCampaign = typeof emailCampaigns.$inferSelect
+export type NewEmailCampaign = typeof emailCampaigns.$inferInsert
+export type CampaignRecipient = typeof campaignRecipients.$inferSelect
+export type NewCampaignRecipient = typeof campaignRecipients.$inferInsert

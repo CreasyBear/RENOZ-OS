@@ -25,7 +25,8 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -40,7 +41,6 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { TruncateTooltip } from '@/components/shared/truncate-tooltip';
 import { formatDistanceToNow } from 'date-fns';
@@ -156,10 +156,13 @@ export const ExpiredQuotesAlertPresenter = memo(function ExpiredQuotesAlertPrese
             </Button>
           }
         />
-        <Link to="/pipeline/$opportunityId" params={{ opportunityId: quote.opportunityId }}>
-          <Button variant="ghost" size="sm">
-            <ExternalLink className="h-4 w-4" />
-          </Button>
+        <Link
+          to="/pipeline/$opportunityId"
+          params={{ opportunityId: quote.opportunityId }}
+          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+          aria-label="View opportunity details"
+        >
+          <ExternalLink className="h-4 w-4" />
         </Link>
       </div>
     </div>

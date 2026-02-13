@@ -8,6 +8,7 @@
  */
 
 import { Redis } from '@upstash/redis';
+import { logger } from '@/lib/logger';
 import type { MemoryProvider, WorkingMemory } from './types';
 
 // ============================================================================
@@ -97,7 +98,7 @@ export class RedisMemoryProvider implements MemoryProvider {
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
     if (!url || !token) {
-      console.warn('[RedisMemoryProvider] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set. Using in-memory fallback.');
+      logger.warn('[RedisMemoryProvider] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set. Using in-memory fallback.');
       this.redisAvailable = false;
       return;
     }
@@ -109,7 +110,7 @@ export class RedisMemoryProvider implements MemoryProvider {
         token,
       });
     } catch (error) {
-      console.error('[RedisMemoryProvider] Failed to initialize Redis:', error);
+      logger.error('[RedisMemoryProvider] Failed to initialize Redis', error as Error, {});
       this.redisAvailable = false;
     }
   }
@@ -128,7 +129,7 @@ export class RedisMemoryProvider implements MemoryProvider {
 
     // If Redis was unavailable, try to reinitialize (circuit breaker recovery)
     if (!this.redisAvailable || !this.redis) {
-      console.info('[RedisMemoryProvider] Attempting to reconnect to Redis...');
+      logger.info('[RedisMemoryProvider] Attempting to reconnect to Redis');
       this.initializeRedis();
     }
 
@@ -140,12 +141,12 @@ export class RedisMemoryProvider implements MemoryProvider {
     try {
       await this.redis.ping();
       if (!this.redisAvailable) {
-        console.info('[RedisMemoryProvider] Redis connection restored.');
+        logger.info('[RedisMemoryProvider] Redis connection restored');
       }
       this.redisAvailable = true;
       return true;
     } catch {
-      console.warn('[RedisMemoryProvider] Redis ping failed. Using in-memory fallback.');
+      logger.warn('[RedisMemoryProvider] Redis ping failed. Using in-memory fallback.');
       this.redisAvailable = false;
       this.redis = null; // Reset client for next retry
       return false;
@@ -161,7 +162,7 @@ export class RedisMemoryProvider implements MemoryProvider {
         const value = await this.redis.get<T>(key);
         return value;
       } catch (error) {
-        console.error('[RedisMemoryProvider] Get failed, using fallback:', error);
+        logger.error('[RedisMemoryProvider] Get failed, using fallback', error as Error, { key });
         this.redisAvailable = false;
         this.redis = null; // Reset for next reconnection attempt
       }
@@ -181,7 +182,7 @@ export class RedisMemoryProvider implements MemoryProvider {
         await this.redis.set(key, value, { ex: ttl });
         return;
       } catch (error) {
-        console.error('[RedisMemoryProvider] Set failed, using fallback:', error);
+        logger.error('[RedisMemoryProvider] Set failed, using fallback', error as Error, { key });
         this.redisAvailable = false;
         this.redis = null; // Reset for next reconnection attempt
       }
@@ -199,7 +200,7 @@ export class RedisMemoryProvider implements MemoryProvider {
         await this.redis.del(key);
         return;
       } catch (error) {
-        console.error('[RedisMemoryProvider] Delete failed, using fallback:', error);
+        logger.error('[RedisMemoryProvider] Delete failed, using fallback', error as Error, { key });
         this.redisAvailable = false;
         this.redis = null; // Reset for next reconnection attempt
       }

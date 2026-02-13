@@ -12,10 +12,17 @@
  * @see https://trigger.dev/docs/v3/tasks
  */
 import { task, schedules, logger } from "@trigger.dev/sdk/v3";
-import { sql, and } from "drizzle-orm";
+import { sql, and, eq, gte, lte, count, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { DashboardCache } from "@/lib/cache/dashboard-cache";
 import { organizations } from "drizzle/schema/settings/organizations";
+import {
+  mvDailyMetrics,
+  mvDailyPipeline,
+  mvDailyJobs,
+  mvDailyWarranty,
+} from "drizzle/schema/dashboard/materialized-views";
+import { customers } from "drizzle/schema";
 
 // ============================================================================
 // TYPES
@@ -108,79 +115,86 @@ async function fetchMetricsFromMV(
   const dateFromStr = dateFrom.toISOString().split("T")[0];
   const dateToStr = dateTo.toISOString().split("T")[0];
 
-  // Query the materialized views
-  const [ordersResult] = await db.execute<{
-    orders_count: string;
-    revenue: string;
-  }>(sql`
-    SELECT
-      COALESCE(SUM(orders_count), 0) as orders_count,
-      COALESCE(SUM(revenue), 0) as revenue
-    FROM mv_daily_metrics
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFromStr}::date
-      AND metric_date <= ${dateToStr}::date
-  `);
+  // Query the materialized views (column names match schema-snapshot-matviews.json)
+  const [ordersResult] = await db
+    .select({
+      orders_count: sql<string>`COALESCE(SUM(${mvDailyMetrics.ordersCount}), 0)`,
+      revenue: sql<string>`COALESCE(SUM(${mvDailyMetrics.ordersTotal}), 0)`,
+    })
+    .from(mvDailyMetrics)
+    .where(
+      and(
+        eq(mvDailyMetrics.organizationId, organizationId),
+        gte(mvDailyMetrics.day, sql`${dateFromStr}::date`),
+        lte(mvDailyMetrics.day, sql`${dateToStr}::date`)
+      )
+    );
 
-  const [pipelineResult] = await db.execute<{
-    opportunity_count: string;
-    total_value: string;
-  }>(sql`
-    SELECT
-      COALESCE(SUM(opportunity_count), 0) as opportunity_count,
-      COALESCE(SUM(total_value), 0) as total_value
-    FROM mv_daily_pipeline
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFromStr}::date
-      AND metric_date <= ${dateToStr}::date
-  `);
+  const [pipelineResult] = await db
+    .select({
+      opportunity_count: sql<string>`COALESCE(SUM(${mvDailyPipeline.opportunitiesCount}), 0)`,
+      total_value: sql<string>`COALESCE(SUM(${mvDailyPipeline.totalValue}), 0)`,
+    })
+    .from(mvDailyPipeline)
+    .where(
+      and(
+        eq(mvDailyPipeline.organizationId, organizationId),
+        gte(mvDailyPipeline.day, sql`${dateFromStr}::date`),
+        lte(mvDailyPipeline.day, sql`${dateToStr}::date`)
+      )
+    );
 
-  const [jobsResult] = await db.execute<{
-    scheduled: string;
-    in_progress: string;
-  }>(sql`
-    SELECT
-      COALESCE(SUM(CASE WHEN status = 'scheduled' THEN job_count ELSE 0 END), 0) as scheduled,
-      COALESCE(SUM(CASE WHEN status = 'in_progress' THEN job_count ELSE 0 END), 0) as in_progress
-    FROM mv_daily_jobs
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFromStr}::date
-      AND metric_date <= ${dateToStr}::date
-  `);
+  const [jobsResult] = await db
+    .select({
+      scheduled: sql<string>`GREATEST(0, COALESCE(SUM(${mvDailyJobs.totalJobs}), 0) - COALESCE(SUM(${mvDailyJobs.completedJobs}), 0) - COALESCE(SUM(${mvDailyJobs.cancelledJobs}), 0) - COALESCE(SUM(${mvDailyJobs.inProgressJobs}), 0) - COALESCE(SUM(${mvDailyJobs.onHoldJobs}), 0))::text`,
+      in_progress: sql<string>`(COALESCE(SUM(${mvDailyJobs.inProgressJobs}), 0) + COALESCE(SUM(${mvDailyJobs.onHoldJobs}), 0))::text`,
+    })
+    .from(mvDailyJobs)
+    .where(
+      and(
+        eq(mvDailyJobs.organizationId, organizationId),
+        gte(mvDailyJobs.day, sql`${dateFromStr}::date`),
+        lte(mvDailyJobs.day, sql`${dateToStr}::date`)
+      )
+    );
 
-  const [claimsResult] = await db.execute<{
-    open_count: string;
-    total_count: string;
-  }>(sql`
-    SELECT
-      COALESCE(SUM(CASE WHEN status IN ('submitted', 'under_review', 'approved') THEN claim_count ELSE 0 END), 0) as open_count,
-      COALESCE(SUM(claim_count), 0) as total_count
-    FROM mv_daily_warranty
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFromStr}::date
-      AND metric_date <= ${dateToStr}::date
-  `);
+  const [claimsResult] = await db
+    .select({
+      open_count: sql<string>`(COALESCE(SUM(${mvDailyWarranty.submittedClaims}), 0) + COALESCE(SUM(${mvDailyWarranty.underReviewClaims}), 0) + COALESCE(SUM(${mvDailyWarranty.approvedClaims}), 0))::text`,
+      total_count: sql<string>`COALESCE(SUM(${mvDailyWarranty.totalClaims}), 0)`,
+    })
+    .from(mvDailyWarranty)
+    .where(
+      and(
+        eq(mvDailyWarranty.organizationId, organizationId),
+        gte(mvDailyWarranty.day, sql`${dateFromStr}::date`),
+        lte(mvDailyWarranty.day, sql`${dateToStr}::date`)
+      )
+    );
 
-  // Get current state for customer count
-  const [currentState] = await db.execute<{
-    total_customers: string;
-  }>(sql`
-    SELECT total_customers
-    FROM mv_current_state
-    WHERE organization_id = ${organizationId}
-  `);
+  // Total customers: mv_current_state has no total_customers; use customers table
+  const [totalCustomersResult] = await db
+    .select({ count: count() })
+    .from(customers)
+    .where(
+      and(
+        eq(customers.organizationId, organizationId),
+        isNull(customers.deletedAt)
+      )
+    );
 
-  // Calculate new customers this period
-  const [newCustomers] = await db.execute<{
-    count: string;
-  }>(sql`
-    SELECT COUNT(*) as count
-    FROM customers
-    WHERE organization_id = ${organizationId}
-      AND created_at >= ${dateFromStr}::date
-      AND created_at <= ${dateToStr}::date
-      AND deleted_at IS NULL
-  `);
+  // New customers this period
+  const [newCustomersResult] = await db
+    .select({ count: count() })
+    .from(customers)
+    .where(
+      and(
+        eq(customers.organizationId, organizationId),
+        gte(customers.createdAt, sql`${dateFromStr}::date`),
+        lte(customers.createdAt, sql`${dateToStr}::date`),
+        isNull(customers.deletedAt)
+      )
+    );
 
   return {
     orders: {
@@ -200,8 +214,8 @@ async function fetchMetricsFromMV(
       total: Number(claimsResult?.total_count ?? 0),
     },
     customers: {
-      total: Number(currentState?.total_customers ?? 0),
-      new: Number(newCustomers?.count ?? 0),
+      total: Number(totalCustomersResult?.count ?? 0),
+      new: newCustomersResult?.count ?? 0,
     },
   };
 }

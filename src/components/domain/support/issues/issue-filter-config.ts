@@ -17,21 +17,9 @@ import {
   XCircle,
 } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
+import type { IssueStatus, IssuePriority, IssueFiltersState } from "@/lib/schemas/support/issues";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export type IssueStatus = "open" | "in_progress" | "pending" | "on_hold" | "resolved" | "closed" | "escalated";
-export type IssuePriority = "low" | "medium" | "high" | "critical";
-
-export interface IssueFiltersState extends Record<string, unknown> {
-  search: string;
-  status: IssueStatus[];
-  priority: IssuePriority[];
-  assignedTo: string | null; // 'me', 'unassigned', or user ID
-  customerId: string | null;
-}
+export type { IssueStatus, IssuePriority, IssueFiltersState };
 
 export const DEFAULT_ISSUE_FILTERS: IssueFiltersState = {
   search: "",

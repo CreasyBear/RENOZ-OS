@@ -5,7 +5,7 @@
  */
 
 import { memo, useState, useMemo } from 'react';
-import { useCustomers } from '@/hooks/customers/use-customers';
+import { useCustomers } from '@/hooks/customers';
 import { CustomerSelector, type CustomerSummary } from '../../customer-selector';
 import type { StepProps } from '../types';
 
@@ -20,9 +20,10 @@ export const CustomerStep = memo(function CustomerStep({ state, setState }: Step
   });
 
   // Map customer data to CustomerSummary format
+  const rawItems = data?.items;
   const customers: CustomerSummary[] = useMemo(() => {
-    if (!data?.items) return [];
-    return data.items.map((c) => ({
+    if (!rawItems) return [];
+    return rawItems.map((c) => ({
       id: c.id,
       name: c.name,
       email: c.email,
@@ -30,7 +31,7 @@ export const CustomerStep = memo(function CustomerStep({ state, setState }: Step
       type: c.type,
       status: c.status,
     }));
-  }, [data?.items]);
+  }, [rawItems]);
 
   return (
     <div className="space-y-4">

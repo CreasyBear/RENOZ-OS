@@ -5,6 +5,8 @@
  * performance metrics, and user analytics.
  */
 
+import { logger as centralLogger } from '@/lib/logger';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -14,7 +16,7 @@ export interface ErrorContext {
   organizationId?: string;
   component?: string;
   action?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PerformanceMetric {
@@ -22,16 +24,19 @@ export interface PerformanceMetric {
   value: number;
   unit: 'ms' | 'bytes' | 'count';
   timestamp: number;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 export interface UserEvent {
   event: string;
   userId?: string;
   organizationId?: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
   timestamp: number;
 }
+
+/** Cast at boundary; monitoring types differ from logger. */
+type LogContext = Record<string, unknown>;
 
 // ============================================================================
 // LOGGER
@@ -54,7 +59,7 @@ class Logger {
 
   error(message: string, error?: Error, context?: ErrorContext) {
     if (this.shouldLog('error')) {
-      console.error(`[ERROR] ${message}`, { error, context });
+      centralLogger.error(message, error, context as LogContext);
 
       // In production, send to error reporting service
       if (this.isProduction) {
@@ -63,21 +68,21 @@ class Logger {
     }
   }
 
-  warn(message: string, context?: Record<string, any>) {
+  warn(message: string, context?: Record<string, unknown>) {
     if (this.shouldLog('warn')) {
-      console.warn(`[WARN] ${message}`, context);
+      centralLogger.warn(message, context);
     }
   }
 
-  info(message: string, context?: Record<string, any>) {
+  info(message: string, context?: Record<string, unknown>) {
     if (this.shouldLog('info')) {
-      console.info(`[INFO] ${message}`, context);
+      centralLogger.info(message, context);
     }
   }
 
-  debug(message: string, context?: Record<string, any>) {
+  debug(message: string, context?: Record<string, unknown>) {
     if (this.shouldLog('debug')) {
-      console.debug(`[DEBUG] ${message}`, context);
+      centralLogger.debug(message, context);
     }
   }
 
@@ -106,9 +111,9 @@ class Logger {
       //   body: JSON.stringify(errorData),
       // });
 
-      console.log('[ERROR REPORT]', errorData);
+      centralLogger.debug('[ERROR REPORT]', errorData);
     } catch (reportingError) {
-      console.error('Failed to report error:', reportingError);
+      centralLogger.error('Failed to report error', reportingError as Error, {});
     }
   }
 }
@@ -125,7 +130,7 @@ class PerformanceMonitor {
     name: string,
     value: number,
     unit: PerformanceMetric['unit'],
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ) {
     if (!this.isEnabled) return;
 
@@ -152,7 +157,7 @@ class PerformanceMonitor {
     logger.debug(`Performance metric: ${name}`, { value, unit, context });
   }
 
-  measureExecutionTime<T>(name: string, fn: () => T, context?: Record<string, any>): T {
+  measureExecutionTime<T>(name: string, fn: () => T, context?: Record<string, unknown>): T {
     const start = performance.now();
     try {
       const result = fn();
@@ -169,7 +174,7 @@ class PerformanceMonitor {
   async measureAsyncExecutionTime<T>(
     name: string,
     fn: () => Promise<T>,
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<T> {
     const start = performance.now();
     try {
@@ -204,7 +209,7 @@ class PerformanceMonitor {
       //   body: JSON.stringify(metric),
       // });
 
-      console.log('[METRIC]', metric);
+      centralLogger.debug('[METRIC]', metric as unknown as LogContext);
     } catch (error) {
       logger.error('Failed to report metric', error as Error);
     }
@@ -220,7 +225,7 @@ class UserAnalytics {
 
   trackEvent(
     event: string,
-    properties?: Record<string, any>,
+    properties?: Record<string, unknown>,
     userId?: string,
     organizationId?: string
   ) {
@@ -242,11 +247,11 @@ class UserAnalytics {
     logger.debug(`User event: ${event}`, { properties, userId, organizationId });
   }
 
-  trackPageView(page: string, properties?: Record<string, any>) {
+  trackPageView(page: string, properties?: Record<string, unknown>) {
     this.trackEvent('page_view', { page, ...properties });
   }
 
-  trackFeatureUsage(feature: string, action: string, properties?: Record<string, any>) {
+  trackFeatureUsage(feature: string, action: string, properties?: Record<string, unknown>) {
     this.trackEvent('feature_usage', { feature, action, ...properties });
   }
 
@@ -269,7 +274,7 @@ class UserAnalytics {
       //   body: JSON.stringify(event),
       // });
 
-      console.log('[EVENT]', event);
+      centralLogger.debug('[EVENT]', event as unknown as LogContext);
     } catch (error) {
       logger.error('Failed to report event', error as Error);
     }
@@ -288,31 +293,31 @@ export const userAnalytics = new UserAnalytics();
 export const logError = (message: string, error?: Error, context?: ErrorContext) =>
   logger.error(message, error, context);
 
-export const logWarn = (message: string, context?: Record<string, any>) =>
+export const logWarn = (message: string, context?: Record<string, unknown>) =>
   logger.warn(message, context);
 
-export const logInfo = (message: string, context?: Record<string, any>) =>
+export const logInfo = (message: string, context?: Record<string, unknown>) =>
   logger.info(message, context);
 
 export const trackPerformance = (
   name: string,
   value: number,
   unit: PerformanceMetric['unit'],
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 ) => performanceMonitor.trackMetric(name, value, unit, context);
 
-export const measureExecutionTime = <T>(name: string, fn: () => T, context?: Record<string, any>) =>
+export const measureExecutionTime = <T>(name: string, fn: () => T, context?: Record<string, unknown>) =>
   performanceMonitor.measureExecutionTime(name, fn, context);
 
 export const measureAsyncExecutionTime = <T>(
   name: string,
   fn: () => Promise<T>,
-  context?: Record<string, any>
+  context?: Record<string, unknown>
 ) => performanceMonitor.measureAsyncExecutionTime(name, fn, context);
 
 export const trackUserEvent = (
   event: string,
-  properties?: Record<string, any>,
+  properties?: Record<string, unknown>,
   userId?: string,
   organizationId?: string
 ) => userAnalytics.trackEvent(event, properties, userId, organizationId);
@@ -335,13 +340,13 @@ export function usePerformanceMonitoring(componentName: string) {
   return {
     trackRender,
     trackInteraction,
-    measureExecutionTime: (fn: () => any) => measureExecutionTime(`${componentName}.operation`, fn),
+    measureExecutionTime: (fn: () => unknown) => measureExecutionTime(`${componentName}.operation`, fn),
   };
 }
 
 // Error boundary hook
 export function useErrorReporting(componentName: string) {
-  const reportError = (error: Error, context?: Record<string, any>) => {
+  const reportError = (error: Error, context?: Record<string, unknown>) => {
     logError(`Error in ${componentName}`, error, {
       component: componentName,
       ...context,

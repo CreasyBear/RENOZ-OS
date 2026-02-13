@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ProjectCard } from './project-card';
-import type { Project } from 'drizzle/schema/jobs/projects';
+import type { Project } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES

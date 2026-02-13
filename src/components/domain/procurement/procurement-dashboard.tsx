@@ -9,10 +9,13 @@
  */
 
 import { Link } from '@tanstack/react-router';
-import { RefreshCw, Calendar } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { RefreshCw, Calendar, Package } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FilterDateRange } from '@/components/shared/filters';
+import { ActivityFeedWidget } from '@/components/domain/dashboard/widgets/activity-feed-widget';
 import {
   Select,
   SelectContent,
@@ -27,8 +30,12 @@ import type {
   OrderMetrics,
   SupplierMetrics,
   ApprovalItem,
-} from './dashboard-widgets';
-import type { ProcurementAlert } from './procurement-alerts';
+  ProcurementAlert,
+} from '@/lib/schemas/procurement';
+import type { UseInfiniteQueryResult } from '@tanstack/react-query';
+import type { InfiniteData } from '@tanstack/react-query';
+import type { ActivityWithUser } from '@/lib/schemas/activities';
+import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 
 // ============================================================================
 // TYPES
@@ -47,14 +54,35 @@ interface ProcurementDashboardProps {
   alerts?: ProcurementAlert[];
   /** @source Combined loading state from all hooks in container */
   isLoading?: boolean;
+  /** @source Individual widget errors from container */
+  errors?: {
+    spend?: Error | null;
+    orders?: Error | null;
+    suppliers?: Error | null;
+    approvals?: Error | null;
+    alerts?: Error | null;
+  };
   /** @source refetch from useProcurementDashboard in container */
   onRefresh?: () => void;
+  /** @source Individual widget retry functions */
+  onRefreshSpend?: () => void;
+  onRefreshOrders?: () => void;
+  onRefreshSuppliers?: () => void;
+  onRefreshApprovals?: () => void;
   /** @source Mutation handler in container */
   onDismissAlert?: (id: string) => void;
   /** @source useState in container */
   dateRange?: 'week' | 'month' | 'quarter' | 'year';
   /** @source setState handler in container */
   onDateRangeChange?: (range: 'week' | 'month' | 'quarter' | 'year') => void;
+  /** @source custom date range state in container */
+  customDateFrom?: Date | null;
+  /** @source custom date range state in container */
+  customDateTo?: Date | null;
+  /** @source handler in container */
+  onCustomDateRangeChange?: (from: Date | null, to: Date | null) => void;
+  /** @source useActivityFeed hook in container */
+  activityFeed?: UseInfiniteQueryResult<InfiniteData<CursorPaginatedResponse<ActivityWithUser>>>;
 }
 
 // ============================================================================
@@ -63,37 +91,24 @@ interface ProcurementDashboardProps {
 
 /**
  * Recent Activity Widget
- * Shows latest procurement-related activities.
- * @TODO: Replace with real activity feed from useActivityLog hook
  */
-function RecentActivity() {
-  // Placeholder - will be replaced with real activity data
-  const activities: { action: string; detail: string; time: string }[] = [];
-
+function RecentActivity({
+  activityFeed,
+}: {
+  activityFeed?: UseInfiniteQueryResult<InfiniteData<CursorPaginatedResponse<ActivityWithUser>>>;
+}) {
+  const activities = activityFeed?.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Recent Activity</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {activities.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No recent activity</p>
-        ) : (
-          <div className="space-y-4">
-            {activities.map((activity, idx) => (
-              <div key={idx} className="flex items-start gap-3">
-                <div className="bg-primary mt-1 h-2 w-2 rounded-full" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{activity.action}</p>
-                  <p className="text-muted-foreground text-xs">{activity.detail}</p>
-                </div>
-                <span className="text-muted-foreground text-xs">{activity.time}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      <ActivityFeedWidget
+        activities={activities}
+        isLoading={activityFeed?.isLoading}
+        error={activityFeed?.error instanceof Error ? activityFeed.error : null}
+        hasMore={activityFeed?.hasNextPage}
+        isFetchingMore={activityFeed?.isFetchingNextPage}
+        onLoadMore={() => activityFeed?.fetchNextPage()}
+        maxItems={8}
+        compact
+      />
   );
 }
 
@@ -101,7 +116,12 @@ function RecentActivity() {
 // QUICK ACTIONS
 // ============================================================================
 
-function QuickActions() {
+interface QuickActionsProps {
+  awaitingDeliveryCount?: number;
+}
+
+function QuickActions({ awaitingDeliveryCount }: QuickActionsProps) {
+
   return (
     <Card>
       <CardHeader>
@@ -109,20 +129,33 @@ function QuickActions() {
       </CardHeader>
       <CardContent>
         <div className="grid gap-2">
-          <Link to="/purchase-orders/create">
-            <Button variant="outline" className="w-full justify-start">
-              Create Purchase Order
-            </Button>
+          <Link
+            to="/purchase-orders/create"
+            className={cn(buttonVariants({ variant: 'outline' }), 'w-full justify-start')}
+          >
+            Create Purchase Order
           </Link>
-          <Link to="/suppliers">
-            <Button variant="outline" className="w-full justify-start">
-              Manage Suppliers
-            </Button>
+          {awaitingDeliveryCount !== undefined && awaitingDeliveryCount > 0 && (
+            <Link
+              to="/procurement/receiving"
+              className={cn(buttonVariants({ variant: 'outline' }), 'w-full justify-start')}
+            >
+              <Package className="mr-2 h-4 w-4" />
+              Receive Goods ({awaitingDeliveryCount})
+            </Link>
+          )}
+          <Link
+            to="/suppliers"
+            className={cn(buttonVariants({ variant: 'outline' }), 'w-full justify-start')}
+          >
+            Manage Suppliers
           </Link>
-          <Link to="/purchase-orders" search={{ status: 'pending_approval' }}>
-            <Button variant="outline" className="w-full justify-start">
-              Review Approvals
-            </Button>
+          <Link
+            to="/purchase-orders"
+            search={{ status: 'pending_approval' }}
+            className={cn(buttonVariants({ variant: 'outline' }), 'w-full justify-start')}
+          >
+            Review Approvals
           </Link>
         </div>
       </CardContent>
@@ -146,31 +179,59 @@ function ProcurementDashboard({
   pendingApprovals,
   alerts,
   isLoading = false,
+  errors = {},
   onRefresh,
+  onRefreshSpend,
+  onRefreshOrders,
+  onRefreshSuppliers,
+  onRefreshApprovals,
   onDismissAlert,
   dateRange = 'month',
   onDateRangeChange,
+  customDateFrom = null,
+  customDateTo = null,
+  onCustomDateRangeChange,
+  activityFeed,
 }: ProcurementDashboardProps) {
+  // Type guard for date range
+  const isValidDateRange = (value: string): value is 'week' | 'month' | 'quarter' | 'year' => {
+    return ['week', 'month', 'quarter', 'year'].includes(value);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header controls */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Calendar className="text-muted-foreground h-4 w-4" />
-          <Select
-            value={dateRange}
-            onValueChange={(v) => onDateRangeChange?.(v as typeof dateRange)}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="quarter">This Quarter</SelectItem>
-              <SelectItem value="year">This Year</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="text-muted-foreground h-4 w-4" />
+            <Select
+              value={dateRange}
+              onValueChange={(v) => {
+                if (isValidDateRange(v)) {
+                  onDateRangeChange?.(v);
+                }
+              }}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="quarter">This Quarter</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[220px]">
+            <FilterDateRange
+              from={customDateFrom}
+              to={customDateTo}
+              onChange={(from, to) => onCustomDateRangeChange?.(from, to)}
+              label="Custom Range"
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {onRefresh && (
@@ -189,6 +250,12 @@ function ProcurementDashboard({
         supplierMetrics={supplierMetrics}
         pendingApprovals={pendingApprovals}
         isLoading={isLoading}
+        errors={errors}
+        onRefresh={onRefresh}
+        onRefreshSpend={onRefreshSpend}
+        onRefreshOrders={onRefreshOrders}
+        onRefreshSuppliers={onRefreshSuppliers}
+        onRefreshApprovals={onRefreshApprovals}
       />
 
       {/* Tabs for different views */}
@@ -201,10 +268,10 @@ function ProcurementDashboard({
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
-              <RecentActivity />
+              <RecentActivity activityFeed={activityFeed} />
             </div>
             <div>
-              <QuickActions />
+              <QuickActions awaitingDeliveryCount={orderMetrics?.awaitingDelivery} />
             </div>
           </div>
         </TabsContent>

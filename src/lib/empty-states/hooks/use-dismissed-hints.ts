@@ -19,7 +19,7 @@
  * }
  * ```
  */
-import { useCallback, useEffect, useState, useMemo } from "react"
+import { useCallback, useEffect, useState, useMemo, startTransition } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   getDismissedHints,
@@ -111,12 +111,12 @@ export function useDismissedHints(): UseDismissedHintsResult {
     return merged
   }, [localDismissed, serverDismissed])
 
-  // Sync server hints to localStorage when loaded
+  // Sync server hints to localStorage when loaded. Defer setState to avoid sync setState in effect.
   useEffect(() => {
     if (serverDismissed && serverDismissed.size > 0) {
       const merged = new Set([...localDismissed, ...serverDismissed])
       setLocalDismissedHints(merged)
-      setLocalDismissed(merged)
+      startTransition(() => setLocalDismissed(merged))
     }
   }, [serverDismissed]) // eslint-disable-line react-hooks/exhaustive-deps
 

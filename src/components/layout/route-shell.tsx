@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Layout exports compound components */
 /**
  * RouteShell Component
  *
@@ -61,9 +62,9 @@ import type {
  */
 export type RouteShellVariant = PageLayoutVariant
 
-export interface RouteShellProps extends PageLayoutProps {}
-export interface RouteShellHeaderProps extends PageHeaderProps {}
-export interface RouteShellContextPanelProps extends PageSidebarProps {}
+export type RouteShellProps = PageLayoutProps;
+export type RouteShellHeaderProps = PageHeaderProps;
+export type RouteShellContextPanelProps = PageSidebarProps;
 
 // ============================================================================
 // ROUTE SHELL COMPOUND COMPONENT

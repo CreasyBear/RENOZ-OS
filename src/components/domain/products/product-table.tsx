@@ -14,7 +14,8 @@ import { useMemo, useCallback, useState } from "react";
 
 import { DataTable } from "@/components/shared/data-table/data-table";
 import { Button } from "@/components/ui/button";
-import { createProductColumns, type ProductTableItem } from "./product-columns";
+import { createProductColumns } from "./product-columns";
+import type { ProductTableItem } from "@/lib/schemas/products";
 
 interface ProductTableProps {
   products: ProductTableItem[];

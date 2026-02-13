@@ -1,14 +1,27 @@
 /**
  * OrderDetail Component
  *
- * Complete order view with tabs for overview, items, fulfillment, and more.
+ * @deprecated Use OrderDetailContainer from
+ * '@/components/domain/orders/containers/order-detail-container' instead.
+ * This component violates the container/presenter pattern by having
+ * query logic inside the component.
+ *
+ * Migration:
+ * ```tsx
+ * // Before
+ * import { OrderDetail } from '@/components/domain/orders';
+ * <OrderDetail orderId={id} />
+ *
+ * // After
+ * import { OrderDetailContainer } from '@/components/domain/orders';
+ * <OrderDetailContainer orderId={id} />
+ * ```
  *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-DETAIL-UI)
  */
 
 import { memo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { Link } from "@tanstack/react-router";
 import {
   Package,
   User,
@@ -66,11 +79,11 @@ import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks";
 import {
-  getOrderWithCustomer,
-  updateOrderStatus,
-  duplicateOrder,
-  deleteOrder,
-} from "@/server/functions/orders/orders";
+  useOrderWithCustomer,
+  useOrderDetailStatusUpdate,
+  useDeleteOrderWithConfirmation,
+  useDuplicateOrderById,
+} from "@/hooks/orders";
 import type { OrderStatus } from "@/lib/schemas/orders";
 import { UnifiedActivityTimeline } from "@/components/shared/activity";
 import { useUnifiedActivities } from "@/hooks/activities";
@@ -117,7 +130,13 @@ const STATUS_CONFIG: Record<
     label: "Picked",
     color: "bg-orange-100 text-orange-800",
     icon: Package,
-    nextActions: ["shipped", "cancelled"],
+    nextActions: ["cancelled"],
+  },
+  partially_shipped: {
+    label: "Partially Shipped",
+    color: "bg-amber-100 text-amber-800",
+    icon: Truck,
+    nextActions: ["cancelled"],
   },
   shipped: {
     label: "Shipped",
@@ -187,69 +206,23 @@ export const OrderDetail = memo(function OrderDetail({
   onDuplicate,
   className,
 }: OrderDetailProps) {
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Fetch order with customer details
-  const { data: order, isLoading, error } = useQuery({
-    queryKey: queryKeys.orders.withCustomer(orderId),
-    queryFn: () => getOrderWithCustomer({ data: { id: orderId } }),
+  const { data: order, isLoading, error } = useOrderWithCustomer({
+    orderId,
     refetchInterval: 30000, // Poll every 30s for status changes
   });
 
   // Status update mutation
-  const statusMutation = useMutation({
-    mutationFn: async ({
-      status,
-      notes,
-    }: {
-      status: OrderStatus;
-      notes?: string;
-    }) => {
-      return updateOrderStatus({
-        data: { id: orderId, data: { status, notes } },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Order status updated");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-    },
-    onError: () => {
-      toastError("Failed to update status");
-    },
-  });
+  const statusMutation = useOrderDetailStatusUpdate(orderId);
 
   // Duplicate mutation
-  const duplicateMutation = useMutation({
-    mutationFn: async () => {
-      return duplicateOrder({ data: { id: orderId } });
-    },
-    onSuccess: (result) => {
-      toastSuccess(`Order duplicated as ${result.orderNumber}`);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      onDuplicate?.(result.id);
-    },
-    onError: () => {
-      toastError("Failed to duplicate order");
-    },
-  });
+  const duplicateMutation = useDuplicateOrderById(orderId);
 
   // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      return deleteOrder({ data: { id: orderId } });
-    },
-    onSuccess: () => {
-      toastSuccess("Order deleted");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      onBack?.();
-    },
-    onError: () => {
-      toastError("Failed to delete order");
-    },
-  });
+  const deleteMutation = useDeleteOrderWithConfirmation(orderId);
 
   // Loading state
   if (isLoading) {
@@ -273,7 +246,7 @@ export const OrderDetail = memo(function OrderDetail({
             <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
             <p className="text-lg font-medium">Order not found</p>
             <p className="text-muted-foreground mt-1">
-              The order you're looking for doesn't exist or has been deleted.
+              The order you&apos;re looking for doesn&apos;t exist or has been deleted.
             </p>
             {onBack && (
               <Button variant="outline" className="mt-4" onClick={onBack}>
@@ -321,7 +294,15 @@ export const OrderDetail = memo(function OrderDetail({
                 {statusConfig.nextActions.map((nextStatus) => (
                   <DropdownMenuItem
                     key={nextStatus}
-                    onClick={() => statusMutation.mutate({ status: nextStatus })}
+                    onClick={() =>
+                      statusMutation.mutate(
+                        { status: nextStatus },
+                        {
+                          onSuccess: () => toastSuccess("Order status updated"),
+                          onError: () => toastError("Failed to update status"),
+                        }
+                      )
+                    }
                   >
                     Mark as {STATUS_CONFIG[nextStatus].label}
                   </DropdownMenuItem>
@@ -344,7 +325,15 @@ export const OrderDetail = memo(function OrderDetail({
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
-                onClick={() => duplicateMutation.mutate()}
+                onClick={() =>
+                  duplicateMutation.mutate(undefined, {
+                    onSuccess: (result) => {
+                      toastSuccess(`Order duplicated as ${result.orderNumber}`);
+                      onDuplicate?.(result.id);
+                    },
+                    onError: () => toastError("Failed to duplicate order"),
+                  })
+                }
                 disabled={duplicateMutation.isPending}
               >
                 <Copy className="h-4 w-4 mr-2" />
@@ -551,9 +540,17 @@ export const OrderDetail = memo(function OrderDetail({
                     <TableRow key={item.id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">
-                            {item.product?.name ?? item.description}
-                          </p>
+                          {item.product?.id && item.product?.name ? (
+                            <Link
+                              to="/products/$productId"
+                              params={{ productId: item.product.id }}
+                              className="font-medium hover:underline"
+                            >
+                              {item.product.name}
+                            </Link>
+                          ) : (
+                            <p className="font-medium">{item.description}</p>
+                          )}
                           {item.sku && (
                             <p className="text-sm text-muted-foreground">
                               SKU: {item.sku}
@@ -738,7 +735,15 @@ export const OrderDetail = memo(function OrderDetail({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteMutation.mutate()}
+              onClick={() =>
+                deleteMutation.mutate(undefined, {
+                  onSuccess: () => {
+                    toastSuccess("Order deleted");
+                    onBack?.();
+                  },
+                  onError: () => toastError("Failed to delete order"),
+                })
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete

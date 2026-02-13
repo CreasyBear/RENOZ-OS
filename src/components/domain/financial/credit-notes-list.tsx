@@ -12,7 +12,8 @@
  */
 
 import { memo, useState, useCallback } from 'react';
-import { MoreHorizontal, Plus, FileText, Ban, CheckCircle, Clock, Receipt } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { MoreHorizontal, Plus, FileText, Ban, CheckCircle, Clock, Receipt, Download, Loader2, AlertTriangle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -38,59 +39,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { format } from 'date-fns';
-import type { CreditNoteStatus } from '@/lib/schemas';
+import type { CreditNoteStatus, CreateCreditNoteInput } from '@/lib/schemas';
+import type { CreditNoteWithCustomer } from '@/lib/schemas/financial/credit-notes';
+import { CreateCreditNoteDialog } from './credit-note-dialogs';
+import { OrderCombobox, type OrderSummary, ConfirmationModal } from '@/components/shared';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-/**
- * Credit note with customer relation for display.
- * Matches the shape returned by listCreditNotes server function.
- */
-interface CreditNoteWithCustomer {
-  id: string;
-  creditNoteNumber: string | null;
-  customerId: string;
-  orderId: string | null;
-  amount: number;
-  gstAmount: number | null;
-  reason: string | null;
-  status: CreditNoteStatus;
-  issuedAt: Date | null;
-  appliedAt: Date | null;
-  appliedToOrderId: string | null;
-  voidedAt: Date | null;
-  voidReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  organizationId: string;
-  customer: {
-    id: string;
-    name: string;
-    email: string | null;
-  } | null;
-}
-
-/**
- * Input for creating a credit note.
- */
-export interface CreateCreditNoteInput {
-  /** @source Form input - customer UUID */
-  customerId: string;
-  /** @source Form input - optional order UUID */
-  orderId?: string;
-  /** @source Form input - amount in cents */
-  amount: number;
-  /** @source Form input - reason for credit */
-  reason: string;
-}
+// CreditNoteWithCustomer type imported from schemas (SCHEMA-TRACE.md compliance)
 
 /**
  * Props for CreditNotesList presenter component.
@@ -113,8 +75,14 @@ export interface CreditNotesListProps {
   onApply: (creditNoteId: string, orderId: string) => void;
   /** @source useMutation for voidCreditNote */
   onVoid: (id: string) => void;
+  /** @source useMutation for generateCreditNotePdf */
+  onGeneratePdf: (id: string) => void;
   /** @source Combined pending state from all mutations */
   isMutating: boolean;
+  /** @source PDF generation pending state */
+  isGeneratingPdf?: boolean;
+  /** @source useQuery refetch - for retry without full page reload */
+  onRetry?: () => void;
   /** @source Optional className for styling */
   className?: string;
 }
@@ -149,103 +117,7 @@ function StatusBadge({ status }: { status: CreditNoteStatus }) {
   );
 }
 
-// ============================================================================
-// CREATE DIALOG (Presenter Sub-Component)
-// ============================================================================
-
-interface CreateDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  customerId?: string;
-  onCreate: (data: CreateCreditNoteInput) => void;
-  isPending: boolean;
-}
-
-function CreateCreditNoteDialog({
-  open,
-  onOpenChange,
-  customerId,
-  onCreate,
-  isPending,
-}: CreateDialogProps) {
-  const [formData, setFormData] = useState({
-    customerId: customerId ?? '',
-    orderId: '',
-    amount: '',
-    reason: '',
-  });
-
-  const handleSubmit = useCallback(() => {
-    onCreate({
-      customerId: formData.customerId,
-      orderId: formData.orderId || undefined,
-      amount: Math.round(parseFloat(formData.amount) * 100), // Convert to cents
-      reason: formData.reason,
-    });
-    onOpenChange(false);
-    setFormData({ customerId: customerId ?? '', orderId: '', amount: '', reason: '' });
-  }, [formData, onCreate, onOpenChange, customerId]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create Credit Note</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="customerId">Customer ID</Label>
-            <Input
-              id="customerId"
-              value={formData.customerId}
-              onChange={(e) => setFormData((prev) => ({ ...prev, customerId: e.target.value }))}
-              placeholder="Customer UUID"
-              disabled={!!customerId}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="orderId">Order ID (optional)</Label>
-            <Input
-              id="orderId"
-              value={formData.orderId}
-              onChange={(e) => setFormData((prev) => ({ ...prev, orderId: e.target.value }))}
-              placeholder="Link to order"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="amount">Amount (AUD)</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.amount}
-              onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
-              placeholder="0.00"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="reason">Reason</Label>
-            <Textarea
-              id="reason"
-              value={formData.reason}
-              onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
-              placeholder="Reason for credit note"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !formData.amount}>
-            {isPending ? 'Creating...' : 'Create Credit Note'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// CreateCreditNoteDialog is now imported from ./credit-note-dialogs
 
 // ============================================================================
 // APPLY TO INVOICE DIALOG (Presenter Sub-Component)
@@ -266,36 +138,46 @@ function ApplyToInvoiceDialog({
   onApply,
   isPending,
 }: ApplyDialogProps) {
-  const [orderId, setOrderId] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
 
   const handleSubmit = useCallback(() => {
-    onApply(creditNoteId, orderId);
+    if (!selectedOrder) return;
+    onApply(creditNoteId, selectedOrder.id);
     onOpenChange(false);
-    setOrderId('');
-  }, [creditNoteId, orderId, onApply, onOpenChange]);
+    setSelectedOrder(null);
+  }, [creditNoteId, selectedOrder, onApply, onOpenChange]);
+
+  const handleClose = useCallback((newOpen: boolean) => {
+    if (!newOpen) {
+      setSelectedOrder(null);
+    }
+    onOpenChange(newOpen);
+  }, [onOpenChange]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Apply Credit Note to Invoice</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="orderId">Order/Invoice ID</Label>
-            <Input
-              id="orderId"
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              placeholder="Order UUID to apply credit"
+            <Label htmlFor="order">Select Order/Invoice *</Label>
+            <OrderCombobox
+              value={selectedOrder}
+              onSelect={setSelectedOrder}
+              placeholder="Search orders by number..."
             />
+            <p className="text-xs text-muted-foreground">
+              Search by order number or customer name
+            </p>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleClose(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !orderId}>
+          <Button onClick={handleSubmit} disabled={isPending || !selectedOrder}>
             {isPending ? 'Applying...' : 'Apply Credit'}
           </Button>
         </DialogFooter>
@@ -317,18 +199,36 @@ export const CreditNotesList = memo(function CreditNotesList({
   onIssue,
   onApply,
   onVoid,
+  onGeneratePdf,
   isMutating,
+  isGeneratingPdf = false,
+  onRetry,
   className,
 }: CreditNotesListProps) {
   // Local UI state for dialogs
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [selectedCreditNoteId, setSelectedCreditNoteId] = useState<string | null>(null);
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false);
+  const [creditNoteToVoid, setCreditNoteToVoid] = useState<CreditNoteWithCustomer | null>(null);
 
   const handleApplyClick = useCallback((creditNoteId: string) => {
     setSelectedCreditNoteId(creditNoteId);
     setApplyDialogOpen(true);
   }, []);
+
+  const handleVoidClick = useCallback((creditNote: CreditNoteWithCustomer) => {
+    setCreditNoteToVoid(creditNote);
+    setVoidDialogOpen(true);
+  }, []);
+
+  const handleVoidConfirm = useCallback(() => {
+    if (creditNoteToVoid) {
+      onVoid(creditNoteToVoid.id);
+      setVoidDialogOpen(false);
+      setCreditNoteToVoid(null);
+    }
+  }, [creditNoteToVoid, onVoid]);
 
   // Loading state
   if (isLoading) {
@@ -343,7 +243,27 @@ export const CreditNotesList = memo(function CreditNotesList({
 
   // Error state
   if (error) {
-    return <div className={cn('text-destructive p-4', className)}>Failed to load credit notes</div>;
+    return (
+      <div className={cn('rounded-lg border border-destructive/50 bg-destructive/10 p-4', className)}>
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium text-destructive">Failed to load credit notes</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => onRetry?.()}
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -377,7 +297,20 @@ export const CreditNotesList = memo(function CreditNotesList({
               <TableRow key={creditNote.id}>
                 <TableCell className="font-medium">{creditNote.creditNoteNumber}</TableCell>
                 <TableCell>{format(new Date(creditNote.createdAt), 'dd MMM yyyy')}</TableCell>
-                <TableCell>{creditNote.customer?.name ?? 'Unknown'}</TableCell>
+                <TableCell>
+                  {creditNote.customer ? (
+                    <Link
+                      to="/customers/$customerId"
+                      params={{ customerId: creditNote.customerId }}
+                      search={{}}
+                      className="text-primary hover:underline"
+                    >
+                      {creditNote.customer.name}
+                    </Link>
+                  ) : (
+                    'Unknown'
+                  )}
+                </TableCell>
                 <TableCell className="text-right">
                   <FormatAmount amount={creditNote.amount} />
                 </TableCell>
@@ -404,11 +337,30 @@ export const CreditNotesList = memo(function CreditNotesList({
                           Apply to Invoice
                         </DropdownMenuItem>
                       )}
+
+                      {/* Generate PDF - for issued and applied credit notes */}
+                      {(creditNote.status === 'issued' || creditNote.status === 'applied') && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => onGeneratePdf(creditNote.id)}
+                            disabled={isGeneratingPdf}
+                          >
+                            {isGeneratingPdf ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="mr-2 h-4 w-4" />
+                            )}
+                            {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
                       {(creditNote.status === 'draft' || creditNote.status === 'issued') && (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => onVoid(creditNote.id)}
+                            onClick={() => handleVoidClick(creditNote)}
                             className="text-destructive"
                           >
                             <Ban className="mr-2 h-4 w-4" />
@@ -440,6 +392,18 @@ export const CreditNotesList = memo(function CreditNotesList({
           creditNoteId={selectedCreditNoteId}
           onApply={onApply}
           isPending={isMutating}
+        />
+      )}
+      {creditNoteToVoid && (
+        <ConfirmationModal
+          open={voidDialogOpen}
+          onOpenChange={setVoidDialogOpen}
+          title="Void Credit Note"
+          message={`Are you sure you want to void credit note ${creditNoteToVoid.creditNoteNumber}? This action cannot be undone. The credit note will be marked as voided and cannot be issued or applied.`}
+          confirmLabel="Void Credit Note"
+          variant="danger"
+          onConfirm={handleVoidConfirm}
+          isConfirming={isMutating}
         />
       )}
     </div>

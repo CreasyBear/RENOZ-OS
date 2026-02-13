@@ -1,8 +1,11 @@
+'use server';
+
 /**
  * Dashboard Metrics Server Functions
  *
+ * ⚠️ SERVER-ONLY: Uses Drizzle ORM and database access.
+ *
  * Server functions for dashboard metrics, summaries, and comparisons.
- * Uses Drizzle ORM with Zod validation.
  *
  * PERFORMANCE: Uses hybrid query strategy:
  * - Materialized views for historical data (> 1 day old)
@@ -18,8 +21,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, sql, and, gte, lte, desc, count } from 'drizzle-orm';
+import { eq, sql, and, gte, lte, desc, count, isNull, inArray, not, notInArray, or, ilike } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
@@ -30,7 +34,13 @@ import {
 } from 'drizzle/schema';
 import { jobAssignments } from 'drizzle/schema/jobs';
 import { warrantyClaims } from 'drizzle/schema/warranty/warranty-claims';
-import { targets } from 'drizzle/schema/dashboard';
+import {
+  targets,
+  mvDailyMetrics,
+  mvDailyPipeline,
+  mvDailyJobs,
+  mvDailyWarranty,
+} from 'drizzle/schema/dashboard';
 import {
   getDashboardMetricsSchema,
   getMetricsComparisonSchema,
@@ -40,6 +50,11 @@ import {
   type ActivityItem,
   type DateRangePreset,
 } from '@/lib/schemas/dashboard/metrics';
+import { logger } from '@/lib/logger';
+import {
+  getInventoryCountsByProductIdsInputSchema,
+  getInventoryCountsBySkusInputSchema,
+} from '@/lib/schemas/dashboard/tracked-products';
 import { DashboardCache } from '@/lib/cache/dashboard-cache';
 
 // ============================================================================
@@ -204,66 +219,75 @@ async function queryMetricsFromMV(
 }> {
   try {
     // Run all MV queries in parallel for better performance
-    const [orderMetricsResult, pipelineMetricsResult, jobMetricsResult, claimMetricsResult] =
+    // Column names match actual DB per schema-snapshot-matviews.json
+    const [orderMetricsRows, pipelineMetricsRows, jobMetricsRows, claimMetricsRows] =
       await Promise.all([
-        // Query mv_daily_metrics for orders/revenue
-        db.execute<{
-          orders_count: string;
-          revenue: string;
-          customer_count: string;
-        }>(sql`
-          SELECT
-            COALESCE(SUM(orders_count), 0) as orders_count,
-            COALESCE(SUM(revenue), 0) as revenue,
-            COALESCE(SUM(customer_count), 0) as customer_count
-          FROM mv_daily_metrics
-          WHERE organization_id = ${organizationId}
-            AND metric_date >= ${dateFrom}::date
-            AND metric_date <= ${dateTo}::date
-        `),
+        // Query mv_daily_metrics for orders/revenue (day, orders_total, customers_count)
+        db
+          .select({
+            orders_count: sql<string>`COALESCE(SUM(${mvDailyMetrics.ordersCount}), 0)`,
+            revenue: sql<string>`COALESCE(SUM(${mvDailyMetrics.ordersTotal}), 0)`,
+            customer_count: sql<string>`COALESCE(SUM(${mvDailyMetrics.customersCount}), 0)`,
+          })
+          .from(mvDailyMetrics)
+          // RAW SQL (Phase 11 Keep): Materialized view date filters. See PHASE11-RAW-SQL-AUDIT.md
+          .where(
+            and(
+              eq(mvDailyMetrics.organizationId, organizationId),
+              gte(mvDailyMetrics.day, sql`${dateFrom}::date`),
+              lte(mvDailyMetrics.day, sql`${dateTo}::date`)
+            )
+          ),
 
-        // Query mv_daily_pipeline for pipeline value
-        db.execute<{
-          total_value: string;
-        }>(sql`
-          SELECT COALESCE(SUM(total_value), 0) as total_value
-          FROM mv_daily_pipeline
-          WHERE organization_id = ${organizationId}
-            AND metric_date >= ${dateFrom}::date
-            AND metric_date <= ${dateTo}::date
-            AND stage NOT IN ('won', 'lost')
-        `),
+        // Query mv_daily_pipeline for pipeline value (exclude won/lost)
+        db
+          .select({
+            total_value: sql<string>`COALESCE(SUM(${mvDailyPipeline.totalValue}), 0)`,
+          })
+          .from(mvDailyPipeline)
+          .where(
+            and(
+              eq(mvDailyPipeline.organizationId, organizationId),
+              gte(mvDailyPipeline.day, sql`${dateFrom}::date`),
+              lte(mvDailyPipeline.day, sql`${dateTo}::date`),
+              notInArray(mvDailyPipeline.stage, ['won', 'lost'])
+            )
+          ),
 
-        // Query mv_daily_jobs for active jobs
-        db.execute<{
-          active_count: string;
-        }>(sql`
-          SELECT COALESCE(SUM(job_count), 0) as active_count
-          FROM mv_daily_jobs
-          WHERE organization_id = ${organizationId}
-            AND metric_date >= ${dateFrom}::date
-            AND metric_date <= ${dateTo}::date
-            AND status IN ('scheduled', 'in_progress')
-        `),
+        // Query mv_daily_jobs for active jobs (in_progress + on_hold)
+        db
+          .select({
+            active_count: sql<string>`(COALESCE(SUM(${mvDailyJobs.inProgressJobs}), 0) + COALESCE(SUM(${mvDailyJobs.onHoldJobs}), 0))::text`,
+          })
+          .from(mvDailyJobs)
+          .where(
+            and(
+              eq(mvDailyJobs.organizationId, organizationId),
+              gte(mvDailyJobs.day, sql`${dateFrom}::date`),
+              lte(mvDailyJobs.day, sql`${dateTo}::date`)
+            )
+          ),
 
-        // Query mv_daily_warranty for open claims
-        db.execute<{
-          open_count: string;
-        }>(sql`
-          SELECT COALESCE(SUM(claim_count), 0) as open_count
-          FROM mv_daily_warranty
-          WHERE organization_id = ${organizationId}
-            AND metric_date >= ${dateFrom}::date
-            AND metric_date <= ${dateTo}::date
-            AND status IN ('submitted', 'under_review', 'approved')
-        `),
+        // Query mv_daily_warranty for open claims (submitted + under_review + approved)
+        db
+          .select({
+            open_count: sql<string>`(COALESCE(SUM(${mvDailyWarranty.submittedClaims}), 0) + COALESCE(SUM(${mvDailyWarranty.underReviewClaims}), 0) + COALESCE(SUM(${mvDailyWarranty.approvedClaims}), 0))::text`,
+          })
+          .from(mvDailyWarranty)
+          .where(
+            and(
+              eq(mvDailyWarranty.organizationId, organizationId),
+              gte(mvDailyWarranty.day, sql`${dateFrom}::date`),
+              lte(mvDailyWarranty.day, sql`${dateTo}::date`)
+            )
+          ),
       ]);
 
     // Extract first row from each result
-    const orderMetrics = orderMetricsResult[0];
-    const pipelineMetrics = pipelineMetricsResult[0];
-    const jobMetrics = jobMetricsResult[0];
-    const claimMetrics = claimMetricsResult[0];
+    const orderMetrics = orderMetricsRows[0];
+    const pipelineMetrics = pipelineMetricsRows[0];
+    const jobMetrics = jobMetricsRows[0];
+    const claimMetrics = claimMetricsRows[0];
 
     return {
       revenue: Number(orderMetrics?.revenue ?? 0),
@@ -274,8 +298,11 @@ async function queryMetricsFromMV(
       openClaims: Number(claimMetrics?.open_count ?? 0),
     };
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/781e85a8-61df-46d9-aac3-a2992cae977d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'dashboard-metrics.ts:queryMetricsFromMV:catch',message:'MV query failed, fallback to live',data:{dateFrom,dateTo,error:error instanceof Error?error.message:'unknown_error'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     // MVs don't exist yet - fall back to live queries
-    console.warn('Materialized views not available, falling back to live queries:', error);
+    logger.warn('Materialized views not available, falling back to live queries', { error });
     return queryMetricsLive(organizationId, dateFrom, dateTo);
   }
 }
@@ -306,9 +333,9 @@ async function queryMetricsLive(
       .where(
         and(
           eq(orders.organizationId, organizationId),
-          sql`DATE(${orders.orderDate}) >= ${dateFrom}::date`,
-          sql`DATE(${orders.orderDate}) <= ${dateTo}::date`,
-          sql`${orders.deletedAt} IS NULL`
+          sql`${orders.orderDate} >= ${dateFrom}::date`,
+          sql`${orders.orderDate} <= ${dateTo}::date`,
+          isNull(orders.deletedAt)
         )
       ),
 
@@ -319,9 +346,9 @@ async function queryMetricsLive(
       .where(
         and(
           eq(customers.organizationId, organizationId),
-          sql`DATE(${customers.createdAt}) >= ${dateFrom}::date`,
-          sql`DATE(${customers.createdAt}) <= ${dateTo}::date`,
-          sql`${customers.deletedAt} IS NULL`
+          sql`${customers.createdAt} >= ${dateFrom}::date`,
+          sql`${customers.createdAt} <= ${dateTo}::date`,
+          isNull(customers.deletedAt)
         )
       ),
 
@@ -334,8 +361,8 @@ async function queryMetricsLive(
       .where(
         and(
           eq(opportunities.organizationId, organizationId),
-          sql`${opportunities.stage} NOT IN ('won', 'lost')`,
-          sql`${opportunities.deletedAt} IS NULL`
+          not(inArray(opportunities.stage, ['won', 'lost'])),
+          isNull(opportunities.deletedAt)
         )
       ),
 
@@ -346,7 +373,7 @@ async function queryMetricsLive(
       .where(
         and(
           eq(jobAssignments.organizationId, organizationId),
-          sql`${jobAssignments.status} IN ('scheduled', 'in_progress')`
+          inArray(jobAssignments.status, ['scheduled', 'in_progress'])
         )
       ),
 
@@ -357,7 +384,7 @@ async function queryMetricsLive(
       .where(
         and(
           eq(warrantyClaims.organizationId, organizationId),
-          sql`${warrantyClaims.status} IN ('submitted', 'under_review', 'approved')`
+          inArray(warrantyClaims.status, ['submitted', 'under_review', 'approved'])
         )
       ),
   ]);
@@ -401,7 +428,7 @@ async function queryTodayMetricsLive(
           and(
             eq(orders.organizationId, organizationId),
             sql`DATE(${orders.orderDate}) = ${today}::date`,
-            sql`${orders.deletedAt} IS NULL`
+            isNull(orders.deletedAt)
           )
         ),
 
@@ -413,7 +440,7 @@ async function queryTodayMetricsLive(
           and(
             eq(customers.organizationId, organizationId),
             sql`DATE(${customers.createdAt}) = ${today}::date`,
-            sql`${customers.deletedAt} IS NULL`
+            isNull(customers.deletedAt)
           )
         ),
 
@@ -426,8 +453,8 @@ async function queryTodayMetricsLive(
         .where(
           and(
             eq(opportunities.organizationId, organizationId),
-            sql`${opportunities.stage} NOT IN ('won', 'lost')`,
-            sql`${opportunities.deletedAt} IS NULL`
+            not(inArray(opportunities.stage, ['won', 'lost'])),
+            isNull(opportunities.deletedAt)
           )
         ),
 
@@ -438,7 +465,7 @@ async function queryTodayMetricsLive(
         .where(
           and(
             eq(jobAssignments.organizationId, organizationId),
-            sql`${jobAssignments.status} IN ('scheduled', 'in_progress')`
+            inArray(jobAssignments.status, ['scheduled', 'in_progress'])
           )
         ),
 
@@ -449,7 +476,7 @@ async function queryTodayMetricsLive(
         .where(
           and(
             eq(warrantyClaims.organizationId, organizationId),
-            sql`${warrantyClaims.status} IN ('submitted', 'under_review', 'approved')`
+            inArray(warrantyClaims.status, ['submitted', 'under_review', 'approved'])
           )
         ),
     ]);
@@ -544,6 +571,11 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
 
     const dateFromStr = from.toISOString().split('T')[0];
     const dateToStr = to.toISOString().split('T')[0];
+    const needsFreshData = includesToday(to);
+
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/781e85a8-61df-46d9-aac3-a2992cae977d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H1',location:'dashboard-metrics.ts:getDashboardMetrics:date-range',message:'Dashboard metrics date range resolved',data:{inputDateFrom:data.dateFrom??null,inputDateTo:data.dateTo??null,preset:preset??null,resolvedDateFrom:dateFromStr,resolvedDateTo:dateToStr,needsFreshData},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     // Try cache first (skip for ranges that include today - need fresh data)
     const cacheKey = {
@@ -554,39 +586,63 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
     };
 
     // Only use cache for purely historical ranges (no today's data)
-    const needsFreshData = includesToday(to);
     if (!needsFreshData) {
       const cached = await DashboardCache.getMetrics<DashboardMetricsResponse>(cacheKey);
       if (cached) {
+        const dr = cached.dateRange;
         return {
           ...cached,
+          dateRange: {
+            from: dr.from instanceof Date ? dr.from.toISOString() : dr.from,
+            to: dr.to instanceof Date ? dr.to.toISOString() : dr.to,
+            preset: dr.preset,
+          },
+          lastUpdated: cached.lastUpdated instanceof Date
+            ? cached.lastUpdated.toISOString()
+            : cached.lastUpdated,
           cacheHit: true as const,
         };
       }
     }
 
-    // Get current period metrics using hybrid strategy
-    const currentMetrics = await getMetricsHybrid(ctx.organizationId, from, to);
-
-    // Previous period for comparison (always historical, so use MV)
+    // Get current period, previous period, targets, and recent activity in parallel
     const comparison = calculateComparisonPeriod(from, to, data.comparePeriod || 'previous_period');
-    const previousMetrics = await queryMetricsFromMV(
-      ctx.organizationId,
-      comparison.from.toISOString().split('T')[0],
-      comparison.to.toISOString().split('T')[0]
-    );
+    const [currentMetrics, previousMetrics, currentTargets, recentActivityData] = await Promise.all([
+      getMetricsHybrid(ctx.organizationId, from, to),
+      queryMetricsFromMV(
+        ctx.organizationId,
+        comparison.from.toISOString().split('T')[0],
+        comparison.to.toISOString().split('T')[0]
+      ),
+      db
+        .select()
+        .from(targets)
+        .where(
+          and(
+            eq(targets.organizationId, ctx.organizationId),
+            lte(targets.startDate, dateToStr),
+            gte(targets.endDate, dateFromStr)
+          )
+        ),
+      db
+        .select({
+          id: activities.id,
+          action: activities.action,
+          description: activities.description,
+          entityId: activities.entityId,
+          entityType: activities.entityType,
+          userId: activities.userId,
+          createdAt: activities.createdAt,
+        })
+        .from(activities)
+        .where(eq(activities.organizationId, ctx.organizationId))
+        .orderBy(desc(activities.createdAt))
+        .limit(10),
+    ]);
 
-    // Get targets for comparison
-    const currentTargets = await db
-      .select()
-      .from(targets)
-      .where(
-        and(
-          eq(targets.organizationId, ctx.organizationId),
-          lte(targets.startDate, dateToStr),
-          gte(targets.endDate, dateFromStr)
-        )
-      );
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/781e85a8-61df-46d9-aac3-a2992cae977d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H3',location:'dashboard-metrics.ts:getDashboardMetrics:computed-metrics',message:'Computed current and previous dashboard metrics',data:{currentMetrics,previousMetrics,targetCount:currentTargets.length,recentActivityCount:recentActivityData.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     const targetMap = new Map(currentTargets.map((t) => [t.metric, Number(t.targetValue)]));
 
@@ -626,22 +682,6 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       ),
     };
 
-    // Get recent activity (always live - it's a feed)
-    const recentActivityData = await db
-      .select({
-        id: activities.id,
-        action: activities.action,
-        description: activities.description,
-        entityId: activities.entityId,
-        entityType: activities.entityType,
-        userId: activities.userId,
-        createdAt: activities.createdAt,
-      })
-      .from(activities)
-      .where(eq(activities.organizationId, ctx.organizationId))
-      .orderBy(desc(activities.createdAt))
-      .limit(10);
-
     const recentActivity: ActivityItem[] = recentActivityData.map((a) => ({
       id: a.id,
       type: mapActivityType(a.action),
@@ -668,12 +708,12 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       charts,
       recentActivity,
       dateRange: {
-        from,
-        to,
+        from: from.toISOString(),
+        to: to.toISOString(),
         preset,
       },
       comparisonEnabled: !!data.comparePeriod,
-      lastUpdated: new Date(),
+      lastUpdated: new Date().toISOString(),
       cacheHit: false as const,
     };
 
@@ -682,6 +722,11 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       await DashboardCache.setMetrics(cacheKey, result);
     }
 
+    logger.debug('[getDashboardMetrics] returning', {
+      orgId: ctx.organizationId,
+      dateRange: { from: dateFromStr, to: dateToStr },
+      hasSummary: !!result.summary,
+    });
     return result;
   });
 
@@ -827,4 +872,157 @@ export const getMetricsComparison = createServerFn({ method: 'GET' })
         previousTo: previous.to,
       },
     };
+  });
+
+// ============================================================================
+// GET INVENTORY COUNTS BY SKU
+// ============================================================================
+
+/**
+ * Get inventory counts for specific SKU patterns.
+ * Used for dashboard widgets showing key product stock levels.
+ *
+ * @example
+ * // Get counts for battery units and mounting kits
+ * const result = await getInventoryCountsBySkus({
+ *   data: {
+ *     skuPatterns: [
+ *       { key: 'batteries', patterns: ['lv-5kwh100ah'] },
+ *       { key: 'kits', patterns: ['lv-top', 'lv-bottom'] },
+ *     ]
+ *   }
+ * });
+ */
+export const getInventoryCountsBySkus = createServerFn({ method: 'GET' })
+  .inputValidator(getInventoryCountsBySkusInputSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
+
+    // Import inventory and products tables
+    const { inventory, products } = await import('drizzle/schema');
+
+    const results: Record<string, { totalQuantity: number; productCount: number; products: Array<{ sku: string; name: string; quantity: number }> }> = {};
+
+    // Query for each SKU pattern group
+    for (const { key, patterns } of data.skuPatterns) {
+      // Build OR conditions for all patterns (case-insensitive, safe from pattern injection)
+      const patternConditions = patterns.map((pattern) => ilike(products.sku, containsPattern(pattern)));
+      const skuCondition = patternConditions.length > 0 ? or(...patternConditions)! : sql`1=0`;
+
+      const inventoryData = await db
+        .select({
+          sku: products.sku,
+          name: products.name,
+          quantityOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
+        })
+        .from(products)
+        .leftJoin(
+          inventory,
+          and(
+            eq(inventory.productId, products.id),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
+        .where(
+          and(
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt),
+            skuCondition
+          )
+        )
+        .groupBy(products.id, products.sku, products.name);
+
+      const totalQuantity = inventoryData.reduce((sum, item) => sum + Number(item.quantityOnHand), 0);
+
+      results[key] = {
+        totalQuantity,
+        productCount: inventoryData.length,
+        products: inventoryData.map((item) => ({
+          sku: item.sku ?? '',
+          name: item.name,
+          quantity: Number(item.quantityOnHand),
+        })),
+      };
+    }
+
+    return results;
+  });
+
+// ============================================================================
+// GET INVENTORY COUNTS BY PRODUCT IDS
+// ============================================================================
+
+/**
+ * Get inventory counts for specific product IDs.
+ * Simpler version that takes exact product IDs instead of SKU patterns.
+ * Used by the tracked products feature on the dashboard.
+ *
+ * @example
+ * const result = await getInventoryCountsByProductIds({
+ *   data: { productIds: ['uuid-1', 'uuid-2'] }
+ * });
+ * // Returns: { 'uuid-1': { totalQuantity: 10, ... }, 'uuid-2': { ... } }
+ */
+export const getInventoryCountsByProductIds = createServerFn({ method: 'GET' })
+  .inputValidator(getInventoryCountsByProductIdsInputSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
+
+    if (data.productIds.length === 0) {
+      return {};
+    }
+
+    // Import inventory and products tables
+    const { inventory, products } = await import('drizzle/schema');
+    const { inArray } = await import('drizzle-orm');
+
+    // Query inventory for the specified product IDs
+    const inventoryData = await db
+      .select({
+        productId: products.id,
+        sku: products.sku,
+        name: products.name,
+        quantityOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
+        quantityAvailable: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::int`,
+      })
+      .from(products)
+      .leftJoin(
+        inventory,
+        and(
+          eq(inventory.productId, products.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
+      .where(
+        and(
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt),
+          inArray(products.id, data.productIds)
+        )
+      )
+      .groupBy(products.id, products.sku, products.name);
+
+    // Build result map keyed by product ID
+    const results: Record<
+      string,
+      {
+        productId: string;
+        sku: string;
+        name: string;
+        totalQuantity: number;
+        availableQuantity: number;
+      }
+    > = {};
+
+    for (const item of inventoryData) {
+      results[item.productId] = {
+        productId: item.productId,
+        sku: item.sku ?? '',
+        name: item.name,
+        totalQuantity: Number(item.quantityOnHand),
+        availableQuantity: Number(item.quantityAvailable),
+      };
+    }
+
+    return results;
   });

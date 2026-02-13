@@ -11,9 +11,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { OrderStatus } from '@/lib/schemas/orders';
-
-// Dynamic imports to prevent server-only code from being bundled to client
-const loadOrdersModule = async () => import('@/server/functions/orders/orders');
+import {
+  updateOrderStatus,
+  bulkUpdateOrderStatus,
+} from '@/server/functions/orders/orders';
 
 // ============================================================================
 // TYPES
@@ -25,7 +26,18 @@ export interface UpdateOrderStatusInput {
   notes?: string;
 }
 
+export interface BulkUpdateOrderStatusInput {
+  orderIds: string[];
+  status: OrderStatus;
+  notes?: string;
+}
+
 export interface UseUpdateOrderStatusOptions {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+}
+
+export interface UseBulkUpdateOrderStatusOptions {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }
@@ -41,10 +53,7 @@ export interface UseUpdateOrderStatusOptions {
 export function useUpdateOrderStatus(options: UseUpdateOrderStatusOptions = {}) {
   const queryClient = useQueryClient();
 
-  const updateFn = useServerFn(async ({ data }: { data: { id: string; data: { status: OrderStatus; notes?: string } } }) => {
-    const { updateOrderStatus } = await loadOrdersModule();
-    return updateOrderStatus({ data });
-  });
+  const updateFn = useServerFn(updateOrderStatus);
 
   return useMutation({
     mutationFn: (input: UpdateOrderStatusInput) =>
@@ -60,6 +69,33 @@ export function useUpdateOrderStatus(options: UseUpdateOrderStatusOptions = {}) 
     onSuccess: () => {
       // Invalidate order lists and fulfillment queries
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
+      options.onSuccess?.();
+    },
+    onError: (error) => {
+      options.onError?.(error);
+    },
+  });
+}
+
+/**
+ * Hook for bulk updating order statuses.
+ * Used for list-level bulk operations (allocate/ship/status update).
+ */
+export function useBulkUpdateOrderStatus(options: UseBulkUpdateOrderStatusOptions = {}) {
+  const queryClient = useQueryClient();
+
+  const bulkUpdateFn = useServerFn(bulkUpdateOrderStatus);
+
+  return useMutation({
+    mutationFn: (input: BulkUpdateOrderStatusInput) =>
+      bulkUpdateFn({
+        data: input,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
       queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
       options.onSuccess?.();

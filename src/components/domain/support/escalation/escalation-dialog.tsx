@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { AlertTriangle, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks';
+import { logger } from '@/lib/logger';
 
 /**
  * Props for uncontrolled mode (with trigger button)
@@ -62,9 +63,15 @@ interface ControlledEscalationDialogProps {
 
 type EscalationDialogProps = UncontrolledEscalationDialogProps | ControlledEscalationDialogProps;
 
+function isUncontrolled(
+  props: EscalationDialogProps
+): props is UncontrolledEscalationDialogProps {
+  return !('open' in props && props.open !== undefined);
+}
+
 export function EscalationDialog(props: EscalationDialogProps) {
   // Determine if we're in controlled mode
-  const isControlled = 'open' in props && props.open !== undefined;
+  const isControlled = !isUncontrolled(props);
 
   // Uncontrolled state
   const [internalOpen, setInternalOpen] = useState(false);
@@ -76,8 +83,8 @@ export function EscalationDialog(props: EscalationDialogProps) {
   const setOpen = isControlled ? props.onOpenChange : setInternalOpen;
   const isPending = isControlled ? props.isPending ?? false : isLoading;
 
-  // Get mode-specific values
-  const isEscalated = isControlled ? false : (props as UncontrolledEscalationDialogProps).isEscalated;
+  // Get mode-specific values (narrowed by type guard)
+  const isEscalated = isControlled ? false : props.isEscalated;
 
   const handleSubmit = async () => {
     if (!reason.trim()) return;
@@ -88,23 +95,22 @@ export function EscalationDialog(props: EscalationDialogProps) {
         await props.onEscalate(reason);
         setReason('');
       } catch (error) {
-        console.error('Escalation failed:', error);
+        logger.error('Escalation failed', error);
         toast.error(error instanceof Error ? error.message : 'Failed to escalate');
       }
     } else {
-      // Uncontrolled mode - manage loading state internally
+      // Uncontrolled mode - manage loading state internally (props narrowed by isUncontrolled)
       setIsLoading(true);
       try {
-        const uncontrolledProps = props as UncontrolledEscalationDialogProps;
         if (isEscalated) {
-          await uncontrolledProps.onDeEscalate(reason);
+          await props.onDeEscalate(reason);
         } else {
-          await uncontrolledProps.onEscalate(reason);
+          await props.onEscalate(reason);
         }
         setOpen(false);
         setReason('');
       } catch (error) {
-        console.error('Escalation failed:', error);
+        logger.error('Escalation failed', error);
         toast.error(error instanceof Error ? error.message : 'Failed to update escalation status');
       } finally {
         setIsLoading(false);
@@ -120,7 +126,7 @@ export function EscalationDialog(props: EscalationDialogProps) {
   const Icon = isEscalated ? ArrowDown : AlertTriangle;
 
   // Get trigger and className for uncontrolled mode
-  const trigger = isControlled ? undefined : (props as UncontrolledEscalationDialogProps).trigger;
+  const trigger = isUncontrolled(props) ? props.trigger : undefined;
   const className = props.className;
 
   return (

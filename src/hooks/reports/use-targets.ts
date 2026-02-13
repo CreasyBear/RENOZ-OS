@@ -63,7 +63,11 @@ export function useTargets(options: UseTargetsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.targets.list(filters),
-    queryFn: () => listTargets({ data: filters as ListTargetsInput }),
+    queryFn: async () => {
+      const result = await listTargets({ data: filters as ListTargetsInput });
+      if (result == null) throw new Error('Targets list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -79,7 +83,11 @@ export function useTargets(options: UseTargetsOptions = {}) {
 export function useTarget({ id, enabled = true }: UseTargetOptions) {
   return useQuery({
     queryKey: queryKeys.reports.targets.detail(id),
-    queryFn: () => getTarget({ data: { id } }),
+    queryFn: async () => {
+      const result = await getTarget({ data: { id } });
+      if (result == null) throw new Error('Target not found');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -87,13 +95,20 @@ export function useTarget({ id, enabled = true }: UseTargetOptions) {
 
 /**
  * Get progress toward active targets.
+ *
+ * Uses direct server function call (no useServerFn) per backup pattern -
+ * matches working implementation from renoz-v3 6.
  */
 export function useTargetProgress(options: UseTargetProgressOptions = {}) {
   const { enabled = true, ...filters } = options;
 
   return useQuery({
     queryKey: queryKeys.reports.targets.progress(filters),
-    queryFn: () => getTargetProgress({ data: filters }),
+    queryFn: async () => {
+      const result = await getTargetProgress({ data: filters });
+      if (result == null) throw new Error('Target progress returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - progress data updates frequently
     refetchOnWindowFocus: true,

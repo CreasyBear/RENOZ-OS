@@ -1,19 +1,23 @@
+/* eslint-disable react-refresh/only-export-components -- Route file exports route config + component */
 /**
- * Warranty List Page
+ * Warranty List Route
  *
- * Lists warranties with filtering and pagination.
+ * Route definition for warranty list page with lazy-loaded component.
  *
+ * @performance Code-split for reduced initial bundle size
+ * @see src/routes/_authenticated/support/warranties/warranties-page.tsx - Page component
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json
  */
 import { createFileRoute } from '@tanstack/react-router';
 import type { FileRoutesByPath } from '@tanstack/react-router';
 import { z } from 'zod';
-import { Shield } from 'lucide-react';
+import { lazy, Suspense } from 'react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
-import { WarrantyListContainer, type WarrantyListItem } from '@/components/domain/warranty';
 
-const searchSchema = z.object({
+const WarrantiesPage = lazy(() => import('./warranties-page'));
+
+export const searchSchema = z.object({
   search: z.string().optional(),
   status: z.enum(['active', 'expiring_soon', 'expired', 'voided', 'transferred']).optional(),
   policyType: z
@@ -25,11 +29,34 @@ const searchSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('asc').catch('asc'),
 });
 
+export type SearchParams = z.infer<typeof searchSchema>;
+
 export const Route = createFileRoute(
   '/_authenticated/support/warranties/' as keyof FileRoutesByPath
 )({
   validateSearch: searchSchema,
-  component: WarrantyListPage,
+  component: function WarrantiesRouteComponent() {
+    const rawSearch = Route.useSearch();
+    const search: SearchParams =
+      rawSearch && typeof rawSearch === 'object' && 'page' in rawSearch
+        ? rawSearch as SearchParams
+        : { page: 1, pageSize: 20, sortBy: 'expiryDate', sortOrder: 'asc' };
+    return (
+      <Suspense fallback={
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title="Warranties"
+            description="View and manage warranty registrations"
+          />
+          <PageLayout.Content>
+            <SupportTableSkeleton />
+          </PageLayout.Content>
+        </PageLayout>
+      }>
+        <WarrantiesPage search={search} />
+      </Suspense>
+    );
+  },
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
@@ -45,52 +72,3 @@ export const Route = createFileRoute(
     </PageLayout>
   ),
 });
-
-function WarrantyListPage() {
-  type SearchParams = z.infer<typeof searchSchema>;
-  const search = Route.useSearch() as SearchParams;
-  const navigate = Route.useNavigate() as (args: {
-    to?: string;
-    params?: Record<string, string>;
-    search?: ((prev: SearchParams) => SearchParams) | SearchParams;
-  }) => void;
-
-  const updateSearch = (updates: Partial<SearchParams>) => {
-    navigate({
-      search: (prev) => ({
-        ...prev,
-        ...updates,
-        page: 'page' in updates ? updates.page ?? 1 : 1,
-      }),
-    });
-  };
-
-  return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title={
-          <div className="flex items-center gap-2">
-            <Shield className="h-6 w-6" />
-            Warranties
-          </div>
-        }
-        description="View and manage warranty registrations"
-      />
-
-      <PageLayout.Content>
-        <div className="space-y-4">
-          <WarrantyListContainer
-            search={search}
-            onSearchChange={updateSearch}
-            onRowClick={(warranty: WarrantyListItem) =>
-              navigate({
-                to: '/support/warranties/$warrantyId',
-                params: { warrantyId: warranty.id },
-              })
-            }
-          />
-        </div>
-      </PageLayout.Content>
-    </PageLayout>
-  );
-}

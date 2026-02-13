@@ -1,14 +1,22 @@
 /**
  * Inventory Detail View (Presenter)
  *
- * Full-width layout following Order Detail gold standard patterns.
- * Maximizes schema field presentation with specialized section components.
+ * 5-Zone Item Tracking View for serialized inventory items.
+ * Focuses on item lifecycle (Received → Allocated → Shipped → Sold)
+ * rather than product-level stock metrics.
  *
+ * Zone 1: Header (product name, serial, status)
+ * Zone 2: Lifecycle Progress (item lifecycle stages)
+ * Zone 3: Alerts (item-contextual only)
+ * Zone 4: Tabs (Overview, Movements, Cost Layers, Quality, Activity)
+ * Zone 5: Main Content + Sidebar
+ *
+ * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  * @see STANDARDS.md - Container/Presenter pattern
- * @see src/components/domain/orders/views/order-detail-view.tsx
  */
 
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import { format, formatDistanceToNow, isPast, isBefore, addDays } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -16,25 +24,21 @@ import {
   MapPin,
   Layers,
   History,
-  TrendingUp,
   Link2,
-  ChevronRight,
   PanelRight,
   AlertTriangle,
   Hash,
   Barcode,
-  Building,
   DollarSign,
   Shield,
-  ArrowUp,
-  ArrowDown,
   ArrowLeftRight,
+  ExternalLink,
+  Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -45,53 +49,38 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
-import { StatusCell } from '@/components/shared/data-table';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { MobileSidebarSheet } from '@/components/shared/mobile-sidebar-sheet';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
+import type { InventoryItemAlert } from '@/lib/schemas/inventory/item-alerts';
+import { InventoryItemAlerts } from '../alerts/inventory-item-alerts';
 import {
-  FORECAST_ACCURACY_CONFIG,
-  getForecastAccuracyLevel,
-} from '../inventory-status-config';
+  ItemLifecycleProgress,
+  OrderAssociationCard,
+  ItemLifecycleTimeline,
+  type OrderAssociation,
+} from '../components';
 import type { ItemDetailData } from '../item-detail';
-import type { MovementRecord, CostLayer, ForecastData, QualityRecord } from '../item-tabs';
+import type { MovementRecord, CostLayer, QualityRecord } from '../item-tabs';
+import { INVENTORY_STATUS_CONFIG, MOVEMENT_TYPE_CONFIG } from '../inventory-status-config';
+import { getMovementReferenceLink } from '../movement-reference-links';
+import { StatusCell } from '@/components/shared/data-table';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-/** Location breakdown for stock distribution */
-export interface LocationStock {
-  id: string;
-  locationCode: string;
-  locationName: string;
-  quantityOnHand: number;
-  quantityAllocated: number;
-  quantityAvailable: number;
-  totalValue: number;
-  utilizationPercent?: number;
-}
-
-/** Supplier info for the item */
-export interface SupplierInfo {
-  id: string;
-  name: string;
-  code?: string;
-  leadTimeDays?: number;
-  lastPurchasePrice?: number;
-  lastOrderDate?: Date;
-}
-
 export interface InventoryDetailViewProps {
   item: ItemDetailData;
   movements?: MovementRecord[];
   costLayers?: CostLayer[];
-  forecasts?: ForecastData[];
   qualityRecords?: QualityRecord[];
-  locationBreakdown?: LocationStock[];
-  suppliers?: SupplierInfo[];
-  reorderPoint?: number;
-  maxStockLevel?: number;
-  safetyStock?: number;
+  /** Zone 3: Alerts (derived from item state, item-contextual only) */
+  alerts?: InventoryItemAlert[];
+  /** Handler to dismiss an alert */
+  onDismissAlert?: (alertId: string) => void;
+  /** Order association data (derived from movements) */
+  orderAssociation?: OrderAssociation | null;
   activeTab: string;
   onTabChange: (tab: string) => void;
   showMetaPanel: boolean;
@@ -99,54 +88,24 @@ export interface InventoryDetailViewProps {
   activities?: UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
+  /** Handler to open activity logging dialog */
+  onLogActivity?: () => void;
   isLoadingMovements?: boolean;
   isLoadingCostLayers?: boolean;
-  isLoadingForecasts?: boolean;
   isLoadingQuality?: boolean;
+  /** Tab counts from composite hook */
+  counts?: {
+    movements: number;
+    costLayers: number;
+    qualityRecords: number;
+    activities: number;
+  };
   className?: string;
 }
 
 // ============================================================================
-// LOCAL CONFIGURATIONS
+// COMPONENTS
 // ============================================================================
-
-const INVENTORY_STATUS_DETAIL_CONFIG: Record<string, { label: string; color: string }> = {
-  available: {
-    label: 'Available',
-    color: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
-  },
-  allocated: {
-    label: 'Allocated',
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-  },
-  sold: {
-    label: 'Sold',
-    color: 'bg-secondary text-secondary-foreground',
-  },
-  damaged: {
-    label: 'Damaged',
-    color: 'bg-destructive/10 text-destructive',
-  },
-  returned: {
-    label: 'Returned',
-    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
-  },
-  quarantined: {
-    label: 'Quarantined',
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
-  },
-};
-
-const MOVEMENT_ICON_MAP: Record<string, typeof ArrowUp> = {
-  receive: ArrowDown,
-  allocate: ArrowLeftRight,
-  deallocate: ArrowLeftRight,
-  pick: ArrowUp,
-  ship: ArrowUp,
-  adjust: ArrowLeftRight,
-  return: ArrowDown,
-  transfer: ArrowLeftRight,
-};
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -166,16 +125,32 @@ function getExpiryStatus(
   return { isExpired, isExpiringSoon, text };
 }
 
-function calculateStockLevelPercent(
-  current: number,
-  max: number
-): number {
-  if (max <= 0) return 0;
-  return Math.min(Math.round((current / max) * 100), 100);
-}
-
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
+}
+
+/**
+ * Derive order association from movements data
+ */
+function deriveOrderAssociation(movements: MovementRecord[] = []): OrderAssociation | null {
+  // Find the allocation or shipment movement with order reference
+  const orderMovement = movements.find(
+    (m) =>
+      (m.movementType === 'allocate' || m.movementType === 'ship') &&
+      m.referenceType === 'order' &&
+      m.referenceId
+  );
+
+  if (!orderMovement || !orderMovement.referenceId) {
+    return null;
+  }
+
+  return {
+    orderId: orderMovement.referenceId,
+    orderNumber: orderMovement.referenceNumber || `O-${orderMovement.referenceId.slice(0, 8)}`,
+    status: 'shipped', // We can enhance this later by fetching order status
+    orderDate: orderMovement.performedAt,
+  };
 }
 
 // ============================================================================
@@ -211,16 +186,22 @@ function MetaChipsRow({ items }: { items: MetaChip[] }) {
 
 interface InventoryHeaderProps {
   item: ItemDetailData;
-  reorderPoint?: number;
 }
 
-function InventoryHeader({ item, reorderPoint }: InventoryHeaderProps) {
-  const statusConfig =
-    INVENTORY_STATUS_DETAIL_CONFIG[item.status] ?? INVENTORY_STATUS_DETAIL_CONFIG.available;
+function InventoryHeader({ item }: InventoryHeaderProps) {
   const expiryStatus = getExpiryStatus(item.expiryDate);
-  const isLowStock = reorderPoint !== undefined && item.quantityAvailable < reorderPoint;
 
+  // Build meta items: Serial number first (item identifier), then SKU, location, lot
   const metaItems: MetaChip[] = [
+    ...(item.serialNumber
+      ? [
+          {
+            label: 'Serial',
+            value: item.serialNumber,
+            icon: <Barcode className="h-3.5 w-3.5" />,
+          },
+        ]
+      : []),
     { label: 'SKU', value: item.productSku, icon: <Hash className="h-3.5 w-3.5" /> },
     {
       label: 'Location',
@@ -236,15 +217,6 @@ function InventoryHeader({ item, reorderPoint }: InventoryHeaderProps) {
           },
         ]
       : []),
-    ...(item.serialNumber
-      ? [
-          {
-            label: 'S/N',
-            value: item.serialNumber,
-            icon: <Barcode className="h-3.5 w-3.5" />,
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -255,16 +227,16 @@ function InventoryHeader({ item, reorderPoint }: InventoryHeaderProps) {
             {item.productName}
           </h1>
           <div className="flex items-center gap-2">
-            <Badge className={cn('gap-1 text-[11px]', statusConfig.color)}>
-              <Package className="h-3 w-3" />
-              {statusConfig.label}
-            </Badge>
-            {item.qualityStatus && (
+            <StatusCell
+              status={item.status}
+              statusConfig={INVENTORY_STATUS_CONFIG}
+              showIcon
+              className="text-[11px]"
+            />
+            {item.qualityStatus && item.qualityStatus !== 'good' && (
               <Badge
                 className={cn(
                   'text-[11px]',
-                  item.qualityStatus === 'good' &&
-                    'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
                   item.qualityStatus === 'damaged' && 'bg-destructive/10 text-destructive',
                   item.qualityStatus === 'expired' &&
                     'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
@@ -275,16 +247,11 @@ function InventoryHeader({ item, reorderPoint }: InventoryHeaderProps) {
                 {item.qualityStatus.charAt(0).toUpperCase() + item.qualityStatus.slice(1)}
               </Badge>
             )}
-            {isLowStock && (
-              <Badge className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
-                Low Stock
-              </Badge>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Expiry Alert */}
+      {/* Expiry Alert (inline, for items with expiry dates) */}
       {(expiryStatus.isExpired || expiryStatus.isExpiringSoon) && (
         <div
           className={cn(
@@ -304,113 +271,6 @@ function InventoryHeader({ item, reorderPoint }: InventoryHeaderProps) {
   );
 }
 
-// ============================================================================
-// STOCK LEVEL VISUALIZATION
-// ============================================================================
-
-interface StockLevelVisualizationProps {
-  item: ItemDetailData;
-  reorderPoint?: number;
-  maxStockLevel?: number;
-  safetyStock?: number;
-}
-
-function StockLevelVisualization({
-  item,
-  reorderPoint = 10,
-  maxStockLevel = 100,
-  safetyStock = 5,
-}: StockLevelVisualizationProps) {
-  const reorderPercent = calculateStockLevelPercent(reorderPoint, maxStockLevel);
-  const safetyPercent = calculateStockLevelPercent(safetyStock, maxStockLevel);
-  const availablePercent = calculateStockLevelPercent(item.quantityAvailable, maxStockLevel);
-
-  const isLowStock = item.quantityAvailable <= reorderPoint;
-  const isCritical = item.quantityAvailable <= safetyStock;
-
-  return (
-    <section>
-      <h2 className="text-base font-semibold text-foreground mb-4">Stock Levels</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Quantity Cards */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold tabular-nums">{item.quantityOnHand}</div>
-            <div className="text-sm text-muted-foreground">On Hand</div>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold tabular-nums text-blue-600">
-              {item.quantityAllocated}
-            </div>
-            <div className="text-sm text-muted-foreground">Allocated</div>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <div
-              className={cn(
-                'text-3xl font-bold tabular-nums',
-                isCritical
-                  ? 'text-destructive'
-                  : isLowStock
-                    ? 'text-amber-600'
-                    : 'text-green-600'
-              )}
-            >
-              {item.quantityAvailable}
-            </div>
-            <div className="text-sm text-muted-foreground">Available</div>
-          </div>
-        </div>
-
-        {/* Progress Visualization */}
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Stock Level</span>
-              <span className="font-medium tabular-nums">{availablePercent}% of max</span>
-            </div>
-            <div className="relative">
-              <Progress
-                value={availablePercent}
-                className={cn(
-                  'h-3',
-                  isCritical && '[&>div]:bg-destructive',
-                  isLowStock && !isCritical && '[&>div]:bg-amber-500'
-                )}
-              />
-              {/* Reorder Point Marker */}
-              <div
-                className="absolute top-0 h-3 w-0.5 bg-amber-500"
-                style={{ left: `${reorderPercent}%` }}
-                title={`Reorder Point: ${reorderPoint}`}
-              />
-              {/* Safety Stock Marker */}
-              <div
-                className="absolute top-0 h-3 w-0.5 bg-destructive"
-                style={{ left: `${safetyPercent}%` }}
-                title={`Safety Stock: ${safetyStock}`}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-destructive rounded-full" />
-              Safety ({safetyStock})
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-amber-500 rounded-full" />
-              Reorder ({reorderPoint})
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-muted rounded-full" />
-              Max ({maxStockLevel})
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ============================================================================
 // COSTING BREAKDOWN
@@ -423,9 +283,10 @@ interface CostingBreakdownProps {
 
 function CostingBreakdown({ item, costLayers = [] }: CostingBreakdownProps) {
   const totalLayerValue = costLayers.reduce((sum, l) => sum + l.totalCost, 0);
+  const totalRemaining = costLayers.reduce((sum, l) => sum + l.quantityRemaining, 0);
   const weightedAvgCost =
-    costLayers.length > 0
-      ? totalLayerValue / costLayers.reduce((sum, l) => sum + l.quantityRemaining, 0)
+    costLayers.length > 0 && totalRemaining > 0
+      ? totalLayerValue / totalRemaining
       : item.unitCost;
 
   return (
@@ -489,71 +350,6 @@ function CostingBreakdown({ item, costLayers = [] }: CostingBreakdownProps) {
 }
 
 // ============================================================================
-// LOCATION BREAKDOWN
-// ============================================================================
-
-interface LocationBreakdownProps {
-  locationBreakdown?: LocationStock[];
-}
-
-function LocationBreakdown({ locationBreakdown = [] }: LocationBreakdownProps) {
-  if (locationBreakdown.length === 0) return null;
-
-  const totalQuantity = locationBreakdown.reduce((sum, l) => sum + l.quantityOnHand, 0);
-
-  return (
-    <section>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-foreground">Stock by Location</h2>
-        <span className="text-sm text-muted-foreground">
-          {locationBreakdown.length} locations
-        </span>
-      </div>
-      <div className="space-y-2">
-        {locationBreakdown.map((location) => {
-          const percent =
-            totalQuantity > 0
-              ? Math.round((location.quantityOnHand / totalQuantity) * 100)
-              : 0;
-
-          return (
-            <div
-              key={location.id}
-              className="flex items-center justify-between py-2 border-b border-border last:border-0"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 bg-muted rounded flex items-center justify-center text-xs font-medium">
-                  <MapPin className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{location.locationName}</div>
-                  <div className="text-xs text-muted-foreground">{location.locationCode}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <div className="text-sm font-medium tabular-nums">
-                    {location.quantityOnHand}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {location.quantityAvailable} avail
-                  </div>
-                </div>
-                <div className="w-16 text-right">
-                  <Badge variant="secondary" className="text-xs tabular-nums">
-                    {percent}%
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-// ============================================================================
 // MOVEMENT HISTORY PREVIEW
 // ============================================================================
 
@@ -596,7 +392,8 @@ function MovementHistoryPreview({ movements = [], isLoading }: MovementHistoryPr
       </div>
       <div className="space-y-2">
         {displayMovements.map((movement) => {
-          const Icon = MOVEMENT_ICON_MAP[movement.movementType] || ArrowLeftRight;
+          const movementConfig = MOVEMENT_TYPE_CONFIG[movement.movementType];
+          const Icon = movementConfig?.icon || ArrowLeftRight;
           const isPositive = movement.quantity > 0;
 
           return (
@@ -647,56 +444,6 @@ function MovementHistoryPreview({ movements = [], isLoading }: MovementHistoryPr
 }
 
 // ============================================================================
-// SUPPLIER INFO
-// ============================================================================
-
-interface SupplierInfoSectionProps {
-  suppliers?: SupplierInfo[];
-}
-
-function SupplierInfoSection({ suppliers = [] }: SupplierInfoSectionProps) {
-  if (suppliers.length === 0) return null;
-
-  return (
-    <section>
-      <h2 className="text-base font-semibold text-foreground mb-4">Suppliers</h2>
-      <div className="space-y-2">
-        {suppliers.map((supplier) => (
-          <div
-            key={supplier.id}
-            className="flex items-center justify-between py-2 border-b border-border last:border-0"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
-                <Building className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{supplier.name}</div>
-                {supplier.code && (
-                  <div className="text-xs text-muted-foreground">{supplier.code}</div>
-                )}
-              </div>
-            </div>
-            <div className="text-right text-sm">
-              {supplier.lastPurchasePrice && (
-                <div className="font-medium tabular-nums">
-                  <FormatAmount amount={supplier.lastPurchasePrice} />
-                </div>
-              )}
-              {supplier.leadTimeDays && (
-                <div className="text-xs text-muted-foreground">
-                  {supplier.leadTimeDays}d lead time
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ============================================================================
 // RIGHT META PANEL
 // ============================================================================
 
@@ -707,7 +454,7 @@ interface RightMetaPanelProps {
 function RightMetaPanel({ item }: RightMetaPanelProps) {
   return (
     <aside className="flex flex-col gap-8 p-4 pt-8 lg:sticky lg:self-start lg:top-4">
-      {/* Product Info */}
+      {/* Product Info with link to Product Inventory View */}
       <div>
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
           Product
@@ -716,13 +463,23 @@ function RightMetaPanel({ item }: RightMetaPanelProps) {
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
             <Package className="h-5 w-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-medium truncate">{item.productName}</div>
             <div className="text-xs text-muted-foreground truncate">
               {item.productDescription || 'No description'}
             </div>
           </div>
         </div>
+        {/* View Product Inventory Link */}
+        <Link
+          to="/products/$productId"
+          params={{ productId: item.productId }}
+          search={{ tab: 'inventory' }}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+        >
+          View Product Inventory
+          <ExternalLink className="h-3 w-3" />
+        </Link>
       </div>
       <Separator />
 
@@ -874,7 +631,8 @@ function MovementsTabContent({ movements = [], isLoading }: MovementsTabContentP
     <ScrollArea className="h-[500px]">
       <div className="space-y-2">
         {movements.map((movement) => {
-          const Icon = MOVEMENT_ICON_MAP[movement.movementType] || ArrowLeftRight;
+          const movementConfig = MOVEMENT_TYPE_CONFIG[movement.movementType];
+          const Icon = movementConfig?.icon || ArrowLeftRight;
           const isPositive = movement.quantity > 0;
 
           return (
@@ -897,13 +655,35 @@ function MovementsTabContent({ movements = [], isLoading }: MovementsTabContentP
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium capitalize">{movement.movementType}</span>
                   {movement.referenceType && (
-                    <Badge variant="outline" className="text-xs">
-                      {movement.referenceType.replace(/_/g, ' ')}
-                    </Badge>
+                    (() => {
+                      const referenceLink = getMovementReferenceLink(
+                        movement.referenceType,
+                        movement.referenceId
+                      );
+                      const displayLabel = movement.referenceNumber
+                        ? movement.referenceNumber
+                        : movement.referenceType.replace(/_/g, ' ');
+                      return referenceLink ? (
+                        <Link
+                          {...referenceLink}
+                          className="inline-flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Badge variant="outline" className="text-xs hover:bg-accent transition-colors cursor-pointer">
+                            {displayLabel}
+                            <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
+                          </Badge>
+                        </Link>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          {displayLabel}
+                        </Badge>
+                      );
+                    })()
                   )}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {movement.performedBy} - {format(new Date(movement.performedAt), 'PPp')}
+                  {movement.performedBy} • {format(new Date(movement.performedAt), 'PPp')}
                 </div>
                 {movement.reason && (
                   <div className="text-sm text-muted-foreground mt-1">{movement.reason}</div>
@@ -1038,84 +818,6 @@ function CostLayersTabContent({ costLayers = [], isLoading }: CostLayersTabConte
 }
 
 // ============================================================================
-// FORECASTS TAB CONTENT
-// ============================================================================
-
-interface ForecastsTabContentProps {
-  forecasts?: ForecastData[];
-  isLoading?: boolean;
-}
-
-function ForecastsTabContent({ forecasts = [], isLoading }: ForecastsTabContentProps) {
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-4 p-3 border rounded">
-            <Skeleton className="h-6 w-20" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-16" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (forecasts.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p>No forecast data available</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {forecasts.map((forecast) => (
-        <div key={forecast.period} className="flex items-center gap-4 p-3 border rounded-lg">
-          <div className="w-24 font-medium">{forecast.period}</div>
-
-          <div className="flex-1 grid grid-cols-3 gap-4 tabular-nums text-center">
-            <div>
-              <div className="text-sm text-muted-foreground">Forecast</div>
-              <div className="font-medium">{forecast.forecastedDemand}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground">Actual</div>
-              <div className="font-medium">{forecast.actualDemand ?? '-'}</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground">Variance</div>
-              <div
-                className={cn(
-                  'font-medium',
-                  forecast.variance && forecast.variance > 0 && 'text-red-600',
-                  forecast.variance && forecast.variance < 0 && 'text-green-600'
-                )}
-              >
-                {forecast.variance !== undefined
-                  ? `${forecast.variance > 0 ? '+' : ''}${forecast.variance}`
-                  : '-'}
-              </div>
-            </div>
-          </div>
-
-          {forecast.accuracy !== undefined && (
-            <StatusCell
-              status={getForecastAccuracyLevel(forecast.accuracy)}
-              statusConfig={FORECAST_ACCURACY_CONFIG}
-              className="tabular-nums"
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================================
 // QUALITY TAB CONTENT
 // ============================================================================
 
@@ -1208,13 +910,10 @@ export const InventoryDetailView = memo(function InventoryDetailView({
   item,
   movements = [],
   costLayers = [],
-  forecasts = [],
   qualityRecords = [],
-  locationBreakdown = [],
-  suppliers = [],
-  reorderPoint = 10,
-  maxStockLevel = 100,
-  safetyStock = 5,
+  alerts = [],
+  onDismissAlert,
+  orderAssociation,
   activeTab,
   onTabChange,
   showMetaPanel,
@@ -1222,38 +921,59 @@ export const InventoryDetailView = memo(function InventoryDetailView({
   activities = [],
   activitiesLoading = false,
   activitiesError,
+  onLogActivity,
   isLoadingMovements,
   isLoadingCostLayers,
-  isLoadingForecasts,
   isLoadingQuality,
+  counts,
   className,
 }: InventoryDetailViewProps) {
-  const movementsCount = useMemo(() => movements.length, [movements]);
+  // Use counts from hook or fallback to array lengths
+  const movementsCount = counts?.movements ?? movements.length;
+  const costLayersCount = counts?.costLayers ?? costLayers.length;
+  const qualityCount = counts?.qualityRecords ?? qualityRecords.length;
+  const activitiesCount = counts?.activities ?? activities.length;
+
+  // Derive order association from movements if not provided
+  const derivedOrderAssociation = useMemo(() => {
+    if (orderAssociation !== undefined) return orderAssociation;
+    return deriveOrderAssociation(movements);
+  }, [orderAssociation, movements]);
+
+  // Determine lifecycle flags from movements
+  const hasBeenAllocated = useMemo(
+    () => movements.some((m) => m.movementType === 'allocate'),
+    [movements]
+  );
+  const hasBeenShipped = useMemo(
+    () => movements.some((m) => m.movementType === 'ship'),
+    [movements]
+  );
+
+  // Tab prefetch on hover/focus for lazy loading optimization
+  const prefetchTab = useCallback((tabId: string) => {
+    // Future: Implement actual lazy loading with React.lazy() imports
+    // For now, this is a no-op placeholder for the pattern
+    void tabId;
+  }, []);
 
   return (
-    <div
-      className={cn(
-        'flex flex-1 flex-col min-w-0 m-2 border border-border rounded-lg',
-        className
-      )}
-    >
-      {/* Top Bar */}
-      <div className="flex items-center justify-between gap-4 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Inventory</span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">{item.productSku}</span>
+    <div className={cn('space-y-6', className)}>
+      {/* Zone 1: Entity Header with panel toggle */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <InventoryHeader item={item} />
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
                   onClick={() => copyToClipboard(window.location.href)}
+                  aria-label="Copy link"
                 >
                   <Link2 className="h-4 w-4" />
                 </Button>
@@ -1267,8 +987,9 @@ export const InventoryDetailView = memo(function InventoryDetailView({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={cn('h-8 w-8', showMetaPanel && 'bg-muted')}
+                  className={cn('h-8 w-8 hidden lg:flex min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0', showMetaPanel && 'bg-muted')}
                   onClick={onToggleMetaPanel}
+                  aria-label={showMetaPanel ? 'Hide details panel' : 'Show details panel'}
                 >
                   <PanelRight className="h-4 w-4" />
                 </Button>
@@ -1279,141 +1000,167 @@ export const InventoryDetailView = memo(function InventoryDetailView({
         </div>
       </div>
 
-      {/* Main Content - FULL WIDTH (no max-w-7xl) */}
-      <div className="flex flex-1 flex-col bg-background px-2 rounded-b-lg min-w-0 border-t">
-        <div className="px-4">
-          <div
-            className={cn(
-              'grid grid-cols-1 gap-12',
-              showMetaPanel ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,320px)]' : 'lg:grid-cols-1'
-            )}
-          >
-            {/* Primary Content */}
-            <div className="space-y-6 pt-4 pb-6">
-              <InventoryHeader item={item} reorderPoint={reorderPoint} />
+      {/* Zone 2: Lifecycle Progress */}
+      <ItemLifecycleProgress
+        currentStatus={item.status}
+        hasBeenAllocated={hasBeenAllocated}
+        hasBeenShipped={hasBeenShipped}
+      />
 
-              <Tabs value={activeTab} onValueChange={onTabChange}>
-                <TabsList className="w-full gap-6 bg-transparent border-b border-border rounded-none h-auto p-0">
-                  <TabsTrigger
-                    value="overview"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                  >
-                    Overview
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="movements"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                  >
-                    Movements ({movementsCount})
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="cost-layers"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                  >
-                    Cost Layers
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="forecasts"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                  >
-                    Forecasts
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="quality"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                  >
-                    Quality
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="activity"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                  >
-                    Activity
-                  </TabsTrigger>
-                </TabsList>
+      {/* Zone 3: Alerts (item-contextual only) */}
+      {alerts.length > 0 && (
+        <InventoryItemAlerts
+          alerts={alerts}
+          onDismiss={onDismissAlert}
+          maxVisible={3}
+        />
+      )}
 
-                {/* Overview Tab - space-y-10 for generous spacing between sections */}
-                <TabsContent value="overview" className="mt-0 pt-6">
-                  <div className="space-y-10">
-                    <StockLevelVisualization
-                      item={item}
-                      reorderPoint={reorderPoint}
-                      maxStockLevel={maxStockLevel}
-                      safetyStock={safetyStock}
-                    />
-                    <CostingBreakdown item={item} costLayers={costLayers} />
-                    <LocationBreakdown locationBreakdown={locationBreakdown} />
-                    <MovementHistoryPreview
-                      movements={movements}
-                      isLoading={isLoadingMovements}
-                    />
-                    <SupplierInfoSection suppliers={suppliers} />
+      {/* Zone 4-5: Main Content Grid */}
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-8',
+          showMetaPanel ? 'lg:grid-cols-[minmax(0,1fr)_320px]' : 'lg:grid-cols-1'
+        )}
+      >
+        {/* Zone 4: Primary Content with Tabs */}
+        <div className="space-y-6 min-w-0">
+          <Tabs value={activeTab} onValueChange={onTabChange}>
+            <TabsList className="w-full gap-6 bg-transparent border-b border-border rounded-none h-auto p-0 flex-wrap">
+              <TabsTrigger
+                value="overview"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
+              >
+                Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="movements"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
+                onMouseEnter={() => prefetchTab('movements')}
+                onFocus={() => prefetchTab('movements')}
+              >
+                Movements{movementsCount > 0 ? ` (${movementsCount})` : ''}
+              </TabsTrigger>
+              <TabsTrigger
+                value="cost-layers"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
+                onMouseEnter={() => prefetchTab('cost-layers')}
+                onFocus={() => prefetchTab('cost-layers')}
+              >
+                Cost Layers{costLayersCount > 0 ? ` (${costLayersCount})` : ''}
+              </TabsTrigger>
+              <TabsTrigger
+                value="quality"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
+                onMouseEnter={() => prefetchTab('quality')}
+                onFocus={() => prefetchTab('quality')}
+              >
+                Quality{qualityCount > 0 ? ` (${qualityCount})` : ''}
+              </TabsTrigger>
+              <TabsTrigger
+                value="activity"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
+                onMouseEnter={() => prefetchTab('activity')}
+                onFocus={() => prefetchTab('activity')}
+              >
+                Activity{activitiesCount > 0 ? ` (${activitiesCount})` : ''}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Overview Tab - Item lifecycle and order association */}
+            <TabsContent value="overview" className="mt-0 pt-6">
+              <div className="space-y-6">
+                {/* Order Association Card (if linked to order) */}
+                <OrderAssociationCard order={derivedOrderAssociation} />
+
+                {/* Item Lifecycle Timeline */}
+                <ItemLifecycleTimeline
+                  currentStatus={item.status}
+                  movements={movements}
+                  receivedAt={item.receivedAt}
+                  locationName={item.locationName}
+                />
+
+                {/* Costing Breakdown (item-level) */}
+                <CostingBreakdown item={item} costLayers={costLayers} />
+
+                {/* Recent Movements Preview */}
+                <MovementHistoryPreview
+                  movements={movements}
+                  isLoading={isLoadingMovements}
+                />
+              </div>
+            </TabsContent>
+
+            {/* Movements Tab */}
+            <TabsContent value="movements" className="mt-0 pt-6">
+              <MovementsTabContent movements={movements} isLoading={isLoadingMovements} />
+            </TabsContent>
+
+            {/* Cost Layers Tab */}
+            <TabsContent value="cost-layers" className="mt-0 pt-6">
+              <CostLayersTabContent
+                costLayers={costLayers}
+                isLoading={isLoadingCostLayers}
+              />
+            </TabsContent>
+
+            {/* Quality Tab */}
+            <TabsContent value="quality" className="mt-0 pt-6">
+              <QualityTabContent
+                qualityRecords={qualityRecords}
+                isLoading={isLoadingQuality}
+              />
+            </TabsContent>
+
+            {/* Activity Tab */}
+            <TabsContent value="activity" className="mt-0 pt-6">
+              <div className="space-y-4">
+                {onLogActivity && (
+                  <div className="flex items-center justify-end">
+                    <Button size="sm" onClick={onLogActivity}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Log Activity
+                    </Button>
                   </div>
-                </TabsContent>
-
-                {/* Movements Tab */}
-                <TabsContent value="movements" className="mt-0 pt-6">
-                  <MovementsTabContent movements={movements} isLoading={isLoadingMovements} />
-                </TabsContent>
-
-                {/* Cost Layers Tab */}
-                <TabsContent value="cost-layers" className="mt-0 pt-6">
-                  <CostLayersTabContent
-                    costLayers={costLayers}
-                    isLoading={isLoadingCostLayers}
-                  />
-                </TabsContent>
-
-                {/* Forecasts Tab */}
-                <TabsContent value="forecasts" className="mt-0 pt-6">
-                  <ForecastsTabContent forecasts={forecasts} isLoading={isLoadingForecasts} />
-                </TabsContent>
-
-                {/* Quality Tab */}
-                <TabsContent value="quality" className="mt-0 pt-6">
-                  <QualityTabContent
-                    qualityRecords={qualityRecords}
-                    isLoading={isLoadingQuality}
-                  />
-                </TabsContent>
-
-                {/* Activity Tab */}
-                <TabsContent value="activity" className="mt-0 pt-6">
-                  <UnifiedActivityTimeline
-                    activities={activities}
-                    isLoading={activitiesLoading}
-                    hasError={!!activitiesError}
-                    error={activitiesError || undefined}
-                    title="Activity Timeline"
-                    description="Complete history of inventory changes, stock movements, and system events"
-                    showFilters={true}
-                    emptyMessage="No activity recorded yet"
-                    emptyDescription="Inventory activities will appear here when changes are made."
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* Animated Side Meta Panel */}
-            <AnimatePresence initial={false}>
-              {showMetaPanel && (
-                <motion.div
-                  key="meta-panel"
-                  initial={{ x: 80, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: 80, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-                  className="lg:border-l lg:border-border"
-                >
-                  <RightMetaPanel item={item} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                )}
+                <UnifiedActivityTimeline
+                  activities={activities}
+                  isLoading={activitiesLoading}
+                  hasError={!!activitiesError}
+                  error={activitiesError || undefined}
+                  title="Activity Timeline"
+                  description="Complete history of inventory changes, stock movements, and system events"
+                  showFilters={true}
+                  emptyMessage="No activity recorded yet"
+                  emptyDescription="Inventory activities will appear here when changes are made."
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
 
-        <Separator className="mt-auto" />
+        {/* Zone 5: Animated Side Meta Panel (Desktop) */}
+        <AnimatePresence initial={false}>
+          {showMetaPanel && (
+            <motion.div
+              key="meta-panel"
+              initial={{ x: 80, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 80, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+              className="hidden lg:block border-l border-border pl-6 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto"
+            >
+              <RightMetaPanel item={item} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+
+      {/* Zone 5: Mobile FAB + Sheet */}
+      <MobileSidebarSheet title="Item Details" ariaLabel="Show item details">
+        <RightMetaPanel item={item} />
+      </MobileSidebarSheet>
     </div>
   );
 });

@@ -28,6 +28,7 @@ import {
   formatResultSummary,
 } from '@/lib/ai/tools/formatters';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // GET ORDERS TOOL
@@ -182,7 +183,7 @@ export const getOrdersTool = tool({
         text: `${table}\n\n${summary}${moreText}`,
       };
     } catch (error) {
-      console.error('Error in getOrdersTool:', error);
+      logger.error('Error in getOrdersTool', error as Error, {});
       yield {
         text: `Failed to retrieve orders: ${error instanceof Error ? error.message : 'Unknown error'}. Try narrowing your search criteria.`,
       };
@@ -337,7 +338,7 @@ export const getInvoicesTool = tool({
         text: `${table}\n\n${summary}${overdueNote}`,
       };
     } catch (error) {
-      console.error('Error in getInvoicesTool:', error);
+      logger.error('Error in getInvoicesTool', error as Error, {});
       yield {
         text: `Failed to retrieve invoices: ${error instanceof Error ? error.message : 'Unknown error'}. Try narrowing your search criteria.`,
       };
@@ -461,7 +462,7 @@ export const createOrderDraftTool = tool({
         `Create order for "${customer.name}" with ${lineItems.length} item(s)`
       );
     } catch (error) {
-      console.error('Error in createOrderDraftTool:', error);
+      logger.error('Error in createOrderDraftTool', error as Error, {});
       return createErrorResult(
         'Failed to create order draft',
         'Verify all product IDs are valid and try again',
@@ -598,7 +599,7 @@ export const createQuoteDraftTool = tool({
         `Create quote "${title}" for "${customer.name}" with ${lineItems.length} item(s)`
       );
     } catch (error) {
-      console.error('Error in createQuoteDraftTool:', error);
+      logger.error('Error in createQuoteDraftTool', error as Error, {});
       return createErrorResult(
         'Failed to create quote draft',
         'Verify all product IDs are valid and try again',

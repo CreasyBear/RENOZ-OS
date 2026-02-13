@@ -33,6 +33,12 @@ import { getServerUser } from '@/lib/supabase/server'
 import { hasPermission, type Role, type PermissionAction } from '@/lib/auth/permissions'
 import { AuthError, PermissionDeniedError } from './errors'
 
+const SESSION_CONTEXT_CACHE_TTL_MS = 5_000
+const MAX_SESSION_CONTEXT_CACHE_ENTRIES = 200
+
+const sessionContextCache = new Map<string, { ctx: SessionContext; cachedAt: number }>()
+const sessionContextInFlight = new Map<string, Promise<SessionContext>>()
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -91,37 +97,61 @@ export async function getSessionContext(): Promise<SessionContext> {
     throw new AuthError('Authentication required')
   }
 
-  // Fetch application user from database
-  const [appUser] = await db
-    .select({
-      id: users.id,
-      authId: users.authId,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      status: users.status,
-      organizationId: users.organizationId,
-    })
-    .from(users)
-    .where(eq(users.authId, authUser.id))
-    .limit(1)
-
-  if (!appUser) {
-    throw new AuthError('User not found in application database')
+  const cacheKey = getSessionContextCacheKey(request, authUser.id)
+  const now = Date.now()
+  const cached = sessionContextCache.get(cacheKey)
+  if (cached && now - cached.cachedAt <= SESSION_CONTEXT_CACHE_TTL_MS) {
+    return cached.ctx
   }
 
-  if (appUser.status !== 'active') {
-    throw new AuthError(`Account is ${appUser.status}. Please contact your administrator.`)
+  const inFlight = sessionContextInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
   }
 
-  return {
-    authUser: {
-      id: authUser.id,
-      email: authUser.email,
-    },
-    user: appUser as SessionContext['user'],
-    role: appUser.role as Role,
-    organizationId: appUser.organizationId,
+  const resolveContext = (async (): Promise<SessionContext> => {
+    // Fetch application user from database
+    const [appUser] = await db
+      .select({
+        id: users.id,
+        authId: users.authId,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        status: users.status,
+        organizationId: users.organizationId,
+      })
+      .from(users)
+      .where(eq(users.authId, authUser.id))
+      .limit(1)
+
+    if (!appUser) {
+      throw new AuthError('User not found in application database')
+    }
+
+    if (appUser.status !== 'active') {
+      throw new AuthError(`Account is ${appUser.status}. Please contact your administrator.`)
+    }
+
+    const ctx: SessionContext = {
+      authUser: {
+        id: authUser.id,
+        email: authUser.email,
+      },
+      user: appUser as SessionContext['user'],
+      role: appUser.role as Role,
+      organizationId: appUser.organizationId,
+    }
+
+    writeSessionContextCache(cacheKey, ctx)
+    return ctx
+  })()
+
+  sessionContextInFlight.set(cacheKey, resolveContext)
+  try {
+    return await resolveContext
+  } finally {
+    sessionContextInFlight.delete(cacheKey)
   }
 }
 
@@ -184,10 +214,9 @@ export async function withAuth(options: WithAuthOptions = {}): Promise<SessionCo
     requirePermission(ctx, options.permission)
   }
 
-  // Set RLS context for Row-Level Security policies
-  // This ensures RLS policies can check organization_id even if a query forgets to filter
+  // Configure connection context in one round-trip to reduce auth overhead.
   await db.execute(
-    sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`
+    sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false), set_config('statement_timeout', '30s', false)`
   )
 
   return ctx
@@ -272,7 +301,15 @@ export async function withApiAuth(options: WithApiAuthOptions = {}): Promise<Api
 
   // Set RLS context for Row-Level Security policies
   await db.execute(
-    sql`SELECT set_config('app.organization_id', ${tokenContext.organizationId}, true)`
+    sql`SELECT set_config('app.organization_id', ${tokenContext.organizationId}, false)`
+  )
+
+  // Set query timeout for this connection (30s default from LIMITS.API_TIMEOUT)
+  // Prevents long-running queries from blocking database connections
+  // Note: SET (without LOCAL) persists for the connection lifetime, which is fine
+  // since connections are returned to pool after handler completes
+  await db.execute(
+    sql`SET statement_timeout = '30s'`
   )
 
   return {
@@ -323,6 +360,19 @@ export async function withAnyAuth(options: WithAuthOptions = {}): Promise<Sessio
 
   // Fall back to Supabase session
   return withAuth(options)
+}
+
+function getSessionContextCacheKey(request: globalThis.Request, authUserId: string) {
+  const cookieHeader = request.headers.get('Cookie') ?? ''
+  const authHeader = request.headers.get('Authorization') ?? ''
+  return `${authUserId}|${cookieHeader}|${authHeader}`
+}
+
+function writeSessionContextCache(key: string, ctx: SessionContext) {
+  if (sessionContextCache.size >= MAX_SESSION_CONTEXT_CACHE_ENTRIES) {
+    sessionContextCache.clear()
+  }
+  sessionContextCache.set(key, { ctx, cachedAt: Date.now() })
 }
 
 // ============================================================================

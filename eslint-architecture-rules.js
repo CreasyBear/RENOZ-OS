@@ -23,6 +23,7 @@ export const domainPresenterRules = {
   rules: {
     // =========================================================================
     // RULE 1: Prevent data fetching hooks in presenter components
+    // RULE 2: Prevent server function imports in components
     // =========================================================================
     'no-restricted-imports': [
       'error',
@@ -71,17 +72,6 @@ export const domainPresenterRules = {
               🔗 See: src/hooks/ for hook examples
             `.trim(),
           },
-        ],
-      },
-    ],
-
-    // =========================================================================
-    // RULE 2: Prevent server function imports in components
-    // =========================================================================
-    'no-restricted-imports': [
-      'error',
-      {
-        patterns: [
           {
             group: ['@/server/functions/**'],
             message: `

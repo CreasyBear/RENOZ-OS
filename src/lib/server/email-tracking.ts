@@ -17,6 +17,7 @@ import {
   createEmailOpenedActivity,
   createEmailClickedActivity,
 } from "@/lib/server/activity-bridge";
+import { logger } from "@/lib/logger";
 
 // ============================================================================
 // CONSTANTS
@@ -108,7 +109,7 @@ export async function recordEmailOpen(emailId: string): Promise<{ success: boole
       .limit(1);
 
     if (!email) {
-      console.warn(`[email-tracking] Email not found: ${emailId}`);
+      logger.warn('[email-tracking] Email not found', { emailId });
       return { success: false, alreadyOpened: false };
     }
 
@@ -132,10 +133,10 @@ export async function recordEmailOpen(emailId: string): Promise<{ success: boole
       recipientEmail: email.toAddress,
     });
 
-    console.log(`[email-tracking] Recorded email open: ${emailId}`);
+    logger.debug('[email-tracking] Recorded email open', { emailId });
     return { success: true, alreadyOpened: false };
   } catch (error) {
-    console.error("[email-tracking] Error recording email open:", error);
+    logger.error("[email-tracking] Error recording email open", error as Error, { emailId });
     return { success: false, alreadyOpened: false };
   }
 }
@@ -172,7 +173,7 @@ export async function recordEmailClick(
       .limit(1);
 
     if (!email) {
-      console.warn(`[email-tracking] Email not found for click: ${emailId}`);
+      logger.warn('[email-tracking] Email not found for click', { emailId });
       return { success: false, redirectUrl: originalUrl };
     }
 
@@ -233,10 +234,10 @@ export async function recordEmailClick(
       });
     }
 
-    console.log(`[email-tracking] Recorded link click: ${emailId} / ${linkId}`);
+    logger.debug('[email-tracking] Recorded link click', { emailId, linkId });
     return { success: true, redirectUrl: originalUrl };
   } catch (error) {
-    console.error("[email-tracking] Error recording link click:", error);
+    logger.error("[email-tracking] Error recording link click", error as Error, { emailId, linkId });
     // Still return the redirect URL so the user isn't blocked
     return { success: false, redirectUrl: originalUrl };
   }

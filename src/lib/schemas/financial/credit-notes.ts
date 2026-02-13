@@ -147,3 +147,64 @@ export const creditNotesByCustomerQuerySchema = paginationSchema.extend({
 });
 
 export type CreditNotesByCustomerQuery = z.infer<typeof creditNotesByCustomerQuerySchema>;
+
+// ============================================================================
+// RESPONSE TYPES (Server Function Return Types)
+// ============================================================================
+
+/**
+ * Credit note with customer relation for display.
+ * Matches the shape returned by listCreditNotes server function.
+ */
+export interface CreditNoteWithCustomer {
+  id: string;
+  creditNoteNumber: string | null;
+  customerId: string;
+  orderId: string | null;
+  amount: number;
+  gstAmount: number | null;
+  reason: string | null;
+  internalNotes: string | null;
+  status: CreditNoteStatus;
+  /** Set when status transitions to 'issued' - not in DB yet, always null for list */
+  issuedAt?: Date | null;
+  appliedAt: Date | null;
+  appliedToOrderId: string | null;
+  /** Set when status is 'voided' - not in DB yet, always null for list */
+  voidedAt?: Date | null;
+  voidReason?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  organizationId: string;
+  createdBy: string | null;
+  updatedBy: string | null;
+  deletedAt: Date | null;
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  order: {
+    id: string;
+    orderNumber: string | null;
+  } | null;
+}
+
+/**
+ * List credit notes result from listCreditNotes server function.
+ * Matches the structure returned by the server function.
+ */
+export interface ListCreditNotesResult {
+  items: CreditNoteWithCustomer[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  totals: {
+    totalAmount: number;
+    draftCount: number;
+    issuedCount: number;
+    appliedCount: number;
+  };
+}

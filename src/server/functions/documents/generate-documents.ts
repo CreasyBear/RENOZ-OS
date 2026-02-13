@@ -12,7 +12,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { orders } from "drizzle/schema";
+import { orders, generatedDocuments } from "drizzle/schema";
 import {
   client,
   documentEvents,
@@ -170,21 +170,20 @@ const getDocumentStatusSchema = z.object({
 });
 
 /**
- * Get the status/URL of a generated document
+ * Get the status/URL of a generated document (quote or invoice)
+ *
+ * Queries generated_documents by (organizationId, entityType='order', entityId=orderId, documentType).
+ * No row = status "pending" (document not yet generated).
  */
 export const getDocumentStatus = createServerFn({ method: "GET" })
   .inputValidator(getDocumentStatusSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
 
-    // TODO: Once we have generated_documents table, query it here
-    // For now, check if PDF URL exists on the order
     const [order] = await db
       .select({
         id: orders.id,
         orderNumber: orders.orderNumber,
-        // quotePdfUrl: orders.quotePdfUrl, // TODO: Add after migration
-        // invoicePdfUrl: orders.invoicePdfUrl, // TODO: Add after migration
       })
       .from(orders)
       .where(
@@ -200,10 +199,35 @@ export const getDocumentStatus = createServerFn({ method: "GET" })
       throw new NotFoundError("Order not found", "order");
     }
 
+    const [doc] = await db
+      .select({
+        storageUrl: generatedDocuments.storageUrl,
+        generatedAt: generatedDocuments.generatedAt,
+      })
+      .from(generatedDocuments)
+      .where(
+        and(
+          eq(generatedDocuments.organizationId, ctx.organizationId),
+          eq(generatedDocuments.entityType, "order"),
+          eq(generatedDocuments.entityId, order.id),
+          eq(generatedDocuments.documentType, data.documentType)
+        )
+      )
+      .limit(1);
+
+    if (!doc) {
+      return {
+        orderId: order.id,
+        documentType: data.documentType,
+        status: "pending" as const,
+        url: null,
+      };
+    }
+
     return {
       orderId: order.id,
       documentType: data.documentType,
-      status: "pending", // TODO: Return actual status once migration is done
-      url: null, // TODO: Return actual URL once migration is done
+      status: "completed" as const,
+      url: doc.storageUrl,
     };
   });

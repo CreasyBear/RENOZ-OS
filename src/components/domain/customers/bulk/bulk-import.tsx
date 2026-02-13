@@ -269,7 +269,7 @@ function FieldMappingStep({
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Missing Required Field</AlertTitle>
           <AlertDescription>
-            You must map a column to "Company Name" to continue.
+            You must map a column to &quot;Company Name&quot; to continue.
           </AlertDescription>
         </Alert>
       )}
@@ -334,7 +334,7 @@ function ValidationStep({ parsedRows, totalRows }: ValidationStepProps) {
                 </div>
               ))}
               {errorRows.length > 10 && (
-                <p className="text-sm">...and {errorRows.length - 10} more errors</p>
+                <p className="text-sm">…and {errorRows.length - 10} more errors</p>
               )}
             </ScrollArea>
           </AlertDescription>
@@ -392,7 +392,7 @@ function ValidationStep({ parsedRows, totalRows }: ValidationStepProps) {
 // ============================================================================
 
 interface ImportProgressStepProps {
-  progress: number
+  progress?: number
   result: ImportResult | null
   isComplete: boolean
 }
@@ -403,12 +403,16 @@ function ImportProgressStep({ progress, result, isComplete }: ImportProgressStep
       {!isComplete ? (
         <div className="text-center py-8">
           <RefreshCw className="h-12 w-12 text-primary animate-spin mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">Importing Customers...</h3>
+          <h3 className="text-lg font-medium mb-2">Importing Customers…</h3>
           <p className="text-muted-foreground mb-4">
-            Please don't close this window
+            Please don&apos;t close this window
           </p>
-          <Progress value={progress} className="max-w-md mx-auto" />
-          <p className="text-sm text-muted-foreground mt-2">{progress}% complete</p>
+          {progress !== undefined && (
+            <>
+              <Progress value={progress} className="max-w-md mx-auto" />
+              <p className="text-sm text-muted-foreground mt-2">{progress}% complete</p>
+            </>
+          )}
         </div>
       ) : result ? (
         <div className="text-center py-8">
@@ -457,12 +461,10 @@ function ImportProgressStep({ progress, result, isComplete }: ImportProgressStep
 
 export function BulkImport({ onImport, onCancel, className }: BulkImportProps) {
   const [currentStep, setCurrentStep] = useState(1)
-  const [_file, setFile] = useState<File | null>(null)
   const [csvColumns, setCsvColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<string[][]>([])
   const [mappings, setMappings] = useState<FieldMapping[]>([])
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
-  const [importProgress, setImportProgress] = useState(0)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [isImporting, setIsImporting] = useState(false)
 
@@ -527,7 +529,6 @@ export function BulkImport({ onImport, onCancel, className }: BulkImportProps) {
 
   // Handle file selection
   const handleFileSelected = (selectedFile: File) => {
-    setFile(selectedFile)
     parseCSV(selectedFile)
   }
 
@@ -547,12 +548,7 @@ export function BulkImport({ onImport, onCancel, className }: BulkImportProps) {
 
     const validRows = parsedRows.filter((r) => r.errors.length === 0)
 
-    // Simulate progress
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((r) => setTimeout(r, 300))
-      setImportProgress(i)
-    }
-
+    // No fake progress - use isImporting state only
     const result = await onImport(validRows.map((r) => r.data))
     setImportResult(result)
     setIsImporting(false)
@@ -625,7 +621,6 @@ export function BulkImport({ onImport, onCancel, className }: BulkImportProps) {
           )}
           {currentStep === 4 && (
             <ImportProgressStep
-              progress={importProgress}
               result={importResult}
               isComplete={!isImporting}
             />

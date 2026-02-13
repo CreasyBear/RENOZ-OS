@@ -4,25 +4,27 @@
  * Displays RMA details with workflow actions (approve, reject, receive, process).
  *
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-003c
- * @see src/components/domain/support/rma-detail-card.tsx
+ * @see src/components/domain/support/rma-detail-view.tsx
  */
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { ChevronLeft, Package } from 'lucide-react';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+
+import { DetailPageBackButton } from '@/components/layout/detail-page-back-button';
 import { toast } from 'sonner';
 
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
-import { Button } from '@/components/ui/button';
-import { RmaDetailCard } from '@/components/domain/support';
-import { RmaWorkflowActions } from '@/components/domain/support';
+import { RmaDetailView } from '@/components/domain/support';
 import {
   useRma,
   useApproveRma,
   useRejectRma,
   useReceiveRma,
   useProcessRma,
+  useCancelRma,
 } from '@/hooks/support';
-import type { RmaResolution } from '@/lib/schemas/support/rma';
+import { useTrackView } from '@/hooks/search';
+import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
+import { rmaInspectionNotesSchema, type RmaResolution } from '@/lib/schemas/support/rma';
 
 // ============================================================================
 // ROUTE
@@ -52,17 +54,24 @@ export const Route = createFileRoute('/_authenticated/support/rmas/$rmaId')({
 
 function RmaDetailPage() {
   const { rmaId } = Route.useParams();
+  const navigate = useNavigate();
+  const { confirm } = useConfirmation();
 
-  // Fetch RMA detail
   const { data: rma, isLoading, error, refetch } = useRma({ rmaId });
+  useTrackView(
+    'rma',
+    rma?.id,
+    rma?.rmaNumber ?? `RMA ${rmaId.slice(0, 8)}`,
+    rma?.status ?? undefined,
+    `/support/rmas/${rmaId}`
+  );
 
-  // Workflow mutations
   const approveMutation = useApproveRma();
   const rejectMutation = useRejectRma();
   const receiveMutation = useReceiveRma();
   const processMutation = useProcessRma();
+  const cancelMutation = useCancelRma();
 
-  // Workflow handlers
   const handleApprove = async (notes?: string) => {
     try {
       await approveMutation.mutateAsync({ rmaId, notes: notes ?? null });
@@ -83,19 +92,14 @@ function RmaDetailPage() {
 
   const handleReceive = async (inspectionNotes?: { condition?: string; notes?: string }) => {
     try {
+      const parsed = inspectionNotes
+        ? rmaInspectionNotesSchema
+            .pick({ condition: true, notes: true })
+            .safeParse(inspectionNotes)
+        : { success: false as const, data: undefined };
       await receiveMutation.mutateAsync({
         rmaId,
-        inspectionNotes: inspectionNotes
-          ? {
-              condition: inspectionNotes.condition as
-                | 'good'
-                | 'damaged'
-                | 'defective'
-                | 'missing_parts'
-                | undefined,
-              notes: inspectionNotes.notes,
-            }
-          : undefined,
+        inspectionNotes: parsed.success ? parsed.data : undefined,
       });
       toast.success('RMA marked as received');
     } catch {
@@ -116,85 +120,52 @@ function RmaDetailPage() {
     }
   };
 
+  const handleCancel = async () => {
+    try {
+      await cancelMutation.mutateAsync({ id: rmaId });
+      toast.success('RMA cancelled successfully');
+      navigate({ to: '/support/rmas' });
+    } catch {
+      toast.error('Failed to cancel RMA');
+    }
+  };
+
+  const handleCancelClick = async () => {
+    const { confirmed } = await confirm(
+      rma ? confirmations.cancelRma(rma.rmaNumber) : confirmations.irreversible('Cancel RMA'),
+    );
+    if (!confirmed) return;
+    await handleCancel();
+  };
+
   const isPending =
     approveMutation.isPending ||
     rejectMutation.isPending ||
     receiveMutation.isPending ||
-    processMutation.isPending;
+    processMutation.isPending ||
+    cancelMutation.isPending;
 
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
-        title={
-          <div className="flex items-center gap-2">
-            <Package className="h-6 w-6" />
-            {rma?.rmaNumber ?? 'RMA Details'}
-          </div>
-        }
-        description="View and manage return authorization"
-        actions={
-          <Link to="/support/rmas">
-            <Button variant="outline">
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Back to RMAs
-            </Button>
-          </Link>
-        }
+        title={null}
+        leading={<DetailPageBackButton to="/support/rmas" aria-label="Back to RMAs" />}
+        actions={null}
       />
-
       <PageLayout.Content>
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* RMA Detail Card */}
-          <div className="lg:col-span-2">
-            <RmaDetailCard
-              rma={rma}
-              isLoading={isLoading}
-              error={error instanceof Error ? error : null}
-              onRetry={refetch}
-              workflowActions={
-                rma && (
-                  <RmaWorkflowActions
-                    rma={rma}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onReceive={handleReceive}
-                    onProcess={handleProcess}
-                    isPending={isPending}
-                  />
-                )
-              }
-            />
-          </div>
-
-          {/* Sidebar with related info */}
-          <div className="space-y-4">
-            {/* Could add related issue link, customer info, order info here */}
-            {rma?.issueId && (
-              <div className="rounded-lg border p-4">
-                <h3 className="mb-2 text-sm font-medium">Related Issue</h3>
-                <Link
-                  to="/support/issues/$issueId"
-                  params={{ issueId: rma.issueId }}
-                  className="text-primary text-sm hover:underline"
-                >
-                  View Issue →
-                </Link>
-              </div>
-            )}
-            {rma?.orderId && (
-              <div className="rounded-lg border p-4">
-                <h3 className="mb-2 text-sm font-medium">Related Order</h3>
-                <Link
-                  to="/orders/$orderId"
-                  params={{ orderId: rma.orderId }}
-                  className="text-primary text-sm hover:underline"
-                >
-                  View Order →
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
+        <RmaDetailView
+          rma={rma}
+          isLoading={isLoading}
+          error={error instanceof Error ? error : null}
+          onRetry={refetch}
+          isPending={isPending}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onReceive={handleReceive}
+          onProcess={handleProcess}
+          onCancel={handleCancelClick}
+          isCancelPending={cancelMutation.isPending}
+        />
       </PageLayout.Content>
     </PageLayout>
   );

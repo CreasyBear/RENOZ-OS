@@ -23,14 +23,15 @@ import {
   timestamp,
   integer,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { paymentPlanTypeEnum, installmentStatusEnum } from "../_shared/enums";
 import {
   timestampColumns,
   auditColumns,
+  softDeleteColumn,
   currencyColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { orders } from "../orders/orders";
 import { organizations } from "../settings/organizations";
@@ -94,6 +95,7 @@ export const paymentSchedules = pgTable(
     // Tracking
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
     // Multi-tenant queries
@@ -118,27 +120,7 @@ export const paymentSchedules = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("payment_schedules_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("payment_schedules_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("payment_schedules_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("payment_schedules_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("payment_schedules"),
   })
 );
 

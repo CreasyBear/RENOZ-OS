@@ -9,15 +9,18 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   integer,
   timestamp,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "./_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "./_shared/patterns";
 import { organizations } from "./settings/organizations";
 import { users } from "./users/users";
 
@@ -53,19 +56,24 @@ export const generatedDocuments = pgTable(
       onDelete: "set null",
     }),
 
+    // Regeneration tracking (incremented on each regenerate)
+    regenerationCount: integer("regeneration_count").notNull().default(0),
+
     // Standard timestamps
     ...timestampColumns,
   },
   (table) => ({
-    // Primary lookup by entity
-    entityIdx: index("idx_generated_documents_entity").on(
+    // UNIQUE: One document per entity per type per org (enables upsert)
+    // This is the core constraint that prevents duplicate documents
+    uniqueDocPerEntity: uniqueIndex("idx_generated_documents_unique_per_entity").on(
+      table.organizationId,
       table.entityType,
-      table.entityId
+      table.entityId,
+      table.documentType
     ),
 
-    // Multi-tenant queries
-    orgEntityIdx: index("idx_generated_documents_org_entity").on(
-      table.organizationId,
+    // Primary lookup by entity (for listing all docs of an entity)
+    entityIdx: index("idx_generated_documents_entity").on(
       table.entityType,
       table.entityId
     ),
@@ -89,27 +97,7 @@ export const generatedDocuments = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("generated_documents_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("generated_documents_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("generated_documents_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("generated_documents_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("generated_documents"),
   })
 );
 

@@ -8,8 +8,6 @@
  */
 
 import { memo, useState, useMemo, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Search,
   Plus,
@@ -26,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
-import { listProducts } from "@/server/functions/products/products";
+import { useProducts } from "@/hooks/products";
 
 // ============================================================================
 // TYPES
@@ -58,13 +56,13 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  // Fetch products
-  const productsQuery = useQuery({
-    queryKey: queryKeys.products.list({ status: "active" }),
-    queryFn: () => listProducts({ data: { pageSize: 200, status: "active" } }),
+  // Fetch products using hook
+  const { data: productsData, isLoading } = useProducts({
+    pageSize: 200,
+    status: "active",
   });
 
-  const products = productsQuery.data?.products ?? [];
+  const products = useMemo(() => productsData?.products ?? [], [productsData]);
 
   // Filter products by search
   const filteredProducts = useMemo(() => {
@@ -193,7 +191,7 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
-          {productsQuery.isLoading ? (
+          {isLoading ? (
             <div className="text-center py-8 text-muted-foreground">
               Loading products...
             </div>

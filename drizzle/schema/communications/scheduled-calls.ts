@@ -14,11 +14,13 @@ import {
   text,
   index,
   timestamp,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { scheduledCallStatusEnum } from "../_shared/enums";
-import { timestampColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { users } from "../users/users";
 import { customers } from "../customers/customers";
 import { organizations } from "../settings/organizations";
@@ -110,27 +112,7 @@ export const scheduledCalls = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("scheduled_calls_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("scheduled_calls_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("scheduled_calls_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("scheduled_calls_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("scheduled_calls"),
   })
 );
 

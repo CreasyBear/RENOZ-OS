@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import type { UpdatePreferencesInput } from '@/lib/schemas/communications/communication-preferences';
 import {
   getContactPreferences,
@@ -31,9 +32,15 @@ export function useContactPreferences(options: UseContactPreferencesOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.contactPreference(contactId),
-    queryFn: () => getContactPreferences({ data: { contactId } }),
+    queryFn: async () => {
+      const result = await getContactPreferences({
+        data: { contactId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!contactId,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
   });
 }
 
@@ -50,9 +57,15 @@ export function usePreferenceHistory(options: UsePreferenceHistoryOptions = {}) 
 
   return useQuery({
     queryKey: queryKeys.communications.preferenceHistory(contactId ?? '', { customerId }),
-    queryFn: () => getPreferenceHistory({ data: { contactId, customerId, limit, offset } }),
+    queryFn: async () => {
+      const result = await getPreferenceHistory({
+        data: { contactId, customerId, limit, offset } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && (!!contactId || !!customerId),
-    staleTime: 5 * 60 * 1000, // 5 minutes - history doesn't change often
+    staleTime: QUERY_CONFIG.STALE_TIME_LONG,
   });
 }
 

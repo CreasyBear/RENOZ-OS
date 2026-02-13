@@ -157,7 +157,11 @@ export function useAIUsage(options: UseAIUsageOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.ai.cost.usage(filters),
-    queryFn: () => fetchUsageHistory(filters),
+    queryFn: async () => {
+      const result = await fetchUsageHistory(filters);
+      if (result == null) throw new Error('AI usage history returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });

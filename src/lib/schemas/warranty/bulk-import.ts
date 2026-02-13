@@ -167,3 +167,21 @@ export interface BulkRegisterResult {
   createdWarranties: CreatedWarranty[];
   summary: BulkRegisterSummary;
 }
+
+/** Props for WarrantyImportSettingsView */
+export interface WarrantyImportSettingsViewProps {
+  dialogOpen: boolean;
+  lastImportResult: BulkRegisterResult | null;
+  onDialogOpenChange: (open: boolean) => void;
+  onStartImport: () => void;
+  onDownloadTemplate: () => void;
+  onViewWarranties: () => void;
+  onViewPolicies: () => void;
+  onImportComplete: (result: BulkRegisterResult) => void;
+  onPreview: (payload: PreviewBulkWarrantyImportInput) => Promise<PreviewResult>;
+  onRegister: (payload: BulkRegisterWarrantiesInput) => Promise<BulkRegisterResult>;
+  onResetPreview: () => void;
+  onResetRegister: () => void;
+  isPreviewing: boolean;
+  isRegistering: boolean;
+}

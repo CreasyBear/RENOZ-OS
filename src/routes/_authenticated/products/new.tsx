@@ -13,8 +13,10 @@ import { ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
-import { ProductForm, type ProductFormValues } from "@/components/domain/products/product-form";
-import { createProduct, getCategoryTree, type CategoryWithChildren } from "@/server/functions/products/products";
+import { ProductForm, type ProductFormValues } from "@/components/domain/products";
+import { useCreateProduct } from "@/hooks/products";
+import { getCategoryTree } from "@/server/functions/products/products";
+import type { Category, CategoryWithChildren } from "@/lib/schemas/products";
 
 export const Route = createFileRoute("/_authenticated/products/new")({
   loader: async () => {
@@ -37,6 +39,7 @@ export const Route = createFileRoute("/_authenticated/products/new")({
 
 function NewProductPage() {
   const navigate = useNavigate();
+  const createProduct = useCreateProduct();
   const loaderData = Route.useLoaderData() as { categoryTree: CategoryWithChildren[] };
   const { categoryTree } = loaderData;
 
@@ -44,14 +47,14 @@ function NewProductPage() {
   const flattenCategories = (
     categories: CategoryWithChildren[],
     prefix = ""
-  ): Array<{ id: string; name: string; parentId: string | null }> => {
-    return categories.flatMap((cat: CategoryWithChildren) => {
-      const name = prefix ? `${prefix} > ${cat.name}` : cat.name;
+  ): Category[] => {
+    return categories.flatMap((cat) => {
+      const displayName = prefix ? `${prefix} > ${cat.name}` : cat.name;
       const children = cat.children
-        ? flattenCategories(cat.children, name)
+        ? flattenCategories(cat.children, displayName)
         : [];
       return [
-        { id: cat.id, name, parentId: cat.parentId },
+        { ...cat, name: displayName },
         ...children,
       ];
     });
@@ -60,18 +63,17 @@ function NewProductPage() {
   const flatCategories = flattenCategories(categoryTree);
 
   const handleSubmit = async (data: ProductFormValues) => {
-    await createProduct({
-      data: {
-        ...data,
-        categoryId: data.categoryId ?? undefined,
-        costPrice: data.costPrice ?? undefined,
-        weight: data.weight ?? undefined,
-        dimensions: data.dimensions ?? undefined,
-        seoTitle: data.seoTitle ?? undefined,
-        seoDescription: data.seoDescription ?? undefined,
-        barcode: data.barcode ?? undefined,
-        specifications: (data.specifications ?? undefined) as Record<string, string> | undefined,
-      },
+    await createProduct.mutateAsync({
+      ...data,
+      categoryId: data.categoryId ?? undefined,
+      costPrice: data.costPrice ?? undefined,
+      weight: data.weight ?? undefined,
+      dimensions: data.dimensions ?? undefined,
+      seoTitle: data.seoTitle ?? undefined,
+      seoDescription: data.seoDescription ?? undefined,
+      barcode: data.barcode ?? undefined,
+      warrantyPolicyId: data.warrantyPolicyId ?? undefined,
+      specifications: (data.specifications ?? undefined) as Record<string, string> | undefined,
     });
     navigate({ to: "/products" as string });
   };

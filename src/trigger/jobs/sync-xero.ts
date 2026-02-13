@@ -198,7 +198,7 @@ export const syncXeroContactTask = task({
     maxAttempts: 3,
   },
   run: async (payload: SyncXeroContactPayload): Promise<SyncXeroContactResult> => {
-    const { customerId, organizationId: _organizationId } = payload;
+    const { customerId } = payload;
 
     logger.info("Syncing customer to Xero", { customerId });
 

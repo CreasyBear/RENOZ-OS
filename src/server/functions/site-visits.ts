@@ -11,19 +11,23 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
+import { z } from "zod";
+import { eq, and, gte, lte, lt, inArray, desc, asc, sql, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { siteVisits, projects } from "drizzle/schema";
 import {
   siteVisitIdSchema,
   createSiteVisitSchema,
   updateSiteVisitSchema,
+  rescheduleSiteVisitSchema,
   siteVisitListQuerySchema,
   checkInSchema,
   checkOutSchema,
   customerSignOffSchema,
 } from "@/lib/schemas/jobs/site-visits";
+import type { SiteVisitItem, SiteVisitListResult } from "@/lib/schemas/jobs/site-visits";
 import { withAuth } from "@/lib/server/protected";
+import { NotFoundError, ValidationError } from "@/lib/server/errors";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
 import { computeChanges } from "@/lib/activity-logger";
@@ -54,7 +58,7 @@ const SITE_VISIT_EXCLUDED_FIELDS: string[] = [
  */
 export const getSiteVisits = createServerFn({ method: "GET" })
   .inputValidator(siteVisitListQuerySchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SiteVisitListResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
     const {
@@ -95,11 +99,11 @@ export const getSiteVisits = createServerFn({ method: "GET" })
     const whereClause = and(...conditions);
 
     // Get total count
-    const countResult = await db
-      .select({ count: sql<number>`count(*)` })
+    const [countRow] = await db
+      .select({ count: count() })
       .from(siteVisits)
       .where(whereClause);
-    const totalItems = Number(countResult[0]?.count ?? 0);
+    const totalItems = countRow?.count ?? 0;
 
     // Get paginated results
     const offset = (page - 1) * pageSize;
@@ -133,7 +137,7 @@ export const getSiteVisits = createServerFn({ method: "GET" })
     }));
 
     return {
-      items: flattenedItems,
+      items: flattenedItems as SiteVisitItem[],
       pagination: {
         page,
         pageSize,
@@ -159,7 +163,7 @@ export const getSiteVisit = createServerFn({ method: "GET" })
     });
 
     if (!siteVisit) {
-      throw new Error("Site visit not found");
+      throw new NotFoundError("Site visit not found", "siteVisit");
     }
 
     return siteVisit;
@@ -183,11 +187,14 @@ export const createSiteVisit = createServerFn({ method: "POST" })
     });
 
     if (!project) {
-      throw new Error("Project not found");
+      throw new NotFoundError("Project not found", "project");
     }
 
     // Generate visit number (VXXX format)
     const visitNumber = await generateVisitNumber(ctx.organizationId, data.projectId);
+
+    // Use provided installer or fall back to current user
+    const installerId = data.installerId ?? ctx.user.id;
 
     const [siteVisit] = await db
       .insert(siteVisits)
@@ -200,7 +207,7 @@ export const createSiteVisit = createServerFn({ method: "POST" })
         scheduledDate: data.scheduledDate,
         scheduledTime: data.scheduledTime,
         estimatedDuration: data.estimatedDuration,
-        installerId: data.installerId,
+        installerId,
         notes: data.notes,
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
@@ -235,6 +242,122 @@ export const createSiteVisit = createServerFn({ method: "POST" })
   });
 
 /**
+ * Reschedule a site visit (scheduled/in_progress only)
+ * Dedicated function for activity logging and validation.
+ */
+export const rescheduleSiteVisit = createServerFn({ method: "POST" })
+  .inputValidator(rescheduleSiteVisitSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
+
+    const existingVisit = await db.query.siteVisits.findFirst({
+      where: and(
+        eq(siteVisits.id, data.siteVisitId),
+        eq(siteVisits.organizationId, ctx.organizationId)
+      ),
+    });
+
+    if (!existingVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
+
+    if (!["scheduled", "in_progress"].includes(existingVisit.status)) {
+      throw new ValidationError(
+        `Cannot reschedule visit with status "${existingVisit.status}". Only scheduled or in-progress visits can be rescheduled.`,
+        { status: ["Visit must be scheduled or in progress to reschedule"] }
+      );
+    }
+
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, existingVisit.projectId),
+      columns: { customerId: true },
+    });
+
+    const before = existingVisit;
+    const updates = {
+      scheduledDate: data.scheduledDate,
+      scheduledTime: data.scheduledTime ?? existingVisit.scheduledTime,
+      updatedBy: ctx.user.id,
+      updatedAt: new Date(),
+      version: sql`${siteVisits.version} + 1`,
+    };
+
+    const [updatedVisit] = await db
+      .update(siteVisits)
+      .set(updates)
+      .where(eq(siteVisits.id, data.siteVisitId))
+      .returning();
+
+    logger.logAsync({
+      entityType: "site_visit",
+      entityId: updatedVisit.id,
+      action: "updated",
+      description: `Rescheduled visit ${existingVisit.visitNumber} from ${before.scheduledDate} to ${data.scheduledDate}`,
+      changes: computeChanges({
+        before,
+        after: updatedVisit,
+        excludeFields: SITE_VISIT_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: project?.customerId ?? undefined,
+        projectId: updatedVisit.projectId,
+        visitNumber: updatedVisit.visitNumber,
+        visitType: updatedVisit.visitType,
+        previousScheduledDate: before.scheduledDate,
+        newScheduledDate: data.scheduledDate,
+      },
+    });
+
+    return updatedVisit;
+  });
+
+/**
+ * Get past-due site visits (scheduled before today, not completed)
+ * Used for the "Needs rescheduling" sidebar in the schedule calendar.
+ */
+export const getPastDueSiteVisits = createServerFn({ method: "GET" })
+  .handler(async (): Promise<SiteVisitListResult> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.job.read });
+
+    const today = new Date().toISOString().split("T")[0]!; // YYYY-MM-DD
+
+    const items = await db
+      .select({
+        visit: siteVisits,
+        projectTitle: projects.title,
+        projectNumber: projects.projectNumber,
+      })
+      .from(siteVisits)
+      .leftJoin(projects, eq(siteVisits.projectId, projects.id))
+      .where(
+        and(
+          eq(siteVisits.organizationId, ctx.organizationId),
+          lt(siteVisits.scheduledDate, today),
+          inArray(siteVisits.status, ["scheduled", "in_progress"])
+        )
+      )
+      .orderBy(asc(siteVisits.scheduledDate))
+      .limit(100);
+
+    const flattenedItems = items.map(({ visit, projectTitle, projectNumber }) => ({
+      ...visit,
+      projectTitle: projectTitle || "Unknown Project",
+      projectNumber: projectNumber || "-",
+    }));
+
+    return {
+      items: flattenedItems as SiteVisitItem[],
+      pagination: {
+        page: 1,
+        pageSize: flattenedItems.length,
+        totalItems: flattenedItems.length,
+        totalPages: flattenedItems.length > 0 ? 1 : 0,
+      },
+    };
+  });
+
+/**
  * Update a site visit
  */
 export const updateSiteVisit = createServerFn({ method: "POST" })
@@ -254,8 +377,14 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
     });
 
     if (!existingVisit) {
-      throw new Error("Site visit not found");
+      throw new NotFoundError("Site visit not found", "siteVisit");
     }
+
+    // Fetch project customerId upfront (before mutation) to avoid extra query after
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, existingVisit.projectId),
+      columns: { customerId: true },
+    });
 
     const before = existingVisit;
 
@@ -275,12 +404,6 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
       before,
       after: updatedVisit,
       excludeFields: SITE_VISIT_EXCLUDED_FIELDS as never[],
-    });
-
-    // Need to get project's customerId for activity logging
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, updatedVisit.projectId),
-      columns: { customerId: true },
     });
 
     if (changes.fields && changes.fields.length > 0) {
@@ -325,23 +448,25 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
     });
 
     if (!existingVisit) {
-      throw new Error("Site visit not found");
+      throw new NotFoundError("Site visit not found", "siteVisit");
     }
 
     // Only allow deletion of scheduled visits
     if (existingVisit.status !== "scheduled") {
-      throw new Error("Cannot delete a visit that has already started or completed");
+      throw new ValidationError("Cannot delete a visit that has already started or completed", {
+        status: ["Visit must be in 'scheduled' status to delete"],
+      });
     }
 
-    await db
-      .delete(siteVisits)
-      .where(eq(siteVisits.id, data.siteVisitId));
-
-    // Get project's customerId for activity logging
+    // Fetch project customerId upfront (before mutation) to avoid extra query after
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, existingVisit.projectId),
       columns: { customerId: true },
     });
+
+    await db
+      .delete(siteVisits)
+      .where(eq(siteVisits.id, data.siteVisitId));
 
     // Log site visit deletion
     logger.logAsync({
@@ -367,6 +492,63 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+/**
+ * Cancel a site visit (status-based cancellation)
+ */
+export const cancelSiteVisit = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({
+    siteVisitId: z.string().uuid(),
+    reason: z.string().optional(),
+  }))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
+    const logger = createActivityLoggerWithContext(ctx);
+
+    const existing = await db.query.siteVisits.findFirst({
+      where: and(
+        eq(siteVisits.id, data.siteVisitId),
+        eq(siteVisits.organizationId, ctx.organizationId)
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundError('Site visit not found', 'siteVisit');
+    }
+
+    // Only allow cancellation from scheduled status
+    if (existing.status !== 'scheduled') {
+      throw new ValidationError('Can only cancel scheduled site visits', {
+        status: ["Visit must be in 'scheduled' status to cancel"],
+      });
+    }
+
+    const [updated] = await db
+      .update(siteVisits)
+      .set({
+        status: 'cancelled',
+        updatedBy: ctx.user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(siteVisits.id, data.siteVisitId))
+      .returning();
+
+    logger.logAsync({
+      entityType: 'site_visit',
+      entityId: existing.id,
+      action: 'updated',
+      description: `Cancelled site visit: ${existing.visitNumber}${data.reason ? ` - ${data.reason}` : ''}`,
+      metadata: {
+        projectId: existing.projectId,
+        visitNumber: existing.visitNumber,
+        previousStatus: existing.status,
+        newStatus: 'cancelled',
+        reason: data.reason,
+      },
+    });
+
+    return updated;
+  });
+
 // ============================================================================
 // CHECK-IN / CHECK-OUT
 // ============================================================================
@@ -388,12 +570,20 @@ export const checkIn = createServerFn({ method: "POST" })
     });
 
     if (!existingVisit) {
-      throw new Error("Site visit not found");
+      throw new NotFoundError("Site visit not found", "siteVisit");
     }
 
     if (existingVisit.status !== "scheduled") {
-      throw new Error("Can only check in to scheduled visits");
+      throw new ValidationError("Can only check in to scheduled visits", {
+        status: ["Visit must be in 'scheduled' status to check in"],
+      });
     }
+
+    // Fetch project customerId upfront (before mutation) to avoid extra query after
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, existingVisit.projectId),
+      columns: { customerId: true },
+    });
 
     const [updatedVisit] = await db
       .update(siteVisits)
@@ -406,12 +596,6 @@ export const checkIn = createServerFn({ method: "POST" })
       })
       .where(eq(siteVisits.id, data.siteVisitId))
       .returning();
-
-    // Get project's customerId for activity logging
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, updatedVisit.projectId),
-      columns: { customerId: true },
-    });
 
     // Log check-in
     logger.logAsync({
@@ -455,12 +639,20 @@ export const checkOut = createServerFn({ method: "POST" })
     });
 
     if (!existingVisit) {
-      throw new Error("Site visit not found");
+      throw new NotFoundError("Site visit not found", "siteVisit");
     }
 
     if (existingVisit.status !== "in_progress") {
-      throw new Error("Can only check out from visits in progress");
+      throw new ValidationError("Can only check out from visits in progress", {
+        status: ["Visit must be in 'in_progress' status to check out"],
+      });
     }
+
+    // Fetch project customerId upfront (before mutation) to avoid extra query after
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, existingVisit.projectId),
+      columns: { customerId: true },
+    });
 
     const [updatedVisit] = await db
       .update(siteVisits)
@@ -473,12 +665,6 @@ export const checkOut = createServerFn({ method: "POST" })
       })
       .where(eq(siteVisits.id, data.siteVisitId))
       .returning();
-
-    // Get project's customerId for activity logging
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, updatedVisit.projectId),
-      columns: { customerId: true },
-    });
 
     // Log check-out
     logger.logAsync({
@@ -526,12 +712,20 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
     });
 
     if (!existingVisit) {
-      throw new Error("Site visit not found");
+      throw new NotFoundError("Site visit not found", "siteVisit");
     }
 
     if (existingVisit.status !== "completed") {
-      throw new Error("Can only sign off completed visits");
+      throw new ValidationError("Can only sign off completed visits", {
+        status: ["Visit must be in 'completed' status to sign off"],
+      });
     }
+
+    // Fetch project customerId upfront (before mutation) to avoid extra query after
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, existingVisit.projectId),
+      columns: { customerId: true },
+    });
 
     const [updatedVisit] = await db
       .update(siteVisits)
@@ -546,12 +740,6 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
       })
       .where(eq(siteVisits.id, data.siteVisitId))
       .returning();
-
-    // Get project's customerId for activity logging
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, updatedVisit.projectId),
-      columns: { customerId: true },
-    });
 
     // Log customer sign-off
     logger.logAsync({

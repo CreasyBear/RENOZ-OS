@@ -53,7 +53,7 @@ export {
 // Inventory channel
 export {
   useInventoryRealtime,
-  useLowStockAlerts,
+  useLowStockAlerts as useLowStockAlertsRealtime,
   type InventoryRealtimePayload,
   type InventoryBroadcastPayload,
   type UseInventoryRealtimeOptions,

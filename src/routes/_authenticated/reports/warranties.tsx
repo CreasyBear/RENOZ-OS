@@ -9,37 +9,14 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { WarrantyAnalyticsPage } from '@/components/domain/reports/warranty-analytics-page';
-
-// ============================================================================
-// ROUTE SEARCH PARAMS
-// ============================================================================
-
-const searchSchema = z.object({
-  range: z.enum(['7', '30', '60', '90', '365', 'all']).default('30').catch('30'),
-  warrantyType: z
-    .enum(['battery_performance', 'inverter_manufacturer', 'installation_workmanship', 'all'])
-    .default('all')
-    .catch('all'),
-  claimType: z
-    .enum([
-      'cell_degradation',
-      'bms_fault',
-      'inverter_failure',
-      'installation_defect',
-      'other',
-      'all',
-    ])
-    .default('all')
-    .catch('all'),
-});
+import { warrantyAnalyticsSearchSchema } from '@/lib/schemas/reports/warranty-analytics';
 
 export const Route = createFileRoute('/_authenticated/reports/warranties')({
   component: WarrantyAnalyticsRoute,
-  validateSearch: searchSchema,
+  validateSearch: warrantyAnalyticsSearchSchema,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/reports" />
   ),

@@ -59,9 +59,9 @@ export function useMFA() {
     retry: false,
   });
 
-  const refreshStatus = () => {
+  const refreshStatus = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.auth.mfa.all() });
-  };
+  }, [queryClient]);
 
   /**
    * Start MFA enrollment - returns QR code and secret
@@ -83,11 +83,11 @@ export function useMFA() {
         qrCode: data.totp.qr_code,
         secret: data.totp.secret,
       };
-    } catch (err) {
+    } catch {
       // Error is handled by the caller
       return null;
     }
-  }, [supabase.auth.mfa, queryClient]);
+  }, [queryClient]);
 
   /**
    * Verify enrollment with TOTP code from authenticator app
@@ -115,7 +115,7 @@ export function useMFA() {
         await refreshStatus();
 
         return true;
-      } catch (err) {
+      } catch {
         // Error is handled by the caller
         return false;
       }
@@ -137,12 +137,12 @@ export function useMFA() {
         await refreshStatus();
 
         return true;
-      } catch (err) {
+      } catch {
         // Error is handled by the caller
         return false;
       }
     },
-    [supabase.auth.mfa, refreshStatus]
+    [refreshStatus]
   );
 
   /**
@@ -176,7 +176,7 @@ export function useMFA() {
 
         await refreshStatus();
         return true;
-      } catch (err) {
+      } catch {
         // Error is handled by the caller
         return false;
       }

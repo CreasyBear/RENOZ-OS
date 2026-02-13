@@ -139,37 +139,39 @@ export const completeJobInternal = createServerFn({ method: 'POST' })
       };
     }
 
-    // Update the job
-    const [updatedJob] = await db
-      .update(jobs)
-      .set({
-        status: data.success ? 'completed' : 'failed',
-        progress: data.success ? 100 : existingJob.progress,
-        completedAt: new Date(),
-        metadata: newMetadata,
-        updatedAt: new Date(),
-      })
-      .where(eq(jobs.id, data.jobId))
-      .returning();
+    const [updatedJob] = await db.transaction(async (tx) => {
+      const [job] = await tx
+        .update(jobs)
+        .set({
+          status: data.success ? 'completed' : 'failed',
+          progress: data.success ? 100 : existingJob.progress,
+          completedAt: new Date(),
+          metadata: newMetadata,
+          updatedAt: new Date(),
+        })
+        .where(eq(jobs.id, data.jobId))
+        .returning();
 
-    // Create notification if requested
-    if (data.createNotification) {
-      await db.insert(notifications).values({
-        userId: existingJob.userId,
-        organizationId: existingJob.organizationId,
-        type: 'system',
-        title: data.success ? `${existingJob.name} completed` : `${existingJob.name} failed`,
-        message: data.success
-          ? `Your ${existingJob.type} job has completed successfully.`
-          : data.errorMessage || `Your ${existingJob.type} job has failed.`,
-        status: 'pending',
-        data: {
-          entityId: existingJob.id,
-          entityType: 'job',
-          actionUrl: `/jobs/${existingJob.id}`,
-        },
-      });
-    }
+      if (data.createNotification && job) {
+        await tx.insert(notifications).values({
+          userId: existingJob.userId,
+          organizationId: existingJob.organizationId,
+          type: 'system',
+          title: data.success ? `${existingJob.name} completed` : `${existingJob.name} failed`,
+          message: data.success
+            ? `Your ${existingJob.type} job has completed successfully.`
+            : data.errorMessage || `Your ${existingJob.type} job has failed.`,
+          status: 'pending',
+          data: {
+            entityId: existingJob.id,
+            entityType: 'job',
+            actionUrl: '/schedule',
+          },
+        });
+      }
+
+      return [job];
+    });
 
     return updatedJob;
   });

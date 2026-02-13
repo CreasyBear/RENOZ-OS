@@ -17,13 +17,17 @@ import {
   timestamp,
   pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { emailStatusEnum, bounceTypeEnum } from "../_shared/enums";
 import { organizations } from "../settings/organizations";
 import { emailCampaigns } from "./email-campaigns";
 import { emailTemplates } from "./email-templates";
 import { users } from "../users/users";
 import { customers } from "../customers/customers";
+import {
+  organizationRlsUsing,
+  organizationRlsWithCheck,
+} from "../_shared/patterns";
 
 // ============================================================================
 // INTERFACES
@@ -46,6 +50,8 @@ export interface EmailMetadata {
   providerMessageId?: string;
   /** Mail provider (sendgrid, ses, etc.) */
   provider?: string;
+  /** Source of email: "sent" | "synced" */
+  source?: string;
   /** Link tracking map (linkId -> originalUrl) for URL validation */
   linkMap?: Record<string, string>;
   /** Email preview text */
@@ -181,16 +187,16 @@ export const emailHistory = pgTable(
       table.resendMessageId
     ),
 
-    // RLS Policies (append-only)
+    // RLS Policies (append-only: select + insert only)
     selectPolicy: pgPolicy("email_history_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
     insertPolicy: pgPolicy("email_history_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: organizationRlsWithCheck(),
     }),
   })
 );

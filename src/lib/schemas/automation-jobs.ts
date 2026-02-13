@@ -74,3 +74,56 @@ export type CreateJobInput = z.infer<typeof createJobSchema>;
 export type UpdateJobProgressInput = z.infer<typeof updateJobProgressSchema>;
 export type CompleteJobInput = z.infer<typeof completeJobSchema>;
 export type UserJobsInput = z.infer<typeof userJobsSchema>;
+
+// ============================================================================
+// CLIENT-SAFE TYPE DEFINITIONS
+// (Duplicated from drizzle schema to avoid client/server bundling issues)
+// ============================================================================
+
+/**
+ * Automation job metadata interface.
+ * Client-safe version from drizzle/schema.
+ * Named AutomationJobMetadata to avoid conflict with jobs.JobMetadata (assignment metadata).
+ */
+export interface AutomationJobMetadata {
+  /** Total items to process */
+  totalItems?: number;
+  /** Items processed so far */
+  processedItems?: number;
+  /** Current step/phase description */
+  currentStep?: string;
+  /** Result data (on completion) */
+  result?: object;
+  /** Error details (on failure) */
+  error?: {
+    message: string;
+    code?: string;
+    stack?: string;
+  };
+  /** Additional context-specific data */
+  extra?: object;
+}
+
+
+/**
+ * Automation job entity.
+ * Client-safe version of Job from drizzle/schema.
+ *
+ * @see drizzle/schema/automation-jobs.ts for database definition
+ */
+export interface Job {
+  id: string;
+  organizationId: string;
+  userId: string;
+  type: JobType;
+  name: string;
+  description: string | null;
+  status: JobStatus;
+  progress: number;
+  startedAt: Date | string | null;
+  completedAt: Date | string | null;
+  metadata: AutomationJobMetadata | null;
+  externalId: string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}

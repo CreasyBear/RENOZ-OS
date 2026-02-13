@@ -10,7 +10,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   integer,
@@ -26,6 +25,10 @@ import {
   timestampColumns,
   auditColumns,
   currencyColumnNullable,
+  standardRlsPolicies,
+  numericRangeCheck,
+  nonNegativeCheck,
+  sqlEmptyTextArray,
 } from "../_shared/patterns";
 import { purchaseOrders } from "./purchase-orders";
 import { users } from "../users/users";
@@ -156,27 +159,7 @@ export const purchaseOrderApprovals = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("purchase_order_approvals_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("purchase_order_approvals_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("purchase_order_approvals_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("purchase_order_approvals_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("purchase_order_approvals"),
   })
 );
 
@@ -203,11 +186,11 @@ export const purchaseOrderApprovalRules = pgTable(
     // Rule configuration
     requiresApproval: boolean("requires_approval").notNull().default(true),
     autoApproveUnder: currencyColumnNullable("auto_approve_under"),
-    approverRoles: text("approver_roles").array().notNull().default(sql`'{}'::text[]`),
+    approverRoles: text("approver_roles").array().notNull().default(sqlEmptyTextArray()),
 
     // Escalation settings
     escalationHours: integer("escalation_hours").default(24),
-    escalationApproverRoles: text("escalation_approver_roles").array().default(sql`'{}'::text[]`),
+    escalationApproverRoles: text("escalation_approver_roles").array().default(sqlEmptyTextArray()),
 
     // Priority (lower = higher priority, checked first)
     priority: integer("priority").notNull().default(0),
@@ -258,45 +241,19 @@ export const purchaseOrderApprovalRules = pgTable(
     ),
 
     // Amount range validation
-    amountRangeCheck: check(
-      "purchase_order_approval_rules_amount_range",
-      sql`${table.minAmount} IS NULL OR ${table.maxAmount} IS NULL OR ${table.maxAmount} >= ${table.minAmount}`
-    ),
+    amountRangeCheck: numericRangeCheck("purchase_order_approval_rules_amount_range", table.minAmount, table.maxAmount),
 
-    // Escalation hours must be positive
+    // Escalation hours must be positive (nullable)
     escalationHoursCheck: check(
       "purchase_order_approval_rules_escalation_hours_positive",
       sql`${table.escalationHours} IS NULL OR ${table.escalationHours} > 0`
     ),
 
     // Priority must be non-negative
-    priorityCheck: check(
-      "purchase_order_approval_rules_priority_non_negative",
-      sql`${table.priority} >= 0`
-    ),
+    priorityCheck: nonNegativeCheck("purchase_order_approval_rules_priority_non_negative", table.priority),
 
     // RLS Policies
-    selectPolicy: pgPolicy("purchase_order_approval_rules_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("purchase_order_approval_rules_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("purchase_order_approval_rules_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("purchase_order_approval_rules_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("purchase_order_approval_rules"),
   })
 );
 

@@ -10,7 +10,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   pgEnum,
   uuid,
   text,
@@ -24,6 +23,7 @@ import {
   currencyColumn,
   currencyColumnNullable,
   percentageColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { suppliers } from "./suppliers";
 import { supplierPriceLists } from "./supplier-price-lists";
@@ -177,27 +177,7 @@ export const priceChangeHistory = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("price_change_history_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("price_change_history_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("price_change_history_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("price_change_history_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("price_change_history"),
   })
 );
 

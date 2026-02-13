@@ -12,15 +12,16 @@
  * @source files from useFiles hook
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Calendar,
   Plus,
   MapPin,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -64,65 +65,20 @@ import { ProjectTimelineGantt } from './project-timeline-gantt';
 // TYPES
 // ============================================================================
 
-export interface ProjectTabData {
-  id: string;
-  title: string;
-  projectNumber: string;
-  description: string | null;
-  status: 'quoting' | 'approved' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold';
-  progressPercent: number;
-  projectType: string;
-  priority: 'urgent' | 'high' | 'medium' | 'low';
-  startDate: string | null;
-  targetCompletionDate: string | null;
-  actualCompletionDate: string | null;
-  estimatedTotalValue: string | number | null;
-  actualTotalCost: string | number | null;
-  siteAddress: {
-    street: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  } | null;
-  scope: {
-    inScope: string[];
-    outOfScope: string[];
-  } | null;
-  outcomes: string[] | null;
-  keyFeatures: {
-    p0: string[];
-    p1: string[];
-    p2: string[];
-  } | null;
-}
+import type {
+  ProjectTabData,
+  ProjectTabVisit,
+  ProjectTimelineTask,
+} from '@/lib/schemas/jobs/project-detail';
+import {
+  tasksToProjectTimelineTasks,
+  visitsToProjectTimelineTasks,
+} from '@/lib/schemas/jobs/project-detail';
+
+export type { ProjectTabData };
 
 interface TabProps {
   project: ProjectTabData;
-}
-
-interface Visit {
-  id: string;
-  visitNumber: string;
-  visitType: string;
-  status: string;
-  scheduledDate: string;
-  scheduledTime: string | null;
-  installerName?: string;
-}
-
-interface TimelineTask {
-  id: string;
-  title: string;
-  startDate: Date;
-  endDate: Date;
-  status: 'todo' | 'in_progress' | 'completed' | 'blocked';
-  progress: number;
-  assignee?: {
-    name: string;
-    avatar?: string;
-  };
-  workstreamName?: string;
 }
 
 // ============================================================================
@@ -149,27 +105,53 @@ function getStatusColor(status: string) {
 // ============================================================================
 
 interface ProjectOverviewTabProps extends TabProps {
-  tasks?: TimelineTask[];
-  visits?: Visit[];
+  /** Job tasks (TaskResponse) - when provided, shown in Gantt; otherwise visits used */
+  tasks?: unknown[];
+  visits?: ProjectTabVisit[];
+  /** Workstream id->name for task labels */
+  workstreamNames?: Record<string, string>;
+  /** Called when user drags/resizes a Gantt bar */
+  onDateChange?: (taskId: string, visitId: string | undefined, isTask: boolean, startDate: Date, endDate: Date) => void;
 }
 
-export function ProjectOverviewTab({ project, tasks = [], visits = [] }: ProjectOverviewTabProps) {
+export function ProjectOverviewTab({
+  project,
+  tasks = [],
+  visits = [],
+  workstreamNames,
+  onDateChange,
+}: ProjectOverviewTabProps) {
   const safeVisits = Array.isArray(visits) ? visits : [];
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-  // Convert site visits to timeline tasks if no tasks provided
-  const timelineTasks: TimelineTask[] = tasks.length > 0
-    ? tasks
-    : safeVisits.map(v => ({
-        id: v.id,
-        title: v.visitNumber,
-        startDate: new Date(v.scheduledDate),
-        endDate: new Date(v.scheduledDate),
-        status: v.status === 'completed' ? 'completed' :
-                v.status === 'in_progress' ? 'in_progress' : 'todo',
-        progress: v.status === 'completed' ? 100 :
-                  v.status === 'in_progress' ? 50 : 0,
-        assignee: v.installerName ? { name: v.installerName } : undefined,
-      }));
+  const navigate = useNavigate();
+  const timelineTasks: ProjectTimelineTask[] =
+    safeTasks.length > 0
+      ? tasksToProjectTimelineTasks(
+          safeTasks as Parameters<typeof tasksToProjectTimelineTasks>[0],
+          workstreamNames
+        )
+      : visitsToProjectTimelineTasks(
+          safeVisits as Parameters<typeof visitsToProjectTimelineTasks>[0]
+        );
+
+  const handleGanttItemClick = useCallback(
+    (task: ProjectTimelineTask) => {
+      if (task.visitId) {
+        navigate({
+          to: '/projects/$projectId/visits/$visitId',
+          params: { projectId: project.id, visitId: task.visitId },
+        });
+      } else if (task.isTask) {
+        navigate({
+          to: '/projects/$projectId',
+          params: { projectId: project.id },
+          search: { tab: 'tasks' },
+        });
+      }
+    },
+    [navigate, project.id]
+  );
 
   return (
     <div className="space-y-6">
@@ -190,6 +172,15 @@ export function ProjectOverviewTab({ project, tasks = [], visits = [] }: Project
         tasks={timelineTasks}
         projectStartDate={project.startDate ? new Date(project.startDate) : undefined}
         projectEndDate={project.targetCompletionDate ? new Date(project.targetCompletionDate) : undefined}
+        onItemClick={handleGanttItemClick}
+        onDateChange={
+          onDateChange
+            ? (taskId, startDate, endDate) => {
+                const task = timelineTasks.find((t) => t.id === taskId);
+                onDateChange(taskId, task?.visitId, !!task?.isTask, startDate, endDate);
+              }
+            : undefined
+        }
       />
 
       {/* Site Address Card */}
@@ -248,7 +239,7 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
       try {
         await deleteWorkstream.mutateAsync(workstream.id);
         toast.success('Workstream deleted');
-      } catch (err) {
+      } catch {
         toast.error('Failed to delete workstream');
       }
     }
@@ -258,7 +249,7 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
     try {
       await reorderWorkstreams.mutateAsync(workstreamIds);
       toast.success('Workstreams reordered');
-    } catch (err) {
+    } catch {
       toast.error('Failed to reorder workstreams');
     }
   };
@@ -301,7 +292,7 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
 // ============================================================================
 
 interface ProjectVisitsTabProps extends TabProps {
-  visits?: Visit[];
+  visits?: ProjectTabVisit[];
   onScheduleVisit?: () => void;
 }
 
@@ -363,10 +354,21 @@ export function ProjectVisitsTab({ project, visits = [], onScheduleVisit }: Proj
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    {visit.installerName && (
+                    {(visit.installerName || visit.installerId) && (
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">Assigned to</p>
-                        <p className="text-sm font-medium">{visit.installerName}</p>
+                        {visit.installerId ? (
+                          <Link
+                            to="/installers/$installerId"
+                            params={{ installerId: visit.installerId }}
+                            className="text-sm font-medium hover:underline"
+                            preload="intent"
+                          >
+                            {visit.installerName || 'Installer'}
+                          </Link>
+                        ) : (
+                          <p className="text-sm font-medium">{visit.installerName}</p>
+                        )}
                       </div>
                     )}
                     <ArrowRight className="h-5 w-5 text-muted-foreground" />
@@ -377,6 +379,26 @@ export function ProjectVisitsTab({ project, visits = [], onScheduleVisit }: Proj
           ))}
         </div>
       )}
+
+      {/* Link to Cross-Project Schedule (PROJECTS-DOMAIN-PHILOSOPHY: View in full schedule) */}
+      <div className="pt-4 border-t flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+        <Link
+          to="/schedule/calendar"
+          search={{ projectId: project.id }}
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground hover:underline transition-colors"
+        >
+          View in calendar
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+        <Link
+          to="/schedule/timeline"
+          search={{ projectId: project.id }}
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground hover:underline transition-colors"
+        >
+          View in timeline
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+      </div>
     </div>
   );
 }
@@ -389,8 +411,16 @@ export function ProjectVisitsTab({ project, visits = [], onScheduleVisit }: Proj
  * Project Tasks Tab Container
  * Full-featured task management with workstream grouping
  */
-export function ProjectTasksTab({ project }: TabProps) {
-  return <EnhancedProjectTasksTab projectId={project.id} />;
+export function ProjectTasksTab({
+  project,
+  onCompleteProjectClick,
+}: TabProps & { onCompleteProjectClick?: () => void }) {
+  return (
+    <EnhancedProjectTasksTab
+      projectId={project.id}
+      onCompleteProjectClick={onCompleteProjectClick}
+    />
+  );
 }
 
 // ============================================================================
@@ -402,7 +432,12 @@ export function ProjectTasksTab({ project }: TabProps) {
  * Full materials management with cost tracking
  */
 export function ProjectBomTab({ project }: TabProps) {
-  return <EnhancedProjectBomTab projectId={project.id} />;
+  return (
+    <EnhancedProjectBomTab
+      projectId={project.id}
+      orderId={project.orderId ?? undefined}
+    />
+  );
 }
 
 // ============================================================================

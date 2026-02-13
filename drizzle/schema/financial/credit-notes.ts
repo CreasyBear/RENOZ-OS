@@ -12,15 +12,15 @@ import {
   uuid,
   text,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { creditNoteStatusEnum } from "../_shared/enums";
 import {
   timestampColumns,
   auditColumns,
   softDeleteColumn,
   currencyColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { orders } from "../orders/orders";
 import { customers } from "../customers/customers";
@@ -106,27 +106,7 @@ export const creditNotes = pgTable(
     orderIdx: index("idx_credit_notes_order").on(table.orderId),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("credit_notes_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("credit_notes_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("credit_notes_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("credit_notes_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("credit_notes"),
   })
 );
 

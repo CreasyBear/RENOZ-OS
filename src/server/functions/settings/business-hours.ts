@@ -8,9 +8,11 @@
  * @see src/lib/sla for time calculations
  */
 
+import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
+import { setResponseStatus } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, ne, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { businessHoursConfig, type WeeklySchedule, type DaySchedule } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -94,37 +96,45 @@ export const listBusinessHours = createServerFn({ method: 'GET' }).handler(async
 // ============================================================================
 
 /**
+ * Cached business hours fetch for per-request deduplication.
+ * @performance Uses React.cache() for automatic request deduplication
+ */
+const _getBusinessHoursCached = cache(async (id: string, organizationId: string) => {
+  const [config] = await db
+    .select({
+      id: businessHoursConfig.id,
+      organizationId: businessHoursConfig.organizationId,
+      name: businessHoursConfig.name,
+      weeklySchedule: businessHoursConfig.weeklySchedule,
+      timezone: businessHoursConfig.timezone,
+      isDefault: businessHoursConfig.isDefault,
+      createdAt: businessHoursConfig.createdAt,
+      updatedAt: businessHoursConfig.updatedAt,
+    })
+    .from(businessHoursConfig)
+    .where(
+      and(
+        eq(businessHoursConfig.id, id),
+        eq(businessHoursConfig.organizationId, organizationId)
+      )
+    )
+    .limit(1);
+
+  return config ?? null;
+});
+
+/**
  * Get a single business hours configuration.
  */
 export const getBusinessHours = createServerFn({ method: 'GET' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-
-    const [config] = await db
-      .select({
-        id: businessHoursConfig.id,
-        organizationId: businessHoursConfig.organizationId,
-        name: businessHoursConfig.name,
-        weeklySchedule: businessHoursConfig.weeklySchedule,
-        timezone: businessHoursConfig.timezone,
-        isDefault: businessHoursConfig.isDefault,
-        createdAt: businessHoursConfig.createdAt,
-        updatedAt: businessHoursConfig.updatedAt,
-      })
-      .from(businessHoursConfig)
-      .where(
-        and(
-          eq(businessHoursConfig.id, data.id),
-          eq(businessHoursConfig.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
+    const config = await _getBusinessHoursCached(data.id, ctx.organizationId);
     if (!config) {
+      setResponseStatus(404);
       throw new NotFoundError('Business hours configuration not found', 'businessHoursConfig');
     }
-
     return config;
   });
 
@@ -172,26 +182,30 @@ export const getDefaultBusinessHours = createServerFn({ method: 'GET' }).handler
 export const createBusinessHours = createServerFn({ method: 'POST' })
   .inputValidator(createBusinessHoursSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
-    // If setting as default, unset other defaults
-    if (data.isDefault) {
-      await db
-        .update(businessHoursConfig)
-        .set({ isDefault: false })
-        .where(eq(businessHoursConfig.organizationId, ctx.organizationId));
-    }
+    const created = await db.transaction(async (tx) => {
+      // If setting as default, unset other defaults
+      if (data.isDefault) {
+        await tx
+          .update(businessHoursConfig)
+          .set({ isDefault: false })
+          .where(eq(businessHoursConfig.organizationId, ctx.organizationId));
+      }
 
-    const [created] = await db
-      .insert(businessHoursConfig)
-      .values({
-        organizationId: ctx.organizationId,
-        name: data.name,
-        weeklySchedule: data.weeklySchedule as WeeklySchedule,
-        timezone: data.timezone,
-        isDefault: data.isDefault,
-      })
-      .returning();
+      const [inserted] = await tx
+        .insert(businessHoursConfig)
+        .values({
+          organizationId: ctx.organizationId,
+          name: data.name,
+          weeklySchedule: data.weeklySchedule as WeeklySchedule,
+          timezone: data.timezone,
+          isDefault: data.isDefault,
+        })
+        .returning();
+
+      return inserted;
+    });
 
     // Log audit
     await logAuditEvent({
@@ -230,49 +244,53 @@ export const createBusinessHours = createServerFn({ method: 'POST' })
 export const updateBusinessHours = createServerFn({ method: 'POST' })
   .inputValidator(updateBusinessHoursSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
-    // Get current config
-    const [current] = await db
-      .select()
-      .from(businessHoursConfig)
-      .where(
-        and(
-          eq(businessHoursConfig.id, data.id),
-          eq(businessHoursConfig.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
-    if (!current) {
-      throw new NotFoundError('Business hours configuration not found', 'businessHoursConfig');
-    }
-
-    // If setting as default, unset other defaults
-    if (data.isDefault) {
-      await db
-        .update(businessHoursConfig)
-        .set({ isDefault: false })
+    const updated = await db.transaction(async (tx) => {
+      // Get current config
+      const [current] = await tx
+        .select()
+        .from(businessHoursConfig)
         .where(
           and(
-            eq(businessHoursConfig.organizationId, ctx.organizationId),
-            sql`${businessHoursConfig.id} != ${data.id}`
+            eq(businessHoursConfig.id, data.id),
+            eq(businessHoursConfig.organizationId, ctx.organizationId)
           )
-        );
-    }
+        )
+        .limit(1);
 
-    const updateData: Partial<typeof current> = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.weeklySchedule !== undefined)
-      updateData.weeklySchedule = data.weeklySchedule as WeeklySchedule;
-    if (data.timezone !== undefined) updateData.timezone = data.timezone;
-    if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
+      if (!current) {
+        throw new NotFoundError('Business hours configuration not found', 'businessHoursConfig');
+      }
 
-    const [updated] = await db
-      .update(businessHoursConfig)
-      .set(updateData)
-      .where(eq(businessHoursConfig.id, data.id))
-      .returning();
+      // If setting as default, unset other defaults
+      if (data.isDefault) {
+        await tx
+          .update(businessHoursConfig)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(businessHoursConfig.organizationId, ctx.organizationId),
+              ne(businessHoursConfig.id, data.id)
+            )
+          );
+      }
+
+      const updateData: Partial<typeof current> = {};
+      if (data.name !== undefined) updateData.name = data.name;
+      if (data.weeklySchedule !== undefined)
+        updateData.weeklySchedule = data.weeklySchedule as WeeklySchedule;
+      if (data.timezone !== undefined) updateData.timezone = data.timezone;
+      if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
+
+      const [result] = await tx
+        .update(businessHoursConfig)
+        .set(updateData)
+        .where(eq(businessHoursConfig.id, data.id))
+        .returning();
+
+      return { current, result };
+    });
 
     // Log audit
     await logAuditEvent({
@@ -280,28 +298,28 @@ export const updateBusinessHours = createServerFn({ method: 'POST' })
       userId: ctx.user.id,
       action: 'business_hours.update',
       entityType: AUDIT_ENTITY_TYPES.ORGANIZATION,
-      entityId: updated.id,
+      entityId: updated.result.id,
       oldValues: {
-        name: current.name,
-        timezone: current.timezone,
-        isDefault: current.isDefault,
+        name: updated.current.name,
+        timezone: updated.current.timezone,
+        isDefault: updated.current.isDefault,
       },
       newValues: {
-        name: updated.name,
-        timezone: updated.timezone,
-        isDefault: updated.isDefault,
+        name: updated.result.name,
+        timezone: updated.result.timezone,
+        isDefault: updated.result.isDefault,
       },
     });
 
     return {
-      id: updated.id,
-      organizationId: updated.organizationId,
-      name: updated.name,
-      weeklySchedule: updated.weeklySchedule,
-      timezone: updated.timezone,
-      isDefault: updated.isDefault,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
+      id: updated.result.id,
+      organizationId: updated.result.organizationId,
+      name: updated.result.name,
+      weeklySchedule: updated.result.weeklySchedule,
+      timezone: updated.result.timezone,
+      isDefault: updated.result.isDefault,
+      createdAt: updated.result.createdAt,
+      updatedAt: updated.result.updatedAt,
     };
   });
 
@@ -317,7 +335,7 @@ export const updateBusinessHours = createServerFn({ method: 'POST' })
 export const deleteBusinessHours = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Get the config to delete
     const [config] = await db

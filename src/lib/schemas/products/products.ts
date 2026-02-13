@@ -16,6 +16,7 @@ import {
   filterSchema,
   idParamSchema,
 } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
@@ -104,7 +105,8 @@ export const productMetadataSchema = z
     warranty: z.string().max(255).optional(),
     leadTime: z.number().int().nonnegative().optional(),
   })
-  .passthrough(); // Allow additional properties
+  .passthrough()
+  .transform((v) => v as Record<string, string | number | boolean | null | undefined>);
 
 export type ProductMetadata = z.infer<typeof productMetadataSchema>;
 
@@ -160,6 +162,18 @@ export type UpdateProduct = z.infer<typeof updateProductSchema>;
 export const productSchema = createProductSchema.extend({
   id: z.string().uuid(),
   organizationId: z.string().uuid(),
+  description: z.string().max(5000).nullable().optional().default(null), // DB returns null; output string | null per SCHEMA-TRACE §8
+  barcode: z.string().max(50).optional().nullable(), // DB returns null for optional fields
+  categoryId: z.string().uuid().optional().nullable(),
+  seoTitle: z.string().max(255).optional().nullable(),
+  seoDescription: z.string().max(500).optional().nullable(),
+  xeroItemId: z.string().max(255).optional().nullable(),
+  tags: z
+    .array(z.string().max(50))
+    .max(20)
+    .nullable()
+    .optional()
+    .transform((v) => v ?? []),
   weight: z.number().nonnegative().multipleOf(0.001).nullable(), // numeric(8,3) - nullable in output
   pricing: productPricingSchema.nullable(), // nullable in output
   warrantyPolicyId: z.string().uuid().nullable(), // nullable in output
@@ -197,6 +211,13 @@ export const productListQuerySchema = paginationSchema.merge(productFilterSchema
 
 export type ProductListQuery = z.infer<typeof productListQuerySchema>;
 
+/**
+ * Cursor-based pagination query for products (recommended for large datasets).
+ */
+export const productCursorQuerySchema = cursorPaginationSchema.merge(productFilterSchema);
+
+export type ProductCursorQuery = z.infer<typeof productCursorQuerySchema>;
+
 // ============================================================================
 // PRODUCT PARAMS
 // ============================================================================
@@ -222,6 +243,8 @@ export const updateCategorySchema = createCategorySchema.partial();
 export const categorySchema = createCategorySchema.extend({
   id: z.string().uuid(),
   organizationId: z.string().uuid(),
+  description: z.string().max(500).nullable().optional(),
+  parentId: z.string().uuid().nullable().optional(),
   defaultWarrantyPolicyId: z.string().uuid().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -240,7 +263,7 @@ export const createPriceTierSchema = z.object({
   minQuantity: z.number().int().positive('Min quantity must be positive'),
   maxQuantity: z.number().int().positive().nullable().optional(),
   price: currencySchema,
-  discountPercent: percentageSchema.optional(),
+  discountPercent: percentageSchema.nullable().default(null),
   isActive: z.boolean().default(true),
 });
 
@@ -265,7 +288,7 @@ export const createCustomerPriceSchema = z.object({
   customerId: z.string().uuid(),
   productId: z.string().uuid(),
   price: currencySchema,
-  discountPercent: percentageSchema.optional(),
+  discountPercent: percentageSchema.nullable().default(null),
   validFrom: z.coerce.date().optional(),
   validTo: z.coerce.date().nullable().optional(),
 });
@@ -327,12 +350,12 @@ export const imageDimensionsSchema = z.object({
 export const createProductImageSchema = z.object({
   productId: z.string().uuid(),
   imageUrl: z.string().url(),
-  altText: z.string().max(255).optional(),
-  caption: z.string().max(500).optional(),
+  altText: z.string().max(255).nullable().optional(),
+  caption: z.string().max(500).nullable().optional(),
   sortOrder: z.number().int().nonnegative().default(0),
   isPrimary: z.boolean().default(false),
-  fileSize: z.number().int().nonnegative().optional(),
-  dimensions: imageDimensionsSchema.optional(),
+  fileSize: z.number().int().nonnegative().nullable().default(null),
+  dimensions: imageDimensionsSchema.nullable().optional(),
 });
 
 export const updateProductImageSchema = createProductImageSchema.partial().omit({
@@ -350,6 +373,51 @@ export const productImageSchema = createProductImageSchema.extend({
 export type CreateProductImage = z.infer<typeof createProductImageSchema>;
 export type UpdateProductImage = z.infer<typeof updateProductImageSchema>;
 export type ProductImage = z.infer<typeof productImageSchema>;
+
+/** Form schema for image editor (alt text, caption) */
+export const imageEditFormSchema = z.object({
+  altText: z
+    .string()
+    .max(255, 'Alt text must be 255 characters or less')
+    .optional(),
+  caption: z
+    .string()
+    .max(1000, 'Caption must be 1000 characters or less')
+    .optional(),
+});
+export type ImageEditFormValues = z.infer<typeof imageEditFormSchema>;
+
+/**
+ * Response schema for getProduct. Validates normalized DB output.
+ * Use in server handler after normalizing null metadata/description/fileSize/discountPercent.
+ */
+// Wire types for ServerFn boundary: z.record produces {}[] for serialization (SCHEMA-TRACE §4)
+const flexibleRecordSchema = z.record(z.string(), z.any());
+
+export const getProductResponseSchema = z.object({
+  product: productSchema,
+  category: categorySchema.nullable(),
+  images: z.array(productImageSchema),
+  priceTiers: z.array(priceTierSchema),
+  attributeValues: z.array(flexibleRecordSchema),
+  relations: z.array(flexibleRecordSchema),
+  bundleComponents: z.array(flexibleRecordSchema).optional(),
+});
+
+export type GetProductResponse = z.infer<typeof getProductResponseSchema>;
+
+/** Loader data for product edit route (getProduct + categoryTree). */
+export type GetProductEditLoaderData = GetProductResponse & { categoryTree: CategoryWithChildren[] };
+
+/** Type guard for GetProductResponse (use after runtime checks). */
+export function isGetProductResponse(v: unknown): v is GetProductResponse {
+  return (
+    v != null &&
+    typeof v === 'object' &&
+    'product' in (v as object) &&
+    (v as GetProductResponse).product != null
+  );
+}
 
 // ============================================================================
 // PRODUCT ATTRIBUTE DEFINITION SCHEMAS
@@ -472,3 +540,199 @@ export const priceResolutionResultSchema = z.object({
 
 export type GetPriceQuery = z.infer<typeof getPriceQuerySchema>;
 export type PriceResolutionResult = z.infer<typeof priceResolutionResultSchema>;
+
+// ============================================================================
+// INVENTORY MOVEMENT TYPES (import for ProductMovementHistoryItem only)
+// ============================================================================
+
+import type { MovementType } from '../inventory';
+
+// Re-export for consumers (inventory-history imports from products)
+export type { MovementType } from '../inventory';
+
+// Movement interface for product inventory history display (nested product/location)
+export interface ProductMovementHistoryItem {
+  id: string;
+  movementType: MovementType;
+  quantity: number;
+  previousQuantity: number;
+  newQuantity: number;
+  unitCost: number;
+  totalCost: number;
+  referenceType: string | null;
+  referenceId: string | null;
+  metadata: Record<string, unknown> | null;
+  notes: string | null;
+  movementDate?: Date | string;
+  totalQuantity: number;
+  runningBalance: number;
+  createdAt: Date;
+  createdBy: string | null;
+  product: {
+    id: string;
+    sku: string;
+    name: string;
+  };
+  location: {
+    id: string;
+    code: string;
+    name: string;
+  };
+}
+
+// ============================================================================
+// STOCK ADJUSTMENT TYPES
+// ============================================================================
+
+export interface StockAdjustmentLocation {
+  id: string;
+  locationCode: string; // Matches Location type from inventory schema
+  name: string;
+}
+
+export interface StockAdjustmentPayload {
+  locationId: string;
+  adjustmentType: 'add' | 'subtract' | 'set';
+  quantity: number;
+  reason: string;
+  notes?: string;
+  currentStock: number;
+}
+
+// ============================================================================
+// PRODUCT WITH RELATIONS (Detail View)
+// ============================================================================
+
+export interface ProductWithRelations extends Omit<Product, 'barcode' | 'description'> {
+  /** DB returns string | null */
+  description: string | null;
+  /** DB returns string | null; loader normalizes to undefined when null */
+  barcode?: string | null;
+}
+
+// ============================================================================
+// PRODUCT TABLE ITEM (List View)
+// ============================================================================
+
+export type ProductType = z.infer<typeof productTypeSchema>;
+export type ProductStatus = z.infer<typeof productStatusSchema>;
+export type TaxType = z.infer<typeof taxTypeSchema>;
+
+export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'not_tracked';
+
+export interface ProductTableItem {
+  id: string;
+  sku: string;
+  barcode?: string | null;
+  name: string;
+  description?: string | null;
+  categoryId: string | null;
+  categoryName?: string | null;
+  type: ProductType;
+  status: ProductStatus;
+  basePrice: number;
+  costPrice: number | null;
+  isActive: boolean;
+  trackInventory?: boolean;
+  totalQuantity?: number;
+  stockStatus?: StockStatus;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+// ============================================================================
+// CATEGORY WITH CHILDREN (Tree Structure)
+// ============================================================================
+
+export interface CategoryWithChildren extends Category {
+  children: CategoryWithChildren[];
+  productCount?: number;
+}
+
+// ============================================================================
+// CATEGORY NODE (Tree Component)
+// ============================================================================
+
+export interface CategoryNode {
+  id: string;
+  name: string;
+  description?: string | null;
+  parentId?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  productCount?: number;
+  children: CategoryNode[];
+}
+
+// ============================================================================
+// PRODUCT WITH INVENTORY (List Response)
+// ============================================================================
+
+export interface ProductWithInventory extends Omit<Product, 'categoryId'> {
+  /** List output normalizes undefined to null per SCHEMA-TRACE §8 */
+  categoryId: string | null;
+  categoryName: string | null;
+  totalQuantity: number;
+  stockStatus: StockStatus;
+}
+
+// ============================================================================
+// PRODUCT SEARCH RESULT
+// ============================================================================
+
+/**
+ * Product from quick search - dimensions may differ from schema due to DB jsonb.
+ * Use when quickSearchProducts returns raw Drizzle rows.
+ */
+export interface ProductSearchItem extends Omit<Product, 'dimensions' | 'description' | 'metadata' | 'tags' | 'barcode'> {
+  dimensions?: unknown;
+  description?: string | null;
+  /** DB returns ProductMetadata | null; search results may have null */
+  metadata?: ProductMetadata | Record<string, string | number | boolean | null | undefined> | null;
+  /** DB returns string[] | null; normalize to [] when null */
+  tags?: string[] | null;
+  /** DB returns string | null */
+  barcode?: string | null;
+}
+
+export interface ProductSearchResult {
+  products: ProductSearchItem[];
+  total: number;
+}
+
+/** Minimal product hit for search results in dialogs (e.g. amendment item_add) */
+export interface ProductSearchHit {
+  id: string;
+  name: string;
+  sku: string | null;
+  basePrice: number | null;
+}
+
+// ============================================================================
+// LIST PRODUCTS RESULT
+// ============================================================================
+
+export interface ListProductsResult {
+  products: ProductWithInventory[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+// ============================================================================
+// NAVIGATION LINK (Cross-Entity Navigation)
+// ============================================================================
+
+export interface NavigationLink {
+  to: string;
+  params: Record<string, string>;
+  label: string;
+}
+
+// ============================================================================
+// GALLERY IMAGE (Image Gallery Component)
+// ============================================================================
+
+/** Alias for ProductImage; kept for backwards compatibility with gallery components. */
+export type GalleryImage = ProductImage;

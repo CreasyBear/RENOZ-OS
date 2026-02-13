@@ -264,8 +264,8 @@ export function extractJobDocumentMetadata(
 
   // Extract dates
   const dateMatches =
-    text.match(/\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g) ||
-    text.match(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g);
+    text.match(/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/g) ||
+    text.match(/\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/g);
   if (dateMatches && dateMatches.length > 0) {
     date = dateMatches[0];
   }

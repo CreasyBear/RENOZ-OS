@@ -45,10 +45,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ReportFavoriteButton } from './report-favorite-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { DatePickerWithRange, type DateRange } from '@/components/ui/date-picker-with-range';
+import { DatePickerWithRange } from '@/components/ui/date-picker-with-range';
 import { Progress } from '@/components/ui/progress';
 import {
   XAxis,
@@ -66,91 +67,16 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useOrgFormat } from '@/hooks/use-org-format';
+import type {
+  ProcurementAnalytics,
+  ReportConfig,
+  ProcurementReportsProps,
+  ReportConfigType,
+  ProcurementTab,
+} from '@/lib/schemas/reports/procurement';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface ProcurementAnalytics {
-  supplierPerformance: Array<{
-    supplierId: string;
-    supplierName: string;
-    totalOrders: number;
-    totalSpend: number;
-    avgOrderValue: number;
-    qualityScore: number;
-    onTimeDelivery: number;
-    defectRate: number;
-    leadTimeDays: number;
-    costSavings: number;
-    trend: 'up' | 'down' | 'stable';
-  }>;
-  spendAnalysis: {
-    byCategory: Array<{
-      category: string;
-      totalSpend: number;
-      percentage: number;
-      trend: number;
-    }>;
-    bySupplier: Array<{
-      supplierId: string;
-      supplierName: string;
-      totalSpend: number;
-      orderCount: number;
-      avgOrderValue: number;
-    }>;
-    trends: Array<{
-      date: string;
-      spend: number;
-      orders: number;
-      savings: number;
-    }>;
-  };
-  efficiencyMetrics: {
-    avgProcessingTime: number;
-    approvalCycleTime: number;
-    orderFulfillmentRate: number;
-    costSavingsRate: number;
-    automationRate: number;
-    supplierDiversity: number;
-  };
-  costSavings: {
-    totalSavings: number;
-    savingsByType: Array<{
-      type: string;
-      amount: number;
-      percentage: number;
-    }>;
-    monthlySavings: Array<{
-      month: string;
-      negotiatedSavings: number;
-      volumeDiscounts: number;
-      processImprovements: number;
-      total: number;
-    }>;
-  };
-}
-
-export interface ReportConfig {
-  id: string;
-  name: string;
-  description: string;
-  type: 'supplier-performance' | 'spend-analysis' | 'efficiency' | 'cost-savings' | 'custom';
-  dateRange: DateRange;
-  filters: {
-    suppliers?: string[];
-    categories?: string[];
-    minAmount?: number;
-    maxAmount?: number;
-  };
-  schedule?: {
-    frequency: 'daily' | 'weekly' | 'monthly';
-    recipients: string[];
-    format: 'pdf' | 'excel' | 'email';
-  };
-  createdBy: string;
-  createdAt: string;
-}
+// Re-export for consumers
+export type { ProcurementAnalytics, ReportConfig, ProcurementReportsProps };
 
 // ============================================================================
 // CONSTANTS
@@ -176,33 +102,6 @@ const REPORT_TYPES = [
 ];
 
 // ============================================================================
-// PROPS
-// ============================================================================
-
-export interface ProcurementReportsProps {
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useQuery result */
-  analytics: ProcurementAnalytics | undefined;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useQuery isLoading */
-  isLoading: boolean;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useQuery error */
-  error: Error | null;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useState */
-  dateRange: DateRange;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useState setter */
-  onDateRangeChange: (range: DateRange) => void;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useCallback */
-  onExport: (format: 'pdf' | 'excel' | 'csv') => void;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useCallback */
-  onCreateCustomReport: (input: {
-    name: string;
-    description?: string;
-    reportType: ReportConfig['type'];
-  }) => void;
-  /** @source Container: route/_authenticated/reports/procurement/index.tsx - useCallback */
-  onScheduleReport: () => void;
-}
-
-// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -212,11 +111,25 @@ export const ProcurementReports = memo(function ProcurementReports({
   error,
   dateRange,
   onDateRangeChange,
+  activeTab: controlledTab,
+  onTabChange,
   onExport,
   onCreateCustomReport,
   onScheduleReport,
 }: ProcurementReportsProps) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [internalTab, setInternalTab] = useState<ProcurementTab>('overview');
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = useCallback(
+    (value: string) => {
+      const tab = value as ProcurementTab;
+      if (onTabChange) {
+        onTabChange(tab);
+      } else {
+        setInternalTab(tab);
+      }
+    },
+    [onTabChange]
+  );
   const [selectedReportType, setSelectedReportType] = useState<string>('supplier-performance');
   const [customReportDialog, setCustomReportDialog] = useState(false);
   const [exportDialog, setExportDialog] = useState(false);
@@ -236,7 +149,7 @@ export const ProcurementReports = memo(function ProcurementReports({
     onCreateCustomReport({
       name: customReportName.trim(),
       description: customReportDescription.trim() || undefined,
-      reportType: selectedReportType as ReportConfig['type'],
+      reportType: selectedReportType as ReportConfigType,
     });
     setCustomReportDialog(false);
     setCustomReportName('');
@@ -293,6 +206,7 @@ export const ProcurementReports = memo(function ProcurementReports({
           />
 
           <div className="flex gap-2">
+            <ReportFavoriteButton reportType="procurement" />
             <Button variant="outline" onClick={() => setExportDialog(true)}>
               <Download className="mr-2 h-4 w-4" />
               Export

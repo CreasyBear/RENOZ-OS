@@ -9,7 +9,7 @@ import { ShoppingCart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusCell, PriceCell, DateCell } from "@/components/shared/data-table";
 import { cn } from "@/lib/utils";
-import type { OrderTableItem } from "./order-columns";
+import type { OrderTableItem } from "@/lib/schemas/orders";
 import { ORDER_STATUS_CONFIG, formatDueDateRelative } from "./order-status-config";
 
 export interface OrdersMobileCardsProps {

@@ -7,6 +7,7 @@
  */
 
 import { useEffect } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Calendar } from 'lucide-react';
 import {
@@ -32,6 +33,7 @@ import { useCreateSiteVisit } from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
 import { toast } from '@/lib/toast';
 import { format } from 'date-fns';
+import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
 
 // ============================================================================
 // SCHEMA
@@ -45,16 +47,6 @@ const createSiteVisitFormSchema = z.object({
   installerId: z.string().optional(),
   notes: z.string().optional(),
 });
-
-const visitTypeOptions = [
-  { value: 'assessment', label: 'Site Assessment' },
-  { value: 'installation', label: 'Installation' },
-  { value: 'commissioning', label: 'Commissioning' },
-  { value: 'service', label: 'Service Call' },
-  { value: 'warranty', label: 'Warranty Repair' },
-  { value: 'inspection', label: 'Inspection' },
-  { value: 'maintenance', label: 'Maintenance' },
-];
 
 // ============================================================================
 // TYPES
@@ -78,6 +70,7 @@ export function SiteVisitCreateDialog({
   projectId,
   onSuccess,
 }: SiteVisitCreateDialogProps) {
+  const navigate = useNavigate();
   const createSiteVisit = useCreateSiteVisit();
   const { data: usersData } = useUsers();
 
@@ -116,7 +109,12 @@ export function SiteVisitCreateDialog({
           notes: data.notes,
         });
 
-        toast.success('Site visit scheduled successfully');
+        toast.success('Site visit scheduled successfully', {
+          action: {
+            label: 'View in Schedule',
+            onClick: () => navigate({ to: '/schedule/calendar', search: { projectId } }),
+          },
+        });
         onOpenChange(false);
         form.reset();
         onSuccess?.(result.id);
@@ -169,7 +167,7 @@ export function SiteVisitCreateDialog({
                 <SelectField
                   field={field}
                   label="Visit Type"
-                  options={visitTypeOptions}
+                  options={VISIT_TYPE_OPTIONS}
                   required
                 />
               )}

@@ -7,3 +7,4 @@
 export * from './sla';
 export * from './issues';
 export * from './rma';
+export * from './escalation';

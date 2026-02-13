@@ -12,7 +12,17 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobMaterials, jobAssignments, products } from 'drizzle/schema';
+import {
+  jobMaterials,
+  jobMaterialSerialNumbers,
+  jobMaterialPhotos,
+  products,
+} from 'drizzle/schema';
+import {
+  verifyJobExists,
+  verifyProductExists,
+  verifyJobMaterialExists,
+} from '@/server/functions/_shared/entity-verification';
 import {
   listJobMaterialsSchema,
   addJobMaterialSchema,
@@ -47,69 +57,6 @@ const JOB_MATERIAL_EXCLUDED_FIELDS: string[] = [
 ];
 
 // ============================================================================
-// HELPERS
-// ============================================================================
-
-/**
- * Verify job belongs to the user's organization.
- * Returns the job with customerId if found, throws NotFoundError otherwise.
- */
-async function verifyJobAccess(jobId: string, organizationId: string) {
-  const [job] = await db
-    .select({ id: jobAssignments.id, customerId: jobAssignments.customerId })
-    .from(jobAssignments)
-    .where(and(eq(jobAssignments.id, jobId), eq(jobAssignments.organizationId, organizationId)))
-    .limit(1);
-
-  if (!job) {
-    throw new NotFoundError('Job not found');
-  }
-
-  return job;
-}
-
-/**
- * Verify material belongs to the user's organization.
- * Returns the material if found, throws NotFoundError otherwise.
- */
-async function verifyMaterialAccess(materialId: string, organizationId: string) {
-  const [material] = await db
-    .select({ id: jobMaterials.id, jobId: jobMaterials.jobId })
-    .from(jobMaterials)
-    .where(and(eq(jobMaterials.id, materialId), eq(jobMaterials.organizationId, organizationId)))
-    .limit(1);
-
-  if (!material) {
-    throw new NotFoundError('Material not found');
-  }
-
-  return material;
-}
-
-/**
- * Verify product exists and belongs to the user's organization.
- * Returns the product if found, throws NotFoundError otherwise.
- */
-async function verifyProductAccess(productId: string, organizationId: string) {
-  const [product] = await db
-    .select({
-      id: products.id,
-      sku: products.sku,
-      name: products.name,
-      description: products.description,
-    })
-    .from(products)
-    .where(and(eq(products.id, productId), eq(products.organizationId, organizationId)))
-    .limit(1);
-
-  if (!product) {
-    throw new NotFoundError('Product not found');
-  }
-
-  return product;
-}
-
-// ============================================================================
 // LIST JOB MATERIALS
 // ============================================================================
 
@@ -124,9 +71,9 @@ export const listJobMaterials = createServerFn({ method: 'GET' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
-    // Get materials with product details
+    // Get materials with product details (serialNumbers/photos from JSONB or new tables)
     const materials = await db
       .select({
         id: jobMaterials.id,
@@ -136,6 +83,8 @@ export const listJobMaterials = createServerFn({ method: 'GET' })
         quantityUsed: jobMaterials.quantityUsed,
         unitCost: jobMaterials.unitCost,
         notes: jobMaterials.notes,
+        serialNumbers: jobMaterials.serialNumbers,
+        photos: jobMaterials.photos,
         createdAt: jobMaterials.createdAt,
         updatedAt: jobMaterials.updatedAt,
         createdBy: jobMaterials.createdBy,
@@ -160,6 +109,8 @@ export const listJobMaterials = createServerFn({ method: 'GET' })
       quantityUsed: Number(m.quantityUsed),
       unitCost: Number(m.unitCost),
       notes: m.notes,
+      serialNumbers: (m.serialNumbers as string[] | null) ?? [],
+      photos: (m.photos as string[] | null) ?? [],
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
       createdBy: m.createdBy,
@@ -191,10 +142,10 @@ export const addJobMaterial = createServerFn({ method: 'POST' })
     const logger = createActivityLoggerWithContext(ctx);
 
     // Verify job access and get customerId for activity logging
-    const job = await verifyJobAccess(data.jobId, ctx.organizationId);
+    const job = await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Verify product access and get details
-    const product = await verifyProductAccess(data.productId, ctx.organizationId);
+    const product = await verifyProductExists(data.productId, ctx.organizationId);
 
     // Insert the material
     const [material] = await db
@@ -245,6 +196,8 @@ export const addJobMaterial = createServerFn({ method: 'POST' })
       quantityUsed: Number(material.quantityUsed),
       unitCost: Number(material.unitCost),
       notes: material.notes,
+      serialNumbers: (material.serialNumbers as string[] | null) ?? [],
+      photos: (material.photos as string[] | null) ?? [],
       createdAt: material.createdAt,
       updatedAt: material.updatedAt,
       createdBy: material.createdBy,
@@ -275,11 +228,16 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
     });
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Get existing material for change tracking
+    // Get existing material for change tracking (with orgId filter)
     const [existingMaterial] = await db
       .select()
       .from(jobMaterials)
-      .where(eq(jobMaterials.id, data.materialId))
+      .where(
+        and(
+          eq(jobMaterials.id, data.materialId),
+          eq(jobMaterials.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!existingMaterial) {
@@ -289,7 +247,7 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
     const before = existingMaterial;
 
     // Get customerId from job for activity logging
-    const job = await verifyJobAccess(existingMaterial.jobId, ctx.organizationId);
+    const job = await verifyJobExists(existingMaterial.jobId, ctx.organizationId);
 
     // Build update object
     const updates: Record<string, unknown> = {
@@ -310,14 +268,19 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
       updates.notes = data.notes;
     }
 
-    // Update the material
+    // Update the material (with orgId filter)
     const [material] = await db
       .update(jobMaterials)
       .set(updates)
-      .where(eq(jobMaterials.id, data.materialId))
+      .where(
+        and(
+          eq(jobMaterials.id, data.materialId),
+          eq(jobMaterials.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
-    // Get product details
+    // Get product details (with orgId filter)
     const [product] = await db
       .select({
         id: products.id,
@@ -326,7 +289,12 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
         description: products.description,
       })
       .from(products)
-      .where(eq(products.id, material.productId))
+      .where(
+        and(
+          eq(products.id, material.productId),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     // Log material update
@@ -363,6 +331,8 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
       quantityUsed: Number(material.quantityUsed),
       unitCost: Number(material.unitCost),
       notes: material.notes,
+      serialNumbers: (material.serialNumbers as string[] | null) ?? [],
+      photos: (material.photos as string[] | null) ?? [],
       createdAt: material.createdAt,
       updatedAt: material.updatedAt,
       createdBy: material.createdBy,
@@ -393,29 +363,44 @@ export const removeJobMaterial = createServerFn({ method: 'POST' })
     });
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Get existing material for activity logging
+    // Get existing material for activity logging (with orgId filter)
     const [existingMaterial] = await db
       .select()
       .from(jobMaterials)
-      .where(eq(jobMaterials.id, data.materialId))
+      .where(
+        and(
+          eq(jobMaterials.id, data.materialId),
+          eq(jobMaterials.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!existingMaterial) {
       throw new NotFoundError('Material not found');
     }
 
-    // Get product details for logging
+    // Get product details for logging (with orgId filter)
     const [product] = await db
       .select({ name: products.name, sku: products.sku })
       .from(products)
-      .where(eq(products.id, existingMaterial.productId))
+      .where(
+        and(
+          eq(products.id, existingMaterial.productId),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     // Get customerId from job for activity logging
-    const job = await verifyJobAccess(existingMaterial.jobId, ctx.organizationId);
+    const job = await verifyJobExists(existingMaterial.jobId, ctx.organizationId);
 
-    // Delete the material
-    await db.delete(jobMaterials).where(eq(jobMaterials.id, data.materialId));
+    // Delete the material (with orgId filter)
+    await db.delete(jobMaterials).where(
+      and(
+        eq(jobMaterials.id, data.materialId),
+        eq(jobMaterials.organizationId, ctx.organizationId)
+      )
+    );
 
     // Log material removal
     logger.logAsync({
@@ -460,7 +445,7 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Get materials to reserve
     let materials;
@@ -497,7 +482,7 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
         );
     }
 
-    // TODO: Integrate with inventory domain to create actual reservations
+    // TODO(PHASE12-007): Integrate with inventory domain to create actual reservations
     // For now, return the list of materials that would be reserved
 
     return {
@@ -527,7 +512,7 @@ export const calculateJobMaterialCost = createServerFn({ method: 'GET' })
     });
 
     // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    await verifyJobExists(data.jobId, ctx.organizationId);
 
     // Get all materials for the job
     const materials = await db
@@ -586,7 +571,7 @@ export const getJobMaterial = createServerFn({ method: 'GET' })
     });
 
     // Verify material access
-    await verifyMaterialAccess(data.materialId, ctx.organizationId);
+    await verifyJobMaterialExists(data.materialId, ctx.organizationId);
 
     // Get material with product details
     const [material] = await db
@@ -598,6 +583,8 @@ export const getJobMaterial = createServerFn({ method: 'GET' })
         quantityUsed: jobMaterials.quantityUsed,
         unitCost: jobMaterials.unitCost,
         notes: jobMaterials.notes,
+        serialNumbers: jobMaterials.serialNumbers,
+        photos: jobMaterials.photos,
         createdAt: jobMaterials.createdAt,
         updatedAt: jobMaterials.updatedAt,
         createdBy: jobMaterials.createdBy,
@@ -619,6 +606,8 @@ export const getJobMaterial = createServerFn({ method: 'GET' })
       quantityUsed: Number(material.quantityUsed),
       unitCost: Number(material.unitCost),
       notes: material.notes,
+      serialNumbers: (material.serialNumbers as string[] | null) ?? [],
+      photos: (material.photos as string[] | null) ?? [],
       createdAt: material.createdAt,
       updatedAt: material.updatedAt,
       createdBy: material.createdBy,
@@ -651,11 +640,16 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
     });
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Get existing material for change tracking
+    // Get existing material for change tracking (with orgId filter)
     const [existingMaterial] = await db
       .select()
       .from(jobMaterials)
-      .where(eq(jobMaterials.id, data.materialId))
+      .where(
+        and(
+          eq(jobMaterials.id, data.materialId),
+          eq(jobMaterials.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!existingMaterial) {
@@ -664,31 +658,97 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
 
     const before = existingMaterial;
 
-    // Get product details for logging
+    // Get product details for logging (with orgId filter)
     const [product] = await db
       .select({ name: products.name, sku: products.sku })
       .from(products)
-      .where(eq(products.id, existingMaterial.productId))
+      .where(
+        and(
+          eq(products.id, existingMaterial.productId),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     // Get customerId from job for activity logging
-    const job = await verifyJobAccess(existingMaterial.jobId, ctx.organizationId);
+    const job = await verifyJobExists(existingMaterial.jobId, ctx.organizationId);
 
-    // Update the material with installation details
-    const [material] = await db
-      .update(jobMaterials)
-      .set({
-        quantityUsed: data.quantityUsed,
-        notes: data.installedLocation
-          ? `Installed at: ${data.installedLocation}${data.serialNumbers?.length ? ` | Serials: ${data.serialNumbers.join(', ')}` : ''}`
-          : data.serialNumbers?.length
-            ? `Serials: ${data.serialNumbers.join(', ')}`
-            : null,
-        updatedBy: ctx.user.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(jobMaterials.id, data.materialId))
-      .returning();
+    const installedAt = new Date();
+    const serials = data.serialNumbers ?? [];
+    const photoUrls = data.photos ?? [];
+
+    // Update material + insert serials/photos in transaction
+    const [material] = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(jobMaterials)
+        .set({
+          quantityUsed: data.quantityUsed,
+          notes: data.installedLocation
+            ? `Installed at: ${data.installedLocation}${serials.length ? ` | Serials: ${serials.join(', ')}` : ''}`
+            : serials.length
+              ? `Serials: ${serials.join(', ')}`
+              : null,
+          serialNumbers: serials,
+          photos: photoUrls,
+          isInstalled: true,
+          installedAt,
+          installedBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+          updatedAt: installedAt,
+        })
+        .where(
+          and(
+            eq(jobMaterials.id, data.materialId),
+            eq(jobMaterials.organizationId, ctx.organizationId)
+          )
+        )
+        .returning();
+
+      if (!updated) throw new NotFoundError('Material not found');
+
+      // Replace serial numbers in dedicated table (PHASE12-007)
+      await tx
+        .delete(jobMaterialSerialNumbers)
+        .where(
+          and(
+            eq(jobMaterialSerialNumbers.jobMaterialId, data.materialId),
+            eq(jobMaterialSerialNumbers.organizationId, ctx.organizationId)
+          )
+        );
+      if (serials.length > 0) {
+        await tx.insert(jobMaterialSerialNumbers).values(
+          serials.map((sn) => ({
+            organizationId: ctx.organizationId,
+            jobMaterialId: data.materialId,
+            serialNumber: sn,
+            productId: existingMaterial.productId,
+            installedAt,
+          }))
+        );
+      }
+
+      // Replace photos in dedicated table (PHASE12-007)
+      await tx
+        .delete(jobMaterialPhotos)
+        .where(
+          and(
+            eq(jobMaterialPhotos.jobMaterialId, data.materialId),
+            eq(jobMaterialPhotos.organizationId, ctx.organizationId)
+          )
+        );
+      if (photoUrls.length > 0) {
+        await tx.insert(jobMaterialPhotos).values(
+          photoUrls.map((storagePath) => ({
+            organizationId: ctx.organizationId,
+            jobMaterialId: data.materialId,
+            storagePath,
+            takenAt: installedAt,
+          }))
+        );
+      }
+
+      return [updated];
+    });
 
     // Log material installation
     const changes = computeChanges({
@@ -705,20 +765,13 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
       changes,
       metadata: {
         customerId: job.customerId ?? undefined,
-        materialId: material.id,
-        jobAssignmentId: material.jobId,
         productId: material.productId,
         productName: product?.name ?? undefined,
-        quantity: Number(data.quantityUsed),
-        customFields: {
-          installedLocation: data.installedLocation ?? null,
-          serialNumbers: data.serialNumbers ?? null,
-        },
+        notes: data.installedLocation
+          ? `Installed at: ${data.installedLocation}${serials.length ? `. Serial numbers: ${serials.join(', ')}` : ''}`
+          : undefined,
       },
     });
-
-    // TODO: Save serial numbers to a dedicated table if schema exists
-    // TODO: Save photos to a dedicated table if schema exists
 
     const response: MaterialResponse = {
       id: material.id,
@@ -728,13 +781,15 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
       quantityUsed: Number(material.quantityUsed),
       unitCost: Number(material.unitCost),
       notes: material.notes,
+      serialNumbers: (material.serialNumbers as string[] | null) ?? [],
+      photos: (material.photos as string[] | null) ?? [],
       createdAt: material.createdAt,
       updatedAt: material.updatedAt,
       createdBy: material.createdBy,
       updatedBy: material.updatedBy,
       product: {
         id: material.productId,
-        sku: product?.sku ?? '', // Now we have product details
+        sku: product?.sku ?? '',
         name: product?.name ?? '',
         description: null,
       },

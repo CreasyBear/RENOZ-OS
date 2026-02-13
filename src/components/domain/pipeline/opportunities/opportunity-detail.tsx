@@ -9,6 +9,7 @@
  */
 
 import { memo } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Building2,
   User,
@@ -165,8 +166,8 @@ export const OpportunityDetail = memo(function OpportunityDetail({
     ? ({
         ...latestVersion,
         items: latestVersion.items.map((item) => {
-          const unitPrice = item.unitPrice ?? (item.unitPriceCents ?? 0) / 100;
-          const total = item.total ?? (item.totalCents ?? unitPrice * item.quantity);
+          const unitPrice = item.unitPrice ?? (item.unitPriceCents ? item.unitPriceCents / 100 : 0);
+          const total = item.total ?? (item.totalCents ? item.totalCents / 100 : unitPrice * item.quantity);
 
           return {
             description: item.description,
@@ -339,7 +340,14 @@ export const OpportunityDetail = memo(function OpportunityDetail({
               {customer ? (
                 <>
                   <div>
-                    <p className="font-medium">{customer.name}</p>
+                    <Link
+                      to="/customers/$customerId"
+                      params={{ customerId: customer.id }}
+                      search={{}}
+                      className="font-medium hover:underline"
+                    >
+                      {customer.name}
+                    </Link>
                     {customer.customerCode && (
                       <p className="text-sm text-muted-foreground">{customer.customerCode}</p>
                     )}

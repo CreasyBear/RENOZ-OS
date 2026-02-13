@@ -8,10 +8,12 @@
  * - Allocation to workstreams/site visits
  * - Status workflow
  *
- * SPRINT-03: Enhanced BOM tab with full CRUD and cost management
+ * @source src/components/domain/jobs/projects/project-bom-tab.tsx
+ * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   Package,
   Plus,
@@ -28,6 +30,10 @@ import {
   Calculator,
   TrendingUp,
   Link as LinkIcon,
+  Upload,
+  RefreshCw,
+  Loader2,
+  ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -66,8 +72,16 @@ import {
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
 import { useOrgFormat } from '@/hooks/use-org-format';
+import { useConfirmation } from '@/hooks';
 // Hooks
 import {
   useProjectBom,
@@ -75,13 +89,24 @@ import {
   useAddBomItem,
   useUpdateBomItem,
   useRemoveBomItem,
+  useRemoveBomItems,
+  useUpdateBomItemsStatus,
+  useImportBomFromCsv,
+  useImportBomFromOrder,
 } from '@/hooks/jobs';
+import { useTableSelection, BulkActionsBar, CheckboxCell } from '@/components/shared/data-table';
 import { useDebounce } from '@/hooks/_shared';
 import { useProductSearch } from '@/hooks/products';
+import { BomTabSkeleton } from './bom-tab-skeleton';
 
 // Types
-import type { ProjectBom, ProjectBomItem, BomItemStatus } from 'drizzle/schema';
-import type { Product } from 'drizzle/schema';
+import {
+  bomItemStatusSchema,
+  type ProjectBom,
+  type BomItemStatus,
+  type BomItemWithProduct,
+} from '@/lib/schemas/jobs';
+import type { ProductSearchItem } from '@/lib/schemas/products';
 
 // ============================================================================
 // TYPES
@@ -89,10 +114,8 @@ import type { Product } from 'drizzle/schema';
 
 interface ProjectBomTabProps {
   projectId: string;
-}
-
-interface BomItemWithProduct extends ProjectBomItem {
-  product?: Product;
+  /** When set, enables "Import from Order" button */
+  orderId?: string | null;
 }
 
 // ============================================================================
@@ -173,7 +196,8 @@ function AddBomItemDialog({
   const formatCurrencyDisplay = (value: number) =>
     formatCurrency(value, { cents: false, showCents: true });
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  // Use looser type to handle DB type variations (e.g., dimensions can be null in DB but not in schema)
+  const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState<number | undefined>();
   const [notes, setNotes] = useState('');
@@ -188,7 +212,7 @@ function AddBomItemDialog({
   const addItem = useAddBomItem(projectId);
   const products = searchResults?.products || [];
 
-  const handleSelectProduct = (product: Product) => {
+  const handleSelectProduct = (product: ProductSearchItem) => {
     setSelectedProduct(product);
     setUnitCost(product.basePrice || undefined);
     setSearchQuery('');
@@ -212,7 +236,7 @@ function AddBomItemDialog({
       onOpenChange(false);
       resetForm();
       onSuccess?.();
-    } catch (error) {
+    } catch {
       toast.error('Failed to add item');
     }
   };
@@ -417,10 +441,12 @@ function EditBomItemDialog({
   // Reset form when item changes
   useEffect(() => {
     if (item) {
-      setQuantity(Number(item.quantityEstimated) || 1);
-      setUnitCost(item.unitCostEstimated ? Number(item.unitCostEstimated) : undefined);
-      setStatus(item.status);
-      setNotes(item.notes || '');
+      startTransition(() => {
+        setQuantity(Number(item.quantityEstimated) || 1);
+        setUnitCost(item.unitCostEstimated ? Number(item.unitCostEstimated) : undefined);
+        setStatus(item.status);
+        setNotes(item.notes || '');
+      });
     }
   }, [item]);
 
@@ -441,7 +467,7 @@ function EditBomItemDialog({
       toast.success('Item updated');
       onOpenChange(false);
       onSuccess?.();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update item');
     }
   };
@@ -466,7 +492,13 @@ function EditBomItemDialog({
           {/* Status */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Status</label>
-            <Select value={status} onValueChange={(v) => setStatus(v as BomItemStatus)}>
+            <Select
+              value={status}
+              onValueChange={(v) => {
+                const parsed = bomItemStatusSchema.safeParse(v);
+                if (parsed.success) setStatus(parsed.data);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -563,10 +595,10 @@ function BomSummaryCards({
       return sum + (qty * cost);
     }, 0);
 
-    const byStatus = items.reduce((acc, item) => {
+    const byStatus = items.reduce<Record<string, number>>((acc, item) => {
       acc[item.status] = (acc[item.status] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>);
+    }, {});
 
     const installedCount = byStatus['installed'] || 0;
     const progress = totalItems > 0 ? (installedCount / totalItems) * 100 : 0;
@@ -661,10 +693,21 @@ function BomItemsTable({
   items,
   onEdit,
   onDelete,
+  selection,
 }: {
   items: BomItemWithProduct[];
   onEdit: (item: BomItemWithProduct) => void;
   onDelete: (item: BomItemWithProduct) => void;
+  selection?: {
+    isSelected: (id: string) => boolean;
+    handleSelect: (id: string, checked: boolean) => void;
+    handleSelectAll: (checked: boolean) => void;
+    handleShiftClickRange: (startIdx: number, endIdx: number) => void;
+    setLastClickedIndex: (index: number | null) => void;
+    lastClickedIndex: number | null;
+    isAllSelected: boolean;
+    isPartiallySelected: boolean;
+  };
 }) {
   const { formatCurrency } = useOrgFormat();
   const formatCurrencyDisplay = (value: number) =>
@@ -686,6 +729,16 @@ function BomItemsTable({
       <Table>
         <TableHeader>
           <TableRow>
+            {selection && (
+              <TableHead className="w-[50px]">
+                <CheckboxCell
+                  checked={selection.isAllSelected}
+                  onChange={(checked) => selection.handleSelectAll(checked)}
+                  indeterminate={selection.isPartiallySelected}
+                  ariaLabel={selection.isAllSelected ? 'Deselect all' : 'Select all'}
+                />
+              </TableHead>
+            )}
             <TableHead>Product</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Qty</TableHead>
@@ -695,7 +748,7 @@ function BomItemsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => {
+          {items.map((item, rowIndex) => {
             const product = item.product;
             const statusConfig = ITEM_STATUS_CONFIG[item.status];
             const qty = Number(item.quantityEstimated) || 0;
@@ -703,15 +756,57 @@ function BomItemsTable({
             const total = qty * unitCost;
             const StatusIcon = statusConfig.icon;
 
+            const handleRowClick = (e: React.MouseEvent) => {
+              if (!selection) return;
+              if (e.shiftKey && selection.lastClickedIndex !== null) {
+                selection.handleShiftClickRange(selection.lastClickedIndex, rowIndex);
+              } else {
+                selection.handleSelect(item.id, !selection.isSelected(item.id));
+              }
+              selection.setLastClickedIndex(rowIndex);
+            };
+
             return (
-              <TableRow key={item.id} className="group">
+              <TableRow
+                key={item.id}
+                className={cn('group', selection?.isSelected(item.id) && 'bg-muted/50')}
+                onClick={selection ? handleRowClick : undefined}
+              >
+                {selection && (
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <CheckboxCell
+                      checked={selection.isSelected(item.id)}
+                      onChange={(checked) => {
+                        selection.handleSelect(item.id, checked);
+                        selection.setLastClickedIndex(rowIndex);
+                      }}
+                      onShiftClick={() => {
+                        if (selection.lastClickedIndex !== null) {
+                          selection.handleShiftClickRange(selection.lastClickedIndex, rowIndex);
+                        }
+                        selection.setLastClickedIndex(rowIndex);
+                      }}
+                      ariaLabel={`Select ${product?.name || 'item'}`}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
                       <Package className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <p className="font-medium">{product?.name || 'Unknown Product'}</p>
+                      {product?.id ? (
+                        <Link
+                          to="/products/$productId"
+                          params={{ productId: product.id }}
+                          className="font-medium hover:underline"
+                        >
+                          {product.name || 'Unknown Product'}
+                        </Link>
+                      ) : (
+                        <p className="font-medium">{product?.name || 'Unknown Product'}</p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         SKU: {product?.sku || 'N/A'}
                       </p>
@@ -771,23 +866,43 @@ function BomItemsTable({
 // MAIN COMPONENT
 // ============================================================================
 
-export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
+export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
   const { data: bomData, isLoading } = useProjectBom({ projectId });
   const createBom = useCreateProjectBom(projectId);
   const removeItem = useRemoveBomItem(projectId);
+  const removeItems = useRemoveBomItems(projectId);
+  const updateItemsStatus = useUpdateBomItemsStatus(projectId);
+  const importCsv = useImportBomFromCsv(projectId);
+  const importFromOrder = useImportBomFromOrder(projectId);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const confirm = useConfirmation();
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BomItemWithProduct | null>(null);
+  const [bulkStatusDialogOpen, setBulkStatusDialogOpen] = useState(false);
 
-  const bom = bomData?.data?.bom;
-  const items = (bomData?.data?.items || []) as BomItemWithProduct[];
+  const bom = bomData?.data?.bom ?? undefined;
+  const items: BomItemWithProduct[] = bomData?.data?.items ?? [];
+
+  const {
+    selectedItems,
+    isAllSelected,
+    isPartiallySelected,
+    handleSelect,
+    handleSelectAll,
+    handleShiftClickRange,
+    lastClickedIndex,
+    setLastClickedIndex,
+    clearSelection,
+    isSelected,
+  } = useTableSelection({ items });
 
   const handleCreateBom = async () => {
     try {
       await createBom.mutateAsync('Bill of Materials');
       toast.success('BOM created');
-    } catch (err) {
+    } catch {
       toast.error('Failed to create BOM');
     }
   };
@@ -798,31 +913,93 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
   };
 
   const handleDeleteItem = async (item: BomItemWithProduct) => {
-    if (confirm(`Remove ${item.product?.name || 'this item'} from BOM?`)) {
+    const { confirmed } = await confirm.confirm({
+      title: 'Remove from BOM',
+      description: `Remove "${item.product?.name || 'this item'}" from the Bill of Materials?`,
+      confirmLabel: 'Remove',
+      variant: 'destructive',
+    });
+    if (confirmed) {
       try {
         await removeItem.mutateAsync({ data: { itemId: item.id } });
         toast.success('Item removed');
-      } catch (err) {
+      } catch {
         toast.error('Failed to remove item');
       }
     }
   };
 
+  const handleBulkRemove = useCallback(async () => {
+    const count = selectedItems.length;
+    const { confirmed } = await confirm.confirm({
+      title: 'Remove from BOM',
+      description: `Remove ${count} item${count > 1 ? 's' : ''} from the Bill of Materials? This cannot be undone.`,
+      confirmLabel: 'Remove',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
+    try {
+      await removeItems.mutateAsync({
+        data: { itemIds: selectedItems.map((i) => i.id) },
+      });
+      toast.success(`Removed ${count} item${count > 1 ? 's' : ''}`);
+      clearSelection();
+    } catch {
+      toast.error('Failed to remove items');
+    }
+  }, [selectedItems, confirm, removeItems, clearSelection]);
+
+  const handleBulkStatusOpen = useCallback(() => {
+    setBulkStatusDialogOpen(true);
+  }, []);
+
+  const handleBulkStatusComplete = useCallback(() => {
+    clearSelection();
+    setBulkStatusDialogOpen(false);
+  }, [clearSelection]);
+
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    try {
+      const text = await file.text();
+      const result = await importCsv.mutateAsync(text);
+      const msg =
+        result.added > 0
+          ? `Imported ${result.added} item(s)`
+          : 'No items imported';
+      if (result.errors.length > 0) {
+        toast.warning(`${msg}. ${result.errors.length} row(s) skipped.`);
+      } else {
+        toast.success(msg);
+      }
+    } catch {
+      toast.error('Failed to import CSV');
+    }
+  };
+
+  const handleImportFromOrder = async () => {
+    if (!orderId) return;
+    try {
+      const result = await importFromOrder.mutateAsync();
+      const msg =
+        result.added > 0
+          ? `Imported ${result.added} item(s) from order`
+          : 'No items imported';
+      if (result.errors.length > 0) {
+        toast.warning(`${msg}. ${result.errors.length} row(s) skipped.`);
+      } else {
+        toast.success(msg);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to import from order';
+      toast.error(message);
+    }
+  };
+
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="h-6 w-32 bg-muted rounded animate-pulse" />
-          <div className="h-10 w-32 bg-muted rounded animate-pulse" />
-        </div>
-        <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
-          ))}
-        </div>
-        <div className="h-64 bg-muted rounded-lg animate-pulse" />
-      </div>
-    );
+    return <BomTabSkeleton />;
   }
 
   // No BOM yet - create prompt
@@ -845,16 +1022,56 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
           <h3 className="text-lg font-medium mb-2">No BOM yet</h3>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             Create a Bill of Materials to estimate costs, track materials through procurement,
-            and monitor installation progress.
+            and monitor installation progress. Or import from CSV (sku,quantity[,unitCost]).
           </p>
-          <Button onClick={handleCreateBom} disabled={createBom.isPending}>
-            <Plus className="mr-2 h-4 w-4" />
-            {createBom.isPending ? 'Creating...' : 'Create BOM'}
-          </Button>
+          <div className="flex items-center justify-center gap-2">
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleCsvImport}
+            />
+            <Button
+              variant="outline"
+              onClick={() => csvInputRef.current?.click()}
+              disabled={importCsv.isPending}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {importCsv.isPending ? 'Importing...' : 'Import CSV'}
+            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      variant="outline"
+                      onClick={handleImportFromOrder}
+                      disabled={!orderId || importFromOrder.isPending}
+                    >
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      {importFromOrder.isPending ? 'Importing...' : 'Import from Order'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {orderId
+                    ? 'Import line items from the linked order'
+                    : 'Link an order to this project first'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button onClick={handleCreateBom} disabled={createBom.isPending}>
+              <Plus className="mr-2 h-4 w-4" />
+              {createBom.isPending ? 'Creating...' : 'Create BOM'}
+            </Button>
+          </div>
         </Card>
       </div>
     );
   }
+
+  if (!bom) return null;
 
   return (
     <div className="space-y-6">
@@ -869,11 +1086,70 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
             {items.length} items • Track materials from estimate to installation
           </p>
         </div>
-        <Button onClick={() => setAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Material
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={handleCsvImport}
+          />
+          <Button
+            variant="outline"
+            onClick={() => csvInputRef.current?.click()}
+            disabled={importCsv.isPending}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {importCsv.isPending ? 'Importing...' : 'Import CSV'}
+          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="outline"
+                    onClick={handleImportFromOrder}
+                    disabled={!orderId || importFromOrder.isPending}
+                  >
+                    <ShoppingCart className="mr-2 h-4 w-4" />
+                    {importFromOrder.isPending ? 'Importing...' : 'Import from Order'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {orderId
+                  ? 'Import line items from the linked order'
+                  : 'Link an order to this project first'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Button onClick={() => setAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Material
+          </Button>
+        </div>
       </div>
+
+      {/* Bulk Actions Bar */}
+      <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleBulkRemove}
+          disabled={removeItems.isPending}
+        >
+          <Trash2 className="h-4 w-4 mr-1" />
+          Remove
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleBulkStatusOpen}
+        >
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Update status
+        </Button>
+      </BulkActionsBar>
 
       {/* Summary Cards */}
       <BomSummaryCards items={items} bom={bom} />
@@ -883,6 +1159,16 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
         items={items}
         onEdit={handleEditItem}
         onDelete={handleDeleteItem}
+        selection={{
+          isSelected,
+          handleSelect,
+          handleSelectAll,
+          handleShiftClickRange,
+          setLastClickedIndex,
+          lastClickedIndex,
+          isAllSelected,
+          isPartiallySelected,
+        }}
       />
 
       {/* Allocation Note */}
@@ -910,6 +1196,97 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
         projectId={projectId}
         item={editingItem}
       />
+
+      <BulkStatusDialog
+        open={bulkStatusDialogOpen}
+        onOpenChange={setBulkStatusDialogOpen}
+        items={selectedItems}
+        onComplete={handleBulkStatusComplete}
+        onUpdateStatus={updateItemsStatus}
+      />
     </div>
+  );
+}
+
+// ============================================================================
+// BULK STATUS DIALOG
+// ============================================================================
+
+function BulkStatusDialog({
+  open,
+  onOpenChange,
+  items,
+  onComplete,
+  onUpdateStatus,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  items: BomItemWithProduct[];
+  onComplete: () => void;
+  onUpdateStatus: ReturnType<typeof useUpdateBomItemsStatus>;
+}) {
+  const [newStatus, setNewStatus] = useState<BomItemStatus>('planned');
+
+  const handleConfirm = async () => {
+    try {
+      await onUpdateStatus.mutateAsync({
+        data: { itemIds: items.map((i) => i.id), status: newStatus },
+      });
+      toast.success(`Updated ${items.length} item${items.length > 1 ? 's' : ''} to ${ITEM_STATUS_CONFIG[newStatus].label}`);
+      onComplete();
+    } catch {
+      toast.error('Failed to update status');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update Status</DialogTitle>
+          <DialogDescription>
+            Change the status of {items.length} selected item{items.length > 1 ? 's' : ''}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>New Status</Label>
+            <Select
+              value={newStatus}
+              onValueChange={(v) => {
+                const parsed = bomItemStatusSchema.safeParse(v);
+                if (parsed.success) setNewStatus(parsed.data);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(ITEM_STATUS_CONFIG).map(([value, config]) => (
+                  <SelectItem key={value} value={value}>
+                    <div className="flex items-center gap-2">
+                      <config.icon className={cn('h-4 w-4', config.color)} />
+                      {config.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={onUpdateStatus.isPending}
+          >
+            {onUpdateStatus.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Update {items.length} items
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

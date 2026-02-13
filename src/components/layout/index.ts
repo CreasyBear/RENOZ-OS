@@ -11,7 +11,16 @@ export { Header } from './header'
 export { Breadcrumbs } from './breadcrumbs'
 export { UserMenu } from './user-menu'
 export { PageLayout, usePageLayout } from './page-layout'
-export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps, PageSidebarProps } from './page-layout'
+export type {
+  PageLayoutVariant,
+  PageLayoutProps,
+  PageHeaderProps,
+  PageContentProps,
+  PageSidebarProps,
+  PageLeftSidebarProps,
+} from './page-layout'
+export { DetailPageBackButton } from './detail-page-back-button'
+export type { DetailPageBackButtonProps } from './detail-page-back-button'
 export { RouteShell, useRouteShell } from './route-shell'
 export type { RouteShellVariant, RouteShellProps, RouteShellHeaderProps, RouteShellContextPanelProps } from './route-shell'
 export { CommandPalette } from './command-palette'
@@ -37,4 +46,4 @@ export { SkipLink } from './skip-link'
 export { PageHeaderActions } from './page-header-actions'
 export type { ActionItem } from './page-header-actions'
 export { SettingsDialog } from './settings-dialog'
-export type { SettingsDialogProps } from './settings-dialog'
+export type { SettingsDialogProps, SettingsPaneId } from './settings-dialog'

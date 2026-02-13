@@ -19,6 +19,7 @@ import {
 import type {
   CreateWorkstreamInput,
   UpdateWorkstreamInput,
+  ListWorkstreamsResponse,
 } from '@/lib/schemas/jobs/workstreams-notes';
 
 // ============================================================================
@@ -26,9 +27,15 @@ import type {
 // ============================================================================
 
 export function useWorkstreams(projectId: string, options: { enabled?: boolean } = {}) {
-  return useQuery({
+  return useQuery<ListWorkstreamsResponse>({
     queryKey: queryKeys.projectWorkstreams.byProject(projectId),
-    queryFn: () => listWorkstreams({ data: { projectId } }),
+    queryFn: async () => {
+      const result = await listWorkstreams({
+        data: { projectId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options.enabled ?? !!projectId,
   });
 }
@@ -40,7 +47,13 @@ export function useWorkstreams(projectId: string, options: { enabled?: boolean }
 export function useWorkstream(id: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectWorkstreams.detail(id),
-    queryFn: () => getWorkstream({ data: { id } }),
+    queryFn: async () => {
+      const result = await getWorkstream({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options.enabled ?? !!id,
   });
 }

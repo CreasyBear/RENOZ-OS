@@ -39,8 +39,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ComponentSelector } from "./component-selector";
-import { createProduct } from "@/server/functions/products/products";
-import { setBundleComponents } from "@/server/functions/products/product-bundles";
+import { useCreateProduct, useSetBundleComponents } from "@/hooks/products";
+import { toastError } from "@/hooks";
 
 // Form schema
 const bundleFormSchema = z.object({
@@ -84,8 +84,13 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [components, setComponents] = useState<SelectedComponent[]>([]);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBundleId, setCreatedBundleId] = useState<string | null>(null);
+
+  // Mutations
+  const createProduct = useCreateProduct();
+  const setBundleComponents = useSetBundleComponents();
+
+  const isSubmitting = createProduct.isPending || setBundleComponents.isPending;
 
   const {
     register,
@@ -105,7 +110,9 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
     },
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
   const useCalculatedPrice = watch("useCalculatedPrice");
+   
   const watchPrice = watch("basePrice");
 
   // Calculate component total
@@ -184,42 +191,37 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
       return;
     }
 
-    setIsSubmitting(true);
     try {
       // Create bundle product
-      const product = await createProduct({
-        data: {
-          sku: data.sku,
-          name: data.name,
-          description: data.description,
-          type: "bundle",
-          status: "active",
-          basePrice: data.basePrice,
-          costPrice: data.costPrice,
-          isSellable: true,
-          isPurchasable: false,
-          trackInventory: false,
-        },
+      const product = await createProduct.mutateAsync({
+        sku: data.sku,
+        name: data.name,
+        description: data.description,
+        type: "bundle",
+        status: "active",
+        basePrice: data.basePrice,
+        costPrice: data.costPrice,
+        isSellable: true,
+        isPurchasable: false,
+        trackInventory: false,
       });
 
       // Add components
-      await setBundleComponents({
-        data: {
-          bundleProductId: product.id,
-          components: components.map((c) => ({
-            componentProductId: c.product.id,
-            quantity: c.quantity,
-            isOptional: c.isOptional,
-          })),
-        },
+      await setBundleComponents.mutateAsync({
+        bundleProductId: product.id,
+        components: components.map((c) => ({
+          componentProductId: c.product.id,
+          quantity: c.quantity,
+          isOptional: c.isOptional,
+        })),
       });
 
       setCreatedBundleId(product.id);
       setStep(3);
     } catch (error) {
-      console.error("Failed to create bundle:", error);
-    } finally {
-      setIsSubmitting(false);
+      toastError(
+        error instanceof Error ? error.message : "Failed to create bundle"
+      );
     }
   };
 

@@ -9,7 +9,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, or, inArray } from 'drizzle-orm';
+import { sql, eq, and, or, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { customers, contacts } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -125,7 +125,7 @@ export const detectDuplicates = createServerFn({ method: 'POST' })
               eq(customers.organizationId, ctx.organizationId),
               sql`${customers.id} = ANY(${customerIds})`,
               excludeCustomerId ? sql`${customers.id} != ${excludeCustomerId}` : sql`true`,
-              sql`${customers.deletedAt} IS NULL`
+              isNull(customers.deletedAt)
             )
           );
 
@@ -183,7 +183,7 @@ export const detectDuplicates = createServerFn({ method: 'POST' })
             eq(customers.organizationId, ctx.organizationId),
             sql`similarity(${customers.name}, ${name}) >= ${threshold}`,
             excludeCustomerId ? sql`${customers.id} != ${excludeCustomerId}` : sql`true`,
-            sql`${customers.deletedAt} IS NULL`
+            isNull(customers.deletedAt)
           )
         )
         .orderBy(sql`similarity(${customers.name}, ${name}) DESC`)
@@ -269,7 +269,7 @@ export const checkEmailExists = createServerFn({ method: 'POST' })
           eq(contacts.organizationId, ctx.organizationId),
           sql`LOWER(${contacts.email}) = LOWER(${email})`,
           excludeCustomerId ? sql`${customers.id} != ${excludeCustomerId}` : sql`true`,
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
       .limit(1);

@@ -15,6 +15,7 @@ import {
   filterSchema,
   idParamSchema,
 } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
@@ -49,15 +50,46 @@ export const loginSchema = z.object({
 
 export type Login = z.infer<typeof loginSchema>;
 
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
+export type ForgotPassword = z.infer<typeof forgotPasswordSchema>;
+
+/** Reusable password field schema (min 8, uppercase, lowercase, number) */
+export const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number');
+
+/** Password + confirmPassword with match refine */
+export const passwordWithConfirmSchema = z
+  .object({
+    password: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
+
+export type PasswordWithConfirm = z.infer<typeof passwordWithConfirmSchema>;
+
+export const acceptInvitationSchema = z
+  .object({
+    firstName: z.string().min(1, 'First name is required').max(100),
+    lastName: z.string().min(1, 'Last name is required').max(100),
+  })
+  .and(passwordWithConfirmSchema);
+
+export type AcceptInvitationFormData = z.infer<typeof acceptInvitationSchema>;
+
 export const registerSchema = z
   .object({
     email: emailSchema,
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-      .regex(/[0-9]/, 'Password must contain at least one number'),
+    password: passwordSchema,
     confirmPassword: z.string(),
     name: z.string().min(1, 'Name is required').max(255),
     organizationName: z.string().min(1, 'Organization name is required').max(255),
@@ -180,6 +212,10 @@ export const userListQuerySchema = paginationSchema.merge(userFilterSchema);
 
 export type UserListQuery = z.infer<typeof userListQuerySchema>;
 
+export const userListCursorSchema = cursorPaginationSchema.merge(userFilterSchema);
+
+export type UserListCursorQuery = z.infer<typeof userListCursorSchema>;
+
 // ============================================================================
 // ORGANIZATION SETTINGS
 // ============================================================================
@@ -194,7 +230,9 @@ export const organizationSettingsSchema = z.object({
   /** Time format (12h or 24h) */
   timeFormat: z.enum(['12h', '24h']).default('12h'),
   /** Week start day (0=Sunday, 1=Monday, etc.) */
-  weekStartDay: z.number().int().min(0).max(6).default(1),
+  weekStartDay: z
+    .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)])
+    .default(1),
   /** Default tax rate percentage */
   defaultTaxRate: z.number().nonnegative().default(10),
   /** Number format (comma/period for thousands/decimal) */
@@ -217,6 +255,22 @@ export const organizationSettingsSchema = z.object({
 });
 
 export type OrganizationSettings = z.infer<typeof organizationSettingsSchema>;
+
+export type NumberFormatValue = OrganizationSettings["numberFormat"];
+
+export type TimeFormatValue = OrganizationSettings["timeFormat"];
+
+export type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface RegionalSettingsData {
+  timezone: string;
+  locale: string;
+  currency: string;
+  dateFormat: string;
+  timeFormat: TimeFormatValue;
+  weekStartDay: WeekStartDay;
+  numberFormat: NumberFormatValue;
+}
 
 // ============================================================================
 // ORGANIZATION BRANDING
@@ -315,3 +369,38 @@ export const changePasswordSchema = z
   });
 
 export type ChangePassword = z.infer<typeof changePasswordSchema>;
+
+// ============================================================================
+// RESEND CONFIRMATION
+// ============================================================================
+
+export const resendConfirmationSchema = z.object({
+  email: emailSchema,
+});
+
+export type ResendConfirmationInput = z.infer<typeof resendConfirmationSchema>;
+
+// ============================================================================
+// SIGN-UP-SUCCESS SEARCH PARAMS
+// ============================================================================
+
+/** Search params for /sign-up-success. Email optional (e.g. direct navigation). */
+export const signUpSuccessSearchSchema = z.object({
+  email: z.string().email().optional().catch(undefined),
+});
+
+export type SignUpSuccessSearch = z.infer<typeof signUpSuccessSearchSchema>;
+
+// ============================================================================
+// PASSWORD STRENGTH
+// ============================================================================
+
+/**
+ * Password strength indicator result.
+ * Used for UI feedback when user is entering a new password.
+ */
+export interface PasswordStrength {
+  strength: number; // 0-4 (0 = too short, 1-4 = weak to strong)
+  label: string; // "Too short" | "Weak" | "Fair" | "Good" | "Strong"
+  color: string; // Tailwind color class for strength indicator
+}

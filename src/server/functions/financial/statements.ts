@@ -13,7 +13,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, isNull, desc, gte, lte, or } from 'drizzle-orm';
+import { eq, and, sql, isNull, desc, gte, lte, or, lt, notInArray, isNotNull, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   statementHistory,
@@ -21,6 +21,7 @@ import {
   addresses,
   orders,
   creditNotes,
+  orderPayments,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
@@ -97,6 +98,7 @@ export const generateStatement = createServerFn()
       .where(
         and(
           eq(addresses.customerId, customerId),
+          eq(addresses.organizationId, ctx.organizationId),
           eq(addresses.type, 'billing'),
           eq(addresses.isPrimary, true)
         )
@@ -128,9 +130,9 @@ export const generateStatement = createServerFn()
           eq(orders.organizationId, ctx.organizationId),
           eq(orders.customerId, customerId),
           isNull(orders.deletedAt),
-          sql`${orders.orderDate} < ${startDate}`,
+          lt(orders.orderDate, startDate),
           // Exclude draft and cancelled
-          sql`${orders.status} NOT IN ('draft', 'cancelled')`
+          notInArray(orders.status, ['draft', 'cancelled'])
         )
       );
 
@@ -155,7 +157,7 @@ export const generateStatement = createServerFn()
           isNull(orders.deletedAt),
           gte(orders.orderDate, startDate),
           lte(orders.orderDate, endDate),
-          sql`${orders.status} NOT IN ('draft', 'cancelled')`
+          notInArray(orders.status, ['draft', 'cancelled'])
         )
       )
       .orderBy(orders.orderDate);
@@ -178,11 +180,37 @@ export const generateStatement = createServerFn()
           isNull(creditNotes.deletedAt),
           // Only issued or applied credit notes count
           or(eq(creditNotes.status, 'issued'), eq(creditNotes.status, 'applied')),
-          sql`DATE(${creditNotes.createdAt}) >= ${startDate}`,
-          sql`DATE(${creditNotes.createdAt}) <= ${endDate}`
+          gte(sql`DATE(${creditNotes.createdAt})`, startDate),
+          lte(sql`DATE(${creditNotes.createdAt})`, endDate)
         )
       )
       .orderBy(creditNotes.createdAt);
+
+    // Get payment transactions within the period
+    const periodPayments = await db
+      .select({
+        id: orderPayments.id,
+        orderId: orderPayments.orderId,
+        orderNumber: orders.orderNumber,
+        paymentDate: orderPayments.paymentDate,
+        amount: orderPayments.amount,
+        isRefund: orderPayments.isRefund,
+        reference: orderPayments.reference,
+      })
+      .from(orderPayments)
+      .innerJoin(orders, eq(orderPayments.orderId, orders.id))
+      .where(
+        and(
+          eq(orderPayments.organizationId, ctx.organizationId),
+          eq(orders.customerId, customerId),
+          isNull(orderPayments.deletedAt),
+          isNull(orders.deletedAt),
+          gte(orderPayments.paymentDate, startDate),
+          lte(orderPayments.paymentDate, endDate),
+          notInArray(orders.status, ['draft', 'cancelled'])
+        )
+      )
+      .orderBy(orderPayments.paymentDate);
 
     // Build transactions list and calculate totals
     const transactions: StatementTransaction[] = [];
@@ -215,25 +243,6 @@ export const generateStatement = createServerFn()
         gstAmount: gst,
         balance: runningBalance,
       });
-
-      // If there's a payment on this order, add it as a separate transaction
-      const paidAmount = order.paidAmount ?? 0;
-      if (paidAmount > 0) {
-        runningBalance -= paidAmount;
-        totalPayments += paidAmount;
-        paymentCount += 1;
-
-        transactions.push({
-          id: `${order.id}-payment`,
-          date: new Date(order.orderDate), // Same date as invoice for simplicity
-          type: 'payment',
-          reference: `PAY-${order.orderNumber}`,
-          description: `Payment for ${order.orderNumber}`,
-          amount: -paidAmount, // Negative because it reduces balance
-          gstAmount: 0,
-          balance: runningBalance,
-        });
-      }
     }
 
     // Process credit notes
@@ -243,6 +252,7 @@ export const generateStatement = createServerFn()
 
       runningBalance -= amount; // Credit notes reduce balance
       totalCredits += amount;
+      totalGst -= gst;
       creditNoteCount += 1;
 
       transactions.push({
@@ -253,6 +263,30 @@ export const generateStatement = createServerFn()
         description: cn.reason ?? `Credit Note ${cn.creditNoteNumber}`,
         amount: -amount, // Negative because it reduces balance
         gstAmount: gst,
+        balance: runningBalance,
+      });
+    }
+
+    // Process payments and refunds
+    for (const payment of periodPayments) {
+      const amount = payment.amount ?? 0;
+      const isRefund = payment.isRefund;
+      const signedAmount = isRefund ? amount : -amount;
+
+      runningBalance += signedAmount;
+      totalPayments += isRefund ? -amount : amount;
+      paymentCount += 1;
+
+      transactions.push({
+        id: payment.id,
+        date: new Date(payment.paymentDate),
+        type: 'payment',
+        reference: payment.reference ?? `PAY-${payment.orderNumber}`,
+        description: isRefund
+          ? `Refund for ${payment.orderNumber}`
+          : `Payment for ${payment.orderNumber}`,
+        amount: signedAmount,
+        gstAmount: 0,
         balance: runningBalance,
       });
     }
@@ -290,7 +324,29 @@ export const generateStatement = createServerFn()
       generatedAt: new Date(),
     };
 
-    return statement;
+    const [historyRecord] = await db
+      .insert(statementHistory)
+      .values({
+        organizationId: ctx.organizationId,
+        customerId,
+        startDate,
+        endDate,
+        openingBalance: statement.openingBalance,
+        closingBalance: statement.closingBalance,
+        invoiceCount: statement.invoiceCount,
+        paymentCount: statement.paymentCount,
+        creditNoteCount: statement.creditNoteCount,
+        totalInvoiced: statement.totalInvoiced,
+        totalPayments: statement.totalPayments,
+        totalCredits: statement.totalCredits,
+        totalGst: statement.totalGst,
+        pdfPath: null,
+        notes: data.notes ?? null,
+        createdBy: ctx.user.id,
+      })
+      .returning({ id: statementHistory.id });
+
+    return { statement, historyId: historyRecord.id };
   });
 
 // ============================================================================
@@ -580,12 +636,12 @@ export const listStatements = createServerFn()
       conditions.push(lte(statementHistory.startDate, dateTo.toISOString().split('T')[0]));
     }
     if (onlySent) {
-      conditions.push(sql`${statementHistory.sentAt} IS NOT NULL`);
+      conditions.push(isNotNull(statementHistory.sentAt));
     }
 
     // Get total count
     const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: count() })
       .from(statementHistory)
       .where(and(...conditions));
 

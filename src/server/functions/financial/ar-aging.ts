@@ -70,8 +70,7 @@ export const getARAgingReport = createServerFn()
       ? sql`AND o.customer_id = ${data.customerId}`
       : sql``;
 
-    // Query 1: Get bucket summary totals using SQL aggregation
-    // This calculates aging buckets in the database instead of JavaScript
+    // RAW SQL (Phase 11 Keep): CTEs, EXTRACT, bucket aggregations. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
     const bucketSummaryResult = await db.execute<{
       current_amount: string;
       current_count: string;
@@ -144,6 +143,44 @@ export const getARAgingReport = createServerFn()
       ? sql`HAVING SUM(balance) >= ${COMMERCIAL_THRESHOLD}`
       : sql``;
 
+    const { page, pageSize } = data;
+    const offset = (page - 1) * pageSize;
+
+    // Common subquery for customer aggregation (used by both COUNT and main query)
+    const customerAggregateCte = sql`
+      SELECT
+        o.customer_id,
+        c.name as customer_name,
+        c.email as customer_email,
+        o.order_date,
+        COALESCE(o.balance_due, COALESCE(o.total, 0) - COALESCE(o.paid_amount, 0)) as balance,
+        EXTRACT(DAY FROM (${asOfDateStr}::date - COALESCE(o.due_date, o.order_date::date + ${PAYMENT_TERMS_DAYS})))::int as age
+      FROM orders o
+      INNER JOIN customers c ON o.customer_id = c.id
+      WHERE o.organization_id = ${ctx.organizationId}
+        AND o.deleted_at IS NULL
+        AND o.status NOT IN ('draft', 'cancelled')
+        AND (
+          o.balance_due > 0
+          OR (o.balance_due IS NULL AND COALESCE(o.total, 0) > COALESCE(o.paid_amount, 0))
+        )
+        ${customerFilter}
+    `;
+
+    // Query 2a: COUNT for pagination (SQL-level)
+    const countResult = await db.execute<{ total: string }>(sql`
+      SELECT COUNT(*)::text as total
+      FROM (
+        SELECT 1
+        FROM (${customerAggregateCte}) aged
+        WHERE balance > 0 OR ${data.includeZeroBalance ?? false}
+        GROUP BY customer_id, customer_name, customer_email
+        ${commercialFilter}
+      ) counted
+    `);
+    const totalItems = parseInt(countResult[0]?.total ?? '0', 10);
+
+    // Query 2b: Customer-level aggregation with SQL-level LIMIT/OFFSET
     const customerSummaryResult = await db.execute<{
       customer_id: string;
       customer_name: string;
@@ -169,33 +206,15 @@ export const getARAgingReport = createServerFn()
         COALESCE(SUM(CASE WHEN age > 90 THEN balance ELSE 0 END), 0)::text as days_over_90_amount,
         MIN(order_date)::text as oldest_order_date,
         COUNT(*)::text as invoice_count
-      FROM (
-        SELECT
-          o.customer_id,
-          c.name as customer_name,
-          c.email as customer_email,
-          o.order_date,
-          COALESCE(o.balance_due, COALESCE(o.total, 0) - COALESCE(o.paid_amount, 0)) as balance,
-          EXTRACT(DAY FROM (${asOfDateStr}::date - COALESCE(o.due_date, o.order_date::date + ${PAYMENT_TERMS_DAYS})))::int as age
-        FROM orders o
-        INNER JOIN customers c ON o.customer_id = c.id
-        WHERE o.organization_id = ${ctx.organizationId}
-          AND o.deleted_at IS NULL
-          AND o.status NOT IN ('draft', 'cancelled')
-          AND (
-            o.balance_due > 0
-            OR (o.balance_due IS NULL AND COALESCE(o.total, 0) > COALESCE(o.paid_amount, 0))
-          )
-          ${customerFilter}
-      ) aged
+      FROM (${customerAggregateCte}) aged
       WHERE balance > 0 OR ${data.includeZeroBalance ?? false}
       GROUP BY customer_id, customer_name, customer_email
       ${commercialFilter}
       ORDER BY SUM(balance) DESC
+      LIMIT ${pageSize} OFFSET ${offset}
     `);
 
-    // Transform customer results
-    const customersList: CustomerAgingSummary[] = customerSummaryResult.map((row) => {
+    const paginatedCustomers: CustomerAgingSummary[] = customerSummaryResult.map((row) => {
       const totalOutstanding = parseFloat(row.total_outstanding);
       return {
         customerId: row.customer_id,
@@ -213,6 +232,19 @@ export const getARAgingReport = createServerFn()
       };
     });
 
+    // Query 2c: Commercial total (sum of outstanding for customers >= threshold)
+    const commercialResult = await db.execute<{ commercial_total: string }>(sql`
+      SELECT COALESCE(SUM(total_outstanding), 0)::text as commercial_total
+      FROM (
+        SELECT SUM(balance) as total_outstanding
+        FROM (${customerAggregateCte}) aged
+        WHERE balance > 0 OR ${data.includeZeroBalance ?? false}
+        GROUP BY customer_id, customer_name, customer_email
+        HAVING SUM(balance) >= ${COMMERCIAL_THRESHOLD}
+      ) commercial
+    `);
+    const commercialOutstanding = parseFloat(commercialResult[0]?.commercial_total ?? '0');
+
     // Calculate totals from bucket summary
     const totalOutstanding = Object.values(bucketTotals).reduce((sum, b) => sum + b.amount, 0);
     const totalCurrent = bucketTotals['current'].amount;
@@ -221,17 +253,9 @@ export const getARAgingReport = createServerFn()
       bucketTotals['31-60'].amount +
       bucketTotals['61-90'].amount +
       bucketTotals['90+'].amount;
-    const commercialOutstanding = customersList
-      .filter((c) => c.isCommercial)
-      .reduce((sum, c) => sum + c.totalOutstanding, 0);
     const invoiceCount = Object.values(bucketTotals).reduce((sum, b) => sum + b.count, 0);
 
-    // Pagination
-    const { page, pageSize } = data;
-    const totalItems = customersList.length;
     const totalPages = Math.ceil(totalItems / pageSize);
-    const offset = (page - 1) * pageSize;
-    const paginatedCustomers = customersList.slice(offset, offset + pageSize);
 
     // Build bucket summary array
     const bucketSummary: AgingBucketSummary[] = [
@@ -327,6 +351,7 @@ export const getARAgingCustomerDetail = createServerFn()
       : sql``;
 
     // Query 1: Get summary using SQL aggregation
+    // Complex CTE with CASE aggregations - acceptable use of raw SQL for complex reporting queries
     const summaryResult = await db.execute<{
       total_outstanding: string;
       current_amount: string;

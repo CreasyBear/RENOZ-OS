@@ -10,7 +10,9 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-001b
  */
 
+import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
+import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -19,6 +21,7 @@ import {
   categories,
   slaConfigurations,
   customers,
+  type WarrantyPolicy,
   type WarrantyPolicyTerms,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -34,9 +37,11 @@ import {
   assignWarrantyPolicyToProductSchema,
   assignDefaultWarrantyPolicyToCategorySchema,
   seedDefaultPoliciesSchema,
+  warrantyPolicyTermsSchema,
 } from '@/lib/schemas/warranty/policies';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
-import { computeChanges } from '@/lib/activity-logger';
+import { computeChanges, excludeFieldsForActivity } from '@/lib/activity-logger';
+import { warrantyLogger } from '@/lib/logger';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -45,14 +50,14 @@ import { computeChanges } from '@/lib/activity-logger';
 /**
  * Fields to exclude from activity change tracking (system-managed)
  */
-const WARRANTY_POLICY_EXCLUDED_FIELDS: string[] = [
+const WARRANTY_POLICY_EXCLUDED_FIELDS = [
   'updatedAt',
   'updatedBy',
   'createdAt',
   'createdBy',
   'deletedAt',
   'organizationId',
-];
+] as const satisfies readonly string[];
 
 // ============================================================================
 // WARRANTY POLICY CRUD
@@ -76,7 +81,7 @@ export const createWarrantyPolicy = createServerFn({ method: 'POST' })
         type: data.type,
         durationMonths: data.durationMonths,
         cycleLimit: data.cycleLimit ?? null,
-        terms: (data.terms ?? {}) as WarrantyPolicyTerms,
+        terms: warrantyPolicyTermsSchema.parse(data.terms ?? {}) as WarrantyPolicyTerms,
         slaConfigurationId: data.slaConfigurationId ?? null,
         isDefault: data.isDefault,
         isActive: data.isActive,
@@ -92,7 +97,7 @@ export const createWarrantyPolicy = createServerFn({ method: 'POST' })
       changes: computeChanges({
         before: null,
         after: policy,
-        excludeFields: WARRANTY_POLICY_EXCLUDED_FIELDS as never[],
+        excludeFields: excludeFieldsForActivity<WarrantyPolicy>(WARRANTY_POLICY_EXCLUDED_FIELDS),
       }),
       metadata: {
         warrantyPolicyId: policy.id,
@@ -147,7 +152,9 @@ export const updateWarrantyPolicy = createServerFn({ method: 'POST' })
         description: updates.description ?? undefined,
         cycleLimit: updates.cycleLimit ?? undefined,
         slaConfigurationId: updates.slaConfigurationId ?? undefined,
-        terms: updates.terms ? (updates.terms as WarrantyPolicyTerms) : undefined,
+        terms: updates.terms
+          ? (warrantyPolicyTermsSchema.parse(updates.terms) as WarrantyPolicyTerms)
+          : undefined,
       })
       .where(
         and(
@@ -161,7 +168,7 @@ export const updateWarrantyPolicy = createServerFn({ method: 'POST' })
     const changes = computeChanges({
       before: existingPolicy,
       after: policy,
-      excludeFields: WARRANTY_POLICY_EXCLUDED_FIELDS as never[],
+      excludeFields: excludeFieldsForActivity<WarrantyPolicy>(WARRANTY_POLICY_EXCLUDED_FIELDS),
     });
 
     if (changes.fields && changes.fields.length > 0) {
@@ -215,28 +222,36 @@ export const listWarrantyPolicies = createServerFn({ method: 'GET' })
   });
 
 /**
+ * Cached warranty policy fetch for per-request deduplication.
+ * @performance Uses React.cache() for automatic request deduplication
+ */
+const _getWarrantyPolicyCached = cache(async (policyId: string, organizationId: string) => {
+  const [policy] = await db
+    .select()
+    .from(warrantyPolicies)
+    .where(
+      and(
+        eq(warrantyPolicies.id, policyId),
+        eq(warrantyPolicies.organizationId, organizationId)
+      )
+    )
+    .limit(1);
+
+  return policy ?? null;
+});
+
+/**
  * Get a single warranty policy by ID
  */
 export const getWarrantyPolicy = createServerFn({ method: 'GET' })
   .inputValidator(getWarrantyPolicyByIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-
-    const [policy] = await db
-      .select()
-      .from(warrantyPolicies)
-      .where(
-        and(
-          eq(warrantyPolicies.id, data.policyId),
-          eq(warrantyPolicies.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
+    const policy = await _getWarrantyPolicyCached(data.policyId, ctx.organizationId);
     if (!policy) {
+      setResponseStatus(404);
       throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
     }
-
     return policy;
   });
 
@@ -852,7 +867,7 @@ export const seedDefaultWarrantyPolicies = createServerFn({ method: 'POST' })
         changes: computeChanges({
           before: null,
           after: policy,
-          excludeFields: WARRANTY_POLICY_EXCLUDED_FIELDS as never[],
+          excludeFields: excludeFieldsForActivity<WarrantyPolicy>(WARRANTY_POLICY_EXCLUDED_FIELDS),
         }),
         metadata: {
           warrantyPolicyId: policy.id,
@@ -953,9 +968,9 @@ export async function triggerWarrantyRegistrationNotification(params: {
 
   // Skip if no customer email
   if (!customer?.email) {
-    console.log(
-      `[warranty-notification] Skipping notification for warranty ${params.warrantyNumber} - no customer email`
-    );
+    warrantyLogger.info('Skipping registration notification - no customer email', {
+      warrantyNumber: params.warrantyNumber,
+    });
     return;
   }
 
@@ -981,9 +996,9 @@ export async function triggerWarrantyRegistrationNotification(params: {
     .limit(1);
 
   if (!policyWithSla?.policy) {
-    console.log(
-      `[warranty-notification] Skipping notification for warranty ${params.warrantyNumber} - policy not found`
-    );
+    warrantyLogger.info('Skipping registration notification - policy not found', {
+      warrantyNumber: params.warrantyNumber,
+    });
     return;
   }
 
@@ -1014,7 +1029,8 @@ export async function triggerWarrantyRegistrationNotification(params: {
   // Trigger warranty notification task
   await tasks.trigger('send-warranty-registration-email', payload);
 
-  console.log(
-    `[warranty-notification] Triggered notification for warranty ${params.warrantyNumber} to ${customer.email}`
-  );
+  warrantyLogger.info('Registration notification triggered', {
+    warrantyNumber: params.warrantyNumber,
+    customerEmail: customer.email,
+  });
 }

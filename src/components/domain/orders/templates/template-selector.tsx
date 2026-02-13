@@ -7,8 +7,6 @@
  */
 
 import { memo, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { Search, FileText, Check, Copy } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { listTemplates, getTemplate } from "@/server/functions/orders/order-templates";
+import { useOrderTemplates, useOrderTemplate } from "@/hooks/orders";
 
 // ============================================================================
 // TYPES
@@ -62,30 +60,20 @@ export const TemplateSelector = memo(function TemplateSelector({
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch templates
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.orders.templates(debouncedSearch),
-    queryFn: () =>
-      listTemplates({
-        data: {
-          search: debouncedSearch || undefined,
-          isActive: true,
-          page: 1,
-          pageSize: 20,
-          sortBy: "usageCount",
-          sortOrder: "desc",
-        },
-      }),
+  // Fetch templates using hook
+  const { data, isLoading } = useOrderTemplates({
+    search: debouncedSearch || undefined,
+    isActive: true,
+    page: 1,
+    pageSize: 20,
+    sortBy: "usageCount",
+    sortOrder: "desc",
     enabled: open,
   });
 
-  // Fetch selected template details
-  const { data: selectedTemplate } = useQuery({
-    queryKey: queryKeys.orders.templateDetail(selectedTemplateId ?? ""),
-    queryFn: () =>
-      selectedTemplateId
-        ? getTemplate({ data: { id: selectedTemplateId } })
-        : null,
+  // Fetch selected template details using hook
+  const { data: selectedTemplate } = useOrderTemplate({
+    templateId: selectedTemplateId ?? "",
     enabled: !!selectedTemplateId,
   });
 
@@ -221,7 +209,7 @@ export const TemplateSelector = memo(function TemplateSelector({
               <p>{selectedTemplate.items.length} items in this template</p>
               {selectedTemplate.defaultValues?.shippingAmount !== undefined && (
                 <p className="mt-1">
-                  Includes ${(selectedTemplate.defaultValues.shippingAmount / 100).toFixed(2)} shipping
+                  Includes ${selectedTemplate.defaultValues.shippingAmount.toFixed(2)} shipping
                 </p>
               )}
             </div>

@@ -46,6 +46,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DomainFilterBar } from "@/components/shared/filters";
 import {
   DEFAULT_INVENTORY_FILTERS,
@@ -142,6 +157,8 @@ export const InventoryBrowser = memo(function InventoryBrowser({
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferLocationId, setTransferLocationId] = useState("");
   const [exportColumns, setExportColumns] = useState<string[]>([
     "productSku",
     "productName",
@@ -199,6 +216,20 @@ export const InventoryBrowser = memo(function InventoryBrowser({
     }
   }, [onExport, selectedIds, items, exportColumns]);
 
+  const handleBulkTransfer = useCallback(async () => {
+    if (!onBulkTransfer || selectedIds.size === 0) return;
+    if (!transferLocationId) {
+      toast.warning("Select a destination location", {
+        description: "Choose where to move the selected inventory items.",
+      });
+      return;
+    }
+    await onBulkTransfer(Array.from(selectedIds), transferLocationId);
+    setSelectedIds(new Set());
+    setTransferLocationId("");
+    setShowTransferDialog(false);
+  }, [onBulkTransfer, selectedIds, transferLocationId]);
+
   const handleColumnToggle = useCallback((columnId: string) => {
     setExportColumns((prev) =>
       prev.includes(columnId)
@@ -213,6 +244,37 @@ export const InventoryBrowser = memo(function InventoryBrowser({
     [products, locations]
   );
 
+  // Compute active filters for empty state display
+  const activeFilters = useMemo(() => {
+    const active: Array<{ label: string; value: string }> = [];
+    
+    if (filters.search) {
+      active.push({ label: "Search", value: filters.search });
+    }
+    if (filters.status && filters.status.length > 0) {
+      active.push({ label: "Status", value: filters.status.join(", ") });
+    }
+    if (filters.locationId) {
+      const location = locations.find((l) => l.id === filters.locationId);
+      if (location) {
+        active.push({ label: "Location", value: location.name });
+      }
+    }
+    if (filters.productId) {
+      const product = products.find((p) => p.id === filters.productId);
+      if (product) {
+        active.push({ label: "Product", value: product.name });
+      }
+    }
+    
+    return active;
+  }, [filters, locations, products]);
+
+  // Clear all filters handler
+  const handleClearFilters = useCallback(() => {
+    onFiltersChange(DEFAULT_INVENTORY_FILTERS);
+  }, [onFiltersChange]);
+
   // View component selection
   const ViewComponent = useMemo(() => {
     switch (viewMode) {
@@ -226,7 +288,7 @@ export const InventoryBrowser = memo(function InventoryBrowser({
   }, [viewMode]);
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-3", className)}>
       {/* Filter Panel */}
       <DomainFilterBar<InventoryFiltersState>
         config={filterConfig}
@@ -242,7 +304,7 @@ export const InventoryBrowser = memo(function InventoryBrowser({
           <ViewModeToggle mode={viewMode} onChange={onViewModeChange} />
 
           {/* Bulk Actions */}
-          {selectedIds.size > 0 && (
+          {selectedIds.size >= 2 && (
             <div className="flex items-center gap-2 ml-4 pl-4 border-l">
               <Badge variant="secondary">
                 {selectedIds.size} selected
@@ -264,10 +326,7 @@ export const InventoryBrowser = memo(function InventoryBrowser({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    // TODO: Implement transfer dialog
-                    toast.info("Transfer", { description: "Transfer dialog coming soon" });
-                  }}
+                  onClick={() => setShowTransferDialog(true)}
                 >
                   <ArrowLeftRight className="h-4 w-4 mr-2" aria-hidden="true" />
                   Transfer
@@ -347,6 +406,8 @@ export const InventoryBrowser = memo(function InventoryBrowser({
         onAdjust={onAdjust}
         onTransfer={onTransfer}
         isLoading={isLoading}
+        onClearFilters={handleClearFilters}
+        activeFilters={activeFilters}
       />
 
       {/* Pagination */}
@@ -397,6 +458,61 @@ export const InventoryBrowser = memo(function InventoryBrowser({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Transfer Dialog */}
+      <Dialog
+        open={showTransferDialog}
+        onOpenChange={(open) => {
+          setShowTransferDialog(open);
+          if (!open) {
+            setTransferLocationId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer Inventory</DialogTitle>
+            <DialogDescription>
+              Move {selectedIds.size} selected item{selectedIds.size !== 1 ? "s" : ""} to a new
+              location.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Destination Location</label>
+            <Select value={transferLocationId} onValueChange={setTransferLocationId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select location..." />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.length === 0 ? (
+                  <SelectItem value="none" disabled>
+                    No locations available
+                  </SelectItem>
+                ) : (
+                  locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name} {location.code ? `(${location.code})` : ""}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkTransfer}
+              disabled={!transferLocationId || selectedIds.size === 0}
+            >
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

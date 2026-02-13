@@ -2,27 +2,34 @@
  * Customer Detail Route
  *
  * Shows the Customer Detail View - a comprehensive dashboard for a single customer.
- * Uses Container/Presenter pattern with render props for flexible layout composition.
+ * Uses the simplified container pattern with useCustomerDetail hook.
  *
  * LAYOUT: full-width (data-rich detail view with 360 widgets)
+ *
+ * Search convention: tab uses Zod 4 .default().catch() for resilience.
+ * - Default tab: use search={{}} when navigating (receives 'overview')
+ * - Specific tab: use search={{ tab: 'activity' }} etc.
  *
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  * @see STANDARDS.md - Container/Presenter pattern
  */
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useCallback } from 'react'
-import { ArrowLeft } from 'lucide-react'
-import { PageLayout, RouteErrorFallback } from '@/components/layout'
-import { CustomerDetailSkeleton } from '@/components/skeletons/customers'
-import { buttonVariants } from '@/components/ui/button'
-import { CustomerDetailContainer } from '@/components/domain/customers'
-import { cn } from '@/lib/utils'
+import { createFileRoute } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
+import { CustomerDetailSkeleton } from '@/components/skeletons/customers';
+import { CustomerDetailContainer } from '@/components/domain/customers';
+import { getCustomerById } from '@/server/functions/customers/customers';
+import { customerDetailSearchSchema } from '@/lib/schemas/customers';
 
 // ============================================================================
 // ROUTE DEFINITION
 // ============================================================================
 
 export const Route = createFileRoute('/_authenticated/customers/$customerId')({
+  validateSearch: customerDetailSearchSchema,
+  loader: async ({ params }) => {
+    const customer = await getCustomerById({ data: { id: params.customerId } });
+    return { customer };
+  },
   component: CustomerDetailPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/customers" />
@@ -35,87 +42,35 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId')({
       </PageLayout.Content>
     </PageLayout>
   ),
-})
+});
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 function CustomerDetailPage() {
-  const { customerId } = Route.useParams()
-  const navigate = useNavigate()
-
-  // Navigation callbacks for container
-  const handleBack = useCallback(() => {
-    navigate({ to: '/customers' })
-  }, [navigate])
-
-  const handleEdit = useCallback(() => {
-    navigate({ to: '/customers/$customerId/edit', params: { customerId } })
-  }, [navigate, customerId])
-
-  const handleAddNote = useCallback(() => {
-    navigate({
-      to: '/customers/communications',
-      search: { customerId, tab: 'timeline' }
-    })
-  }, [navigate, customerId])
-
-  const handleScheduleMeeting = useCallback(() => {
-    navigate({
-      to: '/customers/communications',
-      search: { customerId, tab: 'timeline' }
-    })
-  }, [navigate, customerId])
-
-  const handleCreateQuote = useCallback(() => {
-    navigate({
-      to: '/pipeline/new',
-      search: { stage: 'proposal' }
-    })
-  }, [navigate])
-
-  const handleCreateOrder = useCallback(() => {
-    navigate({ to: '/orders' })
-  }, [navigate])
+  const { customerId } = Route.useParams();
+  const loaderData = Route.useLoaderData();
+  const search = Route.useSearch();
 
   return (
-    <CustomerDetailContainer
-      customerId={customerId}
-      onBack={handleBack}
-      onEdit={handleEdit}
-      onAddNote={handleAddNote}
-      onScheduleMeeting={handleScheduleMeeting}
-      onCreateQuote={handleCreateQuote}
-      onCreateOrder={handleCreateOrder}
-    >
-      {({ headerActions, content }) => (
-        <PageLayout variant="full-width">
-          {/*
-           * title={null} - Entity identity is shown by CustomerHeader in content
-           * Breadcrumbs are handled by global Header, not PageLayout.Header
-           * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
-           */}
-          <PageLayout.Header
-            title={null}
-            actions={
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/customers"
-                  className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }))}
-                  aria-label="Back to customers"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Link>
-                {headerActions}
-              </div>
-            }
-          />
-          <PageLayout.Content>
-            {content}
-          </PageLayout.Content>
-        </PageLayout>
-      )}
-    </CustomerDetailContainer>
-  )
+    <PageLayout variant="full-width">
+      <CustomerDetailContainer
+        customerId={customerId}
+        initialCustomer={loaderData?.customer}
+        initialTab={search.tab}
+      >
+        {({ headerActions, content }) => (
+          <>
+            <PageLayout.Header
+              title={null}
+              leading={<DetailPageBackButton to="/customers" aria-label="Back to customers" />}
+              actions={headerActions}
+            />
+            <PageLayout.Content>{content}</PageLayout.Content>
+          </>
+        )}
+      </CustomerDetailContainer>
+    </PageLayout>
+  );
 }

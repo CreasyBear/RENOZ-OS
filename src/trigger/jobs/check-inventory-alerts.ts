@@ -14,6 +14,7 @@
 import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, lt, gt, lte, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { logger as appLogger } from '@/lib/logger';
 import {
   inventoryAlerts,
   inventory,
@@ -217,6 +218,7 @@ async function notifyAlert(
       data: {
         entityId: alert.alertId,
         entityType: 'inventory_alert',
+        actionUrl: '/inventory/alerts',
         subType: alert.alertType,
         severity: alert.severity,
         affectedItemsCount: alert.affectedItems.length,
@@ -238,7 +240,7 @@ export const checkInventoryAlertsTask = schedules.task({
   id: 'check-inventory-alerts',
   cron: '*/30 * * * *',
   run: async () => {
-    console.log('Starting inventory alerts check');
+    appLogger.debug('Starting inventory alerts check');
 
     const now = new Date();
     let totalChecked = 0;
@@ -250,7 +252,7 @@ export const checkInventoryAlertsTask = schedules.task({
       .from(organizations)
       .where(isNull(organizations.deletedAt));
 
-    console.log(`Checking ${orgs.length} organizations for inventory alerts`);
+    appLogger.debug('Checking organizations for inventory alerts', { orgCount: orgs.length });
 
     for (const org of orgs) {
       // Get all active alerts for this organization
@@ -285,12 +287,12 @@ export const checkInventoryAlertsTask = schedules.task({
 
         await notifyAlert(org.id, triggered);
 
-        console.log(`Alert triggered: ${triggered.alertName} - ${triggered.message}`);
+        appLogger.debug('Alert triggered', { alertName: triggered.alertName, message: triggered.message });
         totalTriggered++;
       }
     }
 
-    console.log(`Inventory alerts check completed. Checked: ${totalChecked}, Triggered: ${totalTriggered}`);
+    appLogger.debug('Inventory alerts check completed', { totalChecked, totalTriggered });
 
     return {
       success: true,

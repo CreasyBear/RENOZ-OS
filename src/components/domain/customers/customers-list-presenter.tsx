@@ -5,12 +5,15 @@
  * with responsive switching, loading states, and pagination.
  */
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Users, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DataTableSkeleton,
   DataTableEmpty,
 } from "@/components/shared/data-table";
+import { FilterEmptyState } from "@/components/shared/filter-empty-state";
+import { buildFilterItems } from "@/components/shared/filters";
+import { countActiveFilters } from "@/components/shared/filters/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +21,11 @@ import { cn } from "@/lib/utils";
 import { CustomersTablePresenter } from "./customers-table-presenter";
 import { CustomersMobileCards } from "./customers-mobile-cards";
 import type { CustomerTableData } from "./customer-columns";
+import {
+  type CustomerFiltersState,
+  DEFAULT_CUSTOMER_FILTERS,
+  CUSTOMER_FILTER_CONFIG,
+} from "./customer-filter-config";
 
 export interface CustomersListPresenterProps {
   /** Customers to display */
@@ -26,6 +34,8 @@ export interface CustomersListPresenterProps {
   isLoading: boolean;
   /** Error state */
   error: Error | null;
+  /** Retry handler for error state */
+  onRetry?: () => void;
   /** Set of selected customer IDs */
   selectedIds: Set<string>;
   /** Whether all items are selected */
@@ -57,6 +67,12 @@ export interface CustomersListPresenterProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
+  /** Current filters */
+  filters?: CustomerFiltersState;
+  /** Filter change handler */
+  onFiltersChange?: (filters: CustomerFiltersState) => void;
+  /** Clear all filters handler */
+  onClearFilters?: () => void;
   /** Additional className */
   className?: string;
 }
@@ -182,6 +198,7 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
   customers,
   isLoading,
   error,
+  onRetry,
   selectedIds,
   isAllSelected,
   isPartiallySelected,
@@ -199,8 +216,28 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
   pageSize,
   total,
   onPageChange,
+  filters,
+  onFiltersChange,
+  onClearFilters,
   className,
 }: CustomersListPresenterProps) {
+  // Check if filters are active
+  const hasActiveFilters = useMemo(() => {
+    if (!filters) return false;
+    return countActiveFilters(filters, ["search"]) > 0;
+  }, [filters]);
+
+  // Build filter items for FilterEmptyState using shared utility
+  const filterItems = useMemo(() => {
+    if (!filters || !hasActiveFilters || !onFiltersChange) return [];
+    return buildFilterItems({
+      filters,
+      config: CUSTOMER_FILTER_CONFIG,
+      defaultFilters: DEFAULT_CUSTOMER_FILTERS,
+      onFiltersChange,
+      excludeKeys: ["search"],
+    });
+  }, [filters, hasActiveFilters, onFiltersChange]);
   // Error state
   if (error) {
     return (
@@ -208,6 +245,7 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
         variant="error"
         title="Failed to load customers"
         description={error.message ?? "An unexpected error occurred"}
+        action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
     );
@@ -223,14 +261,28 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
     );
   }
 
-  // Empty state
+  // Empty state - use FilterEmptyState if filters are active, otherwise use DataTableEmpty
   if (customers.length === 0) {
+    // If filters are active, use FilterEmptyState
+    if (hasActiveFilters && filterItems.length > 0 && onClearFilters) {
+      return (
+        <div className={cn("py-12", className)}>
+          <FilterEmptyState
+            entityName="customers"
+            filters={filterItems}
+            onClearAll={onClearFilters}
+          />
+        </div>
+      );
+    }
+
+    // First visit / no filters - use DataTableEmpty
     return (
       <DataTableEmpty
         variant="no-results"
         icon={Users}
         title="No customers found"
-        description="No customers match the current filters"
+        description="Get started by adding your first customer"
         className={className}
       />
     );

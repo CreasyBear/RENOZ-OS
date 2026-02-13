@@ -54,7 +54,11 @@ export function useCustomReports(options: UseCustomReportsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.customReports.list(filters),
-    queryFn: () => listCustomReports({ data: filters as ListCustomReportsInput }),
+    queryFn: async () => {
+      const result = await listCustomReports({ data: filters as ListCustomReportsInput });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -70,7 +74,13 @@ export function useCustomReports(options: UseCustomReportsOptions = {}) {
 export function useCustomReport({ id, enabled = true }: UseCustomReportOptions) {
   return useQuery({
     queryKey: queryKeys.reports.customReports.detail(id),
-    queryFn: () => getCustomReport({ data: { id } }),
+    queryFn: async () => {
+      const result = await getCustomReport({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });

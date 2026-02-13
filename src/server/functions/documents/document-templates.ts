@@ -8,6 +8,7 @@
  * @see PRD INT-DOC-005-A
  */
 
+import { cache } from "react";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
@@ -63,15 +64,11 @@ const updateDocumentTemplateSchema = z.object({
 // ============================================================================
 
 /**
- * Get the document template settings for a specific document type.
- * Returns defaults if no template exists for the organization.
+ * Cached template fetch for per-request deduplication.
+ * @performance Uses React.cache() for automatic request deduplication
  */
-export const getDocumentTemplate = createServerFn({ method: "GET" })
-  .inputValidator(getDocumentTemplateSchema)
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.read });
-
-    // Query for existing template
+const _getDocumentTemplateCached = cache(
+  async (documentType: string, organizationId: string) => {
     const [template] = await db
       .select({
         id: documentTemplates.id,
@@ -91,18 +88,17 @@ export const getDocumentTemplate = createServerFn({ method: "GET" })
       .from(documentTemplates)
       .where(
         and(
-          eq(documentTemplates.organizationId, ctx.organizationId),
-          eq(documentTemplates.documentType, data.documentType)
+          eq(documentTemplates.organizationId, organizationId),
+          eq(documentTemplates.documentType, documentType)
         )
       )
       .limit(1);
 
-    // If no template exists, return defaults
     if (!template) {
       return {
         id: null,
-        organizationId: ctx.organizationId,
-        documentType: data.documentType,
+        organizationId,
+        documentType,
         logoUrl: null,
         primaryColor: "#1f2937",
         secondaryColor: "#6b7280",
@@ -121,6 +117,18 @@ export const getDocumentTemplate = createServerFn({ method: "GET" })
       ...template,
       isDefault: false,
     };
+  }
+);
+
+/**
+ * Get the document template settings for a specific document type.
+ * Returns defaults if no template exists for the organization.
+ */
+export const getDocumentTemplate = createServerFn({ method: "GET" })
+  .inputValidator(getDocumentTemplateSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.settings?.read });
+    return _getDocumentTemplateCached(data.documentType, ctx.organizationId);
   });
 
 // ============================================================================
@@ -197,7 +205,7 @@ export const updateDocumentTemplate = createServerFn({ method: "POST" })
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
         action: "document_template.update",
-        entityType: "setting" as any,
+        entityType: "setting",
         entityId: updated.id,
         oldValues: {
           documentType,
@@ -226,7 +234,7 @@ export const updateDocumentTemplate = createServerFn({ method: "POST" })
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
         action: "document_template.create",
-        entityType: "setting" as any,
+        entityType: "setting",
         entityId: created.id,
         newValues: {
           documentType,
@@ -349,7 +357,7 @@ export const resetDocumentTemplate = createServerFn({ method: "POST" })
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
         action: "document_template.reset",
-        entityType: "setting" as any,
+        entityType: "setting",
         entityId: deleted[0].id,
         oldValues: { documentType: data.documentType },
       });

@@ -22,17 +22,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 import { TEMPLATE_VARIABLES } from "@/lib/communications/template-variables";
-import type { TemplateVariable } from "@/lib/schemas/communications";
+import type {
+  TemplateVariable,
+  TemplateVariableMenuProps,
+} from "@/lib/schemas/communications";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-interface TemplateVariableMenuProps {
-  onInsert: (variable: string) => void;
-  categories?: string[];
-  className?: string;
-}
+// TemplateVariableMenuProps imported from schemas
 
 // ============================================================================
 // CATEGORY LABELS

@@ -39,6 +39,7 @@ import {
   deleteFile,
   getFileMetadata,
 } from "@/lib/storage";
+import { logger } from "@/lib/logger";
 import {
   presignedUploadRequestSchema,
   confirmUploadRequestSchema,
@@ -176,7 +177,7 @@ export const confirmUpload = createServerFn({ method: "POST" })
         path: attachment.storageKey,
         bucket: DEFAULT_BUCKET,
       });
-    } catch (error) {
+    } catch {
       // File doesn't exist or other error
       throw new NotFoundError(
         "File not found in storage. Upload may have failed or is still processing."
@@ -186,9 +187,11 @@ export const confirmUpload = createServerFn({ method: "POST" })
     // Verify actual content type matches claimed type (server-side security check)
     const actualMimeType = fileInfo.mimeType;
     if (actualMimeType && actualMimeType !== attachment.mimeType) {
-      console.warn(
-        `MIME type mismatch: claimed=${attachment.mimeType}, actual=${actualMimeType}, attachmentId=${data.attachmentId}`
-      );
+      logger.warn('MIME type mismatch', {
+        claimed: attachment.mimeType,
+        actual: actualMimeType,
+        attachmentId: data.attachmentId,
+      });
 
       // If actual type is not allowed, reject the upload entirely
       if (!isAllowedMimeType(actualMimeType)) {
@@ -575,11 +578,10 @@ export const deleteAttachment = createServerFn({ method: "POST" })
         bucket: DEFAULT_BUCKET,
       });
     } catch (error) {
-      // Log but don't fail if file is already deleted from storage
-      console.warn(
-        `Failed to delete file from storage (may already be deleted):`,
-        error
-      );
+      logger.warn('Failed to delete file from storage (may already be deleted)', {
+        error: String(error),
+        attachmentId: data.attachmentId,
+      });
     }
 
     // Soft delete the record
@@ -628,7 +630,10 @@ export const bulkDeleteAttachments = createServerFn({ method: "POST" })
             bucket: DEFAULT_BUCKET,
           });
         } catch (error) {
-          console.warn(`Failed to delete file ${attachment.storageKey}:`, error);
+          logger.warn('Failed to delete file from storage', {
+            storageKey: attachment.storageKey,
+            error: String(error),
+          });
         }
       })
     );

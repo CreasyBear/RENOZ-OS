@@ -13,6 +13,8 @@ import {
   filterSchema,
   idParamSchema,
 } from '../_shared/patterns';
+import type { FlexibleJson, JsonValue } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
@@ -38,8 +40,16 @@ export const movementTypeValues = [
   'transfer',
 ] as const;
 
+export const qualityStatusValues = ['good', 'damaged', 'expired', 'quarantined'] as const;
+
 export const inventoryStatusSchema = z.enum(inventoryStatusValues);
 export const movementTypeSchema = z.enum(movementTypeValues);
+export const qualityStatusSchema = z.enum(qualityStatusValues);
+export type MovementType = z.infer<typeof movementTypeSchema>;
+
+export function isValidMovementType(value: unknown): value is MovementType {
+  return typeof value === 'string' && movementTypeValues.includes(value as MovementType);
+}
 
 // ============================================================================
 // LOCATION ADDRESS
@@ -106,6 +116,10 @@ export const locationListQuerySchema = paginationSchema.merge(locationFilterSche
 
 export type LocationListQuery = z.infer<typeof locationListQuerySchema>;
 
+export const locationListCursorQuerySchema = cursorPaginationSchema.merge(locationFilterSchema);
+
+export type LocationListCursorQuery = z.infer<typeof locationListCursorQuerySchema>;
+
 // ============================================================================
 // INVENTORY CONSTANTS
 // ============================================================================
@@ -145,11 +159,19 @@ export type Inventory = z.infer<typeof inventorySchema>;
 // INVENTORY FILTERS
 // ============================================================================
 
+const ageRangeSchema = z.enum(["all", "0-30", "31-60", "61-90", "90+"]);
+
 export const inventoryFilterSchema = filterSchema.extend({
   productId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),
-  status: inventoryStatusSchema.optional(),
+  status: z.union([inventoryStatusSchema, z.array(inventoryStatusSchema)]).optional(),
+  qualityStatus: z.union([qualityStatusSchema, z.array(qualityStatusSchema)]).optional(),
+  ageRange: ageRangeSchema.optional(),
   lowStock: z.coerce.boolean().optional(), // Below reorder point
+  minQuantity: z.coerce.number().nonnegative().optional(),
+  maxQuantity: z.coerce.number().nonnegative().optional(),
+  minValue: z.coerce.number().nonnegative().optional(),
+  maxValue: z.coerce.number().nonnegative().optional(),
 });
 
 export type InventoryFilter = z.infer<typeof inventoryFilterSchema>;
@@ -175,7 +197,8 @@ export const movementMetadataSchema = z
   })
   .passthrough();
 
-export type MovementMetadata = z.infer<typeof movementMetadataSchema>;
+// FlexibleJson for ServerFn boundary per SCHEMA-TRACE §4
+export type MovementMetadata = FlexibleJson | null;
 
 // ============================================================================
 // CREATE INVENTORY MOVEMENT
@@ -275,6 +298,22 @@ export const stockTransferSchema = z.object({
 export type StockTransfer = z.infer<typeof stockTransferSchema>;
 
 // ============================================================================
+// LOCATION ATTRIBUTES
+// ============================================================================
+
+/** Attributes for warehouse locations (JSONB; may include isDefault, etc.) */
+export const locationAttributesSchema = z
+  .object({
+    isDefault: z.boolean().optional(),
+    allowNegative: z.boolean().optional(),
+    description: z.string().optional(),
+    address: locationAddressSchema.optional(),
+  })
+  .passthrough();
+
+export type LocationAttributes = z.infer<typeof locationAttributesSchema>;
+
+// ============================================================================
 // WAREHOUSE MANAGEMENT ENUMS
 // ============================================================================
 
@@ -293,15 +332,12 @@ export const inventoryAlertTypeValues = [
 
 export const forecastIntervalValues = ['daily', 'weekly', 'monthly'] as const;
 
-export const qualityStatusValues = ['good', 'damaged', 'expired', 'quarantined'] as const;
-
 export const costLayerReferenceTypeValues = ['purchase_order', 'adjustment', 'transfer'] as const;
 
 export const stockCountStatusSchema = z.enum(stockCountStatusValues);
 export const stockCountTypeSchema = z.enum(stockCountTypeValues);
 export const inventoryAlertTypeSchema = z.enum(inventoryAlertTypeValues);
 export const forecastIntervalSchema = z.enum(forecastIntervalValues);
-export const qualityStatusSchema = z.enum(qualityStatusValues);
 export const costLayerReferenceTypeSchema = z.enum(costLayerReferenceTypeValues);
 
 // ============================================================================
@@ -315,7 +351,8 @@ export const stockCountMetadataSchema = z
   })
   .passthrough();
 
-export type StockCountMetadata = z.infer<typeof stockCountMetadataSchema>;
+// FlexibleJson for ServerFn boundary per SCHEMA-TRACE §4
+export type StockCountMetadata = FlexibleJson | null;
 
 export const createStockCountSchema = z.object({
   countCode: z.string().min(1, 'Count code is required').max(20),
@@ -415,6 +452,7 @@ export interface StockCountItemWithRelations extends StockCountItem {
       name?: string;
     };
     productId?: string;
+    unitCost?: number | null;
   } | null;
 }
 
@@ -442,6 +480,21 @@ export const costLayerSchema = createCostLayerSchema.extend({
 });
 
 export type CostLayer = z.infer<typeof costLayerSchema>;
+
+/**
+ * Cost layer row as returned from API (getInventoryItem, listCostLayers).
+ * Matches Drizzle inventoryCostLayers.$inferSelect shape.
+ */
+export interface InventoryCostLayerRow {
+  id: string;
+  receivedAt: Date;
+  quantityReceived: number;
+  quantityRemaining: number;
+  unitCost: string | number;
+  referenceType: string | null;
+  referenceId: string | null;
+  expiryDate: Date | null;
+}
 
 export const costLayerFilterSchema = filterSchema.extend({
   inventoryId: z.string().uuid().optional(),
@@ -511,7 +564,8 @@ export const alertThresholdSchema = z
   })
   .passthrough();
 
-export type AlertThreshold = z.infer<typeof alertThresholdSchema>;
+// FlexibleJson for ServerFn boundary per SCHEMA-TRACE §4
+export type AlertThreshold = FlexibleJson;
 
 export const createAlertSchema = z.object({
   alertType: inventoryAlertTypeSchema,
@@ -765,9 +819,6 @@ export interface InventoryTurnoverResult {
 // MOVEMENT RESPONSE TYPES
 // ============================================================================
 
-/**
- * Movement record with product and location info
- */
 export interface MovementWithRelations {
   id: string;
   organizationId: string;
@@ -782,7 +833,9 @@ export interface MovementWithRelations {
   totalCost: number | null;
   referenceType: string | null;
   referenceId: string | null;
-  metadata: Record<string, unknown> | null;
+  referenceNumber?: string | null;
+  performedByName?: string | null;
+  metadata: FlexibleJson | null;
   notes: string | null;
   createdAt: Date;
   createdBy: string | null;
@@ -827,6 +880,19 @@ export interface ProductMovementAggregation {
   unitsIn: number;
   unitsOut: number;
   count: number;
+}
+
+/**
+ * Top moving product as returned from getInventoryDashboard (topMoving)
+ */
+export interface DashboardTopMovingItem {
+  productId: string;
+  productName: string | null;
+  productSku?: string | null;
+  sku?: string | null;
+  movementCount: number;
+  totalQuantity: number;
+  trend?: 'up' | 'down' | 'stable';
 }
 
 /**
@@ -975,7 +1041,7 @@ export const createWarehouseLocationSchema = z.object({
   isActive: z.boolean().default(true),
   isPickable: z.boolean().default(true),
   isReceivable: z.boolean().default(true),
-  attributes: z.record(z.string(), z.unknown()).optional(),
+  attributes: z.record(z.string(), z.any()).optional(),
 });
 
 export type CreateWarehouseLocationInput = z.infer<typeof createWarehouseLocationSchema>;
@@ -1016,7 +1082,7 @@ export interface LocationApiRecord {
   isActive: boolean;
   isPickable: boolean;
   isReceivable: boolean;
-  attributes: Record<string, unknown> | null;
+  attributes: FlexibleJson | null;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;
@@ -1068,6 +1134,20 @@ export interface LocationDetailApiResult {
 }
 
 // ============================================================================
+// QUALITY RECORD
+// ============================================================================
+
+/** Quality inspection record for inventory item detail view */
+export interface QualityRecord {
+  id: string;
+  inspectionDate: Date;
+  inspectorName: string | null;
+  result: 'pass' | 'fail' | 'conditional' | string;
+  notes?: string;
+  defects?: string[];
+}
+
+// ============================================================================
 // HOOK LOCATION TYPES
 // ============================================================================
 
@@ -1086,7 +1166,7 @@ export interface HookWarehouseLocation {
   currentOccupancy: number;
   utilization: number;
   isActive: boolean;
-  attributes: Record<string, unknown>;
+  attributes: FlexibleJson;
   childCount: number;
   itemCount: number;
   createdAt: Date;
@@ -1119,6 +1199,7 @@ export interface HookLocationContents {
 
 /**
  * Filters for location queries in hooks
+ * Extends Record for compatibility with queryKeys.locations.list()
  */
 export interface HookLocationFilters extends Record<string, unknown> {
   parentId?: string;
@@ -1136,7 +1217,7 @@ export interface CreateLocationInput {
   locationType: LocationType;
   parentId?: string;
   capacity?: number;
-  attributes?: Record<string, unknown>;
+  attributes?: FlexibleJson;
 }
 
 /**
@@ -1147,5 +1228,405 @@ export interface UpdateLocationInput {
   name?: string;
   capacity?: number;
   isActive?: boolean;
-  attributes?: Record<string, unknown>;
+  attributes?: FlexibleJson;
+}
+
+// ============================================================================
+// CLIENT-SAFE TYPE DEFINITIONS
+// (Duplicated from drizzle schema to avoid client/server bundling issues)
+// ============================================================================
+
+/**
+ * Inventory alert entity.
+ * Client-safe version of InventoryAlert from drizzle/schema.
+ */
+export interface InventoryAlert {
+  id: string;
+  organizationId: string;
+  alertType: 'low_stock' | 'overstock' | 'reorder_point' | 'expiring_soon' | 'slow_moving';
+  productId: string | null;
+  locationId: string | null;
+  threshold: AlertThreshold;
+  isActive: boolean;
+  notificationChannels: string[] | null;
+  escalationUsers: string[] | null;
+  lastTriggeredAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  createdBy: string | null;
+  updatedBy: string | null;
+  version: number;
+}
+
+// ============================================================================
+// SERVER FUNCTION RESPONSE TYPES
+// ============================================================================
+
+/**
+ * Inventory list result from listInventory server function
+ */
+export interface ListInventoryResult {
+  items: InventoryWithRelations[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  totals: {
+    totalValue: number;
+    totalItems: number;
+    totalSkus: number;
+    lowStockCount: number;
+  };
+}
+
+/**
+ * Inventory item with product and location relations
+ * Note: This extends the base Inventory type but allows for partial product/location data
+ */
+export interface InventoryWithRelations {
+  // All Inventory fields
+  id: string;
+  organizationId: string;
+  productId: string;
+  locationId: string;
+  quantityOnHand: number;
+  quantityAllocated: number;
+  quantityAvailable: number;
+  unitCost: number | null;
+  totalValue: number | null;
+  status: string;
+  lotNumber: string | null;
+  serialNumber: string | null;
+  batchNumber: string | null;
+  expiryDate: string | null;
+  // Note: qualityStatus is mentioned in PRD but not implemented in actual inventory table schema
+  // Components may derive it from status field or other sources
+  qualityStatus?: string | null;
+  metadata: FlexibleJson | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+  // Relations
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    categoryId: string | null;
+    costPrice: number | null;
+    reorderPoint?: number | null; // Product reorder point (exists on products table)
+    reorderQty?: number | null; // Product reorder quantity (exists on products table)
+    // Note: maxStockLevel and safetyStock are NOT on products table
+    [key: string]: JsonValue | undefined;
+  } | null;
+  location: {
+    id: string;
+    name: string;
+    locationCode: string;
+    locationType: LocationType;
+    capacity?: number | null;
+    [key: string]: JsonValue | undefined;
+  } | null;
+}
+
+/**
+ * WMS Dashboard stock by category
+ */
+export const categoryStockSchema = z.object({
+  categoryId: z.string().uuid().nullable(),
+  categoryName: z.string(),
+  unitCount: z.number().int().nonnegative(),
+  totalValue: z.number().nonnegative(),
+});
+export type CategoryStock = z.infer<typeof categoryStockSchema>;
+
+/**
+ * WMS Dashboard stock by location
+ */
+export const locationStockSchema = z.object({
+  locationId: z.string().uuid(),
+  locationName: z.string(),
+  locationType: z.string(),
+  unitCount: z.number().int().nonnegative(),
+  totalValue: z.number().nonnegative(),
+  percentage: z.number().int().min(0).max(100),
+});
+export type LocationStock = z.infer<typeof locationStockSchema>;
+
+/**
+ * Recent movement for timeline display.
+ * timestamp is ISO string over wire (Date serializes to string in JSON).
+ */
+export const recentMovementSchema = z.object({
+  id: z.string().uuid(),
+  type: z.enum(['receipt', 'transfer', 'allocation']),
+  timestamp: z.union([z.string(), z.coerce.date()]), // ISO string or Date
+  description: z.string(),
+  reference: z.string().nullable(),
+  quantity: z.number().int().nonnegative(),
+  productName: z.string(),
+  productSku: z.string(),
+  location: z.string(),
+  toLocation: z.string().nullable(),
+});
+export type RecentMovement = z.infer<typeof recentMovementSchema>;
+
+/**
+ * Dashboard comparison data (previous period vs current)
+ */
+export const dashboardComparisonSchema = z.object({
+  totalValueChange: z.number(),
+  totalUnitsChange: z.number(),
+  totalSkusChange: z.number().int(),
+  alertsChange: z.number().int(),
+  locationsChange: z.number().int(),
+});
+export type DashboardComparison = z.infer<typeof dashboardComparisonSchema>;
+
+/**
+ * WMS Dashboard complete data structure
+ */
+export const wmsDashboardDataSchema = z.object({
+  totals: z.object({
+    totalValue: z.number().nonnegative(),
+    totalUnits: z.number().int().nonnegative(),
+    totalSkus: z.number().int().nonnegative(),
+  }),
+  comparison: dashboardComparisonSchema.optional(),
+  stockByCategory: z.array(categoryStockSchema),
+  stockByLocation: z.array(locationStockSchema),
+  recentMovements: z.array(recentMovementSchema),
+});
+export type WMSDashboardData = z.infer<typeof wmsDashboardDataSchema>;
+
+/**
+ * COGS calculation result
+ */
+export interface COGSResult {
+  cogs: number;
+  costLayers: Array<{
+    id: string;
+    inventoryId: string;
+    receivedAt: Date;
+    quantityReceived: number;
+    quantityRemaining: number;
+    unitCost: number;
+    referenceType: string | null;
+    referenceId: string | null;
+  }>;
+  remainingLayers: Array<{
+    id: string;
+    inventoryId: string;
+    receivedAt: Date;
+    quantityReceived: number;
+    quantityRemaining: number;
+    unitCost: number;
+    referenceType: string | null;
+    referenceId: string | null;
+  }>;
+}
+
+/**
+ * Reorder recommendation for forecasting
+ */
+export interface ReorderRecommendation {
+  productId: string;
+  productSku: string;
+  productName: string;
+  currentStock: number;
+  reorderPoint: number;
+  safetyStock: number;
+  recommendedQuantity: number;
+  urgency: 'critical' | 'high' | 'medium' | 'low';
+  daysUntilStockout: number | null;
+  locationCount?: number;
+  locations?: Array<{
+    locationId: string;
+    locationName: string;
+    locationCode: string | null;
+    quantityOnHand: number;
+    quantityAvailable: number;
+  }>;
+}
+
+/**
+ * Forecast list result
+ */
+export interface ListForecastsResult {
+  forecasts: Array<{
+    id: string;
+    organizationId: string;
+    productId: string;
+    forecastDate: string;
+    forecastPeriod: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+    demandQuantity: string;
+    forecastAccuracy: string | null;
+    confidenceLevel: string | null;
+    safetyStockLevel: number | null;
+    reorderPoint: number | null;
+    recommendedOrderQuantity: number | null;
+    calculatedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+/**
+ * Alert with product and location details
+ */
+export interface AlertWithDetails {
+  id: string;
+  organizationId: string;
+  alertType: string;
+  productId: string | null;
+  locationId: string | null;
+  threshold: FlexibleJson;
+  isActive: boolean;
+  notificationChannels: string[] | null;
+  escalationUsers: string[] | null;
+  lastTriggeredAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+  version: number;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+  } | null;
+  location?: {
+    id: string;
+    name: string;
+    locationCode: string;
+  } | null;
+}
+
+/**
+ * Triggered alert with current values and severity
+ */
+export interface TriggeredAlert {
+  alert: {
+    id: string;
+    organizationId: string;
+    alertType: string;
+    productId: string | null;
+    locationId: string | null;
+    threshold: FlexibleJson;
+    isActive: boolean;
+    notificationChannels: string[] | null;
+    escalationUsers: string[] | null;
+    lastTriggeredAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    createdBy: string | null;
+    updatedBy: string | null;
+    version: number;
+  };
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+  } | null;
+  location?: {
+    id: string;
+    name: string;
+    locationCode: string;
+  } | null;
+  currentValue: number;
+  thresholdValue: number;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  message: string;
+  affectedItems: Array<{
+    inventoryId: string;
+    productName: string;
+    quantity: number;
+  }>;
+  isFallback?: boolean;
+}
+
+/** Alert item as returned in ListAlertsResult.alerts */
+export interface AlertListItem {
+  id: string;
+  organizationId: string;
+  alertType: string;
+  productId: string | null;
+  locationId: string | null;
+  threshold: FlexibleJson;
+  isActive: boolean;
+  notificationChannels: string[] | null;
+  escalationUsers: string[] | null;
+  lastTriggeredAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+  version: number;
+}
+
+/**
+ * Alert list result
+ */
+export interface ListAlertsResult {
+  alerts: AlertListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  activeCount: number;
+}
+
+/**
+ * Warehouse location with children (hierarchy)
+ */
+export interface WarehouseLocationWithChildren {
+  id: string;
+  organizationId: string;
+  locationCode: string;
+  name: string;
+  locationType: LocationType;
+  parentId: string | null;
+  capacity: number | null;
+  isActive: boolean;
+  isPickable: boolean;
+  isReceivable: boolean;
+  attributes: FlexibleJson | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+  children: WarehouseLocationWithChildren[];
+  inventoryCount?: number;
+  utilization?: number;
+}
+
+/**
+ * Location list result
+ */
+export interface ListLocationsResult {
+  locations: Array<{
+    id: string;
+    organizationId: string;
+    locationCode: string;
+    name: string;
+    locationType: LocationType;
+    parentId: string | null;
+    capacity: number | null;
+    isActive: boolean;
+    isPickable: boolean;
+    isReceivable: boolean;
+    attributes: FlexibleJson | null;
+    createdAt: Date;
+    updatedAt: Date;
+    createdBy: string | null;
+    updatedBy: string | null;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }

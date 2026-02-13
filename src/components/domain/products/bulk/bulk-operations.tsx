@@ -41,11 +41,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  bulkUpdateProducts,
-  bulkAdjustPrices,
-  bulkDeleteProducts,
-  exportProducts,
-} from "@/server/functions/products/product-bulk-ops";
+  useBulkUpdateProducts,
+  useBulkAdjustPrices,
+  useBulkDeleteProducts,
+  useExportProducts,
+} from "@/hooks/products";
+import { toastError } from "@/hooks";
 
 interface ProductBulkOperationsProps {
   selectedIds: string[];
@@ -61,8 +62,19 @@ export function ProductBulkOperations({
   onClearSelection,
 }: ProductBulkOperationsProps) {
   const [activeOperation, setActiveOperation] = useState<BulkOperation>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Mutations
+  const bulkUpdate = useBulkUpdateProducts();
+  const bulkAdjustPrices = useBulkAdjustPrices();
+  const bulkDelete = useBulkDeleteProducts();
+  const exportProducts = useExportProducts();
+
+  const isProcessing =
+    bulkUpdate.isPending ||
+    bulkAdjustPrices.isPending ||
+    bulkDelete.isPending ||
+    exportProducts.isPending;
 
   // Status update state
   const [newStatus, setNewStatus] = useState<string>("active");
@@ -83,120 +95,119 @@ export function ProductBulkOperations({
   };
 
   // Handle bulk status update
-  const handleStatusUpdate = async () => {
-    setIsProcessing(true);
+  const handleStatusUpdate = () => {
     setError(null);
 
-    try {
-      await bulkUpdateProducts({
-        data: {
-          productIds: selectedIds,
-          updates: { status: newStatus as "active" | "inactive" | "discontinued" },
+    bulkUpdate.mutate(
+      {
+        productIds: selectedIds,
+        updates: { status: newStatus as "active" | "inactive" | "discontinued" },
+      },
+      {
+        onSuccess: () => {
+          resetState();
+          onComplete?.();
+          onClearSelection?.();
         },
-      });
-      resetState();
-      onComplete?.();
-      onClearSelection?.();
-    } catch (err) {
-      console.error("Bulk status update failed:", err);
-      setError(err instanceof Error ? err.message : "Failed to update products");
-    } finally {
-      setIsProcessing(false);
-    }
+        onError: (err) => {
+          const errorMessage = err instanceof Error ? err.message : "Failed to update products";
+          toastError(errorMessage);
+          setError(errorMessage);
+        },
+      }
+    );
   };
 
   // Handle bulk price update
-  const handlePriceUpdate = async () => {
+  const handlePriceUpdate = () => {
     const numValue = parseFloat(priceValue);
     if (isNaN(numValue)) {
       setError("Please enter a valid number");
       return;
     }
 
-    setIsProcessing(true);
     setError(null);
 
-    try {
-      // Build adjustment object based on type
-      const adjustment = priceUpdateType === "percentage"
-        ? {
-            type: "percentage" as const,
-            value: numValue,
-            applyTo: priceField === "basePrice" ? "basePrice" as const : "costPrice" as const,
-          }
-        : {
-            type: "fixed" as const,
-            [priceField]: numValue,
-          };
+    // Build adjustment object based on type
+    const adjustment = priceUpdateType === "percentage"
+      ? {
+          type: "percentage" as const,
+          value: numValue,
+          applyTo: priceField === "basePrice" ? "basePrice" as const : "costPrice" as const,
+        }
+      : {
+          type: "fixed" as const,
+          [priceField]: numValue,
+        };
 
-      await bulkAdjustPrices({
-        data: {
-          productIds: selectedIds,
-          adjustment,
+    bulkAdjustPrices.mutate(
+      {
+        productIds: selectedIds,
+        adjustment,
+      },
+      {
+        onSuccess: () => {
+          resetState();
+          onComplete?.();
+          onClearSelection?.();
         },
-      });
-      resetState();
-      onComplete?.();
-      onClearSelection?.();
-    } catch (err) {
-      console.error("Bulk price update failed:", err);
-      setError(err instanceof Error ? err.message : "Failed to update prices");
-    } finally {
-      setIsProcessing(false);
-    }
+        onError: (err) => {
+          const errorMessage = err instanceof Error ? err.message : "Failed to update prices";
+          toastError(errorMessage);
+          setError(errorMessage);
+        },
+      }
+    );
   };
 
   // Handle bulk delete
-  const handleDelete = async () => {
-    setIsProcessing(true);
+  const handleDelete = () => {
     setError(null);
 
-    try {
-      await bulkDeleteProducts({
-        data: {
-          productIds: selectedIds,
-        },
-      });
-      resetState();
-      onComplete?.();
-      onClearSelection?.();
-    } catch (err) {
-      console.error("Bulk delete failed:", err);
-      setError(err instanceof Error ? err.message : "Failed to delete products");
-    } finally {
-      setIsProcessing(false);
-    }
+    bulkDelete.mutate(selectedIds, {
+      onSuccess: () => {
+        resetState();
+        onComplete?.();
+        onClearSelection?.();
+      },
+      onError: (err) => {
+        const errorMessage = err instanceof Error ? err.message : "Failed to delete products";
+        toastError(errorMessage);
+        setError(errorMessage);
+      },
+    });
   };
 
   // Handle export
-  const handleExport = async () => {
-    setIsProcessing(true);
+  const handleExport = () => {
     setError(null);
 
-    try {
-      const result = (await exportProducts({
-        data: {
-          productIds: selectedIds.length > 0 ? selectedIds : undefined,
+    exportProducts.mutate(
+      {
+        productIds: selectedIds.length > 0 ? selectedIds : undefined,
+      },
+      {
+        onSuccess: (result) => {
+          // Download the file
+          const data = result as { content: string; filename: string };
+          const blob = new Blob([data.content], { type: "text/csv" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = data.filename;
+          a.click();
+          URL.revokeObjectURL(url);
         },
-      })) as { content: string; filename: string };
-
-      // Download the file
-      const blob = new Blob([result.content], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = result.filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("Export failed:", err);
-      setError(err instanceof Error ? err.message : "Failed to export products");
-    } finally {
-      setIsProcessing(false);
-    }
+        onError: (err) => {
+          const errorMessage = err instanceof Error ? err.message : "Failed to export products";
+          toastError(errorMessage);
+          setError(errorMessage);
+        },
+      }
+    );
   };
 
-  if (selectedIds.length === 0) {
+  if (selectedIds.length < 2) {
     return null;
   }
 

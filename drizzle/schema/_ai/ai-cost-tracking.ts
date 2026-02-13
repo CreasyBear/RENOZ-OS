@@ -18,12 +18,16 @@ import {
   index,
   pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { organizations } from "../settings/organizations";
 import { users } from "../users";
 import { aiConversations } from "./ai-conversations";
 import { aiAgentTasks } from "./ai-agent-tasks";
-import { currencyColumn } from "../_shared/patterns";
+import {
+  currencyColumn,
+  organizationRlsUsing,
+  organizationRlsWithCheck,
+} from "../_shared/patterns";
 
 // ============================================================================
 // AI COST TRACKING TABLE
@@ -109,22 +113,22 @@ export const aiCostTracking = pgTable(
       table.date
     ),
 
-    // RLS Policies - users see own org's costs, admins see all
+    // RLS Policies - users see own org's costs, admins see all (append-only: select + insert + delete)
     selectPolicy: pgPolicy("ai_cost_tracking_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
     insertPolicy: pgPolicy("ai_cost_tracking_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: organizationRlsWithCheck(),
     }),
     // Cost records are immutable - no update policy
     deletePolicy: pgPolicy("ai_cost_tracking_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
   })
 );

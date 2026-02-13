@@ -19,6 +19,9 @@ This document establishes a systematic framework for debugging data access, aggr
 5. [Common Issues & Fixes](#5-common-issues--fixes)
 6. [Audit Checklist](#6-audit-checklist)
 7. [Quick Reference](#7-quick-reference)
+8. [Null vs Undefined Policy](#8-null-vs-undefined-policy)
+9. [Drizzle Query Best Practices](#9-drizzle-query-best-practices)
+10. [Known Type Debt (@ts-expect-error)](#10-known-type-debt-tsexpect-error)
 
 ---
 
@@ -507,6 +510,41 @@ const typeCounts: Record<string, MovementTypeCount> = {};
 | **Relation Types** | `lib/schemas/{domain}/{entity}.ts` | `StockCountItemWithRelations`, `MovementWithRelations` |
 | **UI State Types** | Route file (simple unions only) | `type Tab = 'a' \| 'b'` (OK for simple local state) |
 
+### ServerFn Serialization Boundary
+
+**When types cross the ServerFn boundary** (createServerFn input/output), TanStack Start serializes to JSON. The framework infers `{ [x: string]: {} }` for object values in generic JSON fields. This conflicts with `Record<string, unknown>` because `unknown` is not assignable to `{}` in the inferred return type.
+
+**Fix at the schema level** using a wire-type pattern:
+
+1. **Define wire types** for data that crosses ServerFn boundaries (metadata, filters, arbitrary JSON).
+2. **Use `z.record(z.string(), z.any())`** in Zod schemas for flexible JSON fields—produces `{ [key: string]: any }` which satisfies both `unknown` and `{}`.
+3. **Add explicit return types** to server handlers when the inferred type conflicts with domain types.
+4. **Domain types** (e.g. `CustomerFiltersState`) remain the source of truth for UI; wire types bridge the boundary.
+
+```typescript
+// lib/schemas/_shared/patterns.ts
+export const flexibleJsonSchema = z.record(z.string(), z.any());
+export type FlexibleJson = z.infer<typeof flexibleJsonSchema>;  // { [key: string]: any }
+
+// Domain type (UI layer)
+export interface CustomerFiltersState extends Record<string, unknown> {
+  search: string;
+  status: CustomerStatus[];
+  // ...
+}
+
+// Wire type (ServerFn boundary)
+export interface SavedCustomerFilterWire {
+  id: string;
+  name: string;
+  filters: FlexibleJson;  // Satisfies ServerFn inference
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+**See:** `docs/design-system/FILTER-STANDARDS.md` §9 Type System Adjustments, `STANDARDS.md` §3 Hook Patterns.
+
 ### When to Extract Types
 
 **Extract to schema when:**
@@ -750,6 +788,16 @@ grep -r "\.map((item)" src/server/functions | grep -v "aggregate"
 
 ---
 
+## 8. Null vs Undefined Policy
+
+**DB → Server:** The database returns `null` for optional columns (JSONB, text, etc.). The server should normalize to the schema contract before returning. Use `normalizeProductRow` or similar helpers in `lib/schemas/*/normalize.ts`.
+
+**Schema output:** Use `.nullable().default(null)` for optional fields that may be absent, so output is `T | null` rather than `T | undefined`.
+
+**Coercion at boundary only:** When the schema cannot be changed, normalize at the explicit API boundary (e.g. server handler return, or a single `normalizeForView` in the container). Avoid ad-hoc `?? null` scattered in views.
+
+---
+
 ## Examples
 
 ### Example 1: Movements Data Access Fix
@@ -834,7 +882,7 @@ items: Array.from(aggregatedMap.values()).slice(0, 10)
 
 ---
 
-## 8. Drizzle Query Best Practices
+## 9. Drizzle Query Best Practices
 
 ### Aggregation Function Checklist
 
@@ -906,6 +954,31 @@ async function calculateMetric(organizationId: string, metricId: string) {
   };
 }
 ```
+
+---
+
+## 10. Known Type Debt (@ts-expect-error)
+
+Several ServerFn handlers use `@ts-expect-error` to work around type mismatches. Documenting the pattern here for future remediation.
+
+### Root Cause
+
+- **JSONB / Record mismatch:** PostgreSQL JSONB columns return `Record<string, unknown>`. TanStack Start ServerFn inference expects schema types like `{ [x: string]: {} }`. The index signature `[x: string]: {}` is stricter than `Record<string, unknown>` (unknown is not assignable to {}).
+- **TanStack Start ServerFn inference:** Explicit return type annotations on handlers sometimes conflict with inferred ServerFn types, requiring `@ts-expect-error`.
+
+### Affected Files
+
+| File | Count | Reason |
+|------|-------|--------|
+| `server/functions/orders/order-amendments.ts` | 8 | `changes.before` Record vs schema; ServerFn inference |
+| `server/functions/settings/custom-fields.ts` | 7 | Complex return types |
+| `server/functions/communications/email-campaigns.ts` | 6 | `recipientCriteria.customFilters` Record vs schema |
+
+### Planned Fix (Future)
+
+1. **Schema alignment:** Relax schema types for JSONB fields to accept `Record<string, unknown>` and validate at runtime.
+2. **Shared JSONB handling:** Create a `flexibleJsonSchema` or similar that maps DB JSONB to a permissive schema type.
+3. **TanStack Start:** Track framework updates for improved ServerFn type inference.
 
 ---
 

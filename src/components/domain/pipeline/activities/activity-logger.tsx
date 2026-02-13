@@ -9,8 +9,6 @@
  */
 
 import { memo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Phone,
   Mail,
@@ -38,7 +36,7 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toastSuccess, toastError } from "@/hooks";
-import { logActivity } from "@/server/functions/pipeline/pipeline";
+import { useLogActivity } from "@/hooks/pipeline";
 import type { OpportunityActivityType } from "@/lib/schemas/pipeline";
 
 // ============================================================================
@@ -104,8 +102,6 @@ export const ActivityLogger = memo(function ActivityLogger({
   variant = "card",
   defaultType = "note",
 }: ActivityLoggerProps) {
-  const queryClient = useQueryClient();
-
   // Form state
   const [type, setType] = useState<OpportunityActivityType>(defaultType);
   const [description, setDescription] = useState("");
@@ -118,11 +114,15 @@ export const ActivityLogger = memo(function ActivityLogger({
   const currentType = ACTIVITY_TYPES.find((t) => t.value === type) ?? ACTIVITY_TYPES[3];
   const Icon = currentType.icon;
 
-  // Log activity mutation
-  const logMutation = useMutation({
-    mutationFn: async () => {
-      return logActivity({
-        data: {
+  // Use the log activity hook
+  const logActivityMutation = useLogActivity();
+
+  // Log activity mutation wrapper
+  const logMutation = {
+    isPending: logActivityMutation.isPending,
+    mutate: () => {
+      logActivityMutation.mutate(
+        {
           opportunityId,
           type,
           description,
@@ -130,25 +130,24 @@ export const ActivityLogger = memo(function ActivityLogger({
           scheduledAt: scheduleFollowUp && followUpDate ? new Date(followUpDate) : undefined,
           completedAt: scheduleFollowUp ? undefined : new Date(),
         },
-      });
+        {
+          onSuccess: () => {
+            toastSuccess(`${currentType.label} logged successfully.`);
+            // Reset form
+            setDescription("");
+            setOutcome("");
+            setScheduleFollowUp(false);
+            setFollowUpDate("");
+            setIsOpen(false);
+            onSuccess?.();
+          },
+          onError: () => {
+            toastError("Failed to log activity. Please try again.");
+          },
+        }
+      );
     },
-    onSuccess: () => {
-      toastSuccess(`${currentType.label} logged successfully.`);
-      // Reset form
-      setDescription("");
-      setOutcome("");
-      setScheduleFollowUp(false);
-      setFollowUpDate("");
-      setIsOpen(false);
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
-      onSuccess?.();
-    },
-    onError: () => {
-      toastError("Failed to log activity. Please try again.");
-    },
-  });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

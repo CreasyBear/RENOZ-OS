@@ -35,7 +35,13 @@ import {
 export function useCustomerKpis(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30d') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.kpis({ period: range }),
-    queryFn: () => getCustomerKpis({ data: { range } }),
+    queryFn: async () => {
+      const result = await getCustomerKpis({ data: { range } });
+      if (result == null) {
+        throw new Error('Customer KPIs returned no data');
+      }
+      return result;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -46,7 +52,11 @@ export function useCustomerKpis(range: '7d' | '30d' | '90d' | '365d' | 'all' = '
 export function useHealthDistribution() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.healthDistribution(),
-    queryFn: () => getHealthDistribution({ data: {} }),
+    queryFn: async () => {
+      const result = await getHealthDistribution({ data: {} });
+      if (result == null) throw new Error('Health distribution returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -57,7 +67,11 @@ export function useHealthDistribution() {
 export function useCustomerTrends(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30d') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.trends({ period: range }),
-    queryFn: () => getCustomerTrends({ data: { range } }),
+    queryFn: async () => {
+      const result = await getCustomerTrends({ data: { range } });
+      if (result == null) throw new Error('Customer trends returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -72,7 +86,11 @@ export function useCustomerTrends(range: '7d' | '30d' | '90d' | '365d' | 'all' =
 export function useSegmentPerformance() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.segments(),
-    queryFn: () => getSegmentPerformance({ data: {} }),
+    queryFn: async () => {
+      const result = await getSegmentPerformance({ data: {} });
+      if (result == null) throw new Error('Segment performance returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -83,7 +101,11 @@ export function useSegmentPerformance() {
 export function useSegmentAnalytics(tagId: string | null) {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.segmentAnalytics(tagId ?? ''),
-    queryFn: () => getSegmentAnalytics({ data: { tagId: tagId! } }),
+    queryFn: async () => {
+      const result = await getSegmentAnalytics({ data: { tagId: tagId! } });
+      if (result == null) throw new Error('Segment analytics returned no data');
+      return result;
+    },
     enabled: !!tagId,
     staleTime: 5 * 60 * 1000,
   });
@@ -99,7 +121,11 @@ export function useSegmentAnalytics(tagId: string | null) {
 export function useLifecycleStages() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.lifecycleStages(),
-    queryFn: () => getLifecycleStages({ data: {} }),
+    queryFn: async () => {
+      const result = await getLifecycleStages({ data: {} });
+      if (result == null) throw new Error('Lifecycle stages returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -110,7 +136,11 @@ export function useLifecycleStages() {
 export function useLifecycleCohorts(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.lifecycleCohorts({ range }),
-    queryFn: () => getLifecycleCohorts({ data: { range } }),
+    queryFn: async () => {
+      const result = await getLifecycleCohorts({ data: { range } });
+      if (result == null) throw new Error('Lifecycle cohorts returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -121,7 +151,11 @@ export function useLifecycleCohorts(range: '3m' | '6m' | '1y' = '6m') {
 export function useChurnMetrics(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.churnMetrics({ range }),
-    queryFn: () => getChurnMetrics({ data: { range } }),
+    queryFn: async () => {
+      const result = await getChurnMetrics({ data: { range } });
+      if (result == null) throw new Error('Churn metrics returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -132,7 +166,11 @@ export function useChurnMetrics(range: '3m' | '6m' | '1y' = '6m') {
 export function useConversionFunnel(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.conversionFunnel({ range }),
-    queryFn: () => getConversionFunnel({ data: { range } }),
+    queryFn: async () => {
+      const result = await getConversionFunnel({ data: { range } });
+      if (result == null) throw new Error('Conversion funnel returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -143,7 +181,11 @@ export function useConversionFunnel(range: '3m' | '6m' | '1y' = '6m') {
 export function useAcquisitionMetrics(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.acquisitionMetrics({ range }),
-    queryFn: () => getAcquisitionMetrics({ data: { range } }),
+    queryFn: async () => {
+      const result = await getAcquisitionMetrics({ data: { range } });
+      if (result == null) throw new Error('Acquisition metrics returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -154,7 +196,11 @@ export function useAcquisitionMetrics(range: '3m' | '6m' | '1y' = '6m') {
 export function useQuickStats(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30d') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.quickStats({ range }),
-    queryFn: () => getQuickStats({ data: { range } }),
+    queryFn: async () => {
+      const result = await getQuickStats({ data: { range } });
+      if (result == null) throw new Error('Quick stats returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -165,7 +211,11 @@ export function useQuickStats(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30
 export function useValueTiers() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.valueTiers(),
-    queryFn: () => getValueTiers({ data: {} }),
+    queryFn: async () => {
+      const result = await getValueTiers({ data: {} });
+      if (result == null) throw new Error('Value tiers returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -176,7 +226,11 @@ export function useValueTiers() {
 export function useValueKpis(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.valueKpis({ range }),
-    queryFn: () => getValueKpis({ data: { range } }),
+    queryFn: async () => {
+      const result = await getValueKpis({ data: { range } });
+      if (result == null) throw new Error('Value KPIs returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -187,7 +241,11 @@ export function useValueKpis(range: '3m' | '6m' | '1y' = '6m') {
 export function useProfitabilitySegments(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.profitabilitySegments({ range }),
-    queryFn: () => getProfitabilitySegments({ data: { range } }),
+    queryFn: async () => {
+      const result = await getProfitabilitySegments({ data: { range } });
+      if (result == null) throw new Error('Profitability segments returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -198,7 +256,11 @@ export function useProfitabilitySegments(range: '3m' | '6m' | '1y' = '6m') {
 export function useTopCustomers(limit: number = 10) {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.topCustomers({ limit }),
-    queryFn: () => getTopCustomers({ data: { limit } }),
+    queryFn: async () => {
+      const result = await getTopCustomers({ data: { limit } });
+      if (result == null) throw new Error('Top customers returned no data');
+      return result;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }

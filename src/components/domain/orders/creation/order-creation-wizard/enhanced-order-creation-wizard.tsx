@@ -37,6 +37,14 @@ const OrderSummary = lazy(() =>
 // Types
 import type { OrderCreationWizardProps, OrderCreatePayload } from './types';
 
+const DRAFT_STORAGE_KEY = 'orderCreationDraft:v1';
+
+type DraftPayload = {
+  formData: Record<string, unknown>;
+  selectedCustomer: SelectedCustomer | null;
+  savedAt: string;
+};
+
 // ============================================================================
 // ORDER CREATION FORM COMPONENT
 // ============================================================================
@@ -54,6 +62,7 @@ function OrderCreationForm({
   customerError,
   customerSearch,
   onCustomerSearchChange,
+  initialCustomer,
 }: {
   onComplete: (orderId: string, orderNumber: string) => void;
   onCancel: () => void;
@@ -64,9 +73,18 @@ function OrderCreationForm({
   customerError?: unknown;
   customerSearch: string;
   onCustomerSearchChange: (value: string) => void;
+  initialCustomer?: SelectedCustomer | null;
 }) {
   const { getValues, formData, calculations, isValid, hasLineItems, resetForm } = useOrderForm();
-  const [selectedCustomer, setSelectedCustomer] = React.useState<SelectedCustomer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = React.useState<SelectedCustomer | null>(
+    initialCustomer ?? null
+  );
+
+  React.useEffect(() => {
+    if (initialCustomer && !selectedCustomer) {
+      setSelectedCustomer(initialCustomer);
+    }
+  }, [initialCustomer, selectedCustomer]);
 
   // Handlers
   const handleSubmit = useCallback(async () => {
@@ -112,6 +130,9 @@ function OrderCreationForm({
       const result = await onCreateOrder(payload);
       toast.success(`Order ${result.orderNumber} created successfully`);
       resetForm();
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      }
       onComplete(result.id, result.orderNumber);
     } catch (error) {
       toast.error(
@@ -121,9 +142,18 @@ function OrderCreationForm({
   }, [getValues, hasLineItems, isValid, onComplete, onCreateOrder, resetForm, selectedCustomer]);
 
   const handleSaveDraft = useCallback(() => {
-    // TODO: Implement draft saving
-    toast.success('Draft saving coming soon');
-  }, []);
+    if (typeof window === 'undefined') return;
+
+    const currentFormData = getValues();
+    const draftPayload: DraftPayload = {
+      formData: currentFormData as Record<string, unknown>,
+      selectedCustomer,
+      savedAt: new Date().toISOString(),
+    };
+
+    window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftPayload));
+    toast.success('Draft saved locally');
+  }, [getValues, selectedCustomer]);
 
   // Calculate form health - memoized for performance
   const formHealth = React.useMemo(() => {
@@ -282,6 +312,24 @@ export function EnhancedOrderCreationWizard({
   customerError,
   className,
 }: OrderCreationWizardProps) {
+  const [draftDefaults, setDraftDefaults] = React.useState<Record<string, unknown> | undefined>();
+  const [draftCustomer, setDraftCustomer] = React.useState<SelectedCustomer | null>(null);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const rawDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!rawDraft) return;
+
+    try {
+      const parsedDraft = JSON.parse(rawDraft) as DraftPayload;
+      setDraftDefaults(parsedDraft.formData);
+      setDraftCustomer(parsedDraft.selectedCustomer ?? null);
+      toast.success('Draft restored');
+    } catch {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }
+  }, []);
+
   const handleComplete = useCallback(
     (orderId: string, orderNumber: string) => {
       // Navigate to the created order
@@ -292,7 +340,7 @@ export function EnhancedOrderCreationWizard({
 
   return (
     <div className={className}>
-      <OrderFormProvider>
+      <OrderFormProvider defaultValues={draftDefaults}>
         <OrderCreationForm
           onComplete={handleComplete}
           onCancel={onCancel}
@@ -303,6 +351,7 @@ export function EnhancedOrderCreationWizard({
           customerError={customerError}
           customerSearch={customerSearch}
           onCustomerSearchChange={onCustomerSearchChange}
+          initialCustomer={draftCustomer}
         />
       </OrderFormProvider>
     </div>

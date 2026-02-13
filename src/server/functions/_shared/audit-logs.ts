@@ -10,13 +10,13 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, desc, sql, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, gte, lte, count as drizzleCount } from 'drizzle-orm';
 import { getRequest } from '@tanstack/react-start/server';
 import { db } from '@/lib/db';
 import { auditLogs, users } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { auditLogFilterSchema, type AuditLog } from '@/lib/schemas/users';
+import { auditLogFilterSchema } from '@/lib/schemas/users';
 import {
   AUDIT_ACTIONS,
   AUDIT_ENTITY_TYPES,
@@ -24,6 +24,7 @@ import {
   type AuditEntityType,
 } from 'drizzle/schema';
 import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
+import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 
 // ============================================================================
 // LIST AUDIT LOGS
@@ -93,12 +94,16 @@ export const listAuditLogs = createServerFn({ method: 'GET' })
 
     // Get total count
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(auditLogs)
       .where(and(...conditions));
 
     return {
-      items: logs as AuditLog[],
+      items: logs.map((log) => ({
+        ...log,
+        oldValues: log.oldValues as FlexibleJson | null,
+        newValues: log.newValues as FlexibleJson | null,
+      })),
       pagination: {
         page,
         pageSize,
@@ -136,8 +141,8 @@ export const getEntityAuditTrail = createServerFn({ method: 'GET' })
         id: auditLogs.id,
         userId: auditLogs.userId,
         action: auditLogs.action,
-        oldValues: sql<Record<string, any>>`${auditLogs.oldValues}`,
-        newValues: sql<Record<string, any>>`${auditLogs.newValues}`,
+        oldValues: auditLogs.oldValues,
+        newValues: auditLogs.newValues,
         timestamp: auditLogs.timestamp,
         user: {
           id: users.id,
@@ -159,7 +164,7 @@ export const getEntityAuditTrail = createServerFn({ method: 'GET' })
       .offset(offset);
 
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(auditLogs)
       .where(
         and(
@@ -170,7 +175,11 @@ export const getEntityAuditTrail = createServerFn({ method: 'GET' })
       );
 
     return {
-      items: logs,
+      items: logs.map((log) => ({
+        ...log,
+        oldValues: log.oldValues as FlexibleJson | null,
+        newValues: log.newValues as FlexibleJson | null,
+      })),
       pagination: {
         page,
         pageSize,
@@ -232,7 +241,7 @@ export const getUserActivity = createServerFn({ method: 'GET' })
       .offset(offset);
 
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(auditLogs)
       .where(and(...conditions));
 
@@ -278,15 +287,15 @@ export const getMyActivity = createServerFn({ method: 'GET' })
         ipAddress: auditLogs.ipAddress,
       })
       .from(auditLogs)
-      .where(eq(auditLogs.userId, ctx.user.id))
+      .where(and(eq(auditLogs.userId, ctx.user.id), eq(auditLogs.organizationId, ctx.organizationId)))
       .orderBy(desc(auditLogs.timestamp))
       .limit(pageSize)
       .offset(offset);
 
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(auditLogs)
-      .where(eq(auditLogs.userId, ctx.user.id));
+      .where(and(eq(auditLogs.userId, ctx.user.id), eq(auditLogs.organizationId, ctx.organizationId)));
 
     return {
       items: logs,
@@ -328,7 +337,7 @@ export const getAuditStats = createServerFn({ method: 'GET' })
 
     // Total logs
     const [{ totalLogs }] = await db
-      .select({ totalLogs: sql<number>`count(*)::int` })
+      .select({ totalLogs: drizzleCount() })
       .from(auditLogs)
       .where(and(...conditions));
 
@@ -336,24 +345,25 @@ export const getAuditStats = createServerFn({ method: 'GET' })
     const actionStats = await db
       .select({
         action: auditLogs.action,
-        count: sql<number>`count(*)::int`,
+        count: drizzleCount(),
       })
       .from(auditLogs)
       .where(and(...conditions))
       .groupBy(auditLogs.action)
-      .orderBy(desc(sql`count(*)`))
+      .orderBy(desc(drizzleCount()))
       .limit(10);
 
     // Logs by entity type
     const entityStats = await db
       .select({
         entityType: auditLogs.entityType,
-        count: sql<number>`count(*)::int`,
+        count: drizzleCount(),
       })
       .from(auditLogs)
       .where(and(...conditions))
       .groupBy(auditLogs.entityType)
-      .orderBy(desc(sql`count(*)`));
+      .orderBy(desc(drizzleCount()))
+      .limit(100);
 
     // Most active users
     const userStats = await db
@@ -361,13 +371,13 @@ export const getAuditStats = createServerFn({ method: 'GET' })
         userId: auditLogs.userId,
         userName: users.name,
         userEmail: users.email,
-        count: sql<number>`count(*)::int`,
+        count: drizzleCount(),
       })
       .from(auditLogs)
       .leftJoin(users, eq(auditLogs.userId, users.id))
       .where(and(...conditions))
       .groupBy(auditLogs.userId, users.name, users.email)
-      .orderBy(desc(sql`count(*)`))
+      .orderBy(desc(drizzleCount()))
       .limit(10);
 
     return {
@@ -445,6 +455,7 @@ export async function logAuditEvent(input: LogAuditEventInput): Promise<void> {
  * Useful for filter dropdowns.
  */
 export const getAuditActions = createServerFn({ method: 'GET' }).handler(async () => {
+  await withAuth({ permission: PERMISSIONS.audit.read });
   return Object.values(AUDIT_ACTIONS);
 });
 
@@ -457,6 +468,7 @@ export const getAuditActions = createServerFn({ method: 'GET' }).handler(async (
  * Useful for filter dropdowns.
  */
 export const getAuditEntityTypes = createServerFn({ method: 'GET' }).handler(async () => {
+  await withAuth({ permission: PERMISSIONS.audit.read });
   return Object.values(AUDIT_ENTITY_TYPES);
 });
 

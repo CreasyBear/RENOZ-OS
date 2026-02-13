@@ -85,6 +85,83 @@
       "when": 1769742400000,
       "tag": "0011_activity_logging_improvements",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1769742500000,
+      "tag": "0012_generated_documents_upsert",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1769742600000,
+      "tag": "0013_invoice_status_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1769742700000,
+      "tag": "0014_paid_at_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1769742800000,
+      "tag": "0015_soft_delete_and_cancel_statuses",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1769742900000,
+      "tag": "0016_job_task_hours_decimal",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1769743000000,
+      "tag": "0017_add_shipment_shipping_cost",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1770304457579,
+      "tag": "0018_melted_sway",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1736208000000,
+      "tag": "0019_email_history_sync_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1736316000000,
+      "tag": "0021_add_activity_entity_type_rma",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1770809808938,
+      "tag": "0021_sweet_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1770864870175,
+      "tag": "0022_add_search_entity_types",
+      "breakpoints": true
     }
   ]
 }

@@ -66,3 +66,34 @@ export {
   type UseScheduledReportOptions,
   type GenerateReportInput,
 } from './use-scheduled-reports';
+
+// Onboarding/Welcome Checklist
+export {
+  useOnboardingProgress as useWelcomeChecklistProgress,
+  useDismissWelcomeChecklist,
+  type UseOnboardingProgressOptions as UseWelcomeChecklistProgressOptions,
+} from './use-onboarding';
+
+// Recent Items for Popovers
+export {
+  useRecentOutstandingInvoices,
+  useRecentOverdueInvoices,
+  useRecentOpportunities,
+  useRecentOrdersToShip,
+} from './use-recent-items';
+
+// Inventory Counts by SKU (for overview stats)
+export {
+  useInventoryCountsBySkus,
+  type SkuPatternGroup,
+  type InventoryCountResult,
+  type UseInventoryCountsBySkusOptions,
+} from './use-inventory-counts';
+
+// Tracked Products (user-configurable inventory tracking)
+export {
+  useTrackedProducts,
+  type TrackedProduct,
+  type TrackedProductWithInventory,
+  type UseTrackedProductsOptions,
+} from './use-tracked-products';

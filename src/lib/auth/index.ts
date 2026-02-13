@@ -34,6 +34,18 @@ export type {
   RolePermissions,
 } from './permissions'
 
+// Password utilities
+export { getPasswordStrength } from './password-utils';
+
+// Route-level auth helpers (cache/retry/dedup/offline)
+export {
+  AUTH_CACHE_TTL_MS,
+  getAuthContext,
+  invalidateAuthCache,
+  isRetryableAuthError,
+  withAuthRetry,
+} from './route-auth'
+
 // Route guards for TanStack Router beforeLoad
 export {
   requireRoles,

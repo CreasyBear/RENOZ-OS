@@ -47,7 +47,8 @@ export const EmailMetadataSchema = z
   })
   .passthrough();
 
-export type EmailMetadata = z.infer<typeof EmailMetadataSchema>;
+/** Extends Record<string, unknown> for compatibility with InboxEmailItem and other consumers */
+export type EmailMetadata = z.infer<typeof EmailMetadataSchema> & Record<string, unknown>;
 
 // ============================================================================
 // CREATE SCHEMA (Append-only, no update)
@@ -98,6 +99,7 @@ export const EmailHistoryFilterSchema = z.object({
   templateId: z.string().optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
+  search: z.string().optional(), // Search in subject, bodyText, fromAddress, toAddress
 });
 
 export const EmailHistoryListQuerySchema = cursorPaginationSchema.merge(EmailHistoryFilterSchema);
@@ -128,3 +130,73 @@ export const CampaignStatsSchema = z.object({
 });
 
 export type CampaignStats = z.infer<typeof CampaignStatsSchema>;
+
+// ============================================================================
+// LINK TRACKING
+// ============================================================================
+
+/**
+ * Individual link click tracking entry.
+ * Mirrors drizzle/schema/communications/email-history.ts LinkClick.
+ */
+export interface LinkClick {
+  linkId: string;
+  url: string;
+  clickedAt: string;
+  userAgent?: string;
+  ipHash?: string;
+}
+
+/**
+ * JSONB structure for tracking all link clicks in an email.
+ * Mirrors drizzle/schema/communications/email-history.ts LinkClicks.
+ */
+export interface LinkClicks {
+  clicks: LinkClick[];
+  totalClicks: number;
+  uniqueLinksClicked: number;
+}
+
+// ============================================================================
+// OUTPUT TYPES (from Drizzle schema - what server functions return)
+// ============================================================================
+
+import type { EmailHistory as DrizzleEmailHistory } from '../../../../drizzle/schema/communications/email-history'
+
+/**
+ * Email history output type - matches what getEmailHistory returns
+ * Server functions return EmailHistory rows directly from Drizzle
+ */
+export type EmailHistoryItem = DrizzleEmailHistory
+
+// ============================================================================
+// COMPONENT PROP TYPES
+// ============================================================================
+
+/**
+ * Email history list item - transformed for UI display
+ * Used in EmailHistoryList component
+ */
+export interface EmailHistoryListItem {
+  id: string
+  subject: string | null
+  bodyText: string | null
+  fromAddress: string
+  toAddress: string
+  status: string
+  sentAt: string | Date | null
+  createdAt: string | Date
+  customerId: string | null
+  customerName: string | null
+}
+
+/**
+ * Props for EmailHistoryList presenter component
+ * All data is passed from the container route.
+ */
+export interface EmailHistoryListProps {
+  items: EmailHistoryListItem[]
+  isLoading?: boolean
+  error?: unknown
+  hasNextPage?: boolean
+}

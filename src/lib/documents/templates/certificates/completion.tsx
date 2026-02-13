@@ -386,8 +386,11 @@ function CompletionCertificateContent({
         <View style={styles.content}>
           {/* Logo/Organization */}
           <View style={styles.logoContainer}>
-            {organization.branding?.logoUrl ? (
-              <Image src={organization.branding.logoUrl} style={styles.logo} />
+            {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+              <Image
+                src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+                style={styles.logo}
+              />
             ) : (
               <Text style={[styles.orgName, { color: primaryColor }]}>
                 {organization.name}
@@ -420,7 +423,7 @@ function CompletionCertificateContent({
             {/* Job Details */}
             <View style={styles.jobSection}>
               <Text style={styles.jobTitle}>{data.jobTitle}</Text>
-              <Text style={styles.jobNumber}>Job No: {data.jobNumber}</Text>
+              <Text style={styles.jobNumber}>{`Job No: ${data.jobNumber}`}</Text>
               {data.jobDescription && (
                 <Text style={styles.jobDescription}>{data.jobDescription}</Text>
               )}
@@ -560,6 +563,8 @@ export function CompletionCertificatePdfDocument({
         author={organization.name}
         subject={`Job Completion Certificate for ${data.customerName}`}
         creator="Renoz CRM"
+        language="en-AU"
+        keywords={`completion certificate, ${data.jobNumber}, ${data.customerName}`}
       >
         <CompletionCertificateContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
       </Document>

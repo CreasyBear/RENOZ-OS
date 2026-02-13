@@ -80,6 +80,7 @@ interface ValueAnalysisProps {
   }
   timeRange?: '3m' | '6m' | '1y'
   onTimeRangeChange?: (range: '3m' | '6m' | '1y') => void
+  showFilters?: boolean
   /** Loading state */
   isLoading?: boolean
   className?: string
@@ -462,6 +463,7 @@ export function ValueAnalysis({
   onTimeRangeChange,
   isLoading = false,
   className,
+  showFilters = true,
 }: ValueAnalysisProps) {
   const handleTimeRangeChange = onTimeRangeChange ?? (() => {})
 
@@ -475,17 +477,19 @@ export function ValueAnalysis({
             Customer profitability and lifetime value
           </p>
         </div>
-        <Select value={timeRange} onValueChange={handleTimeRangeChange}>
-          <SelectTrigger className="w-[160px]">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="3m">Last 3 months</SelectItem>
-            <SelectItem value="6m">Last 6 months</SelectItem>
-            <SelectItem value="1y">Last year</SelectItem>
-          </SelectContent>
-        </Select>
+        {showFilters && (
+          <Select value={timeRange} onValueChange={handleTimeRangeChange}>
+            <SelectTrigger className="w-[160px]">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="3m">Last 3 months</SelectItem>
+              <SelectItem value="6m">Last 6 months</SelectItem>
+              <SelectItem value="1y">Last year</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* KPIs - placeholder until order aggregation */}

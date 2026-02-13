@@ -21,13 +21,17 @@ import { ArrowRightLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { useOpportunities, useDeleteOpportunity } from "@/hooks/pipeline";
+import { useOpportunities, useDeleteOpportunity, useBulkUpdateOpportunityStage } from "@/hooks/pipeline";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
 import { FormatAmount } from "@/components/shared/format";
 import type { OpportunityListQuery, OpportunityStage } from "@/lib/schemas/pipeline";
 import { OpportunitiesListPresenter } from "./opportunities-list-presenter";
-import type { OpportunityTableItem } from "./opportunity-columns";
+import type { OpportunityTableItem } from "@/lib/schemas/pipeline";
+import {
+  OpportunityBulkOperationsDialog,
+  OPERATION_CONFIG,
+  type OpportunityBulkOperation,
+} from "./opportunity-bulk-operations-dialog";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -165,10 +169,26 @@ export function OpportunitiesListContainer({
   } = useTableSelection({ items: opportunities });
 
   const deleteMutation = useDeleteOpportunity();
+  const bulkStageChangeMutation = useBulkUpdateOpportunityStage();
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
 
   // Calculate total value of selected items
   const selectedTotalValue = useMemo(
     () => selectedItems.reduce((sum, o) => sum + o.value, 0),
+    [selectedItems]
+  );
+
+  // Convert selected items to bulk operation format
+  const bulkOperationOpportunities: OpportunityBulkOperation[] = useMemo(
+    () =>
+      selectedItems.map((opp) => ({
+        id: opp.id,
+        title: opp.title,
+        customerId: opp.customer?.id ?? null,
+        customerName: opp.customer?.name ?? null,
+        value: opp.value,
+        currentStage: opp.stage,
+      })),
     [selectedItems]
   );
 
@@ -281,17 +301,56 @@ export function OpportunitiesListContainer({
 
   // Bulk stage change handler
   const handleBulkStageChange = useCallback(() => {
-    // For bulk stage change, we'd open a dialog with stage options
-    // For now, this triggers the stage change for the first selected item
-    if (selectedItems.length > 0 && onStageChangeRequest) {
-      // In a real implementation, you'd open a dialog for bulk stage change
-      toastSuccess(`Stage change requested for ${selectedItems.length} opportunities`);
+    if (selectedItems.length === 0) {
+      toastError("No opportunities selected");
+      return;
     }
-  }, [selectedItems, onStageChangeRequest]);
+    setBulkDialogOpen(true);
+  }, [selectedItems.length]);
+
+  // Handle bulk stage change confirmation
+  const handleBulkStageChangeConfirm = useCallback(
+    async (stage: OpportunityStage) => {
+      const opportunityIds = selectedItems.map((opp) => opp.id);
+      if (opportunityIds.length === 0) {
+        toastError("No opportunities selected");
+        return;
+      }
+
+      try {
+        const result = await bulkStageChangeMutation.mutateAsync({
+          opportunityIds,
+          stage,
+        });
+
+        if (result.updated > 0) {
+          toastSuccess(`Updated ${result.updated} opportunity${result.updated === 1 ? "" : "ies"}`);
+        }
+
+        if (result.failed.length > 0) {
+          toastError(`${result.failed.length} opportunity${result.failed.length === 1 ? "" : "ies"} failed`);
+        }
+
+        clearSelection();
+        setBulkDialogOpen(false);
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to update opportunity stages");
+        throw new Error("Bulk stage change failed");
+      }
+    },
+    [selectedItems, bulkStageChangeMutation, clearSelection]
+  );
 
   return (
     <>
-      <ConfirmationDialog />
+      <OpportunityBulkOperationsDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        operation={OPERATION_CONFIG}
+        opportunities={bulkOperationOpportunities}
+        onConfirm={handleBulkStageChangeConfirm}
+        isLoading={bulkStageChangeMutation.isPending}
+      />
       <div className="space-y-4">
         {/* Bulk Actions Bar */}
         <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
@@ -311,7 +370,7 @@ export function OpportunitiesListContainer({
         <OpportunitiesListPresenter
           opportunities={opportunities}
           isLoading={isOpportunitiesLoading}
-          error={opportunitiesError as Error | null}
+          error={opportunitiesError instanceof Error ? opportunitiesError : null}
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
           isPartiallySelected={isPartiallySelected}

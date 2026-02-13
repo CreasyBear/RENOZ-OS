@@ -59,8 +59,12 @@ export interface TurnoverFilters extends Record<string, unknown> {
  */
 export function useCostLayers(filters: CostLayerFilters = {}, enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.inventory.valuationAll(), 'costLayers', filters],
-    queryFn: () => listCostLayers({ data: filters }),
+    queryKey: queryKeys.inventory.costLayers(filters as Record<string, unknown>),
+    queryFn: async () => {
+      const result = await listCostLayers({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -71,8 +75,14 @@ export function useCostLayers(filters: CostLayerFilters = {}, enabled = true) {
  */
 export function useInventoryCostLayers(inventoryId: string, enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.inventory.valuationAll(), 'costLayers', inventoryId],
-    queryFn: () => getInventoryCostLayers({ data: { inventoryId } }),
+    queryKey: queryKeys.inventory.costLayersDetail(inventoryId),
+    queryFn: async () => {
+      const result = await getInventoryCostLayers({
+        data: { inventoryId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!inventoryId,
     staleTime: 60 * 1000,
   });
@@ -84,7 +94,11 @@ export function useInventoryCostLayers(inventoryId: string, enabled = true) {
 export function useInventoryValuation(filters: ValuationFilters = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.valuation(filters),
-    queryFn: () => getInventoryValuation({ data: filters }),
+    queryFn: async () => {
+      const result = await getInventoryValuation({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -99,8 +113,14 @@ export function useCOGSPreview(
   enabled = true
 ) {
   return useQuery({
-    queryKey: [...queryKeys.inventory.valuationAll(), 'cogs', inventoryId, quantity],
-    queryFn: () => calculateCOGS({ data: { inventoryId, quantity, simulate: true } }),
+    queryKey: queryKeys.inventory.cogs(inventoryId, quantity),
+    queryFn: async () => {
+      const result = await calculateCOGS({
+        data: { inventoryId, quantity, simulate: true } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!inventoryId && quantity > 0,
     staleTime: 30 * 1000,
   });
@@ -114,7 +134,13 @@ export function useInventoryAging(filters: AgingFilters = {}, enabled = true) {
 
   return useQuery({
     queryKey: queryKeys.inventory.aging({ ...filters, ageBuckets }),
-    queryFn: () => getInventoryAging({ data: { ...filters, ageBuckets } }),
+    queryFn: async () => {
+      const result = await getInventoryAging({
+        data: { ...filters, ageBuckets } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -126,7 +152,11 @@ export function useInventoryAging(filters: AgingFilters = {}, enabled = true) {
 export function useInventoryTurnover(filters: TurnoverFilters = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.turnover(filters),
-    queryFn: () => getInventoryTurnover({ data: filters }),
+    queryFn: async () => {
+      const result = await getInventoryTurnover({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -149,7 +179,7 @@ export function useCreateCostLayer() {
       toast.success('Cost layer created');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.inventory.valuationAll(), 'costLayers', variables.inventoryId],
+        queryKey: queryKeys.inventory.costLayersDetail(variables.inventoryId),
       });
     },
     onError: (error: Error) => {
@@ -171,7 +201,7 @@ export function useCalculateCOGS() {
       toast.success(`COGS calculated: $${result.cogs.toFixed(2)}`);
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.inventory.valuationAll(), 'costLayers', variables.inventoryId],
+        queryKey: queryKeys.inventory.costLayersDetail(variables.inventoryId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
     },

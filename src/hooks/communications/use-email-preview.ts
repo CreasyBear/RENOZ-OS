@@ -9,6 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { QUERY_CONFIG } from "@/lib/constants";
 import {
   renderEmailPreview,
   sendTestEmail,
@@ -40,16 +41,20 @@ export function useEmailPreview(options: UseEmailPreviewOptions) {
 
   return useQuery<RenderPreviewResult>({
     queryKey: queryKeys.communications.emailPreview.render(templateId, { variables, sampleCustomerId }),
-    queryFn: () =>
-      renderEmailPreview({
+    queryFn: async () => {
+      const result = await renderEmailPreview({
         data: {
           templateId,
           variables,
           sampleCustomerId,
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!templateId,
-    staleTime: 30 * 1000, // 30 seconds - preview changes often during editing
+    staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 }

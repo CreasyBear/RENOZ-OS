@@ -176,7 +176,7 @@ export const listCustomFields = createServerFn({ method: 'GET' })
       .orderBy(asc(customFields.sortOrder), asc(customFields.label));
 
     return { items: fields } as unknown as { items: typeof fields };
-  }) as any;
+  });
 
 // ============================================================================
 // GET CUSTOM FIELD
@@ -202,7 +202,7 @@ export const getCustomField = createServerFn({ method: 'GET' })
     }
 
     return field as unknown as typeof field;
-  }) as any;
+  });
 
 // ============================================================================
 // CREATE CUSTOM FIELD
@@ -218,43 +218,10 @@ export const createCustomField = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
-    // Check max fields limit
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(customFields)
-      .where(
-        and(
-          eq(customFields.organizationId, ctx.organizationId),
-          eq(customFields.entityType, data.entityType)
-        )
-      );
-
-    if (count >= MAX_CUSTOM_FIELDS_PER_ENTITY) {
-      throw new ValidationError(`Maximum of ${MAX_CUSTOM_FIELDS_PER_ENTITY} custom fields per entity type`);
-    }
-
-    // Check for duplicate name
-    const [existing] = await db
-      .select({ id: customFields.id })
-      .from(customFields)
-      .where(
-        and(
-          eq(customFields.organizationId, ctx.organizationId),
-          eq(customFields.entityType, data.entityType),
-          eq(customFields.name, data.name)
-        )
-      )
-      .limit(1);
-
-    if (existing) {
-      throw new ConflictError('A custom field with this name already exists');
-    }
-
-    // Get next sort order if not specified
-    let sortOrder = data.sortOrder;
-    if (sortOrder === undefined) {
-      const [{ maxOrder }] = await db
-        .select({ maxOrder: sql<number>`COALESCE(MAX(sort_order), -1)::int` })
+    const created = await db.transaction(async (tx) => {
+      // Check max fields limit
+      const [{ count }] = await tx
+        .select({ count: sql<number>`count(*)::int` })
         .from(customFields)
         .where(
           and(
@@ -262,11 +229,45 @@ export const createCustomField = createServerFn({ method: 'POST' })
             eq(customFields.entityType, data.entityType)
           )
         );
-      sortOrder = maxOrder + 1;
-    }
 
-    const [created] = await db
-      .insert(customFields)
+      if (count >= MAX_CUSTOM_FIELDS_PER_ENTITY) {
+        throw new ValidationError(`Maximum of ${MAX_CUSTOM_FIELDS_PER_ENTITY} custom fields per entity type`);
+      }
+
+      // Check for duplicate name
+      const [existing] = await tx
+        .select({ id: customFields.id })
+        .from(customFields)
+        .where(
+          and(
+            eq(customFields.organizationId, ctx.organizationId),
+            eq(customFields.entityType, data.entityType),
+            eq(customFields.name, data.name)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        throw new ConflictError('A custom field with this name already exists');
+      }
+
+      // Get next sort order if not specified
+      let sortOrder = data.sortOrder;
+      if (sortOrder === undefined) {
+        const [{ maxOrder }] = await tx
+          .select({ maxOrder: sql<number>`COALESCE(MAX(sort_order), -1)::int` })
+          .from(customFields)
+          .where(
+            and(
+              eq(customFields.organizationId, ctx.organizationId),
+              eq(customFields.entityType, data.entityType)
+            )
+          );
+        sortOrder = maxOrder + 1;
+      }
+
+      const [inserted] = await tx
+        .insert(customFields)
       .values({
         organizationId: ctx.organizationId,
         entityType: data.entityType,
@@ -282,14 +283,17 @@ export const createCustomField = createServerFn({ method: 'POST' })
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
       })
-      .returning();
+        .returning();
+
+      return inserted;
+    });
 
     // Log audit
     await logAuditEvent({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
       action: 'custom_field.create',
-      entityType: 'custom_field' as any,
+      entityType: 'custom_field',
       entityId: created.id,
       newValues: {
         entityType: data.entityType,
@@ -300,7 +304,7 @@ export const createCustomField = createServerFn({ method: 'POST' })
     });
 
     return created as unknown as typeof created;
-  }) as any;
+  });
 
 // ============================================================================
 // UPDATE CUSTOM FIELD
@@ -340,7 +344,7 @@ export const updateCustomField = createServerFn({ method: 'POST' })
 
     const [updated] = await db
       .update(customFields)
-      .set({ ...updateData, version: sql`version + 1` })
+      .set({ ...updateData, version: sql`${customFields.version} + 1` })
       .where(eq(customFields.id, data.id))
       .returning();
 
@@ -349,14 +353,14 @@ export const updateCustomField = createServerFn({ method: 'POST' })
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
       action: 'custom_field.update',
-      entityType: 'custom_field' as any,
+      entityType: 'custom_field',
       entityId: updated.id,
       oldValues: { label: current.label, isActive: current.isActive },
       newValues: { label: updated.label, isActive: updated.isActive },
     });
 
     return updated as typeof updated;
-  }) as any;
+  });
 
 // ============================================================================
 // DELETE CUSTOM FIELD
@@ -371,33 +375,36 @@ export const deleteCustomField = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
-    const [field] = await db
-      .select({ id: customFields.id, name: customFields.name, entityType: customFields.entityType })
-      .from(customFields)
-      .where(and(eq(customFields.id, data.id), eq(customFields.organizationId, ctx.organizationId)))
-      .limit(1);
+    return db.transaction(async (tx) => {
+      const [field] = await tx
+        .select({ id: customFields.id, name: customFields.name, entityType: customFields.entityType })
+        .from(customFields)
+        .where(and(eq(customFields.id, data.id), eq(customFields.organizationId, ctx.organizationId)))
+        .limit(1);
 
-    if (!field) {
-      throw new NotFoundError('Custom field not found', 'customField');
-    }
+      if (!field) {
+        throw new NotFoundError('Custom field not found', 'customField');
+      }
 
-    // Delete values first (cascade should handle this, but explicit is safer)
-    await db.delete(customFieldValues).where(eq(customFieldValues.customFieldId, data.id));
+      // Delete values first (cascade should handle this, but explicit is safer)
+      await tx.delete(customFieldValues).where(eq(customFieldValues.customFieldId, data.id));
 
-    // Delete field
-    await db.delete(customFields).where(eq(customFields.id, data.id));
+      // Delete field
+      await tx.delete(customFields).where(eq(customFields.id, data.id));
 
-    // Log audit
-    await logAuditEvent({
-      organizationId: ctx.organizationId,
-      userId: ctx.user.id,
-      action: 'custom_field.delete',
-      entityType: 'custom_field' as any,
-      entityId: data.id,
-      oldValues: { name: field.name, entityType: field.entityType },
+      return field;
+    }).then(async (field) => {
+      // Log audit outside transaction (fire-and-forget acceptable)
+      await logAuditEvent({
+        organizationId: ctx.organizationId,
+        userId: ctx.user.id,
+        action: 'custom_field.delete',
+        entityType: 'custom_field',
+        entityId: data.id,
+        oldValues: { name: field.name, entityType: field.entityType },
+      });
+      return { success: true };
     });
-
-    return { success: true };
   });
 
 // ============================================================================
@@ -413,21 +420,22 @@ export const reorderCustomFields = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
-    // Update sort orders based on array position
-    for (let i = 0; i < data.fieldIds.length; i++) {
-      await db
-        .update(customFields)
-        .set({ sortOrder: i, updatedBy: ctx.user.id })
-        .where(
-          and(
-            eq(customFields.id, data.fieldIds[i]),
-            eq(customFields.organizationId, ctx.organizationId),
-            eq(customFields.entityType, data.entityType)
-          )
-        );
-    }
-
-    return { success: true };
+    return db.transaction(async (tx) => {
+      // Update sort orders based on array position
+      for (let i = 0; i < data.fieldIds.length; i++) {
+        await tx
+          .update(customFields)
+          .set({ sortOrder: i, updatedBy: ctx.user.id })
+          .where(
+            and(
+              eq(customFields.id, data.fieldIds[i]),
+              eq(customFields.organizationId, ctx.organizationId),
+              eq(customFields.entityType, data.entityType)
+            )
+          );
+      }
+      return { success: true };
+    });
   });
 
 // ============================================================================
@@ -492,7 +500,7 @@ export const getCustomFieldValues = createServerFn({ method: 'GET' })
       })),
       valuesMap,
     } as const;
-  }) as any;
+  });
 
 // ============================================================================
 // SET FIELD VALUE
@@ -507,56 +515,58 @@ export const setCustomFieldValue = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Verify field exists and belongs to org
-    const [field] = await db
-      .select({ id: customFields.id, organizationId: customFields.organizationId })
-      .from(customFields)
-      .where(eq(customFields.id, data.customFieldId))
-      .limit(1);
+    return db.transaction(async (tx) => {
+      // Verify field exists and belongs to org
+      const [field] = await tx
+        .select({ id: customFields.id, organizationId: customFields.organizationId })
+        .from(customFields)
+        .where(eq(customFields.id, data.customFieldId))
+        .limit(1);
 
-    if (!field || field.organizationId !== ctx.organizationId) {
-      throw new NotFoundError('Custom field not found', 'customField');
-    }
+      if (!field || field.organizationId !== ctx.organizationId) {
+        throw new NotFoundError('Custom field not found', 'customField');
+      }
 
-    // Upsert value
-    const [existing] = await db
-      .select({ id: customFieldValues.id })
-      .from(customFieldValues)
-      .where(
-        and(
-          eq(customFieldValues.customFieldId, data.customFieldId),
-          eq(customFieldValues.entityId, data.entityId)
+      // Upsert value
+      const [existing] = await tx
+        .select({ id: customFieldValues.id })
+        .from(customFieldValues)
+        .where(
+          and(
+            eq(customFieldValues.customFieldId, data.customFieldId),
+            eq(customFieldValues.entityId, data.entityId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (existing) {
-      const [updated] = await db
-        .update(customFieldValues)
-        .set({
-          value: data.value,
-          updatedBy: ctx.user.id,
-          version: sql`version + 1`,
-        })
-        .where(eq(customFieldValues.id, existing.id))
-        .returning();
+      if (existing) {
+        const [updated] = await tx
+          .update(customFieldValues)
+          .set({
+            value: data.value,
+            updatedBy: ctx.user.id,
+            version: sql`${customFieldValues.version} + 1`,
+          })
+          .where(eq(customFieldValues.id, existing.id))
+          .returning();
 
-      return updated as typeof updated;
-    } else {
-      const [created] = await db
-        .insert(customFieldValues)
-        .values({
-          customFieldId: data.customFieldId,
-          entityId: data.entityId,
-          value: data.value,
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        })
-        .returning();
+        return updated as typeof updated;
+      } else {
+        const [created] = await tx
+          .insert(customFieldValues)
+          .values({
+            customFieldId: data.customFieldId,
+            entityId: data.entityId,
+            value: data.value,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          })
+          .returning();
 
-      return created as typeof created;
-    }
-  }) as any;
+        return created as typeof created;
+      }
+    });
+  });
 
 // ============================================================================
 // SET MULTIPLE FIELD VALUES
@@ -576,57 +586,59 @@ export const setCustomFieldValues = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Get all fields for this entity type
-    const fields = await db
-      .select({ id: customFields.id, name: customFields.name })
-      .from(customFields)
-      .where(
-        and(
-          eq(customFields.organizationId, ctx.organizationId),
-          eq(customFields.entityType, data.entityType),
-          eq(customFields.isActive, true)
-        )
-      );
-
-    const fieldMap = new Map(fields.map((f) => [f.name, f.id]));
-    const results: Array<{ fieldName: string; success: boolean }> = [];
-
-    for (const [fieldName, value] of Object.entries(data.values)) {
-      const fieldId = fieldMap.get(fieldName);
-      if (!fieldId) continue;
-
-      const [existing] = await db
-        .select({ id: customFieldValues.id })
-        .from(customFieldValues)
+    return db.transaction(async (tx) => {
+      // Get all fields for this entity type
+      const fields = await tx
+        .select({ id: customFields.id, name: customFields.name })
+        .from(customFields)
         .where(
           and(
-            eq(customFieldValues.customFieldId, fieldId),
-            eq(customFieldValues.entityId, data.entityId)
+            eq(customFields.organizationId, ctx.organizationId),
+            eq(customFields.entityType, data.entityType),
+            eq(customFields.isActive, true)
           )
-        )
-        .limit(1);
+        );
 
-      if (existing) {
-        await db
-          .update(customFieldValues)
-          .set({
+      const fieldMap = new Map(fields.map((f) => [f.name, f.id]));
+      const results: Array<{ fieldName: string; success: boolean }> = [];
+
+      for (const [fieldName, value] of Object.entries(data.values)) {
+        const fieldId = fieldMap.get(fieldName);
+        if (!fieldId) continue;
+
+        const [existing] = await tx
+          .select({ id: customFieldValues.id })
+          .from(customFieldValues)
+          .where(
+            and(
+              eq(customFieldValues.customFieldId, fieldId),
+              eq(customFieldValues.entityId, data.entityId)
+            )
+          )
+          .limit(1);
+
+        if (existing) {
+          await tx
+            .update(customFieldValues)
+            .set({
+              value,
+              updatedBy: ctx.user.id,
+              version: sql`${customFieldValues.version} + 1`,
+            })
+            .where(eq(customFieldValues.id, existing.id));
+        } else {
+          await tx.insert(customFieldValues).values({
+            customFieldId: fieldId,
+            entityId: data.entityId,
             value,
+            createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
-            version: sql`version + 1`,
-          })
-          .where(eq(customFieldValues.id, existing.id));
-      } else {
-        await db.insert(customFieldValues).values({
-          customFieldId: fieldId,
-          entityId: data.entityId,
-          value,
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        });
+          });
+        }
+
+        results.push({ fieldName, success: true });
       }
 
-      results.push({ fieldName, success: true });
-    }
-
-    return { results };
+      return { results };
+    });
   });

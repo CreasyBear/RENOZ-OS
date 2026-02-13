@@ -8,7 +8,8 @@
  */
 
 import { z } from 'zod';
-import { currencySchema, percentageSchema } from '../_shared/patterns';
+import { currencySchema, signedCurrencySchema, percentageSchema, flexibleJsonSchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
@@ -74,7 +75,7 @@ export const financialImpactSchema = z.object({
   taxAfter: currencySchema,
   totalBefore: currencySchema,
   totalAfter: currencySchema,
-  difference: currencySchema, // Can be negative
+  difference: signedCurrencySchema, // Can be positive (charge) or negative (credit)
 });
 
 export type FinancialImpact = z.infer<typeof financialImpactSchema>;
@@ -86,10 +87,11 @@ export type FinancialImpact = z.infer<typeof financialImpactSchema>;
 export const amendmentChangesSchema = z.object({
   type: z.string().max(50),
   description: z.string().max(1000),
-  before: z.record(z.string(), z.unknown()).optional(),
-  after: z.record(z.string(), z.unknown()).optional(),
+  before: flexibleJsonSchema.optional(),
+  after: flexibleJsonSchema.optional(),
   itemChanges: z.array(itemChangeSchema).optional(),
   financialImpact: financialImpactSchema.optional(),
+  shippingAmount: currencySchema.optional(), // For shipping_change amendments
 });
 
 export type AmendmentChanges = z.infer<typeof amendmentChangesSchema>;
@@ -179,6 +181,17 @@ export const amendmentListQuerySchema = z.object({
 });
 
 export type AmendmentListQuery = z.infer<typeof amendmentListQuerySchema>;
+
+export const amendmentListCursorQuerySchema = cursorPaginationSchema.merge(
+  z.object({
+    orderId: z.string().uuid().optional(),
+    status: amendmentStatusSchema.optional(),
+    amendmentType: amendmentTypeSchema.optional(),
+    requestedBy: z.string().uuid().optional(),
+  })
+);
+
+export type AmendmentListCursorQuery = z.infer<typeof amendmentListCursorQuerySchema>;
 
 // ============================================================================
 // OUTPUT SCHEMA

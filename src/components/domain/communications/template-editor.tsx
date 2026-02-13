@@ -62,7 +62,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn, sanitizeHtml } from "@/lib/utils";
 
 import { TemplateVariableMenu } from "./template-variable-menu";
 import {
@@ -73,8 +73,13 @@ import {
   substituteTemplateVariables,
   getSampleTemplateData,
 } from "@/lib/communications/template-utils";
-import type { TemplateCategory } from "../../../../drizzle/schema";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
+import type {
+  TemplateEditorProps,
+  TemplateFormValues,
+  TemplateCategory,
+} from "@/lib/schemas/communications";
 
 // ============================================================================
 // SCHEMAS
@@ -99,28 +104,7 @@ const templateFormSchema = z.object({
   createVersion: z.boolean(),
 });
 
-type TemplateFormValues = z.infer<typeof templateFormSchema>;
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface TemplateEditorProps {
-  template?: {
-    id: string;
-    name: string;
-    description?: string | null;
-    category: TemplateCategory;
-    subject: string;
-    bodyHtml: string;
-    isActive: boolean;
-    version: number;
-  };
-  onSave?: () => void;
-  onCancel?: () => void;
-  onViewHistory?: () => void;
-  className?: string;
-}
+// TemplateFormValues imported from schemas
 
 // ============================================================================
 // CATEGORY OPTIONS
@@ -187,9 +171,9 @@ export function TemplateEditor({
             onSave?.();
           },
           onError: (error) => {
-            toast.error(
-              error instanceof Error ? error.message : "Failed to update template"
-            );
+            toast.error("Failed to update template", {
+              description: getUserFriendlyMessage(error as Error),
+            });
           },
         }
       );
@@ -209,9 +193,9 @@ export function TemplateEditor({
             onSave?.();
           },
           onError: (error) => {
-            toast.error(
-              error instanceof Error ? error.message : "Failed to create template"
-            );
+            toast.error("Failed to create template", {
+              description: getUserFriendlyMessage(error as Error),
+            });
           },
         }
       );
@@ -255,19 +239,22 @@ export function TemplateEditor({
     }
   }, [template?.bodyHtml]);
 
-  // Generate preview content
+  // Generate preview content (extract watched values for deps)
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
+  const watchedSubject = form.watch("subject");
+  const watchedBodyHtml = form.watch("bodyHtml");
   const previewContent = React.useMemo(() => {
     const sampleData = getSampleTemplateData();
     const subject = substituteTemplateVariables(
-      form.watch("subject") || "",
+      watchedSubject || "",
       sampleData
     );
     const body = substituteTemplateVariables(
-      form.watch("bodyHtml") || "",
+      watchedBodyHtml || "",
       sampleData
     );
     return { subject, body };
-  }, [form.watch("subject"), form.watch("bodyHtml")]);
+  }, [watchedSubject, watchedBodyHtml]);
 
   return (
     <Card className={className} aria-label="template-editor">
@@ -520,8 +507,7 @@ export function TemplateEditor({
                           <div
                             className="prose prose-sm max-w-none"
                             dangerouslySetInnerHTML={{
-                              __html:
-                                previewContent.body || "<p>No content</p>",
+                              __html: sanitizeHtml(previewContent.body) || "<p>No content</p>",
                             }}
                           />
                         </div>

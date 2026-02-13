@@ -214,11 +214,12 @@ export const AlertsList = memo(function AlertsList({
         case 'triggeredCount':
           comparison = (a.triggeredCount ?? 0) - (b.triggeredCount ?? 0);
           break;
-        case 'lastTriggeredAt':
+        case 'lastTriggeredAt': {
           const dateA = a.lastTriggeredAt ? new Date(a.lastTriggeredAt).getTime() : 0;
           const dateB = b.lastTriggeredAt ? new Date(b.lastTriggeredAt).getTime() : 0;
           comparison = dateA - dateB;
           break;
+        }
         case 'createdAt':
           comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           break;
@@ -460,7 +461,7 @@ export const AlertsList = memo(function AlertsList({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => onDelete(alert)}
-                                className="text-destructive focus:text-destructive"
+                                className="text-destructive focus-visible:text-destructive"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
                                 Delete

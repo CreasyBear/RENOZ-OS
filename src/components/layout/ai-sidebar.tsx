@@ -13,13 +13,14 @@
  * Note: Currently uses local state. Will integrate with AI SDK useChat
  * hook when AI backend (INT-AI-001) is implemented.
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, startTransition } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { X, Sparkles, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AIMessageList, type Message } from './ai-message-list'
 import { AIChatInput } from './ai-chat-input'
 import { getBreadcrumbLabel } from '@/lib/routing'
+import { useKeyboardShortcut } from './use-keyboard-shortcut'
 
 // ============================================================================
 // TYPES
@@ -79,23 +80,16 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
   const currentPageLabel = getBreadcrumbLabel(currentPath)
   const quickActions = ROUTE_QUICK_ACTIONS[currentPath] || ROUTE_QUICK_ACTIONS.default
 
-  // Handle Cmd+Shift+A keyboard shortcut
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
-        e.preventDefault()
-        setOpen(!open)
-      }
-    }
+  // Handle Cmd+Shift+A keyboard shortcut (via centralized provider)
+  useKeyboardShortcut('toggle-ai', () => setOpen(!open))
 
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, setOpen])
-
-  // Handle escape to close
+  // Handle Escape to close sidebar (contextual — only when open)
   useEffect(() => {
+    if (!open) return
+
     function handleEscape(e: KeyboardEvent) {
-      if (e.key === 'Escape' && open) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
         setOpen(false)
       }
     }
@@ -111,7 +105,7 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed)) {
-          setMessages(parsed)
+          startTransition(() => setMessages(parsed))
         }
       }
     } catch {
@@ -171,9 +165,9 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
       <div
         className={cn(
           'fixed inset-y-0 right-0 z-50 w-full max-w-md',
-          'bg-white shadow-xl',
+          'bg-background shadow-xl',
           'flex flex-col',
-          'transform transition-transform duration-300 ease-out',
+          'transform transition-transform duration-300 ease-out motion-reduce:transition-none',
           open ? 'translate-x-0' : 'translate-x-full'
         )}
         role="dialog"
@@ -181,17 +175,17 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
         aria-labelledby="ai-sidebar-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-purple-100 p-1.5">
-              <Sparkles className="h-5 w-5 text-purple-600" />
+            <div className="rounded-lg bg-purple-100 p-1.5 dark:bg-purple-900/30">
+              <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <h2 id="ai-sidebar-title" className="font-medium text-gray-900">
+              <h2 id="ai-sidebar-title" className="font-medium text-foreground">
                 AI Assistant
               </h2>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <MapPin className="h-3 w-3" />
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" aria-hidden="true" />
                 <span>{currentPageLabel}</span>
               </div>
             </div>
@@ -201,7 +195,7 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
               <button
                 type="button"
                 onClick={handleClearHistory}
-                className="text-xs text-gray-500 hover:text-gray-700"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear
               </button>
@@ -209,7 +203,7 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
               aria-label="Close AI sidebar"
             >
               <X className="h-5 w-5" />
@@ -229,11 +223,11 @@ export function AISidebar({ open: controlledOpen, onOpenChange }: AISidebarProps
         />
 
         {/* Keyboard shortcut hint */}
-        <div className="border-t border-gray-100 px-4 py-2 text-center">
-          <span className="text-xs text-gray-400">
-            <kbd className="rounded bg-gray-100 px-1">⌘</kbd>
-            <kbd className="rounded bg-gray-100 px-1 ml-0.5">⇧</kbd>
-            <kbd className="rounded bg-gray-100 px-1 ml-0.5">A</kbd>
+        <div className="border-t px-4 py-2 text-center">
+          <span className="text-xs text-muted-foreground">
+            <kbd className="rounded bg-muted px-1 border text-[10px] font-mono font-medium">⌘</kbd>
+            <kbd className="rounded bg-muted px-1 ml-0.5 border text-[10px] font-mono font-medium">⇧</kbd>
+            <kbd className="rounded bg-muted px-1 ml-0.5 border text-[10px] font-mono font-medium">A</kbd>
             {' '}to toggle
           </span>
         </div>

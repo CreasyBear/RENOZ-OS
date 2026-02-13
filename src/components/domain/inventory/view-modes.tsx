@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableEmpty } from "@/components/shared/data-table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,9 +61,9 @@ export interface InventoryItem {
   totalValue: number;
   status: "available" | "allocated" | "sold" | "damaged" | "returned" | "quarantined";
   qualityStatus?: "good" | "damaged" | "expired" | "quarantined";
-  serialNumber?: string;
-  lotNumber?: string;
-  expiryDate?: Date;
+  serialNumber?: string | null;
+  lotNumber?: string | null;
+  expiryDate?: Date | null;
   receivedAt?: Date;
   lastMovementAt?: Date;
 }
@@ -80,6 +81,10 @@ interface ViewModeProps {
   onViewHistory?: (item: InventoryItem) => void;
   isLoading?: boolean;
   className?: string;
+  /** Optional callback to clear filters when empty state is shown */
+  onClearFilters?: () => void;
+  /** Optional active filters to display in empty state */
+  activeFilters?: Array<{ label: string; value: string }>;
 }
 
 // ============================================================================
@@ -201,10 +206,13 @@ export const InventoryListView = memo(function InventoryListView({
   onViewHistory,
   isLoading,
   className,
+  onClearFilters,
+  activeFilters,
 }: ViewModeProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const useVirtualization = items.length > 50;
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useVirtualizer returns functions that cannot be memoized; known TanStack Virtual limitation
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
@@ -235,13 +243,36 @@ export const InventoryListView = memo(function InventoryListView({
 
   if (items.length === 0) {
     return (
-      <div className={cn("flex flex-col items-center justify-center py-12 text-center", className)}>
-        <Package className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="text-lg font-medium">No inventory found</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Try adjusting your filters or search criteria
-        </p>
-      </div>
+      <DataTableEmpty
+        variant="no-results"
+        icon={Package}
+        title="No inventory found"
+        description={
+          activeFilters && activeFilters.length > 0
+            ? `No items match your current filters. Try adjusting your search or filter criteria.`
+            : "Try adjusting your filters or search criteria"
+        }
+        action={
+          onClearFilters
+            ? {
+                label: "Clear all filters",
+                onClick: onClearFilters,
+              }
+            : undefined
+        }
+        className={className}
+      >
+        {activeFilters && activeFilters.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2 justify-center">
+            <span className="text-xs text-muted-foreground">Active filters:</span>
+            {activeFilters.map((filter, idx) => (
+              <Badge key={idx} variant="secondary" className="text-xs">
+                {filter.label}: {filter.value}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </DataTableEmpty>
     );
   }
 
@@ -269,9 +300,9 @@ export const InventoryListView = memo(function InventoryListView({
         role="row"
         aria-selected={isSelected}
       >
-        {/* Checkbox - full row hit area */}
+        {/* Checkbox - full row hit area (minimum 44x44px for touch targets) */}
         <div
-          className="flex items-center justify-center w-8 h-full -m-4 p-4"
+          className="flex items-center justify-center min-w-[44px] min-h-[44px] -m-4 p-4"
           onClick={(e) => {
             e.stopPropagation();
             onSelectItem(item.id);
@@ -281,6 +312,7 @@ export const InventoryListView = memo(function InventoryListView({
             checked={isSelected}
             onCheckedChange={() => onSelectItem(item.id)}
             aria-label={`Select ${item.productName}`}
+            className="h-5 w-5"
           />
         </div>
 
@@ -399,8 +431,8 @@ export const InventoryListView = memo(function InventoryListView({
         <Checkbox
           checked={allSelected}
           ref={(ref) => {
-            if (ref) {
-              (ref as any).indeterminate = someSelected;
+            if (ref && 'indeterminate' in ref) {
+              (ref as HTMLInputElement).indeterminate = someSelected;
             }
           }}
           onCheckedChange={onSelectAll}
@@ -469,6 +501,8 @@ export const InventoryGridView = memo(function InventoryGridView({
   onViewHistory: _onViewHistory,
   isLoading,
   className,
+  onClearFilters,
+  activeFilters,
 }: ViewModeProps) {
   // Grid view doesn't use bulk select all or individual actions in current impl
   void _onSelectAll;
@@ -498,13 +532,36 @@ export const InventoryGridView = memo(function InventoryGridView({
 
   if (items.length === 0) {
     return (
-      <div className={cn("flex flex-col items-center justify-center py-12 text-center", className)}>
-        <Package className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="text-lg font-medium">No inventory found</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Try adjusting your filters or search criteria
-        </p>
-      </div>
+      <DataTableEmpty
+        variant="no-results"
+        icon={Package}
+        title="No inventory found"
+        description={
+          activeFilters && activeFilters.length > 0
+            ? `No items match your current filters. Try adjusting your search or filter criteria.`
+            : "Try adjusting your filters or search criteria"
+        }
+        action={
+          onClearFilters
+            ? {
+                label: "Clear all filters",
+                onClick: onClearFilters,
+              }
+            : undefined
+        }
+        className={className}
+      >
+        {activeFilters && activeFilters.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2 justify-center">
+            <span className="text-xs text-muted-foreground">Active filters:</span>
+            {activeFilters.map((filter, idx) => (
+              <Badge key={idx} variant="secondary" className="text-xs">
+                {filter.label}: {filter.value}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </DataTableEmpty>
     );
   }
 
@@ -545,12 +602,13 @@ export const InventoryGridView = memo(function InventoryGridView({
                     e.stopPropagation();
                     onSelectItem(item.id);
                   }}
-                  className="p-1"
+                  className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 >
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={() => onSelectItem(item.id)}
                     aria-label={`Select ${item.productName}`}
+                    className="h-5 w-5"
                   />
                 </div>
                 <Badge
@@ -614,6 +672,8 @@ export const InventoryMapView = memo(function InventoryMapView({
   onItemClick,
   isLoading,
   className,
+  onClearFilters,
+  activeFilters,
 }: ViewModeProps) {
   // Silence unused variable warnings
   void _selectedIds;
@@ -673,13 +733,36 @@ export const InventoryMapView = memo(function InventoryMapView({
 
   if (items.length === 0) {
     return (
-      <div className={cn("flex flex-col items-center justify-center py-12 text-center", className)}>
-        <MapPin className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="text-lg font-medium">No locations with inventory</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Try adjusting your filters or search criteria
-        </p>
-      </div>
+      <DataTableEmpty
+        variant="no-results"
+        icon={MapPin}
+        title="No locations with inventory"
+        description={
+          activeFilters && activeFilters.length > 0
+            ? `No locations match your current filters. Try adjusting your search or filter criteria.`
+            : "Try adjusting your filters or search criteria"
+        }
+        action={
+          onClearFilters
+            ? {
+                label: "Clear all filters",
+                onClick: onClearFilters,
+              }
+            : undefined
+        }
+        className={className}
+      >
+        {activeFilters && activeFilters.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2 justify-center">
+            <span className="text-xs text-muted-foreground">Active filters:</span>
+            {activeFilters.map((filter, idx) => (
+              <Badge key={idx} variant="secondary" className="text-xs">
+                {filter.label}: {filter.value}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </DataTableEmpty>
     );
   }
 

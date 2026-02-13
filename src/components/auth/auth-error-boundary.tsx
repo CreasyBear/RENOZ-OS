@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RefreshCw, Home, LogOut } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 interface AuthErrorBoundaryProps {
   children: ReactNode;
@@ -87,7 +88,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
 
   static getDerivedStateFromError(error: Error): AuthErrorBoundaryState {
     const errorId = `auth-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.error(`[${errorId}] Auth error:`, error);
+    logger.error(`[${errorId}] Auth error`, error);
 
     // Report to error tracking service in production
     if (process.env.NODE_ENV === 'production') {
@@ -98,7 +99,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Auth form error details:', error, errorInfo);
+    logger.error('Auth form error details', error, { errorInfo });
   }
 
   handleRetry = () => {
@@ -115,7 +116,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
       const errorDisplay = getErrorDisplay(errorCategory, this.state.error);
 
       return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+        <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
           <div className="w-full max-w-md">
             <Card>
               <CardHeader>
@@ -130,7 +131,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
                 <p className="text-muted-foreground text-sm">{errorDisplay.message}</p>
 
                 {process.env.NODE_ENV === 'development' && (
-                  <details className="rounded bg-gray-50 p-2 text-xs">
+                  <details className="rounded bg-muted p-2 text-xs">
                     <summary className="cursor-pointer font-medium">
                       Error Details (Dev Only)
                     </summary>

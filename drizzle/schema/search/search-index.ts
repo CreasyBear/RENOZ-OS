@@ -12,13 +12,13 @@ import {
   integer,
   index,
   uniqueIndex,
-  pgPolicy,
   check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   tsvectorColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 
@@ -46,6 +46,10 @@ const SEARCH_ENTITY_TYPES = [
   "warranty_claim",
   "quote",
   "shipment",
+  "invoice",
+  "installer",
+  "purchase_order",
+  "rma",
 ];
 
 export const searchIndex = pgTable(
@@ -97,27 +101,7 @@ export const searchIndex = pgTable(
         SEARCH_ENTITY_TYPES.map((type) => `'${type}'`).join(", ")
       )})`
     ),
-    selectPolicy: pgPolicy("search_index_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("search_index_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("search_index_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("search_index_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("search_index"),
   })
 );
 

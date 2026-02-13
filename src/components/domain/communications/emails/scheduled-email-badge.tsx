@@ -6,15 +6,16 @@
  * @see DOM-COMMS-002c
  */
 
-import { Clock, XCircle, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { getStatusColorClasses } from "@/lib/status";
+import { SCHEDULED_EMAIL_STATUS_CONFIG } from "./scheduled-email-status-config";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type ScheduledEmailStatus = "pending" | "sent" | "cancelled";
+import type { ScheduledEmailStatus } from "@/lib/schemas/communications";
 
 export interface ScheduledEmailBadgeProps {
   status: ScheduledEmailStatus;
@@ -23,38 +24,8 @@ export interface ScheduledEmailBadgeProps {
   size?: "sm" | "default";
 }
 
-// ============================================================================
-// STATUS CONFIG
-// ============================================================================
-
-const STATUS_CONFIG: Record<
-  ScheduledEmailStatus,
-  {
-    label: string;
-    variant: "default" | "secondary" | "destructive" | "outline";
-    icon: typeof Clock;
-    className?: string;
-  }
-> = {
-  pending: {
-    label: "Scheduled",
-    variant: "secondary",
-    icon: Clock,
-    className: "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400",
-  },
-  sent: {
-    label: "Sent",
-    variant: "default",
-    icon: Send,
-    className: "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400",
-  },
-  cancelled: {
-    label: "Cancelled",
-    variant: "destructive",
-    icon: XCircle,
-    className: "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400",
-  },
-};
+// Re-export for backward compatibility
+export type { ScheduledEmailStatus };
 
 // ============================================================================
 // COMPONENT
@@ -66,20 +37,20 @@ export function ScheduledEmailBadge({
   showIcon = true,
   size = "default",
 }: ScheduledEmailBadgeProps) {
-  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  const config = SCHEDULED_EMAIL_STATUS_CONFIG[status] ?? SCHEDULED_EMAIL_STATUS_CONFIG.pending;
   const Icon = config.icon;
 
   return (
     <Badge
-      variant={config.variant}
+      variant="outline"
       className={cn(
         "gap-1",
-        config.className,
+        getStatusColorClasses(config.color),
         size === "sm" && "text-xs px-1.5 py-0",
         className
       )}
     >
-      {showIcon && <Icon className={cn("h-3 w-3", size === "sm" && "h-2.5 w-2.5")} />}
+      {showIcon && Icon && <Icon className={cn("h-3 w-3", size === "sm" && "h-2.5 w-2.5")} />}
       {config.label}
     </Badge>
   );

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + chart helpers */
 /**
  * Comparison Chart Component
  *
@@ -14,7 +15,7 @@
  * @see src/lib/schemas/dashboard/comparison.ts
  */
 
-import { memo, useMemo } from 'react';
+import { createContext, memo, useContext, useMemo } from 'react';
 import {
   Line,
   LineChart,
@@ -102,6 +103,71 @@ const CHART_COLORS = {
 } as const;
 
 // ============================================================================
+// TOOLTIP CONTEXT (avoids creating component during render)
+// ============================================================================
+
+interface ComparisonTooltipConfig {
+  currentLabel: string;
+  comparisonLabel: string;
+  valueFormatter: (value: number) => string;
+  showChange: boolean;
+  higherIsBetter: boolean;
+}
+
+const ComparisonTooltipContext = createContext<ComparisonTooltipConfig | null>(null);
+
+/** Stable tooltip component - reads config from context */
+function ComparisonTooltipContent({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ dataKey: string; value: number; color: string }>;
+  label?: string;
+}) {
+  const config = useContext(ComparisonTooltipContext);
+  if (!config || !active || !payload || !payload.length) return null;
+
+  const { currentLabel, comparisonLabel, valueFormatter, showChange, higherIsBetter } = config;
+  const currentValue = payload.find((p) => p.dataKey === 'current')?.value ?? 0;
+  const previousValue = payload.find((p) => p.dataKey === 'previous')?.value ?? 0;
+  const change =
+    previousValue === 0 ? 0 : ((currentValue - previousValue) / previousValue) * 100;
+
+  return (
+    <div className="rounded-lg border bg-background p-2 shadow-sm">
+      <div className="font-medium mb-2">{label}</div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm" style={{ color: CHART_COLORS.current }}>
+            {currentLabel}:
+          </span>
+          <span className="font-medium">{valueFormatter(currentValue)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm" style={{ color: CHART_COLORS.previous }}>
+            {comparisonLabel}:
+          </span>
+          <span className="font-medium">{valueFormatter(previousValue)}</span>
+        </div>
+        {showChange && (
+          <div className="flex items-center justify-between gap-4 pt-1 border-t">
+            <span className="text-sm text-muted-foreground">Change:</span>
+            <ChangeIndicator
+              change={change}
+              higherIsBetter={higherIsBetter}
+              variant="badge"
+              size="sm"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // CHART COMPONENTS
 // ============================================================================
 
@@ -138,66 +204,21 @@ const ChartRenderer = memo(function ChartRenderer({
     [currentLabel, comparisonLabel]
   );
 
-  const CustomTooltipContent = useMemo(
-    () =>
-      function TooltipRenderer({
-        active,
-        payload,
-        label,
-      }: {
-        active?: boolean;
-        payload?: Array<{ dataKey: string; value: number; color: string }>;
-        label?: string;
-      }) {
-        if (!active || !payload || !payload.length) return null;
-
-        const currentValue = payload.find((p) => p.dataKey === 'current')?.value ?? 0;
-        const previousValue = payload.find((p) => p.dataKey === 'previous')?.value ?? 0;
-        const change =
-          previousValue === 0
-            ? 0
-            : ((currentValue - previousValue) / previousValue) * 100;
-
-        return (
-          <div className="rounded-lg border bg-background p-2 shadow-sm">
-            <div className="font-medium mb-2">{label}</div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-sm" style={{ color: CHART_COLORS.current }}>
-                  {currentLabel}:
-                </span>
-                <span className="font-medium">{valueFormatter(currentValue)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span
-                  className="text-sm"
-                  style={{ color: CHART_COLORS.previous }}
-                >
-                  {comparisonLabel}:
-                </span>
-                <span className="font-medium">{valueFormatter(previousValue)}</span>
-              </div>
-              {showChange && (
-                <div className="flex items-center justify-between gap-4 pt-1 border-t">
-                  <span className="text-sm text-muted-foreground">Change:</span>
-                  <ChangeIndicator
-                    change={change}
-                    higherIsBetter={higherIsBetter}
-                    variant="badge"
-                    size="sm"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      },
+  const tooltipConfig: ComparisonTooltipConfig = useMemo(
+    () => ({
+      currentLabel,
+      comparisonLabel,
+      valueFormatter,
+      showChange,
+      higherIsBetter,
+    }),
     [currentLabel, comparisonLabel, valueFormatter, showChange, higherIsBetter]
   );
 
   if (chartType === 'bar') {
     return (
-      <ChartContainer config={chartConfig} className="h-[300px] w-full">
+      <ComparisonTooltipContext.Provider value={tooltipConfig}>
+        <ChartContainer config={chartConfig} className="h-[300px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -213,7 +234,7 @@ const ChartRenderer = memo(function ChartRenderer({
               tickFormatter={valueFormatter}
               className="text-xs text-muted-foreground"
             />
-            <ChartTooltip content={<CustomTooltipContent />} />
+            <ChartTooltip content={<ComparisonTooltipContent />} />
             <Legend />
             <Bar
               dataKey="current"
@@ -231,12 +252,14 @@ const ChartRenderer = memo(function ChartRenderer({
           </BarChart>
         </ResponsiveContainer>
       </ChartContainer>
+      </ComparisonTooltipContext.Provider>
     );
   }
 
   // Line chart (default)
   return (
-    <ChartContainer config={chartConfig} className="h-[300px] w-full">
+    <ComparisonTooltipContext.Provider value={tooltipConfig}>
+      <ChartContainer config={chartConfig} className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -252,7 +275,7 @@ const ChartRenderer = memo(function ChartRenderer({
             tickFormatter={valueFormatter}
             className="text-xs text-muted-foreground"
           />
-          <ChartTooltip content={<CustomTooltipContent />} />
+          <ChartTooltip content={<ComparisonTooltipContent />} />
           <Legend />
           <Line
             type="monotone"
@@ -277,6 +300,7 @@ const ChartRenderer = memo(function ChartRenderer({
         </LineChart>
       </ResponsiveContainer>
     </ChartContainer>
+    </ComparisonTooltipContext.Provider>
   );
 });
 

@@ -224,7 +224,7 @@ const TreeNode = memo(function TreeNode({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -247,7 +247,7 @@ const TreeNode = memo(function TreeNode({
             {onDelete && (
               <DropdownMenuItem
                 onClick={() => onDelete(location)}
-                className="text-destructive focus:text-destructive"
+                className="text-destructive focus-visible:text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
                 Delete

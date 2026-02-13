@@ -100,9 +100,9 @@ export function useGenerateQuote() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(result.orderId),
       });
-      // Invalidate document history if we add that
+      // Invalidate document history so Documents tab updates
       queryClient.invalidateQueries({
-        queryKey: ['documents', 'history', 'order', result.orderId],
+        queryKey: queryKeys.documents.history('order', result.orderId),
       });
     },
   });
@@ -145,9 +145,9 @@ export function useGenerateInvoice() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(result.orderId),
       });
-      // Invalidate document history if we add that
+      // Invalidate document history so Documents tab updates
       queryClient.invalidateQueries({
-        queryKey: ['documents', 'history', 'order', result.orderId],
+        queryKey: queryKeys.documents.history('order', result.orderId),
       });
     },
   });
@@ -183,7 +183,11 @@ export function useDocumentStatus(
 
   return useQuery<DocumentStatusResult, Error>({
     queryKey: ['documents', 'status', input.orderId, input.documentType],
-    queryFn: () => statusFn({ data: input }),
+    queryFn: async () => {
+      const result = await statusFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options?.enabled ?? true,
     staleTime: 5 * 1000, // 5 seconds - document status can change quickly
     refetchInterval: options?.refetchInterval ?? false,
@@ -213,7 +217,11 @@ export function useDocumentPolling(
 
   return useQuery<DocumentStatusResult, Error>({
     queryKey: ['documents', 'status', statusInput.orderId, statusInput.documentType],
-    queryFn: () => statusFn({ data: statusInput }),
+    queryFn: async () => {
+      const result = await statusFn({ data: statusInput });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 1000,
     refetchInterval: (query) => {

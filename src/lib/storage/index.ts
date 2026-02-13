@@ -74,6 +74,15 @@ export { listFiles } from "./supabase-storage";
 export { ensureBucket } from "./supabase-storage";
 
 // ============================================================================
+// URL UTILITIES
+// ============================================================================
+
+export {
+  isOurStorageUrl,
+  extractStoragePathFromPublicUrl,
+} from "./storage-url-utils";
+
+// ============================================================================
 // ERRORS
 // ============================================================================
 

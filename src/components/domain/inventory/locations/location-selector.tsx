@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { LocationTree, type WarehouseLocation } from './location-tree';
+import { DataTableEmpty } from '@/components/shared/data-table';
 
 // ============================================================================
 // TYPES
@@ -195,7 +196,14 @@ export const LocationSelector = memo(function LocationSelector({
         <ScrollArea className="h-[300px]">
           <div className="p-2">
             {filteredLocations.length === 0 ? (
-              <p className="text-muted-foreground py-6 text-center text-sm">No locations found</p>
+              <div className="py-6">
+                <DataTableEmpty
+                  variant="no-results"
+                  title="No locations found"
+                  description="Try adjusting your search criteria."
+                  className="py-4"
+                />
+              </div>
             ) : (
               <LocationTree
                 locations={filteredLocations}

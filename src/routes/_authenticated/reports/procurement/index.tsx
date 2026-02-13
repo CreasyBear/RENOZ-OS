@@ -10,12 +10,14 @@ import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { ProcurementReportsPage } from '@/components/domain/reports/procurement-reports-page';
+import { procurementReportsSearchSchema } from '@/lib/schemas/reports/procurement';
 
 // ============================================================================
 // ROUTE DEFINITION
 // ============================================================================
 
 export const Route = createFileRoute('/_authenticated/reports/procurement/')({
+  validateSearch: procurementReportsSearchSchema,
   component: ProcurementReportsRoute,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/reports" />

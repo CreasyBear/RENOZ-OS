@@ -58,7 +58,11 @@ export function useDashboardLayouts(options: UseDashboardLayoutsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.list(filters),
-    queryFn: () => listDashboardLayouts({ data: filters as ListDashboardLayoutsInput }),
+    queryFn: async () => {
+      const result = await listDashboardLayouts({ data: filters as ListDashboardLayoutsInput });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -74,7 +78,13 @@ export function useDashboardLayouts(options: UseDashboardLayoutsOptions = {}) {
 export function useDashboardLayout({ id, enabled = true }: UseDashboardLayoutOptions) {
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.detail(id),
-    queryFn: () => getDashboardLayout({ data: { id } }),
+    queryFn: async () => {
+      const result = await getDashboardLayout({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -86,7 +96,11 @@ export function useDashboardLayout({ id, enabled = true }: UseDashboardLayoutOpt
 export function useUserLayout(enabled = true) {
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.userLayout(),
-    queryFn: () => getUserLayout(),
+    queryFn: async () => {
+      const result = await getUserLayout();
+      if (result == null) throw new Error('User layout returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -98,7 +112,11 @@ export function useUserLayout(enabled = true) {
 export function useAvailableWidgets(enabled = true) {
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.widgets(),
-    queryFn: () => getAvailableWidgets(),
+    queryFn: async () => {
+      const result = await getAvailableWidgets();
+      if (result == null) throw new Error('Available widgets returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes - widgets don't change often
   });

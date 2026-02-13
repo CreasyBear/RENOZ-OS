@@ -3,10 +3,128 @@
  *
  * Types for combining audit trail activities with planned activities
  * into a single timeline view.
+ *
+ * NOTE: These types are client-safe duplicates of the drizzle schema types.
+ * They must be kept in sync with drizzle/schema/activities/activities.ts
+ * and drizzle/schema/customers/customers.ts
+ *
+ * @see STANDARDS.md - Schema files must be client-safe (no drizzle imports)
  */
 
-import type { Activity, ActivityChanges, ActivityMetadata } from 'drizzle/schema';
-import type { CustomerActivity } from 'drizzle/schema';
+// ============================================================================
+// CLIENT-SAFE TYPE DEFINITIONS
+// (Duplicated from drizzle schema to avoid client/server bundling issues)
+// ============================================================================
+
+/**
+ * Change details for audit trail activities.
+ * Client-safe version of ActivityChanges from drizzle/schema.
+ */
+export interface ActivityChanges {
+  before?: Record<string, string | number | boolean | null | string[] | number[]>;
+  after?: Record<string, string | number | boolean | null | string[] | number[]>;
+  fields?: string[];
+}
+
+/**
+ * Additional metadata for activities.
+ * Client-safe version of ActivityMetadata from drizzle/schema.
+ * Only includes fields used by UI components.
+ */
+export interface ActivityMetadata {
+  requestId?: string;
+  reason?: string;
+  assignedTo?: string;
+  customerId?: string;
+  customerName?: string;
+  orderId?: string;
+  orderNumber?: string;
+  opportunityId?: string;
+  opportunityTitle?: string;
+  emailId?: string;
+  recipientEmail?: string;
+  recipientName?: string;
+  subject?: string;
+  eventType?: string;
+  clickedUrl?: string;
+  callId?: string;
+  purpose?: string;
+  direction?: 'inbound' | 'outbound';
+  durationMinutes?: number;
+  notes?: string;
+  noteId?: string;
+  contentPreview?: string;
+  logType?: string;
+  status?: string;
+  changedFields?: string[];
+  previousStage?: string;
+  newStage?: string;
+  stage?: string;
+  value?: number;
+  probability?: number;
+  projectId?: string;
+  projectNumber?: string;
+  projectTitle?: string;
+  taskId?: string;
+  taskTitle?: string;
+  warrantyId?: string;
+  warrantyNumber?: string;
+  claimId?: string;
+  claimNumber?: string;
+  amount?: number;
+  quantity?: number;
+  productId?: string;
+  productName?: string;
+  supplierId?: string;
+  supplierName?: string;
+  customFields?: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * Audit trail activity record.
+ * Client-safe version of Activity from drizzle/schema.
+ */
+export interface Activity {
+  id: string;
+  organizationId: string;
+  userId: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  changes: ActivityChanges | null;
+  metadata: ActivityMetadata | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  description: string | null;
+  entityName: string | null;
+  source: 'manual' | 'email' | 'webhook' | 'system' | 'import';
+  sourceRef: string | null;
+  createdAt: string | Date;
+  createdBy: string | null;
+}
+
+/**
+ * Customer activity (planned activity) record.
+ * Client-safe version of CustomerActivity from drizzle/schema.
+ */
+export interface CustomerActivity {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  contactId: string | null;
+  activityType: string;
+  direction: 'inbound' | 'outbound' | 'internal' | null;
+  subject: string | null;
+  description: string;
+  outcome: string | null;
+  duration: number | null;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  assignedTo: string | null;
+  metadata: Record<string, string | number | boolean | null | undefined> | null;
+  createdAt: string;
+  createdBy: string;
+}
 
 // ============================================================================
 // UNIFIED ACTIVITY TYPE
@@ -99,8 +217,14 @@ export interface UnifiedActivityResponse {
 /**
  * Transform an audit trail activity to unified format
  */
+import type { ActivityWithUser } from '@/lib/schemas/activities';
+
+/**
+ * Transform an audit trail activity to unified format.
+ * Accepts ActivityWithUser which extends Activity and has compatible user structure.
+ */
 export function transformAuditActivity(
-  activity: Activity & { user?: { id: string; name: string | null; email: string } | null }
+  activity: ActivityWithUser
 ): UnifiedActivity {
   return {
     id: activity.id,

@@ -10,7 +10,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, isNull, desc, gte, lte, asc, gt, ne, or, inArray } from 'drizzle-orm';
+import { eq, and, sql, isNull, desc, gte, lte, asc, gt, ne, or, inArray, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   reminderTemplates,
@@ -34,7 +34,13 @@ import {
   type OrderForReminder,
   type TemplateVariables,
 } from '@/lib/schemas';
-import { calculateDaysOverdue as calcDaysOverdue } from '@/lib/utils/financial';
+import {
+  calculateDaysOverdue as calcDaysOverdue,
+  getEffectiveDueDate,
+  formatAUD,
+  formatDateForDisplay,
+  renderTemplate,
+} from '@/lib/utils/financial';
 
 // ============================================================================
 // CONSTANTS
@@ -48,60 +54,11 @@ const PAYMENT_TERMS_DAYS = 30;
 // ============================================================================
 
 /**
- * Calculate due date from order date.
- */
-function getEffectiveDueDate(orderDate: string | Date, dueDate: string | Date | null): Date {
-  if (dueDate) {
-    return new Date(dueDate);
-  }
-  const effectiveDate = new Date(orderDate);
-  effectiveDate.setDate(effectiveDate.getDate() + PAYMENT_TERMS_DAYS);
-  return effectiveDate;
-}
-
-/**
  * Calculate days overdue from due date.
  * Uses shared utility with proper timezone handling.
  */
 function calculateDaysOverdue(dueDate: Date): number {
   return calcDaysOverdue(dueDate, new Date());
-}
-
-/**
- * Render template with variables.
- */
-function renderTemplate(template: string, variables: TemplateVariables): string {
-  let rendered = template;
-  rendered = rendered.replace(/\{\{customerName\}\}/g, variables.customerName);
-  rendered = rendered.replace(/\{\{invoiceNumber\}\}/g, variables.invoiceNumber);
-  rendered = rendered.replace(/\{\{invoiceAmount\}\}/g, variables.invoiceAmount);
-  rendered = rendered.replace(/\{\{invoiceDate\}\}/g, variables.invoiceDate);
-  rendered = rendered.replace(/\{\{dueDate\}\}/g, variables.dueDate);
-  rendered = rendered.replace(/\{\{daysOverdue\}\}/g, String(variables.daysOverdue));
-  rendered = rendered.replace(/\{\{orderDescription\}\}/g, variables.orderDescription);
-  rendered = rendered.replace(/\{\{paymentTerms\}\}/g, variables.paymentTerms);
-  return rendered;
-}
-
-/**
- * Format currency for AUD.
- */
-function formatAUD(amount: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-  }).format(amount);
-}
-
-/**
- * Format date for display.
- */
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-AU', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 }
 
 // ============================================================================
@@ -236,7 +193,7 @@ export const listReminderTemplates = createServerFn()
 
     // Get total count
     const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: count() })
       .from(reminderTemplates)
       .where(and(...conditions));
 
@@ -268,7 +225,7 @@ export const listReminderTemplates = createServerFn()
         ? await db
             .select({
               templateId: reminderHistory.templateId,
-              totalSent: sql<number>`count(*)::int`,
+              totalSent: count(),
               lastSentAt: sql<Date | null>`max(${reminderHistory.sentAt})`,
             })
             .from(reminderHistory)
@@ -352,7 +309,7 @@ export const sendReminder = createServerFn()
     }
 
     // Calculate days overdue
-    const effectiveDueDate = getEffectiveDueDate(order.orderDate, order.dueDate);
+    const effectiveDueDate = getEffectiveDueDate(order.orderDate, order.dueDate, PAYMENT_TERMS_DAYS);
     const daysOverdue = calculateDaysOverdue(effectiveDueDate);
 
     // Get template
@@ -400,16 +357,17 @@ export const sendReminder = createServerFn()
       customerName: order.customerName ?? 'Customer',
       invoiceNumber: order.orderNumber,
       invoiceAmount: formatAUD(balanceDue),
-      invoiceDate: formatDate(new Date(order.orderDate)),
-      dueDate: formatDate(effectiveDueDate),
+      invoiceDate: formatDateForDisplay(new Date(order.orderDate)),
+      dueDate: formatDateForDisplay(effectiveDueDate),
       daysOverdue: Math.max(0, daysOverdue),
       orderDescription: `Order ${order.orderNumber}`,
       paymentTerms: `Net ${PAYMENT_TERMS_DAYS} days`,
     };
 
-    // Render subject and body
-    const renderedSubject = renderTemplate(template.subject, variables);
-    const renderedBody = renderTemplate(template.body, variables);
+    // Render subject and body (renderTemplate expects string values)
+    const stringVars = { ...variables, daysOverdue: String(variables.daysOverdue) };
+    const renderedSubject = renderTemplate(template.subject, stringVars);
+    const renderedBody = renderTemplate(template.body, stringVars);
 
     // Record in history
     const [historyRecord] = await db
@@ -447,6 +405,8 @@ export const sendReminder = createServerFn()
  * Get orders that are overdue and eligible for reminders.
  *
  * Used by the automated job to find orders to send reminders for.
+ * Filtering (minDaysOverdue, matchTemplateDays, excludeAlreadyReminded) is pushed
+ * to SQL for proper database-level pagination (SCHEMA-TRACE.md).
  */
 export const getOrdersForReminders = createServerFn()
   .inputValidator(overdueOrdersForRemindersQuerySchema)
@@ -471,42 +431,73 @@ export const getOrdersForReminders = createServerFn()
       )
       .orderBy(asc(reminderTemplates.daysOverdue));
 
-    // Get all orders with outstanding balance
-    const outstandingOrders = await db
-      .select({
-        orderId: orders.id,
-        orderNumber: orders.orderNumber,
-        orderDate: orders.orderDate,
-        dueDate: orders.dueDate,
-        total: orders.total,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-        customerId: orders.customerId,
-        customerName: customersTable.name,
-        customerEmail: customersTable.email,
-      })
-      .from(orders)
-      .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
-      .where(
+    // RAW SQL (Phase 11 Keep): EXISTS subqueries, COALESCE date arithmetic. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
+    const effectiveDueExpr = sql`COALESCE(${orders.dueDate}, (${orders.orderDate} + interval '30 days')::date)`;
+    const daysOverdueExpr = sql`(CURRENT_DATE - ${effectiveDueExpr})::integer`;
+
+    const baseConditions = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      ne(orders.status, 'draft'),
+      ne(orders.status, 'cancelled'),
+      sql`${daysOverdueExpr} >= ${minDaysOverdue}`,
+      or(
+        gt(orders.balanceDue, 0),
         and(
-          eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt),
-          ne(orders.status, 'draft'),
-          ne(orders.status, 'cancelled'),
-          // Has outstanding balance
-          or(
-            gt(orders.balanceDue, sql`0`),
+          isNull(orders.balanceDue),
+          sql`COALESCE(${orders.total}, 0) > COALESCE(${orders.paidAmount}, 0)`
+        )
+      )
+    );
+
+    // matchTemplateDays: restrict to orders that have a matching template
+    const ordersWithMatch = matchTemplateDays
+      ? await db
+          .select({
+            orderId: orders.id,
+            orderNumber: orders.orderNumber,
+            orderDate: orders.orderDate,
+            dueDate: orders.dueDate,
+            total: orders.total,
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
+            customerId: orders.customerId,
+            customerName: customersTable.name,
+            customerEmail: customersTable.email,
+          })
+          .from(orders)
+          .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
+          .where(
             and(
-              isNull(orders.balanceDue),
-              sql`COALESCE(${orders.total}, 0) > COALESCE(${orders.paidAmount}, 0)`
+              baseConditions,
+              sql`EXISTS (
+                SELECT 1 FROM reminder_templates t
+                WHERE t.organization_id = ${ctx.organizationId}
+                  AND t.is_active = true
+                  AND t.days_overdue <= (CURRENT_DATE - ${effectiveDueExpr})::integer
+              )`
             )
           )
-        )
-      );
+      : await db
+          .select({
+            orderId: orders.id,
+            orderNumber: orders.orderNumber,
+            orderDate: orders.orderDate,
+            dueDate: orders.dueDate,
+            total: orders.total,
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
+            customerId: orders.customerId,
+            customerName: customersTable.name,
+            customerEmail: customersTable.email,
+          })
+          .from(orders)
+          .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
+          .where(baseConditions);
 
-    // Get reminder history for these orders
-    const orderIds = outstandingOrders.map((o) => o.orderId);
-    let reminderHistoryMap = new Map<string, { sentAt: Date; daysOverdue: number | null }>();
+    // Get reminder history for these orders (for excludeAlreadyReminded and result shape)
+    const orderIds = ordersWithMatch.map((o) => o.orderId);
+    const reminderHistoryMap = new Map<string, { sentAt: Date; daysOverdue: number | null }>();
 
     if (orderIds.length > 0) {
       const historyResult = await db
@@ -524,7 +515,6 @@ export const getOrdersForReminders = createServerFn()
         )
         .orderBy(desc(reminderHistory.sentAt));
 
-      // Keep only the most recent reminder per order
       for (const h of historyResult) {
         if (!reminderHistoryMap.has(h.orderId)) {
           reminderHistoryMap.set(h.orderId, { sentAt: h.sentAt, daysOverdue: h.daysOverdue });
@@ -532,20 +522,16 @@ export const getOrdersForReminders = createServerFn()
       }
     }
 
-    // Process orders
+    // Build eligible orders (apply excludeAlreadyReminded and find matching template)
     const eligibleOrders: OrderForReminder[] = [];
 
-    for (const order of outstandingOrders) {
+    for (const order of ordersWithMatch) {
       const effectiveDueDate = getEffectiveDueDate(order.orderDate, order.dueDate);
       const daysOverdue = calculateDaysOverdue(effectiveDueDate);
-
-      // Skip if not overdue enough
-      if (daysOverdue < minDaysOverdue) continue;
 
       const balanceDue = order.balanceDue ?? (order.total ?? 0) - (order.paidAmount ?? 0);
       if (balanceDue <= 0) continue;
 
-      // Find matching template
       let matchingTemplate = null;
       for (const t of activeTemplates) {
         if (daysOverdue >= t.daysOverdue) {
@@ -553,12 +539,8 @@ export const getOrdersForReminders = createServerFn()
         }
       }
 
-      if (matchTemplateDays && !matchingTemplate) continue;
-
-      // Check if already reminded at this tier
       const lastReminder = reminderHistoryMap.get(order.orderId);
       if (excludeAlreadyReminded && lastReminder && matchingTemplate) {
-        // Skip if already reminded at this days overdue tier or higher
         if (
           lastReminder.daysOverdue !== null &&
           lastReminder.daysOverdue >= matchingTemplate.daysOverdue
@@ -584,10 +566,8 @@ export const getOrdersForReminders = createServerFn()
       });
     }
 
-    // Sort by days overdue descending
     eligibleOrders.sort((a, b) => b.daysOverdue - a.daysOverdue);
 
-    // Paginate
     const totalItems = eligibleOrders.length;
     const paginatedOrders = eligibleOrders.slice(offset, offset + pageSize);
 
@@ -640,7 +620,7 @@ export const getReminderHistory = createServerFn()
 
     // Get total count
     const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: count() })
       .from(reminderHistory)
       .innerJoin(orders, eq(reminderHistory.orderId, orders.id))
       .where(and(...conditions));

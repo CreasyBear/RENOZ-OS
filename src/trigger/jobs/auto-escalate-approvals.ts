@@ -14,6 +14,7 @@
 import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, sql, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { logger as appLogger } from '@/lib/logger';
 import { purchaseOrderApprovals } from 'drizzle/schema/suppliers';
 import { organizations, notifications, users } from 'drizzle/schema';
 
@@ -77,7 +78,7 @@ export const autoEscalateApprovalsTask = schedules.task({
   id: 'auto-escalate-approvals',
   cron: '*/15 * * * *',
   run: async () => {
-    console.log('Starting approval escalation check');
+    appLogger.debug('Starting approval escalation check');
 
     const now = new Date();
     let totalEscalated = 0;
@@ -88,7 +89,7 @@ export const autoEscalateApprovalsTask = schedules.task({
       .from(organizations)
       .where(isNull(organizations.deletedAt));
 
-    console.log(`Checking ${orgs.length} organizations for overdue approvals`);
+    appLogger.debug('Checking organizations for overdue approvals', { orgCount: orgs.length });
 
     for (const org of orgs) {
       // Find overdue pending approvals for this organization
@@ -126,12 +127,12 @@ export const autoEscalateApprovalsTask = schedules.task({
         // Notify relevant users
         await notifyEscalation(approval, reason);
 
-        console.log(`Escalated approval ${approval.id} for PO ${approval.purchaseOrderId}`);
+        appLogger.debug('Escalated approval', { approvalId: approval.id, purchaseOrderId: approval.purchaseOrderId });
         totalEscalated++;
       }
     }
 
-    console.log(`Escalation check completed. Total escalated: ${totalEscalated}`);
+    appLogger.debug('Escalation check completed', { totalEscalated });
 
     return {
       success: true,

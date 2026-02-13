@@ -43,7 +43,7 @@ export function SupportKanbanSkeleton() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 p-3 pt-0">
-                {Array.from({ length: Math.floor(Math.random() * 3) + 2 }).map((_, i) => (
+                {Array.from({ length: 2 + (columns.indexOf(column) % 2) }).map((_, i) => (
                   <Card key={i} className="p-3">
                     <div className="space-y-2">
                       <div className="flex items-start justify-between">

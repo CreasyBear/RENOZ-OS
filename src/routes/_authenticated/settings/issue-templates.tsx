@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import type {
   IssueTemplateResponse,
   IssueType,
+  IssuePriority,
 } from '@/lib/schemas/support/issue-templates';
 
 export const Route = createFileRoute('/_authenticated/settings/issue-templates')({
@@ -124,7 +125,7 @@ function IssueTemplatesSettingsPage() {
     name: string;
     description: string | null;
     type: IssueType;
-    defaultPriority: IssueType extends never ? never : any;
+    defaultPriority: IssuePriority;
     titleTemplate: string | null;
     descriptionPrompt: string | null;
     requiredFields: IssueTemplateResponse['requiredFields'] | null;

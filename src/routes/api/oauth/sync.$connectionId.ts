@@ -4,6 +4,7 @@
  * POST /api/oauth/sync/:connectionId
  */
 
+import { createFileRoute } from '@tanstack/react-router';
 import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { oauthConnections } from 'drizzle/schema';
@@ -12,7 +13,7 @@ import { syncCalendar } from '@/server/functions/oauth/calendar-sync';
 import { syncEmails } from '@/server/functions/oauth/email-sync';
 import { syncContacts } from '@/server/functions/oauth/contacts-sync';
 
-export async function POST({
+async function handleSync({
   params,
   request,
 }: {
@@ -80,3 +81,11 @@ export async function POST({
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+export const Route = createFileRoute('/api/oauth/sync/$connectionId')({
+  server: {
+    handlers: {
+      POST: handleSync,
+    },
+  },
+});

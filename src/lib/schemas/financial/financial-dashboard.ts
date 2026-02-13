@@ -127,6 +127,8 @@ export interface FinancialDashboardMetrics {
   invoiceCount: number; // Total outstanding invoices
   overdueCount: number; // Number of overdue invoices
   averageDaysToPayment: number; // Average days from invoice to payment
+  paymentRate: number; // Paid invoices / total invoices in period (0-1)
+  overdueRate: number; // Overdue invoices / total invoices in period (0-1)
 
   // Period info
   periodStart: Date;

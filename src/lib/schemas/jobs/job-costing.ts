@@ -77,6 +77,10 @@ export type GetJobProfitabilityInput = z.infer<typeof getJobProfitabilitySchema>
 
 export const jobProfitabilityResultSchema = z.object({
   jobId: z.string().uuid(),
+  /** When job is migrated to project, enables drill-down to project detail */
+  projectId: z.string().uuid().optional(),
+  /** Customer ID for cross-entity navigation */
+  customerId: z.string().uuid().optional(),
   jobNumber: z.string(),
   jobTitle: z.string(),
   customerName: z.string(),

@@ -20,7 +20,7 @@ export async function GET() {
     });
   }
 
-  const healthMap: Record<string, any> = {};
+  const healthMap: Record<string, unknown> = {};
   for (const check of result.result.results) {
     healthMap[check.connectionId] = {
       status: check.overallStatus,

@@ -12,6 +12,7 @@ export {
   colors,
   spacing,
   pageMargins,
+  fixedHeaderClearance,
   fontSize,
   lineHeight,
   letterSpacing,
@@ -28,7 +29,12 @@ export {
 // HEADER
 // ============================================================================
 
-export { DocumentHeader, type DocumentHeaderProps } from "./header";
+export {
+  DocumentHeader,
+  FixedDocumentHeader,
+  type DocumentHeaderProps,
+  type FixedDocumentHeaderProps,
+} from "./header";
 
 // ============================================================================
 // ADDRESS
@@ -113,3 +119,15 @@ export {
   type DeliveryAcknowledgmentProps,
   type WorkOrderSignOffProps,
 } from "./signature-line";
+
+// ============================================================================
+// ICONS
+// ============================================================================
+
+export {
+  MailIcon,
+  CheckIcon,
+  FileTextIcon,
+  ExternalLinkIcon,
+  type PdfIconProps,
+} from "./icons";

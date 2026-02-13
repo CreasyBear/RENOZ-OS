@@ -8,13 +8,18 @@
  * @source updateMutation from useUpdateSupplier hook
  */
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, startTransition } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { SupplierForm, type SupplierFormData, type SupplierFormErrors } from './supplier-form';
 import { SupplierFormSkeleton } from './supplier-form-skeleton';
 import { useSupplier, useUpdateSupplier } from '@/hooks/suppliers';
 import { toast } from '@/lib/toast';
-import type { SupplierStatus, SupplierType, PaymentTerms } from '@/lib/schemas/suppliers';
+import { logger } from '@/lib/logger';
+import {
+  supplierStatusSchema,
+  supplierTypeSchema,
+  paymentTermsSchema,
+} from '@/lib/schemas/suppliers';
 
 // ============================================================================
 // TYPES
@@ -80,37 +85,42 @@ export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps
   
   const [errors, setErrors] = useState<SupplierFormErrors>({});
   
-  // Load supplier data when available
+  // Load supplier data when available (Zod safeParse for enum validation)
   useEffect(() => {
     if (supplierData) {
-      setFormData({
+      const statusParsed = supplierStatusSchema.safeParse(supplierData.status);
+      const typeParsed = supplierTypeSchema.safeParse(supplierData.supplierType);
+      const termsParsed = paymentTermsSchema.safeParse(supplierData.paymentTerms);
+      startTransition(() => setFormData({
         name: supplierData.name ?? '',
         legalName: supplierData.legalName ?? '',
         email: supplierData.email ?? '',
         phone: supplierData.phone ?? '',
         website: supplierData.website ?? '',
-        status: (supplierData.status as SupplierStatus) ?? 'active',
-        supplierType: supplierData.supplierType as SupplierType | undefined,
+        status: statusParsed.success ? statusParsed.data : 'active',
+        supplierType: typeParsed.success ? typeParsed.data : undefined,
         taxId: supplierData.taxId ?? '',
         registrationNumber: supplierData.registrationNumber ?? '',
         primaryContactName: supplierData.primaryContactName ?? '',
         primaryContactEmail: supplierData.primaryContactEmail ?? '',
         primaryContactPhone: supplierData.primaryContactPhone ?? '',
-        paymentTerms: supplierData.paymentTerms as PaymentTerms | undefined,
+        paymentTerms: termsParsed.success ? termsParsed.data : undefined,
         currency: supplierData.currency ?? 'AUD',
         leadTimeDays: supplierData.leadTimeDays ?? undefined,
         minimumOrderValue: supplierData.minimumOrderValue ? Number(supplierData.minimumOrderValue) : undefined,
         maximumOrderValue: supplierData.maximumOrderValue ? Number(supplierData.maximumOrderValue) : undefined,
         notes: supplierData.notes ?? '',
-      });
+      }));
     }
   }, [supplierData]);
   
   // Handlers
   const handleChange = useCallback((field: keyof SupplierFormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when field is edited
-    if (errors[field as keyof SupplierFormErrors]) {
+    // Clear error when field is edited (type guard for error fields)
+    const hasError = (f: keyof SupplierFormData): f is keyof SupplierFormErrors =>
+      ['name', 'email', 'website', 'primaryContactEmail'].includes(f);
+    if (hasError(field) && errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   }, [errors]);
@@ -171,7 +181,7 @@ export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps
       toast.success('Supplier updated successfully');
       navigate({ to: '/suppliers/$supplierId', params: { supplierId } });
     } catch (error) {
-      console.error('Failed to update supplier:', error);
+      logger.error('Failed to update supplier', error);
       toast.error('Failed to update supplier', {
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });

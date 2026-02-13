@@ -93,7 +93,11 @@ export function useWarrantyAnalyticsSummary(options: UseWarrantyAnalyticsSummary
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.summary(filters),
-    queryFn: () => getWarrantyAnalyticsSummary({ data: filters }),
+    queryFn: async () => {
+      const result = await getWarrantyAnalyticsSummary({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -126,7 +130,11 @@ export function useClaimsByProduct(options: UseClaimsByProductOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsByProduct(filters),
-    queryFn: () => getClaimsByProduct({ data: filters }),
+    queryFn: async () => {
+      const result = await getClaimsByProduct({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -157,7 +165,11 @@ export function useClaimsTrend(options: UseClaimsTrendOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsTrend(input),
-    queryFn: () => getClaimsTrend({ data: input }),
+    queryFn: async () => {
+      const result = await getClaimsTrend({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -189,7 +201,11 @@ export function useClaimsByType(options: UseClaimsByTypeOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsByType(filters),
-    queryFn: () => getClaimsByType({ data: filters }),
+    queryFn: async () => {
+      const result = await getClaimsByType({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -222,7 +238,11 @@ export function useSlaComplianceMetrics(options: UseSlaComplianceMetricsOptions 
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.slaCompliance(filters),
-    queryFn: () => getSlaComplianceMetrics({ data: filters }),
+    queryFn: async () => {
+      const result = await getSlaComplianceMetrics({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -255,7 +275,11 @@ export function useCycleCountAtClaim(options: UseCycleCountAtClaimOptions = {}) 
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.cycleCount(filters),
-    queryFn: () => getCycleCountAtClaim({ data: filters }),
+    queryFn: async () => {
+      const result = await getCycleCountAtClaim({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -286,7 +310,11 @@ export function useExtensionVsResolution(options: UseExtensionVsResolutionOption
 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.extensionVsResolution(filters),
-    queryFn: () => getExtensionVsResolution({ data: filters }),
+    queryFn: async () => {
+      const result = await getExtensionVsResolution({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -302,7 +330,11 @@ export function useExtensionVsResolution(options: UseExtensionVsResolutionOption
 export function useWarrantyAnalyticsFilterOptions() {
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.filterOptions(),
-    queryFn: () => getWarrantyAnalyticsFilterOptions(),
+    queryFn: async () => {
+      const result = await getWarrantyAnalyticsFilterOptions();
+      if (result == null) throw new Error('Warranty analytics filter options returned no data');
+      return result;
+    },
     staleTime: FILTER_OPTIONS_STALE_TIME,
   });
 }
@@ -357,11 +389,15 @@ export interface UseWarrantyAnalyticsDashboardOptions {
   enabled?: boolean;
 }
 
+import type { WarrantyAnalyticsDashboard } from '@/lib/schemas/reports/warranty-analytics';
+
 /**
  * Combined hook for warranty analytics dashboard.
  * Fetches all analytics data in parallel.
  */
-export function useWarrantyAnalyticsDashboard(options: UseWarrantyAnalyticsDashboardOptions = {}) {
+export function useWarrantyAnalyticsDashboard(
+  options: UseWarrantyAnalyticsDashboardOptions = {}
+): WarrantyAnalyticsDashboard {
   const {
     startDate,
     endDate,

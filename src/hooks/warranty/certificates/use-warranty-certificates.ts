@@ -42,7 +42,13 @@ import { toast } from '../../_shared/use-toast';
 export function useWarrantyCertificate(warrantyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyCertificates.detail(warrantyId ?? ''),
-    queryFn: () => getWarrantyCertificate({ data: { warrantyId: warrantyId! } }),
+    queryFn: async () => {
+      const result = await getWarrantyCertificate({
+        data: { warrantyId: warrantyId! } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!warrantyId,
     // Certificates don't change often, so we can use longer stale time
     staleTime: 5 * 60 * 1000, // 5 minutes

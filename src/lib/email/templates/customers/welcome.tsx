@@ -108,7 +108,7 @@ export function WelcomeEmail(props: WelcomeEmailProps) {
                 margin: "8px 0 0 0",
               }}
             >
-              We're excited to have you with us.
+              We&apos;re excited to have you with us.
             </Text>
           </Section>
 
@@ -130,7 +130,7 @@ export function WelcomeEmail(props: WelcomeEmailProps) {
               }}
             >
               Thank you for joining {fromCompanyName}
-              {companyName ? ` on behalf of ${companyName}` : ""}! We're thrilled
+              {companyName ? ` on behalf of ${companyName}` : ""}! We&apos;re thrilled
               to have you as part of our community.
             </Text>
 

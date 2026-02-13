@@ -16,10 +16,9 @@ import {
   jsonb,
   integer,
   date,
-  check,
   index,
   uniqueIndex,
-  pgPolicy,
+  check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -34,6 +33,10 @@ import {
   fullTextSearchSql,
   currencyColumnNullable,
   numericCasted,
+  standardRlsPolicies,
+  rangeCheck,
+  numericRangeCheck,
+  sqlNow,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 
@@ -186,51 +189,16 @@ export const suppliers = pgTable(
     tagsGinIdx: index("idx_suppliers_tags_gin").using("gin", table.tags),
 
     // Rating constraints (0-5 scale)
-    qualityRatingCheck: check(
-      "suppliers_quality_rating_range",
-      sql`${table.qualityRating} IS NULL OR (${table.qualityRating} >= 0 AND ${table.qualityRating} <= 5)`
-    ),
-    deliveryRatingCheck: check(
-      "suppliers_delivery_rating_range",
-      sql`${table.deliveryRating} IS NULL OR (${table.deliveryRating} >= 0 AND ${table.deliveryRating} <= 5)`
-    ),
-    communicationRatingCheck: check(
-      "suppliers_communication_rating_range",
-      sql`${table.communicationRating} IS NULL OR (${table.communicationRating} >= 0 AND ${table.communicationRating} <= 5)`
-    ),
-    overallRatingCheck: check(
-      "suppliers_overall_rating_range",
-      sql`${table.overallRating} IS NULL OR (${table.overallRating} >= 0 AND ${table.overallRating} <= 5)`
-    ),
+    qualityRatingCheck: rangeCheck("suppliers_quality_rating_range", table.qualityRating, 0, 5),
+    deliveryRatingCheck: rangeCheck("suppliers_delivery_rating_range", table.deliveryRating, 0, 5),
+    communicationRatingCheck: rangeCheck("suppliers_communication_rating_range", table.communicationRating, 0, 5),
+    overallRatingCheck: rangeCheck("suppliers_overall_rating_range", table.overallRating, 0, 5),
 
     // Order value constraints
-    orderValueCheck: check(
-      "suppliers_order_value_range",
-      sql`${table.minimumOrderValue} IS NULL OR ${table.maximumOrderValue} IS NULL OR ${table.maximumOrderValue} >= ${table.minimumOrderValue}`
-    ),
+    orderValueCheck: numericRangeCheck("suppliers_order_value_range", table.minimumOrderValue, table.maximumOrderValue),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("suppliers_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("suppliers_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("suppliers_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("suppliers_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("suppliers"),
   })
 );
 
@@ -279,7 +247,7 @@ export const supplierPerformanceMetrics = pgTable(
     overallScore: numericCasted("overall_score", { precision: 5, scale: 2 }),
 
     // Tracking
-    createdAt: text("created_at").notNull().default(sql`now()`),
+    createdAt: text("created_at").notNull().default(sqlNow()),
   },
   (table) => ({
     // Unique metric per supplier per month
@@ -326,27 +294,8 @@ export const supplierPerformanceMetrics = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("supplier_performance_metrics_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("supplier_performance_metrics_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("supplier_performance_metrics_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("supplier_performance_metrics_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("supplier_performance_metrics"),
+    ...standardRlsPolicies("supplier_performance_metrics"),
   })
 );
 

@@ -1,32 +1,20 @@
+/* eslint-disable react-refresh/only-export-components -- Route file exports route config + component */
 /**
- * RMA List Page
+ * RMA List Index Route
  *
- * Displays all RMAs with filtering, sorting, and pagination.
- * Links to RMA detail view for workflow actions.
+ * Route definition for RMA list with lazy-loaded component.
  *
- * Note: RMA creation requires an order context. Create RMAs from:
- * - Order detail page (/orders/$orderId -> RMA tab)
- * - Issue detail page (/support/issues/$issueId -> Create RMA action)
- *
+ * @performance Code-split for reduced initial bundle size
+ * @see src/routes/_authenticated/support/rmas/rmas-page.tsx - Page component
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-003c
- * @see src/components/domain/support/rma-list.tsx
  */
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
+import { lazy, Suspense } from 'react';
 import { z } from 'zod';
-import { Package, ExternalLink } from 'lucide-react';
-
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { RmaList } from '@/components/domain/support';
-import { useRmas } from '@/hooks/support';
-import type { RmaStatus, RmaReason, RmaResponse } from '@/lib/schemas/support/rma';
 
-// ============================================================================
-// ROUTE SEARCH PARAMS
-// ============================================================================
-
-const rmasSearchSchema = z.object({
+export const rmasSearchSchema = z.object({
   status: z
     .enum(['requested', 'approved', 'received', 'processed', 'rejected'])
     .optional(),
@@ -48,9 +36,28 @@ const rmasSearchSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+const RmasPage = lazy(() => import('./rmas-page'));
+
 export const Route = createFileRoute('/_authenticated/support/rmas/')({
   validateSearch: rmasSearchSchema,
-  component: RmasListPage,
+  component: function RmasRouteComponent() {
+    const search = Route.useSearch();
+    return (
+      <Suspense fallback={
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title="Return Authorizations"
+            description="Manage product returns and RMA workflow"
+          />
+          <PageLayout.Content>
+            <SupportTableSkeleton />
+          </PageLayout.Content>
+        </PageLayout>
+      }>
+        <RmasPage search={search} />
+      </Suspense>
+    );
+  },
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
@@ -66,98 +73,3 @@ export const Route = createFileRoute('/_authenticated/support/rmas/')({
     </PageLayout>
   ),
 });
-
-// ============================================================================
-// COMPONENT
-// ============================================================================
-
-function RmasListPage() {
-  const navigate = useNavigate({ from: Route.fullPath });
-  const search = Route.useSearch();
-
-  // Fetch RMAs
-  const { data, isLoading, error, refetch } = useRmas({
-    status: search.status,
-    reason: search.reason,
-    search: search.search,
-    page: search.page,
-    pageSize: search.pageSize,
-    sortBy: search.sortBy,
-    sortOrder: search.sortOrder,
-  });
-
-  const rmas = data?.data ?? [];
-  const totalCount = data?.pagination?.totalCount ?? 0;
-
-  // Update search params
-  const updateSearch = (updates: Partial<z.infer<typeof rmasSearchSchema>>) => {
-    navigate({
-      search: (prev) => ({
-        ...prev,
-        ...updates,
-        // Reset to page 1 when filters change
-        page: 'page' in updates ? updates.page : 1,
-      }),
-    });
-  };
-
-  // Handle RMA click - navigate to detail
-  const handleRmaClick = (rma: RmaResponse) => {
-    navigate({
-      to: '/support/rmas/$rmaId',
-      params: { rmaId: rma.id },
-    });
-  };
-
-  return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title={
-          <div className="flex items-center gap-2">
-            <Package className="h-6 w-6" />
-            Return Authorizations
-          </div>
-        }
-        description="Manage product returns and RMA workflow"
-      />
-
-      <PageLayout.Content>
-        {/* Info about creating RMAs */}
-        <Alert className="mb-4">
-          <ExternalLink className="h-4 w-4" />
-          <AlertTitle>Creating RMAs</AlertTitle>
-          <AlertDescription>
-            To create a new RMA, go to an{' '}
-            <Link to="/orders" className="text-primary underline">
-              order detail page
-            </Link>{' '}
-            and select items to return.
-          </AlertDescription>
-        </Alert>
-
-        <RmaList
-          rmas={rmas}
-          totalCount={totalCount}
-          isLoading={isLoading}
-          error={error instanceof Error ? error : null}
-          onRetry={refetch}
-          statusFilter={search.status ?? 'all'}
-          reasonFilter={search.reason ?? 'all'}
-          searchQuery={search.search ?? ''}
-          page={search.page}
-          onStatusFilterChange={(value) =>
-            updateSearch({ status: value === 'all' ? undefined : (value as RmaStatus) })
-          }
-          onReasonFilterChange={(value) =>
-            updateSearch({ reason: value === 'all' ? undefined : (value as RmaReason) })
-          }
-          onSearchChange={(value) => updateSearch({ search: value || undefined })}
-          onPageChange={(page) => updateSearch({ page })}
-          onRmaClick={handleRmaClick}
-          showCreateButton={false}
-          pageSize={search.pageSize}
-        />
-      </PageLayout.Content>
-    </PageLayout>
-  );
-}

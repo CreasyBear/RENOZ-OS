@@ -43,7 +43,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle } from 'lucide-react';
 import { FulfillmentColumn } from './fulfillment-column';
-import { FulfillmentCard, type FulfillmentOrder } from './fulfillment-card';
+import { FulfillmentCard } from './fulfillment-card';
+import type { FulfillmentOrder } from '@/lib/schemas/orders';
 import type { InlineEditFormData } from '../../cards/order-card-inline-edit.schema';
 
 // ============================================================================
@@ -429,7 +430,7 @@ export const FulfillmentBoard = memo(function FulfillmentBoard({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full min-w-max gap-3 overflow-hidden px-3 pt-4 pb-2">
+      <div className="flex h-full min-w-max gap-3 overflow-x-auto overflow-y-hidden px-3 pt-4 pb-2">
         {STAGES.map((stage) => (
           <FulfillmentColumn
             key={stage.id}

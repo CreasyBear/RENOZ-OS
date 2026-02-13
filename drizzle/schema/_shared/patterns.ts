@@ -15,7 +15,7 @@
  * });
  */
 
-import { uuid, timestamp, customType } from "drizzle-orm/pg-core";
+import { uuid, timestamp, customType, pgPolicy, check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // ============================================================================
@@ -196,3 +196,252 @@ export const quantityColumn = (name: string) =>
  */
 export const fullTextSearchSql = (column: any) =>
   sql`to_tsvector('english', ${column})`;
+
+// ============================================================================
+// RLS POLICY HELPERS
+// ============================================================================
+
+/**
+ * Standard RLS policy SQL expression for organization-based multi-tenancy.
+ * Uses PostgreSQL session variable 'app.organization_id' set by application.
+ *
+ * @example
+ * selectPolicy: pgPolicy("table_select_policy", {
+ *   for: "select",
+ *   to: "authenticated",
+ *   using: organizationRlsUsing(),
+ * }),
+ */
+export const organizationRlsUsing = () =>
+  sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`;
+
+/**
+ * Standard RLS policy SQL expression for organization-based multi-tenancy (withCheck).
+ * Uses PostgreSQL session variable 'app.organization_id' set by application.
+ *
+ * @example
+ * insertPolicy: pgPolicy("table_insert_policy", {
+ *   for: "insert",
+ *   to: "authenticated",
+ *   withCheck: organizationRlsWithCheck(),
+ * }),
+ */
+export const organizationRlsWithCheck = () =>
+  sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`;
+
+/**
+ * Generate standard CRUD RLS policies for a table.
+ * Returns an object with selectPolicy, insertPolicy, updatePolicy, and deletePolicy.
+ *
+ * @param tableName - The table name (e.g., "customers")
+ * @returns Object with RLS policy definitions
+ *
+ * @example
+ * export const customers = pgTable("customers", {
+ *   // ... columns
+ * }, (table) => ({
+ *   ...standardRlsPolicies("customers"),
+ *   // ... other indexes/constraints
+ * }));
+ */
+export const standardRlsPolicies = (tableName: string) => {
+  const using = organizationRlsUsing();
+  const withCheck = organizationRlsWithCheck();
+
+  return {
+    selectPolicy: pgPolicy(`${tableName}_select_policy`, {
+      for: "select",
+      to: "authenticated",
+      using,
+    }),
+    insertPolicy: pgPolicy(`${tableName}_insert_policy`, {
+      for: "insert",
+      to: "authenticated",
+      withCheck,
+    }),
+    updatePolicy: pgPolicy(`${tableName}_update_policy`, {
+      for: "update",
+      to: "authenticated",
+      using,
+      withCheck,
+    }),
+    deletePolicy: pgPolicy(`${tableName}_delete_policy`, {
+      for: "delete",
+      to: "authenticated",
+      using,
+    }),
+  };
+};
+
+// ============================================================================
+// CHECK CONSTRAINT HELPERS
+// ============================================================================
+
+/**
+ * Check constraint for nullable numeric range (e.g., scores 0-100).
+ *
+ * @param name - Constraint name
+ * @param column - Column reference from table
+ * @param min - Minimum value (default: 0)
+ * @param max - Maximum value (default: 100)
+ *
+ * @example
+ * healthScoreCheck: rangeCheck("health_score_range", table.healthScore, 0, 100),
+ */
+export const rangeCheck = (
+  name: string,
+  column: any,
+  min: number = 0,
+  max: number = 100
+) =>
+  check(
+    name,
+    sql`${column} IS NULL OR (${column} >= ${min} AND ${column} <= ${max})`
+  );
+
+/**
+ * Check constraint for non-negative numeric values.
+ *
+ * @param name - Constraint name
+ * @param column - Column reference from table
+ *
+ * @example
+ * priceNonNegativeCheck: nonNegativeCheck("price_non_negative", table.price),
+ */
+export const nonNegativeCheck = (name: string, column: any) =>
+  check(name, sql`${column} >= 0`);
+
+/**
+ * Check constraint for positive numeric values (must be > 0).
+ *
+ * @param name - Constraint name
+ * @param column - Column reference from table
+ *
+ * @example
+ * minQuantityCheck: positiveCheck("min_quantity_positive", table.minQuantity),
+ */
+export const positiveCheck = (name: string, column: any) =>
+  check(name, sql`${column} > 0`);
+
+/**
+ * Check constraint for nullable non-negative numeric values.
+ *
+ * @param name - Constraint name
+ * @param column - Column reference from table
+ *
+ * @example
+ * costNonNegativeCheck: nullableNonNegativeCheck("cost_non_negative", table.cost),
+ */
+export const nullableNonNegativeCheck = (name: string, column: any) =>
+  check(name, sql`${column} IS NULL OR ${column} >= 0`);
+
+/**
+ * Check constraint for date range validation (end date must be after start date).
+ *
+ * @param name - Constraint name
+ * @param startColumn - Start date column reference
+ * @param endColumn - End date column reference
+ *
+ * @example
+ * contractDatesCheck: dateRangeCheck("contract_dates_valid", table.contractStartDate, table.contractEndDate),
+ */
+export const dateRangeCheck = (
+  name: string,
+  startColumn: any,
+  endColumn: any
+) =>
+  check(
+    name,
+    sql`${endColumn} IS NULL OR ${startColumn} IS NULL OR ${endColumn} > ${startColumn}`
+  );
+
+/**
+ * Check constraint for nullable numeric range validation (max >= min).
+ * Useful for quantity ranges, amount ranges, etc.
+ *
+ * @param name - Constraint name
+ * @param minColumn - Minimum value column reference
+ * @param maxColumn - Maximum value column reference
+ * @param allowEqual - Whether min can equal max (default: true)
+ *
+ * @example
+ * quantityRangeCheck: numericRangeCheck("quantity_range", table.minQuantity, table.maxQuantity),
+ */
+export const numericRangeCheck = (
+  name: string,
+  minColumn: any,
+  maxColumn: any,
+  allowEqual: boolean = true
+) => {
+  if (allowEqual) {
+    return check(
+      name,
+      sql`${maxColumn} IS NULL OR ${minColumn} IS NULL OR ${maxColumn} >= ${minColumn}`
+    );
+  } else {
+    return check(
+      name,
+      sql`${maxColumn} IS NULL OR ${minColumn} IS NULL OR ${maxColumn} > ${minColumn}`
+    );
+  }
+};
+
+/**
+ * Check constraint for non-nullable numeric range (e.g., scores 0-100).
+ * Unlike rangeCheck(), this does NOT allow NULL values.
+ *
+ * @param name - Constraint name
+ * @param column - Column reference from table
+ * @param min - Minimum value (default: 0)
+ * @param max - Maximum value (default: 100)
+ *
+ * @example
+ * discountPercentCheck: nonNullableRangeCheck("discount_percent_range", table.discountPercent, 0, 100),
+ */
+export const nonNullableRangeCheck = (
+  name: string,
+  column: any,
+  min: number = 0,
+  max: number = 100
+) =>
+  check(
+    name,
+    sql`${column} >= ${min} AND ${column} <= ${max}`
+  );
+
+// ============================================================================
+// DEFAULT VALUE HELPERS
+// ============================================================================
+
+/**
+ * SQL expression for current timestamp (for text columns that store ISO strings).
+ * Note: Prefer using timestamp columns with .defaultNow() when possible.
+ *
+ * @example
+ * createdAt: text("created_at").notNull().default(sqlNow()),
+ */
+export const sqlNow = () => sql`now()`;
+
+/**
+ * SQL expression for current date.
+ *
+ * @example
+ * orderDate: date("order_date").notNull().default(sqlCurrentDate()),
+ */
+export const sqlCurrentDate = () => sql`CURRENT_DATE`;
+
+/**
+ * SQL expression for empty text array default.
+ *
+ * @example
+ * tags: text("tags").array().default(sqlEmptyTextArray()),
+ */
+export const sqlEmptyTextArray = () => sql`'{}'::text[]`;
+
+/**
+ * SQL expression for empty UUID array default.
+ *
+ * @example
+ * userIds: uuid("user_ids").array().default(sqlEmptyUuidArray()),
+ */
+export const sqlEmptyUuidArray = () => sql`'{}'::uuid[]`;

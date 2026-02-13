@@ -14,9 +14,10 @@
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json for specification
  */
 
-import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, isNull, ilike } from 'drizzle-orm';
 import { cache } from 'react';
+import { createServerFn } from '@tanstack/react-start';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, sql, desc, asc, isNull, ilike, inArray, gte, lte, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
@@ -32,6 +33,7 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { ordersLogger } from '@/lib/logger';
 import { computeChanges } from '@/lib/activity-logger';
 import {
   createOrderSchema,
@@ -42,14 +44,17 @@ import {
   createOrderLineItemSchema,
   updateOrderStatusSchema,
   type OrderStatus,
-  type PaymentStatus,
+  type FulfillmentKanbanOrder,
+  type FulfillmentKanbanResult,
 } from '@/lib/schemas/orders';
+import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 import {
   decodeCursor,
   buildCursorCondition,
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
 import { GST_RATE } from '@/lib/order-calculations';
+import { validateInvoiceTotals } from '@/lib/utils/financial';
 import {
   generateQuotePdf,
   generateInvoicePdf,
@@ -76,6 +81,10 @@ const ORDER_EXCLUDED_FIELDS: string[] = [
 // TYPES
 // ============================================================================
 
+/** Drizzle transaction type for functions that accept either db or tx */
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type DbOrTransaction = typeof db | DbTransaction;
+
 type Order = typeof orders.$inferSelect;
 type OrderLineItem = typeof orderLineItems.$inferSelect;
 
@@ -83,75 +92,62 @@ interface OrderWithLineItems extends Order {
   lineItems: OrderLineItem[];
 }
 
-export interface OrderListItem {
-  id: string;
-  orderNumber: string;
-  customerId: string;
-  status: string;
-  paymentStatus: string;
-  orderDate: string | null;
-  dueDate: string | null;
-  total: number | null;
-  metadata: Order['metadata'];
-  createdAt: Date;
-  updatedAt: Date;
-  customer: {
-    id: string;
-    name: string;
-  } | null;
-  itemCount: number;
-}
-
-interface ListOrdersResult {
-  orders: OrderListItem[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
+// Types moved to schemas - imported above
 
 // ============================================================================
 // ORDER NUMBER GENERATION
 // ============================================================================
 
+const MAX_ORDER_NUMBER_RETRIES = 5;
+
 /**
  * Generate unique order number with prefix ORD-YYYYMMDD-XXXX
  * Uses retry loop to handle race conditions from concurrent order creation.
+ * Catches unique constraint violations (code 23505) to retry on conflict.
  */
-async function generateOrderNumber(organizationId: string): Promise<string> {
+export async function generateOrderNumber(organizationId: string): Promise<string> {
   const today = new Date();
   const datePrefix = today.toISOString().slice(0, 10).replace(/-/g, '');
 
   // Retry loop to handle concurrent requests
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.organizationId, organizationId),
-          sql`DATE(${orders.orderDate}) = CURRENT_DATE`
+  for (let attempt = 0; attempt < MAX_ORDER_NUMBER_RETRIES; attempt++) {
+    try {
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.organizationId, organizationId),
+            sql`DATE(${orders.orderDate}) = CURRENT_DATE`
+          )
+        );
+
+      const todayCount = (countResult?.count ?? 0) + 1 + attempt;
+      const sequence = todayCount.toString().padStart(4, '0');
+      const orderNumber = `ORD-${datePrefix}-${sequence}`;
+
+      // Check if this number already exists
+      const [existing] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.organizationId, organizationId),
+            eq(orders.orderNumber, orderNumber),
+            isNull(orders.deletedAt)
+          )
         )
-      );
+        .limit(1);
 
-    const todayCount = (countResult?.count ?? 0) + 1 + attempt;
-    const sequence = todayCount.toString().padStart(4, '0');
-    const orderNumber = `ORD-${datePrefix}-${sequence}`;
-
-    // Check if this number already exists
-    const [existing] = await db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.organizationId, organizationId),
-          eq(orders.orderNumber, orderNumber),
-          isNull(orders.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!existing) return orderNumber;
+      if (!existing) return orderNumber;
+    } catch (error: unknown) {
+      // Catch unique constraint violations (PostgreSQL error code 23505) and retry
+      const pgError = error as { code?: string };
+      if (pgError.code === '23505') {
+        continue;
+      }
+      throw error;
+    }
   }
 
   // Fallback with timestamp for uniqueness
@@ -169,7 +165,8 @@ const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ['confirmed', 'cancelled'],
   confirmed: ['picking', 'cancelled'],
   picking: ['picked', 'cancelled'],
-  picked: ['shipped', 'cancelled'],
+  picked: ['partially_shipped', 'shipped', 'cancelled'],
+  partially_shipped: ['shipped', 'delivered', 'cancelled'],
   shipped: ['delivered'],
   delivered: [], // Terminal state
   cancelled: [], // Terminal state
@@ -189,7 +186,7 @@ function validateStatusTransition(current: OrderStatus, next: OrderStatus): bool
 /**
  * Calculate line item totals including tax.
  */
-function calculateLineItemTotals(lineItem: {
+export function calculateLineItemTotals(lineItem: {
   quantity: number;
   unitPrice: number;
   discountPercent?: number | null;
@@ -275,7 +272,7 @@ function calculateOrderTotals(
  */
 export const listOrders = createServerFn({ method: 'GET' })
   .inputValidator(orderListQuerySchema)
-  .handler(async ({ data }): Promise<ListOrdersResult> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
     const {
       page = 1,
@@ -296,13 +293,13 @@ export const listOrders = createServerFn({ method: 'GET' })
     // Build where conditions - ALWAYS include organizationId
     const conditions = [eq(orders.organizationId, ctx.organizationId), isNull(orders.deletedAt)];
 
-    // Add filters
+    // Add filters - use ilike helper instead of raw SQL for type safety
     if (search) {
       conditions.push(
-        sql`(
-          ${orders.orderNumber} ILIKE ${`%${search}%`} OR
-          ${orders.internalNotes} ILIKE ${`%${search}%`}
-        )`
+        or(
+          ilike(orders.orderNumber, containsPattern(search)),
+          ilike(orders.internalNotes, containsPattern(search))
+        )!
       );
     }
     if (status) {
@@ -315,16 +312,16 @@ export const listOrders = createServerFn({ method: 'GET' })
       conditions.push(eq(orders.customerId, customerId));
     }
     if (minTotal !== undefined) {
-      conditions.push(sql`CAST(${orders.total} AS DECIMAL) >= ${minTotal}`);
+      conditions.push(gte(orders.total, minTotal));
     }
     if (maxTotal !== undefined) {
-      conditions.push(sql`CAST(${orders.total} AS DECIMAL) <= ${maxTotal}`);
+      conditions.push(lte(orders.total, maxTotal));
     }
     if (dateFrom) {
-      conditions.push(sql`${orders.orderDate} >= ${dateFrom.toISOString().slice(0, 10)}`);
+      conditions.push(gte(orders.orderDate, dateFrom.toISOString().slice(0, 10)));
     }
     if (dateTo) {
-      conditions.push(sql`${orders.orderDate} <= ${dateTo.toISOString().slice(0, 10)}`);
+      conditions.push(lte(orders.orderDate, dateTo.toISOString().slice(0, 10)));
     }
 
     // Get total count
@@ -370,7 +367,11 @@ export const listOrders = createServerFn({ method: 'GET' })
         itemCount: sql<number>`count(${orderLineItems.id})::int`,
       })
       .from(orders)
-      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .leftJoin(customers, and(
+        eq(orders.customerId, customers.id),
+        eq(customers.organizationId, ctx.organizationId),
+        isNull(customers.deletedAt)
+      ))
       .leftJoin(orderLineItems, eq(orders.id, orderLineItems.orderId))
       .where(and(...conditions))
       .groupBy(orders.id, customers.id, customers.name)
@@ -410,7 +411,8 @@ export const getOrderStats = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt)
+          isNull(orders.deletedAt),
+          gte(orders.createdAt, sql`NOW() - INTERVAL '2 years'`)
         )
       );
 
@@ -462,10 +464,10 @@ export const listOrdersCursor = createServerFn({ method: 'GET' })
       conditions.push(eq(orders.customerId, customerId));
     }
     if (minTotal !== undefined) {
-      conditions.push(sql`CAST(${orders.total} AS DECIMAL) >= ${minTotal}`);
+      conditions.push(gte(orders.total, minTotal));
     }
     if (maxTotal !== undefined) {
-      conditions.push(sql`CAST(${orders.total} AS DECIMAL) <= ${maxTotal}`);
+      conditions.push(lte(orders.total, maxTotal));
     }
 
     // Add cursor condition
@@ -481,7 +483,19 @@ export const listOrdersCursor = createServerFn({ method: 'GET' })
     const orderDir = sortOrder === 'asc' ? asc : desc;
 
     const results = await db
-      .select()
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        customerId: orders.customerId,
+        status: orders.status,
+        paymentStatus: orders.paymentStatus,
+        orderDate: orders.orderDate,
+        dueDate: orders.dueDate,
+        total: orders.total,
+        metadata: orders.metadata,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      })
       .from(orders)
       .where(and(...conditions))
       .orderBy(orderDir(orders.createdAt), orderDir(orders.id))
@@ -495,41 +509,51 @@ export const listOrdersCursor = createServerFn({ method: 'GET' })
 // ============================================================================
 
 /**
+ * Cached order fetch for per-request deduplication.
+ * @performance Uses React.cache() for automatic request deduplication
+ */
+const _getOrderCached = cache(async (id: string, organizationId: string): Promise<OrderWithLineItems | null> => {
+  const [orderResult, lineItems] = await Promise.all([
+    db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, id),
+          eq(orders.organizationId, organizationId),
+          isNull(orders.deletedAt)
+        )
+      )
+      .limit(1),
+    db
+      .select()
+      .from(orderLineItems)
+      .where(and(
+        eq(orderLineItems.orderId, id),
+        eq(orderLineItems.organizationId, organizationId)
+      ))
+      .orderBy(asc(orderLineItems.lineNumber)),
+  ]);
+
+  const [order] = orderResult;
+  if (!order) return null;
+
+  return { ...order, lineItems };
+});
+
+/**
  * Get single order with full details including line items.
  */
 export const getOrder = createServerFn({ method: 'GET' })
   .inputValidator(orderParamsSchema)
   .handler(async ({ data }): Promise<OrderWithLineItems> => {
     const ctx = await withAuth();
-
-    // Get order
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(
-        and(
-          eq(orders.id, data.id),
-          eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!order) {
+    const result = await _getOrderCached(data.id, ctx.organizationId);
+    if (!result) {
+      setResponseStatus(404);
       throw new NotFoundError('Order not found', 'order');
     }
-
-    // Get line items
-    const lineItems = await db
-      .select()
-      .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, data.id))
-      .orderBy(asc(orderLineItems.lineNumber));
-
-    return {
-      ...order,
-      lineItems,
-    };
+    return result;
   });
 
 // ============================================================================
@@ -537,15 +561,12 @@ export const getOrder = createServerFn({ method: 'GET' })
 // ============================================================================
 
 /**
- * Get order with customer details for display.
+ * Cached order-with-customer fetch for per-request deduplication.
+ * @performance Uses React.cache() for automatic request deduplication
  */
-export const getOrderWithCustomer = createServerFn({ method: 'GET' })
-  .inputValidator(orderParamsSchema)
-  .handler(async ({ data }) => {
-    const ctx = await withAuth();
-
-    // Get order with customer join
-    const result = await db
+const _getOrderWithCustomerCached = cache(async (id: string, organizationId: string) => {
+  const [orderResult, lineItems] = await Promise.all([
+    db
       .select({
         order: orders,
         customer: {
@@ -557,43 +578,67 @@ export const getOrderWithCustomer = createServerFn({ method: 'GET' })
         },
       })
       .from(orders)
-      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .leftJoin(customers, and(
+        eq(orders.customerId, customers.id),
+        eq(customers.organizationId, organizationId),
+        isNull(customers.deletedAt)
+      ))
       .where(
         and(
-          eq(orders.id, data.id),
-          eq(orders.organizationId, ctx.organizationId),
+          eq(orders.id, id),
+          eq(orders.organizationId, organizationId),
           isNull(orders.deletedAt)
         )
       )
-      .limit(1);
-
-    if (!result[0]) {
-      throw new NotFoundError('Order not found', 'order');
-    }
-
-    // Get line items with product info
-    const lineItems = await db
+      .limit(1),
+    db
       .select({
         lineItem: orderLineItems,
         product: {
           id: products.id,
           name: products.name,
           sku: products.sku,
+          isSerialized: products.isSerialized,
         },
       })
       .from(orderLineItems)
-      .leftJoin(products, eq(orderLineItems.productId, products.id))
-      .where(eq(orderLineItems.orderId, data.id))
-      .orderBy(asc(orderLineItems.lineNumber));
+      .leftJoin(products, and(
+        eq(orderLineItems.productId, products.id),
+        eq(products.organizationId, organizationId),
+        isNull(products.deletedAt)
+      ))
+      .where(and(
+        eq(orderLineItems.orderId, id),
+        eq(orderLineItems.organizationId, organizationId)
+      ))
+      .orderBy(asc(orderLineItems.lineNumber)),
+  ]);
 
-    return {
-      ...result[0].order,
-      customer: result[0].customer,
-      lineItems: lineItems.map((li) => ({
-        ...li.lineItem,
-        product: li.product,
-      })),
-    };
+  if (!orderResult[0]) return null;
+
+  return {
+    ...orderResult[0].order,
+    customer: orderResult[0].customer,
+    lineItems: lineItems.map((li) => ({
+      ...li.lineItem,
+      product: li.product,
+    })),
+  };
+});
+
+/**
+ * Get order with customer details for display.
+ */
+export const getOrderWithCustomer = createServerFn({ method: 'GET' })
+  .inputValidator(orderParamsSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const result = await _getOrderWithCustomerCached(data.id, ctx.organizationId);
+    if (!result) {
+      setResponseStatus(404);
+      throw new NotFoundError('Order not found', 'order');
+    }
+    return result;
   });
 
 // ============================================================================
@@ -671,6 +716,22 @@ export const createOrder = createServerFn({ method: 'POST' })
       data.discountAmount ? Number(data.discountAmount) : null,
       data.shippingAmount ? Number(data.shippingAmount) : 0
     );
+
+    const totalsValidation = validateInvoiceTotals({
+      subtotal: orderTotals.subtotal,
+      taxAmount: orderTotals.taxAmount,
+      shippingAmount: data.shippingAmount ? Number(data.shippingAmount) : 0,
+      discountAmount: orderTotals.discountAmount,
+      total: orderTotals.total,
+    });
+
+    if (!totalsValidation.isValid) {
+      throw new ValidationError('Order totals do not reconcile', {
+        total: [
+          `Expected ${totalsValidation.expectedTotal.toFixed(2)}, got ${orderTotals.total.toFixed(2)}`,
+        ],
+      });
+    }
 
     // Insert order and line items in transaction
     const result = await db.transaction(async (tx) => {
@@ -755,7 +816,7 @@ export const createOrder = createServerFn({ method: 'POST' })
       customerId: result.order.customerId,
     }).catch((error) => {
       // Log but don't fail order creation if PDF trigger fails
-      console.error('[INT-DOC-007] Failed to trigger quote PDF generation:', error);
+      ordersLogger.error('[INT-DOC-007] Failed to trigger quote PDF generation', error);
     });
 
     // Log order creation
@@ -870,7 +931,17 @@ export const updateOrder = createServerFn({ method: 'POST' })
     updateData.updatedBy = ctx.user.id;
 
     const updated = await db.transaction(async (tx) => {
-      const [result] = await tx.update(orders).set(updateData).where(eq(orders.id, id)).returning();
+      const [result] = await tx
+        .update(orders)
+        .set(updateData)
+        .where(
+          and(
+            eq(orders.id, id),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt) // MUST include deletedAt check
+          )
+        )
+        .returning();
 
       await enqueueSearchIndexOutbox(
         {
@@ -961,14 +1032,14 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
 
     // Update status-related dates
     const statusDates: Record<string, string> = {};
-    if (newStatus === 'shipped') {
+    if (newStatus === 'shipped' || newStatus === 'partially_shipped') {
       statusDates.shippedDate = new Date().toISOString().slice(0, 10);
     }
     if (newStatus === 'delivered') {
       statusDates.deliveredDate = new Date().toISOString().slice(0, 10);
     }
 
-    // Update order
+    // Update order with optimistic locking on current status
     const updated = await db.transaction(async (tx) => {
       const [result] = await tx
         .update(orders)
@@ -981,8 +1052,20 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(orders.id, id))
+        .where(
+          and(
+            eq(orders.id, id),
+            eq(orders.organizationId, ctx.organizationId), // MUST include organizationId filter
+            eq(orders.status, currentStatus) // Optimistic lock: only update if status hasn't changed
+          )
+        )
         .returning();
+
+      if (!result) {
+        throw new ConflictError(
+          'Order status was modified by another user. Please refresh and try again.'
+        );
+      }
 
       await enqueueSearchIndexOutbox(
         {
@@ -1013,7 +1096,7 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
         customerId: updated.customerId,
         dueDate: updated.dueDate ?? undefined,
       }).catch((error) => {
-        console.error('[INT-DOC-007] Failed to trigger invoice PDF generation:', error);
+        ordersLogger.error('[INT-DOC-007] Failed to trigger invoice PDF generation', error);
       });
     }
 
@@ -1026,7 +1109,7 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
         customerId: updated.customerId,
         deliveryDate: statusDates.shippedDate ?? null,
       }).catch((error) => {
-        console.error('[INT-DOC-007] Failed to trigger delivery note PDF generation:', error);
+        ordersLogger.error('[INT-DOC-007] Failed to trigger delivery note PDF generation', error);
       });
     }
 
@@ -1046,7 +1129,7 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
         customerId: updated.customerId, // Include customerId for customer timeline lookup
         previousStatus: currentStatus,
         newStatus,
-        notes: data.notes ?? null,
+        notes: data.notes ?? undefined,
       },
     });
 
@@ -1066,9 +1149,14 @@ export const deleteOrder = createServerFn({ method: 'POST' })
     const ctx = await withAuth();
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Get existing order
+    // Get existing order - select only fields needed for validation and logging
     const [existing] = await db
-      .select()
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        status: orders.status,
+        total: orders.total,
+      })
       .from(orders)
       .where(
         and(
@@ -1100,7 +1188,12 @@ export const deleteOrder = createServerFn({ method: 'POST' })
           deletedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(orders.id, data.id));
+        .where(
+          and(
+            eq(orders.id, data.id),
+            eq(orders.organizationId, ctx.organizationId)
+          )
+        );
 
       await enqueueSearchIndexOutbox(
         {
@@ -1118,11 +1211,6 @@ export const deleteOrder = createServerFn({ method: 'POST' })
       entityType: 'order',
       entityId: data.id,
       action: 'deleted',
-      changes: computeChanges({
-        before: orderToDelete,
-        after: null,
-        excludeFields: ORDER_EXCLUDED_FIELDS as never[],
-      }),
       description: `Deleted order: ${orderToDelete.orderNumber}`,
       metadata: {
         orderNumber: orderToDelete.orderNumber,
@@ -1185,11 +1273,16 @@ export const addOrderLineItem = createServerFn({ method: 'POST' })
 
     // Wrap insert and recalculate in transaction for atomicity
     const newItem = await db.transaction(async (tx) => {
-      // Get next line number
+      // Get next line number - MUST include organizationId filter
       const [maxLine] = await tx
         .select({ max: sql<string>`MAX(${orderLineItems.lineNumber})` })
         .from(orderLineItems)
-        .where(eq(orderLineItems.orderId, data.orderId));
+        .where(
+          and(
+            eq(orderLineItems.orderId, data.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        );
 
       const nextLineNumber = ((parseInt(maxLine?.max ?? '0', 10) || 0) + 1)
         .toString()
@@ -1220,7 +1313,7 @@ export const addOrderLineItem = createServerFn({ method: 'POST' })
         .returning();
 
       // Recalculate order totals within same transaction
-      await recalculateOrderTotals(data.orderId, ctx.user.id, tx);
+      await recalculateOrderTotals(data.orderId, ctx.user.id, ctx.organizationId, tx);
 
       return inserted;
     });
@@ -1269,11 +1362,25 @@ export const updateOrderLineItem = createServerFn({ method: 'POST' })
       });
     }
 
-    // Get existing line item
+    // Get existing line item - select only fields needed for recalculation
+    // MUST include organizationId filter
     const [existing] = await db
-      .select()
+      .select({
+        id: orderLineItems.id,
+        quantity: orderLineItems.quantity,
+        unitPrice: orderLineItems.unitPrice,
+        discountPercent: orderLineItems.discountPercent,
+        discountAmount: orderLineItems.discountAmount,
+        taxType: orderLineItems.taxType,
+      })
       .from(orderLineItems)
-      .where(and(eq(orderLineItems.id, itemId), eq(orderLineItems.orderId, orderId)))
+      .where(
+        and(
+          eq(orderLineItems.id, itemId),
+          eq(orderLineItems.orderId, orderId),
+          eq(orderLineItems.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!existing) {
@@ -1298,7 +1405,7 @@ export const updateOrderLineItem = createServerFn({ method: 'POST' })
 
     // Wrap update and recalculate in transaction for atomicity
     const updated = await db.transaction(async (tx) => {
-      // Update line item
+      // Update line item - MUST include organizationId filter
       const [updatedItem] = await tx
         .update(orderLineItems)
         .set({
@@ -1311,11 +1418,16 @@ export const updateOrderLineItem = createServerFn({ method: 'POST' })
           lineTotal: totals.lineTotal,
           updatedAt: new Date(),
         })
-        .where(eq(orderLineItems.id, itemId))
+        .where(
+          and(
+            eq(orderLineItems.id, itemId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        )
         .returning();
 
       // Recalculate order totals within same transaction
-      await recalculateOrderTotals(orderId, ctx.user.id, tx);
+      await recalculateOrderTotals(orderId, ctx.user.id, ctx.organizationId, tx);
 
       return updatedItem;
     });
@@ -1366,10 +1478,16 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
     // Wrap count check, delete and recalculate in transaction for atomicity
     await db.transaction(async (tx) => {
       // Get line item count within transaction to ensure consistency
+      // MUST include organizationId filter
       const [countResult] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(orderLineItems)
-        .where(eq(orderLineItems.orderId, data.orderId));
+        .where(
+          and(
+            eq(orderLineItems.orderId, data.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        );
 
       if ((countResult?.count ?? 0) <= 1) {
         throw new ValidationError('Cannot delete last line item', {
@@ -1377,13 +1495,19 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
         });
       }
 
-      // Delete line item
+      // Delete line item - MUST include organizationId filter
       await tx
         .delete(orderLineItems)
-        .where(and(eq(orderLineItems.id, data.itemId), eq(orderLineItems.orderId, data.orderId)));
+        .where(
+          and(
+            eq(orderLineItems.id, data.itemId),
+            eq(orderLineItems.orderId, data.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        );
 
       // Recalculate order totals within same transaction
-      await recalculateOrderTotals(data.orderId, ctx.user.id, tx);
+      await recalculateOrderTotals(data.orderId, ctx.user.id, ctx.organizationId, tx);
     });
 
     return { success: true };
@@ -1422,7 +1546,10 @@ export const duplicateOrder = createServerFn({ method: 'POST' })
     const sourceLineItems = await db
       .select()
       .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, data.id))
+      .where(and(
+        eq(orderLineItems.orderId, data.id),
+        eq(orderLineItems.organizationId, ctx.organizationId)
+      ))
       .orderBy(asc(orderLineItems.lineNumber));
 
     // Generate new order number
@@ -1527,19 +1654,25 @@ export const duplicateOrder = createServerFn({ method: 'POST' })
 async function recalculateOrderTotals(
   orderId: string,
   userId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any = db
+  organizationId: string,
+  tx: DbOrTransaction = db
 ): Promise<void> {
-  // Get all line items
-  const lineItems: { lineTotal: string | null; taxAmount: string | null }[] = await tx
+  // Aggregate line item totals in SQL instead of fetching all rows and reducing in JS
+  // MUST include organizationId filter for security
+  const [lineItemAgg] = await tx
     .select({
-      lineTotal: orderLineItems.lineTotal,
-      taxAmount: orderLineItems.taxAmount,
+      totalLineTotal: sql<number>`COALESCE(SUM(${orderLineItems.lineTotal}), 0)`,
+      totalTaxAmount: sql<number>`COALESCE(SUM(${orderLineItems.taxAmount}), 0)`,
     })
     .from(orderLineItems)
-    .where(eq(orderLineItems.orderId, orderId));
+    .where(
+      and(
+        eq(orderLineItems.orderId, orderId),
+        eq(orderLineItems.organizationId, organizationId)
+      )
+    );
 
-  // Get current order for discount and shipping
+  // Get current order for discount and shipping - MUST include organizationId filter
   const [order] = await tx
     .select({
       discountPercent: orders.discountPercent,
@@ -1548,17 +1681,23 @@ async function recalculateOrderTotals(
       paidAmount: orders.paidAmount,
     })
     .from(orders)
-    .where(eq(orders.id, orderId))
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.organizationId, organizationId),
+        isNull(orders.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!order) return;
 
-  // Calculate totals
+  const lineSubtotal = Number(lineItemAgg?.totalLineTotal ?? 0);
+  const lineTaxTotal = Number(lineItemAgg?.totalTaxAmount ?? 0);
+
+  // Calculate totals using the aggregated values
   const totals = calculateOrderTotals(
-    lineItems.map((li) => ({
-      lineTotal: Number(li.lineTotal),
-      taxAmount: Number(li.taxAmount),
-    })),
+    [{ lineTotal: lineSubtotal, taxAmount: lineTaxTotal }],
     order.discountPercent ? Number(order.discountPercent) : null,
     order.discountAmount ? Number(order.discountAmount) : null,
     Number(order.shippingAmount)
@@ -1566,7 +1705,7 @@ async function recalculateOrderTotals(
 
   const balanceDue = totals.total - Number(order.paidAmount);
 
-  // Update order
+  // Update order - MUST include organizationId filter
   await tx
     .update(orders)
     .set({
@@ -1578,13 +1717,25 @@ async function recalculateOrderTotals(
       updatedAt: new Date(),
       updatedBy: userId,
     })
-    .where(eq(orders.id, orderId));
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.organizationId, organizationId)
+      )
+    );
 }
 
 // ============================================================================
 // BULK UPDATE ORDER STATUS (Kanban operations)
 // ============================================================================
 
+/**
+ * Bulk update order status with optimized batch processing.
+ * 
+ * PERFORMANCE: Previously used sequential loop with 2N queries (N selects + N updates).
+ * Now uses batch fetch (1 query) + batch updates (N updates in transaction) = N+1 queries total.
+ * For 100 orders: previously 200 queries, now ~101 queries.
+ */
 export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
@@ -1608,91 +1759,121 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
       const updated: string[] = [];
       const failed: string[] = [];
 
-      // Process each order
+      // PERFORMANCE: Batch fetch all orders in a single query instead of N queries
+      const existingOrders = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            inArray(orders.id, orderIds),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        );
+
+      // Create lookup map for O(1) access
+      const orderMap = new Map(existingOrders.map(o => [o.id, o]));
+
+      // Track orders that passed validation
+      const validUpdates: Array<{
+        order: typeof existingOrders[0];
+        statusDates: Record<string, string>;
+      }> = [];
+
+      // Validate all orders first (in memory, no DB queries)
       for (const orderId of orderIds) {
-        try {
-          // Get existing order
-          const [existing] = await db
-            .select()
-            .from(orders)
-            .where(
-              and(
-                eq(orders.id, orderId),
-                eq(orders.organizationId, ctx.organizationId),
-                isNull(orders.deletedAt)
-              )
-            )
-            .limit(1);
+        const existing = orderMap.get(orderId);
 
-          if (!existing) {
-            failed.push(`${orderId}: Order not found`);
-            continue;
-          }
-
-          // Validate status transition
-          const currentStatus = existing.status as OrderStatus;
-          const newStatus = status as OrderStatus;
-
-          if (!validateStatusTransition(currentStatus, newStatus)) {
-            failed.push(
-              `${orderId}: Invalid status transition from '${currentStatus}' to '${newStatus}'`
-            );
-            continue;
-          }
-
-          // Update status-related dates
-          const statusDates: Record<string, string> = {};
-          if (newStatus === 'shipped') {
-            statusDates.shippedDate = new Date().toISOString().slice(0, 10);
-          }
-          if (newStatus === 'delivered') {
-            statusDates.deliveredDate = new Date().toISOString().slice(0, 10);
-          }
-
-          // Update order
-          await db
-            .update(orders)
-            .set({
-              status: newStatus,
-              ...statusDates,
-              internalNotes: notes
-                ? `${existing.internalNotes ?? ''}\n[${new Date().toISOString()}] Bulk status changed to ${newStatus}: ${notes}`.trim()
-                : existing.internalNotes,
-              updatedAt: new Date(),
-              updatedBy: ctx.user.id,
-            })
-            .where(eq(orders.id, orderId));
-
-          // INT-DOC-007: Trigger PDF generation based on status change
-          // Fire-and-forget - don't block bulk update on PDF generation
-          if (newStatus === 'confirmed') {
-            generateInvoicePdf.trigger({
-              orderId: existing.id,
-              orderNumber: existing.orderNumber,
-              organizationId: ctx.organizationId,
-              customerId: existing.customerId,
-              dueDate: existing.dueDate ?? undefined,
-            }).catch((error) => {
-              console.error(`[INT-DOC-007] Failed to trigger invoice PDF for order ${orderId}:`, error);
-            });
-          }
-
-          if (newStatus === 'shipped') {
-            generateDeliveryNotePdf.trigger({
-              orderId: existing.id,
-              orderNumber: existing.orderNumber,
-              organizationId: ctx.organizationId,
-              customerId: existing.customerId,
-              deliveryDate: statusDates.shippedDate ?? null,
-            }).catch((error) => {
-              console.error(`[INT-DOC-007] Failed to trigger delivery note PDF for order ${orderId}:`, error);
-            });
-          }
-
-          updated.push(orderId);
-        } catch (error) {
-          failed.push(`${orderId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        if (!existing) {
+          failed.push(`${orderId}: Order not found`);
+          continue;
         }
+
+        const currentStatus = existing.status as OrderStatus;
+        const newStatus = status as OrderStatus;
+
+        if (!validateStatusTransition(currentStatus, newStatus)) {
+          failed.push(
+            `${orderId}: Invalid status transition from '${currentStatus}' to '${newStatus}'`
+          );
+          continue;
+        }
+
+        // Calculate status dates
+        const statusDates: Record<string, string> = {};
+        if (newStatus === 'shipped') {
+          statusDates.shippedDate = new Date().toISOString().slice(0, 10);
+        }
+        if (newStatus === 'delivered') {
+          statusDates.deliveredDate = new Date().toISOString().slice(0, 10);
+        }
+
+        validUpdates.push({ order: existing, statusDates });
+      }
+
+      // Process valid updates in a transaction for atomicity
+      if (validUpdates.length > 0) {
+        await db.transaction(async (tx) => {
+          for (const { order: existing, statusDates } of validUpdates) {
+            const newStatus = status as OrderStatus;
+
+            const currentStatus = existing.status as OrderStatus;
+
+            // Optimistic lock: only update if status hasn't changed since validation
+            const [updateResult] = await tx
+              .update(orders)
+              .set({
+                status: newStatus,
+                ...statusDates,
+                internalNotes: notes
+                  ? `${existing.internalNotes ?? ''}\n[${new Date().toISOString()}] Bulk status changed to ${newStatus}: ${notes}`.trim()
+                  : existing.internalNotes,
+                updatedAt: new Date(),
+                updatedBy: ctx.user.id,
+              })
+              .where(
+                and(
+                  eq(orders.id, existing.id),
+                  eq(orders.organizationId, ctx.organizationId), // MUST include organizationId filter
+                  eq(orders.status, currentStatus)
+                )
+              )
+              .returning();
+
+            if (!updateResult) {
+              failed.push(`${existing.id}: Status was modified concurrently`);
+              continue;
+            }
+
+            updated.push(existing.id);
+
+            // INT-DOC-007: Trigger PDF generation based on status change
+            // Fire-and-forget - don't block bulk update on PDF generation
+            if (newStatus === 'confirmed') {
+              generateInvoicePdf.trigger({
+                orderId: existing.id,
+                orderNumber: existing.orderNumber,
+                organizationId: ctx.organizationId,
+                customerId: existing.customerId,
+                dueDate: existing.dueDate ?? undefined,
+              }).catch((error) => {
+                ordersLogger.error(`[INT-DOC-007] Failed to trigger invoice PDF for order ${existing.id}`, error);
+              });
+            }
+
+            if (newStatus === 'shipped') {
+              generateDeliveryNotePdf.trigger({
+                orderId: existing.id,
+                orderNumber: existing.orderNumber,
+                organizationId: ctx.organizationId,
+                customerId: existing.customerId,
+                deliveryDate: statusDates.shippedDate ?? null,
+              }).catch((error) => {
+                ordersLogger.error(`[INT-DOC-007] Failed to trigger delivery note PDF for order ${existing.id}`, error);
+              });
+            }
+          }
+        });
       }
 
       return { updated: updated.length, failed };
@@ -1750,6 +1931,9 @@ export const createOrderForKanban = createServerFn({ method: 'POST' })
     // Generate order number
     const orderNumber = await generateOrderNumber(ctx.organizationId);
 
+    // Intentionally creates zero-total orders for the kanban workflow.
+    // Line items and totals are added/calculated later by the user after placing
+    // the order in the desired fulfillment stage on the kanban board.
     const created = await db.transaction(async (tx) => {
       const [result] = await tx
         .insert(orders)
@@ -1760,7 +1944,7 @@ export const createOrderForKanban = createServerFn({ method: 'POST' })
           status,
           paymentStatus: 'pending',
           orderDate: new Date().toISOString().slice(0, 10),
-          total: 0, // Will be calculated from line items
+          total: 0, // Intentionally zero — recalculated when line items are added
           balanceDue: 0,
           metadata: notes ? { notes } : {},
           internalNotes: notes ? `Created via Kanban board: ${notes}` : 'Created via Kanban board',
@@ -1793,36 +1977,7 @@ export const createOrderForKanban = createServerFn({ method: 'POST' })
 // LIST FULFILLMENT KANBAN ORDERS
 // ============================================================================
 
-/**
- * Kanban-specific order query result grouped by fulfillment stages
- */
-export interface FulfillmentKanbanOrder {
-  id: string;
-  orderNumber: string;
-  customerId: string;
-  customerName: string | null;
-  status: OrderStatus;
-  paymentStatus: PaymentStatus;
-  orderDate: Date;
-  dueDate: Date | null;
-  total: number;
-  metadata: OrderMetadata | null;
-  createdAt: Date;
-  updatedAt: Date;
-  itemCount: number;
-  shippedDate: Date | null;
-}
-
-export interface FulfillmentKanbanResult {
-  stages: {
-    to_allocate: FulfillmentKanbanOrder[];
-    to_pick: FulfillmentKanbanOrder[];
-    picking: FulfillmentKanbanOrder[];
-    to_ship: FulfillmentKanbanOrder[];
-    shipped_today: FulfillmentKanbanOrder[];
-  };
-  total: number;
-}
+// Types moved to schemas - imported above
 
 const fulfillmentKanbanQuerySchema = z.object({
   customerId: z.string().uuid().optional(),
@@ -1838,7 +1993,6 @@ const fulfillmentKanbanQuerySchema = z.object({
 export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
   .inputValidator(fulfillmentKanbanQuerySchema)
   .handler(
-    cache(
       async ({
         data,
       }: {
@@ -1852,7 +2006,7 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
           eq(orders.organizationId, ctx.organizationId),
           isNull(orders.deletedAt),
           // Only include orders that are in the fulfillment workflow (not draft or delivered)
-          sql`${orders.status} IN ('confirmed', 'picking', 'picked', 'shipped')`,
+          inArray(orders.status, ['confirmed', 'picking', 'picked', 'partially_shipped', 'shipped']),
         ];
 
         // Add filters
@@ -1861,17 +2015,17 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
         }
         if (search) {
           conditions.push(
-            sql`(
-          ${orders.orderNumber} ILIKE ${`%${search}%`} OR
-          ${orders.internalNotes} ILIKE ${`%${search}%`}
-        )`
+            or(
+              ilike(orders.orderNumber, containsPattern(search)),
+              ilike(orders.internalNotes, containsPattern(search))
+            )!
           );
         }
         if (dateFrom) {
-          conditions.push(sql`${orders.orderDate} >= ${dateFrom.toISOString().slice(0, 10)}`);
+          conditions.push(gte(orders.orderDate, dateFrom.toISOString().slice(0, 10)));
         }
         if (dateTo) {
-          conditions.push(sql`${orders.orderDate} <= ${dateTo.toISOString().slice(0, 10)}`);
+          conditions.push(lte(orders.orderDate, dateTo.toISOString().slice(0, 10)));
         }
 
         // Get orders with customer info and item counts
@@ -1894,7 +2048,11 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
             itemCount: sql<number>`count(${orderLineItems.id})::int`,
           })
           .from(orders)
-          .leftJoin(customers, eq(orders.customerId, customers.id))
+          .leftJoin(customers, and(
+            eq(orders.customerId, customers.id),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          ))
           .leftJoin(orderLineItems, eq(orders.id, orderLineItems.orderId))
           .where(and(...conditions))
           .groupBy(
@@ -1912,7 +2070,8 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
             orders.updatedAt,
             orders.shippedDate
           )
-          .orderBy(desc(orders.createdAt));
+          .orderBy(desc(orders.createdAt))
+          .limit(1000);
 
         // Group orders by fulfillment workflow stages
         const stages: FulfillmentKanbanResult['stages'] = {
@@ -1938,7 +2097,7 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
             orderDate: new Date(order.orderDate),
             dueDate: order.dueDate ? new Date(order.dueDate) : null,
             total: Number(order.total),
-            metadata: order.metadata,
+            metadata: (order.metadata ?? null) as FlexibleJson | null,
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
             itemCount: order.itemCount,
@@ -1954,6 +2113,10 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
               stages.picking.push(fulfillmentOrder);
               break;
             case 'picked':
+              stages.to_ship.push(fulfillmentOrder);
+              break;
+            case 'partially_shipped':
+              // Partially shipped orders need attention — show in to_ship
               stages.to_ship.push(fulfillmentOrder);
               break;
             case 'shipped':
@@ -1976,5 +2139,4 @@ export const listFulfillmentKanbanOrders = createServerFn({ method: 'GET' })
           total: orderList.length,
         };
       }
-    )
   );

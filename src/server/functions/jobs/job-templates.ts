@@ -134,6 +134,8 @@ function toTemplateResponse(row: {
   };
 }
 
+type TemplateRow = Parameters<typeof toTemplateResponse>[0];
+
 // ============================================================================
 // LIST JOB TEMPLATES
 // ============================================================================
@@ -176,7 +178,8 @@ export const listJobTemplates = createServerFn({ method: 'GET' })
       .leftJoin(checklistTemplates, eq(jobTemplates.checklistTemplateId, checklistTemplates.id))
       .leftJoin(slaConfigurations, eq(jobTemplates.slaConfigurationId, slaConfigurations.id))
       .where(and(...conditions))
-      .orderBy(jobTemplates.name);
+      .orderBy(jobTemplates.name)
+      .limit(100);
 
     return {
       templates: templates.map(toTemplateResponse),
@@ -316,7 +319,7 @@ export const createJobTemplate = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return { template: toTemplateResponse(newTemplate as any) };
+    return { template: toTemplateResponse(newTemplate as TemplateRow) };
   });
 
 // ============================================================================
@@ -413,7 +416,7 @@ export const updateJobTemplate = createServerFn({ method: 'POST' })
       .where(eq(jobTemplates.id, data.templateId))
       .returning();
 
-    return { template: toTemplateResponse(updatedTemplate as any) };
+    return { template: toTemplateResponse(updatedTemplate as TemplateRow) };
   });
 
 // ============================================================================
@@ -488,165 +491,170 @@ export const createJobFromTemplate = createServerFn({ method: 'POST' })
     // Generate unique job number
     const jobNumber = generateJobNumber();
 
-    // Start SLA tracking if template has SLA configuration
-    let slaTrackingId: string | null = null;
+    // Wrap all creation steps in a transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Start SLA tracking if template has SLA configuration
+      let slaTrackingId: string | null = null;
 
-    if (template.slaConfigurationId) {
-      // Create SLA tracking record
-      const [slaRecord] = await db
-        .insert(slaTracking)
-        .values({
-          organizationId: ctx.organizationId,
-          domain: 'jobs',
-          entityType: 'job_assignment',
-          entityId: jobNumber, // Will update after job creation
-          slaConfigurationId: template.slaConfigurationId,
-          startedAt: new Date(),
-          status: 'active',
-        })
-        .returning();
-
-      slaTrackingId = slaRecord.id;
-    }
-
-    // Create job assignment
-    const [newJob] = await db
-      .insert(jobAssignments)
-      .values({
-        organizationId: ctx.organizationId,
-        customerId: data.customerId,
-        installerId: data.installerId,
-        orderId: data.orderId ?? null,
-        jobNumber,
-        title: template.name,
-        description: template.description ?? null,
-        jobType: 'installation', // Default to installation type
-        scheduledDate: data.scheduledDate,
-        scheduledTime: data.scheduledTime ?? null,
-        estimatedDuration: template.estimatedDuration,
-        status: 'scheduled',
-        slaTrackingId,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
-
-    // Update SLA tracking with actual job ID
-    if (slaTrackingId) {
-      await db
-        .update(slaTracking)
-        .set({ entityId: newJob.id })
-        .where(eq(slaTracking.id, slaTrackingId));
-    }
-
-    // Create tasks from template
-    let tasksCreated = 0;
-    if (template.defaultTasks && template.defaultTasks.length > 0) {
-      const taskValues = template.defaultTasks.map((task) => ({
-        organizationId: ctx.organizationId,
-        jobId: newJob.id,
-        title: task.title,
-        description: task.description ?? null,
-        status: 'pending' as const,
-        position: task.position,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      }));
-
-      await db.insert(jobTasks).values(taskValues);
-      tasksCreated = taskValues.length;
-    }
-
-    // Create materials from template BOM
-    let materialsAdded = 0;
-    if (template.defaultBOM && template.defaultBOM.length > 0) {
-      // Get product prices
-      const productIds = template.defaultBOM.map((item) => item.productId);
-      const productData = await db
-        .select({
-          id: products.id,
-          basePrice: products.basePrice,
-        })
-        .from(products)
-        .where(sql`${products.id} = ANY(${productIds})`);
-
-      const priceMap = new Map(productData.map((p) => [p.id, Number(p.basePrice)]));
-
-      const materialValues = template.defaultBOM.map((item) => ({
-        organizationId: ctx.organizationId,
-        jobId: newJob.id,
-        productId: item.productId,
-        quantityRequired: item.quantityRequired,
-        quantityUsed: 0,
-        unitCost: priceMap.get(item.productId) ?? 0,
-        notes: item.notes ?? null,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      }));
-
-      await db.insert(jobMaterials).values(materialValues);
-      materialsAdded = materialValues.length;
-    }
-
-    // Apply checklist from template if configured
-    let checklistApplied = false;
-    if (template.checklistTemplateId) {
-      // Get checklist template
-      const [checklistTemplate] = await db
-        .select({
-          id: checklistTemplates.id,
-          name: checklistTemplates.name,
-          items: checklistTemplates.items,
-        })
-        .from(checklistTemplates)
-        .where(eq(checklistTemplates.id, template.checklistTemplateId))
-        .limit(1);
-
-      if (checklistTemplate) {
-        // Create job checklist
-        const [newChecklist] = await db
-          .insert(jobChecklists)
+      if (template.slaConfigurationId) {
+        // Create SLA tracking record
+        const [slaRecord] = await tx
+          .insert(slaTracking)
           .values({
             organizationId: ctx.organizationId,
-            jobId: newJob.id,
-            templateId: checklistTemplate.id,
-            templateName: checklistTemplate.name,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
+            domain: 'jobs',
+            entityType: 'job_assignment',
+            entityId: jobNumber, // Will update after job creation
+            slaConfigurationId: template.slaConfigurationId,
+            startedAt: new Date(),
+            status: 'active',
           })
           .returning();
 
-        // Create checklist items
-        if (checklistTemplate.items && checklistTemplate.items.length > 0) {
-          const items = checklistTemplate.items as ChecklistTemplateItem[];
-          const itemValues = items.map((item) => ({
-            organizationId: ctx.organizationId,
-            checklistId: newChecklist.id,
-            itemText: item.text,
-            itemDescription: item.description ?? null,
-            requiresPhoto: item.requiresPhoto ?? false,
-            position: item.position,
-            isCompleted: false,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          }));
-
-          await db.insert(jobChecklistItems).values(itemValues);
-        }
-
-        checklistApplied = true;
+        slaTrackingId = slaRecord.id;
       }
-    }
 
-    return {
-      success: true,
-      jobId: newJob.id,
-      jobNumber: newJob.jobNumber,
-      tasksCreated,
-      materialsAdded,
-      checklistApplied,
-      slaTrackingId,
-    } satisfies CreateJobFromTemplateResponse;
+      // Create job assignment
+      const [newJob] = await tx
+        .insert(jobAssignments)
+        .values({
+          organizationId: ctx.organizationId,
+          customerId: data.customerId,
+          installerId: data.installerId,
+          orderId: data.orderId ?? null,
+          jobNumber,
+          title: template.name,
+          description: template.description ?? null,
+          jobType: 'installation', // Default to installation type
+          scheduledDate: data.scheduledDate,
+          scheduledTime: data.scheduledTime ?? null,
+          estimatedDuration: template.estimatedDuration,
+          status: 'scheduled',
+          slaTrackingId,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
+
+      // Update SLA tracking with actual job ID
+      if (slaTrackingId) {
+        await tx
+          .update(slaTracking)
+          .set({ entityId: newJob.id })
+          .where(eq(slaTracking.id, slaTrackingId));
+      }
+
+      // Create tasks from template
+      let tasksCreated = 0;
+      if (template.defaultTasks && template.defaultTasks.length > 0) {
+        const taskValues = template.defaultTasks.map((task) => ({
+          organizationId: ctx.organizationId,
+          jobId: newJob.id,
+          title: task.title,
+          description: task.description ?? null,
+          status: 'pending' as const,
+          position: task.position,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }));
+
+        await tx.insert(jobTasks).values(taskValues);
+        tasksCreated = taskValues.length;
+      }
+
+      // Create materials from template BOM
+      let materialsAdded = 0;
+      if (template.defaultBOM && template.defaultBOM.length > 0) {
+        // Get product prices
+        const productIds = template.defaultBOM.map((item) => item.productId);
+        const productData = await tx
+          .select({
+            id: products.id,
+            basePrice: products.basePrice,
+          })
+          .from(products)
+          .where(sql`${products.id} = ANY(${productIds})`);
+
+        const priceMap = new Map(productData.map((p) => [p.id, Number(p.basePrice)]));
+
+        const materialValues = template.defaultBOM.map((item) => ({
+          organizationId: ctx.organizationId,
+          jobId: newJob.id,
+          productId: item.productId,
+          quantityRequired: item.quantityRequired,
+          quantityUsed: 0,
+          unitCost: priceMap.get(item.productId) ?? 0,
+          notes: item.notes ?? null,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }));
+
+        await tx.insert(jobMaterials).values(materialValues);
+        materialsAdded = materialValues.length;
+      }
+
+      // Apply checklist from template if configured
+      let checklistApplied = false;
+      if (template.checklistTemplateId) {
+        // Get checklist template
+        const [checklistTemplate] = await tx
+          .select({
+            id: checklistTemplates.id,
+            name: checklistTemplates.name,
+            items: checklistTemplates.items,
+          })
+          .from(checklistTemplates)
+          .where(eq(checklistTemplates.id, template.checklistTemplateId))
+          .limit(1);
+
+        if (checklistTemplate) {
+          // Create job checklist
+          const [newChecklist] = await tx
+            .insert(jobChecklists)
+            .values({
+              organizationId: ctx.organizationId,
+              jobId: newJob.id,
+              templateId: checklistTemplate.id,
+              templateName: checklistTemplate.name,
+              createdBy: ctx.user.id,
+              updatedBy: ctx.user.id,
+            })
+            .returning();
+
+          // Create checklist items
+          if (checklistTemplate.items && checklistTemplate.items.length > 0) {
+            const items = checklistTemplate.items as ChecklistTemplateItem[];
+            const itemValues = items.map((item) => ({
+              organizationId: ctx.organizationId,
+              checklistId: newChecklist.id,
+              itemText: item.text,
+              itemDescription: item.description ?? null,
+              requiresPhoto: item.requiresPhoto ?? false,
+              position: item.position,
+              isCompleted: false,
+              createdBy: ctx.user.id,
+              updatedBy: ctx.user.id,
+            }));
+
+            await tx.insert(jobChecklistItems).values(itemValues);
+          }
+
+          checklistApplied = true;
+        }
+      }
+
+      return {
+        success: true as const,
+        jobId: newJob.id,
+        jobNumber: newJob.jobNumber,
+        tasksCreated,
+        materialsAdded,
+        checklistApplied,
+        slaTrackingId,
+      };
+    });
+
+    return result satisfies CreateJobFromTemplateResponse;
   });
 
 // ============================================================================
@@ -720,7 +728,11 @@ export const exportCalendarData = createServerFn({ method: 'POST' })
 /**
  * Generate ICS calendar format
  */
-function generateICSCalendar(jobs: any[], _config: any): string {
+interface CalendarJobRow {
+  job: { id: string; scheduledDate: string; scheduledTime?: string | null; title: string; description?: string | null; estimatedDuration?: number | null };
+  customer: { name: string };
+}
+function generateICSCalendar(jobs: CalendarJobRow[], _config: Record<string, unknown>): string {
   const icsLines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -759,7 +771,12 @@ function generateICSCalendar(jobs: any[], _config: any): string {
 /**
  * Generate CSV calendar format
  */
-function generateCSVCalendar(jobs: any[], _config: any): string {
+interface CsvCalendarJobRow {
+  job: { scheduledDate: string; scheduledTime?: string | null; jobNumber: string; title: string; status: string; priority?: string; estimatedDuration?: number | null };
+  customer: { name: string };
+  installer: { name?: string | null; email: string };
+}
+function generateCSVCalendar(jobs: CsvCalendarJobRow[], _config: Record<string, unknown>): string {
   const headers = [
     'Date',
     'Time',
@@ -783,7 +800,7 @@ function generateCSVCalendar(jobs: any[], _config: any): string {
       `"${row.installer.name || row.installer.email}"`,
       job.status,
       ((job.estimatedDuration ?? 120) / 60).toFixed(1),
-      job.priority || 'medium',
+      (job as { priority?: string }).priority || 'medium',
     ];
   });
 

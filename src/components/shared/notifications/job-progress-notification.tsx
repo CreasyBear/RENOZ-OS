@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks";
-import type { Job, JobStatus, JobType, JobMetadata } from "drizzle/schema";
+import type { Job, JobStatus, JobType, AutomationJobMetadata } from "@/lib/schemas/automation-jobs";
 
 // ============================================================================
 // JOB TYPE ICONS
@@ -151,7 +151,7 @@ export function JobProgressNotification({
   const [isRetrying, setIsRetrying] = React.useState(false);
 
   const JobTypeIcon = JOB_TYPE_ICONS[job.type] || Cog;
-  const metadata = (job.metadata || {}) as JobMetadata;
+  const metadata = (job.metadata || {}) as AutomationJobMetadata;
   const isActive = job.status === "pending" || job.status === "running";
   const isComplete = job.status === "completed";
   const isFailed = job.status === "failed";

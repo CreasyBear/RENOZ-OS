@@ -49,7 +49,7 @@ export function parseJobDate(dateString: string): Date | null {
   }
 
   // Australian formats (DD/MM/YYYY, DD-MM-YYYY)
-  const auMatch = trimmed.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  const auMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (auMatch) {
     const [, day, month, year] = auMatch;
     const d = Number(day);
@@ -61,7 +61,7 @@ export function parseJobDate(dateString: string): Date | null {
   }
 
   // US formats (MM/DD/YYYY, MM-DD-YYYY)
-  const usMatch = trimmed.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  const usMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (usMatch) {
     const [, month, day, year] = usMatch;
     const m = Number(month);
@@ -308,7 +308,11 @@ export function validateJobSchedulingData(data: {
   };
 } {
   const errors: string[] = [];
-  const normalizedData: any = {};
+  const normalizedData: {
+    scheduledDate?: string;
+    scheduledTime?: string;
+    estimatedDuration?: number;
+  } = {};
 
   // Validate and normalize date
   if (data.scheduledDate) {

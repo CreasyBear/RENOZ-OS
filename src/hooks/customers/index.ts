@@ -16,6 +16,8 @@ export {
   useDeleteCustomer,
   useBulkDeleteCustomers,
   useBulkUpdateCustomers,
+  useBulkUpdateHealthScores,
+  useDeleteCustomerTag,
   usePrefetchCustomer,
 } from './use-customers';
 export type { CustomerFilters } from '@/lib/query-keys';
@@ -58,6 +60,15 @@ export {
   useLifecycleAnalytics,
 } from './use-customer-analytics';
 export { useCustomerHealthMetrics, useCustomerHealthHistory } from './use-customer-health';
+export {
+  useCustomerActionPlans,
+  useActionPlan,
+  useCreateActionPlan,
+  useUpdateActionPlan,
+  useDeleteActionPlan,
+  useCompleteActionPlan,
+  type CustomerActionPlan,
+} from './use-action-plans';
 export { useSegments, useSegmentDetail } from './use-customer-segments';
 
 // Duplicate detection hooks
@@ -69,6 +80,25 @@ export {
   useDuplicatesPage,
 } from './use-duplicate-scan';
 
+// Detail view extended hooks (alerts, active items, order summary)
+export {
+  useCustomerAlerts,
+  useCustomerActiveItems,
+  useCustomerOrderSummary,
+} from './use-customer-detail-extended';
+
+// Detail view hook (comprehensive data + state + actions)
+export {
+  useCustomerDetail,
+  type UseCustomerDetailReturn,
+  type CustomerDetailActions,
+} from './use-customer-detail';
+
+// Navigation hook
+export { useCustomerNavigation, type UseCustomerNavigationReturn } from './use-customer-navigation';
+
+// Types should be imported directly from @/lib/schemas/customers, not re-exported here
+
 // Re-export types
 export type {
   Customer,
@@ -79,3 +109,12 @@ export type {
 export type { HealthMetrics } from './use-customer-health';
 export type { SegmentWithStats, SegmentAnalyticsData } from './use-customer-segments';
 export type { DuplicateMatch, DuplicateDetectionInput } from './use-duplicate-detection';
+
+// Saved filters hook
+export { useSavedCustomerFilters } from './use-saved-filters';
+
+// Triage hook
+export { useCustomerTriage } from './use-customer-triage';
+
+// Rollback hooks
+export { useRecentBulkOperations, useRollbackBulkOperation } from './use-rollback';

@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { currencySchema, quantitySchema, percentageSchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 import { taxTypeSchema } from '../products/products';
 
 // ============================================================================
@@ -159,6 +160,16 @@ export const templateListQuerySchema = z.object({
 });
 
 export type TemplateListQuery = z.infer<typeof templateListQuerySchema>;
+
+export const templateListCursorQuerySchema = cursorPaginationSchema.merge(
+  z.object({
+    search: z.string().optional(),
+    isActive: z.boolean().optional(),
+    category: z.string().optional(),
+  })
+);
+
+export type TemplateListCursorQuery = z.infer<typeof templateListCursorQuerySchema>;
 
 // ============================================================================
 // OUTPUT SCHEMA

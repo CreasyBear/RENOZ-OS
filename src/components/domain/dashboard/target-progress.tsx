@@ -305,14 +305,15 @@ export const TargetProgressWidget = memo(function TargetProgressWidget({
   showSummary = true,
   className,
 }: TargetProgressProps) {
-  // Filter to display items
+  // Filter to display items (use raw targets for deps to satisfy React Compiler)
+  const rawTargets = progress?.targets;
   const displayTargets = useMemo(() => {
-    if (!progress?.targets) return [];
-    if (maxItems && progress.targets.length > maxItems) {
-      return progress.targets.slice(0, maxItems);
+    if (!rawTargets) return [];
+    if (maxItems && rawTargets.length > maxItems) {
+      return rawTargets.slice(0, maxItems);
     }
-    return progress.targets;
-  }, [progress?.targets, maxItems]);
+    return rawTargets;
+  }, [rawTargets, maxItems]);
 
   // Loading state
   if (isLoading && !progress) {

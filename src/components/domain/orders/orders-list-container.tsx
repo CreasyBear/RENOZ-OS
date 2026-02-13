@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Container exports component + constants */
 'use client';
 
 /**
@@ -18,24 +19,28 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Package, Truck, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
+import { logger } from "@/lib/logger";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { useDeleteOrder, useDuplicateOrder, useOrders } from "@/hooks/orders";
+import {
+  useBulkUpdateOrderStatus,
+  useDeleteOrder,
+  useDuplicateOrder,
+  useOrders,
+} from "@/hooks/orders";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
-import type { OrderListQuery } from "@/lib/schemas/orders";
+import type { OrderListQuery, OrderStatus, OrderTableItem } from "@/lib/schemas/orders";
 import { ORDER_FILTER_CONFIG, DEFAULT_ORDER_FILTERS } from "./order-filter-config";
 import type { OrderFiltersState } from "./order-filter-config";
 import { DomainFilterBar } from "@/components/shared/filters";
 import { OrdersListPresenter } from "./orders-list-presenter";
 import {
   OrderBulkOperationsDialog,
+  OPERATION_CONFIGS,
   type BulkOperationConfig,
   type OrderBulkOperation,
 } from "./order-bulk-operations-dialog";
-import type { OrderTableItem } from "./order-columns";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -47,17 +52,24 @@ export interface OrdersListContainerProps {
   onRefresh?: () => void;
   onExport?: () => void;
   isExporting?: boolean;
+  /** When creating RMA from issue - preserve in navigation to order detail */
+  fromIssueId?: string;
 }
 
 type OrderQueryFilters = Pick<
   OrderListQuery,
-  "search" | "status" | "paymentStatus" | "dateFrom" | "dateTo" | "minTotal" | "maxTotal"
+  "search" | "status" | "paymentStatus" | "dateFrom" | "dateTo" | "minTotal" | "maxTotal" | "customerId"
 >;
 
 type SortField = "orderNumber" | "orderDate" | "status" | "total" | "createdAt";
+
+// Type guard for sort field validation
+function isValidSortField(field: string): field is SortField {
+  return ["orderNumber", "orderDate", "status", "total", "createdAt"].includes(field);
+}
 type SortDirection = "asc" | "desc";
 
-function buildOrderQuery(filters: OrderFiltersState): OrderQueryFilters {
+export function buildOrderQuery(filters: OrderFiltersState): OrderQueryFilters {
   return {
     search: filters.search || undefined,
     status: filters.status ?? undefined,
@@ -66,12 +78,15 @@ function buildOrderQuery(filters: OrderFiltersState): OrderQueryFilters {
     dateTo: filters.dateRange?.to ?? undefined,
     minTotal: filters.totalRange?.min ?? undefined,
     maxTotal: filters.totalRange?.max ?? undefined,
+    customerId: filters.customerId ?? undefined,
   };
 }
 
 export function OrdersListContainer({
   filters,
   onFiltersChange,
+  onCreateOrder,
+  fromIssueId,
 }: OrdersListContainerProps) {
   const navigate = useNavigate();
   const confirmation = useConfirmation();
@@ -98,11 +113,12 @@ export function OrdersListContainer({
     data: ordersData,
     isLoading: isOrdersLoading,
     error: ordersError,
+    refetch: refetchOrders,
   } = useOrders(queryFilters);
 
-  // Cast orders to OrderTableItem type
+  // Server function returns OrderTableItem[] (which extends OrderListItem)
   const orders = useMemo<OrderTableItem[]>(
-    () => (ordersData?.orders ?? []) as OrderTableItem[],
+    () => ordersData?.orders ?? [],
     [ordersData]
   );
   const total = ordersData?.total ?? 0;
@@ -124,9 +140,14 @@ export function OrdersListContainer({
 
   const duplicateMutation = useDuplicateOrder();
   const deleteMutation = useDeleteOrder();
+  const bulkUpdateStatusMutation = useBulkUpdateOrderStatus();
 
   // Handle sort toggle
   const handleSort = useCallback((field: string) => {
+    if (!isValidSortField(field)) {
+      logger.warn('Invalid sort field', { field });
+      return;
+    }
     setSortField((currentField) => {
       if (currentField === field) {
         // Toggle direction
@@ -137,7 +158,7 @@ export function OrdersListContainer({
       setSortDirection(
         ["orderDate", "total", "createdAt"].includes(field) ? "desc" : "asc"
       );
-      return field as SortField;
+      return field;
     });
     setPage(1); // Reset to first page on sort change
   }, []);
@@ -170,9 +191,10 @@ export function OrdersListContainer({
       navigate({
         to: "/orders/$orderId",
         params: { orderId },
+        search: fromIssueId ? { fromIssueId } : undefined,
       });
     },
-    [navigate]
+    [navigate, fromIssueId]
   );
 
   const handleDuplicateOrder = useCallback(
@@ -214,46 +236,61 @@ export function OrdersListContainer({
   // Bulk operation handlers
   const openBulkDialog = useCallback(
     (operationType: "allocate" | "ship" | "status_update") => {
-      const configs: Record<typeof operationType, BulkOperationConfig> = {
-        allocate: {
-          type: "allocate",
-          title: "Bulk Allocate Orders",
-          description: "Move selected orders to the picking stage for fulfillment.",
-          confirmText: "Allocate Orders",
-          icon: Package,
-          variant: "default",
-        },
-        ship: {
-          type: "ship",
-          title: "Bulk Ship Orders",
-          description: "Mark selected orders as shipped and update their status.",
-          confirmText: "Ship Orders",
-          icon: Truck,
-          variant: "default",
-        },
-        status_update: {
-          type: "status_update",
-          title: "Bulk Status Update",
-          description: "Update the status of selected orders.",
-          confirmText: "Update Status",
-          icon: CheckCircle,
-          variant: "secondary",
-        },
-      };
-
-      setBulkOperation(configs[operationType]);
-      setBulkDialogOpen(true);
+      const config = OPERATION_CONFIGS[operationType];
+      if (config) {
+        setBulkOperation(config);
+        setBulkDialogOpen(true);
+      }
     },
     []
   );
 
-  const handleBulkConfirm = useCallback(async () => {
-    // TODO: Implement actual bulk operation logic
-    toastSuccess(`Bulk ${bulkOperation?.type} completed for ${selectedItems.length} orders`);
-    clearSelection();
-    setBulkDialogOpen(false);
-    setBulkOperation(null);
-  }, [bulkOperation, selectedItems.length, clearSelection]);
+  const handleBulkConfirm = useCallback(
+    async (statusOverride?: OrderStatus) => {
+      if (!bulkOperation) return;
+
+      const orderIds = selectedItems.map((order) => order.id);
+      if (orderIds.length === 0) {
+        toastError("No orders selected");
+        return;
+      }
+
+      const statusMap: Record<BulkOperationConfig["type"], OrderStatus | null> = {
+        allocate: "picking",
+        ship: "shipped",
+        status_update: statusOverride ?? null,
+      };
+
+      const status = statusMap[bulkOperation.type];
+      if (!status) {
+        toastError("Select a status to continue");
+        return;
+      }
+
+      try {
+        const result = await bulkUpdateStatusMutation.mutateAsync({
+          orderIds,
+          status,
+        });
+
+        if (result.updated > 0) {
+          toastSuccess(`Updated ${result.updated} order${result.updated === 1 ? "" : "s"}`);
+        }
+
+        if (result.failed.length > 0) {
+          toastError(`${result.failed.length} order${result.failed.length === 1 ? "" : "s"} failed`);
+        }
+
+        clearSelection();
+        setBulkDialogOpen(false);
+        setBulkOperation(null);
+      } catch {
+        toastError("Failed to update order statuses");
+        throw new Error("Bulk status update failed");
+      }
+    },
+    [bulkOperation, selectedItems, clearSelection, bulkUpdateStatusMutation]
+  );
 
   // Convert selected items to bulk operation format
   const bulkOperationOrders: OrderBulkOperation[] = useMemo(
@@ -261,6 +298,7 @@ export function OrdersListContainer({
       selectedItems.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
+        customerId: order.customer?.id ?? null,
         customerName: order.customer?.name ?? "Unknown",
         total: order.total ?? 0,
         currentStatus: order.status,
@@ -268,18 +306,34 @@ export function OrdersListContainer({
     [selectedItems]
   );
 
+  // Shared filter change handler
+  const handleFiltersChange = useCallback(
+    (nextFilters: OrderFiltersState) => {
+      setPage(1);
+      clearSelection();
+      onFiltersChange(nextFilters);
+    },
+    [onFiltersChange, clearSelection]
+  );
+
+  // Clear all filters handler
+  const handleClearFilters = useCallback(() => {
+    setPage(1);
+    clearSelection();
+    onFiltersChange(DEFAULT_ORDER_FILTERS);
+  }, [onFiltersChange, clearSelection]);
+
+  // Extract icons from config for bulk action buttons
+  const AllocateIcon = OPERATION_CONFIGS.allocate.icon;
+  const ShipIcon = OPERATION_CONFIGS.ship.icon;
+  const StatusIcon = OPERATION_CONFIGS.status_update.icon;
+
   return (
-    <>
-      <ConfirmationDialog />
-      <div className="space-y-4">
+    <div className="space-y-3">
         <DomainFilterBar<OrderFiltersState>
           config={ORDER_FILTER_CONFIG}
           filters={filters}
-          onFiltersChange={(nextFilters) => {
-            setPage(1);
-            clearSelection();
-            onFiltersChange(nextFilters);
-          }}
+          onFiltersChange={handleFiltersChange}
           defaultFilters={DEFAULT_ORDER_FILTERS}
           resultCount={total}
         />
@@ -287,15 +341,15 @@ export function OrdersListContainer({
         {/* Bulk Actions Bar */}
         <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
           <Button size="sm" variant="outline" onClick={() => openBulkDialog("allocate")}>
-            <Package className="h-4 w-4 mr-1" />
+            <AllocateIcon className="h-4 w-4 mr-1" />
             Allocate
           </Button>
           <Button size="sm" variant="outline" onClick={() => openBulkDialog("ship")}>
-            <Truck className="h-4 w-4 mr-1" />
+            <ShipIcon className="h-4 w-4 mr-1" />
             Ship
           </Button>
           <Button size="sm" variant="outline" onClick={() => openBulkDialog("status_update")}>
-            <CheckCircle className="h-4 w-4 mr-1" />
+            <StatusIcon className="h-4 w-4 mr-1" />
             Update Status
           </Button>
         </BulkActionsBar>
@@ -303,7 +357,15 @@ export function OrdersListContainer({
         <OrdersListPresenter
           orders={orders}
           isLoading={isOrdersLoading}
-          error={ordersError as Error | null}
+          error={ordersError instanceof Error ? ordersError : null}
+          onRetry={() => {
+            // Refetch orders on retry
+            void refetchOrders();
+          }}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          onClearFilters={handleClearFilters}
+          onCreateOrder={onCreateOrder}
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
           isPartiallySelected={isPartiallySelected}
@@ -321,6 +383,7 @@ export function OrdersListContainer({
           pageSize={DISPLAY_PAGE_SIZE}
           total={total}
           onPageChange={setPage}
+          fromIssueId={fromIssueId}
         />
 
         {/* Bulk Operations Dialog */}
@@ -330,9 +393,9 @@ export function OrdersListContainer({
           operation={bulkOperation}
           orders={bulkOperationOrders}
           onConfirm={handleBulkConfirm}
+          isLoading={bulkUpdateStatusMutation.isPending}
         />
       </div>
-    </>
   );
 }
 

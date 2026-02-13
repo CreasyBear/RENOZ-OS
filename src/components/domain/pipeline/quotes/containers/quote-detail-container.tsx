@@ -21,10 +21,10 @@ import {
   Send,
   Download,
   History,
+  Trash2,
 } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -33,27 +33,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { cn } from '@/lib/utils';
+import { EntityActivityLogger } from '@/components/shared/activity';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toastSuccess, toastError } from '@/hooks';
-import { useQuoteVersion, useQuoteVersions } from '@/hooks/pipeline/use-quotes';
+import { useQuoteVersion, useQuoteVersions, useDeleteQuote } from '@/hooks/pipeline';
 import { useOpportunity } from '@/hooks/pipeline';
 import { useGenerateQuotePdf, useSendQuote } from '@/hooks/pipeline/use-quote-mutations';
 import { useUnifiedActivities } from '@/hooks/activities';
+import { useTrackView } from '@/hooks/search';
 import { QuoteDetailView } from '../views/quote-detail-view';
 import {
-  QUOTE_STATUS_CONFIG,
   getQuoteDisplayStatus,
   type QuoteDisplayStatus,
 } from '../quote-status-config';
+import type { Opportunity } from '@/lib/schemas/pipeline';
+import { isValidOpportunityMetadata } from '@/lib/schemas/pipeline';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface QuoteDetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
   /** Header action buttons */
   headerActions: React.ReactNode;
   /** Main content */
@@ -108,6 +119,7 @@ export function QuoteDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('overview');
   const [showMetaPanel, setShowMetaPanel] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Panel Toggle Handler
@@ -125,6 +137,7 @@ export function QuoteDetailContainer({
     error: quoteError,
     refetch: refetchQuote,
   } = useQuoteVersion({ versionId: quoteVersionId });
+  useTrackView('quote', quoteData?.quoteVersion?.id, quoteData?.quoteVersion ? `Quote v${quoteData.quoteVersion.versionNumber}` : undefined, undefined, `/pipeline/quotes/${quoteVersionId}`);
 
   // Fetch opportunity once we have the quote
   const opportunityId = quoteData?.quoteVersion?.opportunityId;
@@ -155,11 +168,18 @@ export function QuoteDetailContainer({
     enabled: !!opportunityId,
   });
 
+  const { onLogActivity, loggerProps } = useEntityActivityLogging({
+    entityType: 'opportunity',
+    entityId: opportunityId ?? '',
+    entityLabel: `Quote: ${opportunityData?.opportunity?.title ?? 'Opportunity'}`,
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
   // Mutations
   // ─────────────────────────────────────────────────────────────────────────
   const generatePdfMutation = useGenerateQuotePdf();
   const sendQuoteMutation = useSendQuote();
+  const deleteMutation = useDeleteQuote();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -215,10 +235,43 @@ export function QuoteDetailContainer({
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Derived State
+  // Derived State - cast types for presenter compatibility
   // ─────────────────────────────────────────────────────────────────────────
   const quote = quoteData?.quoteVersion;
-  const opportunity = opportunityData?.opportunity;
+
+  const handleDelete = useCallback(async () => {
+    if (!quote) return;
+
+    try {
+      await deleteMutation.mutateAsync(quote.id);
+      toastSuccess('Quote deleted successfully');
+      setDeleteDialogOpen(false);
+      navigate({ to: '/pipeline' });
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Failed to delete quote');
+    }
+  }, [deleteMutation, quote, navigate]);
+  // Transform opportunity to handle Date/string differences from server
+  const opportunity = useMemo((): Opportunity | undefined => {
+    const rawOpp = opportunityData?.opportunity;
+    if (!rawOpp) return undefined;
+    return {
+      ...rawOpp,
+      expectedCloseDate: rawOpp.expectedCloseDate
+        ? new Date(rawOpp.expectedCloseDate)
+        : null,
+      actualCloseDate: rawOpp.actualCloseDate
+        ? new Date(rawOpp.actualCloseDate)
+        : null,
+      followUpDate: rawOpp.followUpDate
+        ? new Date(rawOpp.followUpDate)
+        : null,
+      quoteExpiresAt: rawOpp.quoteExpiresAt
+        ? new Date(rawOpp.quoteExpiresAt)
+        : null,
+      metadata: isValidOpportunityMetadata(rawOpp.metadata) ? rawOpp.metadata : null,
+    };
+  }, [opportunityData]);
   const customer = opportunityData?.customer;
   const versions = versionsData?.versions ?? [];
   const isLoading = isLoadingQuote || (!!opportunityId && isLoadingOpportunity);
@@ -227,9 +280,6 @@ export function QuoteDetailContainer({
     if (!opportunity) return 'draft';
     return getQuoteDisplayStatus(opportunity.quoteExpiresAt);
   }, [opportunity]);
-
-  const statusConfig = QUOTE_STATUS_CONFIG[displayStatus];
-  const StatusIcon = statusConfig?.icon;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
@@ -240,7 +290,6 @@ export function QuoteDetailContainer({
       return (
         <>
           {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
             headerActions: <Skeleton className="h-10 w-32" />,
             content: loadingContent,
           })}
@@ -266,7 +315,6 @@ export function QuoteDetailContainer({
       return (
         <>
           {children({
-            headerTitle: 'Quote Not Found',
             headerActions: null,
             content: errorContent,
           })}
@@ -277,20 +325,8 @@ export function QuoteDetailContainer({
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render: Header Elements
+  // Render: Header Actions
   // ─────────────────────────────────────────────────────────────────────────
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <span className="text-xl font-semibold">Quote v{quote.versionNumber}</span>
-      {statusConfig && StatusIcon && (
-        <Badge className={cn('gap-1', `bg-${statusConfig.color}-100 text-${statusConfig.color}-800`)}>
-          <StatusIcon className="h-3 w-3" />
-          {statusConfig.label}
-        </Badge>
-      )}
-    </div>
-  );
-
   const headerActions = (
     <div className="flex items-center gap-2">
       {/* Primary Actions */}
@@ -339,6 +375,18 @@ export function QuoteDetailContainer({
             <Copy className="h-4 w-4 mr-2" />
             Copy Link
           </DropdownMenuItem>
+          {displayStatus !== 'accepted' && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setDeleteDialogOpen(true)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -348,34 +396,61 @@ export function QuoteDetailContainer({
   // Render: Main Content
   // ─────────────────────────────────────────────────────────────────────────
   const content = (
-    <QuoteDetailView
-      quote={quote}
-      opportunity={opportunity ?? null}
-      customer={customer ?? null}
-      versions={versions}
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      showMetaPanel={showMetaPanel}
-      onToggleMetaPanel={handleToggleMetaPanel}
-      activities={activities}
-      activitiesLoading={activitiesLoading}
-      activitiesError={activitiesError}
-      className={className}
-    />
+    <>
+      <QuoteDetailView
+        quote={quote}
+        opportunity={opportunity ?? null}
+        customer={customer ?? null}
+        versions={versions}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        showMetaPanel={showMetaPanel}
+        onToggleMetaPanel={handleToggleMetaPanel}
+        activities={activities}
+        activitiesLoading={activitiesLoading}
+        activitiesError={activitiesError}
+        onLogActivity={opportunityId ? onLogActivity : undefined}
+        className={className}
+      />
+
+      {opportunityId && <EntityActivityLogger {...loggerProps} />}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Quote</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this quote (v{quote.versionNumber})? This action cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: With Render Props or Default
   // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
   // Default rendering (standalone usage)
   return (
     <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
+      <div className="flex items-center justify-end mb-6">
         {headerActions}
       </div>
       {content}

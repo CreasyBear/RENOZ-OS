@@ -7,8 +7,6 @@
  */
 
 import { memo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   FileEdit,
   Clock,
@@ -39,7 +37,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useOrgFormat } from "@/hooks/use-org-format";
-import { listAmendments } from "@/server/functions/orders/order-amendments";
+import { useAmendments } from "@/hooks/orders";
 import type { AmendmentStatus, AmendmentType, AmendmentChanges, FinancialImpact } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -133,14 +131,10 @@ export const AmendmentList = memo(function AmendmentList({
   const { formatCurrency } = useOrgFormat();
   const formatCurrencyDisplay = (amount: number) =>
     formatCurrency(amount, { cents: false, showCents: true });
-  // Fetch amendments
-  const { data: amendments, isLoading, error } = useQuery<AmendmentListItem[]>({
-    queryKey: queryKeys.orders.amendments(orderId),
-    queryFn: async (): Promise<AmendmentListItem[]> => {
-      const result = await listAmendments({ data: { orderId } }) as { amendments: AmendmentListItem[] };
-      return result.amendments;
-    },
-  });
+
+  // Fetch amendments using hook
+  const { data: amendmentsData, isLoading, error } = useAmendments({ orderId });
+  const amendments = (amendmentsData as { amendments: AmendmentListItem[] } | undefined)?.amendments;
 
   if (isLoading) {
     return (

@@ -20,22 +20,29 @@ import type {
   CreateNoteInput,
   UpdateNoteInput,
   NoteType,
+  ListNotesResponse,
 } from '@/lib/schemas/jobs/workstreams-notes';
 
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
 
-export function useNotes(projectId: string, options: { 
+export function useNotes(projectId: string, options: {
   siteVisitId?: string;
   noteType?: NoteType;
   enabled?: boolean;
 } = {}) {
   const { siteVisitId, noteType, enabled } = options;
-  
-  return useQuery({
-    queryKey: [...queryKeys.projectNotes.byProject(projectId), { siteVisitId, noteType }],
-    queryFn: () => listNotes({ data: { projectId, siteVisitId, noteType } }),
+
+  return useQuery<ListNotesResponse>({
+    queryKey: queryKeys.projectNotes.byProjectFiltered(projectId, { siteVisitId, noteType }),
+    queryFn: async () => {
+      const result = await listNotes({
+        data: { projectId, siteVisitId, noteType } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled ?? !!projectId,
   });
 }
@@ -43,7 +50,13 @@ export function useNotes(projectId: string, options: {
 export function useNotesStats(projectId: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectNotes.stats(projectId),
-    queryFn: () => getProjectNotesStats({ data: { projectId } }),
+    queryFn: async () => {
+      const result = await getProjectNotesStats({
+        data: { projectId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options.enabled ?? !!projectId,
   });
 }
@@ -55,7 +68,13 @@ export function useNotesStats(projectId: string, options: { enabled?: boolean } 
 export function useNote(id: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectNotes.detail(id),
-    queryFn: () => getNote({ data: { id } }),
+    queryFn: async () => {
+      const result = await getNote({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options.enabled ?? !!id,
   });
 }

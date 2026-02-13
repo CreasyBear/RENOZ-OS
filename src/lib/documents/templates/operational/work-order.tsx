@@ -8,10 +8,12 @@
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   DocumentHeader,
+  FixedDocumentHeader,
   AddressBlock,
   PageNumber,
   WorkOrderSignOff,
   pageMargins,
+  fixedHeaderClearance,
   colors,
   spacing,
   fontSize,
@@ -35,6 +37,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    marginTop: fixedHeaderClearance,
   },
   // Two-column layout for customer and job info
   twoColumn: {
@@ -121,8 +124,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border.light,
   },
   checkbox: {
-    width: 14,
-    height: 14,
+    width: 18,
+    height: 18,
     borderWidth: 1,
     borderColor: colors.border.medium,
     marginRight: spacing.sm,
@@ -279,7 +282,7 @@ export interface WorkOrderMaterial {
 /**
  * Priority levels for work orders
  */
-export type WorkOrderPriority = "low" | "medium" | "high" | "urgent";
+export type WorkOrderPriority = "low" | "medium" | "normal" | "high" | "urgent";
 
 /**
  * Work order document data
@@ -305,6 +308,8 @@ export interface WorkOrderDocumentData {
   priority?: WorkOrderPriority | null;
   /** Job type/category */
   jobType?: string | null;
+  /** Job title (from job.name or job.title) */
+  jobTitle?: string | null;
   /** Customer information */
   customer: {
     id: string;
@@ -458,7 +463,7 @@ function MaterialsSection({ materials }: { materials: WorkOrderMaterial[] }) {
               </Text>
             )}
           </View>
-          <Text style={styles.materialQty}>{material.quantity}</Text>
+          <Text style={styles.materialQty}>{String(material.quantity)}</Text>
         </View>
       ))}
     </View>
@@ -475,7 +480,7 @@ function WorkOrderContent({
   showMaterials = true,
   showCustomerSignature = true,
 }: WorkOrderPdfTemplateProps) {
-  const { locale } = useOrgDocument();
+  const { organization, locale } = useOrgDocument();
 
   // Build site address
   const siteAddress = data.siteAddress
@@ -497,6 +502,11 @@ function WorkOrderContent({
 
   return (
     <Page size="A4" style={styles.page}>
+      <FixedDocumentHeader
+        orgName={organization.name}
+        documentType="Work Order"
+        documentNumber={data.documentNumber}
+      />
       <View style={styles.content}>
         {/* Header with logo and document info */}
         <DocumentHeader
@@ -690,6 +700,8 @@ export function WorkOrderPdfDocument({
         author={organization.name}
         subject={`Work Order for ${data.customer.name}`}
         creator="Renoz CRM"
+        language="en-AU"
+        keywords={`work order, ${data.documentNumber}, ${data.customer.name}`}
       >
         <WorkOrderContent
           data={data}

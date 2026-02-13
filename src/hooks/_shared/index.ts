@@ -14,8 +14,10 @@ export * from './use-sidebar';
 // --- Persistence ---
 export * from './use-persisted-state';
 export * from './use-form-draft';
+export * from './use-alert-dismissals';
 
 // --- Feedback ---
+export * from './use-cooldown';
 export * from './use-toast';
 export * from './use-confirmation';
 export * from './use-loading-state';
@@ -32,3 +34,6 @@ export * from './use-selection';
 
 // --- Layout ---
 export * from './use-context-panel';
+
+// --- Admin ---
+export * from './use-audit-logs';

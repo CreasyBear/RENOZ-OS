@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + helpers */
 /**
  * Permission Guard Component
  *

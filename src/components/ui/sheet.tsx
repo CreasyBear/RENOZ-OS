@@ -9,9 +9,30 @@ function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
 }
 
 function SheetTrigger({
+  children,
+  asChild,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
-  return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
+  const childCount = React.Children.count(children)
+  if (childCount === 0) {
+    return null
+  }
+
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const shouldFallback = !!asChild && !isSingleElement
+
+  return (
+    <SheetPrimitive.Trigger
+      data-slot="sheet-trigger"
+      asChild={shouldFallback ? false : asChild}
+      {...props}
+    >
+      {children}
+    </SheetPrimitive.Trigger>
+  )
 }
 
 function SheetClose({

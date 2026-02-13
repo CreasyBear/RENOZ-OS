@@ -11,10 +11,12 @@ import {
   timestamp,
   index,
   uniqueIndex,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { customers } from "../customers/customers";
 import { contacts } from "../customers/customers";
 import { jobAssignments } from "../jobs/job-assignments";
@@ -57,27 +59,7 @@ export const customerPortalSessions = pgTable(
       table.organizationId,
       table.jobAssignmentId
     ),
-    selectPolicy: pgPolicy("portal_sessions_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("portal_sessions_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("portal_sessions_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("portal_sessions_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("portal_sessions"),
   })
 );
 

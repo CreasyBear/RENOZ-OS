@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import { paginationSchema, filterSchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // SHARED ENUMS
@@ -97,6 +98,47 @@ export const updateGroupMemberRoleSchema = z.object({
 
 export type UpdateGroupMemberRole = z.infer<typeof updateGroupMemberRoleSchema>;
 
+/** User profile (avatar, preferences, etc.) */
+export interface UserProfile {
+  avatarUrl?: string;
+  [key: string]: unknown;
+}
+
+/** User list item for DataTable (aligns with listUsers return) */
+export interface UserTableItem {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+/** User group (for display in user detail) */
+export interface UserGroup {
+  groupId: string;
+  groupName: string;
+  role: GroupRole;
+  joinedAt: Date;
+}
+
+/** User with groups relation */
+export interface UserWithGroups {
+  id: string;
+  authId: string;
+  organizationId: string;
+  email: string;
+  name: string | null;
+  role: string; // UserRole from auth schemas
+  status: string; // UserStatus from auth schemas
+  type: string | null;
+  profile: UserProfile | null;
+  preferences: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+  groups: UserGroup[];
+}
+
 /** Group member output */
 export const groupMemberSchema = z.object({
   id: z.string().uuid(),
@@ -117,6 +159,48 @@ export const groupMemberSchema = z.object({
 });
 
 export type GroupMember = z.infer<typeof groupMemberSchema>;
+
+/** Group member role (alias for GroupRole, used in member display contexts) */
+export type GroupMemberRole = GroupRole;
+
+/** Group member item for display (e.g. group detail members list) */
+export interface MemberItem {
+  id: string;
+  groupId: string;
+  userId: string;
+  role: GroupMemberRole;
+  joinedAt: Date;
+  addedBy: string;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+    status: string;
+  };
+}
+
+// ============================================================================
+// ACTIVITY (user activity feed)
+// ============================================================================
+
+/** Single activity item in user activity feed */
+export interface ActivityItem {
+  id: string;
+  action: string;
+  entityType: string;
+  timestamp: Date;
+}
+
+/** Paginated activity result */
+export interface ActivityResult {
+  items: ActivityItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
 
 // ============================================================================
 // DELEGATIONS
@@ -212,8 +296,8 @@ export const bulkSendInvitationsSchema = z.object({
 
 export type BulkSendInvitations = z.infer<typeof bulkSendInvitationsSchema>;
 
-/** Accept an invitation */
-export const acceptInvitationSchema = z
+/** Accept an invitation (API payload - token, password, etc.) */
+export const acceptInvitationApiSchema = z
   .object({
     token: z.string().min(1, 'Token is required'),
     password: z
@@ -231,7 +315,7 @@ export const acceptInvitationSchema = z
     path: ['confirmPassword'],
   });
 
-export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;
+export type AcceptInvitation = z.infer<typeof acceptInvitationApiSchema>;
 
 /** Invitation output */
 export const invitationSchema = z.object({
@@ -263,6 +347,47 @@ export const invitationFilterSchema = paginationSchema.extend({
 
 export type InvitationFilter = z.infer<typeof invitationFilterSchema>;
 
+export const invitationCursorSchema = cursorPaginationSchema.merge(
+  z.object({ status: invitationStatusSchema.optional() })
+);
+export type InvitationCursorQuery = z.infer<typeof invitationCursorSchema>;
+
+/** Batch invitation item (for CSV import) */
+export const batchInvitationItemSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['admin', 'manager', 'sales', 'operations', 'support', 'viewer']),
+  personalMessage: z.string().optional(),
+});
+
+export type BatchInvitationItem = z.infer<typeof batchInvitationItemSchema>;
+
+/** Batch send invitations input */
+export const batchSendInvitationsSchema = z.object({
+  invitations: z.array(batchInvitationItemSchema).min(1).max(100),
+});
+
+export type BatchSendInvitationsInput = z.infer<typeof batchSendInvitationsSchema>;
+
+/** Result of a single batch invitation attempt */
+export interface BatchInvitationResult {
+  email: string;
+  success: boolean;
+  error?: string;
+  invitationId?: string;
+}
+
+/** Session info for active sessions list */
+export interface SessionInfo {
+  id: string;
+  device: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+  browser: string;
+  ipAddress: string | null;
+  lastActiveAt: Date | null;
+  createdAt: Date;
+  isCurrent: boolean;
+}
+
 // ============================================================================
 // ONBOARDING
 // ============================================================================
@@ -290,7 +415,7 @@ export const onboardingStepSchema = z.object({
   isCompleted: z.boolean(),
   completedAt: z.coerce.date().nullable(),
   dismissedAt: z.coerce.date().nullable(),
-  metadata: z.record(z.string(), z.any()).nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
 });
 
 export type OnboardingStep = z.infer<typeof onboardingStepSchema>;
@@ -313,7 +438,7 @@ export type OnboardingStatus = z.infer<typeof onboardingStatusSchema>;
 export const setPreferenceSchema = z.object({
   category: z.string().min(1).max(50),
   key: z.string().min(1).max(100),
-  value: z.any(), // Can be any JSON value
+  value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.record(z.string(), z.any()), z.array(z.any())]),
 });
 
 export type SetPreference = z.infer<typeof setPreferenceSchema>;
@@ -345,7 +470,7 @@ export const preferenceSchema = z.object({
   userId: z.string().uuid(),
   category: z.string(),
   key: z.string(),
-  value: z.any(),
+  value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.record(z.string(), z.any()), z.array(z.any())]),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
@@ -362,9 +487,14 @@ export const auditLogFilterSchema = paginationSchema.merge(filterSchema).extend(
   action: z.string().optional(),
   entityType: z.string().optional(),
   entityId: z.string().uuid().optional(),
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional(),
 });
 
 export type AuditLogFilter = z.infer<typeof auditLogFilterSchema>;
+
+// Alias for backward compatibility (query-keys.ts used plural)
+export type AuditLogsFilters = AuditLogFilter;
 
 /** Audit log output */
 export const auditLogSchema = z.object({
@@ -374,12 +504,12 @@ export const auditLogSchema = z.object({
   action: z.string(),
   entityType: z.string(),
   entityId: z.string().uuid().nullable(),
-  oldValues: z.record(z.string(), z.any()).nullable(),
-  newValues: z.record(z.string(), z.any()).nullable(),
+  oldValues: z.record(z.string(), z.unknown()).nullable(),
+  newValues: z.record(z.string(), z.unknown()).nullable(),
   ipAddress: z.string().nullable(),
   userAgent: z.string().nullable(),
   timestamp: z.coerce.date(),
-  metadata: z.record(z.string(), z.any()).nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
   // Joined user info
   user: z
     .object({
@@ -391,6 +521,22 @@ export const auditLogSchema = z.object({
 });
 
 export type AuditLog = z.infer<typeof auditLogSchema>;
+
+// ============================================================================
+// GROUP MEMBERS LISTING
+// ============================================================================
+
+/** List group members schema */
+export const listGroupMembersSchema = paginationSchema.extend({
+  groupId: z.string().uuid(),
+});
+
+export type ListGroupMembersInput = z.infer<typeof listGroupMembersSchema>;
+
+export const listGroupsCursorSchema = cursorPaginationSchema.merge(
+  z.object({ includeInactive: z.boolean().optional().default(false) })
+);
+export type ListGroupsCursorQuery = z.infer<typeof listGroupsCursorSchema>;
 
 // ============================================================================
 // USER ACTIVITY
@@ -483,3 +629,61 @@ export const bulkExportSchema = z.object({
 });
 
 export type BulkExport = z.infer<typeof bulkExportSchema>;
+
+// ============================================================================
+// TRANSFER OWNERSHIP
+// ============================================================================
+
+/** Transfer organization ownership */
+export const transferOwnershipSchema = z.object({
+  newOwnerId: z.string().uuid(),
+});
+
+export type TransferOwnership = z.infer<typeof transferOwnershipSchema>;
+
+// ============================================================================
+// BULK UPDATE (server function input)
+// ============================================================================
+
+/** Bulk update users — server function input */
+export const bulkUpdateServerSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1).max(100),
+  updates: z.object({
+    role: z.enum(['admin', 'manager', 'sales', 'operations', 'support', 'viewer']).optional(),
+    status: z.enum(['active', 'suspended']).optional(),
+  }),
+});
+
+export type BulkUpdateServer = z.infer<typeof bulkUpdateServerSchema>;
+
+// ============================================================================
+// EXPORT USERS (server function input)
+// ============================================================================
+
+/** Export users — server function input */
+export const exportUsersServerSchema = z.object({
+  format: z.enum(['json', 'csv']).default('csv'),
+  userIds: z.array(z.string().uuid()).optional(),
+});
+
+export type ExportUsersServer = z.infer<typeof exportUsersServerSchema>;
+
+// ============================================================================
+// PREFERENCE CATEGORIES (client-safe constants)
+// ============================================================================
+
+/**
+ * Preference categories for user settings.
+ * Mirrors drizzle/schema/users/user-preferences.ts PREFERENCE_CATEGORIES.
+ */
+export const PREFERENCE_CATEGORIES = {
+  APPEARANCE: "appearance",
+  NOTIFICATIONS: "notifications",
+  DASHBOARD: "dashboard",
+  DATA_DISPLAY: "data_display",
+  SHORTCUTS: "shortcuts",
+  ACCESSIBILITY: "accessibility",
+  LOCALIZATION: "localization",
+} as const;
+
+export type PreferenceCategory = typeof PREFERENCE_CATEGORIES[keyof typeof PREFERENCE_CATEGORIES];

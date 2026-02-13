@@ -11,7 +11,8 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, gte, lte, sql, count, sum, avg } from 'drizzle-orm';
+import { z } from 'zod';
+import { eq, and, gte, lte, sql, count, sum, avg, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   warranties,
@@ -30,6 +31,8 @@ import {
   getCycleCountAtClaimSchema,
   getExtensionVsResolutionSchema,
   exportWarrantyAnalyticsSchema,
+  claimsTrendRowSchema,
+  slaComplianceMetricsRowSchema,
   type WarrantyAnalyticsSummary,
   type ClaimsByProductResult,
   type ClaimsTrendResult,
@@ -200,8 +203,8 @@ export const getWarrantyAnalyticsSummary = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(warrantyClaims.organizationId, ctx.organizationId),
-          sql`${warrantyClaims.status} != 'resolved'`,
-          sql`${warrantyClaims.status} != 'denied'`
+          ne(warrantyClaims.status, 'resolved'),
+          ne(warrantyClaims.status, 'denied')
         )
       );
 
@@ -351,13 +354,8 @@ export const getClaimsTrend = createServerFn({ method: 'GET' })
       conditions.push(eq(warrantyClaims.claimType, claimType));
     }
 
-    // Get claims grouped by month
-    const results = await db.execute<{
-      month: string;
-      claims_count: number;
-      avg_cost: number;
-      total_cost: number;
-    }>(sql`
+    // RAW SQL (Phase 11 Keep): Raw aggregations, DATE_TRUNC. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
+    const rawResults = await db.execute(sql`
       SELECT
         TO_CHAR(DATE_TRUNC('month', ${warrantyClaims.submittedAt}::timestamp), 'YYYY-MM') as month,
         COUNT(*) as claims_count,
@@ -372,24 +370,21 @@ export const getClaimsTrend = createServerFn({ method: 'GET' })
       ORDER BY month ASC
     `);
 
-    // Cast result to typed array
-    const resultsData = results as unknown as {
-      month: string;
-      claims_count: number;
-      avg_cost: number;
-      total_cost: number;
-    }[];
+    const rows = Array.isArray(rawResults)
+      ? rawResults
+      : (rawResults as { rows: unknown[] }).rows ?? [];
+    const resultsData = z.array(claimsTrendRowSchema).parse(rows);
 
-    // Format month labels
+    // Format month labels (map snake_case to camelCase in return)
     return {
       items: resultsData.map((r) => {
         const date = new Date(r.month + '-01');
         return {
           month: r.month,
           monthLabel: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-          claimsCount: Number(r.claims_count),
-          averageCost: Math.round(Number(r.avg_cost)),
-          totalCost: Math.round(Number(r.total_cost)),
+          claimsCount: r.claims_count,
+          averageCost: Math.round(r.avg_cost),
+          totalCost: Math.round(r.total_cost),
         };
       }),
     };
@@ -469,15 +464,7 @@ export const getSlaComplianceMetrics = createServerFn({ method: 'GET' })
     }
 
     // Get SLA metrics using window for response/resolution times
-    const metrics = await db.execute<{
-      total_claims: number;
-      resolved_claims: number;
-      pending_claims: number;
-      within_response_sla: number;
-      within_resolution_sla: number;
-      avg_response_hours: number;
-      avg_resolution_days: number;
-    }>(sql`
+    const rawMetrics = await db.execute(sql`
       WITH claim_metrics AS (
         SELECT
           id,
@@ -508,18 +495,11 @@ export const getSlaComplianceMetrics = createServerFn({ method: 'GET' })
       FROM claim_metrics
     `);
 
-    // Cast result to typed array
-    const metricsData = metrics as unknown as {
-      total_claims: number;
-      resolved_claims: number;
-      pending_claims: number;
-      within_response_sla: number;
-      within_resolution_sla: number;
-      avg_response_hours: number;
-      avg_resolution_days: number;
-    }[];
-
-    const m = metricsData[0] || {
+    const metricsRows = Array.isArray(rawMetrics)
+      ? rawMetrics
+      : (rawMetrics as { rows: unknown[] }).rows ?? [];
+    const metricsData = z.array(slaComplianceMetricsRowSchema).parse(metricsRows);
+    const m = metricsData[0] ?? {
       total_claims: 0,
       resolved_claims: 0,
       pending_claims: 0,
@@ -529,10 +509,10 @@ export const getSlaComplianceMetrics = createServerFn({ method: 'GET' })
       avg_resolution_days: 0,
     };
 
-    const totalClaims = Number(m.total_claims);
-    const resolvedClaims = Number(m.resolved_claims);
-    const breachedResponse = totalClaims - Number(m.within_response_sla);
-    const breachedResolution = resolvedClaims - Number(m.within_resolution_sla);
+    const totalClaims = m.total_claims;
+    const resolvedClaims = m.resolved_claims;
+    const breachedResponse = totalClaims - m.within_response_sla;
+    const breachedResolution = resolvedClaims - m.within_resolution_sla;
 
     return {
       responseComplianceRate:

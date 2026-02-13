@@ -59,6 +59,8 @@ export interface POListPresenterProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
+  /** Retry handler for error state */
+  onRetry?: () => void;
   /** Additional className */
   className?: string;
 }
@@ -190,6 +192,7 @@ export const POListPresenter = memo(function POListPresenter({
   pageSize,
   total,
   onPageChange,
+  onRetry,
   className,
 }: POListPresenterProps) {
   // Error state
@@ -199,6 +202,7 @@ export const POListPresenter = memo(function POListPresenter({
         variant="error"
         title="Failed to load purchase orders"
         description={error.message ?? "An unexpected error occurred"}
+        action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
     );

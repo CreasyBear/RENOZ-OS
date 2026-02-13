@@ -54,45 +54,15 @@ import {
 import { cn } from "@/lib/utils";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import { ScheduledReportForm } from "@/components/domain/settings/scheduled-report-form";
+import { ReportFavoriteButton } from "./report-favorite-button";
 import { Button } from "@/components/ui/button";
 import type {
-  WinLossAnalysisResult,
-  Competitor,
-} from "@/hooks/reports";
-import type { CreateScheduledReportInput } from "@/lib/schemas/reports/scheduled-reports";
+  WinLossAnalysisPresenterProps,
+  WinLossAnalysisProps,
+} from "@/lib/schemas/reports/win-loss";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface WinLossAnalysisPresenterProps {
-  /** @source Container: win-loss-analysis-container.tsx - useWinLossAnalysis hook */
-  analysis: WinLossAnalysisResult | undefined;
-  /** @source Container: win-loss-analysis-container.tsx - useCompetitors hook */
-  competitors: Competitor[];
-  /** @source Container: win-loss-analysis-container.tsx - useQuery isLoading */
-  isLoading: boolean;
-  /** @source Container: win-loss-analysis-container.tsx - useState */
-  period: string;
-  /** @source Container: win-loss-analysis-container.tsx - useState setter */
-  onPeriodChange: (period: string) => void;
-  /** @source Container: win-loss-analysis-container.tsx - useCallback */
-  onExport: (format: "pdf" | "excel") => void;
-  /** @source Container: win-loss-analysis-container.tsx - useCallback */
-  onScheduleReport: () => void;
-  /** @source Container: win-loss-analysis-container.tsx - useState */
-  scheduleOpen: boolean;
-  /** @source Container: win-loss-analysis-container.tsx - useState setter */
-  onScheduleOpenChange: (open: boolean) => void;
-  /** @source Container: win-loss-analysis-container.tsx - useCallback */
-  onScheduleSubmit: (input: CreateScheduledReportInput) => Promise<void>;
-  /** @source Container: win-loss-analysis-container.tsx - useMutation isPending */
-  isScheduleSubmitting: boolean;
-  className?: string;
-}
-
-// Keep old interface name for backward compatibility during migration
-export interface WinLossAnalysisProps extends WinLossAnalysisPresenterProps {}
+// Re-export for consumers
+export type { WinLossAnalysisPresenterProps, WinLossAnalysisProps };
 
 // ============================================================================
 // COMPONENT
@@ -179,6 +149,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
               <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
+          <ReportFavoriteButton reportType="win-loss" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">

@@ -12,7 +12,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { orders } from "drizzle/schema";
+import { orders, generatedDocuments } from "drizzle/schema";
 import { client } from "@/trigger/client";
 import { NotFoundError } from "@/lib/server/errors";
 
@@ -136,6 +136,9 @@ const getPackingSlipStatusSchema = z.object({
 
 /**
  * Get the status/URL of a generated packing slip
+ *
+ * Queries generated_documents by (organizationId, entityType='order', entityId=orderId, documentType='packing-slip').
+ * No row = status "pending" (document not yet generated).
  */
 export const getPackingSlipStatus = createServerFn({ method: "GET" })
   .inputValidator(getPackingSlipStatusSchema)
@@ -162,11 +165,35 @@ export const getPackingSlipStatus = createServerFn({ method: "GET" })
       throw new NotFoundError("Order not found", "order");
     }
 
-    // TODO: Once we have generated_documents table, query it here
+    const [doc] = await db
+      .select({
+        storageUrl: generatedDocuments.storageUrl,
+        generatedAt: generatedDocuments.generatedAt,
+      })
+      .from(generatedDocuments)
+      .where(
+        and(
+          eq(generatedDocuments.organizationId, ctx.organizationId),
+          eq(generatedDocuments.entityType, "order"),
+          eq(generatedDocuments.entityId, order.id),
+          eq(generatedDocuments.documentType, "packing-slip")
+        )
+      )
+      .limit(1);
+
+    if (!doc) {
+      return {
+        orderId: order.id,
+        documentType: "packing-slip" as const,
+        status: "pending" as const,
+        url: null,
+      };
+    }
+
     return {
       orderId: order.id,
       documentType: "packing-slip" as const,
-      status: "pending", // TODO: Return actual status once migration is done
-      url: null, // TODO: Return actual URL once migration is done
+      status: "completed" as const,
+      url: doc.storageUrl,
     };
   });

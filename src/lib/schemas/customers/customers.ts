@@ -17,6 +17,7 @@ import {
   idParamSchema,
   percentageSchema,
   currencySchema,
+  flexibleJsonSchema,
 } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
@@ -79,9 +80,9 @@ export const customerCustomFieldsSchema = z
   .optional();
 
 /**
- * Create customer input schema
+ * Create customer input schema (base object - no refinements, for .partial() compatibility)
  */
-export const createCustomerSchema = z.object({
+const createCustomerBaseSchema = z.object({
   // Required fields
   name: z.string().min(1, 'Name is required').max(255),
 
@@ -117,12 +118,39 @@ export const createCustomerSchema = z.object({
   warrantyExpiryAlertOptOut: z.boolean().default(false),
 });
 
+/**
+ * Create customer input schema
+ * ✅ P1 FIX: Business rule - credit hold reason required when credit hold is enabled
+ */
+export const createCustomerSchema = createCustomerBaseSchema.refine(
+  (data) => !data.creditHold || !!data.creditHoldReason,
+  {
+    message: 'Credit hold reason is required when credit hold is enabled',
+    path: ['creditHoldReason'],
+  }
+);
+
 export type CreateCustomer = z.infer<typeof createCustomerSchema>;
 
 /**
  * Update customer input schema
+ * ✅ P1 FIX: Apply same credit hold validation for updates
+ * Note: .partial() must be on base schema (no refinements) per Zod limitation
  */
-export const updateCustomerSchema = createCustomerSchema.partial();
+export const updateCustomerSchema = createCustomerBaseSchema.partial().refine(
+  (data) => {
+    // Only validate if creditHold is being set to true
+    // If creditHold is undefined, skip validation (partial update)
+    if (data.creditHold === true && !data.creditHoldReason) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Credit hold reason is required when enabling credit hold',
+    path: ['creditHoldReason'],
+  }
+);
 
 export type UpdateCustomer = z.infer<typeof updateCustomerSchema>;
 
@@ -195,6 +223,16 @@ export type CustomerCursorQuery = z.infer<typeof customerCursorQuerySchema>;
 
 export const customerParamsSchema = idParamSchema;
 export type CustomerParams = z.infer<typeof customerParamsSchema>;
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+export const bulkAssignTagsDialogSchema = z.object({
+  tagIds: z.array(z.string()).min(1, 'Select at least one tag to continue.'),
+});
+
+export type BulkAssignTagsDialogInput = z.infer<typeof bulkAssignTagsDialogSchema>;
 
 // ============================================================================
 // CONTACT SCHEMAS
@@ -495,6 +533,14 @@ export const bulkAssignTagsSchema = z.object({
 
 export type BulkAssignTags = z.infer<typeof bulkAssignTagsSchema>;
 
+export const bulkUpdateHealthScoresSchema = z.object({
+  customerIds: z.array(z.string().uuid()).min(1).max(100),
+  healthScore: z.number().int().min(0).max(100),
+  reason: z.string().max(500).optional(),
+});
+
+export type BulkUpdateHealthScores = z.infer<typeof bulkUpdateHealthScoresSchema>;
+
 // ============================================================================
 // CUSTOMER MERGE SCHEMAS
 // ============================================================================
@@ -516,8 +562,8 @@ export const createCustomerMergeAuditSchema = z.object({
   mergedCustomerId: z.string().uuid().nullable(),
   action: z.enum(['merged', 'dismissed', 'undone']),
   reason: z.string().max(1000).optional(),
-  mergedData: z.record(z.string(), z.unknown()).default({}),
-  metadata: z.record(z.string(), z.unknown()).default({}),
+  mergedData: flexibleJsonSchema.default({}),
+  metadata: flexibleJsonSchema.default({}),
 });
 
 export type CreateCustomerMergeAudit = z.infer<typeof createCustomerMergeAuditSchema>;
@@ -539,6 +585,15 @@ export const customerMergeAuditFilterSchema = z.object({
 });
 
 export type CustomerMergeAuditFilter = z.infer<typeof customerMergeAuditFilterSchema>;
+
+/** Cursor pagination for merge history (uses performedAt + id for stable sort) */
+export const customerMergeAuditCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    action: z.enum(['merged', 'dismissed', 'undone']).optional(),
+    primaryCustomerId: z.string().uuid().optional(),
+  })
+);
+export type CustomerMergeAuditCursorInput = z.infer<typeof customerMergeAuditCursorSchema>;
 
 // ============================================================================
 // EXPORT SCHEMAS

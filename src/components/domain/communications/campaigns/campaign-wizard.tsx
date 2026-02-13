@@ -23,7 +23,9 @@ import {
 } from "lucide-react";
 import {
   useCreateCampaign,
+  useUpdateCampaign,
   usePopulateCampaignRecipients,
+  useSendCampaign,
 } from "@/hooks/communications/use-campaigns";
 import { RecipientFilterBuilder, type RecipientCriteria } from "./recipient-filter-builder";
 import { CampaignPreviewPanel } from "./campaign-preview-panel";
@@ -60,19 +62,21 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
+import { CommunicationsErrorBoundary } from "../communications-error-boundary";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface CampaignWizardProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: (campaignId: string) => void;
-}
+import type {
+  CampaignWizardProps,
+  WizardStep,
+  Campaign,
+} from "@/lib/schemas/communications";
 
-type WizardStep = "details" | "template" | "recipients" | "preview";
-
+// CampaignFormData is specific to wizard internal state - keep inline
 interface CampaignFormData {
   name: string;
   description: string;
@@ -179,6 +183,7 @@ function validateStep(step: WizardStep, data: CampaignFormData): string[] {
       break;
     case "recipients":
       // Recipients are optional - will include all contacts if no filters
+      // Validation happens after recipient population
       break;
     case "preview":
       // Validation handled by preview panel
@@ -196,17 +201,60 @@ export function CampaignWizard({
   open,
   onOpenChange,
   onSuccess,
+  initialCampaign,
 }: CampaignWizardProps) {
+  return (
+    <CommunicationsErrorBoundary
+      title="Campaign Wizard Error"
+      description="We encountered an error in the campaign wizard. Please try again or contact support if the issue persists."
+    >
+      <CampaignWizardContent
+        open={open}
+        onOpenChange={onOpenChange}
+        onSuccess={onSuccess}
+        initialCampaign={initialCampaign}
+      />
+    </CommunicationsErrorBoundary>
+  );
+}
+
+function CampaignWizardContent({
+  open,
+  onOpenChange,
+  onSuccess,
+  initialCampaign,
+}: CampaignWizardProps) {
+  const isEditMode = !!initialCampaign;
   const [currentStep, setCurrentStep] = useState<WizardStep>("details");
-  const [formData, setFormData] = useState<CampaignFormData>(initialFormData);
+  
+  // Initialize form data from initialCampaign if editing, otherwise use defaults
+  const getInitialFormData = (): CampaignFormData => {
+    if (initialCampaign) {
+      return {
+        name: initialCampaign.name,
+        description: initialCampaign.description || "",
+        templateType: initialCampaign.templateType,
+        templateData: (initialCampaign.templateData || {}) as CampaignFormData["templateData"],
+        recipientCriteria: (initialCampaign.recipientCriteria || {}) as RecipientCriteria,
+        scheduleEnabled: !!initialCampaign.scheduledAt,
+        scheduledAt: initialCampaign.scheduledAt || null,
+        timezone: getLocalTimezone(),
+      };
+    }
+    return initialFormData;
+  };
+
+  const [formData, setFormData] = useState<CampaignFormData>(getInitialFormData());
   const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [recipientCount, setRecipientCount] = useState(0);
   const createCampaignMutation = useCreateCampaign();
+  const updateCampaignMutation = useUpdateCampaign();
   const populateRecipientsMutation = usePopulateCampaignRecipients();
+  const sendCampaignMutation = useSendCampaign();
 
-  // Reset form when dialog closes
+  // Reset form when dialog closes or initialize from initialCampaign
   useEffect(() => {
     if (!open) {
       setCurrentStep("details");
@@ -214,8 +262,12 @@ export function CampaignWizard({
       setErrors([]);
       setIsSubmitting(false);
       setRecipientCount(0);
+    } else if (initialCampaign) {
+      // Initialize form data when opening in edit mode
+      setFormData(getInitialFormData());
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialCampaign?.id]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
   const isFirstStep = currentStepIndex === 0;
@@ -263,29 +315,101 @@ export function CampaignWizard({
         scheduledAt = formData.scheduledAt;
       }
 
-      // Create the campaign
-      const campaign = (await createCampaignMutation.mutateAsync({
+      let campaign: Campaign;
+
+      if (isEditMode && initialCampaign) {
+        // Update existing campaign
+        campaign = await updateCampaignMutation.mutateAsync({
+          id: initialCampaign.id,
+          name: formData.name,
+          description: formData.description || undefined,
+          templateType: formData.templateType as "newsletter",
+          templateData: formData.templateData,
+          recipientCriteria: formData.recipientCriteria,
+          scheduledAt,
+        });
+
+        // For edits, only repopulate recipients if criteria changed
+        // (This is a simplification - in production you might want to compare criteria)
+        try {
+          const populateResult = await populateRecipientsMutation.mutateAsync({
+            campaignId: campaign.id,
+          });
+          
+          if (populateResult.recipientCount === 0) {
+            toast.warning('No recipients found', {
+              description: 'Recipient criteria updated but no recipients match. Campaign saved.',
+            });
+          }
+        } catch (error) {
+          // Recipient population failure is non-critical for edits
+          toast.warning('Campaign updated but failed to refresh recipients', {
+            description: getUserFriendlyMessage(error as Error),
+          });
+        }
+
+        toast.success('Campaign updated successfully');
+        onSuccess?.(campaign.id);
+        onOpenChange(false);
+        return;
+      }
+
+      // Create new campaign
+      campaign = await createCampaignMutation.mutateAsync({
         name: formData.name,
         description: formData.description || undefined,
         templateType: formData.templateType as "newsletter",
         templateData: formData.templateData,
         recipientCriteria: formData.recipientCriteria,
         scheduledAt,
-      })) as { id: string };
-
-      // Populate recipients
-      await populateRecipientsMutation.mutateAsync({
-        campaignId: campaign.id,
       });
 
-      // If not scheduled, trigger send immediately via event
-      // For now we just create the campaign - actual sending is triggered separately
+      // Populate recipients
+      let populateResult;
+      try {
+        populateResult = await populateRecipientsMutation.mutateAsync({
+          campaignId: campaign.id,
+        });
+      } catch (error) {
+        toast.error('Failed to populate recipients', {
+          description: getUserFriendlyMessage(error as Error),
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate recipients were populated
+      if (populateResult.recipientCount === 0) {
+        toast.error('No recipients found', {
+          description: 'Please adjust your recipient filters and try again.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If not scheduled, trigger send immediately
+      if (!scheduledAt) {
+        try {
+          await sendCampaignMutation.mutateAsync({ id: campaign.id });
+          toast.success('Campaign created and sent successfully');
+        } catch (error) {
+          // Campaign created but send failed - still show success but warn user
+          toast.warning('Campaign created but failed to start sending', {
+            description: getUserFriendlyMessage(error as Error) + ' You can send it manually from the campaign detail page.',
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       // Call success callback
+      toast.success('Campaign created successfully');
       onSuccess?.(campaign.id);
       onOpenChange(false);
     } catch (error) {
-      setErrors([error instanceof Error ? error.message : "Failed to create campaign"]);
+      toast.error(isEditMode ? 'Failed to update campaign' : 'Failed to create campaign', {
+        description: getUserFriendlyMessage(error as Error),
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -305,19 +429,25 @@ export function CampaignWizard({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
-          aria-label="Create campaign wizard"
+          aria-label={isEditMode ? "Edit campaign wizard" : "Create campaign wizard"}
         >
           <DialogHeader>
-            <DialogTitle>Create Email Campaign</DialogTitle>
+            <DialogTitle>{isEditMode ? "Edit Email Campaign" : "Create Email Campaign"}</DialogTitle>
             <DialogDescription>
-              Set up your campaign in {STEPS.length} easy steps
+              {isEditMode
+                ? "Update your email campaign settings and recipients."
+                : `Set up your campaign in ${STEPS.length} easy steps`}
             </DialogDescription>
           </DialogHeader>
 
           {/* Step Tabs */}
           <Tabs
             value={currentStep}
-            onValueChange={(v) => handleStepClick(v as WizardStep)}
+            onValueChange={(v) => {
+              if (v === "details" || v === "template" || v === "recipients" || v === "preview") {
+                handleStepClick(v);
+              }
+            }}
             className="flex-1 flex flex-col min-h-0"
           >
             <TabsList className="w-full justify-start">
@@ -553,10 +683,14 @@ export function CampaignWizard({
                 onClick={handleNext}
                 disabled={isSubmitting || (isLastStep && recipientCount === 0)}
               >
-                {isSubmitting ? (
+                {(isSubmitting || populateRecipientsMutation.isPending || sendCampaignMutation.isPending) ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
+                    {populateRecipientsMutation.isPending 
+                      ? "Populating recipients..." 
+                      : sendCampaignMutation.isPending 
+                      ? "Starting send..." 
+                      : "Creating..."}
                   </>
                 ) : isLastStep ? (
                   <>
@@ -568,7 +702,7 @@ export function CampaignWizard({
                     ) : (
                       <>
                         <Send className="h-4 w-4 mr-2" />
-                        Create Campaign
+                        Create & Send
                       </>
                     )}
                   </>
@@ -589,12 +723,18 @@ export function CampaignWizard({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {formData.scheduleEnabled ? "Schedule Campaign?" : "Create Campaign?"}
+              {isEditMode
+                ? formData.scheduleEnabled
+                  ? "Update and Schedule Campaign?"
+                  : "Update Campaign?"
+                : formData.scheduleEnabled
+                  ? "Schedule Campaign?"
+                  : "Send Campaign Now?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {formData.scheduleEnabled ? (
                 <>
-                  This will schedule "<strong>{formData.name}</strong>" to be sent to{" "}
+                  This will schedule &quot;<strong>{formData.name}</strong>&quot; to be sent to{" "}
                   <strong>{recipientCount.toLocaleString()}</strong> recipients on{" "}
                   <strong>
                     {formData.scheduledAt?.toLocaleDateString()} at{" "}
@@ -607,17 +747,37 @@ export function CampaignWizard({
                 </>
               ) : (
                 <>
-                  This will create "<strong>{formData.name}</strong>" with{" "}
-                  <strong>{recipientCount.toLocaleString()}</strong> recipients. You can
-                  then send it from the campaigns list.
+                  This will create &quot;<strong>{formData.name}</strong>&quot; and send it to{" "}
+                  <strong>{recipientCount.toLocaleString()}</strong> recipients immediately.
+                  {recipientCount === 0 && (
+                    <span className="block mt-2 text-destructive font-medium">
+                      ⚠️ No recipients found. Please adjust your recipient filters.
+                    </span>
+                  )}
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSubmit}>
-              {formData.scheduleEnabled ? "Schedule" : "Create"} Campaign
+            <AlertDialogAction 
+              onClick={handleSubmit} 
+              disabled={isSubmitting || populateRecipientsMutation.isPending || sendCampaignMutation.isPending || recipientCount === 0}
+            >
+              {(isSubmitting || populateRecipientsMutation.isPending || sendCampaignMutation.isPending) ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {populateRecipientsMutation.isPending 
+                    ? "Populating recipients..." 
+                    : sendCampaignMutation.isPending 
+                    ? "Starting send..." 
+                    : "Creating..."}
+                </>
+              ) : formData.scheduleEnabled ? (
+                "Schedule"
+              ) : (
+                "Create & Send"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

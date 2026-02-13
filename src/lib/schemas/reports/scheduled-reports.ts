@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { idParamSchema, paginationSchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (match Drizzle schema enums)
@@ -118,6 +119,16 @@ export const listScheduledReportsSchema = paginationSchema.extend({
 
 export type ListScheduledReportsInput = z.infer<typeof listScheduledReportsSchema>;
 
+export const listScheduledReportsCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    isActive: z.boolean().optional(),
+    frequency: reportFrequencySchema.optional(),
+    format: reportFormatSchema.optional(),
+    search: z.string().max(255).optional(),
+  })
+);
+export type ListScheduledReportsCursorInput = z.infer<typeof listScheduledReportsCursorSchema>;
+
 // ============================================================================
 // GET SCHEDULED REPORT
 // ============================================================================
@@ -157,9 +168,15 @@ export const scheduledReportSchema = z.object({
   description: z.string().nullable(),
   frequency: reportFrequencySchema,
   format: reportFormatSchema,
+  scheduleCron: z.string(),
+  timezone: z.string(),
   isActive: z.boolean(),
   lastRunAt: z.coerce.date().nullable(),
   nextRunAt: z.coerce.date().nullable(),
+  lastSuccessAt: z.coerce.date().nullable(),
+  lastErrorAt: z.coerce.date().nullable(),
+  lastError: z.string().nullable(),
+  consecutiveFailures: z.string().nullable(),
   recipients: reportRecipientsSchema,
   metrics: reportMetricsSchema,
   createdAt: z.coerce.date(),

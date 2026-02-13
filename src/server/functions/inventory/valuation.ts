@@ -6,8 +6,10 @@
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json for specification
  */
 
+'use server';
+
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, gt } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, gt, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
@@ -31,6 +33,7 @@ import {
   type InventoryValuationResult,
   type InventoryTurnoverResult,
   type AggregatedAgingItem,
+  type COGSResult,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -39,10 +42,16 @@ import {
 
 type CostLayerRecord = typeof inventoryCostLayers.$inferSelect;
 
-interface COGSResult {
-  cogs: number;
-  costLayers: CostLayerRecord[];
-  remainingLayers: CostLayerRecord[];
+// ============================================================================
+// TYPE HELPERS
+// ============================================================================
+
+/**
+ * Convert decimal string to number for API response.
+ * Drizzle returns decimal columns as strings, but schema expects numbers.
+ */
+function parseDecimal(value: string | number): number {
+  return typeof value === 'string' ? Number(value) : value;
 }
 
 // ============================================================================
@@ -119,10 +128,16 @@ export const getInventoryCostLayers = createServerFn({ method: 'GET' })
       throw new NotFoundError('Inventory item not found', 'inventory');
     }
 
+    // OPTIMIZED: Add organizationId filter for security and to use index
     const layers = await db
       .select()
       .from(inventoryCostLayers)
-      .where(eq(inventoryCostLayers.inventoryId, data.inventoryId))
+      .where(
+        and(
+          eq(inventoryCostLayers.organizationId, ctx.organizationId),
+          eq(inventoryCostLayers.inventoryId, data.inventoryId)
+        )
+      )
       .orderBy(asc(inventoryCostLayers.receivedAt));
 
     // Calculate summary
@@ -252,6 +267,25 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
       .groupBy(locations.id, locations.locationCode, locations.name, locations.capacity)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`));
 
+    // OPTIMIZED: Use LEFT JOIN with aggregation instead of correlated subquery
+    // Create subquery for cost layer counts per product
+    const costLayerCounts = db
+      .select({
+        productId: inventory.productId,
+        costLayerCount: sql<number>`COUNT(DISTINCT ${inventoryCostLayers.id})::int`,
+      })
+      .from(inventoryCostLayers)
+      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+      .where(
+        and(
+          eq(inventory.organizationId, ctx.organizationId),
+          gt(inventoryCostLayers.quantityRemaining, 0),
+          data.locationId ? eq(inventory.locationId, data.locationId) : sql`true`
+        )
+      )
+      .groupBy(inventory.productId)
+      .as('cost_layer_counts');
+
     // Get by product
     const byProduct = await db
       .select({
@@ -266,20 +300,13 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
             ELSE 0
           END::numeric`,
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
-        costLayers: sql<number>`(
-          SELECT COUNT(*)
-          FROM inventory_cost_layers cl
-          INNER JOIN inventory inv2 ON cl.inventory_id = inv2.id
-          WHERE inv2.product_id = ${products.id}
-            AND inv2.organization_id = ${ctx.organizationId}
-            AND cl.quantity_remaining > 0
-            ${data.locationId ? sql`AND inv2.location_id = ${data.locationId}` : sql``}
-        )::int`,
+        costLayers: sql<number>`COALESCE(${costLayerCounts.costLayerCount}, 0)::int`,
       })
       .from(inventory)
       .innerJoin(products, eq(inventory.productId, products.id))
+      .leftJoin(costLayerCounts, eq(costLayerCounts.productId, products.id))
       .where(and(...invConditions))
-      .groupBy(products.id, products.sku, products.name)
+      .groupBy(products.id, products.sku, products.name, costLayerCounts.costLayerCount)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`))
       .limit(50);
 
@@ -351,11 +378,13 @@ export const calculateCOGS = createServerFn({ method: 'GET' })
     }
 
     // Get active cost layers in FIFO order
+    // OPTIMIZED: Add organizationId filter for security and to use index
     const layers = await db
       .select()
       .from(inventoryCostLayers)
       .where(
         and(
+          eq(inventoryCostLayers.organizationId, ctx.organizationId),
           eq(inventoryCostLayers.inventoryId, data.inventoryId),
           gt(inventoryCostLayers.quantityRemaining, 0)
         )
@@ -400,25 +429,48 @@ export const calculateCOGS = createServerFn({ method: 'GET' })
     }
 
     // If not simulating, actually update the layers
-    if (!data.simulate) {
+    if (!data.simulate && usedLayers.length > 0) {
       await db.transaction(async (tx) => {
-        for (let i = 0; i < usedLayers.length; i++) {
-          const layer = layers[i];
-          const quantityUsed = usedLayers[i].quantityRemaining;
-          const newRemaining = layer.quantityRemaining - quantityUsed;
+        // OPTIMIZED: Bulk update using CASE statement instead of sequential updates
+        const layerIds = usedLayers.map((_, i) => layers[i].id);
+        const caseStatement = sql`CASE ${inventoryCostLayers.id}
+          ${sql.join(
+            usedLayers.map((usedLayer, i) => {
+              const layer = layers[i];
+              const quantityUsed = usedLayer.quantityRemaining;
+              const newRemaining = layer.quantityRemaining - quantityUsed;
+              return sql`WHEN ${layer.id} THEN ${newRemaining}`;
+            }),
+            sql` `
+          )}
+          ELSE ${inventoryCostLayers.quantityRemaining}
+        END`;
 
-          await tx
-            .update(inventoryCostLayers)
-            .set({ quantityRemaining: newRemaining })
-            .where(eq(inventoryCostLayers.id, layer.id));
-        }
+        await tx
+          .update(inventoryCostLayers)
+          .set({ quantityRemaining: caseStatement })
+          .where(
+            and(
+              eq(inventoryCostLayers.organizationId, ctx.organizationId),
+              inArray(inventoryCostLayers.id, layerIds)
+            )
+          );
       });
     }
 
+    // Convert unitCost from decimal (string) to number for API response
     return {
       cogs: totalCOGS,
-      costLayers: usedLayers,
-      remainingLayers: updatedLayers.filter((l) => l.quantityRemaining > 0),
+      costLayers: usedLayers.map((layer) => ({
+        ...layer,
+        unitCost: parseDecimal(layer.unitCost),
+      })),
+      remainingLayers: updatedLayers
+        .filter((l) => l.quantityRemaining > 0)
+        .map((layer) => ({
+          ...layer,
+          unitCost: parseDecimal(layer.unitCost),
+        })),
     };
   });
 
@@ -690,8 +742,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
       .from(inventory)
       .where(and(...conditions));
 
-    // Get COGS for period (sum of outbound movements * cost)
-    // Exclude positive adjust movements - only count actual outbound movements
+    // RAW SQL (Phase 11 Keep): CTEs, turnover calculations. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
     const cogsPeriodResult = await db.execute<{ cogs: number }>(
       sql`
         SELECT COALESCE(SUM(ABS(total_cost)), 0)::numeric as cogs
@@ -699,7 +750,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
         WHERE organization_id = ${ctx.organizationId}
           AND movement_type IN ('pick', 'ship')
           AND quantity < 0
-          AND created_at >= NOW() - INTERVAL '${sql.raw(String(periodDays))} days'
+          AND created_at >= NOW() - INTERVAL '1 day' * ${periodDays}
           ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
       `
     );
@@ -712,7 +763,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
     const turnoverRate = avgInventory > 0 ? annualizedCOGS / avgInventory : 0;
     const daysOnHand = turnoverRate > 0 ? 365 / turnoverRate : 0;
 
-    // Get turnover by product (top 20)
+    // Get turnover by product (top 20) - current period
     const turnoverByProduct = await db.execute<{
       productId: string;
       productSku: string;
@@ -730,7 +781,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
           WHERE organization_id = ${ctx.organizationId}
             AND movement_type IN ('pick', 'ship')
             AND quantity < 0
-            AND created_at >= NOW() - INTERVAL '${sql.raw(String(periodDays))} days'
+            AND created_at >= NOW() - INTERVAL '1 day' * ${periodDays}
           GROUP BY product_id
         ),
         product_inventory AS (
@@ -765,6 +816,113 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
       `
     );
 
+    // Get previous period turnover rates for trend calculation
+    // Calculate historical inventory value by reconstructing from movements:
+    // 1. Calculate quantity at end of previous period (sum all movements up to that point)
+    // 2. Calculate weighted average unit cost from receive movements up to that point
+    // 3. Multiply quantity * average cost to get historical inventory value
+    const previousPeriodDays = periodDays;
+    const previousPeriodStart = periodDays * 2;
+    const previousPeriodEnd = periodDays;
+    const previousPeriodEndDate = sql`NOW() - INTERVAL '1 day' * ${previousPeriodEnd}`;
+    const previousTurnoverByProduct = await db.execute<{
+      productId: string;
+      turnoverRate: number;
+    }>(
+      sql`
+        WITH product_cogs_prev AS (
+          SELECT
+            product_id,
+            COALESCE(SUM(ABS(total_cost)), 0) as period_cogs
+          FROM inventory_movements
+          WHERE organization_id = ${ctx.organizationId}
+            AND movement_type IN ('pick', 'ship')
+            AND quantity < 0
+            AND created_at >= ${previousPeriodEndDate}
+            AND created_at < NOW() - INTERVAL '1 day' * ${previousPeriodStart}
+            ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
+          GROUP BY product_id
+        ),
+        -- Calculate historical inventory quantity at end of previous period
+        historical_quantity AS (
+          SELECT
+            product_id,
+            COALESCE(SUM(quantity), 0) as net_quantity
+          FROM inventory_movements
+          WHERE organization_id = ${ctx.organizationId}
+            AND created_at < ${previousPeriodEndDate}
+            ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
+          GROUP BY product_id
+        ),
+        -- Calculate weighted average unit cost from receive movements up to previous period end
+        -- Include all positive movements (receives, adjustments, transfers in) that have unit_cost
+        historical_cost AS (
+          SELECT
+            product_id,
+            CASE
+              WHEN SUM(CASE WHEN quantity > 0 AND unit_cost IS NOT NULL THEN quantity ELSE 0 END) > 0
+              THEN SUM(CASE WHEN quantity > 0 AND unit_cost IS NOT NULL THEN unit_cost * quantity ELSE 0 END) / 
+                   SUM(CASE WHEN quantity > 0 AND unit_cost IS NOT NULL THEN quantity ELSE 0 END)
+              ELSE NULL
+            END as avg_unit_cost
+          FROM inventory_movements
+          WHERE organization_id = ${ctx.organizationId}
+            AND quantity > 0
+            AND unit_cost IS NOT NULL
+            AND unit_cost > 0
+            AND created_at < ${previousPeriodEndDate}
+            ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
+          GROUP BY product_id
+        ),
+        -- Calculate historical inventory value
+        -- If no cost data available, fall back to current inventory unit cost (less accurate but better than zero)
+        current_inventory_cost AS (
+          SELECT
+            product_id,
+            CASE
+              WHEN SUM(quantity_on_hand) > 0
+              THEN SUM(total_value) / SUM(quantity_on_hand)
+              ELSE NULL
+            END as current_avg_cost
+          FROM inventory
+          WHERE organization_id = ${ctx.organizationId}
+          GROUP BY product_id
+        ),
+        product_inventory_prev AS (
+          SELECT
+            COALESCE(hq.product_id, hc.product_id, cic.product_id) as product_id,
+            CASE
+              WHEN COALESCE(hq.net_quantity, 0) <= 0 THEN 0
+              WHEN COALESCE(hc.avg_unit_cost, 0) > 0 THEN COALESCE(hq.net_quantity, 0) * hc.avg_unit_cost
+              WHEN COALESCE(cic.current_avg_cost, 0) > 0 THEN COALESCE(hq.net_quantity, 0) * cic.current_avg_cost
+              ELSE 0
+            END as inventory_value
+          FROM historical_quantity hq
+          FULL OUTER JOIN historical_cost hc ON hq.product_id = hc.product_id
+          FULL OUTER JOIN current_inventory_cost cic ON COALESCE(hq.product_id, hc.product_id) = cic.product_id
+        )
+        SELECT
+          p.id as product_id,
+          CASE
+            WHEN COALESCE(pi.inventory_value, 0) > 0
+            THEN ((COALESCE(pc.period_cogs, 0) / ${previousPeriodDays}) * 365) / pi.inventory_value
+            ELSE 0
+          END::numeric as turnover_rate
+        FROM products p
+        LEFT JOIN product_inventory_prev pi ON p.id = pi.product_id
+        LEFT JOIN product_cogs_prev pc ON p.id = pc.product_id
+        WHERE p.organization_id = ${ctx.organizationId}
+          AND p.deleted_at IS NULL
+          ${data.productId ? sql`AND p.id = ${data.productId}` : sql``}
+      `
+    );
+
+    // Create a map of previous period turnover rates for quick lookup
+    const previousTurnoverMap = new Map<string, number>();
+    for (const item of previousTurnoverByProduct as unknown as Array<{ product_id: string; turnover_rate: number }>) {
+      previousTurnoverMap.set(item.product_id, Number(item.turnover_rate ?? 0));
+    }
+
     // Calculate trends for last 4 periods (monthly if 90d, weekly if 30d)
     const trendPeriods: Array<{ period: string; turnoverRate: number; daysOnHand: number }> = [];
     const trendInterval = periodDays === 30 ? 7 : periodDays === 90 ? 30 : 90; // weeks for 30d, months for 90d, quarters for 365d
@@ -780,8 +938,8 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
           WHERE organization_id = ${ctx.organizationId}
             AND movement_type IN ('pick', 'ship')
             AND quantity < 0
-            AND created_at >= NOW() - INTERVAL '${sql.raw(String(periodEnd))} days'
-            AND created_at < NOW() - INTERVAL '${sql.raw(String(periodStart))} days'
+            AND created_at >= NOW() - INTERVAL '1 day' * ${periodEnd}
+            AND created_at < NOW() - INTERVAL '1 day' * ${periodStart}
             ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
         `
       );
@@ -821,6 +979,24 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
         const inventoryValue = Number(p.inventory_value ?? 0);
         const periodCOGS = Number(p.period_cogs ?? 0);
         const turnoverRate = Number(p.turnover_rate ?? 0);
+        const previousTurnoverRate = previousTurnoverMap.get(p.product_id ?? '') ?? 0;
+
+        // Calculate trend percentage change
+        const trendPercentage =
+          previousTurnoverRate === 0
+            ? 0
+            : ((turnoverRate - previousTurnoverRate) / previousTurnoverRate) * 100;
+
+        // Determine trend direction based on percentage change threshold (5%)
+        const TREND_THRESHOLD = 5;
+        let trend: 'up' | 'down' | 'stable';
+        if (Math.abs(trendPercentage) < TREND_THRESHOLD) {
+          trend = 'stable';
+        } else if (trendPercentage > 0) {
+          trend = 'up';
+        } else {
+          trend = 'down';
+        }
 
         return {
           productId: p.product_id ?? '',
@@ -829,8 +1005,8 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
           inventoryValue: isNaN(inventoryValue) ? 0 : inventoryValue,
           periodCOGS: isNaN(periodCOGS) ? 0 : periodCOGS,
           turnoverRate: isNaN(turnoverRate) ? 0 : turnoverRate,
-          trend: 'stable' as const, // TODO: Calculate trend comparison
-          trendPercentage: 0, // TODO: Calculate trend percentage
+          trend,
+          trendPercentage: Math.round(trendPercentage * 100) / 100,
         };
       }),
       trends: trendPeriods,
@@ -841,4 +1017,113 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
         poor: 1, // <3 turns
       },
     };
+  });
+
+// ============================================================================
+// PRODUCT COST LAYERS
+// ============================================================================
+
+/**
+ * Get all cost layers for a product (across all inventory records).
+ * Used in product detail view to show FIFO cost breakdown.
+ */
+export const getProductCostLayers = createServerFn({ method: 'GET' })
+  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
+
+    const layers = await db
+      .select({
+        id: inventoryCostLayers.id,
+        receivedAt: inventoryCostLayers.receivedAt,
+        quantityReceived: inventoryCostLayers.quantityReceived,
+        quantityRemaining: inventoryCostLayers.quantityRemaining,
+        unitCost: inventoryCostLayers.unitCost,
+        referenceType: inventoryCostLayers.referenceType,
+        referenceId: inventoryCostLayers.referenceId,
+        createdAt: inventoryCostLayers.createdAt,
+      })
+      .from(inventoryCostLayers)
+      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+      .where(
+        and(
+          eq(inventory.productId, data.productId),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
+      .orderBy(asc(inventoryCostLayers.receivedAt));
+
+    // Calculate summary
+    const activeLayers = layers.filter((l) => l.quantityRemaining > 0);
+    const totalRemaining = activeLayers.reduce((sum, l) => sum + l.quantityRemaining, 0);
+    const totalValue = activeLayers.reduce(
+      (sum, l) => sum + l.quantityRemaining * Number(l.unitCost),
+      0
+    );
+    const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
+    const lastPurchaseCost =
+      layers.length > 0 ? Number(layers[layers.length - 1].unitCost) : 0;
+
+    return {
+      layers: layers.map((l) => ({
+        ...l,
+        unitCost: Number(l.unitCost),
+      })),
+      summary: {
+        totalLayers: layers.length,
+        activeLayers: activeLayers.length,
+        totalRemaining,
+        totalValue,
+        weightedAvgCost,
+        lastPurchaseCost,
+      },
+    };
+  });
+
+// ============================================================================
+// WEIGHTED AVERAGE COST UPDATE
+// ============================================================================
+
+/**
+ * Recalculate and update a product's costPrice from its active cost layers.
+ * Called after goods receipt and after COGS consumption.
+ */
+export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
+
+    // Get all active cost layers for this product
+    const layers = await db
+      .select({
+        quantityRemaining: inventoryCostLayers.quantityRemaining,
+        unitCost: inventoryCostLayers.unitCost,
+      })
+      .from(inventoryCostLayers)
+      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+      .where(
+        and(
+          eq(inventory.productId, data.productId),
+          eq(inventory.organizationId, ctx.organizationId),
+          gt(inventoryCostLayers.quantityRemaining, 0)
+        )
+      );
+
+    if (layers.length === 0) {
+      return { productId: data.productId, costPrice: null, updated: false };
+    }
+
+    const totalRemaining = layers.reduce((sum, l) => sum + l.quantityRemaining, 0);
+    const totalValue = layers.reduce(
+      (sum, l) => sum + l.quantityRemaining * Number(l.unitCost),
+      0
+    );
+    const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
+
+    await db
+      .update(products)
+      .set({ costPrice: weightedAvgCost })
+      .where(eq(products.id, data.productId));
+
+    return { productId: data.productId, costPrice: weightedAvgCost, updated: true };
   });

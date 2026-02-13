@@ -21,141 +21,23 @@
  */
 
 import * as React from 'react';
+import { formatDateAustralian } from '@/lib/warranty';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Warranty policy type display configuration
- */
-export type WarrantyPolicyType =
-  | 'battery_performance'
-  | 'inverter_manufacturer'
-  | 'installation_workmanship';
-
-/**
- * Coverage details from the warranty policy
- */
-export interface WarrantyCoverageDetails {
-  /** What is covered under this warranty */
-  coverage?: string[];
-  /** What is excluded from coverage */
-  exclusions?: string[];
-  /** Requirements for filing a claim */
-  claimRequirements?: string[];
-  /** Whether warranty can be transferred to new owner */
-  transferable?: boolean;
-  /** Months after which warranty becomes prorated */
-  proratedAfterMonths?: number;
-}
-
-/**
- * Customer address information
- */
-export interface CustomerAddress {
-  street?: string;
-  suburb?: string;
-  state?: string;
-  postcode?: string;
-  country?: string;
-}
-
-/**
- * Props for the warranty certificate template
- */
-export interface WarrantyCertificateProps {
-  // === Certificate Identification ===
-  /** Unique warranty number (e.g., "WRN-2026-00001") */
-  warrantyNumber: string;
-  /** Registration date (ISO string or Date) */
-  registrationDate: string | Date;
-
-  // === Customer Information ===
-  /** Customer full name or company name */
-  customerName: string;
-  /** Customer address */
-  customerAddress?: CustomerAddress;
-  /** Customer email */
-  customerEmail?: string;
-  /** Customer phone */
-  customerPhone?: string;
-
-  // === Product Information ===
-  /** Product name (e.g., "Tesla Powerwall 2") */
-  productName: string;
-  /** Product serial number */
-  productSerial?: string;
-  /** Product category (e.g., "Battery Storage", "Inverter") */
-  productCategory?: string;
-  /** Product SKU */
-  productSku?: string;
-  /** Covered items for multi-product certificates */
-  items?: Array<{
-    id: string;
-    productName: string | null;
-    productSku: string | null;
-    productSerial: string | null;
-  }>;
-
-  // === Warranty Policy Details ===
-  /** Warranty policy type */
-  policyType: WarrantyPolicyType;
-  /** Warranty policy name */
-  policyName: string;
-  /** Warranty duration in months */
-  durationMonths: number;
-  /** Cycle limit for battery warranties */
-  cycleLimit?: number;
-  /** Expiry date (ISO string or Date) */
-  expiryDate: string | Date;
-  /** Coverage details from policy */
-  coverageDetails?: WarrantyCoverageDetails;
-
-  // === SLA Information ===
-  /** Response time SLA in hours */
-  slaResponseHours?: number;
-  /** Resolution time SLA in days */
-  slaResolutionDays?: number;
-
-  // === Verification ===
-  /** URL for QR code verification (warranty lookup page) */
-  verificationUrl?: string;
-
-  // === Company Branding ===
-  /** Company logo URL (optional) */
-  logoUrl?: string;
-  /** Company name override */
-  companyName?: string;
-  /** Support email override */
-  supportEmail?: string;
-  /** Support phone override */
-  supportPhone?: string;
-  /** Company website */
-  companyWebsite?: string;
-  /** Company ABN */
-  companyAbn?: string;
-}
+// Import types from schemas per SCHEMA-TRACE.md
+import type {
+  WarrantyCertificateProps,
+  WarrantyCertificateCustomerAddress,
+  WarrantyPolicyTypeValue,
+} from '@/lib/schemas/warranty';
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
 /**
- * Format date to Australian format (DD/MM/YYYY)
- */
-function formatDateAustralian(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  const day = d.getDate().toString().padStart(2, '0');
-  const month = (d.getMonth() + 1).toString().padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
-/**
  * Get human-readable policy type name
  */
-function getPolicyTypeDisplayName(type: WarrantyPolicyType): string {
+function getPolicyTypeDisplayName(type: WarrantyPolicyTypeValue): string {
   switch (type) {
     case 'battery_performance':
       return 'Battery Performance Warranty';
@@ -171,7 +53,7 @@ function getPolicyTypeDisplayName(type: WarrantyPolicyType): string {
 /**
  * Get policy type badge color
  */
-function getPolicyTypeColor(type: WarrantyPolicyType): {
+function getPolicyTypeColor(type: WarrantyPolicyTypeValue): {
   bg: string;
   text: string;
   border: string;
@@ -202,7 +84,7 @@ function formatDuration(months: number): string {
 /**
  * Format address for display
  */
-function formatAddress(address?: CustomerAddress): string | null {
+function formatAddress(address?: WarrantyCertificateCustomerAddress): string | null {
   if (!address) return null;
   const parts: string[] = [];
   if (address.street) parts.push(address.street);
@@ -282,8 +164,8 @@ export function WarrantyCertificateTemplate({
 }: WarrantyCertificateProps): React.ReactElement {
   const policyTypeDisplay = getPolicyTypeDisplayName(policyType);
   const policyTypeColor = getPolicyTypeColor(policyType);
-  const formattedRegistrationDate = formatDateAustralian(registrationDate);
-  const formattedExpiryDate = formatDateAustralian(expiryDate);
+  const formattedRegistrationDate = formatDateAustralian(registrationDate, 'numeric');
+  const formattedExpiryDate = formatDateAustralian(expiryDate, 'numeric');
   const formattedAddress = formatAddress(customerAddress);
   const formattedCycleLimit = formatCycleLimit(cycleLimit);
   const formattedDuration = formatDuration(durationMonths);

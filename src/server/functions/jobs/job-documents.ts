@@ -32,6 +32,7 @@ import {
   type DeleteJobDocumentResponse,
 } from '@/lib/schemas/jobs/job-documents';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -48,7 +49,7 @@ function validateDocumentFile(
   mimeType: string,
   fileSize: number
 ): { valid: boolean; error?: string } {
-  if (!ALLOWED_MIME_TYPES.includes(mimeType as any)) {
+  if (!(ALLOWED_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return {
       valid: false,
       error: `Invalid file type. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`,
@@ -70,7 +71,7 @@ function validateDocumentFile(
 // ============================================================================
 
 export const uploadJobDocument = createServerFn({ method: 'POST' })
-  .inputValidator((input: any) => {
+  .inputValidator((input: unknown) => {
     // First validate with Zod schema
     const validated = uploadJobDocumentSchema.parse(input);
 
@@ -93,7 +94,12 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
           organizationId: jobAssignments.organizationId,
         })
         .from(jobAssignments)
-        .where(eq(jobAssignments.id, data.jobAssignmentId))
+        .where(
+          and(
+            eq(jobAssignments.id, data.jobAssignmentId),
+            eq(jobAssignments.organizationId, ctx.organizationId)
+          )
+        )
         .limit(1);
 
       if (!jobAssignment) {
@@ -119,7 +125,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
           // For now, we'll skip OCR/text extraction and just use filename
           extractedJobNumber = extractJobNumberFromDocument(data.file.name, format);
         } catch (error) {
-          console.warn('Failed to extract job number from document:', error);
+          logger.warn('Failed to extract job number from document', { error });
         }
       }
 
@@ -139,7 +145,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
         .values({
           organizationId: jobAssignment.organizationId,
           jobAssignmentId: data.jobAssignmentId,
-          type: data.type as any,
+          type: data.type,
           photoUrl,
           caption: data.caption,
           createdBy: ctx.user.id,
@@ -153,13 +159,14 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
         await processJobDocument({
           photoId: newPhoto.id,
           jobAssignmentId: data.jobAssignmentId,
+          organizationId: ctx.organizationId,
           fileData,
           mimeType: data.file.type,
           filename: data.file.name,
           format,
         });
       } catch (processingError) {
-        console.warn('Document processing failed, but upload succeeded:', processingError);
+        logger.warn('Document processing failed, but upload succeeded', { error: processingError });
         // Don't fail the upload if processing fails
       }
 
@@ -182,7 +189,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
 
       return response;
     } catch (error) {
-      console.error('Failed to upload job document:', error);
+      logger.error('Failed to upload job document', error);
       const response: UploadJobDocumentResponse = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to upload document',
@@ -198,14 +205,19 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
 export const listJobDocuments = createServerFn({ method: 'GET' })
   .inputValidator(listJobDocumentsSchema.parse)
   .handler(async ({ data }: { data: ListJobDocumentsInput }) => {
-    await withAuth();
+    const ctx = await withAuth();
 
     try {
       // Verify job assignment access
       const [jobAssignment] = await db
         .select({ organizationId: jobAssignments.organizationId })
         .from(jobAssignments)
-        .where(eq(jobAssignments.id, data.jobAssignmentId))
+        .where(
+          and(
+            eq(jobAssignments.id, data.jobAssignmentId),
+            eq(jobAssignments.organizationId, ctx.organizationId)
+          )
+        )
         .limit(1);
 
       if (!jobAssignment) {
@@ -216,7 +228,12 @@ export const listJobDocuments = createServerFn({ method: 'GET' })
       const photos = await db
         .select()
         .from(jobPhotos)
-        .where(eq(jobPhotos.jobAssignmentId, data.jobAssignmentId))
+        .where(
+          and(
+            eq(jobPhotos.jobAssignmentId, data.jobAssignmentId),
+            eq(jobPhotos.organizationId, ctx.organizationId)
+          )
+        )
         .orderBy(desc(jobPhotos.createdAt));
 
       const response: ListJobDocumentsResponse = {
@@ -236,7 +253,7 @@ export const listJobDocuments = createServerFn({ method: 'GET' })
 
       return response;
     } catch (error) {
-      console.error('Failed to list job documents:', error);
+      logger.error('Failed to list job documents', error);
       throw error;
     }
   });
@@ -248,7 +265,7 @@ export const listJobDocuments = createServerFn({ method: 'GET' })
 export const deleteJobDocument = createServerFn({ method: 'POST' })
   .inputValidator(deleteJobDocumentSchema.parse)
   .handler(async ({ data }: { data: DeleteJobDocumentInput }) => {
-    await withAuth();
+    const ctx = await withAuth();
 
     try {
       // Delete the photo record (this would also need to delete the actual file)
@@ -257,7 +274,8 @@ export const deleteJobDocument = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobPhotos.id, data.documentId),
-            eq(jobPhotos.jobAssignmentId, data.jobAssignmentId)
+            eq(jobPhotos.jobAssignmentId, data.jobAssignmentId),
+            eq(jobPhotos.organizationId, ctx.organizationId)
           )
         )
         .returning();
@@ -272,7 +290,7 @@ export const deleteJobDocument = createServerFn({ method: 'POST' })
       const response: DeleteJobDocumentResponse = { success: true };
       return response;
     } catch (error) {
-      console.error('Failed to delete job document:', error);
+      logger.error('Failed to delete job document', error);
       const response: DeleteJobDocumentResponse = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to delete document',
@@ -291,6 +309,7 @@ export const deleteJobDocument = createServerFn({ method: 'POST' })
 async function processJobDocument(params: {
   photoId: string;
   jobAssignmentId: string;
+  organizationId: string;
   fileData: Uint8Array;
   mimeType: string;
   filename: string;
@@ -301,13 +320,18 @@ async function processJobDocument(params: {
     await db
       .update(jobPhotos)
       .set({ updatedAt: new Date() })
-      .where(eq(jobPhotos.id, params.photoId));
+      .where(
+        and(
+          eq(jobPhotos.id, params.photoId),
+          eq(jobPhotos.organizationId, params.organizationId)
+        )
+      );
 
     // Following midday pattern:
     // 1. Handle HEIC conversion (if needed)
     if (params.mimeType === 'image/heic') {
       // Convert HEIC to JPG (would implement conversion logic)
-      console.log('Converting HEIC image for job document:', params.photoId);
+      logger.debug('Converting HEIC image for job document', { photoId: params.photoId });
     }
 
     // 2. Classify image vs document
@@ -334,10 +358,13 @@ async function processJobDocument(params: {
     const extractedJobNumber = extractJobNumberFromDocument(params.filename, params.format);
     if (extractedJobNumber) {
       // Store extracted job number (could link to job assignment)
-      console.log(`Extracted job number ${extractedJobNumber} from document ${params.photoId}`);
+      logger.debug('Extracted job number from document', {
+        extractedJobNumber,
+        photoId: params.photoId,
+      });
     }
   } catch (error) {
-    console.error('Document processing failed:', error);
+    logger.error('Document processing failed', error);
     // Update status to failed (would add processing_status column)
     // await db.update(jobPhotos).set({ processingStatus: "failed" }).where(eq(jobPhotos.id, params.photoId));
   }
@@ -354,7 +381,10 @@ async function classifyJobImage(params: {
 }): Promise<void> {
   // This would integrate with AI/ML classification service
   // For now, use filename-based classification from our existing utility
-  console.log(`Classified image ${params.photoId} as: ${params.format.classification}`);
+  logger.debug('Classified image', {
+    photoId: params.photoId,
+    classification: params.format.classification,
+  });
 
   // Could update metadata with classification results
   // await db.update(jobPhotos).set({ classification: params.format.classification }).where(eq(jobPhotos.id, params.photoId));
@@ -384,7 +414,10 @@ async function classifyJobDocument(params: {
 
     if (extractedText) {
       // Classify document based on content
-      console.log(`Classified document ${params.photoId} as: ${params.format.classification}`);
+      logger.debug('Classified document', {
+        photoId: params.photoId,
+        classification: params.format.classification,
+      });
 
       // Could store extracted text and classification
       // await db.update(jobPhotos).set({
@@ -393,7 +426,7 @@ async function classifyJobDocument(params: {
       // }).where(eq(jobPhotos.id, params.photoId));
     }
   } catch (error) {
-    console.error('Document classification failed:', error);
+    logger.error('Document classification failed', error);
   }
 }
 

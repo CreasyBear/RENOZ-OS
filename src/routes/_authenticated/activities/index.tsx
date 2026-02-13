@@ -83,7 +83,6 @@ function ActivitiesPage() {
           }}
           onFiltersChange={handleFiltersChange}
           showFilters
-          height="100%"
           className="flex-1 min-h-0"
         />
       </PageLayout.Content>

@@ -19,13 +19,29 @@ function DropdownMenuPortal({
 }
 
 function DropdownMenuTrigger({
+  children,
+  asChild,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
+  const childCount = React.Children.count(children)
+  if (childCount === 0) {
+    return null
+  }
+
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const shouldFallback = !!asChild && !isSingleElement
+
   return (
     <DropdownMenuPrimitive.Trigger
       data-slot="dropdown-menu-trigger"
+      asChild={shouldFallback ? false : asChild}
       {...props}
-    />
+    >
+      {children}
+    </DropdownMenuPrimitive.Trigger>
   )
 }
 

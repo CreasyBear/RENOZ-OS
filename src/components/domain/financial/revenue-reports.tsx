@@ -8,6 +8,7 @@
  */
 
 import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   DollarSign,
   Clock,
@@ -41,6 +42,10 @@ import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { format } from 'date-fns';
+import {
+  recognitionStateSchema,
+  recognitionStateValues,
+} from '@/lib/schemas/financial/revenue-recognition';
 import type {
   DeferredRevenueBalance,
   RecognitionState,
@@ -273,7 +278,7 @@ export const RevenueReports = memo(function RevenueReports({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-6 gap-4">
-        {(Object.keys(stateConfig) as RecognitionState[]).map((state) => {
+        {recognitionStateValues.map((state) => {
           const config = stateConfig[state];
           const Icon = config.icon;
           const count = stateCounts[state] || 0;
@@ -331,7 +336,16 @@ export const RevenueReports = memo(function RevenueReports({
           <CardTitle>Recognition Records</CardTitle>
           <Select
             value={stateFilter}
-            onValueChange={(v) => onStateFilterChange(v as RecognitionState | 'all')}
+            onValueChange={(v) => {
+              if (v === 'all') {
+                onStateFilterChange('all');
+              } else {
+                const result = recognitionStateSchema.safeParse(v);
+                if (result.success) {
+                  onStateFilterChange(result.data);
+                }
+              }
+            }}
           >
             <SelectTrigger className="w-40">
               <SelectValue />
@@ -371,8 +385,27 @@ export const RevenueReports = memo(function RevenueReports({
                 {records.map((rec) => (
                   <TableRow key={rec.id}>
                     <TableCell>{format(new Date(rec.recognitionDate), 'dd MMM yyyy')}</TableCell>
-                    <TableCell className="font-mono">{rec.orderNumber}</TableCell>
-                    <TableCell>{rec.customerName}</TableCell>
+                    <TableCell className="font-mono">
+                      <Link
+                        to="/orders/$orderId"
+                        params={{ orderId: rec.orderId }}
+                        className="hover:underline text-primary"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {rec.orderNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        to="/customers/$customerId"
+                        params={{ customerId: rec.customerId }}
+                        search={{}}
+                        className="hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {rec.customerName}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="capitalize">
                         {rec.recognitionType.replace('_', ' ')}

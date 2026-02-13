@@ -5,7 +5,9 @@
  */
 
 // --- Core Components ---
-export { WelcomeChecklist, onboardingKeys } from "./welcome-checklist"
+export { WelcomeChecklistContainer } from "./welcome-checklist-container"
+export type { WelcomeChecklistContainerProps } from "./welcome-checklist-container"
+export { WelcomeChecklistPresenter, WelcomeChecklist } from "./welcome-checklist"
 export type { WelcomeChecklistProps, ChecklistItem } from "./welcome-checklist"
 
 export { DashboardDndProvider } from "./dnd-provider"
@@ -55,3 +57,9 @@ export * from './mobile'
 
 // --- Widgets ---
 export * from './widgets'
+
+// --- Business Overview (comprehensive metrics) ---
+export * from './business-overview'
+
+// --- Overview Dashboard (Square UI inspired) ---
+export * from './overview'

@@ -24,6 +24,7 @@ import {
 } from '../prompts/shared';
 import { createAgentConfig, TRIAGE_DEFAULTS } from './config';
 import type { AgentMemoryConfig } from './factory';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // CONFIGURATION
@@ -158,7 +159,7 @@ ${formatContextForLLM(userContext)}
 
   // Fallback: if somehow no tool call was made (shouldn't happen with forced choice)
   // Default to customer agent
-  console.warn('[TriageAgent] No tool call found, defaulting to customer agent');
+  logger.warn('[TriageAgent] No tool call found, defaulting to customer agent');
   return {
     targetAgent: 'customer',
     reason: 'Default routing due to missing tool call',

@@ -138,7 +138,7 @@ function AttachmentItem({
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete attachment?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will delete "{attachment.originalFilename}". This action
+                  This will delete &quot;{attachment.originalFilename}&quot;. This action
                   cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>

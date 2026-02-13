@@ -32,12 +32,13 @@ import {
   boolean,
   timestamp,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
+  softDeleteColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { orders } from "../orders/orders";
 import { organizations } from "../settings/organizations";
@@ -79,6 +80,7 @@ export const reminderTemplates = pgTable(
     // Tracking
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
     // Multi-tenant queries
@@ -92,27 +94,7 @@ export const reminderTemplates = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("reminder_templates_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("reminder_templates_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("reminder_templates_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("reminder_templates_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("reminder_templates"),
   })
 );
 
@@ -167,6 +149,7 @@ export const reminderHistory = pgTable(
     // Tracking
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
     // Multi-tenant queries
@@ -184,27 +167,7 @@ export const reminderHistory = pgTable(
     templateIdx: index("idx_reminder_history_template").on(table.templateId),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("reminder_history_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("reminder_history_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("reminder_history_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("reminder_history_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("reminder_history"),
   })
 );
 

@@ -1,4 +1,4 @@
-import type { MovementMetadata } from 'drizzle/schema/inventory';
+import type { MovementMetadata } from '@/lib/schemas/inventory';
 
 export type MovementType =
   | 'receive'

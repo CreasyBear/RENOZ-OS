@@ -81,7 +81,11 @@ export function useJobMaterials(input: ListJobMaterialsInput) {
 
   return useQuery({
     queryKey: queryKeys.jobMaterials.list(input.jobId),
-    queryFn: () => listFn({ data: input }),
+    queryFn: async () => {
+      const result = await listFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.jobId,
   });
 }
@@ -94,7 +98,11 @@ export function useJobMaterial(input: GetJobMaterialInput) {
 
   return useQuery({
     queryKey: queryKeys.jobMaterials.detail(input.materialId),
-    queryFn: () => getFn({ data: input }),
+    queryFn: async () => {
+      const result = await getFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.materialId,
   });
 }
@@ -107,7 +115,11 @@ export function useJobMaterialCost(input: CalculateJobMaterialCostInput) {
 
   return useQuery({
     queryKey: queryKeys.jobMaterials.cost.byJob(input.jobId),
-    queryFn: () => calculateFn({ data: input }),
+    queryFn: async () => {
+      const result = await calculateFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.jobId,
   });
 }
@@ -205,7 +217,11 @@ export function useJobTimeEntries(input: GetJobTimeEntriesInput) {
 
   return useQuery({
     queryKey: queryKeys.jobTime.entries(input.jobId),
-    queryFn: () => getEntriesFn({ data: input }),
+    queryFn: async () => {
+      const result = await getEntriesFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.jobId,
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -222,7 +238,11 @@ export function useTimeEntry(input: GetTimeEntryInput) {
 
   return useQuery({
     queryKey: queryKeys.jobTime.detail(input.entryId),
-    queryFn: () => getFn({ data: input }),
+    queryFn: async () => {
+      const result = await getFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.entryId,
   });
 }
@@ -235,7 +255,11 @@ export function useJobLaborCost(input: CalculateJobLaborCostInput) {
 
   return useQuery({
     queryKey: queryKeys.jobTime.costs.byJob(input.jobId),
-    queryFn: () => calculateFn({ data: input }),
+    queryFn: async () => {
+      const result = await calculateFn({ data: input });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!input.jobId && input.hourlyRate >= 0,
   });
 }
@@ -355,7 +379,11 @@ export function useJobCost(options: CalculateJobCostInput | undefined) {
 
   return useQuery({
     queryKey: queryKeys.jobCosting.cost(options?.jobId ?? ''),
-    queryFn: () => calculateFn({ data: options! }),
+    queryFn: async () => {
+      const result = await calculateFn({ data: options! });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!options?.jobId,
   });
 }
@@ -368,7 +396,11 @@ export function useJobProfitability(options: GetJobProfitabilityInput | undefine
 
   return useQuery({
     queryKey: queryKeys.jobCosting.job(options?.jobId ?? ''),
-    queryFn: () => profitabilityFn({ data: options! }),
+    queryFn: async () => {
+      const result = await profitabilityFn({ data: options! });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!options?.jobId,
   });
 }
@@ -381,7 +413,11 @@ export function useJobCostingReport(options: GetJobCostingReportInput) {
 
   return useQuery({
     queryKey: queryKeys.jobCosting.list(options as unknown as Record<string, unknown>),
-    queryFn: () => reportFn({ data: options }),
+    queryFn: async () => {
+      const result = await reportFn({ data: options });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
   });
 }
 

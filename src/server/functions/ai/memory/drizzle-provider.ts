@@ -34,6 +34,7 @@ export class DrizzleMemoryProvider implements ConversationMemoryProvider {
    */
   async isAvailable(): Promise<boolean> {
     try {
+      // RAW SQL (Phase 11 Keep): Connection health check. See PHASE11-RAW-SQL-AUDIT.md
       await db.execute(sql`SELECT 1`);
       return true;
     } catch {
@@ -82,12 +83,13 @@ export class DrizzleMemoryProvider implements ConversationMemoryProvider {
 
     if (!row) return null;
 
-    // Get messages separately
+    // Get messages separately (limit to avoid unbounded reads; use getMessages for pagination)
     const messages = await db
       .select()
       .from(aiConversationMessages)
       .where(eq(aiConversationMessages.conversationId, conversationId))
-      .orderBy(aiConversationMessages.createdAt);
+      .orderBy(aiConversationMessages.createdAt)
+      .limit(500);
 
     return mapRowToConversation(row, messages);
   }
@@ -96,58 +98,60 @@ export class DrizzleMemoryProvider implements ConversationMemoryProvider {
    * Save a message to a conversation.
    */
   async saveMessage(conversationId: string, message: ConversationMessage): Promise<void> {
-    // Verify conversation exists
-    const [existing] = await db
-      .select({ id: aiConversations.id })
-      .from(aiConversations)
-      .where(eq(aiConversations.id, conversationId))
-      .limit(1);
+    await db.transaction(async (tx) => {
+      // Verify conversation exists
+      const [existing] = await tx
+        .select({ id: aiConversations.id })
+        .from(aiConversations)
+        .where(eq(aiConversations.id, conversationId))
+        .limit(1);
 
-    if (!existing) {
-      throw new Error(`Conversation not found: ${conversationId}`);
-    }
+      if (!existing) {
+        throw new Error(`Conversation not found: ${conversationId}`);
+      }
 
-    // Transform tool calls from memory format to schema format
-    const schemaToolCalls = message.toolCalls?.map((tc) => ({
-      id: tc.id,
-      name: tc.name,
-      arguments: tc.input, // Schema uses 'arguments', type uses 'input'
-    })) ?? null;
+      // Transform tool calls from memory format to schema format
+      const schemaToolCalls = message.toolCalls?.map((tc) => ({
+        id: tc.id,
+        name: tc.name,
+        arguments: tc.input, // Schema uses 'arguments', type uses 'input'
+      })) ?? null;
 
-    // Transform tool results from memory format to schema format
-    const schemaToolResults = message.toolResults?.map((tr) => ({
-      toolCallId: tr.toolCallId,
-      result: tr.output, // Schema uses 'result', type uses 'output'
-      error: tr.error ? String(tr.error) : undefined,
-    })) ?? null;
+      // Transform tool results from memory format to schema format
+      const schemaToolResults = message.toolResults?.map((tr) => ({
+        toolCallId: tr.toolCallId,
+        result: tr.output, // Schema uses 'result', type uses 'output'
+        error: tr.error ? String(tr.error) : undefined,
+      })) ?? null;
 
-    // Insert message into messages table
-    await db
-      .insert(aiConversationMessages)
-      .values({
-        conversationId,
-        role: message.role,
-        content: message.content,
-        toolCalls: schemaToolCalls,
-        toolResults: schemaToolResults,
-        tokensUsed: message.tokensUsed ?? null,
-        agentName: message.agent ?? null,
-      });
+      // Insert message into messages table
+      await tx
+        .insert(aiConversationMessages)
+        .values({
+          conversationId,
+          role: message.role,
+          content: message.content,
+          toolCalls: schemaToolCalls,
+          toolResults: schemaToolResults,
+          tokensUsed: message.tokensUsed ?? null,
+          agentName: message.agent ?? null,
+        });
 
-    // Update conversation's lastMessageAt and activeAgent
-    const updates: Record<string, unknown> = {
-      lastMessageAt: new Date(),
-      updatedAt: new Date(),
-    };
+      // Update conversation's lastMessageAt and activeAgent
+      const updates: Record<string, unknown> = {
+        lastMessageAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    if (message.agent) {
-      updates.activeAgent = message.agent;
-    }
+      if (message.agent) {
+        updates.activeAgent = message.agent;
+      }
 
-    await db
-      .update(aiConversations)
-      .set(updates)
-      .where(eq(aiConversations.id, conversationId));
+      await tx
+        .update(aiConversations)
+        .set(updates)
+        .where(eq(aiConversations.id, conversationId));
+    });
   }
 
   /**

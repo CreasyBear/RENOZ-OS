@@ -6,6 +6,8 @@
  * @see drizzle/schema/inventory/inventory.ts
  */
 
+'use server';
+
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";

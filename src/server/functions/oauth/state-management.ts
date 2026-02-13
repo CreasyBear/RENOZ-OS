@@ -4,7 +4,7 @@
  * Server-side functions for OAuth state validation, cleanup, and persistence.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import {
   validateOAuthStateWithDatabase,
   cleanupOAuthStates,
@@ -13,6 +13,7 @@ import {
   getPersistentOAuthState,
   updatePersistentOAuthState,
 } from '@/lib/oauth/state-management';
+import type { OAuthStatePayload } from '@/lib/oauth/token-encryption';
 
 export interface ValidateOAuthStateRequest {
   encryptedState: string;
@@ -21,7 +22,7 @@ export interface ValidateOAuthStateRequest {
 
 export interface ValidateOAuthStateResponseSuccess {
   success: true;
-  state: any;
+  state: OAuthStatePayload;
 }
 
 export interface ValidateOAuthStateResponseError {
@@ -37,7 +38,7 @@ export type ValidateOAuthStateResponse =
  * Server function to validate OAuth state.
  */
 export async function validateOAuthStateServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: ValidateOAuthStateRequest
 ): Promise<ValidateOAuthStateResponse> {
   try {
@@ -98,7 +99,7 @@ export type CleanupOAuthStatesResponse =
  * Server function to clean up expired OAuth states and failed connections.
  */
 export async function cleanupOAuthStatesServer(
-  db: PostgresJsDatabase<any>
+  db: OAuthDatabase
 ): Promise<CleanupOAuthStatesResponse> {
   try {
     const result = await cleanupOAuthStates(db);
@@ -138,7 +139,7 @@ export type GetOAuthStateCleanupStatsResponse =
  * Server function to get cleanup statistics without performing cleanup.
  */
 export async function getOAuthStateCleanupStatsServer(
-  db: PostgresJsDatabase<any>
+  db: OAuthDatabase
 ): Promise<GetOAuthStateCleanupStatsResponse> {
   try {
     const stats = await getOAuthStateCleanupStats(db);
@@ -166,7 +167,7 @@ export interface CreatePersistentOAuthStateRequest {
   pkceVerifier?: string;
   pkceChallenge?: string;
   pkceMethod?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreatePersistentOAuthStateResponseSuccess {
@@ -187,7 +188,7 @@ export type CreatePersistentOAuthStateResponse =
  * Server function to create a persistent OAuth state.
  */
 export async function createPersistentOAuthStateServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: CreatePersistentOAuthStateRequest
 ): Promise<CreatePersistentOAuthStateResponse> {
   try {
@@ -212,7 +213,19 @@ export interface GetPersistentOAuthStateRequest {
 
 export interface GetPersistentOAuthStateResponseSuccess {
   success: true;
-  state: any;
+  state: {
+    id: string;
+    organizationId: string;
+    userId: string;
+    provider: string;
+    services: string[];
+    redirectUrl: string;
+    status: string;
+    expiresAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    metadata?: Record<string, unknown>;
+  };
 }
 
 export interface GetPersistentOAuthStateResponseError {
@@ -228,7 +241,7 @@ export type GetPersistentOAuthStateResponse =
  * Server function to retrieve a persistent OAuth state.
  */
 export async function getPersistentOAuthStateServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: GetPersistentOAuthStateRequest
 ): Promise<GetPersistentOAuthStateResponse> {
   try {
@@ -269,7 +282,7 @@ export async function getPersistentOAuthStateServer(
 export interface UpdatePersistentOAuthStateRequest {
   stateId: string;
   status?: 'pending' | 'active' | 'completed' | 'failed' | 'expired';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdatePersistentOAuthStateResponseSuccess {
@@ -289,7 +302,7 @@ export type UpdatePersistentOAuthStateResponse =
  * Server function to update a persistent OAuth state.
  */
 export async function updatePersistentOAuthStateServer(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: UpdatePersistentOAuthStateRequest
 ): Promise<UpdatePersistentOAuthStateResponse> {
   try {

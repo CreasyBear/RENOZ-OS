@@ -17,17 +17,15 @@ import {
   orderLineItems,
   customers,
   addresses,
-  organizations,
-  type OrganizationBranding,
-  type OrganizationAddress,
 } from "drizzle/schema";
+import { fetchShipmentSerialsByOrderLineItem } from "@/server/functions/documents/fetch-order-line-items-with-serials";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
   generateFilename,
   generateStoragePath,
   calculateChecksum,
   generateQRCode,
-  type DocumentOrganization,
 } from "@/lib/documents";
 import {
   PackingSlipPdfDocument,
@@ -68,17 +66,7 @@ export interface GeneratePackingSlipPdfPayload {
 
 const STORAGE_BUCKET = "documents";
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Generate the order lookup URL for QR code
- */
-function getOrderLookupUrl(orderId: string): string {
-  const baseUrl = process.env.APP_URL || "https://app.renoz.com.au";
-  return `${baseUrl}/orders/${orderId}`;
-}
+import { buildDocumentViewUrl } from "@/lib/documents/urls";
 
 // ============================================================================
 // TASK DEFINITION
@@ -154,72 +142,32 @@ export const generatePackingSlipPdf = task({
         description: orderLineItems.description,
         quantity: orderLineItems.quantity,
         notes: orderLineItems.notes,
+        allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
       })
       .from(orderLineItems)
       .where(eq(orderLineItems.orderId, orderId))
       .orderBy(orderLineItems.lineNumber);
 
-    const packingLineItems: PackingSlipLineItem[] = lineItems.map((item) => ({
-      id: item.id,
-      lineNumber: item.lineNumber,
-      sku: item.sku,
-      description: item.description,
-      quantity: Number(item.quantity) || 1,
-      notes: item.notes,
-      // TODO: Add location from inventory when available
-      location: null,
-    }));
+    const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+    const packingLineItems: PackingSlipLineItem[] = lineItems.map((item, index) => {
+      const serialNumbers =
+        shipmentSerialMap.get(item.id) ??
+        (item.allocatedSerialNumbers as string[] | null) ??
+        undefined;
+      return {
+        id: item.id,
+        lineNumber: item.lineNumber ?? String(index + 1),
+        sku: item.sku,
+        description: item.description,
+        quantity: Number(item.quantity) || 1,
+        notes: item.notes,
+        location: null,
+        serialNumbers: serialNumbers && serialNumbers.length > 0 ? serialNumbers : undefined,
+      };
+    });
 
-    // Step 2: Fetch organization details
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
-    const address = org.address as OrganizationAddress | null;
-    const branding = org.branding as OrganizationBranding | null;
-
-    const orgData: DocumentOrganization = {
-      id: org.id,
-      name: org.name,
-      email: org.email,
-      phone: org.phone,
-      website: org.website || branding?.websiteUrl,
-      taxId: org.abn,
-      currency: org.currency || "AUD",
-      locale: org.locale || "en-AU",
-      address: address
-        ? {
-            addressLine1: address.street1,
-            addressLine2: address.street2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: branding?.logoUrl,
-        primaryColor: branding?.primaryColor,
-        secondaryColor: branding?.secondaryColor,
-      },
-    };
+    // Step 2: Fetch organization details (with logo pre-fetched for PDF)
+    const orgData = await fetchOrganizationForDocument(organizationId);
 
     // Step 3: Fetch customer details
     const [customer] = await db
@@ -289,7 +237,7 @@ export const generatePackingSlipPdf = task({
     }
 
     // Step 4: Generate QR code for order lookup
-    const orderLookupUrl = getOrderLookupUrl(orderId);
+    const orderLookupUrl = buildDocumentViewUrl("order", orderId);
     const qrCodeDataUrl = await generateQRCode(orderLookupUrl, {
       width: 280, // Higher res for 70pt display
       margin: 0,

@@ -82,10 +82,14 @@ export function useWinLossAnalysis(options: UseWinLossAnalysisOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.winLossAnalysis(dateFromStr, dateToStr),
-    queryFn: () =>
-      getWinLossAnalysis({
+    queryFn: async () => {
+      const result = await getWinLossAnalysis({
         data: { dateFrom, dateTo, type },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -116,10 +120,14 @@ export function useCompetitors(options: UseCompetitorsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.competitors(dateFromStr, dateToStr),
-    queryFn: () =>
-      getCompetitors({
+    queryFn: async () => {
+      const result = await getCompetitors({
         data: { dateFrom, dateTo },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

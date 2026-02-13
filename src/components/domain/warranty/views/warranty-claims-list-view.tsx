@@ -6,7 +6,7 @@
  * Pure UI component for claims filtering, table, and pagination.
  */
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import {
   FileWarning,
   Filter,
@@ -51,44 +51,17 @@ import {
   formatClaimCost,
 } from '@/lib/warranty/claims-utils';
 import type { WarrantyClaimStatusValue, WarrantyClaimTypeValue } from '@/hooks/warranty';
+import {
+  isWarrantyClaimStatusValue,
+  isWarrantyClaimTypeValue,
+} from '@/lib/schemas/warranty';
+import type {
+  WarrantyClaimListItem,
+  WarrantyClaimsListViewProps,
+} from '@/lib/schemas/warranty';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface WarrantyClaimListItem {
-  id: string;
-  claimNumber: string;
-  claimType: string;
-  status: string;
-  cost: number | null;
-  submittedAt: string | Date;
-  customer?: { name?: string | null } | null;
-  warranty?: { warrantyNumber?: string | null } | null;
-  product?: { name?: string | null } | null;
-}
-
-export interface WarrantyClaimPagination {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-}
-
-export interface WarrantyClaimsListViewProps {
-  status?: WarrantyClaimStatusValue;
-  type?: WarrantyClaimTypeValue;
-  claims: WarrantyClaimListItem[];
-  pagination: WarrantyClaimPagination;
-  isLoading: boolean;
-  error: Error | null;
-  onStatusChange: (value: WarrantyClaimStatusValue | undefined) => void;
-  onTypeChange: (value: WarrantyClaimTypeValue | undefined) => void;
-  onClearFilters: () => void;
-  onPageChange: (page: number) => void;
-  onRowClick: (claimId: string) => void;
-  onRetry: () => void;
-}
+// Re-export for convenience
+export type { WarrantyClaimListItem, WarrantyClaimsListViewProps };
 
 // ============================================================================
 // OPTIONS
@@ -109,6 +82,69 @@ const TYPE_OPTIONS: { value: WarrantyClaimTypeValue; label: string }[] = [
   { value: 'installation_defect', label: 'Installation Defect' },
   { value: 'other', label: 'Other' },
 ];
+
+// ============================================================================
+// MEMOIZED ROW (TABLE-STANDARDS §1)
+// ============================================================================
+
+const ClaimTableRow = memo(function ClaimTableRow({
+  claim,
+  onRowClick,
+}: {
+  claim: WarrantyClaimListItem;
+  onRowClick: (claimId: string) => void;
+}) {
+  const typeConfig = isWarrantyClaimTypeValue(claim.claimType)
+    ? claimTypeConfig[claim.claimType]
+    : undefined;
+
+  return (
+    <TableRow
+      className="hover:bg-muted/50 cursor-pointer"
+      onClick={() => onRowClick(claim.id)}
+    >
+      <TableCell className="font-mono text-sm">{claim.claimNumber}</TableCell>
+      <TableCell>
+        <div className="flex flex-col">
+          <span className="font-medium">{claim.customer?.name ?? 'Unknown'}</span>
+          <span className="text-muted-foreground hidden text-xs sm:inline">
+            {claim.warranty?.warrantyNumber ?? '—'}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        {claim.product?.name ?? 'Unknown'}
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className="whitespace-nowrap">
+          {typeConfig?.label ?? claim.claimType}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <StatusBadge status={claim.status} statusConfig={claimStatusConfig} />
+      </TableCell>
+      <TableCell className="hidden lg:table-cell">
+        {formatClaimCost(claim.cost)}
+      </TableCell>
+      <TableCell className="text-muted-foreground hidden text-sm md:table-cell">
+        {formatClaimDate(claim.submittedAt)}
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRowClick(claim.id);
+          }}
+          aria-label={`View claim ${claim.claimNumber}`}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+});
 
 // ============================================================================
 // VIEW
@@ -144,7 +180,9 @@ export function WarrantyClaimsListView({
             <Select
               value={status ?? 'all'}
               onValueChange={(value) =>
-                onStatusChange(value === 'all' ? undefined : (value as WarrantyClaimStatusValue))
+                onStatusChange(
+                  value === 'all' ? undefined : isWarrantyClaimStatusValue(value) ? value : undefined
+                )
               }
             >
               <SelectTrigger className="w-[160px]">
@@ -163,7 +201,9 @@ export function WarrantyClaimsListView({
             <Select
               value={type ?? 'all'}
               onValueChange={(value) =>
-                onTypeChange(value === 'all' ? undefined : (value as WarrantyClaimTypeValue))
+                onTypeChange(
+                  value === 'all' ? undefined : isWarrantyClaimTypeValue(value) ? value : undefined
+                )
               }
             >
               <SelectTrigger className="w-[180px]">
@@ -216,7 +256,11 @@ export function WarrantyClaimsListView({
                       value={status ?? 'all'}
                       onValueChange={(value) =>
                         onStatusChange(
-                          value === 'all' ? undefined : (value as WarrantyClaimStatusValue)
+                          value === 'all'
+                            ? undefined
+                            : isWarrantyClaimStatusValue(value)
+                              ? value
+                              : undefined
                         )
                       }
                     >
@@ -240,7 +284,11 @@ export function WarrantyClaimsListView({
                       value={type ?? 'all'}
                       onValueChange={(value) =>
                         onTypeChange(
-                          value === 'all' ? undefined : (value as WarrantyClaimTypeValue)
+                          value === 'all'
+                            ? undefined
+                            : isWarrantyClaimTypeValue(value)
+                              ? value
+                              : undefined
                         )
                       }
                     >
@@ -328,60 +376,9 @@ export function WarrantyClaimsListView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {claims.map((claim) => {
-                    const typeConfig = claimTypeConfig[claim.claimType as WarrantyClaimTypeValue];
-
-                    return (
-                      <TableRow
-                        key={claim.id}
-                        className="hover:bg-muted/50 cursor-pointer"
-                        onClick={() => onRowClick(claim.id)}
-                      >
-                        <TableCell className="font-mono text-sm">{claim.claimNumber}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{claim.customer?.name ?? 'Unknown'}</span>
-                            <span className="text-muted-foreground hidden text-xs sm:inline">
-                              {claim.warranty?.warrantyNumber ?? '—'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {claim.product?.name ?? 'Unknown'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="whitespace-nowrap">
-                            {typeConfig?.label ?? claim.claimType}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge
-                            status={claim.status}
-                            statusConfig={claimStatusConfig}
-                          />
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {formatClaimCost(claim.cost)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground hidden text-sm md:table-cell">
-                          {formatClaimDate(claim.submittedAt)}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onRowClick(claim.id);
-                            }}
-                            aria-label={`View claim ${claim.claimNumber}`}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {claims.map((claim) => (
+                    <ClaimTableRow key={claim.id} claim={claim} onRowClick={onRowClick} />
+                  ))}
                 </TableBody>
               </Table>
 

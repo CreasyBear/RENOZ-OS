@@ -10,6 +10,10 @@ import { db } from '@/lib/db';
 import { organizations, users } from 'drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { AuthError, ValidationError } from '@/lib/server/errors';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
+import { sanitizeInternalRedirect } from '@/lib/auth/redirects';
+import { toAuthErrorCode } from '@/lib/auth/error-codes';
+import { authLogger } from '@/lib/logger';
 
 // ============================================================================
 // COMPLETE SIGNUP - Create org and user after email confirmation
@@ -95,14 +99,11 @@ export const completeSignup = createServerFn({ method: 'POST' })
 
 export const confirmEmailFn = createServerFn({ method: 'GET' })
   .inputValidator((searchParams: unknown) => {
-    if (
-      searchParams &&
-      typeof searchParams === 'object' &&
-      'token_hash' in searchParams &&
-      'type' in searchParams &&
-      'next' in searchParams
-    ) {
-      return searchParams;
+    if (searchParams && typeof searchParams === 'object') {
+      const params = searchParams as Record<string, unknown>;
+      if (typeof params.token_hash === 'string' && typeof params.type === 'string') {
+        return params;
+      }
     }
     throw new ValidationError('Invalid search params');
   })
@@ -110,14 +111,17 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
     const request = getRequest();
 
     if (!request) {
-      throw redirect({ to: `/auth/error`, search: { error: 'No request' } });
+      throw redirect({ to: `/auth/error`, search: { error: 'invalid_request' } });
     }
 
     const searchParams = data;
     const token_hash = searchParams['token_hash'] as string;
     const type = searchParams['type'] as EmailOtpType | null;
-    const _next = searchParams['next'] as string;
-    const next = _next?.startsWith('/') ? _next : '/';
+    const next = sanitizeInternalRedirect(searchParams['next'], { fallback: '/' });
+
+    // Throttle token verification to reduce abuse and token-guess attempts.
+    const clientId = getClientIdentifier(request);
+    checkRateLimit('auth-confirm-email', `${clientId}:${token_hash}`, RATE_LIMITS.publicAction);
 
     if (token_hash && type) {
       const supabase = createServerSupabase(request);
@@ -143,10 +147,10 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
             });
           }
         } catch (signupError) {
-          console.error('Signup completion error:', signupError);
+          authLogger.error('Signup completion error', signupError);
           throw redirect({
             to: `/auth/error`,
-            search: { error: 'Account creation failed. Please try signing up again.' },
+            search: { error: 'account_creation_failed' },
           });
         }
 
@@ -155,13 +159,13 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
       } else {
         throw redirect({
           to: `/auth/error`,
-          search: { error: error?.message },
+          search: { error: toAuthErrorCode(error?.message) },
         });
       }
     }
 
     throw redirect({
       to: `/auth/error`,
-      search: { error: 'No token hash or type' },
+      search: { error: 'invalid_request' },
     });
   });

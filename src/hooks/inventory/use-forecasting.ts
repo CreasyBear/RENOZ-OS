@@ -58,7 +58,11 @@ export function useForecasts(options: UseForecastsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.inventory.productForecast('all', filters),
-    queryFn: () => listForecasts({ data: filters }),
+    queryFn: async () => {
+      const result = await listForecasts({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -69,14 +73,20 @@ export function useForecasts(options: UseForecastsOptions = {}) {
  */
 export function useProductForecast(
   productId: string,
-  options: { period?: 'daily' | 'weekly' | 'monthly'; days?: number } = {},
+  options: { period?: 'daily' | 'weekly' | 'monthly' | 'quarterly'; days?: number } = {},
   enabled = true
 ) {
   const { period = 'monthly', days = 90 } = options;
 
   return useQuery({
     queryKey: queryKeys.inventory.productForecast(productId, { period, days }),
-    queryFn: () => getProductForecast({ data: { productId, period, days } }),
+    queryFn: async () => {
+      const result = await getProductForecast({
+        data: { productId, period, days } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!productId,
     staleTime: 5 * 60 * 1000,
   });
@@ -88,7 +98,11 @@ export function useProductForecast(
 export function useReorderRecommendations(filters: ReorderFilters = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.reorderRecommendations(filters),
-    queryFn: () => getReorderRecommendations({ data: filters }),
+    queryFn: async () => {
+      const result = await getReorderRecommendations({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -109,7 +123,13 @@ export function useForecastAccuracy(
 
   return useQuery({
     queryKey: queryKeys.inventory.forecastAccuracy(productId),
-    queryFn: () => getForecastAccuracy({ data: { productId, period, lookbackDays } }),
+    queryFn: async () => {
+      const result = await getForecastAccuracy({
+        data: { productId, period, lookbackDays } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -126,8 +146,14 @@ export function useSafetyStock(
   const { serviceLevel = 0.95, leadTimeDays = 7 } = options;
 
   return useQuery({
-    queryKey: [...queryKeys.inventory.forecastingAll(), 'safetyStock', productId, { serviceLevel, leadTimeDays }],
-    queryFn: () => calculateSafetyStock({ data: { productId, serviceLevel, leadTimeDays } }),
+    queryKey: queryKeys.inventory.safetyStock(productId, { serviceLevel, leadTimeDays }),
+    queryFn: async () => {
+      const result = await calculateSafetyStock({
+        data: { productId, serviceLevel, leadTimeDays } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!productId,
     staleTime: 10 * 60 * 1000,
   });

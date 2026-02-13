@@ -10,12 +10,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import type {
   CreateCampaignInput,
   UpdateCampaignInput,
   CancelCampaignInput,
   DeleteCampaignInput,
   PopulateCampaignRecipientsInput,
+  SendCampaignInput,
+  PauseCampaignInput,
+  ResumeCampaignInput,
+  DuplicateCampaignInput,
+  TestSendCampaignInput,
+  Campaign,
+  PreviewRecipientsResult,
 } from '@/lib/schemas/communications/email-campaigns';
 import {
   getCampaigns,
@@ -27,6 +35,11 @@ import {
   deleteCampaign,
   previewCampaignRecipients,
   populateCampaignRecipients,
+  sendCampaign,
+  pauseCampaign,
+  resumeCampaign,
+  duplicateCampaign,
+  testSendCampaign,
 } from '@/server/functions/communications/email-campaigns';
 
 // ============================================================================
@@ -35,39 +48,38 @@ import {
 
 export interface UseCampaignsOptions {
   status?: 'draft' | 'scheduled' | 'sending' | 'sent' | 'paused' | 'cancelled' | 'failed';
+  search?: string;
+  templateType?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
   limit?: number;
   offset?: number;
   enabled?: boolean;
 }
 
-// Type for getCampaigns response (server function has @ts-expect-error breaking inference)
+// Type for getCampaigns response - matches what server function returns
+// Note: ServerFn return type assertion needed until CampaignRecipientCriteria.customFilters
+// uses wire type per SCHEMA-TRACE.md §4. See @ts-expect-error in email-campaigns server.
+
 interface CampaignsResponse {
-  items: Array<{
-    id: string;
-    organizationId: string;
-    name: string;
-    description: string | null;
-    templateType: string;
-    templateData: Record<string, unknown>;
-    recipientCriteria: Record<string, unknown>;
-    status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'paused' | 'cancelled' | 'failed';
-    scheduledAt: Date | null;
-    sentAt: Date | null;
-    createdById: string;
-    createdAt: Date;
-    updatedAt: Date;
-  }>;
-  total: number;
+  items: Campaign[]
+  total: number
 }
 
 export function useCampaigns(options: UseCampaignsOptions = {}) {
-  const { status, limit = 50, offset = 0, enabled = true } = options;
+  const { status, search, templateType, dateFrom, dateTo, limit = 50, offset = 0, enabled = true } = options;
 
   return useQuery<CampaignsResponse>({
-    queryKey: queryKeys.communications.campaignsList({ status, limit, offset }),
-    queryFn: () => getCampaigns({ data: { status, limit, offset } }) as Promise<CampaignsResponse>,
+    queryKey: queryKeys.communications.campaignsList({ status, search, templateType, dateFrom, dateTo, limit, offset }),
+    queryFn: async () => {
+      const result = await getCampaigns({
+        data: { status, search, templateType, dateFrom, dateTo, limit, offset },
+      });
+      if (result == null) throw new Error('Campaigns list returned no data');
+      return result as CampaignsResponse;
+    },
     enabled,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
   });
 }
 
@@ -79,11 +91,14 @@ export interface UseCampaignOptions {
 export function useCampaign(options: UseCampaignOptions) {
   const { campaignId, enabled = true } = options;
 
-  return useQuery({
+  return useQuery<Campaign | undefined>({
     queryKey: queryKeys.communications.campaignDetail(campaignId),
-    queryFn: () => getCampaignById({ data: { id: campaignId } }),
+    queryFn: async () => {
+      const r = await getCampaignById({ data: { id: campaignId } });
+      return r && typeof r === 'object' && 'id' in r ? (r as Campaign) : undefined;
+    },
     enabled: enabled && !!campaignId,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
   });
 }
 
@@ -100,9 +115,13 @@ export function useCampaignRecipients(options: UseCampaignRecipientsOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.campaignRecipients(campaignId, { status, limit }),
-    queryFn: () => getCampaignRecipients({ data: { campaignId, status, limit, offset } }),
+    queryFn: async () => {
+      const result = await getCampaignRecipients({ data: { campaignId, status, limit, offset } });
+      if (result == null) throw new Error('Campaign recipients returned no data');
+      return result;
+    },
     enabled: enabled && !!campaignId,
-    staleTime: 30 * 1000,
+    staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
   });
 }
 
@@ -122,11 +141,17 @@ export interface UseCampaignPreviewOptions {
 export function useCampaignPreview(options: UseCampaignPreviewOptions) {
   const { recipientCriteria, sampleSize = 5, enabled = true } = options;
 
-  return useQuery({
+  return useQuery<PreviewRecipientsResult>({
     queryKey: queryKeys.communications.campaignPreview(recipientCriteria),
-    queryFn: () => previewCampaignRecipients({ data: { recipientCriteria, sampleSize } }),
+    queryFn: async () => {
+      const result = await previewCampaignRecipients({
+        data: { recipientCriteria, sampleSize } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && Object.keys(recipientCriteria).length > 0,
-    staleTime: 60 * 1000, // 1 minute - preview data can be cached a bit
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM, // preview data can be cached a bit
   });
 }
 
@@ -141,8 +166,8 @@ export function useCreateCampaign() {
   const queryClient = useQueryClient();
   const createCampaignFn = useServerFn(createCampaign);
 
-  return useMutation({
-    mutationFn: (input: CreateCampaignInput) => createCampaignFn({ data: input }),
+  return useMutation<Campaign, Error, CreateCampaignInput>({
+    mutationFn: async (input: CreateCampaignInput) => (await createCampaignFn({ data: input })) as Campaign,
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaigns(),
@@ -155,14 +180,18 @@ export function useUpdateCampaign() {
   const queryClient = useQueryClient();
   const updateCampaignFn = useServerFn(updateCampaign);
 
-  return useMutation({
-    mutationFn: (input: UpdateCampaignInput) => updateCampaignFn({ data: input }),
+  return useMutation<Campaign, Error, UpdateCampaignInput>({
+    mutationFn: async (input: UpdateCampaignInput) => (await updateCampaignFn({ data: input })) as Campaign,
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaigns(),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaignDetail(variables.id),
+      });
+      // Also invalidate inbox since campaign changes may affect inbox items
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.inbox(),
       });
     },
   });
@@ -212,6 +241,85 @@ export function usePopulateCampaignRecipients() {
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaignRecipients(variables.campaignId, {}),
+      });
+    },
+  });
+}
+
+export function useSendCampaign() {
+  const queryClient = useQueryClient();
+  const sendCampaignFn = useServerFn(sendCampaign);
+
+  return useMutation({
+    mutationFn: (input: SendCampaignInput) => sendCampaignFn({ data: input }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaignDetail(variables.id),
+      });
+    },
+  });
+}
+
+export function usePauseCampaign() {
+  const queryClient = useQueryClient();
+  const pauseCampaignFn = useServerFn(pauseCampaign);
+
+  return useMutation({
+    mutationFn: (input: PauseCampaignInput) => pauseCampaignFn({ data: input }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaignDetail(variables.id),
+      });
+    },
+  });
+}
+
+export function useResumeCampaign() {
+  const queryClient = useQueryClient();
+  const resumeCampaignFn = useServerFn(resumeCampaign);
+
+  return useMutation({
+    mutationFn: (input: ResumeCampaignInput) => resumeCampaignFn({ data: input }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaignDetail(variables.id),
+      });
+    },
+  });
+}
+
+export function useDuplicateCampaign() {
+  const queryClient = useQueryClient();
+  const duplicateCampaignFn = useServerFn(duplicateCampaign);
+
+  return useMutation({
+    mutationFn: (input: DuplicateCampaignInput) => duplicateCampaignFn({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+    },
+  });
+}
+
+export function useTestSendCampaign() {
+  const queryClient = useQueryClient();
+  const testSendCampaignFn = useServerFn(testSendCampaign);
+
+  return useMutation({
+    mutationFn: (input: TestSendCampaignInput) => testSendCampaignFn({ data: input }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaignDetail(variables.campaignId),
       });
     },
   });

@@ -217,7 +217,7 @@ export interface ExportOptions {
     start: Date;
     end: Date;
   };
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
 }
 
 /**

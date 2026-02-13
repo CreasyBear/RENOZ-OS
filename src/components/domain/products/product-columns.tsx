@@ -5,6 +5,7 @@
  */
 
 import { Eye, Pencil, Copy, Trash2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   CheckboxCell,
@@ -17,7 +18,7 @@ import {
   DataTableColumnHeader,
 } from "@/components/shared/data-table";
 import type { ActionItem } from "@/components/shared/data-table/cells/actions-cell";
-import type { ProductStatus, ProductType, StockStatus } from "./product-status-config";
+import type { ProductTableItem } from "@/lib/schemas/products";
 import {
   PRODUCT_STATUS_CONFIG,
   PRODUCT_TYPE_CONFIG,
@@ -30,29 +31,7 @@ import {
 // ============================================================================
 // TYPES
 // ============================================================================
-
-/**
- * Product table item type - matches server function response
- */
-export interface ProductTableItem {
-  id: string;
-  sku: string;
-  barcode?: string | null;
-  name: string;
-  description: string | null;
-  categoryId: string | null;
-  categoryName?: string | null;
-  type: ProductType;
-  status: ProductStatus;
-  basePrice: number;
-  costPrice: number | null;
-  isActive: boolean;
-  trackInventory?: boolean;
-  totalQuantity?: number;
-  stockStatus?: StockStatus;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-}
+// ProductTableItem moved to schemas/products.ts - imported above
 
 export interface CreateProductColumnsOptions {
   /** Handle single item selection */
@@ -181,10 +160,23 @@ export function createProductColumns(
       header: "Category",
       cell: ({ row }) => {
         const categoryName = row.original.categoryName;
-        return (
-          <span className="text-sm text-muted-foreground">
-            {categoryName || "-"}
-          </span>
+        const categoryId = row.original.categoryId;
+        
+        if (!categoryName) {
+          return <span className="text-sm text-muted-foreground">-</span>;
+        }
+
+        // Link to filtered products list by category
+        return categoryId ? (
+          <Link
+            to="/products"
+            search={{ categoryId }}
+            className="text-sm text-primary hover:underline"
+          >
+            {categoryName}
+          </Link>
+        ) : (
+          <span className="text-sm text-muted-foreground">{categoryName}</span>
         );
       },
       enableSorting: false,
@@ -239,10 +231,16 @@ export function createProductColumns(
           return <span className="text-muted-foreground text-sm">-</span>;
         }
 
+        // Type guard for stock status (exclude "not_tracked")
+        const stockStatus = row.original.stockStatus;
+        if (!stockStatus || stockStatus === "not_tracked") {
+          return <span className="text-muted-foreground text-sm">-</span>;
+        }
+
         return (
           <div className="flex items-center gap-2">
             <StatusCell
-              status={row.original.stockStatus as Exclude<StockStatus, "not_tracked">}
+              status={stockStatus}
               statusConfig={STOCK_STATUS_CONFIG}
             />
             {totalQty !== undefined && (

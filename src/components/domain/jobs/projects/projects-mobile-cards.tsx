@@ -4,7 +4,8 @@
  * Mobile-optimized card layout for projects table view.
  */
 
-import { memo, useCallback } from "react";
+import { memo } from "react";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusCell } from "@/components/shared/data-table";
 import { cn } from "@/lib/utils";
@@ -23,8 +24,8 @@ export interface ProjectsMobileCardsProps {
   selectedIds: Set<string>;
   /** Handle selection toggle */
   onSelect: (id: string, checked: boolean) => void;
-  /** View project handler */
-  onViewProject: (id: string) => void;
+  /** @deprecated Use Link for navigation - kept for API compatibility */
+  onViewProject?: (id: string) => void;
   /** Additional className */
   className?: string;
 }
@@ -58,26 +59,8 @@ function MobileProgressBar({ value }: { value: number }) {
 export const ProjectsMobileCards = memo(function ProjectsMobileCards({
   projects,
   selectedIds,
-  onViewProject,
   className,
 }: ProjectsMobileCardsProps) {
-  const handleCardClick = useCallback(
-    (projectId: string) => {
-      onViewProject(projectId);
-    },
-    [onViewProject]
-  );
-
-  const handleCardKeyDown = useCallback(
-    (e: React.KeyboardEvent, projectId: string) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onViewProject(projectId);
-      }
-    },
-    [onViewProject]
-  );
-
   return (
     <div className={cn("space-y-3", className)}>
       {projects.map((project) => {
@@ -88,37 +71,39 @@ export const ProjectsMobileCards = memo(function ProjectsMobileCards({
         );
 
         return (
-          <Card
+          <Link
             key={project.id}
-            tabIndex={0}
-            role="button"
-            aria-label={`View project ${project.projectNumber}`}
-            className={cn(
-              "cursor-pointer hover:bg-muted/50 transition-colors",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              isSelected && "bg-muted/50 ring-1 ring-primary"
-            )}
-            onClick={() => handleCardClick(project.id)}
-            onKeyDown={(e) => handleCardKeyDown(e, project.id)}
+            to="/projects/$projectId"
+            params={{ projectId: project.id }}
           >
-            <CardContent className="p-4">
-              {/* Header row: Title + Status */}
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1 min-w-0 mr-2">
-                  <p className="font-medium truncate">{project.title}</p>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{project.projectNumber}</span>
-                    <span>·</span>
-                    <span className="capitalize">
-                      {formatProjectType(project.projectType)}
-                    </span>
+            <Card
+              tabIndex={0}
+              role="article"
+              aria-label={`View project ${project.projectNumber}`}
+              className={cn(
+                "cursor-pointer hover:bg-muted/50 transition-colors",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isSelected && "bg-muted/50 ring-1 ring-primary"
+              )}
+            >
+              <CardContent className="p-4">
+                {/* Header row: Title + Status */}
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0 mr-2">
+                    <p className="font-medium truncate">{project.title}</p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{project.projectNumber}</span>
+                      <span>·</span>
+                      <span className="capitalize">
+                        {formatProjectType(project.projectType)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <StatusCell
-                  status={project.status}
-                  statusConfig={PROJECT_STATUS_CONFIG}
-                  showIcon
-                />
+                  <StatusCell
+                    status={project.status}
+                    statusConfig={PROJECT_STATUS_CONFIG}
+                    showIcon
+                  />
               </div>
 
               {/* Middle row: Priority + Due Date */}
@@ -142,8 +127,9 @@ export const ProjectsMobileCards = memo(function ProjectsMobileCards({
 
               {/* Footer row: Progress */}
               <MobileProgressBar value={project.progressPercent} />
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         );
       })}
     </div>

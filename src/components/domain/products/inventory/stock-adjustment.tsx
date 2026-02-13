@@ -3,7 +3,7 @@
  *
  * Dialog for adjusting inventory levels with reason tracking.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { adjustStock, receiveStock, listLocations } from "@/server/functions/products/product-inventory";
+import { useAdjustStock, useReceiveStock, useInventoryLocations } from "@/hooks/products";
 
 interface StockAdjustmentProps {
   productId: string;
@@ -59,12 +59,6 @@ const reasonPresets = [
   { value: "other", label: "Other" },
 ];
 
-interface Location {
-  id: string;
-  locationCode: string;
-  name: string;
-}
-
 export function StockAdjustment({
   productId,
   productName,
@@ -74,11 +68,18 @@ export function StockAdjustment({
   onAdjusted,
   defaultLocationId,
 }: StockAdjustmentProps) {
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState<string>("");
+
+  // Use TanStack Query hooks
+  const { data: locationsData, isLoading: isLoadingLocations } = useInventoryLocations({
+    enabled: open,
+  });
+  const adjustStockMutation = useAdjustStock();
+  const receiveStockMutation = useReceiveStock();
+
+  const locations = useMemo(() => locationsData?.locations ?? [], [locationsData]);
+  const isSaving = adjustStockMutation.isPending || receiveStockMutation.isPending;
 
   const {
     register,
@@ -97,8 +98,10 @@ export function StockAdjustment({
     },
   });
 
+  /* eslint-disable react-hooks/incompatible-library -- React Hook Form watch(); known limitation */
   const adjustmentType = watch("adjustmentType");
   const quantity = watch("quantity");
+  /* eslint-enable react-hooks/incompatible-library */
 
   // Calculate preview
   const getPreviewQuantity = () => {
@@ -115,34 +118,17 @@ export function StockAdjustment({
     }
   };
 
-  // Load locations
+  // Set default location when locations load
   useEffect(() => {
-    const loadLocations = async () => {
-      setIsLoadingLocations(true);
-      try {
-        const result = await listLocations({ data: { isActive: true } }) as any;
-        const locs = (result.locations ?? []) as Location[];
-        setLocations(locs);
-        // Set default location
-        if (locs.length > 0) {
-          const defaultLoc = defaultLocationId
-            ? locs.find((l) => l.id === defaultLocationId)
-            : locs[0];
-          if (defaultLoc) {
-            setValue("locationId", defaultLoc.id);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load locations:", err);
-      } finally {
-        setIsLoadingLocations(false);
+    if (locations.length > 0 && open) {
+      const defaultLoc = defaultLocationId
+        ? locations.find((l) => l.id === defaultLocationId)
+        : locations[0];
+      if (defaultLoc) {
+        setValue("locationId", defaultLoc.id);
       }
-    };
-
-    if (open) {
-      loadLocations();
     }
-  }, [open, defaultLocationId, setValue]);
+  }, [locations, open, defaultLocationId, setValue]);
 
 
   // Handle preset selection
@@ -157,57 +143,69 @@ export function StockAdjustment({
   };
 
   // Handle submit
-  const onSubmit = async (data: AdjustmentFormData) => {
-    setIsSaving(true);
+  const onSubmit = (data: AdjustmentFormData) => {
     setError(null);
 
-    try {
-      let adjustmentQty: number;
-
-      switch (data.adjustmentType) {
-        case "add":
-          // Use receiveStock for additions
-          await receiveStock({
-            data: {
-              productId,
-              locationId: data.locationId,
-              quantity: data.quantity,
-              notes: `${data.reason}${data.notes ? ` - ${data.notes}` : ""}`,
-            },
-          });
-          onAdjusted?.();
-          onOpenChange(false);
-          return;
-
-        case "subtract":
-          adjustmentQty = -data.quantity;
-          break;
-
-        case "set":
-          adjustmentQty = data.quantity - currentStock;
-          break;
-
-        default:
-          adjustmentQty = data.quantity;
-      }
-
-      await adjustStock({
-        data: {
-          productId,
-          locationId: data.locationId,
-          adjustmentQty,
-          reason: data.reason,
-          notes: data.notes,
-        },
-      });
-
+    const onSuccess = () => {
       onAdjusted?.();
       onOpenChange(false);
-    } catch (err) {
-      console.error("Failed to adjust stock:", err);
-      setError(err instanceof Error ? err.message : "Failed to adjust stock");
-    } finally {
-      setIsSaving(false);
+    };
+
+    const onError = (err: Error) => {
+      setError(err.message || "Failed to adjust stock");
+    };
+
+    switch (data.adjustmentType) {
+      case "add":
+        // Use receiveStock for additions
+        receiveStockMutation.mutate(
+          {
+            productId,
+            locationId: data.locationId,
+            quantity: data.quantity,
+            notes: `${data.reason}${data.notes ? ` - ${data.notes}` : ""}`,
+          },
+          { onSuccess, onError }
+        );
+        return;
+
+      case "subtract":
+        adjustStockMutation.mutate(
+          {
+            productId,
+            locationId: data.locationId,
+            adjustmentQty: -data.quantity,
+            reason: data.reason,
+            notes: data.notes,
+          },
+          { onSuccess, onError }
+        );
+        return;
+
+      case "set":
+        adjustStockMutation.mutate(
+          {
+            productId,
+            locationId: data.locationId,
+            adjustmentQty: data.quantity - currentStock,
+            reason: data.reason,
+            notes: data.notes,
+          },
+          { onSuccess, onError }
+        );
+        return;
+
+      default:
+        adjustStockMutation.mutate(
+          {
+            productId,
+            locationId: data.locationId,
+            adjustmentQty: data.quantity,
+            reason: data.reason,
+            notes: data.notes,
+          },
+          { onSuccess, onError }
+        );
     }
   };
 

@@ -8,6 +8,7 @@
 import { CheckCircle, Clock, XCircle, ArrowRightLeft, Ban } from "lucide-react";
 import type { StatusConfigItem } from "@/components/shared/data-table";
 import type { WarrantyStatus } from "@/lib/schemas/warranty";
+import { parseDate } from "@/lib/warranty";
 
 /**
  * Warranty status configuration for StatusCell
@@ -47,7 +48,8 @@ export function isWarrantyExpiringSoon(
   expiryDate: string | Date | null | undefined
 ): boolean {
   if (!expiryDate) return false;
-  const expiry = typeof expiryDate === "string" ? new Date(expiryDate) : expiryDate;
+  const expiry = parseDate(expiryDate);
+  if (!expiry) return false;
   const now = new Date();
   const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   return expiry > now && expiry <= thirtyDaysFromNow;
@@ -60,7 +62,8 @@ export function isWarrantyExpired(
   expiryDate: string | Date | null | undefined
 ): boolean {
   if (!expiryDate) return false;
-  const expiry = typeof expiryDate === "string" ? new Date(expiryDate) : expiryDate;
+  const expiry = parseDate(expiryDate);
+  if (!expiry) return false;
   return expiry < new Date();
 }
 
@@ -72,7 +75,9 @@ export function formatExpiryDateRelative(
 ): { text: string; isExpired: boolean; isExpiringSoon: boolean } {
   if (!expiryDate) return { text: "—", isExpired: false, isExpiringSoon: false };
 
-  const expiry = typeof expiryDate === "string" ? new Date(expiryDate) : expiryDate;
+  const expiry = parseDate(expiryDate);
+  if (!expiry) return { text: "—", isExpired: false, isExpiringSoon: false };
+  
   const now = new Date();
   const isExpired = expiry < now;
 

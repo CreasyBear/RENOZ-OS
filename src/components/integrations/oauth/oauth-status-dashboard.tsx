@@ -40,7 +40,7 @@ interface RecentActivity {
   provider: 'google_workspace' | 'microsoft_365';
   status: 'success' | 'error' | 'warning';
   description: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 interface OAuthStatusDashboardProps {
@@ -153,17 +153,19 @@ export function OAuthStatusDashboard({
       <div className="flex items-center space-x-2">
         <span className="text-sm font-medium">Time Range:</span>
         <div className="flex space-x-1">
-          {[
-            { value: '1h', label: '1H' },
-            { value: '24h', label: '24H' },
-            { value: '7d', label: '7D' },
-            { value: '30d', label: '30D' },
-          ].map((option) => (
+          {(
+            [
+              { value: '1h' as const, label: '1H' },
+              { value: '24h' as const, label: '24H' },
+              { value: '7d' as const, label: '7D' },
+              { value: '30d' as const, label: '30D' },
+            ] as const
+          ).map((option) => (
             <Button
               key={option.value}
               variant={selectedTimeframe === option.value ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSelectedTimeframe(option.value as any)}
+              onClick={() => setSelectedTimeframe(option.value as typeof selectedTimeframe)}
             >
               {option.label}
             </Button>

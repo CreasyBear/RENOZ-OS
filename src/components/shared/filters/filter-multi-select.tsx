@@ -42,6 +42,7 @@ export const FilterMultiSelect = memo(function FilterMultiSelect<T extends strin
   placeholder = "Select...",
   label,
   maxDisplay = 2,
+  maxSelections,
   className,
   disabled = false,
 }: FilterMultiSelectProps<T>) {
@@ -49,6 +50,15 @@ export const FilterMultiSelect = memo(function FilterMultiSelect<T extends strin
 
   const handleToggle = (optionValue: T, checked: boolean) => {
     if (checked) {
+      if (maxSelections === 1) {
+        onChange([optionValue]);
+        return;
+      }
+      if (maxSelections && value.length >= maxSelections) {
+        const trimmed = value.slice(1 - maxSelections);
+        onChange([...trimmed, optionValue]);
+        return;
+      }
       onChange([...value, optionValue]);
     } else {
       onChange(value.filter((v) => v !== optionValue));

@@ -4,32 +4,64 @@ import { cn } from '~/lib/utils';
 import { supabase } from '~/lib/supabase/client';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
 import { Link, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
+import { useTanStackForm } from '~/hooks/_shared/use-tanstack-form';
+import { loginSchema } from '~/lib/schemas/auth';
+import { TextField } from '~/components/shared/forms';
+import { Loader2 } from 'lucide-react';
+import { checkLoginAttempt, clearLoginAttempt } from '@/server/functions/auth/login-rate-limit';
+import { sanitizeInternalRedirect } from '@/lib/auth/redirects';
+import { logger } from '@/lib/logger';
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
-  const { redirect } = useSearch({ from: '/login' });
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const { redirect, reason } = useSearch({ from: '/login' });
   const navigate = useNavigate();
   const router = useRouter();
-  const safeRedirect = redirect && redirect.startsWith('/') ? redirect : '/dashboard';
+  const safeRedirect = sanitizeInternalRedirect(redirect, {
+    fallback: '/dashboard',
+    disallowPaths: ['/login', '/sign-up', '/forgot-password'],
+  });
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
+  React.useEffect(() => {
+    if (reason === 'invalid_user') {
+      setAuthError('Your account is not fully set up. Please contact support.');
+      return;
+    }
+  }, [reason]);
 
-    try {
+  const form = useTanStackForm({
+    schema: loginSchema,
+    defaultValues: { email: '', password: '' },
+    onSubmit: async (values) => {
+      setAuthError(null);
+      const loginRateLimit = await checkLoginAttempt({
+        data: { email: values.email },
+      }).catch((error) => {
+        logger.warn('[login] Rate-limit check failed, continuing login flow', { error });
+        return { success: true } as const;
+      });
+
+      if (
+        loginRateLimit &&
+        typeof loginRateLimit === 'object' &&
+        'success' in loginRateLimit &&
+        !loginRateLimit.success
+      ) {
+        throw new Error(
+          (typeof loginRateLimit.error === 'string' && loginRateLimit.error) ||
+            'Too many login attempts. Please try again later.'
+        );
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: values.email,
+        password: values.password,
       });
       if (error) throw error;
-      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
         await supabase.auth.signOut();
         throw new Error('Login succeeded but no session was found.');
@@ -46,66 +78,101 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         throw new Error('Account setup is incomplete. Please sign up again or contact support.');
       }
 
-      // Invalidate router cache to refresh auth state, then redirect
+      await clearLoginAttempt({
+        data: { email: values.email },
+      }).catch((error) => {
+        // Successful login should not fail because limiter reset failed.
+        logger.warn('[login] Failed to clear rate-limit counter', { error });
+      });
+
       await router.invalidate();
       await navigate({ to: safeRedirect, replace: true });
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAuthError(null);
+    void form.handleSubmit().catch((err) => {
+      setAuthError(err instanceof Error ? err.message : 'An error occurred');
+    });
   };
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>Enter your email below to login to your account</CardDescription>
+      <Card className="border-border/80 shadow-lg">
+        <CardHeader className="space-y-1.5 pb-4">
+          <CardTitle className="text-2xl font-semibold tracking-tight">Sign in</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Enter your email and password to access your account
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                  <Link
-                    to="/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Logging in...' : 'Login'}
+          <form id="login-form" onSubmit={handleSubmit} noValidate>
+            <div className="flex flex-col gap-5">
+              <form.Field name="email">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Email"
+                    type="email"
+                    placeholder="name@company.com"
+                    required
+                    autocomplete="email"
+                  />
+                )}
+              </form.Field>
+              <form.Field name="password">
+                {(field) => (
+                  <div className="space-y-2">
+                    <TextField
+                      field={field}
+                      label="Password"
+                      type="password"
+                      required
+                      autocomplete="current-password"
+                    />
+                    <div className="flex justify-end">
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground transition-colors duration-200 cursor-pointer"
+                      >
+                        Forgot your password?
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </form.Field>
+              {authError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {authError}
+                </p>
+              )}
+              <Button
+                type="submit"
+                className="w-full h-11 font-medium transition-colors duration-200"
+                disabled={form.state.isSubmitting}
+              >
+                {form.state.isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign in'
+                )}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
+            <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
-              <Link to="/sign-up" className="underline underline-offset-4">
+              <Link
+                to="/sign-up"
+                className="font-medium text-foreground underline-offset-4 hover:underline transition-colors duration-200 cursor-pointer"
+              >
                 Sign up
               </Link>
-            </div>
+            </p>
           </form>
         </CardContent>
       </Card>

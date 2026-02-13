@@ -4,7 +4,12 @@
  * Organization-wide activity feed with date grouping, filtering,
  * infinite scroll, and virtualization for large lists.
  *
- * @see ACTIVITY-FEED-UI acceptance criteria
+ * ARCHITECTURE: Container/Presenter Pattern
+ * - Container handles data fetching (useActivityFeed hook)
+ * - Presenter renders UI and receives data via props
+ *
+ * @see ACTIVITY-TIMELINE-STANDARDS.md
+ * @see STANDARDS.md for container/presenter pattern
  */
 
 import * as React from "react";
@@ -20,12 +25,18 @@ import { ENTITY_LABELS, ENTITY_ICONS } from "./activity-config";
 import {
   useActivityFeed,
   useFlattenedActivities,
-  useCanLoadMore,
   type UseActivityFeedOptions,
 } from "@/hooks";
+import { useInfiniteScrollObserver } from "@/hooks/activities/use-infinite-scroll-observer";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
-import { RefreshCw, Inbox } from "lucide-react";
-import type { ActivityWithUser, ActivityEntityType } from "@/lib/schemas/activities";
+import { RefreshCw, Inbox, Plus, Filter } from "lucide-react";
+import type {
+  ActivityWithUser,
+  ActivityEntityType,
+  ActivityDateGroup,
+} from "@/lib/schemas/activities";
+import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
+import { useCurrentUser } from "@/hooks/auth/use-current-user";
 
 // ============================================================================
 // TYPES
@@ -42,23 +53,57 @@ export interface ActivityFeedProps {
   virtualizationThreshold?: number;
   /** Custom link generator for entities */
   getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string;
-  /** Height of the feed container (for virtualization) */
-  height?: number | string;
   /** Show compact activity items */
   compact?: boolean;
+  /** Use pagination instead of infinite scroll */
+  pagination?: boolean;
   className?: string;
 }
 
-interface DateGroup {
-  date: Date;
-  label: string;
-  entities: EntityGroup[];
-}
-
-interface EntityGroup {
-  entityType: ActivityEntityType;
-  label: string;
-  activities: ActivityWithUser[];
+export interface ActivityFeedPresenterProps {
+  /** @source groups from groupActivitiesByDate() in ActivityFeed container */
+  groups: ActivityDateGroup[];
+  /** @source filters from useState(filters) in ActivityFeed container */
+  filters: ActivityFiltersValue;
+  /** @source isLoading from useActivityFeed hook in ActivityFeed container */
+  isLoading: boolean;
+  /** @source isError from useActivityFeed hook in ActivityFeed container */
+  isError: boolean;
+  /** @source error from useActivityFeed hook in ActivityFeed container */
+  error?: Error | null;
+  /** @source isEmpty from activities.length === 0 in ActivityFeed container */
+  isEmpty: boolean;
+  /** @source hasActiveFilters from Object.values(filters).some(Boolean) in ActivityFeed container */
+  hasActiveFilters: boolean;
+  /** @source isFetching from useActivityFeed hook in ActivityFeed container */
+  isFetching: boolean;
+  /** @source isFetchingNextPage from useActivityFeed hook in ActivityFeed container */
+  isFetchingNextPage: boolean;
+  /** @source hasNextPage from useActivityFeed hook in ActivityFeed container */
+  hasNextPage: boolean;
+  /** @source totalActivities from groups calculation in ActivityFeed container */
+  totalActivities: number;
+  /** @source useVirtualization from totalActivities > virtualizationThreshold in ActivityFeed container */
+  useVirtualization: boolean;
+  /** @source showFilters prop passed to ActivityFeed container */
+  showFilters: boolean;
+  /** @source compact prop passed to ActivityFeed container */
+  compact: boolean;
+  /** @source getEntityLink prop passed to ActivityFeed container */
+  getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string;
+  /** @source currentUserId from useCurrentUser hook in ActivityFeed container */
+  currentUserId?: string;
+  className?: string;
+  /** @source handleFiltersChange from useCallback in ActivityFeed container */
+  onFiltersChange: (filters: ActivityFiltersValue) => void;
+  /** @source handleRetry from useCallback in ActivityFeed container */
+  onRetry: () => void;
+  /** @source handleClearFilters from useCallback in ActivityFeed container */
+  onClearFilters?: () => void;
+  /** Ref for infinite scroll trigger element */
+  loadMoreRef: React.RefObject<HTMLDivElement | null>;
+  /** Ref for scroll container (for virtualization and infinite scroll observer) */
+  scrollParentRef: React.RefObject<HTMLDivElement | null>;
 }
 
 // ============================================================================
@@ -67,6 +112,7 @@ interface EntityGroup {
 
 /**
  * Get a human-readable label for a date.
+ * Follows ACTIVITY-TIMELINE-STANDARDS.md pattern.
  */
 function getDateLabel(date: Date): string {
   if (isToday(date)) return "Today";
@@ -75,15 +121,19 @@ function getDateLabel(date: Date): string {
 }
 
 /**
- * Group activities by date.
+ * Get entity label from entity type.
  */
 function getEntityLabel(entityType: ActivityEntityType): string {
   return ENTITY_LABELS[entityType] ?? entityType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function groupActivitiesByDate(activities: ActivityWithUser[]): DateGroup[] {
-  const groups: DateGroup[] = [];
-  let currentGroup: DateGroup | null = null;
+/**
+ * Group activities by date and entity type.
+ * Follows ACTIVITY-TIMELINE-STANDARDS.md grouping algorithm.
+ */
+function groupActivitiesByDate(activities: ActivityWithUser[]): ActivityDateGroup[] {
+  const groups: ActivityDateGroup[] = [];
+  let currentGroup: ActivityDateGroup | null = null;
 
   for (const activity of activities) {
     const activityDate = new Date(activity.createdAt);
@@ -167,35 +217,74 @@ function LoadingState() {
   );
 }
 
-function EmptyState({ hasFilters }: { hasFilters: boolean }) {
+function EmptyStateComponent({
+  hasFilters,
+  onClearFilters,
+  onCreateActivity,
+}: {
+  hasFilters: boolean;
+  onClearFilters?: () => void;
+  onCreateActivity?: () => void;
+}) {
+  if (hasFilters) {
+    return (
+      <EmptyStateContainer variant="page">
+        <EmptyState
+          icon={Filter}
+          title="No matching activities"
+          message="Try adjusting your filters to see more results, or clear all filters to view all activities."
+          primaryAction={
+            onClearFilters
+              ? {
+                  label: "Clear filters",
+                  onClick: onClearFilters,
+                  icon: RefreshCw,
+                }
+              : undefined
+          }
+        />
+      </EmptyStateContainer>
+    );
+  }
+
   return (
-    <div
-      className="flex flex-col items-center justify-center py-16 px-4 text-center"
-      role="status"
-      aria-label={hasFilters ? "No matching activities" : "No activities yet"}
-    >
-      <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-        <Inbox className="w-8 h-8 text-muted-foreground" aria-hidden="true" />
-      </div>
-      <h3 className="font-semibold text-lg mb-2 text-foreground">
-        {hasFilters ? "No matching activities" : "No activities yet"}
-      </h3>
-      <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-        {hasFilters
-          ? "Try adjusting your filters to see more results."
-          : "Activities will appear here as your team takes actions."}
-      </p>
-    </div>
+    <EmptyStateContainer variant="page">
+      <EmptyState
+        icon={Inbox}
+        title="No activities yet"
+        message="Activities will appear here as your team takes actions. Log your first activity to get started tracking your team's work."
+        primaryAction={
+          onCreateActivity
+            ? {
+                label: "Log Activity",
+                onClick: onCreateActivity,
+                icon: Plus,
+              }
+            : undefined
+        }
+        secondaryAction={
+          onClearFilters
+            ? {
+                label: "View all activities",
+                onClick: onClearFilters,
+              }
+            : undefined
+        }
+      />
+    </EmptyStateContainer>
   );
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
+function ErrorState({ error, onRetry }: { error?: Error | null; onRetry: () => void }) {
   return (
     <div
       className="flex flex-col items-center justify-center py-12 px-4 text-center"
       role="alert"
     >
       <p className="text-destructive mb-4">Failed to load activities</p>
+      {error?.message && (
+        <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
+      )}
       <Button onClick={onRetry} variant="outline" size="sm">
         <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
         Try again
@@ -204,17 +293,48 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function FilterBar({
+  filters,
+  onFiltersChange,
+  currentUserId,
+}: {
+  filters: ActivityFiltersValue;
+  onFiltersChange: (filters: ActivityFiltersValue) => void;
+  currentUserId?: string;
+}) {
+  return (
+    <div className="border-b p-4 shrink-0">
+      <ActivityFilters
+        value={filters}
+        onChange={onFiltersChange}
+        currentUserId={currentUserId}
+      />
+    </div>
+  );
+}
+
 // ============================================================================
 // VIRTUALIZED LIST
 // ============================================================================
 
-interface VirtualizedFeedProps {
-  groups: DateGroup[];
+export interface VirtualizedFeedProps {
+  groups: ActivityDateGroup[];
   parentRef: React.RefObject<HTMLDivElement | null>;
   compact?: boolean;
   getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string;
 }
 
+export interface StandardFeedProps {
+  groups: ActivityDateGroup[];
+  compact?: boolean;
+  getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string;
+}
+
+/**
+ * Virtualized feed component.
+ * Follows ACTIVITY-TIMELINE-STANDARDS.md virtualization pattern.
+ * Separate component ensures hooks only called when virtualization is enabled.
+ */
 function VirtualizedFeed({
   groups,
   parentRef,
@@ -247,6 +367,7 @@ function VirtualizedFeed({
     return result;
   }, [groups]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useVirtualizer returns functions that cannot be memoized; known TanStack Virtual limitation
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
@@ -270,6 +391,7 @@ function VirtualizedFeed({
     >
       {virtualizer.getVirtualItems().map((virtualRow) => {
         const item = items[virtualRow.index];
+        if (!item) return null;
 
         return (
           <div
@@ -309,12 +431,6 @@ function VirtualizedFeed({
 // NON-VIRTUALIZED LIST
 // ============================================================================
 
-interface StandardFeedProps {
-  groups: DateGroup[];
-  compact?: boolean;
-  getEntityLink?: (entityType: ActivityEntityType, entityId: string) => string;
-}
-
 function StandardFeed({ groups, compact, getEntityLink }: StandardFeedProps) {
   return (
     <div className="space-y-1">
@@ -347,178 +463,86 @@ function StandardFeed({ groups, compact, getEntityLink }: StandardFeedProps) {
 }
 
 // ============================================================================
-// MAIN COMPONENT
+// PRESENTER
 // ============================================================================
 
 /**
- * Activity feed with filtering, date grouping, infinite scroll, and virtualization.
+ * Activity Feed Presenter
  *
- * @example
- * ```tsx
- * // Basic usage
- * <ActivityFeed showFilters />
- *
- * // With initial filters
- * <ActivityFeed
- *   filters={{ entityType: "customer" }}
- *   height={600}
- * />
- *
- * // Compact mode for sidebars
- * <ActivityFeed compact height={400} />
- * ```
+ * Pure UI component - receives all data and callbacks via props.
+ * No data fetching hooks, no state management.
  */
-export function ActivityFeed({
-  filters: initialFilters = {},
-  onFiltersChange,
-  showFilters = true,
-  virtualizationThreshold = 50,
+export const ActivityFeedPresenter = React.memo(function ActivityFeedPresenter({
+  groups,
+  filters,
+  isLoading,
+  isError,
+  error,
+  isEmpty,
+  hasActiveFilters,
+  isFetching,
+  isFetchingNextPage,
+  hasNextPage,
+  totalActivities,
+  useVirtualization,
+  showFilters,
+  compact,
   getEntityLink,
-  height: _height = 600, // Height now controlled via className
-  compact = false,
+  currentUserId,
   className,
-}: ActivityFeedProps) {
-  const [filters, setFilters] = React.useState<ActivityFiltersValue>({
-    entityType: initialFilters.entityType,
-    action: initialFilters.action,
-    userId: initialFilters.userId,
-    dateFrom: initialFilters.dateFrom,
-    dateTo: initialFilters.dateTo,
-  });
-
-  // Sync filters when prop changes (URL navigation)
-  React.useEffect(() => {
-    setFilters({
-      entityType: initialFilters.entityType,
-      action: initialFilters.action,
-      userId: initialFilters.userId,
-      dateFrom: initialFilters.dateFrom,
-      dateTo: initialFilters.dateTo,
-    });
-  }, [
-    initialFilters.entityType,
-    initialFilters.action,
-    initialFilters.userId,
-    initialFilters.dateFrom?.getTime(),
-    initialFilters.dateTo?.getTime(),
-  ]);
-
-  // Fetch activities with current filters
-  const feedQuery = useActivityFeed({
-    ...filters,
-    pageSize: 20,
-  });
-
-  const activities = useFlattenedActivities(feedQuery);
-  const canLoadMore = useCanLoadMore(feedQuery);
-
-  // Intersection observer for infinite scroll
-  const loadMoreRef = React.useRef<HTMLDivElement>(null);
-
-  // Use ref for canLoadMore to avoid recreating observer on every change
-  const canLoadMoreRef = React.useRef(canLoadMore);
-  canLoadMoreRef.current = canLoadMore;
-
-  // Set up intersection observer for infinite scroll
-  React.useEffect(() => {
-    const element = loadMoreRef.current;
-    if (!element) return;
-
-    // Find the ScrollArea viewport element (Radix UI wraps content in a Viewport)
-    const scrollContainer = scrollParentRef.current;
-    if (!scrollContainer) return;
-
-    let observer: IntersectionObserver | null = null;
-
-    // Use requestAnimationFrame to ensure DOM is ready
-    const rafId = requestAnimationFrame(() => {
-      const viewport = scrollContainer.querySelector(
-        '[data-slot="scroll-area-viewport"]'
-      ) as HTMLElement;
-
-      if (!viewport && process.env.NODE_ENV === 'development') {
-        console.warn('[ActivityFeed] ScrollArea viewport not found, using document viewport');
-      }
-
-      observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && canLoadMoreRef.current) {
-            feedQuery.fetchNextPage();
-          }
-        },
-        {
-          threshold: 0,
-          rootMargin: "200px", // Increased margin for earlier trigger
-          root: viewport || null, // Use ScrollArea viewport as root, fallback to document viewport
-        }
-      );
-
-      observer.observe(element);
-    });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      if (observer) {
-        observer.disconnect();
-      }
-    };
-  }, [feedQuery, activities.length]); // Re-run when activities change or query updates
-
-  // Group activities by date
-  const groups = React.useMemo(
-    () => groupActivitiesByDate(activities as ActivityWithUser[]),
-    [activities]
-  );
-
-  // Determine if virtualization should be used
-  const useVirtualization = activities.length > virtualizationThreshold;
-  const scrollParentRef = React.useRef<HTMLDivElement>(null);
-
-  // Check if any filters are active
-  const hasActiveFilters = Object.values(filters).some(Boolean);
-
-  // Handle filter changes - notify parent for URL sync
-  const handleFiltersChange = (newFilters: ActivityFiltersValue) => {
-    setFilters(newFilters);
-    onFiltersChange?.(newFilters);
-  };
-
-  // Render states
-  if (feedQuery.isLoading && !feedQuery.data) {
+  onFiltersChange,
+  onRetry,
+  onClearFilters,
+  loadMoreRef,
+  scrollParentRef,
+}: ActivityFeedPresenterProps) {
+  // Render loading state
+  if (isLoading) {
     return (
       <div className={cn("flex flex-col", className)}>
         {showFilters && (
-          <div className="border-b p-4">
-            <ActivityFilters value={filters} onChange={handleFiltersChange} />
-          </div>
+          <FilterBar
+            filters={filters}
+            onFiltersChange={onFiltersChange}
+            currentUserId={currentUserId}
+          />
         )}
         <LoadingState />
       </div>
     );
   }
 
-  if (feedQuery.isError) {
+  // Render error state
+  if (isError) {
     return (
       <div className={cn("flex flex-col", className)}>
         {showFilters && (
-          <div className="border-b p-4">
-            <ActivityFilters value={filters} onChange={handleFiltersChange} />
-          </div>
+          <FilterBar
+            filters={filters}
+            onFiltersChange={onFiltersChange}
+            currentUserId={currentUserId}
+          />
         )}
-        <ErrorState onRetry={() => feedQuery.refetch()} />
+        <ErrorState error={error} onRetry={onRetry} />
       </div>
     );
   }
 
-  if (activities.length === 0) {
+  // Render empty state
+  if (isEmpty) {
     return (
       <div className={cn("flex flex-col", className)}>
         {showFilters && (
-          <div className="border-b p-4">
-            <ActivityFilters value={filters} onChange={handleFiltersChange} />
-          </div>
+          <FilterBar
+            filters={filters}
+            onFiltersChange={onFiltersChange}
+            currentUserId={currentUserId}
+          />
         )}
-        <EmptyState hasFilters={hasActiveFilters} />
+        <EmptyStateComponent
+          hasFilters={hasActiveFilters}
+          onClearFilters={onClearFilters}
+        />
       </div>
     );
   }
@@ -526,18 +550,17 @@ export function ActivityFeed({
   return (
     <div className={cn("flex flex-col overflow-hidden", className)}>
       {showFilters && (
-        <div className="border-b p-4 shrink-0">
-          <ActivityFilters value={filters} onChange={handleFiltersChange} />
-        </div>
+        <FilterBar
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          currentUserId={currentUserId}
+        />
       )}
 
-      <ScrollArea
-        ref={scrollParentRef}
-        className="flex-1 min-h-0"
-      >
+      <ScrollArea ref={scrollParentRef} className="flex-1 min-h-0">
         <div
           role="feed"
-          aria-busy={feedQuery.isFetching}
+          aria-busy={isFetching}
           aria-label="Activity feed"
         >
           {useVirtualization ? (
@@ -556,15 +579,17 @@ export function ActivityFeed({
           )}
 
           {/* Infinite scroll trigger - always render so observer can attach */}
-          <div
-            ref={loadMoreRef}
-            className="h-4 w-full"
-            aria-hidden="true"
-            data-infinite-scroll-trigger
-          />
+          {hasNextPage && (
+            <div
+              ref={loadMoreRef}
+              className="h-16 w-full"
+              aria-hidden="true"
+              data-infinite-scroll-trigger
+            />
+          )}
 
           {/* Loading indicator for next page */}
-          {feedQuery.isFetchingNextPage && (
+          {isFetchingNextPage && (
             <div className="flex justify-center py-4">
               <RefreshCw
                 className="w-5 h-5 animate-spin text-muted-foreground"
@@ -574,11 +599,15 @@ export function ActivityFeed({
           )}
 
           {/* End of feed indicator */}
-          {!feedQuery.hasNextPage && activities.length > 0 && (
-            <div className="text-center py-6 text-sm text-muted-foreground" role="status" aria-label="End of activity feed">
+          {!hasNextPage && totalActivities > 0 && (
+            <div
+              className="text-center py-6 text-sm text-muted-foreground"
+              role="status"
+              aria-label="End of activity feed"
+            >
               <span className="inline-flex items-center gap-2">
                 <span className="h-px w-8 bg-border"></span>
-                You've reached the end
+                You&apos;ve reached the end
                 <span className="h-px w-8 bg-border"></span>
               </span>
             </div>
@@ -586,5 +615,152 @@ export function ActivityFeed({
         </div>
       </ScrollArea>
     </div>
+  );
+});
+
+// ============================================================================
+// CONTAINER
+// ============================================================================
+
+/**
+ * Activity Feed Container
+ *
+ * Container responsibilities:
+ * - Fetches data via useActivityFeed hook
+ * - Manages filter state
+ * - Handles infinite scroll logic
+ * - Groups activities by date and entity
+ * - Passes data and callbacks to presenter
+ *
+ * @source activities from useActivityFeed hook
+ * @source currentUser from useCurrentUser hook
+ */
+export function ActivityFeed({
+  filters: initialFilters = {},
+  onFiltersChange,
+  showFilters = true,
+  virtualizationThreshold = 50,
+  getEntityLink,
+  compact = false,
+  className,
+}: ActivityFeedProps) {
+  // Use reducer for filter state to handle sync more cleanly
+  const [filters, setFilters] = React.useReducer(
+    (_prev: ActivityFiltersValue, next: ActivityFiltersValue) => next,
+    {
+      entityType: initialFilters.entityType,
+      action: initialFilters.action,
+      userId: initialFilters.userId,
+      dateFrom: initialFilters.dateFrom,
+      dateTo: initialFilters.dateTo,
+    }
+  );
+
+  // Sync filters when prop changes (URL navigation) - use reducer dispatch
+  const dateFromTime = initialFilters.dateFrom?.getTime();
+  const dateToTime = initialFilters.dateTo?.getTime();
+  
+  React.useEffect(() => {
+    setFilters({
+      entityType: initialFilters.entityType,
+      action: initialFilters.action,
+      userId: initialFilters.userId,
+      dateFrom: initialFilters.dateFrom,
+      dateTo: initialFilters.dateTo,
+    });
+  }, [
+    initialFilters.entityType,
+    initialFilters.action,
+    initialFilters.userId,
+    initialFilters.dateFrom,
+    initialFilters.dateTo,
+    dateFromTime,
+    dateToTime,
+  ]);
+
+  // Fetch activities with current filters
+  const feedQuery = useActivityFeed({
+    ...filters,
+    pageSize: 20,
+  });
+
+  const activities = useFlattenedActivities(feedQuery);
+  const { user: currentUser } = useCurrentUser();
+
+  // Refs for scroll container and infinite scroll trigger
+  const scrollParentRef = React.useRef<HTMLDivElement>(null);
+  
+  // Use custom hook for infinite scroll observer
+  const loadMoreRef = useInfiniteScrollObserver({
+    hasNextPage: feedQuery.hasNextPage ?? false,
+    isFetchingNextPage: feedQuery.isFetchingNextPage,
+    fetchNextPage: feedQuery.fetchNextPage,
+    scrollContainerRef: scrollParentRef,
+  });
+
+  // Group activities by date
+  const groups = React.useMemo(
+    () => groupActivitiesByDate(activities),
+    [activities]
+  );
+
+  // Calculate total activities and virtualization decision in container
+  const totalActivities = React.useMemo(() => {
+    return groups.reduce(
+      (sum, group) =>
+        sum + group.entities.reduce((entitySum, entity) => entitySum + entity.activities.length, 0),
+      0
+    );
+  }, [groups]);
+
+  const useVirtualization = totalActivities > virtualizationThreshold;
+
+  // Check if any filters are active
+  const hasActiveFilters = React.useMemo(
+    () => Object.values(filters).some(Boolean),
+    [filters]
+  );
+
+  // Handle filter changes - notify parent for URL sync
+  const handleFiltersChange = React.useCallback((newFilters: ActivityFiltersValue) => {
+    setFilters(newFilters);
+    onFiltersChange?.(newFilters);
+  }, [onFiltersChange]);
+
+  // Handle retry - refetch is stable from TanStack Query
+  const handleRetry = React.useCallback(() => {
+    feedQuery.refetch();
+  }, [feedQuery]);
+
+  // Handle clear filters - wrap in useCallback for prop stability
+  const handleClearFilters = React.useCallback(() => {
+    handleFiltersChange({});
+  }, [handleFiltersChange]);
+
+  return (
+    <ActivityFeedPresenter
+      groups={groups}
+      filters={filters}
+      isLoading={feedQuery.isLoading && !feedQuery.data}
+      isError={feedQuery.isError}
+      error={feedQuery.error instanceof Error ? feedQuery.error : feedQuery.error ? new Error(String(feedQuery.error)) : null}
+      isEmpty={activities.length === 0}
+      hasActiveFilters={hasActiveFilters}
+      isFetching={feedQuery.isFetching}
+      isFetchingNextPage={feedQuery.isFetchingNextPage}
+      hasNextPage={feedQuery.hasNextPage ?? false}
+      totalActivities={totalActivities}
+      useVirtualization={useVirtualization}
+      showFilters={showFilters}
+      compact={compact}
+      getEntityLink={getEntityLink}
+      currentUserId={currentUser?.id}
+      className={className}
+      onFiltersChange={handleFiltersChange}
+      onRetry={handleRetry}
+      onClearFilters={hasActiveFilters ? handleClearFilters : undefined}
+      loadMoreRef={loadMoreRef}
+      scrollParentRef={scrollParentRef}
+    />
   );
 }

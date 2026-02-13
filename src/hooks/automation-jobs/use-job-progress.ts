@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { getJobStatus, getActiveJobs } from '@/server/automation-jobs';
-import type { Job, JobStatus } from 'drizzle/schema/automation-jobs';
+import type { Job, JobStatus } from '@/lib/schemas/automation-jobs';
 import { toast } from 'sonner';
 
 // ============================================================================
@@ -98,6 +98,7 @@ export function useJobProgress({
         const result = await getJobStatusFn({ data: { jobId } });
         // Reset backoff on success
         consecutiveErrorsRef.current = 0;
+        if (result == null) throw new Error('Job status returned no data');
         return result;
       } catch (err) {
         // Exponential backoff on error (max 30s)
@@ -185,6 +186,7 @@ export function useActiveJobs({
       try {
         const result = await getActiveJobsFn();
         setConsecutiveErrors(0); // Reset on success
+        if (result == null) throw new Error('Active jobs returned no data');
         return result;
       } catch (err) {
         setConsecutiveErrors((prev) => prev + 1);

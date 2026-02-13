@@ -18,7 +18,7 @@
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-ACTIVITIES-UI)
  */
 
-import { memo, useState, useMemo, useEffect } from 'react';
+import { memo, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,8 +33,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Filter, MessageSquare } from 'lucide-react';
-import { ActivityTimeline, type Activity } from '@/components/shared';
+import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import type { OpportunityActivityType } from '@/lib/schemas/pipeline';
+import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 
 // ============================================================================
 // TYPES
@@ -59,6 +60,8 @@ export interface OpportunityActivityTimelineProps {
   onComplete?: (activityId: string, outcome?: string) => void;
   /** Whether a complete action is in progress */
   isCompleting?: boolean;
+  /** Optional entity id for mapping to UnifiedActivity */
+  opportunityId?: string;
   className?: string;
   maxItems?: number;
   showFilters?: boolean;
@@ -99,42 +102,26 @@ export const OpportunityActivityTimeline = memo(function OpportunityActivityTime
   isLoading = false,
   onComplete,
   isCompleting = false,
+  opportunityId,
   className,
   maxItems,
   showFilters = true,
 }: OpportunityActivityTimelineProps) {
-  // Deprecation warning
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(
-        '[DEPRECATED] OpportunityActivityTimeline is deprecated. ' +
-        'Use OpportunityActivityTimelineContainer or UnifiedActivityTimeline directly.'
-      );
-    }
-  }, []);
+  // Deprecation notice: This component is deprecated.
+  // Use OpportunityActivityTimelineContainer or UnifiedActivityTimeline directly.
 
   // Local UI state only - no data hooks
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   // Transform and filter activities for shared component
-  const activities = useMemo(() => {
+  const activities = useMemo((): UnifiedActivity[] => {
     if (!rawActivities) return [];
 
-    let result = rawActivities.map(
-      (a): Activity => ({
-        id: a.id,
-        activityType: a.type,
-        description: a.description,
-        outcome: a.outcome,
-        scheduledAt: a.scheduledAt?.toString() ?? null,
-        completedAt: a.completedAt?.toString() ?? null,
-        createdAt: a.createdAt.toString(),
-      })
-    );
+    let result = [...rawActivities];
 
     // Apply filters
     if (filters.type !== 'all') {
-      result = result.filter((a) => a.activityType === filters.type);
+      result = result.filter((a) => a.type === filters.type);
     }
     if (filters.status === 'completed') {
       result = result.filter((a) => !!a.completedAt);
@@ -151,8 +138,33 @@ export const OpportunityActivityTimeline = memo(function OpportunityActivityTime
       result = result.filter((a) => new Date(a.createdAt) <= to);
     }
 
-    return maxItems ? result.slice(0, maxItems) : result;
-  }, [rawActivities, filters, maxItems]);
+    const mapped = result.map((activity): UnifiedActivity => {
+      const isCompleted = !!activity.completedAt;
+      const isOverdue =
+        !isCompleted &&
+        !!activity.scheduledAt &&
+        new Date(activity.scheduledAt) < new Date();
+
+      return {
+        id: activity.id,
+        source: 'planned',
+        entityType: 'opportunity',
+        entityId: opportunityId ?? activity.id,
+        type: activity.type,
+        activityType: activity.type,
+        description: activity.description,
+        outcome: activity.outcome,
+        scheduledAt: activity.scheduledAt?.toString() ?? undefined,
+        completedAt: activity.completedAt?.toString() ?? undefined,
+        createdAt: activity.createdAt.toString(),
+        userId: null,
+        isCompleted,
+        isOverdue: isOverdue || undefined,
+      };
+    });
+
+    return maxItems ? mapped.slice(0, maxItems) : mapped;
+  }, [rawActivities, filters, maxItems, opportunityId]);
 
   // Check if filters are active
   const hasActiveFilters =
@@ -296,11 +308,12 @@ export const OpportunityActivityTimeline = memo(function OpportunityActivityTime
             </p>
           </div>
         ) : (
-          <ActivityTimeline
+          <UnifiedActivityTimeline
             activities={activities}
-            showCompletion
+            showFilters={false}
             onComplete={handleComplete}
-            isCompleting={isCompleting}
+            isCompletePending={isCompleting}
+            asCard={false}
           />
         )}
       </CardContent>

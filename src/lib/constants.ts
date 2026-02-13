@@ -143,6 +143,10 @@ export const LIMITS = {
   API_TIMEOUT: 30000,
   UPLOAD_TIMEOUT: 120000,
   LONG_RUNNING_TIMEOUT: 300000,
+
+  // Email sync
+  EMAIL_SYNC_MAX_EMAILS: 500,
+  EMAIL_PREVIEW_LENGTH: 150,
 } as const;
 
 // ============================================================================
@@ -188,6 +192,18 @@ export const API_CONFIG = {
 } as const;
 
 // ============================================================================
+// TANSTACK QUERY CONFIG
+// ============================================================================
+
+export const QUERY_CONFIG = {
+  STALE_TIME_SHORT: 30_000,
+  STALE_TIME_MEDIUM: 5 * 60_000,
+  STALE_TIME_LONG: 10 * 60_000,
+  REFETCH_INTERVAL_NORMAL: 30_000,
+  REFETCH_INTERVAL_SLOW: 60_000,
+} as const;
+
+// ============================================================================
 // VALIDATION RULES
 // ============================================================================
 
@@ -196,7 +212,7 @@ export const VALIDATION = {
   EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
 
   // Phone (international format)
-  PHONE_REGEX: /^\+?[\d\s\-\(\)]+$/,
+  PHONE_REGEX: /^\+?[\d\s\-()]+$/,
 
   // URLs
   URL_REGEX: /^https?:\/\/.+/,
@@ -234,3 +250,15 @@ export const TIMEZONES = {
     'Asia/Tokyo',
   ],
 } as const;
+
+export const LANGUAGES: Array<{ value: string; label: string }> = [
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'fr', label: 'French' },
+  { value: 'de', label: 'German' },
+  { value: 'it', label: 'Italian' },
+  { value: 'pt', label: 'Portuguese' },
+  { value: 'zh', label: 'Chinese' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'ko', label: 'Korean' },
+];

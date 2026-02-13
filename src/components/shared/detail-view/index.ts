@@ -28,8 +28,10 @@ export {
 // Entity header with avatar, name, status, actions
 export {
   EntityHeader,
+  EntityHeaderActions,
   type EntityHeaderProps,
   type EntityHeaderAction,
+  type EntityHeaderActionsProps,
 } from './entity-header';
 
 // Sheet layout with scrollable content and fixed footer

@@ -24,7 +24,7 @@ import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { TextField, TextareaField, SelectField } from '@/components/shared/forms';
 import { useCreateWorkstream, useUpdateWorkstream } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
-import type { ProjectWorkstream } from 'drizzle/schema/jobs/workstreams-notes';
+import type { ProjectWorkstream } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // SCHEMAS
@@ -45,6 +45,14 @@ const workstreamFormSchema = z.object({
 });
 
 type WorkstreamFormData = z.infer<typeof workstreamFormSchema>;
+
+/** Parse API defaultVisitType (string | null) to form enum or undefined */
+function parseDefaultVisitType(
+  raw: string | null | undefined
+): WorkstreamFormData['defaultVisitType'] {
+  const parsed = workstreamFormSchema.shape.defaultVisitType.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
 
 const visitTypeOptions = [
   { value: 'assessment', label: 'Assessment' },
@@ -205,7 +213,7 @@ export function WorkstreamEditDialog({
     defaultValues: {
       name: workstream?.name || '',
       description: workstream?.description || '',
-      defaultVisitType: (workstream?.defaultVisitType as WorkstreamFormData['defaultVisitType']) || undefined,
+      defaultVisitType: parseDefaultVisitType(workstream?.defaultVisitType),
     },
     onSubmit: async (data) => {
       if (!workstream) return;
@@ -233,7 +241,7 @@ export function WorkstreamEditDialog({
       form.reset({
         name: workstream.name,
         description: workstream.description || '',
-        defaultVisitType: (workstream.defaultVisitType as WorkstreamFormData['defaultVisitType']) || undefined,
+        defaultVisitType: parseDefaultVisitType(workstream.defaultVisitType),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable

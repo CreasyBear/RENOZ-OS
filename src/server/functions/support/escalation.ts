@@ -20,12 +20,14 @@ import type {
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError, ServerError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // SCHEMAS
 // ============================================================================
 
-const escalateIssueSchema = z.object({
+/** Exported for unit testing schema validation */
+export const escalateIssueSchema = z.object({
   issueId: z.string().uuid(),
   reason: z.string().min(1).max(1000),
   escalateToUserId: z.string().uuid().optional(),
@@ -108,30 +110,37 @@ export const escalateIssue = createServerFn({ method: 'POST' })
 
     const now = new Date();
 
-    // Update issue status to escalated
-    await db
-      .update(issues)
-      .set({
-        status: 'escalated',
-        escalatedAt: now,
-        assignedToUserId: data.escalateToUserId ?? issue.assignedToUserId,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(issues.id, data.issueId));
+    const [historyRecord] = await db.transaction(async (tx) => {
+      await tx
+        .update(issues)
+        .set({
+          status: 'escalated',
+          escalatedAt: now,
+          assignedToUserId: data.escalateToUserId ?? issue.assignedToUserId,
+          updatedBy: ctx.user.id,
+        })
+        .where(
+          and(
+            eq(issues.id, data.issueId),
+            eq(issues.organizationId, ctx.organizationId)
+          )
+        );
 
-    // Create escalation history record
-    const [historyRecord] = await db
-      .insert(escalationHistory)
-      .values({
-        organizationId: ctx.organizationId,
-        issueId: data.issueId,
-        action: 'escalate',
-        performedByUserId: ctx.user.id,
-        reason: data.reason,
-        escalatedToUserId: data.escalateToUserId,
-        previousAssigneeId: issue.assignedToUserId,
-      })
-      .returning();
+      const [history] = await tx
+        .insert(escalationHistory)
+        .values({
+          organizationId: ctx.organizationId,
+          issueId: data.issueId,
+          action: 'escalate',
+          performedByUserId: ctx.user.id,
+          reason: data.reason,
+          escalatedToUserId: data.escalateToUserId,
+          previousAssigneeId: issue.assignedToUserId,
+        })
+        .returning();
+
+      return [history];
+    });
 
     // Log escalation
     logger.logAsync({
@@ -190,30 +199,37 @@ export const deEscalateIssue = createServerFn({ method: 'POST' })
       throw new ValidationError('Issue is not currently escalated');
     }
 
-    // Update issue status back to in_progress
-    await db
-      .update(issues)
-      .set({
-        status: 'in_progress',
-        escalatedAt: null,
-        assignedToUserId: data.assignToUserId ?? issue.assignedToUserId,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(issues.id, data.issueId));
+    const [historyRecord] = await db.transaction(async (tx) => {
+      await tx
+        .update(issues)
+        .set({
+          status: 'in_progress',
+          escalatedAt: null,
+          assignedToUserId: data.assignToUserId ?? issue.assignedToUserId,
+          updatedBy: ctx.user.id,
+        })
+        .where(
+          and(
+            eq(issues.id, data.issueId),
+            eq(issues.organizationId, ctx.organizationId)
+          )
+        );
 
-    // Create de-escalation history record
-    const [historyRecord] = await db
-      .insert(escalationHistory)
-      .values({
-        organizationId: ctx.organizationId,
-        issueId: data.issueId,
-        action: 'de_escalate',
-        performedByUserId: ctx.user.id,
-        reason: data.reason,
-        escalatedToUserId: data.assignToUserId,
-        previousAssigneeId: issue.assignedToUserId,
-      })
-      .returning();
+      const [history] = await tx
+        .insert(escalationHistory)
+        .values({
+          organizationId: ctx.organizationId,
+          issueId: data.issueId,
+          action: 'de_escalate',
+          performedByUserId: ctx.user.id,
+          reason: data.reason,
+          escalatedToUserId: data.assignToUserId,
+          previousAssigneeId: issue.assignedToUserId,
+        })
+        .returning();
+
+      return [history];
+    });
 
     // Log de-escalation
     logger.logAsync({
@@ -517,25 +533,26 @@ async function applyEscalationAction(
   switch (action.type) {
     case 'assign_user': {
       if (action.params?.userId) {
-        await db
-          .update(issues)
-          .set({
-            status: 'escalated',
-            escalatedAt: now,
-            assignedToUserId: action.params.userId,
-          })
-          .where(eq(issues.id, issue.id));
+        await db.transaction(async (tx) => {
+          await tx
+            .update(issues)
+            .set({
+              status: 'escalated',
+              escalatedAt: now,
+              assignedToUserId: action.params!.userId,
+            })
+            .where(eq(issues.id, issue.id));
 
-        // Create history record
-        await db.insert(escalationHistory).values({
-          organizationId,
-          issueId: issue.id,
-          action: 'escalate',
-          performedByUserId: performedBy,
-          reason: `Auto-escalated by rule: ${rule.name}`,
-          escalationRuleId: rule.id,
-          escalatedToUserId: action.params.userId,
-          previousAssigneeId: issue.assignedToUserId,
+          await tx.insert(escalationHistory).values({
+            organizationId,
+            issueId: issue.id,
+            action: 'escalate',
+            performedByUserId: performedBy,
+            reason: `Auto-escalated by rule: ${rule.name}`,
+            escalationRuleId: rule.id,
+            escalatedToUserId: action.params!.userId,
+            previousAssigneeId: issue.assignedToUserId,
+          });
         });
       }
       break;
@@ -569,19 +586,21 @@ async function applyEscalationAction(
     }
 
     case 'notify_user': {
-      // TODO: Integrate with notification system
-      // For now, just log the action
-      console.log(
-        `[Auto-Escalation] Would notify user ${action.params?.userId} about issue ${issue.id}`
-      );
+      // By design: notification system not yet integrated — tracked for future release (ESC-001).
+      // For now, log the action for visibility.
+      logger.debug('[Auto-Escalation] Would notify user', {
+        userId: action.params?.userId,
+        issueId: issue.id,
+      });
       break;
     }
   }
 }
 
 /**
- * Process automatic escalations for an organization
- * This should be called by a scheduled job (e.g., Trigger.dev)
+ * Process automatic escalations for an organization.
+ * Trigger.dev-only. No user auth by design; runs as background job.
+ * Invoked by a scheduled Trigger.dev task, not by user request.
  */
 export const processAutoEscalations = createServerFn({ method: 'POST' })
   .inputValidator(

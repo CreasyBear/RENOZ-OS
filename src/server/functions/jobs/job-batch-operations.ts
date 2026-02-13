@@ -11,8 +11,11 @@ import { jobAssignments, users } from 'drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
 import { z } from 'zod';
+import { flexibleJsonSchema } from '@/lib/schemas/_shared/patterns';
 import { processJobOperations } from '@/lib/job-batch-processing';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
+import { logger } from '@/lib/logger';
+import type { JobBatchResult, JobRollbackData } from '@/lib/schemas/jobs/job-batch';
 
 // ============================================================================
 // SCHEMAS
@@ -21,7 +24,7 @@ import { NotFoundError, ConflictError } from '@/lib/server/errors';
 export const jobBatchOperationSchema = z.object({
   id: z.string(),
   type: z.enum(['create', 'update', 'delete', 'reschedule', 'assign']),
-  data: z.any(),
+  data: flexibleJsonSchema,
 });
 
 export const processJobBatchSchema = z.object({
@@ -38,12 +41,7 @@ export const processJobBatchSchema = z.object({
 export type ProcessJobBatchInput = z.infer<typeof processJobBatchSchema>;
 export type ProcessJobBatchResult = {
   success: boolean;
-  results: Array<{
-    operationId: string;
-    success: boolean;
-    error?: string;
-    data?: any;
-  }>;
+  results: JobBatchResult[];
   summary: {
     total: number;
     successful: number;
@@ -51,7 +49,7 @@ export type ProcessJobBatchResult = {
     skipped?: number;
     duration: number;
   };
-  rollbackData?: any[];
+  rollbackData?: JobRollbackData[];
 };
 
 // ============================================================================
@@ -73,11 +71,10 @@ export const processJobBatchOperations = createServerFn({ method: 'POST' })
       batchSize: data.options.batchSize,
       enableRollback: data.options.enableRollback,
       onProgress: (completed, total) => {
-        // Could emit progress events here
-        console.log(`Batch progress: ${completed}/${total}`);
+        logger.debug('Batch progress', { completed, total });
       },
       onError: (error, operation) => {
-        console.error(`Batch operation failed: ${operation.id}`, error);
+        logger.error(`Batch operation failed: ${operation.id}`, error as Error, { operationId: operation.id });
       },
     });
 
@@ -320,81 +317,83 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
       existingJobsResult.map((job) => [job.jobNumber, job])
     );
 
-    // Process jobs in batches
-    const batchSize = 10;
-    for (let i = 0; i < data.jobs.length; i += batchSize) {
-      const batch = data.jobs.slice(i, i + batchSize);
+    // Process all jobs in a single transaction for atomicity
+    await db.transaction(async (tx) => {
+      const batchSize = 10;
+      for (let i = 0; i < data.jobs.length; i += batchSize) {
+        const batch = data.jobs.slice(i, i + batchSize);
 
-      for (const jobData of batch) {
-        try {
-          // Check for existing job using pre-fetched Map (O(1) lookup)
-          const existingJob = existingJobsMap.get(jobData.jobNumber);
+        for (const jobData of batch) {
+          try {
+            // Check for existing job using pre-fetched Map (O(1) lookup)
+            const existingJob = existingJobsMap.get(jobData.jobNumber);
 
-          if (existingJob) {
-            if (data.options.skipDuplicates) {
-              results.skipped.push(jobData.jobNumber);
-              continue;
-            } else if (data.options.updateExisting) {
-              // Update existing job
-              await db
-                .update(jobAssignments)
-                .set({
-                  title: jobData.title,
-                  description: jobData.description,
-                  customerId: jobData.customerId,
-                  installerId: jobData.installerId,
-                  scheduledDate: jobData.scheduledDate,
-                  scheduledTime: jobData.scheduledTime,
-                  estimatedDuration: jobData.estimatedDuration,
-                  jobType: jobData.jobType,
-                  status: jobData.status,
-                  updatedAt: new Date(),
-                })
-                .where(
-                  and(
-                    eq(jobAssignments.organizationId, ctx.organizationId),
-                    eq(jobAssignments.id, existingJob.id)
-                  )
-                );
+            if (existingJob) {
+              if (data.options.skipDuplicates) {
+                results.skipped.push(jobData.jobNumber);
+                continue;
+              } else if (data.options.updateExisting) {
+                // Update existing job
+                await tx
+                  .update(jobAssignments)
+                  .set({
+                    title: jobData.title,
+                    description: jobData.description,
+                    customerId: jobData.customerId,
+                    installerId: jobData.installerId,
+                    scheduledDate: jobData.scheduledDate,
+                    scheduledTime: jobData.scheduledTime,
+                    estimatedDuration: jobData.estimatedDuration,
+                    jobType: jobData.jobType,
+                    status: jobData.status,
+                    updatedAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      eq(jobAssignments.organizationId, ctx.organizationId),
+                      eq(jobAssignments.id, existingJob.id)
+                    )
+                  );
 
-              results.imported.push(jobData.jobNumber);
-              continue;
-            } else {
-              throw new ConflictError('Job already exists');
+                results.imported.push(jobData.jobNumber);
+                continue;
+              } else {
+                throw new ConflictError('Job already exists');
+              }
             }
-          }
 
-          // Create new job
-          const newJob = await db
-            .insert(jobAssignments)
-            .values({
-              id: crypto.randomUUID(),
-              organizationId: ctx.organizationId,
+            // Create new job
+            const newJob = await tx
+              .insert(jobAssignments)
+              .values({
+                id: crypto.randomUUID(),
+                organizationId: ctx.organizationId,
+                jobNumber: jobData.jobNumber,
+                title: jobData.title,
+                description: jobData.description,
+                customerId: jobData.customerId,
+                installerId: jobData.installerId,
+                scheduledDate: jobData.scheduledDate,
+                scheduledTime: jobData.scheduledTime,
+                estimatedDuration: jobData.estimatedDuration,
+                jobType: jobData.jobType,
+                status: jobData.status,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .returning({ id: jobAssignments.id, jobNumber: jobAssignments.jobNumber });
+
+            results.imported.push(newJob[0].jobNumber);
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            results.errors.push({
               jobNumber: jobData.jobNumber,
-              title: jobData.title,
-              description: jobData.description,
-              customerId: jobData.customerId,
-              installerId: jobData.installerId,
-              scheduledDate: jobData.scheduledDate,
-              scheduledTime: jobData.scheduledTime,
-              estimatedDuration: jobData.estimatedDuration,
-              jobType: jobData.jobType,
-              status: jobData.status,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .returning({ id: jobAssignments.id, jobNumber: jobAssignments.jobNumber });
-
-          results.imported.push(newJob[0].jobNumber);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          results.errors.push({
-            jobNumber: jobData.jobNumber,
-            error: errorMessage,
-          });
+              error: errorMessage,
+            });
+          }
         }
       }
-    }
+    });
 
     return {
       success: true,

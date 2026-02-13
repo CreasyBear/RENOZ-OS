@@ -38,6 +38,8 @@ export interface FilterFieldConfig<TValue = unknown> {
   placeholder?: string;
   /** Options for select/multi-select types */
   options?: FilterOption[];
+  /** Max selections for multi-select (undefined = unlimited) */
+  maxSelections?: number;
   /** Show in primary bar (true) or advanced panel (false) */
   primary?: boolean;
   /** Custom formatter for chip display */
@@ -137,6 +139,7 @@ export interface FilterMultiSelectProps<T = string> extends BaseFilterProps {
   placeholder?: string;
   label?: string;
   maxDisplay?: number;
+  maxSelections?: number;
 }
 
 export interface FilterDatePickerProps extends BaseFilterProps {
@@ -217,6 +220,8 @@ export interface DomainFilterBarProps<TFilters extends Record<string, unknown>> 
   showChips?: boolean;
   /** Show preset buttons (default: true) */
   showPresets?: boolean;
+  /** Optional content to render after presets/chips in the same row (e.g. Save Current Filters) */
+  presetsSuffix?: React.ReactNode;
   /** Additional CSS classes */
   className?: string;
 }

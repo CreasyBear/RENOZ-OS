@@ -22,6 +22,8 @@ import {
   receiveInventory,
   listMovements,
   getInventoryDashboard,
+  quickSearchInventory,
+  getAvailableSerials,
 } from '@/server/functions/inventory/inventory';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
@@ -64,9 +66,34 @@ export function useInventory(options: UseInventoryListOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.inventory.list(filters),
-    queryFn: () => listInventory({ data: filters }),
+    queryFn: async () => {
+      const result = await listInventory({ data: filters });
+      if (result == null) throw new Error('Inventory list returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Quick search inventory items by product name, SKU, lot, or serial number.
+ * Optimized for autocomplete/typeahead use cases.
+ */
+export function useInventorySearch(
+  query: string,
+  options: { limit?: number } = {},
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.inventory.search(query, options),
+    queryFn: async () => {
+      const result = await quickSearchInventory({ data: { q: query, limit: options.limit ?? 10 } });
+      if (result == null) throw new Error('Inventory search returned no data');
+      return result;
+    },
+    enabled: enabled && query.length >= 2,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -76,7 +103,11 @@ export function useInventory(options: UseInventoryListOptions = {}) {
 export function useInventoryItem(inventoryId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.detail(inventoryId),
-    queryFn: () => getInventoryItem({ data: { id: inventoryId } }),
+    queryFn: async () => {
+      const result = await getInventoryItem({ data: { id: inventoryId } });
+      if (result == null) throw new Error('Inventory item not found');
+      return result;
+    },
     enabled: enabled && !!inventoryId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -88,10 +119,13 @@ export function useInventoryItem(inventoryId: string, enabled = true) {
 export function useInventoryMovements(inventoryId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.movements({ inventoryId, page: 1, pageSize: 50 }),
-    queryFn: () =>
-      listMovements({
+    queryFn: async () => {
+      const result = await listMovements({
         data: { inventoryId, page: 1, pageSize: 50, sortOrder: 'desc' } satisfies MovementListQuery,
-      }),
+      });
+      if (result == null) throw new Error('Inventory movements returned no data');
+      return result;
+    },
     enabled: enabled && !!inventoryId,
     staleTime: 30 * 1000,
   });
@@ -103,14 +137,13 @@ export function useInventoryMovements(inventoryId: string, enabled = true) {
 export function useInventoryLowStock(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.lowStock(),
-    queryFn: () =>
-      listInventory({
-        data: {
-          lowStock: true,
-          page: 1,
-          pageSize: 100,
-        },
-      }),
+    queryFn: async () => {
+      const result = await listInventory({
+        data: { lowStock: true, page: 1, pageSize: 100 },
+      });
+      if (result == null) throw new Error('Low stock inventory returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -333,7 +366,11 @@ export function useMovements(
   };
   return useQuery({
     queryKey: queryKeys.inventory.movements(queryFilters),
-    queryFn: () => listMovements({ data: queryFilters }),
+    queryFn: async () => {
+      const result = await listMovements({ data: queryFilters });
+      if (result == null) throw new Error('Inventory movements returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -354,7 +391,11 @@ export function useMovementsDashboard(
   };
   return useQuery({
     queryKey: queryKeys.inventory.movements({ ...queryFilters, dashboard: true }),
-    queryFn: () => listMovements({ data: queryFilters }),
+    queryFn: async () => {
+      const result = await listMovements({ data: queryFilters });
+      if (result == null) throw new Error('Inventory movements returned no data');
+      return result;
+    },
     enabled,
     staleTime: 15 * 1000,
     refetchInterval: 30 * 1000,
@@ -456,10 +497,21 @@ export function useReceiveInventory() {
 /**
  * Fetch inventory dashboard metrics and top movers
  */
+/**
+ * Fetch inventory dashboard metrics and top movers.
+ *
+ * Uses direct server function call (no useServerFn) per backup pattern -
+ * matches working implementation from renoz-v3 6.
+ * Throws on undefined to satisfy React Query (queryFn must not return undefined).
+ */
 export function useInventoryDashboard(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.dashboard(),
-    queryFn: () => getInventoryDashboard(),
+    queryFn: async () => {
+      const result = await getInventoryDashboard();
+      if (result == null) throw new Error('Inventory dashboard returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
     refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
@@ -472,9 +524,45 @@ export function useInventoryDashboard(enabled = true) {
 export function useLocationUtilization(enabled = true) {
   return useQuery({
     queryKey: queryKeys.locations.utilization(),
-    queryFn: () => getLocationUtilization({}),
+    queryFn: async () => {
+      const result = await getLocationUtilization({});
+      if (result == null) throw new Error('Location utilization returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000, // Auto-refresh every 60 seconds
+  });
+}
+
+// ============================================================================
+// SERIAL NUMBER HOOKS
+// ============================================================================
+
+export interface UseAvailableSerialsOptions {
+  productId: string;
+  locationId?: string;
+  enabled?: boolean;
+}
+
+/**
+ * Fetch available serial numbers for a product.
+ *
+ * Used by the picking workflow to populate serial number selectors
+ * for serialized products. Returns serials that are in inventory
+ * and not already allocated to another order.
+ */
+export function useAvailableSerials(options: UseAvailableSerialsOptions) {
+  const { productId, locationId, enabled = true } = options;
+
+  return useQuery({
+    queryKey: queryKeys.inventory.availableSerials(productId, locationId),
+    queryFn: async () => {
+      const result = await getAvailableSerials({ data: { productId, locationId } });
+      if (result == null) throw new Error('Available serials returned no data');
+      return result;
+    },
+    enabled: enabled && !!productId,
+    staleTime: 10 * 1000, // 10 seconds - serials can change frequently during picking
   });
 }

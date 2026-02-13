@@ -24,35 +24,41 @@ import type { ProjectStatus, ProjectPriority } from "@/lib/schemas/jobs/projects
 /**
  * Project status configuration for StatusCell
  */
-export const PROJECT_STATUS_CONFIG: Record<ProjectStatus, SemanticStatusConfigItem> = {
+export const PROJECT_STATUS_CONFIG: Record<ProjectStatus, SemanticStatusConfigItem & { variant: SemanticStatusConfigItem['color'] }> = {
   quoting: {
     label: "Quoting",
     color: "draft",
+    variant: "draft",
     icon: FileEdit,
   },
   approved: {
     label: "Approved",
     color: "info",
+    variant: "info",
     icon: CheckCircle,
   },
   in_progress: {
     label: "In Progress",
     color: "progress",
+    variant: "progress",
     icon: Play,
   },
   completed: {
     label: "Completed",
     color: "success",
+    variant: "success",
     icon: CheckCircle,
   },
   cancelled: {
     label: "Cancelled",
     color: "error",
+    variant: "error",
     icon: XCircle,
   },
   on_hold: {
     label: "On Hold",
     color: "warning",
+    variant: "warning",
     icon: PauseCircle,
   },
 };

@@ -12,21 +12,34 @@ export {
   SupplierPerformanceWidget,
   ApprovalQueueWidget,
 } from './dashboard-widgets';
+export type { DashboardWidgetsProps } from './dashboard-widgets';
+
+export { ProcurementAlerts, AlertItem, CompactAlertsList } from './procurement-alerts';
+export type { ProcurementAlertsProps } from './procurement-alerts';
+
+// Re-export types from schemas for convenience
 export type {
-  DashboardWidgetsProps,
   SpendMetrics,
   OrderMetrics,
   SupplierMetrics,
   ApprovalItem,
-} from './dashboard-widgets';
-
-export { ProcurementAlerts, AlertItem, CompactAlertsList } from './procurement-alerts';
-export type {
-  ProcurementAlertsProps,
   ProcurementAlert,
   AlertSeverity,
   AlertType,
-} from './procurement-alerts';
+} from '@/lib/schemas/procurement';
 
 export { ProcurementDashboard } from './procurement-dashboard';
 export type { ProcurementDashboardProps } from './procurement-dashboard';
+
+// Receiving components
+export {
+  ReceivingDashboardContainer,
+  ReceivingDashboard,
+  ReceivingStats,
+} from './receiving';
+export type {
+  ReceivingDashboardContainerProps,
+  ReceivingDashboardProps,
+  ReceivingMetrics,
+  ReceivingStatsProps,
+} from './receiving';

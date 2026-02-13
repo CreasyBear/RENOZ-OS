@@ -9,38 +9,54 @@
  * @see DOM-COMMS-001b
  */
 
+import { createFileRoute } from '@tanstack/react-router';
 import {
   recordEmailOpen,
   TRACKING_PIXEL,
   validateTrackingSignature,
-} from "@/lib/server/email-tracking";
+} from '@/lib/server/email-tracking';
+import { logger } from '@/lib/logger';
 
-export async function GET({ request, params }: { request: Request; params: { emailId: string } }) {
+async function handleOpen({
+  request,
+  params,
+}: {
+  request: Request;
+  params: { emailId: string };
+}) {
   const { emailId } = params;
 
   // Validate HMAC signature
   const url = new URL(request.url);
-  const sig = url.searchParams.get("sig");
+  const sig = url.searchParams.get('sig');
 
   if (!sig || !validateTrackingSignature(emailId, sig)) {
-    return new Response("Invalid tracking signature", { status: 403 });
+    return new Response('Invalid tracking signature', { status: 403 });
   }
 
   // Record the open (fire-and-forget, don't block response)
   recordEmailOpen(emailId).catch((err) => {
-    console.error("[track/open] Error recording open:", err);
+    logger.error('[track/open] Error recording open', err as Error, { emailId });
   });
 
   // Return the tracking pixel
   return new Response(TRACKING_PIXEL, {
     status: 200,
     headers: {
-      "Content-Type": "image/gif",
-      "Content-Length": String(TRACKING_PIXEL.length),
+      'Content-Type': 'image/gif',
+      'Content-Length': String(TRACKING_PIXEL.length),
       // Prevent caching to ensure pixel is always fetched
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
     },
   });
 }
+
+export const Route = createFileRoute('/api/track/open/$emailId')({
+  server: {
+    handlers: {
+      GET: handleOpen,
+    },
+  },
+});

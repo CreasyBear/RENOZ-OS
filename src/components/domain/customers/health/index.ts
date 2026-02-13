@@ -30,3 +30,5 @@ export {
 export { HealthRecommendations } from './health-recommendations';
 export { HealthScoreGauge } from './health-score-gauge';
 export { RiskAlerts } from './risk-alerts';
+export { ActionPlans } from './action-plans';
+export { HealthHistory } from './health-history';

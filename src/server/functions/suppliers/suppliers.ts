@@ -8,11 +8,18 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, ilike, desc, asc, sql, gte, lte, count, isNull } from 'drizzle-orm';
+import { eq, and, or, ilike, desc, asc, gte, lte, count, isNull, not, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
-import { currencySchema } from '@/lib/schemas/_shared/patterns';
+import {
+  createSupplierSchema,
+  updateSupplierSchema,
+  getSupplierSchema,
+  listSuppliersSchema,
+  listSuppliersCursorSchema,
+} from '@/lib/schemas/suppliers';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { suppliers, supplierPerformanceMetrics } from 'drizzle/schema/suppliers';
 import { purchaseOrders } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
@@ -33,72 +40,8 @@ const SUPPLIER_EXCLUDED_FIELDS: string[] = [
 ];
 
 // ============================================================================
-// INPUT SCHEMAS
+// INPUT SCHEMAS (createSupplierSchema, updateSupplierSchema, getSupplierSchema, listSuppliersSchema from lib)
 // ============================================================================
-
-const listSuppliersSchema = z.object({
-  search: z.string().optional(),
-  status: z.enum(['active', 'inactive', 'suspended', 'blacklisted']).optional(),
-  supplierType: z
-    .enum(['manufacturer', 'distributor', 'retailer', 'service', 'raw_materials'])
-    .optional(),
-  ratingMin: z.number().min(0).max(5).optional(),
-  ratingMax: z.number().min(0).max(5).optional(),
-  sortBy: z.enum(['name', 'status', 'overallRating', 'createdAt', 'lastOrderDate']).default('name'),
-  sortOrder: z.enum(['asc', 'desc']).default('asc'),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
-
-const getSupplierSchema = z.object({
-  id: z.string().uuid(),
-});
-
-const createSupplierSchema = z.object({
-  name: z.string().min(1),
-  legalName: z.string().optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  website: z.string().url().optional(),
-  status: z.enum(['active', 'inactive', 'suspended', 'blacklisted']).default('active'),
-  supplierType: z
-    .enum(['manufacturer', 'distributor', 'retailer', 'service', 'raw_materials'])
-    .optional(),
-  taxId: z.string().optional(),
-  registrationNumber: z.string().optional(),
-  primaryContactName: z.string().optional(),
-  primaryContactEmail: z.string().email().optional(),
-  primaryContactPhone: z.string().optional(),
-  billingAddress: z
-    .object({
-      street1: z.string(),
-      street2: z.string().optional(),
-      city: z.string(),
-      state: z.string().optional(),
-      postcode: z.string(),
-      country: z.string(),
-    })
-    .optional(),
-  shippingAddress: z
-    .object({
-      street1: z.string(),
-      street2: z.string().optional(),
-      city: z.string(),
-      state: z.string().optional(),
-      postcode: z.string(),
-      country: z.string(),
-    })
-    .optional(),
-  paymentTerms: z.enum(['net_15', 'net_30', 'net_45', 'net_60', 'cod', 'prepaid']).optional(),
-  currency: z.string().default('AUD'),
-  leadTimeDays: z.number().int().min(0).optional(),
-  minimumOrderValue: currencySchema.optional(),
-  maximumOrderValue: currencySchema.optional(),
-  tags: z.array(z.string()).optional(),
-  notes: z.string().optional(),
-});
-
-const updateSupplierSchema = createSupplierSchema.partial();
 
 const updateSupplierRatingSchema = z.object({
   id: z.string().uuid(),
@@ -139,7 +82,16 @@ export const listSuppliers = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(suppliers.name, containsPattern(search)));
+      const searchPattern = containsPattern(search);
+      const searchCondition = or(
+        ilike(suppliers.name, searchPattern),
+        ilike(suppliers.supplierCode, searchPattern),
+        ilike(suppliers.email, searchPattern),
+        ilike(suppliers.primaryContactName, searchPattern)
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
     }
 
     if (status) {
@@ -223,6 +175,66 @@ export const listSuppliers = createServerFn({ method: 'GET' })
   });
 
 /**
+ * List suppliers with cursor pagination (recommended for large datasets).
+ */
+export const listSuppliersCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listSuppliersCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, status, supplierType, ratingMin, ratingMax } = data;
+
+    const conditions = [eq(suppliers.organizationId, ctx.organizationId), isNull(suppliers.deletedAt)];
+
+    if (search) {
+      const searchPattern = containsPattern(search);
+      const searchCondition = or(
+        ilike(suppliers.name, searchPattern),
+        ilike(suppliers.supplierCode, searchPattern),
+        ilike(suppliers.email, searchPattern),
+        ilike(suppliers.primaryContactName, searchPattern)
+      );
+      if (searchCondition) conditions.push(searchCondition);
+    }
+    if (status) conditions.push(eq(suppliers.status, status));
+    if (supplierType) conditions.push(eq(suppliers.supplierType, supplierType));
+    if (ratingMin !== undefined) conditions.push(gte(suppliers.overallRating, ratingMin));
+    if (ratingMax !== undefined) conditions.push(lte(suppliers.overallRating, ratingMax));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(suppliers.createdAt, suppliers.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const items = await db
+      .select({
+        id: suppliers.id,
+        supplierCode: suppliers.supplierCode,
+        name: suppliers.name,
+        email: suppliers.email,
+        phone: suppliers.phone,
+        status: suppliers.status,
+        supplierType: suppliers.supplierType,
+        primaryContactName: suppliers.primaryContactName,
+        overallRating: suppliers.overallRating,
+        leadTimeDays: suppliers.leadTimeDays,
+        lastOrderDate: suppliers.lastOrderDate,
+        totalPurchaseOrders: suppliers.totalPurchaseOrders,
+        createdAt: suppliers.createdAt,
+        updatedAt: suppliers.updatedAt,
+      })
+      .from(suppliers)
+      .where(and(...conditions))
+      .orderBy(orderDir(suppliers.createdAt), orderDir(suppliers.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/**
  * Get a single supplier with full details
  */
 export const getSupplier = createServerFn({ method: 'GET' })
@@ -231,7 +243,48 @@ export const getSupplier = createServerFn({ method: 'GET' })
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const result = await db
-      .select()
+      .select({
+        id: suppliers.id,
+        organizationId: suppliers.organizationId,
+        supplierCode: suppliers.supplierCode,
+        name: suppliers.name,
+        legalName: suppliers.legalName,
+        email: suppliers.email,
+        phone: suppliers.phone,
+        website: suppliers.website,
+        status: suppliers.status,
+        supplierType: suppliers.supplierType,
+        taxId: suppliers.taxId,
+        registrationNumber: suppliers.registrationNumber,
+        primaryContactName: suppliers.primaryContactName,
+        primaryContactEmail: suppliers.primaryContactEmail,
+        primaryContactPhone: suppliers.primaryContactPhone,
+        billingAddress: suppliers.billingAddress,
+        shippingAddress: suppliers.shippingAddress,
+        paymentTerms: suppliers.paymentTerms,
+        currency: suppliers.currency,
+        leadTimeDays: suppliers.leadTimeDays,
+        minimumOrderValue: suppliers.minimumOrderValue,
+        maximumOrderValue: suppliers.maximumOrderValue,
+        qualityRating: suppliers.qualityRating,
+        deliveryRating: suppliers.deliveryRating,
+        communicationRating: suppliers.communicationRating,
+        overallRating: suppliers.overallRating,
+        ratingUpdatedAt: suppliers.ratingUpdatedAt,
+        totalPurchaseOrders: suppliers.totalPurchaseOrders,
+        totalPurchaseValue: suppliers.totalPurchaseValue,
+        averageOrderValue: suppliers.averageOrderValue,
+        firstOrderDate: suppliers.firstOrderDate,
+        lastOrderDate: suppliers.lastOrderDate,
+        tags: suppliers.tags,
+        customFields: suppliers.customFields,
+        notes: suppliers.notes,
+        createdAt: suppliers.createdAt,
+        updatedAt: suppliers.updatedAt,
+        createdBy: suppliers.createdBy,
+        updatedBy: suppliers.updatedBy,
+        deletedAt: suppliers.deletedAt,
+      })
       .from(suppliers)
       .where(
         and(
@@ -294,9 +347,11 @@ export const createSupplier = createServerFn({ method: 'POST' })
     // Generate supplier code
     const supplierCode = await generateSupplierCode(ctx.organizationId);
 
-    const result = await db
-      .insert(suppliers)
-      .values({
+    let result: typeof suppliers.$inferSelect[];
+    try {
+      result = await db
+        .insert(suppliers)
+        .values({
         organizationId: ctx.organizationId,
         supplierCode,
         name: data.name,
@@ -324,6 +379,24 @@ export const createSupplier = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
       })
       .returning();
+    } catch (err: unknown) {
+      const pgError = err as { code?: string; constraint?: string };
+      if (pgError.code === '23505') {
+        if (pgError.constraint?.includes('email')) {
+          throw new ValidationError(
+            'A supplier with this email address already exists. Use a different email or update the existing supplier.',
+            { email: ['Email is already in use.'] }
+          );
+        }
+        if (pgError.constraint?.includes('code')) {
+          throw new ValidationError(
+            'A supplier code conflict occurred. Please try again.',
+            { supplierCode: ['Please retry.'] }
+          );
+        }
+      }
+      throw err;
+    }
 
     const supplier = result[0];
 
@@ -412,17 +485,29 @@ export const updateSupplier = createServerFn({ method: 'POST' })
     if (updateData.tags !== undefined) updates.tags = updateData.tags;
     if (updateData.notes !== undefined) updates.notes = updateData.notes;
 
-    const result = await db
-      .update(suppliers)
-      .set(updates)
-      .where(
-        and(
-          eq(suppliers.id, id),
-          eq(suppliers.organizationId, ctx.organizationId),
-          isNull(suppliers.deletedAt)
+    let result: typeof suppliers.$inferSelect[];
+    try {
+      result = await db
+        .update(suppliers)
+        .set(updates)
+        .where(
+          and(
+            eq(suppliers.id, id),
+            eq(suppliers.organizationId, ctx.organizationId),
+            isNull(suppliers.deletedAt)
+          )
         )
-      )
-      .returning();
+        .returning();
+    } catch (err: unknown) {
+      const pgError = err as { code?: string; constraint?: string };
+      if (pgError.code === '23505' && pgError.constraint?.includes('email')) {
+        throw new ValidationError(
+          'A supplier with this email address already exists. Use a different email.',
+          { email: ['Email is already in use.'] }
+        );
+      }
+      throw err;
+    }
 
     if (!result[0]) {
       throw new NotFoundError('Supplier not found', 'Supplier');
@@ -485,12 +570,14 @@ export const deleteSupplier = createServerFn({ method: 'POST' })
         and(
           eq(purchaseOrders.supplierId, data.id),
           eq(purchaseOrders.organizationId, ctx.organizationId),
-          sql`${purchaseOrders.status} NOT IN ('cancelled', 'closed')`
+          not(inArray(purchaseOrders.status, ['cancelled', 'closed']))
         )
       );
 
     if (Number(activeOrders[0]?.count ?? 0) > 0) {
-      throw new ValidationError('Cannot delete supplier with active purchase orders');
+      throw new ValidationError(
+        'This supplier has open purchase orders. Close or cancel them first, then try again.'
+      );
     }
 
     const result = await db
@@ -701,12 +788,34 @@ export const getSupplierPerformance = createServerFn({ method: 'GET' })
 /**
  * Generate a unique supplier code
  */
-async function generateSupplierCode(organizationId: string): Promise<string> {
-  const result = await db
-    .select({ count: count() })
-    .from(suppliers)
-    .where(eq(suppliers.organizationId, organizationId));
+async function generateSupplierCode(organizationId: string, maxRetries = 3): Promise<string> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const result = await db
+      .select({ count: count() })
+      .from(suppliers)
+      .where(eq(suppliers.organizationId, organizationId));
 
-  const nextNumber = (Number(result[0]?.count ?? 0) + 1).toString().padStart(4, '0');
-  return `SUP${nextNumber}`;
+    const nextNumber = (Number(result[0]?.count ?? 0) + 1 + attempt).toString().padStart(4, '0');
+    const code = `SUP${nextNumber}`;
+
+    // Check for uniqueness before returning
+    const [existing] = await db
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(
+        and(
+          eq(suppliers.organizationId, organizationId),
+          eq(suppliers.supplierCode, code)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      return code;
+    }
+  }
+
+  // Fallback: append random suffix to guarantee uniqueness
+  const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `SUP-${randomSuffix}`;
 }

@@ -15,9 +15,12 @@ import postgres from "postgres";
 
 // Schema imports will be added as tables are created
 import * as schema from "../../../drizzle/schema";
+import { logger } from "@/lib/logger";
 
 let clientInstance: ReturnType<typeof postgres> | null = null;
 let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
+const isDev = process.env.NODE_ENV === 'development';
+const verboseDbLogging = process.env.DB_VERBOSE_LOGS === 'true';
 
 /**
  * Get or create the postgres client with Supabase pooler-compatible settings.
@@ -56,6 +59,21 @@ export function getClient() {
 }
 
 /**
+ * Query logger for development debugging.
+ * Logs all queries in development for easier debugging.
+ */
+const queryLogger = {
+  logQuery: (query: string, params: unknown[]) => {
+    if (isDev && verboseDbLogging) {
+      logger.debug('[DB Query]', { query, params: params.length > 0 ? params : undefined });
+    }
+  },
+  logQueryError: (query: string, params: unknown[], error: unknown) => {
+    logger.error('[DB Error]', error instanceof Error ? error : undefined, { query, params });
+  },
+};
+
+/**
  * Get or create the Drizzle ORM instance.
  */
 function getDb() {
@@ -64,10 +82,11 @@ function getDb() {
   }
 
   const client = getClient();
-
   dbInstance = drizzle(client, {
     schema,
     casing: "snake_case",
+    // Enable query logging only when explicitly requested in development.
+    logger: isDev && verboseDbLogging ? queryLogger : undefined,
   });
 
   return dbInstance;
@@ -86,8 +105,8 @@ function getDb() {
 export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
   get(_target, prop) {
     const db = getDb();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (db as any)[prop];
+    const key = prop as keyof typeof db;
+    return db[key];
   },
 });
 

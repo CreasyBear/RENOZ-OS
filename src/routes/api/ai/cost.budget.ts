@@ -9,11 +9,13 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
+import { createFileRoute } from '@tanstack/react-router';
 import { withAuth } from '@/lib/server/protected';
 import { getBudgetStatus } from '@/server/functions/ai/utils/budget';
 import { formatCost } from '@/server/functions/ai/utils/cost';
+import { logger } from '@/lib/logger';
 
-export async function GET() {
+async function handleBudget() {
   try {
     // Authenticate user
     const ctx = await withAuth();
@@ -66,7 +68,7 @@ export async function GET() {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('[API /ai/cost/budget] Error:', error);
+    logger.error('[API /ai/cost/budget] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {
@@ -85,3 +87,11 @@ export async function GET() {
     );
   }
 }
+
+export const Route = createFileRoute('/api/ai/cost/budget')({
+  server: {
+    handlers: {
+      GET: handleBudget,
+    },
+  },
+});

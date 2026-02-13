@@ -4,5 +4,6 @@
  */
 export * from "./orders";
 export * from "./order-amendments";
+export * from "./order-payments";
 export * from "./order-shipments";
 export * from "./order-templates";

@@ -10,6 +10,7 @@
  */
 
 import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { aiCostTracking } from 'drizzle/schema/_ai';
 import { eq, and, sql } from 'drizzle-orm';
 
@@ -245,7 +246,7 @@ export async function checkBudget(
       userDailyLimit,
     };
   } catch (error) {
-    console.error('[AI Budget] Failed to check budget:', error);
+    logger.error('[AI Budget] Failed to check budget', error as Error, {});
 
     // CRITICAL SECURITY: Fail closed in production to prevent unbounded AI costs
     // In production, deny requests if we can't verify budget
@@ -259,7 +260,7 @@ export async function checkBudget(
     }
 
     // Development only: allow request but warn
-    console.warn('[AI Budget] Allowing request in development despite budget check failure');
+    logger.warn('[AI Budget] Allowing request in development despite budget check failure');
     return {
       allowed: true,
       reason: 'Budget check failed (allowing in development only)',

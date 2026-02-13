@@ -2,3 +2,4 @@
 export * from './pipeline';
 export * from './quote-versions';
 export * from './win-loss-reasons';
+export * from './opportunity-detail-extended';

@@ -428,7 +428,7 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
                 <Package className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-muted-foreground">No products added yet</p>
                 <p className="text-sm text-muted-foreground">
-                  Click "Add Product" to get started
+                  Click &quot;Add Product&quot; to get started
                 </p>
               </div>
             ) : (

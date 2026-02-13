@@ -4,6 +4,7 @@
  * Bulk import and update functionality for supplier pricing.
  * Supports CSV import with validation and preview.
  */
+import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -110,8 +111,8 @@ export const validatePriceImport = createServerFn({ method: "POST" })
       const rowNumber = data.hasHeaders ? i + 2 : i + 1;
 
       try {
-        // Create object from headers or indexed columns
-        let rowData: any = {};
+        // Create object from headers or indexed columns (string values before schema parse)
+        let rowData: Record<string, string> = {};
 
         if (headers) {
           headers.forEach((header, index) => {
@@ -198,7 +199,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
         // Check if price already exists (by supplier + product)
         // For now, we'll create new prices - in production you'd want upsert logic
         // Generate a placeholder product ID - in production, this should be looked up from productSku
-        const productId = crypto.randomUUID();
+        const productId = randomUUID();
 
         const [newPrice] = await db
           .insert(priceLists)

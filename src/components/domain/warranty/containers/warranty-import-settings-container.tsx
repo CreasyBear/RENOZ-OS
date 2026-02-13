@@ -46,11 +46,11 @@ export function WarrantyImportSettingsContainer() {
   }, []);
 
   const handleViewWarranties = useCallback(() => {
-    navigate({ to: '/support/warranties' as any });
+    navigate({ to: '/support/warranties', params: {} as never });
   }, [navigate]);
 
   const handleViewPolicies = useCallback(() => {
-    navigate({ to: '/settings/warranty-policies' });
+    navigate({ to: '/settings/warranty-policies', params: {} as never });
   }, [navigate]);
 
   return (

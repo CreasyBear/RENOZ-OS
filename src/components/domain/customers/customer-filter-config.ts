@@ -17,28 +17,15 @@ import {
   UserCheck,
 } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
-import {
-  customerStatusValues,
-  customerTypeValues,
-  customerSizeValues,
-} from "@/lib/schemas/customers";
+import type {
+  CustomerStatus,
+  CustomerType,
+  CustomerSize,
+  CustomerFiltersState,
+} from "@/lib/schemas/customers/saved-filters";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export type CustomerStatus = (typeof customerStatusValues)[number];
-export type CustomerType = (typeof customerTypeValues)[number];
-export type CustomerSize = (typeof customerSizeValues)[number];
-
-export interface CustomerFiltersState extends Record<string, unknown> {
-  search: string;
-  status: CustomerStatus[];
-  type: CustomerType[];
-  size: CustomerSize[];
-  healthScoreRange: { min: number | null; max: number | null } | null;
-  tags: string[];
-}
+// Re-export for consumers
+export type { CustomerStatus, CustomerType, CustomerSize, CustomerFiltersState };
 
 export const DEFAULT_CUSTOMER_FILTERS: CustomerFiltersState = {
   search: "",
@@ -82,7 +69,7 @@ export const CUSTOMER_SIZE_OPTIONS: FilterOption<CustomerSize>[] = [
 
 export const CUSTOMER_FILTER_CONFIG: FilterBarConfig<CustomerFiltersState> = {
   search: {
-    placeholder: "Search customers by name, email, phone, code...",
+    placeholder: "Search customers by name, email, phone, code…",
     fields: ["name", "email", "phone", "customerCode"],
   },
   filters: [
@@ -92,6 +79,7 @@ export const CUSTOMER_FILTER_CONFIG: FilterBarConfig<CustomerFiltersState> = {
       type: "multi-select",
       options: CUSTOMER_STATUS_OPTIONS,
       primary: true,
+      maxSelections: 1,
     },
     {
       key: "type",
@@ -99,12 +87,14 @@ export const CUSTOMER_FILTER_CONFIG: FilterBarConfig<CustomerFiltersState> = {
       type: "multi-select",
       options: CUSTOMER_TYPE_OPTIONS,
       primary: true,
+      maxSelections: 1,
     },
     {
       key: "size",
       label: "Size",
       type: "multi-select",
       options: CUSTOMER_SIZE_OPTIONS,
+      maxSelections: 1,
     },
     {
       key: "healthScoreRange",

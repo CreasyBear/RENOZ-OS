@@ -24,18 +24,19 @@ import {
   TrendingUp,
   Percent,
   AlertCircle,
-  ChevronRight,
   Link2,
   PanelRight,
   Calendar,
   Hash,
   User,
   CreditCard,
-  AlertTriangle,
   CheckCircle,
+  X,
+  Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -54,27 +55,20 @@ import {
 } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { FormatAmount, MetricCard } from '@/components/shared';
+import { formatAmount } from '@/lib/currency';
+import { FormatAmount, MetricCard, EntityHeader } from '@/components/shared';
 import { StatusCell } from '@/components/shared/data-table';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
-import { SUPPLIER_STATUS_CONFIG, SUPPLIER_TYPE_CONFIG, formatLeadTime } from '../supplier-status-config';
+import { SUPPLIER_STATUS_CONFIG, SUPPLIER_TYPE_CONFIG, SUPPLIER_STATUS_CONFIG_FOR_ENTITY_HEADER, formatLeadTime } from '../supplier-status-config';
 import { PO_STATUS_CONFIG } from '../../purchase-orders/po-status-config';
-import type { SupplierStatus, SupplierType } from '@/lib/schemas/suppliers';
+import type { SupplierStatus, SupplierType, SupplierAddress } from '@/lib/schemas/suppliers';
 import type { PurchaseOrderStatus } from '@/lib/schemas/purchase-orders';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
+import { useAlertDismissals, generateAlertIdWithValue } from '@/hooks/_shared/use-alert-dismissals';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface Address {
-  street1: string;
-  street2?: string;
-  city: string;
-  state?: string;
-  postcode: string;
-  country: string;
-}
 
 interface PerformanceMetric {
   metricMonth: string;
@@ -97,6 +91,7 @@ interface PurchaseOrderSummary {
   poNumber: string;
   status: PurchaseOrderStatus;
   totalAmount: number;
+  currency?: string;
   createdAt: Date | string;
 }
 
@@ -124,8 +119,8 @@ export interface SupplierData {
   primaryContactName?: string | null;
   primaryContactEmail?: string | null;
   primaryContactPhone?: string | null;
-  billingAddress?: Address | null;
-  shippingAddress?: Address | null;
+  billingAddress?: SupplierAddress | null;
+  shippingAddress?: SupplierAddress | null;
   paymentTerms?: 'net_15' | 'net_30' | 'net_45' | 'net_60' | 'cod' | 'prepaid' | null;
   currency: string;
   leadTimeDays?: number | null;
@@ -149,12 +144,33 @@ export interface SupplierData {
   performanceMetrics?: PerformanceMetric[];
 }
 
+/** Header config for EntityHeader (matches EntityHeaderAction) */
+export interface SupplierDetailHeaderConfig {
+  primaryAction?: {
+    label: string;
+    onClick: () => void;
+    icon?: ReactNode;
+    disabled?: boolean;
+  };
+  secondaryActions?: Array<{
+    label: string;
+    onClick: () => void;
+    icon?: ReactNode;
+    destructive?: boolean;
+    disabled?: boolean;
+  }>;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}
+
 export interface SupplierDetailViewProps {
   supplier: SupplierData;
   activeTab: string;
   onTabChange: (tab: string) => void;
   showMetaPanel: boolean;
   onToggleMetaPanel: () => void;
+  /** EntityHeader config - when provided, uses EntityHeader instead of custom header */
+  headerConfig?: SupplierDetailHeaderConfig;
   purchaseOrders?: PurchaseOrderSummary[];
   purchaseOrdersLoading?: boolean;
   priceAgreements?: PriceAgreement[];
@@ -162,6 +178,8 @@ export interface SupplierDetailViewProps {
   activities?: UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
+  /** Handler to open activity logging dialog */
+  onLogActivity?: () => void;
   className?: string;
 }
 
@@ -186,6 +204,13 @@ const PAYMENT_TERMS_LABELS: Record<string, string> = {
   net_60: 'Net 60',
   cod: 'Cash on Delivery',
   prepaid: 'Prepaid',
+};
+
+const SUPPLIER_STATUS_CLASSES: Record<SupplierStatus, string> = {
+  active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+  inactive: 'bg-muted text-muted-foreground',
+  suspended: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200',
+  blacklisted: 'bg-destructive/10 text-destructive',
 };
 
 function copyToClipboard(text: string) {
@@ -277,16 +302,17 @@ const RatingBar = memo(function RatingBar({
 });
 
 // ============================================================================
-// SUPPLIER HEADER (Project Management pattern)
+// SUPPLIER HEADER (EntityHeader per DETAIL-VIEW-STANDARDS)
 // ============================================================================
 
-interface SupplierHeaderProps {
+interface SupplierHeaderSectionProps {
   supplier: SupplierData;
+  showMetaPanel: boolean;
+  onToggleMetaPanel: () => void;
+  headerConfig?: SupplierDetailHeaderConfig;
 }
 
-function SupplierHeader({ supplier }: SupplierHeaderProps) {
-  const statusConfig = SUPPLIER_STATUS_CONFIG[supplier.status];
-  const StatusIcon = statusConfig?.icon ?? CheckCircle;
+function SupplierHeaderSection({ supplier, showMetaPanel, onToggleMetaPanel, headerConfig }: SupplierHeaderSectionProps) {
   const typeConfig = supplier.supplierType ? SUPPLIER_TYPE_CONFIG[supplier.supplierType] : null;
   const TypeIcon = typeConfig?.icon;
 
@@ -295,7 +321,7 @@ function SupplierHeader({ supplier }: SupplierHeaderProps) {
     ...(supplier.supplierType && typeConfig ? [{
       label: 'Type',
       value: typeConfig.label,
-      icon: TypeIcon && <TypeIcon className="h-3.5 w-3.5" />,
+      icon: TypeIcon ? <TypeIcon className="h-3.5 w-3.5" /> : undefined,
     }] : []),
     ...(supplier.leadTimeDays !== null && supplier.leadTimeDays !== undefined ? [{
       label: 'Lead Time',
@@ -310,6 +336,46 @@ function SupplierHeader({ supplier }: SupplierHeaderProps) {
     }] : []),
   ];
 
+  const viewSecondaryActions = [
+    { label: 'Copy link', onClick: () => copyToClipboard(window.location.href), icon: <Link2 className="h-4 w-4" /> },
+    {
+      label: showMetaPanel ? 'Hide details panel' : 'Show details panel',
+      onClick: onToggleMetaPanel,
+      icon: <PanelRight className="h-4 w-4" />,
+    },
+  ];
+
+  if (headerConfig) {
+    return (
+      <section className="space-y-4">
+        <EntityHeader
+          name={supplier.name}
+          subtitle={supplier.legalName && supplier.legalName !== supplier.name ? supplier.legalName : undefined}
+          avatarFallback="S"
+          status={{
+            value: supplier.status,
+            config: SUPPLIER_STATUS_CONFIG_FOR_ENTITY_HEADER,
+          }}
+          typeBadge={
+            supplier.supplierType && typeConfig ? (
+              <Badge variant="outline" className="text-[11px]">
+                {typeConfig.label}
+              </Badge>
+            ) : undefined
+          }
+          primaryAction={headerConfig.primaryAction}
+          secondaryActions={[...viewSecondaryActions, ...(headerConfig.secondaryActions ?? [])]}
+          onEdit={headerConfig.onEdit}
+          onDelete={headerConfig.onDelete}
+        />
+        <MetaChipsRow items={metaItems} />
+      </section>
+    );
+  }
+
+  // Fallback: minimal header when no headerConfig (e.g. loading/error)
+  const statusConfig = SUPPLIER_STATUS_CONFIG[supplier.status];
+  const StatusIcon = statusConfig?.icon ?? CheckCircle;
   return (
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -324,7 +390,7 @@ function SupplierHeader({ supplier }: SupplierHeaderProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Badge className={cn('gap-1 text-[11px]', statusConfig?.color && `bg-${statusConfig.color}/10 text-${statusConfig.color}`)}>
+            <Badge className={cn('gap-1 text-[11px]', SUPPLIER_STATUS_CLASSES[supplier.status])}>
               <StatusIcon className="h-3 w-3" />
               {statusConfig?.label ?? supplier.status}
             </Badge>
@@ -335,22 +401,29 @@ function SupplierHeader({ supplier }: SupplierHeaderProps) {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Alert for suspended/blacklisted suppliers */}
-      {(supplier.status === 'suspended' || supplier.status === 'blacklisted') && (
-        <div className={cn(
-          'flex items-center gap-2 text-sm px-3 py-2 rounded-md',
-          supplier.status === 'suspended' && 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-          supplier.status === 'blacklisted' && 'bg-destructive/10 text-destructive'
-        )}>
-          <AlertTriangle className="h-4 w-4" />
-          {supplier.status === 'suspended'
-            ? 'This supplier is currently suspended. Review their status before placing new orders.'
-            : 'This supplier has been blacklisted. No new orders should be placed.'}
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" onClick={() => copyToClipboard(window.location.href)} aria-label="Copy link">
+                  <Link2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy link</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className={cn('h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0', showMetaPanel && 'bg-muted')} onClick={onToggleMetaPanel} aria-label={showMetaPanel ? 'Hide details panel' : 'Show details panel'}>
+                  <PanelRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{showMetaPanel ? 'Hide' : 'Show'} details panel</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-      )}
-
+      </div>
       <MetaChipsRow items={metaItems} />
     </section>
   );
@@ -384,11 +457,9 @@ function PerformanceMetricsSection({ supplier }: PerformanceMetricsSectionProps)
           icon={Package}
           title="Total Orders"
           value={supplier.totalPurchaseOrders ?? 0}
-          subtitle={supplier.averageOrderValue ? (
-            <span className="flex items-center gap-1">
-              Avg: <FormatAmount amount={supplier.averageOrderValue} currency={currency} />
-            </span>
-          ) : undefined}
+          subtitle={supplier.averageOrderValue
+            ? `Avg: ${formatAmount({ amount: supplier.averageOrderValue, currency })}`
+            : undefined}
         />
         <MetricCard
           icon={Clock}
@@ -517,12 +588,12 @@ function ContactInformationSection({ supplier }: ContactInformationSectionProps)
 // ============================================================================
 
 interface AddressesSectionProps {
-  billingAddress: Address | null | undefined;
-  shippingAddress: Address | null | undefined;
+  billingAddress: SupplierAddress | null | undefined;
+  shippingAddress: SupplierAddress | null | undefined;
 }
 
 function AddressesSection({ billingAddress, shippingAddress }: AddressesSectionProps) {
-  const renderAddress = (address: Address | null | undefined) => {
+  const renderAddress = (address: SupplierAddress | null | undefined) => {
     if (!address) return <span className="text-muted-foreground text-sm">Not specified</span>;
     return (
       <div className="text-sm space-y-0.5">
@@ -643,10 +714,9 @@ function NotesSection({ notes, tags }: NotesSectionProps) {
 interface RecentPurchaseOrdersSectionProps {
   purchaseOrders: PurchaseOrderSummary[];
   loading?: boolean;
-  currency: CurrencyCode;
 }
 
-function RecentPurchaseOrdersSection({ purchaseOrders, loading, currency }: RecentPurchaseOrdersSectionProps) {
+function RecentPurchaseOrdersSection({ purchaseOrders, loading }: RecentPurchaseOrdersSectionProps) {
   if (loading) {
     return (
       <section>
@@ -685,7 +755,7 @@ function RecentPurchaseOrdersSection({ purchaseOrders, loading, currency }: Rece
                 <div className="flex items-center gap-3">
                   <StatusCell status={po.status} statusConfig={PO_STATUS_CONFIG} />
                   <span className="text-sm font-medium tabular-nums">
-                    <FormatAmount amount={po.totalAmount} currency={currency} />
+                    <FormatAmount amount={po.totalAmount} currency={po.currency} />
                   </span>
                 </div>
               </div>
@@ -928,6 +998,7 @@ export const SupplierDetailView = memo(function SupplierDetailView({
   onTabChange,
   showMetaPanel,
   onToggleMetaPanel,
+  headerConfig,
   purchaseOrders = [],
   purchaseOrdersLoading = false,
   priceAgreements = [],
@@ -935,53 +1006,55 @@ export const SupplierDetailView = memo(function SupplierDetailView({
   activities = [],
   activitiesLoading = false,
   activitiesError,
+  onLogActivity,
   className,
 }: SupplierDetailViewProps) {
   const currency = useMemo(() => toCurrency(supplier.currency), [supplier.currency]);
   const poCount = useMemo(() => purchaseOrders.length, [purchaseOrders]);
   const priceCount = useMemo(() => priceAgreements.length, [priceAgreements]);
+  const { dismiss, isAlertDismissed } = useAlertDismissals();
+
+  const alerts = useMemo(() => {
+    const items: Array<{
+      id: string;
+      tone: 'warning' | 'critical';
+      title: string;
+      description: string;
+      actionLabel: string;
+      onAction: () => void;
+    }> = [];
+
+    if (supplier.status === 'suspended') {
+      items.push({
+        id: generateAlertIdWithValue('supplier', supplier.id, 'suspended', supplier.status),
+        tone: 'warning',
+        title: 'Supplier suspended',
+        description: 'Review their status before placing new orders.',
+        actionLabel: 'View performance',
+        onAction: () => onTabChange('performance'),
+      });
+    }
+
+    if (supplier.status === 'blacklisted') {
+      items.push({
+        id: generateAlertIdWithValue('supplier', supplier.id, 'blacklisted', supplier.status),
+        tone: 'critical',
+        title: 'Supplier blacklisted',
+        description: 'No new orders should be placed with this supplier.',
+        actionLabel: 'View performance',
+        onAction: () => onTabChange('performance'),
+      });
+    }
+
+    return items;
+  }, [onTabChange, supplier.id, supplier.status]);
+
+  const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
 
   return (
-    <div className={cn('flex flex-1 flex-col min-w-0 m-2 border border-border rounded-lg', className)}>
-      {/* Top Bar */}
-      <div className="flex items-center justify-between gap-4 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Suppliers</span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">{supplier.name}</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(window.location.href)}>
-                  <Link2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Copy link</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn('h-8 w-8', showMetaPanel && 'bg-muted')}
-                  onClick={onToggleMetaPanel}
-                >
-                  <PanelRight className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{showMetaPanel ? 'Hide' : 'Show'} details panel</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
-
+    <div className={cn('flex flex-1 flex-col min-w-0', className)}>
       {/* Main Content - FULL WIDTH (no max-w-7xl) */}
-      <div className="flex flex-1 flex-col bg-background px-2 rounded-b-lg min-w-0 border-t">
+      <div className="flex flex-1 flex-col bg-background min-w-0">
         <div className="px-4">
           <div className={cn(
             'grid grid-cols-1 gap-12',
@@ -989,7 +1062,43 @@ export const SupplierDetailView = memo(function SupplierDetailView({
           )}>
             {/* Primary Content */}
             <div className="space-y-6 pt-4 pb-6">
-              <SupplierHeader supplier={supplier} />
+              <SupplierHeaderSection
+                supplier={supplier}
+                showMetaPanel={showMetaPanel}
+                onToggleMetaPanel={onToggleMetaPanel}
+                headerConfig={headerConfig}
+              />
+
+              {visibleAlerts.length > 0 && (
+                <div className="space-y-2">
+                  {visibleAlerts.map((alert) => (
+                    <Alert
+                      key={alert.id}
+                      variant={alert.tone === 'critical' ? 'destructive' : 'default'}
+                    >
+                      <AlertDescription className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">{alert.title}</div>
+                          <div className="text-sm text-muted-foreground">{alert.description}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={alert.onAction}>
+                            {alert.actionLabel}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Dismiss alert"
+                            onClick={() => dismiss(alert.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              )}
 
               <Tabs value={activeTab} onValueChange={onTabChange}>
                 <TabsList className="w-full gap-6 bg-transparent border-b border-border rounded-none h-auto p-0">
@@ -999,11 +1108,17 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                   <TabsTrigger value="performance" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
                     Performance
                   </TabsTrigger>
-                  <TabsTrigger value="orders" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
-                    Orders ({poCount})
+                  <TabsTrigger value="orders" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3 gap-2">
+                    Orders
+                    <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
+                      {poCount}
+                    </Badge>
                   </TabsTrigger>
-                  <TabsTrigger value="pricing" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
-                    Pricing ({priceCount})
+                  <TabsTrigger value="pricing" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3 gap-2">
+                    Pricing
+                    <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
+                      {priceCount}
+                    </Badge>
                   </TabsTrigger>
                   <TabsTrigger value="activity" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
                     Activity
@@ -1021,7 +1136,6 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                     <RecentPurchaseOrdersSection
                       purchaseOrders={purchaseOrders}
                       loading={purchaseOrdersLoading}
-                      currency={currency}
                     />
                     <NotesSection notes={supplier.notes} tags={supplier.tags} />
                   </div>
@@ -1107,7 +1221,7 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                               <StatusCell status={po.status} statusConfig={PO_STATUS_CONFIG} />
                             </TableCell>
                             <TableCell className="text-right font-medium tabular-nums">
-                              <FormatAmount amount={po.totalAmount} currency={currency} />
+                              <FormatAmount amount={po.totalAmount} currency={po.currency} />
                             </TableCell>
                             <TableCell className="text-right text-muted-foreground">
                               {format(new Date(po.createdAt), 'PP')}
@@ -1180,17 +1294,27 @@ export const SupplierDetailView = memo(function SupplierDetailView({
 
                 {/* Activity Tab */}
                 <TabsContent value="activity" className="mt-0 pt-6">
-                  <UnifiedActivityTimeline
-                    activities={activities}
-                    isLoading={activitiesLoading}
-                    hasError={!!activitiesError}
-                    error={activitiesError || undefined}
-                    title="Activity Timeline"
-                    description="Complete history of supplier changes, orders, and system events"
-                    showFilters={true}
-                    emptyMessage="No activity recorded yet"
-                    emptyDescription="Supplier activities will appear here when changes are made."
-                  />
+                  <div className="space-y-4">
+                    {onLogActivity && (
+                      <div className="flex items-center justify-end">
+                        <Button size="sm" onClick={onLogActivity}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Log Activity
+                        </Button>
+                      </div>
+                    )}
+                    <UnifiedActivityTimeline
+                      activities={activities}
+                      isLoading={activitiesLoading}
+                      hasError={!!activitiesError}
+                      error={activitiesError || undefined}
+                      title="Activity Timeline"
+                      description="Complete history of supplier changes, orders, and system events"
+                      showFilters={true}
+                      emptyMessage="No activity recorded yet"
+                      emptyDescription="Supplier activities will appear here when changes are made."
+                    />
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>
@@ -1212,8 +1336,6 @@ export const SupplierDetailView = memo(function SupplierDetailView({
             </AnimatePresence>
           </div>
         </div>
-
-        <Separator className="mt-auto" />
       </div>
     </div>
   );

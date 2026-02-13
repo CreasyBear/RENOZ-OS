@@ -12,12 +12,14 @@ import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { JobCostingReportPage } from '@/components/domain/reports/job-costing-report-page';
+import { jobCostingReportSearchSchema } from '@/lib/schemas/reports/job-costing';
 
 // ============================================================================
 // ROUTE
 // ============================================================================
 
 export const Route = createFileRoute('/_authenticated/reports/job-costing')({
+  validateSearch: jobCostingReportSearchSchema,
   component: JobCostingRoute,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/reports" />

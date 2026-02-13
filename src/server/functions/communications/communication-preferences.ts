@@ -7,7 +7,7 @@
  * @see DOM-COMMS-005
  */
 import { createServerFn } from '@tanstack/react-start'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { contacts, customerActivities } from 'drizzle/schema'
 import {
@@ -17,6 +17,7 @@ import {
 } from '@/lib/schemas/communications'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
+import { NotFoundError } from '@/lib/server/errors'
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -51,7 +52,7 @@ export const getContactPreferences = createServerFn({ method: 'GET' })
       .limit(1)
 
     if (!contact) {
-      throw new Error('Contact not found')
+      throw new NotFoundError('Contact not found', 'contact')
     }
 
     return contact
@@ -86,7 +87,7 @@ export const updateContactPreferences = createServerFn({ method: 'POST' })
       .limit(1)
 
     if (!contact) {
-      throw new Error('Contact not found')
+      throw new NotFoundError('Contact not found', 'contact')
     }
 
     const now = new Date().toISOString()
@@ -119,21 +120,22 @@ export const updateContactPreferences = createServerFn({ method: 'POST' })
       return contact
     }
 
-    // Update contact
-    await db
-      .update(contacts)
-      .set(updateData)
-      .where(
-        and(
-          eq(contacts.id, data.contactId),
-          eq(contacts.organizationId, ctx.organizationId),
-        ),
-      )
+    // Wrap UPDATE + activity INSERTs in transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Update contact
+      await tx
+        .update(contacts)
+        .set(updateData)
+        .where(
+          and(
+            eq(contacts.id, data.contactId),
+            eq(contacts.organizationId, ctx.organizationId),
+          ),
+        )
 
-    // Log changes to activities
-    await Promise.all(
-      changes.map((change) =>
-        db.insert(customerActivities).values({
+      // Log changes to activities
+      for (const change of changes) {
+        await tx.insert(customerActivities).values({
           organizationId: ctx.organizationId,
           customerId: contact.customerId,
           createdBy: ctx.user.id,
@@ -148,9 +150,9 @@ export const updateContactPreferences = createServerFn({ method: 'POST' })
             newValue: change.newValue,
             changedAt: now,
           },
-        }),
-      ),
-    )
+        })
+      }
+    })
 
     return {
       ...contact,
@@ -166,7 +168,11 @@ export const getPreferenceHistory = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
-    const conditions = [eq(customerActivities.organizationId, ctx.organizationId)]
+    const conditions = [
+      eq(customerActivities.organizationId, ctx.organizationId),
+      // M01: Filter preference changes in SQL instead of in-memory
+      sql`${customerActivities.metadata}->>'preferenceChange' = 'true'`,
+    ]
 
     if (data.contactId) {
       conditions.push(eq(customerActivities.contactId, data.contactId))
@@ -184,16 +190,8 @@ export const getPreferenceHistory = createServerFn({ method: 'GET' })
       .limit(data.limit)
       .offset(data.offset)
 
-    const preferenceChanges = results.filter(
-      (activity) =>
-        activity.metadata &&
-        typeof activity.metadata === 'object' &&
-        'preferenceChange' in activity.metadata &&
-        activity.metadata.preferenceChange === true,
-    )
-
     return {
-      items: preferenceChanges,
-      total: preferenceChanges.length,
+      items: results,
+      total: results.length,
     }
   })

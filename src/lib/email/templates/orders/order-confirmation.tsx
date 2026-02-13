@@ -140,7 +140,7 @@ export function OrderConfirmation(props: OrderConfirmationProps) {
                 margin: "4px 0 0 0",
               }}
             >
-              Thank you for your order. We'll notify you when it ships.
+              Thank you for your order. We&apos;ll notify you when it ships.
             </Text>
           </Section>
 
@@ -162,7 +162,7 @@ export function OrderConfirmation(props: OrderConfirmationProps) {
               }}
             >
               Your order <strong>{formattedOrderNumber}</strong> has been confirmed
-              and is being processed. Here's a summary of your order:
+              and is being processed. Here&apos;s a summary of your order:
             </Text>
 
             {/* Order Details */}

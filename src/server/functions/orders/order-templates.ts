@@ -8,7 +8,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, isNull, sql, inArray, ilike, or } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
@@ -21,6 +23,8 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError, NotFoundError } from '@/lib/server/errors';
+import { GST_RATE } from '@/lib/order-calculations';
+import { generateOrderNumber } from '@/server/functions/orders/orders';
 import {
   createTemplateSchema,
   updateTemplateSchema,
@@ -28,6 +32,7 @@ import {
   createOrderFromTemplateSchema,
   templateParamsSchema,
   templateListQuerySchema,
+  templateListCursorQuerySchema,
   createTemplateItemSchema,
 } from '@/lib/schemas';
 
@@ -51,20 +56,6 @@ interface ListTemplatesResult {
 }
 
 // ============================================================================
-// HELPERS
-// ============================================================================
-
-async function generateOrderNumber(organizationId: string): Promise<string> {
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(orders)
-    .where(eq(orders.organizationId, organizationId));
-
-  const orderNum = (count || 0) + 1;
-  return `ORD-${String(orderNum).padStart(6, '0')}`;
-}
-
-// ============================================================================
 // LIST TEMPLATES
 // ============================================================================
 
@@ -85,11 +76,12 @@ export const listTemplates = createServerFn({ method: 'GET' })
     }
 
     if (search) {
+      const searchPattern = containsPattern(search);
       conditions.push(
-        sql`(
-          ${orderTemplates.name} ILIKE ${`%${search}%`} OR
-          ${orderTemplates.description} ILIKE ${`%${search}%`}
-        )`
+        or(
+          ilike(orderTemplates.name, searchPattern),
+          ilike(orderTemplates.description, searchPattern)
+        )!
       );
     }
 
@@ -130,6 +122,54 @@ export const listTemplates = createServerFn({ method: 'GET' })
       pageSize,
       hasMore: page * pageSize < total,
     };
+  });
+
+/**
+ * List templates with cursor pagination (recommended for large datasets).
+ */
+export const listTemplatesCursor = createServerFn({ method: 'GET' })
+  .inputValidator(templateListCursorQuerySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, isActive, category } = data;
+
+    const conditions = [
+      eq(orderTemplates.organizationId, ctx.organizationId),
+      isNull(orderTemplates.deletedAt),
+    ];
+    if (isActive !== undefined) conditions.push(eq(orderTemplates.isActive, isActive));
+    if (search) {
+      const searchPattern = containsPattern(search);
+      conditions.push(
+        or(
+          ilike(orderTemplates.name, searchPattern),
+          ilike(orderTemplates.description, searchPattern)
+        )!
+      );
+    }
+    if (category) {
+      conditions.push(sql`${orderTemplates.metadata}->>'category' = ${category}`);
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(orderTemplates.createdAt, orderTemplates.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const templates = await db
+      .select()
+      .from(orderTemplates)
+      .where(and(...conditions))
+      .orderBy(orderDir(orderTemplates.createdAt), orderDir(orderTemplates.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(templates, pageSize);
   });
 
 // ============================================================================
@@ -200,52 +240,56 @@ export const createTemplate = createServerFn({ method: 'POST' })
       }
     }
 
-    // Create template
-    const [template] = await db
-      .insert(orderTemplates)
-      .values({
-        organizationId: ctx.organizationId,
-        name: data.name,
-        description: data.description,
-        isActive: data.isActive,
-        isGlobal: data.isGlobal,
-        defaultCustomerId: data.defaultCustomerId,
-        defaultValues: data.defaultValues,
-        metadata: data.metadata ?? { usageCount: 0 },
-        createdBy: ctx.user.id,
-      })
-      .returning();
-
-    // Create items
-    const createdItems: OrderTemplateItem[] = [];
-    for (const item of data.items) {
-      const [createdItem] = await db
-        .insert(orderTemplateItems)
+    // Wrap template creation and item insertion in a transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Create template
+      const [template] = await tx
+        .insert(orderTemplates)
         .values({
           organizationId: ctx.organizationId,
-          templateId: template.id,
-          lineNumber: item.lineNumber,
-          sortOrder: item.sortOrder,
-          productId: item.productId,
-          sku: item.sku,
-          description: item.description,
-          defaultQuantity: item.defaultQuantity,
-          fixedUnitPrice: item.fixedUnitPrice,
-          useCurrentPrice: item.useCurrentPrice,
-          discountPercent: item.discountPercent,
-          discountAmount: item.discountAmount,
-          taxType: item.taxType,
-          notes: item.notes,
+          name: data.name,
+          description: data.description,
+          isActive: data.isActive,
+          isGlobal: data.isGlobal,
+          defaultCustomerId: data.defaultCustomerId,
+          defaultValues: data.defaultValues,
+          metadata: data.metadata ?? { usageCount: 0 },
+          createdBy: ctx.user.id,
         })
         .returning();
 
-      createdItems.push(createdItem);
-    }
+      // Batch-insert all items at once
+      const createdItems = data.items.length > 0
+        ? await tx
+            .insert(orderTemplateItems)
+            .values(
+              data.items.map((item) => ({
+                organizationId: ctx.organizationId,
+                templateId: template.id,
+                lineNumber: item.lineNumber,
+                sortOrder: item.sortOrder,
+                productId: item.productId,
+                sku: item.sku,
+                description: item.description,
+                defaultQuantity: item.defaultQuantity,
+                fixedUnitPrice: item.fixedUnitPrice,
+                useCurrentPrice: item.useCurrentPrice,
+                discountPercent: item.discountPercent,
+                discountAmount: item.discountAmount,
+                taxType: item.taxType,
+                notes: item.notes,
+              }))
+            )
+            .returning()
+        : [];
 
-    return {
-      ...template,
-      items: createdItems,
-    };
+      return {
+        ...template,
+        items: createdItems,
+      };
+    });
+
+    return result;
   });
 
 // ============================================================================
@@ -383,58 +427,62 @@ export const saveOrderAsTemplate = createServerFn({ method: 'POST' })
       .where(eq(orderLineItems.orderId, data.orderId))
       .orderBy(asc(orderLineItems.lineNumber));
 
-    // Create template
-    const [template] = await db
-      .insert(orderTemplates)
-      .values({
-        organizationId: ctx.organizationId,
-        name: data.name,
-        description: data.description,
-        isActive: true,
-        isGlobal: data.isGlobal,
-        defaultCustomerId: data.preserveCustomer ? order.customerId : null,
-        defaultValues: {
-          discountPercent: order.discountPercent ?? undefined,
-          discountAmount: order.discountAmount ?? undefined,
-          shippingAmount: order.shippingAmount ?? undefined,
-          internalNotes: order.internalNotes ?? undefined,
-          customerNotes: order.customerNotes ?? undefined,
-        },
-        metadata: { usageCount: 0 },
-        createdBy: ctx.user.id,
-      })
-      .returning();
-
-    // Create template items from order line items
-    const createdItems: OrderTemplateItem[] = [];
-    for (const item of lineItems) {
-      const [createdItem] = await db
-        .insert(orderTemplateItems)
+    // Wrap template creation and item insertion in a transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Create template
+      const [template] = await tx
+        .insert(orderTemplates)
         .values({
           organizationId: ctx.organizationId,
-          templateId: template.id,
-          lineNumber: item.lineNumber,
-          sortOrder: item.lineNumber,
-          productId: item.productId ?? undefined,
-          sku: item.sku ?? undefined,
-          description: item.description,
-          defaultQuantity: item.quantity,
-          fixedUnitPrice: data.preservePrices ? item.unitPrice : undefined,
-          useCurrentPrice: !data.preservePrices,
-          discountPercent: item.discountPercent ?? undefined,
-          discountAmount: item.discountAmount ?? undefined,
-          taxType: item.taxType,
-          notes: item.notes ?? undefined,
+          name: data.name,
+          description: data.description,
+          isActive: true,
+          isGlobal: data.isGlobal,
+          defaultCustomerId: data.preserveCustomer ? order.customerId : null,
+          defaultValues: {
+            discountPercent: order.discountPercent ?? undefined,
+            discountAmount: order.discountAmount ?? undefined,
+            shippingAmount: order.shippingAmount ?? undefined,
+            internalNotes: order.internalNotes ?? undefined,
+            customerNotes: order.customerNotes ?? undefined,
+          },
+          metadata: { usageCount: 0 },
+          createdBy: ctx.user.id,
         })
         .returning();
 
-      createdItems.push(createdItem);
-    }
+      // Batch-insert template items from order line items
+      const createdItems = lineItems.length > 0
+        ? await tx
+            .insert(orderTemplateItems)
+            .values(
+              lineItems.map((item) => ({
+                organizationId: ctx.organizationId,
+                templateId: template.id,
+                lineNumber: item.lineNumber,
+                sortOrder: item.lineNumber,
+                productId: item.productId ?? undefined,
+                sku: item.sku ?? undefined,
+                description: item.description,
+                defaultQuantity: item.quantity,
+                fixedUnitPrice: data.preservePrices ? item.unitPrice : undefined,
+                useCurrentPrice: !data.preservePrices,
+                discountPercent: item.discountPercent ?? undefined,
+                discountAmount: item.discountAmount ?? undefined,
+                taxType: item.taxType,
+                notes: item.notes ?? undefined,
+              }))
+            )
+            .returning()
+        : [];
 
-    return {
-      ...template,
-      items: createdItems,
-    };
+      return {
+        ...template,
+        items: createdItems,
+      };
+    });
+
+    return result;
   });
 
 // ============================================================================
@@ -502,111 +550,134 @@ export const createOrderFromTemplate = createServerFn({ method: 'POST' })
     const defaults = data.useTemplateDefaults ? template.defaultValues : null;
     const overrides = data.overrides ?? {};
 
-    // Create order
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: ctx.organizationId,
-        orderNumber,
-        customerId: data.customerId,
-        status: 'draft',
-        paymentStatus: 'pending',
-        orderDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-        discountPercent: overrides.discountPercent ?? defaults?.discountPercent ?? undefined,
-        discountAmount: overrides.discountAmount ?? defaults?.discountAmount ?? undefined,
-        shippingAmount: overrides.shippingAmount ?? defaults?.shippingAmount ?? 0,
-        internalNotes: overrides.internalNotes ?? defaults?.internalNotes ?? undefined,
-        customerNotes: overrides.customerNotes ?? defaults?.customerNotes ?? undefined,
-        createdBy: ctx.user.id,
-      })
-      .returning();
+    // Wrap order creation, line items, totals update, and template usage in a transaction
+    const result = await db.transaction(async (tx) => {
+      // Create order
+      const [order] = await tx
+        .insert(orders)
+        .values({
+          organizationId: ctx.organizationId,
+          orderNumber,
+          customerId: data.customerId,
+          status: 'draft',
+          paymentStatus: 'pending',
+          orderDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+          discountPercent: overrides.discountPercent ?? defaults?.discountPercent ?? undefined,
+          discountAmount: overrides.discountAmount ?? defaults?.discountAmount ?? undefined,
+          shippingAmount: overrides.shippingAmount ?? defaults?.shippingAmount ?? 0,
+          internalNotes: overrides.internalNotes ?? defaults?.internalNotes ?? undefined,
+          customerNotes: overrides.customerNotes ?? defaults?.customerNotes ?? undefined,
+          createdBy: ctx.user.id,
+        })
+        .returning();
 
-    // Create line items
-    let subtotal = 0;
-    let totalTax = 0;
+      // Create line items
+      let subtotal = 0;
+      let totalTax = 0;
 
-    for (const templateItem of templateItems) {
-      // Get current price if needed
-      let unitPrice = templateItem.fixedUnitPrice;
-      if (templateItem.useCurrentPrice && templateItem.productId) {
-        const [product] = await db
-          .select({ basePrice: products.basePrice })
+      // Batch fetch current prices for products that need them
+      const currentPriceProductIds = templateItems
+        .filter((ti) => ti.useCurrentPrice && ti.productId)
+        .map((ti) => ti.productId!);
+      const productPriceMap = new Map<string, number>();
+      if (currentPriceProductIds.length > 0) {
+        const fetchedProducts = await tx
+          .select({ id: products.id, basePrice: products.basePrice })
           .from(products)
-          .where(eq(products.id, templateItem.productId))
-          .limit(1);
-
-        unitPrice = product?.basePrice ?? 0;
+          .where(inArray(products.id, currentPriceProductIds));
+        for (const p of fetchedProducts) {
+          productPriceMap.set(p.id, p.basePrice ?? 0);
+        }
       }
 
-      if (unitPrice === null) unitPrice = 0;
+      // Build all line item values and batch insert
+      const lineItemValues = [];
+      for (const templateItem of templateItems) {
+        let unitPrice = templateItem.fixedUnitPrice;
+        if (templateItem.useCurrentPrice && templateItem.productId) {
+          unitPrice = productPriceMap.get(templateItem.productId) ?? 0;
+        }
 
-      // Calculate line totals
-      const lineSubtotal = templateItem.defaultQuantity * unitPrice;
-      const discount =
-        (templateItem.discountPercent ? lineSubtotal * (templateItem.discountPercent / 100) : 0) +
-        (templateItem.discountAmount ?? 0);
-      const afterDiscount = lineSubtotal - discount;
-      const taxRate = templateItem.taxType === 'gst' ? 0.1 : 0;
-      const taxAmount = Math.round(afterDiscount * taxRate);
-      const lineTotal = afterDiscount + taxAmount;
+        if (unitPrice === null) unitPrice = 0;
 
-      await db.insert(orderLineItems).values({
-        organizationId: ctx.organizationId,
-        orderId: order.id,
-        productId: templateItem.productId,
-        lineNumber: templateItem.lineNumber,
-        sku: templateItem.sku,
-        description: templateItem.description,
-        quantity: templateItem.defaultQuantity,
-        unitPrice,
-        discountPercent: templateItem.discountPercent,
-        discountAmount: templateItem.discountAmount,
-        taxType: templateItem.taxType ?? 'gst',
-        taxAmount,
-        lineTotal,
-        notes: templateItem.notes,
-        qtyPicked: 0,
-        qtyShipped: 0,
-        qtyDelivered: 0,
-      });
+        // Calculate line totals
+        const lineSubtotal = templateItem.defaultQuantity * unitPrice;
+        const discount =
+          (templateItem.discountPercent ? lineSubtotal * (templateItem.discountPercent / 100) : 0) +
+          (templateItem.discountAmount ?? 0);
+        const afterDiscount = lineSubtotal - discount;
+        const taxRate = templateItem.taxType === 'gst' ? GST_RATE : 0;
+        const taxAmount = Math.round(afterDiscount * taxRate);
+        const lineTotal = afterDiscount + taxAmount;
 
-      subtotal += lineSubtotal;
-      totalTax += taxAmount;
-    }
+        lineItemValues.push({
+          organizationId: ctx.organizationId,
+          orderId: order.id,
+          productId: templateItem.productId,
+          lineNumber: templateItem.lineNumber,
+          sku: templateItem.sku,
+          description: templateItem.description,
+          quantity: templateItem.defaultQuantity,
+          unitPrice,
+          discountPercent: templateItem.discountPercent,
+          discountAmount: templateItem.discountAmount,
+          taxType: templateItem.taxType ?? 'gst',
+          taxAmount,
+          lineTotal,
+          notes: templateItem.notes,
+          qtyPicked: 0,
+          qtyShipped: 0,
+          qtyDelivered: 0,
+        });
 
-    // Update order totals
-    const orderDiscount =
-      (order.discountPercent ? subtotal * (order.discountPercent / 100) : 0) +
-      (order.discountAmount ?? 0);
-    const total = subtotal - orderDiscount + totalTax + (order.shippingAmount ?? 0);
+        subtotal += lineSubtotal;
+        totalTax += taxAmount;
+      }
 
-    await db
-      .update(orders)
-      .set({
-        subtotal,
-        taxAmount: totalTax,
-        discountAmount: orderDiscount,
-        total,
-      })
-      .where(eq(orders.id, order.id));
+      // Batch insert all line items at once
+      if (lineItemValues.length > 0) {
+        await tx.insert(orderLineItems).values(lineItemValues);
+      }
 
-    // Update template usage count
-    const currentUsage = (template.metadata as Record<string, unknown>)?.usageCount ?? 0;
-    await db
-      .update(orderTemplates)
-      .set({
-        metadata: {
-          ...(template.metadata as Record<string, unknown>),
-          usageCount: (currentUsage as number) + 1,
-          lastUsedAt: new Date().toISOString(),
-        },
-      })
-      .where(eq(orderTemplates.id, data.templateId));
+      // Update order totals
+      const orderDiscount =
+        (order.discountPercent ? subtotal * (order.discountPercent / 100) : 0) +
+        (order.discountAmount ?? 0);
+      const total = subtotal - orderDiscount + totalTax + (order.shippingAmount ?? 0);
 
-    return {
-      order: { ...order, subtotal, taxAmount: totalTax, total },
-      orderNumber,
-    };
+      await tx
+        .update(orders)
+        .set({
+          subtotal,
+          taxAmount: totalTax,
+          discountAmount: orderDiscount,
+          total,
+        })
+        .where(eq(orders.id, order.id));
+
+      // Update template usage count atomically to prevent race conditions
+      await tx
+        .update(orderTemplates)
+        .set({
+          metadata: sql`jsonb_set(
+            jsonb_set(
+              COALESCE(${orderTemplates.metadata}, '{}'::jsonb),
+              '{usageCount}',
+              (COALESCE((${orderTemplates.metadata}->>'usageCount')::int, 0) + 1)::text::jsonb
+            ),
+            '{lastUsedAt}',
+            ${JSON.stringify(new Date().toISOString())}::jsonb
+          )`,
+        })
+        .where(eq(orderTemplates.id, data.templateId));
+
+      return {
+        order: { ...order, subtotal, taxAmount: totalTax, total },
+        orderNumber,
+      };
+    });
+
+    return result;
   });
 
 // ============================================================================

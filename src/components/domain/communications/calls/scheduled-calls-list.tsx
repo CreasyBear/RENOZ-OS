@@ -52,53 +52,13 @@ import { ScheduledCallBadge } from "./scheduled-call-badge";
 // TYPES
 // ============================================================================
 
-export interface ScheduledCall {
-  id: string;
-  customerId: string;
-  assigneeId: string;
-  scheduledAt: Date | string;
-  reminderAt: Date | string | null;
-  purpose: string;
-  notes: string | null;
-  status: "pending" | "completed" | "cancelled" | "rescheduled";
-  outcome?: string | null;
-  outcomeNotes?: string | null;
-  completedAt?: Date | string | null;
-  cancelledAt?: Date | string | null;
-  organizationId: string;
-}
+import type {
+  ScheduledCall,
+  ScheduledCallsListProps,
+} from "@/lib/schemas/communications";
 
-/**
- * Props for the ScheduledCallsList presenter component.
- * All data is passed from the container route.
- */
-export interface ScheduledCallsListProps {
-  /** @source useScheduledCalls() in communications/calls/index.tsx */
-  calls: ScheduledCall[];
-  /** @source useScheduledCalls().isLoading in container */
-  isLoading: boolean;
-  /** @source useState(statusFilter) in container */
-  statusFilter: string;
-  /** @source setStatusFilter in container */
-  onStatusFilterChange: (status: string) => void;
-  /** @source useState(selectedCallForOutcome) in container */
-  selectedCallForOutcome: string | null;
-  /** @source setSelectedCallForOutcome in container */
-  onSelectCallForOutcome: (callId: string | null) => void;
-  /** @source useCompleteCall handler in container */
-  onComplete: (id: string, outcome: string, notes?: string) => Promise<void>;
-  /** @source useCancelCall handler in container */
-  onCancel: (id: string) => Promise<void>;
-  /** @source useRescheduleCall handler in container */
-  onReschedule: (id: string, newDate: Date) => Promise<void>;
-  /** @source useCompleteCall.isPending in container */
-  isCompleting?: boolean;
-  /** @source useCancelCall.isPending in container */
-  isCancelling?: boolean;
-  /** @source useRescheduleCall.isPending in container */
-  isRescheduling?: boolean;
-  className?: string;
-}
+// Re-export types for backward compatibility
+export type { ScheduledCall, ScheduledCallsListProps };
 
 // ============================================================================
 // LOADING SKELETON

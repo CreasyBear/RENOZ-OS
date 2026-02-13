@@ -13,7 +13,11 @@ import { queryKeys } from "@/lib/query-keys";
 export function useProfile(userId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.user.profile(),
-    queryFn: () => getUser({ data: { id: userId } }),
+    queryFn: async () => {
+      const result = await getUser({ data: { id: userId } });
+      if (result == null) throw new Error('User profile not found');
+      return result;
+    },
     enabled: enabled && !!userId,
   });
 }
@@ -38,6 +42,7 @@ export function useUpdateProfile() {
           profile,
         },
       });
+      if (result == null) throw new Error('Profile update returned no data');
       return result;
     },
     onSuccess: () => {

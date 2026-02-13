@@ -1,17 +1,19 @@
 /**
  * Customer Detail Container
  *
- * Handles data fetching, mutations, and state management for customer detail view.
- * Implements render props pattern for flexible header/action composition.
+ * Orchestrates data fetching, state management, and actions for customer detail view.
+ * Uses the useCustomerDetail hook for all logic, keeping this container thin.
  *
- * @source customer from useCustomer hook
- * @source activities from useUnifiedActivities hook
+ * @source customer from useCustomerDetail hook
+ * @source activities from useCustomerDetail hook
+ * @source alerts from useCustomerDetail hook
+ * @source activeItems from useCustomerDetail hook
  *
- * @see STANDARDS.md - Container/Presenter pattern
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
+ * @see STANDARDS.md - Container/Presenter pattern
  */
 
-import { useState, useCallback } from 'react';
+import { useMemo } from 'react';
 import {
   Edit,
   Copy,
@@ -45,9 +47,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { toastSuccess, toastError } from '@/hooks';
-import { useCustomer, useDeleteCustomer } from '@/hooks/customers';
-import { useUnifiedActivities } from '@/hooks/activities';
+import { EntityActivityLogger } from '@/components/shared/activity';
+import { useCustomerDetail } from '@/hooks/customers';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
+import { useTrackView } from '@/hooks/search';
+import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
+import type { CustomerDetailData } from '@/lib/schemas/customers';
 import { CustomerDetailView } from '../views/customer-detail-view';
 
 // ============================================================================
@@ -55,27 +60,19 @@ import { CustomerDetailView } from '../views/customer-detail-view';
 // ============================================================================
 
 export interface CustomerDetailContainerRenderProps {
-  /** Header action buttons (Edit, Quick Actions, More menu) */
-  headerActions: React.ReactNode;
-  /** Main content (CustomerDetailView) */
+  /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
+  headerActions?: React.ReactNode;
+  /** Main content */
   content: React.ReactNode;
 }
 
 export interface CustomerDetailContainerProps {
   /** Customer ID to display */
   customerId: string;
-  /** Callback when user navigates back */
-  onBack?: () => void;
-  /** Callback when user clicks edit */
-  onEdit?: () => void;
-  /** Callback to navigate to communications */
-  onAddNote?: () => void;
-  /** Callback to schedule meeting */
-  onScheduleMeeting?: () => void;
-  /** Callback to create quote */
-  onCreateQuote?: () => void;
-  /** Callback to create order */
-  onCreateOrder?: () => void;
+  /** Preloaded customer data from route loader */
+  initialCustomer?: CustomerDetailData;
+  /** Initial active tab (from URL search, e.g. ?tab=activity) */
+  initialTab?: string;
   /** Render props pattern for layout composition */
   children?: (props: CustomerDetailContainerRenderProps) => React.ReactNode;
   /** Additional CSS classes */
@@ -105,173 +102,56 @@ function CustomerDetailSkeleton() {
 }
 
 // ============================================================================
-// MAIN COMPONENT
+// HEADER ACTIONS
 // ============================================================================
 
-export function CustomerDetailContainer({
-  customerId,
-  onBack,
-  onEdit,
-  onAddNote,
-  onScheduleMeeting,
-  onCreateQuote,
-  onCreateOrder,
-  children,
-  className,
-}: CustomerDetailContainerProps) {
-  // ─────────────────────────────────────────────────────────────────────────
-  // State
-  // ─────────────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('overview');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [showMetaPanel, setShowMetaPanel] = useState(true);
+interface HeaderActionsProps {
+  customer: NonNullable<ReturnType<typeof useCustomerDetail>['customer']>;
+  actions: ReturnType<typeof useCustomerDetail>['actions'];
+  onDeleteClick: () => void;
+}
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Panel Toggle Handler
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleToggleMetaPanel = useCallback(() => {
-    setShowMetaPanel((prev) => !prev);
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Data Fetching
-  // ─────────────────────────────────────────────────────────────────────────
-  const {
-    data: customer,
-    isLoading,
-    error,
-    refetch,
-  } = useCustomer({ id: customerId });
-
-  const {
-    activities,
-    isLoading: activitiesLoading,
-    error: activitiesError,
-  } = useUnifiedActivities({
-    entityType: 'customer',
-    entityId: customerId,
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Mutations
-  // ─────────────────────────────────────────────────────────────────────────
-  const deleteMutation = useDeleteCustomer();
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Handlers
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleDelete = useCallback(async () => {
-    try {
-      await deleteMutation.mutateAsync(customerId);
-      toastSuccess('Customer deleted');
-      setDeleteDialogOpen(false);
-      onBack?.();
-    } catch {
-      toastError('Failed to delete customer');
-    }
-  }, [deleteMutation, customerId, onBack]);
-
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
-  const handleCopyLink = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
-    toastSuccess('Link copied to clipboard');
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render: Loading
-  // ─────────────────────────────────────────────────────────────────────────
-  if (isLoading) {
-    const loadingContent = <CustomerDetailSkeleton />;
-    if (children) {
-      return (
-        <>
-          {children({
-            headerActions: <Skeleton className="h-10 w-32" />,
-            content: loadingContent,
-          })}
-        </>
-      );
-    }
-    return loadingContent;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render: Error
-  // ─────────────────────────────────────────────────────────────────────────
-  if (error || !customer) {
-    const errorContent = (
-      <ErrorState
-        title="Customer not found"
-        message="The customer you're looking for doesn't exist or has been deleted."
-        onRetry={() => refetch()}
-        retryLabel="Try Again"
-      />
-    );
-    if (children) {
-      return (
-        <>
-          {children({
-            headerActions: null,
-            content: errorContent,
-          })}
-        </>
-      );
-    }
-    return errorContent;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render: Header Elements
-  // ─────────────────────────────────────────────────────────────────────────
-  // Entity identity (name, status) is displayed by CustomerHeader in the view
-  // No headerTitle needed - follows single-responsibility principle
-  // @see docs/design-system/DETAIL-VIEW-STANDARDS.md
-
-  const headerActions = (
+function HeaderActions({ customer, actions, onDeleteClick }: HeaderActionsProps) {
+  return (
     <div className="flex items-center gap-2">
-      {/* Primary Action - Edit */}
-      {onEdit && (
-        <Button variant="outline" onClick={onEdit}>
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
+      {/* Primary Actions - Most common next steps (per DETAIL-VIEW-STANDARDS) */}
+      <Button onClick={actions.onCreateQuote}>
+        <FileText className="h-4 w-4 mr-2" />
+        New Quote
+      </Button>
+      {customer.phone && (
+        <Button variant="outline" asChild>
+          <a href={`tel:${customer.phone}`}>
+            <Phone className="h-4 w-4 mr-2" />
+            Call
+          </a>
         </Button>
       )}
+
+      {/* Edit */}
+      <Button variant="outline" onClick={actions.onEdit}>
+        <Edit className="h-4 w-4 mr-2" />
+        Edit
+      </Button>
 
       {/* Quick Actions */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline">
-            Quick Actions
-          </Button>
+          <Button variant="outline">Quick Actions</Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {onAddNote && (
-            <DropdownMenuItem onClick={onAddNote}>
-              <MessageSquarePlus className="h-4 w-4 mr-2" />
-              Add Note
-            </DropdownMenuItem>
-          )}
-          {onScheduleMeeting && (
-            <DropdownMenuItem onClick={onScheduleMeeting}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Schedule Meeting
-            </DropdownMenuItem>
-          )}
-          {onCreateQuote && (
-            <DropdownMenuItem onClick={onCreateQuote}>
-              <FileText className="h-4 w-4 mr-2" />
-              Create Quote
-            </DropdownMenuItem>
-          )}
-          {onCreateOrder && (
-            <DropdownMenuItem onClick={onCreateOrder}>
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Create Order
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem onClick={actions.onAddNote}>
+            <MessageSquarePlus className="h-4 w-4 mr-2" />
+            Add Note
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={actions.onScheduleMeeting}>
+            <Calendar className="h-4 w-4 mr-2" />
+            Schedule Meeting
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={actions.onCreateOrder}>
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Create Order
+          </DropdownMenuItem>
           {customer.email && (
             <>
               <DropdownMenuSeparator />
@@ -282,14 +162,6 @@ export function CustomerDetailContainer({
                 </a>
               </DropdownMenuItem>
             </>
-          )}
-          {customer.phone && (
-            <DropdownMenuItem asChild>
-              <a href={`tel:${customer.phone}`}>
-                <Phone className="h-4 w-4 mr-2" />
-                Call Customer
-              </a>
-            </DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -303,17 +175,17 @@ export function CustomerDetailContainer({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleCopyLink}>
+          <DropdownMenuItem onClick={actions.onCopyLink}>
             <Copy className="h-4 w-4 mr-2" />
             Copy Link
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handlePrint}>
+          <DropdownMenuItem onClick={actions.onPrint}>
             <Printer className="h-4 w-4 mr-2" />
             Print
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => setDeleteDialogOpen(true)}
+            onClick={onDeleteClick}
             className="text-destructive"
           >
             <Trash2 className="h-4 w-4 mr-2" />
@@ -323,43 +195,136 @@ export function CustomerDetailContainer({
       </DropdownMenu>
     </div>
   );
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export function CustomerDetailContainer({
+  customerId,
+  initialCustomer,
+  initialTab,
+  children,
+  className,
+}: CustomerDetailContainerProps) {
+  const detail = useCustomerDetail(customerId, { initialTab });
+  const customer = detail.customer ?? initialCustomer;
+
+  const { onLogActivity, onScheduleFollowUp, loggerProps } = useEntityActivityLogging({
+    entityType: 'customer',
+    entityId: customerId,
+    entityLabel: `Customer: ${customer?.name ?? customerId}`,
+  });
+
+  const actionsWithActivity = useMemo(
+    () => ({
+      ...detail.actions,
+      onLogActivity,
+      onScheduleFollowUp,
+      onAddNote: onLogActivity,
+      onScheduleMeeting: onScheduleFollowUp,
+    }),
+    [detail.actions, onLogActivity, onScheduleFollowUp]
+  );
+
+  useTrackView(
+    'customer',
+    customer?.id,
+    customer?.name,
+    customer?.email ?? undefined,
+    `/customers/${customerId}`
+  );
+  useDetailBreadcrumb(`/customers/${customerId}`, customer ? (customer.name ?? customerId) : undefined, !!customer);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render: Main Content
+  // Render: Loading
   // ─────────────────────────────────────────────────────────────────────────
+  if (detail.isLoading && !customer) {
+    const loadingContent = <CustomerDetailSkeleton />;
+    if (children) {
+      return <>{children({ headerActions: <Skeleton className="h-10 w-32" />, content: loadingContent })}</>;
+    }
+    return loadingContent;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render: Error
+  // ─────────────────────────────────────────────────────────────────────────
+  if (detail.error && !customer) {
+    const errorContent = (
+      <ErrorState
+        title="Customer not found"
+        message="The customer you're looking for doesn't exist or has been deleted."
+        onRetry={() => detail.refetch()}
+        retryLabel="Try Again"
+      />
+    );
+    if (children) {
+      return <>{children({ headerActions: null, content: errorContent })}</>;
+    }
+    return errorContent;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render: Success (guard: customer required)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (!customer) return null;
+
+  const headerActionsEl = (
+    <HeaderActions
+      customer={customer}
+      actions={actionsWithActivity}
+      onDeleteClick={() => detail.setDeleteDialogOpen(true)}
+    />
+  );
+
   const content = (
     <>
       <CustomerDetailView
         customer={customer}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        showMetaPanel={showMetaPanel}
-        onToggleMetaPanel={handleToggleMetaPanel}
-        activities={activities}
-        activitiesLoading={activitiesLoading}
-        activitiesError={activitiesError}
+        activeTab={detail.activeTab}
+        onTabChange={detail.onTabChange}
+        showMetaPanel={detail.showSidebar}
+        onToggleMetaPanel={detail.toggleSidebar}
+        activities={detail.activities}
+        activitiesLoading={detail.activitiesLoading}
+        activitiesError={detail.activitiesError}
+        alerts={detail.alerts}
+        alertsLoading={detail.alertsLoading}
+        activeItems={detail.activeItems}
+        activeItemsLoading={detail.activeItemsLoading}
+        headerActions={children ? null : headerActionsEl}
+        onLogActivity={onLogActivity}
+        onScheduleFollowUp={onScheduleFollowUp}
         className={className}
       />
 
+      {/* Activity Logger Dialog */}
+      <EntityActivityLogger {...loggerProps} />
+
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog
+        open={detail.deleteDialogOpen}
+        onOpenChange={detail.setDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Customer</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {customer.name}? This action cannot
-              be undone. All related contacts, addresses, and activities will also
-              be deleted.
+              Are you sure you want to delete {customer.name}? This action
+              cannot be undone. All related contacts, addresses, and activities
+              will also be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
+              onClick={detail.actions.onDelete}
+              disabled={detail.isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {detail.isDeleting ? 'Deleting…' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -367,24 +332,11 @@ export function CustomerDetailContainer({
     </>
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render: With Render Props or Default
-  // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerActions, content })}</>;
+    return <>{children({ headerActions: headerActionsEl, content })}</>;
   }
 
-  // Default rendering (standalone usage)
-  return (
-    <div className={className}>
-      {headerActions && (
-        <div className="flex items-center justify-end mb-4">
-          {headerActions}
-        </div>
-      )}
-      {content}
-    </div>
-  );
+  return content;
 }
 
 export default CustomerDetailContainer;

@@ -6,6 +6,9 @@
 // Legacy exports (will be deprecated)
 export * from "./job-assignments";
 export * from "./job-materials";
+export * from "./job-material-reservations";
+export * from "./job-material-serial-numbers";
+export * from "./job-material-photos";
 export * from "./job-tasks";
 export * from "./job-templates";
 export * from "./job-time-entries";

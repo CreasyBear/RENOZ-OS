@@ -17,7 +17,9 @@ import {
   Building2,
   Package,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { useOrgFormat } from '@/hooks/use-org-format';
+import { toastError } from '@/hooks';
+import { logger } from '@/lib/logger';
 import {
   Dialog,
   DialogContent,
@@ -29,9 +31,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -41,8 +50,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useOrgFormat } from '@/hooks/use-org-format';
-import type { ApprovalItem } from './approval-dashboard';
+import { StatusCell } from '@/components/shared/data-table';
+import { APPROVAL_PRIORITY_CONFIG } from './approval-status-config';
+import type { ApprovalItem } from '@/lib/schemas/approvals';
 
 // ============================================================================
 // TYPES
@@ -52,19 +62,25 @@ interface ApprovalDecisionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: ApprovalItem | null;
-  onDecision: (decision: 'approve' | 'reject' | 'escalate', comments: string) => void;
+  onDecision: (
+    decision: 'approve' | 'reject' | 'escalate',
+    data: { comments: string; escalateTo?: string }
+  ) => void;
+  escalationUsers: Array<{ id: string; name: string | null; email: string | null }>;
+  /** @source useApprovalDetails in /approvals/index.tsx */
+  approvalDetails?: {
+    items?: Array<{
+      id: string;
+      productName: string;
+      productSku?: string | null;
+      quantity: number;
+      unitPrice?: number | null;
+      lineTotal?: number | null;
+    }>;
+  };
+  /** @source useApprovalDetails loading state in /approvals/index.tsx */
+  isLoadingApprovalDetails?: boolean;
 }
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const PRIORITY_CONFIG = {
-  low: { label: 'Low', color: 'bg-gray-100 text-gray-800' },
-  medium: { label: 'Medium', color: 'bg-blue-100 text-blue-800' },
-  high: { label: 'High', color: 'bg-orange-100 text-orange-800' },
-  urgent: { label: 'Urgent', color: 'bg-red-100 text-red-800' },
-};
 
 // ============================================================================
 // COMPONENT
@@ -75,16 +91,25 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
   onOpenChange,
   item,
   onDecision,
+  escalationUsers,
+  approvalDetails,
+  isLoadingApprovalDetails = false,
 }: ApprovalDecisionDialogProps) {
   const [comments, setComments] = useState('');
+  const [escalateTo, setEscalateTo] = useState('');
+  const [escalationReason, setEscalationReason] = useState('');
+  const [escalationError, setEscalationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { formatCurrency } = useOrgFormat();
+  const { formatCurrency, formatDate } = useOrgFormat();
 
   // Reset form when dialog opens
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setComments('');
       setIsSubmitting(false);
+      setEscalateTo('');
+      setEscalationReason('');
+      setEscalationError(null);
     }
     onOpenChange(newOpen);
   };
@@ -93,27 +118,29 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
   const handleDecision = async (decision: 'approve' | 'reject' | 'escalate') => {
     if (!item) return;
 
+    if (decision === 'escalate') {
+      if (!escalateTo || !escalationReason.trim()) {
+        setEscalationError('Select a user and provide an escalation reason.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      await onDecision(decision, comments);
+      if (decision === 'escalate') {
+        await onDecision(decision, { comments: escalationReason, escalateTo });
+      } else {
+        await onDecision(decision, { comments });
+      }
       handleOpenChange(false);
     } catch (error) {
-      console.error('Decision error:', error);
+      logger.error('Decision error', error);
+      toastError(error instanceof Error ? error.message : 'Failed to submit decision');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Render priority badge
-  const renderPriorityBadge = () => {
-    if (!item) return null;
-    const config = PRIORITY_CONFIG[item.priority];
-    return (
-      <Badge variant="secondary" className={config.color}>
-        {config.label}
-      </Badge>
-    );
-  };
 
   if (!item) return null;
 
@@ -153,12 +180,18 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                 </div>
                 <div>
                   <span className="text-muted-foreground text-sm font-medium">Priority</span>
-                  <div className="mt-1">{renderPriorityBadge()}</div>
+                  <div className="mt-1">
+                    <StatusCell
+                      status={item.priority as 'low' | 'medium' | 'high' | 'urgent'}
+                      statusConfig={APPROVAL_PRIORITY_CONFIG}
+                      showIcon
+                    />
+                  </div>
                 </div>
                 <div>
                   <span className="text-muted-foreground text-sm font-medium">Due Date</span>
                   <p className="font-medium">
-                    {item.dueDate ? format(new Date(item.dueDate), 'MMM dd, yyyy') : 'No deadline'}
+                    {item.dueDate ? formatDate(item.dueDate, { format: 'short' }) : 'No deadline'}
                   </p>
                 </div>
               </div>
@@ -194,7 +227,7 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                 <div>
                   <div className="text-muted-foreground mb-1 flex items-center gap-2 text-sm">
                     <Calendar className="h-4 w-4" />
-                    Submitted {format(new Date(item.submittedAt), 'MMM dd, yyyy HH:mm')}
+                    Submitted {formatDate(item.submittedAt, { format: 'short', includeTime: true })}
                   </div>
                   {item.supplierName && (
                     <div className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -214,7 +247,7 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
             </CardContent>
           </Card>
 
-          {/* Item Details - Mock data for now */}
+          {/* Item Details */}
           {item.type === 'purchase_order' && (
             <Card>
               <CardHeader>
@@ -234,29 +267,49 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Mock items - will be replaced with real data */}
-                    <TableRow>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">Office Chair</p>
-                          <p className="text-muted-foreground text-sm">SKU: CHR-001</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">5</TableCell>
-                      <TableCell className="text-right">$250.00</TableCell>
-                      <TableCell className="text-right">$1,250.00</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">Standing Desk</p>
-                          <p className="text-muted-foreground text-sm">SKU: DSK-002</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">3</TableCell>
-                      <TableCell className="text-right">$450.00</TableCell>
-                      <TableCell className="text-right">$1,350.00</TableCell>
-                    </TableRow>
+                    {isLoadingApprovalDetails && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-muted-foreground text-sm">
+                          Loading items…
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoadingApprovalDetails && (approvalDetails?.items?.length ?? 0) === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-muted-foreground text-sm">
+                          No items available.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {approvalDetails?.items?.map((lineItem) => (
+                      <TableRow key={lineItem.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{lineItem.productName}</p>
+                            {lineItem.productSku && (
+                              <p className="text-muted-foreground text-sm">
+                                SKU: {lineItem.productSku}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{lineItem.quantity}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(Number(lineItem.unitPrice ?? 0), {
+                            currency: item.currency,
+                            cents: false,
+                            showCents: true,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(Number(lineItem.lineTotal ?? 0), {
+                            currency: item.currency,
+                            cents: false,
+                            showCents: true,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -286,6 +339,54 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
               </div>
             </CardContent>
           </Card>
+
+          {/* Escalation */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Escalation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Escalate To</Label>
+                <Select value={escalateTo} onValueChange={setEscalateTo}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select user..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {escalationUsers.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No users available
+                      </SelectItem>
+                    ) : (
+                      escalationUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name ?? user.email ?? 'Unnamed user'}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="escalation-reason">
+                  Escalation Reason <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  id="escalation-reason"
+                  placeholder="Explain why this approval is being escalated..."
+                  value={escalationReason}
+                  onChange={(e) => setEscalationReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              {escalationError && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{escalationError}</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-row">
@@ -298,26 +399,24 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
               variant="outline"
               onClick={() => handleDecision('escalate')}
               disabled={isSubmitting}
-              className="text-orange-600 hover:text-orange-700"
             >
               <AlertTriangle className="mr-2 h-4 w-4" />
               Escalate
             </Button>
 
             <Button
-              variant="outline"
+              variant="destructive"
               onClick={() => handleDecision('reject')}
               disabled={isSubmitting}
-              className="text-red-600 hover:text-red-700"
             >
               <XCircle className="mr-2 h-4 w-4" />
               Reject
             </Button>
 
             <Button
+              variant="default"
               onClick={() => handleDecision('approve')}
               disabled={isSubmitting}
-              className="bg-green-600 hover:bg-green-700"
             >
               <CheckCircle className="mr-2 h-4 w-4" />
               Approve

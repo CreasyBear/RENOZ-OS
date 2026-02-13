@@ -9,7 +9,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, gte, lte, count, ne, inArray } from 'drizzle-orm';
+import { sql, eq, and, gte, lte, count, ne, inArray, sum, avg, isNull, notInArray } from 'drizzle-orm';
 import { cache } from 'react';
 import { db } from '@/lib/db';
 import { customers, customerTags, customerTagAssignments, orders, customerActivities } from 'drizzle/schema';
@@ -56,24 +56,24 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
   // Build order conditions for valid orders
   const validOrderCondition = and(
     eq(orders.organizationId, organizationId),
-    sql`${orders.deletedAt} IS NULL`,
-    sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    isNull(orders.deletedAt),
+    notInArray(orders.status, ['draft', 'cancelled'])
   );
 
   const currentCustomerCondition = and(
     eq(customers.organizationId, organizationId),
-    sql`${customers.deletedAt} IS NULL`,
+    isNull(customers.deletedAt),
     startDate ? gte(customers.createdAt, startDate) : sql`1=1`
   );
 
   const previousCustomerCondition = and(
     eq(customers.organizationId, organizationId),
-    sql`${customers.deletedAt} IS NULL`,
+    isNull(customers.deletedAt),
     previousStartDate ? gte(customers.createdAt, previousStartDate) : sql`1=1`,
     startDate ? lte(customers.createdAt, startDate) : sql`1=1`
   );
 
-  // Run current and previous period queries in parallel to eliminate waterfall
+  // RAW SQL (Phase 11 Keep): count(CASE WHEN) for conditional counts. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
   const [currentMetrics, previousMetrics, currentRevenue, previousRevenue] = await Promise.all([
     // Current period customer metrics
     db
@@ -94,7 +94,7 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
     // Note: avgLifetimeValue will be calculated as totalRevenue / totalCustomers
     db
       .select({
-        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        totalRevenue: sum(orders.total),
       })
       .from(orders)
       .innerJoin(
@@ -108,7 +108,7 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
     // Previous period revenue from orders
     db
       .select({
-        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        totalRevenue: sum(orders.total),
       })
       .from(orders)
       .innerJoin(
@@ -123,23 +123,26 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
 
   const current = currentMetrics[0];
   const previous = previousMetrics[0];
-  const currentRev = currentRevenue[0] ?? { totalRevenue: 0 };
-  const previousRev = previousRevenue[0] ?? { totalRevenue: 0 };
+  const currentRev = currentRevenue[0] ?? { totalRevenue: null };
+  const previousRev = previousRevenue[0] ?? { totalRevenue: null };
   
   // Calculate average LTV: total revenue / number of customers (including those with 0 orders)
+  // Handle nulls from sum() aggregation (returns null when no rows match)
   const totalCustomers = Number(current?.totalCustomers ?? 0);
+  const currentRevenueValue = Number(currentRev?.totalRevenue ?? 0);
   const avgLifetimeValue = totalCustomers > 0 
-    ? Number(currentRev?.totalRevenue ?? 0) / totalCustomers 
+    ? currentRevenueValue / totalCustomers 
     : 0;
 
-  // Calculate changes
+  // Calculate changes (handle nulls from sum() aggregation)
+  const previousRevenueValue = Number(previousRev?.totalRevenue ?? 0);
   const customerChange = calculatePercentChange(
     Number(current?.totalCustomers ?? 0),
     Number(previous?.totalCustomers ?? 0)
   );
   const revenueChange = calculatePercentChange(
-    Number(currentRev?.totalRevenue ?? 0),
-    Number(previousRev?.totalRevenue ?? 0)
+    currentRevenueValue,
+    previousRevenueValue
   );
 
   return {
@@ -153,7 +156,7 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
       },
       {
         label: 'Total Revenue',
-        value: formatCurrency(Number(currentRev?.totalRevenue ?? 0)),
+        value: formatCurrency(currentRevenueValue),
         change: revenueChange,
         changeLabel: `vs previous ${range}`,
         icon: 'dollar',
@@ -211,7 +214,7 @@ export const getHealthDistribution = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           sql`${customers.healthScore} IS NOT NULL`
         )
       );
@@ -254,17 +257,24 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
     // Build order aggregation conditions
     const validOrderCondition = and(
       eq(orders.organizationId, ctx.organizationId),
-      sql`${orders.deletedAt} IS NULL`,
-      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+      isNull(orders.deletedAt),
+      notInArray(orders.status, ['draft', 'cancelled'])
     );
 
-    // Get customer counts by period with revenue aggregated from orders
-    // Use subquery to aggregate revenue per customer first, then group by period
-    const customerRevenues = await db
+    // Aggregate customer counts and revenue by period in SQL using DATE_TRUNC
+    // This avoids fetching all rows and grouping in JavaScript
+    const DATE_TRUNC_INTERVALS = {
+      day: sql`'day'`,
+      week: sql`'week'`,
+      month: sql`'month'`,
+    } as const;
+    const truncateExpr =
+      DATE_TRUNC_INTERVALS[intervals.truncate as keyof typeof DATE_TRUNC_INTERVALS] ?? sql`'month'`;
+    const trendsData = await db
       .select({
-        customerId: customers.id,
-        createdAt: customers.createdAt,
-        revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        period: sql<string>`DATE_TRUNC(${truncateExpr}, ${customers.createdAt})::text`.as('period'),
+        customer_count: sql<number>`COUNT(DISTINCT ${customers.id})::int`.as('customer_count'),
+        revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`.as('revenue'),
       })
       .from(customers)
       .leftJoin(
@@ -277,48 +287,12 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           gte(customers.createdAt, intervals.startDate)
         )
       )
-      .groupBy(customers.id, customers.createdAt);
-
-    // Group by period in JavaScript (since DATE_TRUNC requires raw SQL)
-    // This is acceptable as we're processing already-aggregated data
-    const trendsMap = new Map<string, { customer_count: number; revenue: number }>();
-    
-    customerRevenues.forEach((cr) => {
-      const date = new Date(cr.createdAt);
-      let period: string;
-      
-      // Match the DATE_TRUNC logic based on intervals.truncate
-      if (intervals.truncate === 'day') {
-        period = date.toISOString().split('T')[0];
-      } else if (intervals.truncate === 'week') {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        period = weekStart.toISOString().split('T')[0];
-      } else if (intervals.truncate === 'month') {
-        period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      } else {
-        period = `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
-      }
-
-      if (!trendsMap.has(period)) {
-        trendsMap.set(period, { customer_count: 0, revenue: 0 });
-      }
-      const trend = trendsMap.get(period)!;
-      trend.customer_count += 1;
-      trend.revenue += Number(cr.revenue ?? 0);
-    });
-
-    const trendsData = Array.from(trendsMap.entries())
-      .map(([period, data]) => ({
-        period,
-        customer_count: data.customer_count,
-        revenue: data.revenue,
-      }))
-      .sort((a, b) => a.period.localeCompare(b.period));
+      .groupBy(sql`DATE_TRUNC(${truncateExpr}, ${customers.createdAt})`)
+      .orderBy(sql`DATE_TRUNC(${truncateExpr}, ${customers.createdAt})`);
 
     return {
       customerTrend: trendsData.map((row) => ({
@@ -347,8 +321,8 @@ export const getSegmentPerformance = createServerFn({ method: 'GET' })
     // Build order aggregation conditions
     const validOrderCondition = and(
       eq(orders.organizationId, ctx.organizationId),
-      sql`${orders.deletedAt} IS NULL`,
-      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+      isNull(orders.deletedAt),
+      notInArray(orders.status, ['draft', 'cancelled'])
     );
 
     // Get metrics per tag (segment) with revenue aggregated from orders
@@ -370,7 +344,7 @@ export const getSegmentPerformance = createServerFn({ method: 'GET' })
         and(
           eq(customers.id, customerTagAssignments.customerId),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
       .leftJoin(
@@ -425,8 +399,8 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
     // Build order aggregation conditions
     const validOrderCondition = and(
       eq(orders.organizationId, ctx.organizationId),
-      sql`${orders.deletedAt} IS NULL`,
-      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+      isNull(orders.deletedAt),
+      notInArray(orders.status, ['draft', 'cancelled'])
     );
 
     // Get customer count and health metrics
@@ -448,7 +422,7 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
         and(
           eq(customerTagAssignments.tagId, tagId),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       );
 
@@ -464,7 +438,7 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
         and(
           eq(customerTagAssignments.tagId, tagId),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       );
 
@@ -552,7 +526,7 @@ export const getLifecycleStages = createServerFn({ method: 'GET' })
       })
       .from(customers)
       .where(
-        and(eq(customers.organizationId, ctx.organizationId), sql`${customers.deletedAt} IS NULL`)
+        and(eq(customers.organizationId, ctx.organizationId), isNull(customers.deletedAt))
       )
       .groupBy(customers.status);
 
@@ -587,6 +561,8 @@ export const getLifecycleCohorts = createServerFn({ method: 'GET' })
     const startDate = getValueStartDate(data.range, new Date());
     const startDateString = startDate ? startDate.toISOString() : null;
 
+    // Raw SQL justified: Complex COUNT(DISTINCT CASE WHEN ... OR ...) with interval expressions.
+    // Drizzle ORM doesn't provide abstractions for retention cohort calculations.
     const cohorts = await db.execute<{
       period: string;
       customers: number;
@@ -702,7 +678,7 @@ export const getChurnMetrics = createServerFn({ method: 'GET' })
       .select({ total: count() })
       .from(customers)
       .where(
-        and(eq(customers.organizationId, ctx.organizationId), sql`${customers.deletedAt} IS NULL`)
+        and(eq(customers.organizationId, ctx.organizationId), isNull(customers.deletedAt))
       );
 
     const total = Number(totalCustomers?.total ?? 0) || 1;
@@ -746,7 +722,7 @@ export const getConversionFunnel = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           startDate ? gte(customers.createdAt, startDate) : sql`1=1`
         )
       );
@@ -876,7 +852,7 @@ export const getQuickStats = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           startDate ? gte(customers.createdAt, startDate) : sql`1=1`
         )
       );
@@ -889,7 +865,7 @@ export const getQuickStats = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           sql`${customers.status} IN ('inactive', 'suspended', 'blacklisted')`,
           startDate ? gte(customers.updatedAt, startDate) : sql`1=1`
         )
@@ -903,7 +879,7 @@ export const getQuickStats = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(orders.organizationId, ctx.organizationId),
-          sql`${orders.deletedAt} IS NULL`,
+          isNull(orders.deletedAt),
           ne(orders.status, 'draft'),
           ne(orders.status, 'cancelled'),
           startDateString ? gte(orders.orderDate, startDateString) : sql`1=1`
@@ -967,7 +943,7 @@ export const getValueKpis = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           startDate ? gte(customers.createdAt, startDate) : sql`1=1`
         )
       );
@@ -975,9 +951,10 @@ export const getValueKpis = createServerFn({ method: 'GET' })
     // Get order metrics aggregated from orders table
     const orderMetrics = await db
       .select({
-        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
-        avgOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
-        orderCount: sql<number>`COUNT(*)::int`,
+        totalRevenue: sum(orders.total),
+        avgOrderValue: avg(orders.total),
+        orderCount: count(),
+        // COUNT(DISTINCT) requires raw SQL as Drizzle doesn't have distinct count function
         customerCount: sql<number>`COUNT(DISTINCT ${orders.customerId})::int`,
       })
       .from(orders)
@@ -986,24 +963,25 @@ export const getValueKpis = createServerFn({ method: 'GET' })
         and(
           eq(orders.customerId, customers.id),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`,
+          isNull(customers.deletedAt),
           startDate ? gte(customers.createdAt, startDate) : sql`1=1`
         )
       )
       .where(
         and(
           eq(orders.organizationId, ctx.organizationId),
-          sql`${orders.deletedAt} IS NULL`,
-          sql`${orders.status} NOT IN ('draft', 'cancelled')`,
+          isNull(orders.deletedAt),
+          notInArray(orders.status, ['draft', 'cancelled']),
           startDateString ? gte(orders.orderDate, startDateString) : sql`1=1`
         )
       );
 
-    const orderStats = orderMetrics[0] ?? {
-      totalRevenue: 0,
-      avgOrderValue: 0,
-      orderCount: 0,
-      customerCount: 0,
+    const orderStatsRow = orderMetrics[0];
+    const orderStats = {
+      totalRevenue: Number(orderStatsRow?.totalRevenue ?? 0),
+      avgOrderValue: Number(orderStatsRow?.avgOrderValue ?? 0),
+      orderCount: Number(orderStatsRow?.orderCount ?? 0),
+      customerCount: Number(orderStatsRow?.customerCount ?? 0),
     };
 
     const totalCustomers = Number(customerCountResult?.customerCount ?? 0);
@@ -1043,17 +1021,18 @@ export const getValueTiers = createServerFn({ method: 'GET' })
         and(
           eq(orders.customerId, customers.id),
           eq(orders.organizationId, ctx.organizationId),
-          sql`${orders.deletedAt} IS NULL`,
-          sql`${orders.status} NOT IN ('draft', 'cancelled')`
+          isNull(orders.deletedAt),
+          notInArray(orders.status, ['draft', 'cancelled'])
         )
       )
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
-      .groupBy(customers.id);
+      .groupBy(customers.id)
+      .limit(5000); // Cap for large orgs; tier distribution may be partial above this
 
     // Group by tier thresholds
     const tierGroups = customerRevenues.reduce((acc, cr) => {
@@ -1111,8 +1090,8 @@ export const getTopCustomers = createServerFn({ method: 'GET' })
     // Build order aggregation conditions
     const validOrderCondition = and(
       eq(orders.organizationId, ctx.organizationId),
-      sql`${orders.deletedAt} IS NULL`,
-      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+      isNull(orders.deletedAt),
+      notInArray(orders.status, ['draft', 'cancelled'])
     );
 
     const topCustomers = await db
@@ -1136,7 +1115,7 @@ export const getTopCustomers = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
       .groupBy(

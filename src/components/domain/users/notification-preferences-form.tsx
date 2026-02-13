@@ -3,6 +3,10 @@
  *
  * Form for managing user notification preferences.
  *
+ * ARCHITECTURE: Container/Presenter Pattern
+ * - Container handles data fetching (useNotificationPreferences hook)
+ * - Presenter renders UI and receives data/callbacks via props
+ *
  * @see src/hooks/profile/use-notification-preferences.ts
  */
 import { useCallback } from "react";
@@ -13,25 +17,25 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useNotificationPreferences } from "@/hooks/profile/use-notification-preferences";
+import type { NotificationPreferencesFormPresenterProps } from "@/lib/schemas/users/profile";
 
-export function NotificationPreferencesForm() {
-  const { preferences, isLoading, isPending, updatePreference } =
-    useNotificationPreferences();
+// ============================================================================
+// PRESENTER
+// ============================================================================
 
-  const handleToggle = useCallback(
-    (key: keyof typeof preferences) => {
-      updatePreference(key, !preferences[key]);
-    },
-    [preferences, updatePreference]
-  );
-
-  const handleDigestChange = useCallback(
-    (value: string) => {
-      updatePreference("digestFrequency", value as "daily" | "weekly" | "realtime");
-    },
-    [updatePreference]
-  );
-
+/**
+ * Notification Preferences Form Presenter
+ *
+ * Pure UI component - receives all data and callbacks via props.
+ * No data fetching hooks.
+ */
+export function NotificationPreferencesFormPresenter({
+  preferences,
+  isLoading,
+  isPending,
+  onToggle,
+  onDigestChange,
+}: NotificationPreferencesFormPresenterProps) {
   if (isLoading) {
     return (
       <Card>
@@ -78,7 +82,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="email-notifications"
                 checked={preferences.email}
-                onCheckedChange={() => handleToggle("email")}
+                onCheckedChange={() => onToggle("email")}
                 disabled={isPending}
               />
             </div>
@@ -92,7 +96,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="push-notifications"
                 checked={preferences.push}
-                onCheckedChange={() => handleToggle("push")}
+                onCheckedChange={() => onToggle("push")}
                 disabled={isPending}
               />
             </div>
@@ -109,7 +113,7 @@ export function NotificationPreferencesForm() {
           </h4>
           <RadioGroup
             value={preferences.digestFrequency}
-            onValueChange={handleDigestChange}
+            onValueChange={(value) => onDigestChange(value as "daily" | "weekly" | "realtime")}
             className="flex flex-col space-y-2"
             disabled={isPending}
           >
@@ -156,7 +160,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="order-updates"
                 checked={preferences.orderUpdates}
-                onCheckedChange={() => handleToggle("orderUpdates")}
+                onCheckedChange={() => onToggle("orderUpdates")}
                 disabled={isPending}
               />
             </div>
@@ -177,7 +181,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="customer-messages"
                 checked={preferences.customerMessages}
-                onCheckedChange={() => handleToggle("customerMessages")}
+                onCheckedChange={() => onToggle("customerMessages")}
                 disabled={isPending}
               />
             </div>
@@ -198,7 +202,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="inventory-alerts"
                 checked={preferences.inventoryAlerts}
-                onCheckedChange={() => handleToggle("inventoryAlerts")}
+                onCheckedChange={() => onToggle("inventoryAlerts")}
                 disabled={isPending}
               />
             </div>
@@ -219,7 +223,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="task-reminders"
                 checked={preferences.taskReminders}
-                onCheckedChange={() => handleToggle("taskReminders")}
+                onCheckedChange={() => onToggle("taskReminders")}
                 disabled={isPending}
               />
             </div>
@@ -237,7 +241,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="mentions"
                 checked={preferences.mentions}
-                onCheckedChange={() => handleToggle("mentions")}
+                onCheckedChange={() => onToggle("mentions")}
                 disabled={isPending}
               />
             </div>
@@ -258,7 +262,7 @@ export function NotificationPreferencesForm() {
               <Switch
                 id="system-announcements"
                 checked={preferences.systemAnnouncements}
-                onCheckedChange={() => handleToggle("systemAnnouncements")}
+                onCheckedChange={() => onToggle("systemAnnouncements")}
                 disabled={isPending}
               />
             </div>
@@ -266,5 +270,48 @@ export function NotificationPreferencesForm() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ============================================================================
+// CONTAINER
+// ============================================================================
+
+/**
+ * Notification Preferences Form Container
+ *
+ * Container responsibilities:
+ * - Fetches data hook (useNotificationPreferences)
+ * - Handles preference update mutations
+ * - Passes data and callbacks to presenter
+ *
+ * @source preferences from useNotificationPreferences hook
+ */
+export function NotificationPreferencesForm() {
+  const { preferences, isLoading, isPending, updatePreference } =
+    useNotificationPreferences();
+
+  const handleToggle = useCallback(
+    (key: keyof typeof preferences) => {
+      updatePreference(key, !preferences[key]);
+    },
+    [preferences, updatePreference]
+  );
+
+  const handleDigestChange = useCallback(
+    (value: "daily" | "weekly" | "realtime") => {
+      updatePreference("digestFrequency", value);
+    },
+    [updatePreference]
+  );
+
+  return (
+    <NotificationPreferencesFormPresenter
+      preferences={preferences}
+      isLoading={isLoading}
+      isPending={isPending}
+      onToggle={handleToggle}
+      onDigestChange={handleDigestChange}
+    />
   );
 }

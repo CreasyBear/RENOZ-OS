@@ -3,15 +3,8 @@
  *
  * Dialog for editing image metadata (alt text, caption).
  */
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useEffect, useCallback } from "react";
 import { Image, Info, Star, FileImage } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -21,15 +14,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { updateProductImage } from "@/server/functions/products/product-images";
-
-// Form schema
-const imageEditSchema = z.object({
-  altText: z.string().max(255, "Alt text must be 255 characters or less").optional(),
-  caption: z.string().max(1000, "Caption must be 1000 characters or less").optional(),
-});
-
-type ImageEditFormValues = z.infer<typeof imageEditSchema>;
+import { useUpdateProductImage } from "@/hooks/products";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextField,
+  TextareaField,
+  FormActions,
+} from "@/components/shared/forms";
+import {
+  imageEditFormSchema,
+  type ImageEditFormValues,
+} from "@/lib/schemas/products";
 
 export interface EditableImage {
   id: string;
@@ -56,54 +51,58 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function ImageEditor({ image, open, onOpenChange, onSaved }: ImageEditorProps) {
-  const [isSaving, setIsSaving] = useState(false);
+export function ImageEditor({
+  image,
+  open,
+  onOpenChange,
+  onSaved,
+}: ImageEditorProps) {
+  const updateMutation = useUpdateProductImage();
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors, isDirty },
-  } = useForm<ImageEditFormValues>({
-    resolver: zodResolver(imageEditSchema) as never,
+  const form = useTanStackForm<ImageEditFormValues>({
+    schema: imageEditFormSchema,
     defaultValues: {
-      altText: "",
-      caption: "",
+      altText: image?.altText ?? "",
+      caption: image?.caption ?? "",
+    },
+    onSubmit: async (values) => {
+      if (!image) return;
+
+      updateMutation.mutate(
+        {
+          id: image.id,
+          altText: values.altText || undefined,
+          caption: values.caption || undefined,
+        },
+        {
+          onSuccess: () => {
+            onSaved?.();
+            onOpenChange(false);
+          },
+        }
+      );
     },
   });
 
-  const altText = watch("altText");
-  const caption = watch("caption");
+  const altText = form.useWatch("altText");
+  const caption = form.useWatch("caption");
 
-
-  // Handle save
-  const onSubmit = async (data: ImageEditFormValues) => {
-    if (!image) return;
-
-    setIsSaving(true);
-    try {
-      await updateProductImage({
-        data: {
-          id: image.id,
-          altText: data.altText || undefined,
-          caption: data.caption || undefined,
-        },
+  useEffect(() => {
+    if (image && open) {
+      form.reset({
+        altText: image.altText ?? "",
+        caption: image.caption ?? "",
       });
-      onSaved?.();
-      onOpenChange(false);
-    } catch (error) {
-      console.error("Failed to update image:", error);
-    } finally {
-      setIsSaving(false);
     }
-  };
+  }, [image, open, form]);
 
-  // Handle close
-  const handleClose = () => {
-    if (!isSaving) {
+  const handleClose = useCallback(() => {
+    if (!updateMutation.isPending) {
       onOpenChange(false);
     }
-  };
+  }, [updateMutation.isPending, onOpenChange]);
+
+  const isDirty = form.isDirty();
 
   if (!image) return null;
 
@@ -120,7 +119,13 @@ export function ImageEditor({ image, open, onOpenChange, onSaved }: ImageEditorP
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-6"
+        >
           {/* Image preview */}
           <div className="flex gap-6">
             <div className="relative w-48 h-48 flex-shrink-0 rounded-lg overflow-hidden border">
@@ -180,61 +185,39 @@ export function ImageEditor({ image, open, onOpenChange, onSaved }: ImageEditorP
           </div>
 
           {/* Alt text field */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="altText">Alt Text</Label>
-              <span className="text-xs text-muted-foreground">
-                {altText?.length || 0}/255
-              </span>
-            </div>
-            <Input
-              id="altText"
-              placeholder="Describe the image for accessibility..."
-              {...register("altText")}
-            />
-            {errors.altText && (
-              <p className="text-sm text-destructive">{errors.altText.message}</p>
+          <form.Field name="altText">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Alt Text"
+                placeholder="Describe the image for accessibility..."
+                description={`${altText?.length ?? 0}/255 characters. Alt text helps screen readers describe images to visually impaired users and improves SEO.`}
+              />
             )}
-            <p className="text-xs text-muted-foreground">
-              Alt text helps screen readers describe images to visually impaired users and
-              improves SEO.
-            </p>
-          </div>
+          </form.Field>
 
           {/* Caption field */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="caption">Caption (Optional)</Label>
-              <span className="text-xs text-muted-foreground">
-                {caption?.length || 0}/1000
-              </span>
-            </div>
-            <Textarea
-              id="caption"
-              placeholder="Add a caption to display below the image..."
-              rows={3}
-              {...register("caption")}
-            />
-            {errors.caption && (
-              <p className="text-sm text-destructive">{errors.caption.message}</p>
+          <form.Field name="caption">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Caption (Optional)"
+                placeholder="Add a caption to display below the image..."
+                rows={3}
+                description={`${caption?.length ?? 0}/1000 characters. Captions are displayed below images in the gallery and product pages.`}
+              />
             )}
-            <p className="text-xs text-muted-foreground">
-              Captions are displayed below images in the gallery and product pages.
-            </p>
-          </div>
+          </form.Field>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving || !isDirty}>
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
+            <FormActions
+              form={form}
+              submitLabel="Save Changes"
+              cancelLabel="Cancel"
+              loadingLabel="Saving..."
+              onCancel={handleClose}
+              submitDisabled={updateMutation.isPending || !isDirty}
+            />
           </DialogFooter>
         </form>
       </DialogContent>

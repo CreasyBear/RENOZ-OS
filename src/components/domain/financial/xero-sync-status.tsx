@@ -10,6 +10,7 @@
  */
 
 import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
 import { RefreshCw, CheckCircle, AlertTriangle, Clock, ExternalLink, Loader2 } from 'lucide-react';
 import {
   Table,
@@ -27,27 +28,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { format } from 'date-fns';
-import type { XeroSyncStatus as SyncStatus } from '@/lib/schemas';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Invoice data with Xero sync status information.
- */
-export interface InvoiceWithSyncStatus {
-  orderId: string;
-  orderNumber: string;
-  orderDate: string;
-  total: number;
-  customerName: string;
-  xeroInvoiceId: string | null;
-  xeroSyncStatus: SyncStatus;
-  xeroSyncError: string | null;
-  lastXeroSyncAt: string | null;
-  xeroInvoiceUrl: string | null;
-}
+import type { XeroSyncStatus as SyncStatus, InvoiceWithSyncStatus } from '@/lib/schemas';
+import { xeroSyncStatusSchema } from '@/lib/schemas';
 
 /**
  * Props for the XeroSyncStatus presenter component.
@@ -115,8 +97,27 @@ interface InvoiceRowProps {
 function InvoiceRow({ invoice, onResync, isResyncing }: InvoiceRowProps) {
   return (
     <TableRow>
-      <TableCell className="font-medium">{invoice.orderNumber}</TableCell>
-      <TableCell>{invoice.customerName}</TableCell>
+      <TableCell className="font-medium">
+        <Link
+          to="/orders/$orderId"
+          params={{ orderId: invoice.orderId }}
+          className="hover:underline text-primary"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {invoice.orderNumber}
+        </Link>
+      </TableCell>
+      <TableCell>
+        <Link
+          to="/customers/$customerId"
+          params={{ customerId: invoice.customerId }}
+          search={{}}
+          className="hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {invoice.customerName}
+        </Link>
+      </TableCell>
       <TableCell>{format(new Date(invoice.orderDate), 'dd MMM yyyy')}</TableCell>
       <TableCell className="text-right">
         <FormatAmount amount={invoice.total} />
@@ -248,7 +249,19 @@ export const XeroSyncStatus = memo(function XeroSyncStatus({
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as SyncStatus | 'all')}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          if (v === 'all') {
+            onTabChange('all');
+          } else {
+            const result = xeroSyncStatusSchema.safeParse(v);
+            if (result.success) {
+              onTabChange(result.data);
+            }
+          }
+        }}
+      >
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="pending">Pending</TabsTrigger>

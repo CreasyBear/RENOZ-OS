@@ -53,6 +53,16 @@ export interface AuditLogMetadata {
   previousValues?: Record<string, string | number | boolean | null>;
   /** New values (for creates/updates) */
   newValues?: Record<string, string | number | boolean | null>;
+  /** Operation type for bulk operations */
+  operationType?: string;
+  /** Reason for the operation */
+  reason?: string;
+  /** Audit log ID that was rolled back */
+  rolledBackAuditLogId?: string;
+  /** Original action that was rolled back */
+  originalAction?: string;
+  /** Number of records restored in rollback */
+  restoredCount?: number;
 }
 
 // ============================================================================

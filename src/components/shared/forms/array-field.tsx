@@ -167,7 +167,7 @@ export function ArrayField<TItem>({
     }
   }
 
-  const AddButton = () => (
+  const addButton = (
     <Button
       type="button"
       variant="outline"
@@ -197,7 +197,7 @@ export function ArrayField<TItem>({
               <p className="text-sm text-muted-foreground">{description}</p>
             )}
           </div>
-          {(addPosition === "top" || addPosition === "both") && <AddButton />}
+          {(addPosition === "top" || addPosition === "both") && addButton}
         </div>
       )}
 
@@ -207,7 +207,7 @@ export function ArrayField<TItem>({
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           {addPosition === "bottom" && (
             <div className="mt-4">
-              <AddButton />
+              {addButton}
             </div>
           )}
         </div>
@@ -269,7 +269,7 @@ export function ArrayField<TItem>({
       {/* Bottom Add Button */}
       {items.length > 0 && (addPosition === "bottom" || addPosition === "both") && (
         <div className="flex justify-start">
-          <AddButton />
+          {addButton}
         </div>
       )}
 

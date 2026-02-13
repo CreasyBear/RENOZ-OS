@@ -16,11 +16,19 @@ import {
   text,
   index,
   uniqueIndex,
-  check,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { currencyColumn, percentageColumn, auditColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  currencyColumn,
+  percentageColumn,
+  auditColumns,
+  standardRlsPolicies,
+  nonNegativeCheck,
+  positiveCheck,
+  numericRangeCheck,
+  rangeCheck,
+  dateRangeCheck,
+} from "../_shared/patterns";
 import { products } from "./products";
 import { customers } from "../customers/customers";
 import { priceChangeTypeEnum } from "../_shared/enums";
@@ -83,45 +91,13 @@ export const productPriceTiers = pgTable(
     ),
 
     // Quantity constraints
-    minQtyPositiveCheck: check(
-      "price_tier_min_qty_positive",
-      sql`${table.minQuantity} > 0`
-    ),
-    maxQtyValidCheck: check(
-      "price_tier_max_qty_valid",
-      sql`${table.maxQuantity} IS NULL OR ${table.maxQuantity} > ${table.minQuantity}`
-    ),
-    priceNonNegativeCheck: check(
-      "price_tier_price_non_negative",
-      sql`${table.price} >= 0`
-    ),
-    discountRangeCheck: check(
-      "price_tier_discount_range",
-      sql`${table.discountPercent} IS NULL OR (${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100)`
-    ),
+    minQtyPositiveCheck: positiveCheck("price_tier_min_qty_positive", table.minQuantity),
+    maxQtyValidCheck: numericRangeCheck("price_tier_max_qty_valid", table.minQuantity, table.maxQuantity, false),
+    priceNonNegativeCheck: nonNegativeCheck("price_tier_price_non_negative", table.price),
+    discountRangeCheck: rangeCheck("price_tier_discount_range", table.discountPercent, 0, 100),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("product_price_tiers_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("product_price_tiers_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("product_price_tiers_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("product_price_tiers_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("product_price_tiers"),
   })
 );
 
@@ -190,41 +166,12 @@ export const customerProductPrices = pgTable(
     validToIdx: index("idx_customer_prices_valid_to").on(table.validTo),
 
     // Validity constraints
-    validToAfterFromCheck: check(
-      "customer_price_valid_to_after_from",
-      sql`${table.validTo} IS NULL OR ${table.validTo} > ${table.validFrom}`
-    ),
-    priceNonNegativeCheck: check(
-      "customer_price_non_negative",
-      sql`${table.price} >= 0`
-    ),
-    discountRangeCheck: check(
-      "customer_price_discount_range",
-      sql`${table.discountPercent} IS NULL OR (${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100)`
-    ),
+    validToAfterFromCheck: dateRangeCheck("customer_price_valid_to_after_from", table.validFrom, table.validTo),
+    priceNonNegativeCheck: nonNegativeCheck("customer_price_non_negative", table.price),
+    discountRangeCheck: rangeCheck("customer_price_discount_range", table.discountPercent, 0, 100),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("customer_product_prices_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("customer_product_prices_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("customer_product_prices_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("customer_product_prices_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("customer_product_prices"),
   })
 );
 
@@ -313,27 +260,7 @@ export const priceHistory = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("price_history_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("price_history_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("price_history_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("price_history_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("price_history"),
   })
 );
 

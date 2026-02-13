@@ -2,62 +2,22 @@
  * Campaign Detail Route (Container)
  *
  * Container component that renders CampaignDetailPanel with campaign ID.
- * The CampaignDetailPanel handles its own data fetching.
- *
- * @see docs/plans/2026-01-24-communications-plumbing-review.md
  */
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
-import { CampaignDetailPanel } from "@/components/domain/communications";
-import { RouteErrorFallback, PageLayout } from "@/components/layout";
+import { createFileRoute } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
+import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
-// ============================================================================
-// ROUTE DEFINITION
-// ============================================================================
+const CampaignDetailPage = lazy(() => import("./-campaign-detail-page"));
 
 export const Route = createFileRoute("/_authenticated/communications/campaigns/$campaignId")({
-  component: CampaignDetailContainer,
+  component: () => (
+    <Suspense fallback={<CommunicationsListSkeleton />}>
+      <CampaignDetailPage />
+    </Suspense>
+  ),
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/communications/campaigns" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Content>
-        <CommunicationsListSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <CommunicationsListSkeleton />,
 });
-
-// ============================================================================
-// CONTAINER COMPONENT
-// ============================================================================
-
-function CampaignDetailContainer() {
-  const { campaignId } = Route.useParams();
-  const navigate = useNavigate();
-
-  // ============================================================================
-  // HANDLERS
-  // ============================================================================
-  const handleBack = useCallback(() => {
-    navigate({ to: "/communications/campaigns" });
-  }, [navigate]);
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-  return (
-    <PageLayout variant="full-width">
-      <PageLayout.Content>
-        <CampaignDetailPanel
-          campaignId={campaignId}
-          onBack={handleBack}
-        />
-      </PageLayout.Content>
-    </PageLayout>
-  );
-}
-
-export default CampaignDetailContainer;

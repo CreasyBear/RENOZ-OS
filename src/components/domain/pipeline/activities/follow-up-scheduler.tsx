@@ -9,8 +9,6 @@
  */
 
 import { memo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Clock,
   CheckCircle2,
@@ -41,11 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import {
-  getUpcomingFollowUps,
-  logActivity,
-  completeActivity,
-} from "@/server/functions/pipeline/pipeline";
+import { useFollowUps, useLogActivity, useCompleteActivity } from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
@@ -77,13 +71,7 @@ interface FollowUpItem {
   };
 }
 
-interface FollowUpsResponse {
-  followUps: FollowUpItem[];
-  overdue: FollowUpItem[];
-  upcoming: FollowUpItem[];
-  overdueCount: number;
-  upcomingCount: number;
-}
+// FollowUpsResponse shape documented in useFollowUps hook
 
 // ============================================================================
 // COMPONENT
@@ -94,66 +82,61 @@ export const FollowUpScheduler = memo(function FollowUpScheduler({
   className,
   compact = false,
 }: FollowUpSchedulerProps) {
-  const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newFollowUp, setNewFollowUp] = useState({
     description: "",
     scheduledAt: "",
   });
 
-  // Fetch upcoming follow-ups
-  const { data, isLoading, error } = useQuery<FollowUpsResponse>({
-    queryKey: queryKeys.pipeline.followUps(opportunityId),
-    queryFn: async () => {
-      const result = await getUpcomingFollowUps({
-        data: { opportunityId, days: 30 },
-      });
-      return result as FollowUpsResponse;
-    },
-  });
+  // Fetch upcoming follow-ups using hook
+  const { data, isLoading, error } = useFollowUps({ opportunityId, days: 30 });
 
-  // Schedule new follow-up mutation
-  const scheduleMutation = useMutation({
-    mutationFn: async () => {
-      return logActivity({
-        data: {
+  // Use log activity and complete activity hooks
+  const logActivityMutation = useLogActivity();
+  const completeActivityMutation = useCompleteActivity();
+
+  // Schedule new follow-up mutation wrapper
+  const scheduleMutation = {
+    isPending: logActivityMutation.isPending,
+    mutate: () => {
+      logActivityMutation.mutate(
+        {
           opportunityId,
           type: "follow_up",
           description: newFollowUp.description,
           scheduledAt: new Date(newFollowUp.scheduledAt),
         },
-      });
+        {
+          onSuccess: () => {
+            toastSuccess("Follow-up scheduled successfully.");
+            setIsDialogOpen(false);
+            setNewFollowUp({ description: "", scheduledAt: "" });
+          },
+          onError: () => {
+            toastError("Failed to schedule follow-up. Please try again.");
+          },
+        }
+      );
     },
-    onSuccess: () => {
-      toastSuccess("Follow-up scheduled successfully.");
-      setIsDialogOpen(false);
-      setNewFollowUp({ description: "", scheduledAt: "" });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activityTimeline(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
-    },
-    onError: () => {
-      toastError("Failed to schedule follow-up. Please try again.");
-    },
-  });
+  };
 
-  // Complete follow-up mutation
-  const completeMutation = useMutation({
-    mutationFn: async ({ id, outcome }: { id: string; outcome?: string }) => {
-      return completeActivity({
-        data: { id, outcome },
-      });
+  // Complete follow-up mutation wrapper
+  const completeMutation = {
+    isPending: completeActivityMutation.isPending,
+    mutate: ({ id, outcome }: { id: string; outcome?: string }) => {
+      completeActivityMutation.mutate(
+        { opportunityId, activityId: id, outcome },
+        {
+          onSuccess: () => {
+            toastSuccess("Follow-up marked as complete.");
+          },
+          onError: () => {
+            toastError("Failed to complete follow-up. Please try again.");
+          },
+        }
+      );
     },
-    onSuccess: () => {
-      toastSuccess("Follow-up marked as complete.");
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activityTimeline(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
-    },
-    onError: () => {
-      toastError("Failed to complete follow-up. Please try again.");
-    },
-  });
+  };
 
   // Calculate days until/since due
   const getDaysUntilDue = (scheduledAt: Date | null): number => {

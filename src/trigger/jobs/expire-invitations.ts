@@ -13,6 +13,7 @@
 import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { logger as appLogger } from '@/lib/logger';
 import { userInvitations } from 'drizzle/schema';
 
 // ============================================================================
@@ -26,7 +27,7 @@ export const expireInvitationsTask = schedules.task({
   id: 'expire-old-invitations',
   cron: '0 * * * *',
   run: async () => {
-    console.log('Starting invitation expiry check');
+    appLogger.debug('Starting invitation expiry check');
 
     const now = new Date();
 
@@ -42,7 +43,7 @@ export const expireInvitationsTask = schedules.task({
       )
       .returning({ id: userInvitations.id });
 
-    console.log(`Expired ${result.length} invitations`);
+    appLogger.debug('Invitation expiry check completed', { expiredCount: result.length });
 
     return {
       success: true,

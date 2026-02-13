@@ -22,6 +22,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { HealthScoreGauge } from './health-score-gauge'
 import { HealthRecommendations } from './health-recommendations'
 import { RiskAlerts } from './risk-alerts'
+import { ActionPlans } from './action-plans'
+import { HealthHistory } from './health-history'
+import { calculateDaysSince } from '@/lib/customer-utils'
+import { formatDate } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 
 // ============================================================================
@@ -67,104 +71,24 @@ export interface HealthDashboardPresenterProps extends HealthDashboardContainerP
   healthMetrics: HealthMetricPoint[]
   /** Loading state for health metrics */
   isLoadingMetrics: boolean
+  /** @source useCustomerActionPlans hook */
+  actionPlans?: import('./action-plans').ActionPlansProps['actionPlans']
+  /** Loading state for action plans */
+  isLoadingActionPlans?: boolean
+  /** Handler to create action plan */
+  onCreateActionPlan?: (data: {
+    title: string
+    description?: string
+    priority: 'high' | 'medium' | 'low'
+    category: 'recency' | 'frequency' | 'monetary' | 'engagement' | 'general'
+    dueDate?: Date
+  }) => Promise<void>
+  /** Handler to complete action plan */
+  onCompleteActionPlan?: (id: string) => Promise<void>
+  /** Handler to delete action plan */
+  onDeleteActionPlan?: (id: string) => Promise<void>
 }
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function calculateDaysSince(dateString: string | null): number | null {
-  if (!dateString) return null
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24))
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-AU', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-// ============================================================================
-// HEALTH HISTORY CHART (simplified)
-// ============================================================================
-
-interface HealthHistoryProps {
-  metrics: Array<{
-    metricDate: string
-    overallScore: number | null
-  }>
-}
-
-function HealthHistory({ metrics }: HealthHistoryProps) {
-  if (metrics.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No health history available</p>
-      </div>
-    )
-  }
-
-  // Get last 6 data points, filter out null scores
-  const dataPoints = metrics
-    .filter((m) => m.overallScore !== null)
-    .slice(0, 6)
-    .reverse()
-  const maxScore = 100
-  const minScore = 0
-  const range = maxScore - minScore
-
-  if (dataPoints.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No health history available</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-end gap-1 h-24">
-        {dataPoints.map((point, i) => {
-          const score = point.overallScore ?? 0
-          const height = ((score - minScore) / range) * 100
-          const isLast = i === dataPoints.length - 1
-
-          return (
-            <div
-              key={point.metricDate}
-              className="flex-1 flex flex-col items-center gap-1"
-            >
-              <div
-                className={cn(
-                  'w-full rounded-t transition-all',
-                  score >= 80 ? 'bg-green-500' :
-                  score >= 60 ? 'bg-yellow-500' :
-                  score >= 40 ? 'bg-orange-500' : 'bg-red-500',
-                  isLast && 'ring-2 ring-offset-1 ring-primary'
-                )}
-                style={{ height: `${height}%` }}
-              />
-            </div>
-          )
-        })}
-      </div>
-      <div className="flex gap-1 text-[10px] text-muted-foreground">
-        {dataPoints.map((point) => (
-          <div key={point.metricDate} className="flex-1 text-center truncate">
-            {new Date(point.metricDate).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 // ============================================================================
 // MAIN COMPONENT (PRESENTER)
@@ -174,6 +98,11 @@ export function HealthDashboardPresenter({
   customer,
   healthMetrics,
   isLoadingMetrics,
+  actionPlans,
+  isLoadingActionPlans,
+  onCreateActionPlan,
+  onCompleteActionPlan,
+  onDeleteActionPlan,
   onScheduleCall,
   onSendEmail,
   onRefresh,
@@ -224,7 +153,7 @@ export function HealthDashboardPresenter({
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Health Score</CardTitle>
               {onRefresh && (
-                <Button variant="ghost" size="icon" onClick={onRefresh}>
+                <Button variant="ghost" size="icon" onClick={onRefresh} aria-label="Refresh health score">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               )}
@@ -270,6 +199,20 @@ export function HealthDashboardPresenter({
         <HealthRecommendations metrics={metricsData} />
       </div>
 
+      {/* Action Plans Section */}
+      {actionPlans !== undefined && (
+        <div>
+          <ActionPlans
+            actionPlans={actionPlans}
+            isLoading={isLoadingActionPlans}
+            customerId={customer.id}
+            onCreate={onCreateActionPlan ?? (async () => {})}
+            onComplete={onCompleteActionPlan ?? (async () => {})}
+            onDelete={onDeleteActionPlan ?? (async () => {})}
+          />
+        </div>
+      )}
+
       {/* Bottom: Key Metrics Summary */}
       <Card>
         <CardHeader className="pb-3">
@@ -298,7 +241,7 @@ export function HealthDashboardPresenter({
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/50">
               <p className="text-2xl font-bold">
-                {customer.lastOrderDate ? formatDate(customer.lastOrderDate) : '—'}
+                {customer.lastOrderDate ? formatDate(customer.lastOrderDate, { locale: 'en-AU' }) : '—'}
               </p>
               <p className="text-xs text-muted-foreground">Last Order Date</p>
             </div>

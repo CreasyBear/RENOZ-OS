@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- UI primitive exports Form components + useFormField */
 "use client"
 
 import * as React from "react"

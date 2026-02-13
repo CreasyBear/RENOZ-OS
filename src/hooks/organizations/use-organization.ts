@@ -63,7 +63,13 @@ export interface UseOrganizationQueryOptions {
 export function useOrganizationQuery(options: UseOrganizationQueryOptions = {}) {
   return useQuery({
     queryKey: queryKeys.organizations.current(),
-    queryFn: () => getOrganization(),
+    queryFn: async () => {
+      const organization = await getOrganization();
+      if (!organization) {
+        throw new Error('Organization not found');
+      }
+      return organization;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
     enabled: options.enabled,
   });
@@ -84,7 +90,13 @@ export interface UseOrganizationSettingsQueryOptions {
 export function useOrganizationSettingsQuery(options: UseOrganizationSettingsQueryOptions = {}) {
   return useQuery({
     queryKey: queryKeys.organizations.settings(),
-    queryFn: () => getOrganizationSettings(),
+    queryFn: async () => {
+      const settings = await getOrganizationSettings();
+      if (!settings) {
+        throw new Error('Organization settings unavailable');
+      }
+      return settings;
+    },
     staleTime: 5 * 60 * 1000,
     enabled: options.enabled,
   });
@@ -105,7 +117,13 @@ export interface UseOrganizationBrandingQueryOptions {
 export function useOrganizationBrandingQuery(options: UseOrganizationBrandingQueryOptions = {}) {
   return useQuery({
     queryKey: queryKeys.organizations.branding(),
-    queryFn: () => getOrganizationBranding(),
+    queryFn: async () => {
+      const branding = await getOrganizationBranding();
+      if (!branding) {
+        throw new Error('Organization branding unavailable');
+      }
+      return branding;
+    },
     staleTime: 5 * 60 * 1000,
     enabled: options.enabled,
   });

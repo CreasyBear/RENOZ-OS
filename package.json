@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3000",
-    "build": "vite build && tsc",
+    "build": "NODE_OPTIONS=--max-old-space-size=8192 vite build && tsc",
+    "predeploy": "npm run typecheck && npm run lint && npm run test:unit && npm run build",
     "preview": "vite preview",
     "test": "bun test",
     "test:unit": "bun test tests/unit",
@@ -14,7 +15,9 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "build:analyze": "vite-bundle-visualizer",
+    "fonts:download": "node scripts/download-pdf-fonts.mjs"
   },
   "dependencies": {
     "@ai-sdk-tools/artifacts": "^1.2.0",
@@ -26,6 +29,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -87,9 +91,11 @@
     "drizzle-orm": "^0.45.1",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.29.2",
+    "googleapis": "^144.0.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.562.0",
     "next-themes": "^0.4.6",
+    "nitro": "^3.0.1-alpha.2",
     "postgres": "^3.4.8",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
@@ -99,7 +105,6 @@
     "react-dropzone": "^14.3.8",
     "react-error-boundary": "^6.1.0",
     "react-hook-form": "^7.71.1",
-    "react-pdf": "^10.3.0",
     "react-resizable-panels": "^4.4.1",
     "recharts": "2.15.4",
     "resend": "^6.8.0",
@@ -132,8 +137,11 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
     "jsdom": "^27.0.0",
+    "react-grab": "^0.1.7",
+    "rollup-plugin-visualizer": "^6.0.5",
     "typescript": "^5.7.2",
     "vite": "^7.1.7",
+    "vite-bundle-visualizer": "^1.2.1",
     "vitest": "^3.0.5",
     "web-vitals": "^5.1.0"
   }

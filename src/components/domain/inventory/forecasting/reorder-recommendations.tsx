@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableEmpty } from "@/components/shared/data-table";
 import {
   Table,
   TableBody,
@@ -156,13 +157,12 @@ export const ReorderRecommendations = memo(function ReorderRecommendations({
           <CardTitle>Reorder Recommendations</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <CheckCircle className="h-12 w-12 text-green-600 mx-auto" />
-            <h3 className="mt-4 font-semibold">All Stocked Up</h3>
-            <p className="text-sm text-muted-foreground mt-2">
-              No products need reordering at this time.
-            </p>
-          </div>
+          <DataTableEmpty
+            variant="complete"
+            icon={CheckCircle}
+            title="All Stocked Up"
+            description="No products need reordering at this time."
+          />
         </CardContent>
       </Card>
     );

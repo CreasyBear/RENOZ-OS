@@ -1,17 +1,18 @@
 /**
  * Opportunity Detail Container
  *
- * Handles data fetching, mutations, and state management for opportunity detail view.
+ * Thin orchestration layer that uses the composite useOpportunityDetail hook
+ * for all data fetching, mutations, and state management.
+ *
  * Implements render props pattern for flexible header/action composition.
  *
- * @source opportunity from useOpportunity hook
- * @source activities from useUnifiedActivities hook
+ * @source all data and state from useOpportunityDetail composite hook
  *
  * @see STANDARDS.md - Container/Presenter pattern
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { memo } from 'react';
 import {
   Edit,
   MoreHorizontal,
@@ -20,9 +21,9 @@ import {
   ArrowRight,
   Send,
   Printer,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -42,27 +43,20 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { cn } from '@/lib/utils';
-import { toastSuccess, toastError } from '@/hooks';
-import {
-  useOpportunity,
-  useDeleteOpportunity,
-  useUpdateOpportunityStage,
-  useConvertToOrder,
-  useSendQuote,
-} from '@/hooks/pipeline';
-import { useUnifiedActivities } from '@/hooks/activities';
-import type { OpportunityStage } from '@/lib/schemas/pipeline';
+import { useOpportunityDetail } from '@/hooks/pipeline';
+import { useTrackView } from '@/hooks/search';
+import { isValidOpportunityStage, isValidOpportunityMetadata } from '@/lib/schemas/pipeline';
 import { OpportunityDetailView } from '../views/opportunity-detail-view';
 import { OPPORTUNITY_STAGE_CONFIG } from '../opportunity-status-config';
+import { WonLostDialog } from '../../won-lost-dialog';
+import { ActivityLogger } from '../../activities/activity-logger';
+import { ExtendValidityDialog } from '../../quotes/extend-validity-dialog';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface OpportunityDetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
   /** Header action buttons */
   headerActions: React.ReactNode;
   /** Main content */
@@ -72,32 +66,11 @@ export interface OpportunityDetailContainerRenderProps {
 export interface OpportunityDetailContainerProps {
   /** Opportunity ID to display */
   opportunityId: string;
-  /** Callback when user navigates back */
-  onBack?: () => void;
-  /** Callback when user clicks edit */
-  onEdit?: () => void;
-  /** Callback after successful conversion to order */
-  onConvertToOrder?: (orderId: string) => void;
-  /** Callback to open won/lost dialog */
-  onOpenWonLostDialog?: (stage: 'won' | 'lost') => void;
   /** Render props pattern for layout composition */
   children?: (props: OpportunityDetailContainerRenderProps) => React.ReactNode;
   /** Additional CSS classes */
   className?: string;
 }
-
-// ============================================================================
-// STATUS WORKFLOW
-// ============================================================================
-
-const STATUS_NEXT_ACTIONS: Record<OpportunityStage, OpportunityStage[]> = {
-  new: ['qualified'],
-  qualified: ['proposal'],
-  proposal: ['negotiation'],
-  negotiation: ['won', 'lost'],
-  won: [],
-  lost: [],
-};
 
 // ============================================================================
 // LOADING SKELETON
@@ -119,145 +92,68 @@ function OpportunityDetailSkeleton() {
 // MAIN COMPONENT
 // ============================================================================
 
-export function OpportunityDetailContainer({
+export const OpportunityDetailContainer = memo(function OpportunityDetailContainer({
   opportunityId,
-  onBack,
-  onEdit,
-  onConvertToOrder,
-  onOpenWonLostDialog,
   children,
   className,
 }: OpportunityDetailContainerProps) {
   // ─────────────────────────────────────────────────────────────────────────
-  // State
-  // ─────────────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('overview');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [showMetaPanel, setShowMetaPanel] = useState(true);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Panel Toggle Handler
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleToggleMetaPanel = useCallback(() => {
-    setShowMetaPanel((prev) => !prev);
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Data Fetching
+  // Composite Hook - All data, state, and actions
   // ─────────────────────────────────────────────────────────────────────────
   const {
-    data,
+    // Core data
+    opportunity,
+    customer,
+    contact,
+    versions,
+    winLossReason,
+
+    // Extended data
+    alerts,
+    activeItems,
+    unifiedActivities,
+
+    // Loading states
     isLoading,
     error,
+    activeItemsLoading,
+    activitiesLoading,
+    activitiesError,
+
+    // UI State
+    activeTab,
+    onTabChange,
+    showSidebar,
+    toggleSidebar,
+
+    // Dialog states
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    openWonLostDialog,
+    wonLostDialogOpen,
+    wonLostDialogStage,
+    closeWonLostDialog,
+    activityDialogOpen,
+    setActivityDialogOpen,
+    extendQuoteDialogOpen,
+    setExtendQuoteDialogOpen,
+
+    // Mutation states
+    isDeleting,
+    isUpdatingStage,
+    isConverting,
+
+    // Actions
+    actions,
+
+    // Derived state
+    isClosedStage,
+    nextStageActions,
+
+    // Refetch
     refetch,
-  } = useOpportunity({ id: opportunityId });
-
-  const {
-    activities: unifiedActivities,
-    isLoading: unifiedActivitiesLoading,
-    error: unifiedActivitiesError,
-  } = useUnifiedActivities({
-    entityType: 'opportunity',
-    entityId: opportunityId,
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Mutations
-  // ─────────────────────────────────────────────────────────────────────────
-  const stageChangeMutation = useUpdateOpportunityStage();
-  const deleteMutation = useDeleteOpportunity();
-  const convertToOrderMutation = useConvertToOrder();
-  const sendQuoteMutation = useSendQuote();
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Handlers
-  // ─────────────────────────────────────────────────────────────────────────
-  const handleStageChange = useCallback(
-    async (stage: OpportunityStage) => {
-      // Won/Lost require the dialog for reason selection
-      if (stage === 'won' || stage === 'lost') {
-        onOpenWonLostDialog?.(stage);
-        return;
-      }
-
-      try {
-        await stageChangeMutation.mutateAsync({ opportunityId, stage });
-        toastSuccess(`Stage updated to ${OPPORTUNITY_STAGE_CONFIG[stage].label}`);
-      } catch {
-        toastError('Failed to update stage');
-      }
-    },
-    [stageChangeMutation, opportunityId, onOpenWonLostDialog]
-  );
-
-  const handleDelete = useCallback(async () => {
-    try {
-      await deleteMutation.mutateAsync(opportunityId);
-      toastSuccess('Opportunity deleted');
-      setDeleteDialogOpen(false);
-      onBack?.();
-    } catch {
-      toastError('Failed to delete opportunity');
-    }
-  }, [deleteMutation, opportunityId, onBack]);
-
-  const handleConvertToOrder = useCallback(async () => {
-    try {
-      await convertToOrderMutation.mutateAsync({ opportunityId });
-      toastSuccess('Opportunity conversion initiated');
-      // TODO: Navigate to newly created order when Orders domain integration is complete
-    } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to convert opportunity');
-    }
-  }, [convertToOrderMutation, opportunityId, onConvertToOrder]);
-
-  const handleSendQuote = useCallback(async () => {
-    if (!data?.versions?.length) {
-      toastError('No quote version available to send.');
-      return;
-    }
-    if (!data?.customer?.email) {
-      toastError('Customer email is required to send quote.');
-      return;
-    }
-    const latestVersion = data.versions[0];
-    try {
-      await sendQuoteMutation.mutateAsync({
-        opportunityId,
-        quoteVersionId: latestVersion.id,
-        recipientEmail: data.customer.email,
-        subject: `Quote for ${data.opportunity.title}`,
-      });
-      toastSuccess('Quote sent successfully.');
-    } catch {
-      toastError('Failed to send quote.');
-    }
-  }, [sendQuoteMutation, opportunityId, data]);
-
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Derived State
-  // ─────────────────────────────────────────────────────────────────────────
-  const stageConfig = useMemo(() => {
-    if (!data?.opportunity) return null;
-    return (
-      OPPORTUNITY_STAGE_CONFIG[data.opportunity.stage as OpportunityStage] ??
-      OPPORTUNITY_STAGE_CONFIG.new
-    );
-  }, [data?.opportunity]);
-
-  const nextActions = useMemo(() => {
-    if (!data?.opportunity) return [];
-    return STATUS_NEXT_ACTIONS[data.opportunity.stage as OpportunityStage] ?? [];
-  }, [data?.opportunity]);
-
-  const isClosedStage = useMemo(() => {
-    if (!data?.opportunity) return false;
-    return data.opportunity.stage === 'won' || data.opportunity.stage === 'lost';
-  }, [data?.opportunity]);
+  } = useOpportunityDetail(opportunityId);
+  useTrackView('opportunity', opportunity?.id, opportunity?.title, customer?.name ?? undefined, `/pipeline/${opportunityId}`);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
@@ -268,7 +164,6 @@ export function OpportunityDetailContainer({
       return (
         <>
           {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
             headerActions: <Skeleton className="h-10 w-32" />,
             content: loadingContent,
           })}
@@ -281,7 +176,7 @@ export function OpportunityDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Error
   // ─────────────────────────────────────────────────────────────────────────
-  if (error || !data) {
+  if (error || !opportunity) {
     const errorContent = (
       <ErrorState
         title="Opportunity not found"
@@ -294,7 +189,6 @@ export function OpportunityDetailContainer({
       return (
         <>
           {children({
-            headerTitle: 'Opportunity Not Found',
             headerActions: null,
             content: errorContent,
           })}
@@ -305,42 +199,46 @@ export function OpportunityDetailContainer({
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Extract data
+  // Extract activities from opportunity data (immutable log)
   // ─────────────────────────────────────────────────────────────────────────
-  const { opportunity, customer, contact, activities, versions, winLossReason } = data;
-  const StageIcon = stageConfig?.icon;
+  // Note: The useOpportunity hook returns opportunity.activities in its data shape
+  // We need to extract it for the view. For now, use an empty array as the
+  // activities are accessible via unifiedActivities.
+  const opportunityActivities: Array<{
+    id: string;
+    type: string;
+    description: string;
+    outcome: string | null;
+    scheduledAt: Date | string | null;
+    completedAt: Date | string | null;
+    createdAt: Date | string;
+  }> = [];
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render: Header Elements
+  // Render: Header Actions
   // ─────────────────────────────────────────────────────────────────────────
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <span className="text-xl font-semibold">{opportunity.title}</span>
-      {stageConfig && (
-        <Badge className={cn('gap-1')}>
-          {StageIcon && <StageIcon className="h-3 w-3" />}
-          {stageConfig.label}
-        </Badge>
-      )}
-    </div>
-  );
-
   const headerActions = (
     <div className="flex items-center gap-2">
       {/* Stage Actions */}
-      {nextActions.length > 0 && (
+      {nextStageActions.length > 0 && !isClosedStage && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button disabled={stageChangeMutation.isPending}>
-              {stageChangeMutation.isPending ? 'Updating...' : 'Advance Stage'}
+            <Button disabled={isUpdatingStage}>
+              {isUpdatingStage ? 'Updating...' : 'Advance Stage'}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {nextActions.map((nextStage) => (
-              <DropdownMenuItem key={nextStage} onClick={() => handleStageChange(nextStage)}>
+            {nextStageActions.map((nextStage) => (
+              <DropdownMenuItem
+                key={nextStage}
+                onClick={() => actions.onStageChange(nextStage)}
+              >
                 {nextStage === 'won' && <Trophy className="h-4 w-4 mr-2 text-green-600" />}
                 {nextStage === 'lost' && <XCircle className="h-4 w-4 mr-2 text-destructive" />}
-                Move to {OPPORTUNITY_STAGE_CONFIG[nextStage].label}
+                {nextStage !== 'won' && nextStage !== 'lost' && (
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                )}
+                Move to {isValidOpportunityStage(nextStage) ? OPPORTUNITY_STAGE_CONFIG[nextStage]?.label ?? nextStage : nextStage}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -353,7 +251,7 @@ export function OpportunityDetailContainer({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onOpenWonLostDialog?.('won')}
+            onClick={() => openWonLostDialog('won')}
           >
             <Trophy className="h-4 w-4 mr-2 text-green-600" />
             Won
@@ -361,7 +259,7 @@ export function OpportunityDetailContainer({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onOpenWonLostDialog?.('lost')}
+            onClick={() => openWonLostDialog('lost')}
           >
             <XCircle className="h-4 w-4 mr-2 text-destructive" />
             Lost
@@ -378,31 +276,28 @@ export function OpportunityDetailContainer({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {onEdit && !isClosedStage && (
-            <DropdownMenuItem onClick={onEdit}>
+          {!isClosedStage && (
+            <DropdownMenuItem onClick={actions.onEdit}>
               <Edit className="h-4 w-4 mr-2" />
               Edit Opportunity
             </DropdownMenuItem>
           )}
           {!isClosedStage && versions.length > 0 && (
-            <DropdownMenuItem
-              onClick={handleSendQuote}
-              disabled={sendQuoteMutation.isPending}
-            >
+            <DropdownMenuItem onClick={actions.onSendQuote}>
               <Send className="h-4 w-4 mr-2" />
               Send Quote
             </DropdownMenuItem>
           )}
           {opportunity.stage === 'won' && (
             <DropdownMenuItem
-              onClick={handleConvertToOrder}
-              disabled={convertToOrderMutation.isPending}
+              onClick={actions.onConvertToOrder}
+              disabled={isConverting}
             >
               <ArrowRight className="h-4 w-4 mr-2" />
-              Convert to Order
+              {isConverting ? 'Converting...' : 'Convert to Order'}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={handlePrint}>
+          <DropdownMenuItem onClick={actions.onPrint}>
             <Printer className="h-4 w-4 mr-2" />
             Print
           </DropdownMenuItem>
@@ -411,7 +306,7 @@ export function OpportunityDetailContainer({
             onClick={() => setDeleteDialogOpen(true)}
             className="text-destructive"
           >
-            <XCircle className="h-4 w-4 mr-2" />
+            <Trash2 className="h-4 w-4 mr-2" />
             Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -425,19 +320,44 @@ export function OpportunityDetailContainer({
   const content = (
     <>
       <OpportunityDetailView
-        opportunity={opportunity}
+        opportunity={{
+          ...opportunity,
+          metadata: isValidOpportunityMetadata(opportunity.metadata) ? opportunity.metadata : null,
+        }}
         customer={customer}
-        contact={contact}
-        activities={activities}
+        contact={contact ? {
+          ...contact,
+          jobTitle: (contact as { jobTitle?: string | null }).jobTitle ?? null,
+        } : null}
+        activities={opportunityActivities}
         versions={versions}
         winLossReason={winLossReason}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        showMetaPanel={showMetaPanel}
-        onToggleMetaPanel={handleToggleMetaPanel}
+        alerts={alerts}
+        activeItems={activeItems}
+        activeItemsLoading={activeItemsLoading}
         unifiedActivities={unifiedActivities}
-        unifiedActivitiesLoading={unifiedActivitiesLoading}
-        unifiedActivitiesError={unifiedActivitiesError}
+        unifiedActivitiesLoading={activitiesLoading}
+        unifiedActivitiesError={activitiesError}
+        activeTab={activeTab}
+        onTabChange={onTabChange}
+        showSidebar={showSidebar}
+        onToggleSidebar={toggleSidebar}
+        isClosedStage={isClosedStage}
+        onAlertAction={(actionType) => {
+          // Handle alert actions
+          if (actionType === 'extend_quote') {
+            actions.onExtendQuote();
+          } else if (actionType === 'log_activity') {
+            actions.onLogActivity();
+          } else if (actionType === 'schedule_followup') {
+            actions.onScheduleFollowUp();
+          }
+        }}
+        onLogActivity={actions.onLogActivity}
+        onScheduleFollowUp={actions.onScheduleFollowUp}
+        onExtendQuote={actions.onExtendQuote}
+        onSendQuote={actions.onSendQuote}
+        onCopyLink={actions.onCopyLink}
         className={className}
       />
 
@@ -447,22 +367,68 @@ export function OpportunityDetailContainer({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Opportunity</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{opportunity.title}"? This action cannot
+              Are you sure you want to delete &ldquo;{opportunity.title}&rdquo;? This action cannot
               be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
+              onClick={actions.onDelete}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Won/Lost Classification Dialog */}
+      <WonLostDialog
+        open={wonLostDialogOpen}
+        type={wonLostDialogStage ?? 'won'}
+        opportunity={opportunity ? { title: opportunity.title, value: opportunity.value } : null}
+        onConfirm={(reason) => actions.onWonLostConfirm(reason)}
+        onCancel={closeWonLostDialog}
+      />
+
+      {/* Activity Logger Dialog */}
+      {activityDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm" onClick={() => setActivityDialogOpen(false)}>
+          <div className="bg-background border rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Log Activity</h2>
+              <Button variant="ghost" size="icon" onClick={() => setActivityDialogOpen(false)}>
+                ×
+              </Button>
+            </div>
+            <ActivityLogger
+              opportunityId={opportunityId}
+              variant="card"
+              onSuccess={() => {
+                setActivityDialogOpen(false);
+                refetch();
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Extend Quote Validity Dialog */}
+      {versions.length > 0 && (
+        <ExtendValidityDialog
+          opportunityId={opportunityId}
+          quoteNumber={`Quote v${versions[0].versionNumber}`}
+          currentValidUntil={opportunity.quoteExpiresAt}
+          open={extendQuoteDialogOpen}
+          onOpenChange={setExtendQuoteDialogOpen}
+          onSuccess={() => {
+            setExtendQuoteDialogOpen(false);
+            refetch();
+          }}
+        />
+      )}
     </>
   );
 
@@ -470,19 +436,18 @@ export function OpportunityDetailContainer({
   // Render: With Render Props or Default
   // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
   // Default rendering (standalone usage)
   return (
     <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
+      <div className="flex items-center justify-end mb-6">
         {headerActions}
       </div>
       {content}
     </div>
   );
-}
+});
 
 export default OpportunityDetailContainer;

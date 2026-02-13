@@ -19,7 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { SupplierStatus, SupplierType, PaymentTerms } from '@/lib/schemas/suppliers';
+import {
+  supplierStatusSchema,
+  supplierTypeSchema,
+  paymentTermsSchema,
+  type SupplierStatus,
+  type SupplierType,
+  type PaymentTerms,
+} from '@/lib/schemas/suppliers';
 
 // ============================================================================
 // TYPES
@@ -131,7 +138,10 @@ export function SupplierForm({
               <Label htmlFor="supplierType">Supplier Type</Label>
               <Select
                 value={data.supplierType || ''}
-                onValueChange={(value) => onChange('supplierType', value as SupplierType)}
+                onValueChange={(value) => {
+                  const parsed = supplierTypeSchema.safeParse(value);
+                  if (parsed.success) onChange('supplierType', parsed.data);
+                }}
                 disabled={isSubmitting}
               >
                 <SelectTrigger id="supplierType">
@@ -151,7 +161,10 @@ export function SupplierForm({
               <Label htmlFor="status">Status</Label>
               <Select
                 value={data.status}
-                onValueChange={(value) => onChange('status', value as SupplierStatus)}
+                onValueChange={(value) => {
+                  const parsed = supplierStatusSchema.safeParse(value);
+                  if (parsed.success) onChange('status', parsed.data);
+                }}
                 disabled={isSubmitting}
               >
                 <SelectTrigger id="status">
@@ -293,7 +306,10 @@ export function SupplierForm({
               <Label htmlFor="paymentTerms">Payment Terms</Label>
               <Select
                 value={data.paymentTerms || ''}
-                onValueChange={(value) => onChange('paymentTerms', value as PaymentTerms)}
+                onValueChange={(value) => {
+                  const parsed = paymentTermsSchema.safeParse(value);
+                  if (parsed.success) onChange('paymentTerms', parsed.data);
+                }}
                 disabled={isSubmitting}
               >
                 <SelectTrigger id="paymentTerms">

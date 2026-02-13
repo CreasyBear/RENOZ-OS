@@ -6,8 +6,12 @@
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json for specification
  */
 
+'use server';
+
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, isNull, ne } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, isNull, ne, ilike, or } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
@@ -23,29 +27,40 @@ import {
   createLocationSchema,
   updateLocationSchema,
   locationListQuerySchema,
+  locationListCursorQuerySchema,
   warehouseLocationListQuerySchema,
   createWarehouseLocationSchema,
+  type WarehouseLocationWithChildren,
+  type ListLocationsResult,
+  type LocationAttributes,
 } from '@/lib/schemas/inventory';
+import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type LocationRecord = typeof locations.$inferSelect;
 type WarehouseLocationRecord = typeof warehouseLocations.$inferSelect;
 
-interface WarehouseLocationWithChildren extends WarehouseLocationRecord {
-  children: WarehouseLocationWithChildren[];
-  inventoryCount?: number;
-  utilization?: number;
+// ============================================================================
+// TYPE HELPERS
+// ============================================================================
+
+/**
+ * Cast attributes to schema-compatible type for TanStack Start serialization.
+ * Types flow from schemas - attributes types are defined in lib/schemas/inventory/inventory.ts
+ */
+function castAttributes(attributes: unknown): FlexibleJson | null {
+  if (!attributes || typeof attributes !== 'object') return null;
+  return attributes as FlexibleJson;
 }
 
-interface ListLocationsResult {
-  locations: LocationRecord[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
+/**
+ * Ensure boolean value, defaulting to true if null.
+ * Used when schema allows null but type requires boolean.
+ */
+function ensureIsActive(value: boolean | null | undefined): boolean {
+  return value ?? true;
 }
 
 // ============================================================================
@@ -66,11 +81,12 @@ export const listLocations = createServerFn({ method: 'GET' })
     const conditions = [eq(locations.organizationId, ctx.organizationId)];
 
     if (search) {
+      const searchPattern = containsPattern(search);
       conditions.push(
-        sql`(
-          ${locations.locationCode} ILIKE ${`%${search}%`} OR
-          ${locations.name} ILIKE ${`%${search}%`}
-        )`
+        or(
+          ilike(locations.locationCode, searchPattern),
+          ilike(locations.name, searchPattern)
+        )!
       );
     }
 
@@ -101,12 +117,73 @@ export const listLocations = createServerFn({ method: 'GET' })
       .limit(limit)
       .offset(offset);
 
+    // Map locations and ensure type compatibility
     return {
-      locations: locationList,
+      locations: locationList.map((loc) => ({
+        ...loc,
+        isActive: ensureIsActive(loc.isActive),
+        isPickable: loc.isPickable ?? false,
+        isReceivable: loc.isReceivable ?? false,
+        attributes: castAttributes(loc.attributes),
+      })),
       total,
       page,
       limit,
       hasMore: offset + locationList.length < total,
+    };
+  });
+
+/**
+ * List locations with cursor pagination (recommended for large datasets).
+ */
+export const listLocationsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(locationListCursorQuerySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, isActive } = data;
+
+    const conditions = [eq(locations.organizationId, ctx.organizationId)];
+    if (search) {
+      const searchPattern = containsPattern(search);
+      conditions.push(
+        or(
+          ilike(locations.locationCode, searchPattern),
+          ilike(locations.name, searchPattern)
+        )!
+      );
+    }
+    if (isActive !== undefined) conditions.push(eq(locations.isActive, isActive));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(locations.createdAt, locations.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const locationList = await db
+      .select()
+      .from(locations)
+      .where(and(...conditions))
+      .orderBy(orderDir(locations.createdAt), orderDir(locations.id))
+      .limit(pageSize + 1);
+
+    const { items, nextCursor, hasNextPage } = buildStandardCursorResponse(locationList, pageSize);
+
+    return {
+      items: items.map((loc) => ({
+        ...loc,
+        isActive: ensureIsActive(loc.isActive),
+        isPickable: loc.isPickable ?? false,
+        isReceivable: loc.isReceivable ?? false,
+        attributes: castAttributes(loc.attributes),
+      })),
+      nextCursor,
+      hasNextPage,
     };
   });
 
@@ -128,7 +205,7 @@ export const getLocation = createServerFn({ method: 'GET' })
       throw new NotFoundError('Location not found', 'location');
     }
 
-    // Get inventory in this location
+    // Get inventory in this location (with orgId filter)
     const inventoryRows = await db
       .select({
         item: inventory,
@@ -136,7 +213,12 @@ export const getLocation = createServerFn({ method: 'GET' })
       })
       .from(inventory)
       .leftJoin(products, eq(inventory.productId, products.id))
-      .where(eq(inventory.locationId, data.id))
+      .where(
+        and(
+          eq(inventory.locationId, data.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
       .orderBy(desc(inventory.updatedAt));
 
     const inventoryItems = inventoryRows.map(({ item, product }) => ({
@@ -144,7 +226,7 @@ export const getLocation = createServerFn({ method: 'GET' })
       product,
     }));
 
-    // Get utilization metrics
+    // Get utilization metrics (with orgId filter)
     const [metrics] = await db
       .select({
         itemCount: sql<number>`COUNT(*)::int`,
@@ -152,7 +234,12 @@ export const getLocation = createServerFn({ method: 'GET' })
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
       })
       .from(inventory)
-      .where(eq(inventory.locationId, data.id));
+      .where(
+        and(
+          eq(inventory.locationId, data.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      );
 
     return {
       location,
@@ -184,24 +271,24 @@ export const createLocation = createServerFn({ method: 'POST' })
       throw new ConflictError(`Location with code '${data.code}' already exists`);
     }
 
-    // If this is set as default, unset others
-    if (data.isDefault) {
-      await db
-        .update(locations)
-        .set({
-          attributes: sql`jsonb_set(COALESCE(${locations.attributes}, '{}'::jsonb), '{isDefault}', 'false'::jsonb)`
-        })
-        .where(
-          and(
-            eq(locations.organizationId, ctx.organizationId),
-            sql`(${locations.attributes}->>'isDefault')::boolean = true`
-          )
-        );
-    }
+    const [location] = await db.transaction(async (tx) => {
+      if (data.isDefault) {
+        await tx
+          .update(locations)
+          .set({
+            attributes: sql`jsonb_set(COALESCE(${locations.attributes}, '{}'::jsonb), '{isDefault}', 'false'::jsonb)`
+          })
+          .where(
+            and(
+              eq(locations.organizationId, ctx.organizationId),
+              sql`(${locations.attributes}->>'isDefault')::boolean = true`
+            )
+          );
+      }
 
-    const [location] = await db
-      .insert(locations)
-      .values({
+      const [loc] = await tx
+        .insert(locations)
+        .values({
         organizationId: ctx.organizationId,
         locationCode: data.code,
         name: data.name,
@@ -216,7 +303,10 @@ export const createLocation = createServerFn({ method: 'POST' })
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
       })
-      .returning();
+        .returning();
+
+      return [loc];
+    });
 
     return { location };
   });
@@ -263,24 +353,8 @@ export const updateLocation = createServerFn({ method: 'POST' })
       }
     }
 
-    // If setting as default, unset others
-    const existingIsDefault = (existing.attributes as any)?.isDefault ?? false;
-    if (data.isDefault && !existingIsDefault) {
-      await db
-        .update(locations)
-        .set({
-          attributes: sql`jsonb_set(COALESCE(${locations.attributes}, '{}'::jsonb), '{isDefault}', 'false'::jsonb)`
-        })
-        .where(
-          and(
-            eq(locations.organizationId, ctx.organizationId),
-            sql`(${locations.attributes}->>'isDefault')::boolean = true`
-          )
-        );
-    }
-
     // Build update values
-    const updateValues: any = {
+    const updateValues: Record<string, unknown> = {
       updatedAt: new Date(),
       updatedBy: ctx.user.id,
     };
@@ -297,7 +371,7 @@ export const updateLocation = createServerFn({ method: 'POST' })
 
     // Update attributes if any attribute fields are provided
     if (data.isDefault !== undefined || data.allowNegative !== undefined || data.description !== undefined || data.address !== undefined) {
-      const attributeUpdates: any = {};
+      const attributeUpdates: Partial<LocationAttributes> = {};
       if (data.isDefault !== undefined) attributeUpdates.isDefault = data.isDefault;
       if (data.allowNegative !== undefined) attributeUpdates.allowNegative = data.allowNegative;
       if (data.description !== undefined) attributeUpdates.description = data.description;
@@ -306,11 +380,30 @@ export const updateLocation = createServerFn({ method: 'POST' })
       updateValues.attributes = sql`COALESCE(${locations.attributes}, '{}'::jsonb) || ${JSON.stringify(attributeUpdates)}::jsonb`;
     }
 
-    const [location] = await db
-      .update(locations)
-      .set(updateValues)
-      .where(eq(locations.id, id))
-      .returning();
+    const [location] = await db.transaction(async (tx) => {
+      const existingIsDefault = (existing.attributes as { isDefault?: boolean } | null)?.isDefault ?? false;
+      if (data.isDefault && !existingIsDefault) {
+        await tx
+          .update(locations)
+          .set({
+            attributes: sql`jsonb_set(COALESCE(${locations.attributes}, '{}'::jsonb), '{isDefault}', 'false'::jsonb)`
+          })
+          .where(
+            and(
+              eq(locations.organizationId, ctx.organizationId),
+              sql`(${locations.attributes}->>'isDefault')::boolean = true`
+            )
+          );
+      }
+
+      const [loc] = await tx
+        .update(locations)
+        .set(updateValues)
+        .where(eq(locations.id, id))
+        .returning();
+
+      return [loc];
+    });
 
     return { location };
   });
@@ -333,11 +426,16 @@ export const deleteLocation = createServerFn({ method: 'POST' })
       throw new NotFoundError('Location not found', 'location');
     }
 
-    // Check for inventory in this location
+    // Check for inventory in this location (with orgId filter)
     const [inventoryCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(inventory)
-      .where(eq(inventory.locationId, data.id));
+      .where(
+        and(
+          eq(inventory.locationId, data.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      );
 
     if ((inventoryCount?.count ?? 0) > 0) {
       throw new ConflictError(
@@ -384,11 +482,12 @@ export const listWarehouseLocations = createServerFn({ method: 'GET' })
     }
 
     if (data.search) {
+      const searchPattern = containsPattern(data.search);
       conditions.push(
-        sql`(
-          ${warehouseLocations.locationCode} ILIKE ${`%${data.search}%`} OR
-          ${warehouseLocations.name} ILIKE ${`%${data.search}%`}
-        )`
+        or(
+          ilike(warehouseLocations.locationCode, searchPattern),
+          ilike(warehouseLocations.name, searchPattern)
+        )!
       );
     }
 
@@ -441,6 +540,10 @@ export const getWarehouseLocationHierarchy = createServerFn({ method: 'GET' })
         .filter((item) => item.parentId === parentId)
         .map((item) => ({
           ...item,
+          isActive: ensureIsActive(item.isActive),
+          isPickable: item.isPickable ?? false,
+          isReceivable: item.isReceivable ?? false,
+          attributes: castAttributes(item.attributes),
           children: buildTree(items, item.id),
         }));
     };

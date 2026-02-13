@@ -2,11 +2,19 @@
  * Search Server Functions
  *
  * Global search and recent items APIs for the application.
+ * Uses PostgreSQL FTS with websearch_to_tsquery (fallback to plainto_tsquery on invalid input).
+ *
+ * - Performant: min query length, skip count for quick search, index-backed search_vector,
+ *   single-query pagination with count(*) OVER() for globalSearch
+ * - Resilient: tsquery fallback, graceful degradation on unexpected errors
+ * - Safe: containsPattern for ILIKE, parameterized queries, schema validation
+ * - Intuitive: consistent empty responses, min 2 chars aligned with client
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notInArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { searchIndex, searchIndexOutbox, recentItems } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
@@ -18,125 +26,217 @@ import {
 } from '@/lib/schemas/search';
 
 const MAX_RECENT_ITEMS = 50;
+const SEARCH_MIN_QUERY_LENGTH = 2;
+const SEARCH_MAX_QUERY_LENGTH = 200;
+
+/** Normalize search query: trim, limit length. Returns empty string if invalid. */
+function normalizeSearchQuery(query: string): string {
+  return query.trim().slice(0, SEARCH_MAX_QUERY_LENGTH);
+}
+
+/** Returns true if query is too short to search (avoids wasteful DB hits). */
+function isQueryTooShort(normalized: string): boolean {
+  return normalized.length < SEARCH_MIN_QUERY_LENGTH;
+}
+
+/** Websearch-style tsquery; falls back to plainto at call site on syntax error. */
+function buildTsQuerySql(normalizedQuery: string): SQL {
+  return sql`websearch_to_tsquery('english', ${normalizedQuery})`;
+}
+
+/** Fallback tsquery when websearch_to_tsquery fails (e.g. special chars). */
+function buildPlainTsQuerySql(normalizedQuery: string): SQL {
+  return sql`plainto_tsquery('english', ${normalizedQuery})`;
+}
+
+function isTsQueryError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /syntax error|tsquery|invalid.*query/i.test(msg);
+}
+
+const searchResultColumns = {
+  entityType: searchIndex.entityType,
+  entityId: searchIndex.entityId,
+  title: searchIndex.title,
+  subtitle: searchIndex.subtitle,
+  description: searchIndex.description,
+  url: searchIndex.url,
+  rankBoost: searchIndex.rankBoost,
+  updatedAt: searchIndex.updatedAt,
+} as const;
+
+interface ExecuteSearchParams {
+  organizationId: string;
+  tsQuery: SQL;
+  normalizedQuery: string;
+  entityTypes?: readonly string[];
+  limit: number;
+  offset?: number;
+  /** When true, skips the count query (e.g. for quick search). */
+  skipCount?: boolean;
+}
+
+/** Executes FTS search; used by both globalSearch and quickSearch. */
+async function executeSearch(params: ExecuteSearchParams) {
+  const { organizationId, tsQuery, normalizedQuery, entityTypes, limit, offset = 0, skipCount } =
+    params;
+  const ilikePattern = containsPattern(normalizedQuery);
+
+  const conditions = [eq(searchIndex.organizationId, organizationId)];
+  conditions.push(
+    sql`(
+      ${searchIndex.searchVector}
+      @@ ${tsQuery}
+      OR ${searchIndex.title} ILIKE ${ilikePattern}
+      OR ${searchIndex.subtitle} ILIKE ${ilikePattern}
+      OR ${searchIndex.description} ILIKE ${ilikePattern}
+    )`
+  );
+  if (entityTypes && entityTypes.length > 0) {
+    conditions.push(inArray(searchIndex.entityType, entityTypes));
+  }
+
+  const relevanceScore = sql<number>`
+    ts_rank(${searchIndex.searchVector}, ${tsQuery}) + ${searchIndex.rankBoost}
+  `.as('relevance_score');
+
+  if (skipCount) {
+    const results = await db
+      .select({ ...searchResultColumns, relevanceScore })
+      .from(searchIndex)
+      .where(and(...conditions))
+      .orderBy(desc(relevanceScore))
+      .limit(limit)
+      .offset(offset);
+
+    return { results, totalItems: 0 };
+  }
+
+  // Single query with window count (avoids second round-trip per Supabase Postgres best practices)
+  const rows = await db
+    .select({
+      ...searchResultColumns,
+      relevanceScore,
+      totalItems: sql<number>`(count(*) over ())::int`.as('total_items'),
+    })
+    .from(searchIndex)
+    .where(and(...conditions))
+    .orderBy(desc(relevanceScore))
+    .limit(limit)
+    .offset(offset);
+
+  const totalItems = rows[0]?.totalItems ?? 0;
+  const results = rows.map(({ totalItems: _t, ...r }) => r);
+
+  return { results, totalItems };
+}
+
+interface SearchOptions {
+  limit: number;
+  offset?: number;
+  skipCount?: boolean;
+}
+
+/** Run search with websearch tsquery; retry with plainto on tsquery syntax error. */
+async function searchWithTsQueryFallback<T>(
+  normalizedQuery: string,
+  entityTypes: readonly string[] | undefined,
+  organizationId: string,
+  options: SearchOptions,
+  format: (result: Awaited<ReturnType<typeof executeSearch>>) => T,
+  emptyResult: T
+): Promise<T> {
+  const run = (tsQuery: SQL) =>
+    executeSearch({
+      organizationId,
+      tsQuery,
+      normalizedQuery,
+      entityTypes,
+      limit: options.limit,
+      offset: options.offset,
+      skipCount: options.skipCount,
+    });
+
+  try {
+    const result = await run(buildTsQuerySql(normalizedQuery));
+    return format(result);
+  } catch (err) {
+    if (isTsQueryError(err)) {
+      try {
+        const result = await run(buildPlainTsQuerySql(normalizedQuery));
+        return format(result);
+      } catch {
+        return emptyResult;
+      }
+    }
+    throw err;
+  }
+}
 
 // ============================================================================
 // SEARCH
 // ============================================================================
 
+const emptyGlobalSearchResult = (data: { page: number; pageSize: number }) => ({
+  results: [] as Awaited<ReturnType<typeof executeSearch>>['results'],
+  pagination: {
+    page: data.page,
+    pageSize: data.pageSize,
+    totalItems: 0,
+    totalPages: 0,
+  },
+});
+
 export const globalSearch = createServerFn({ method: 'GET' })
   .inputValidator(searchQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const normalizedQuery = normalizeSearchQuery(data.query);
 
-    const tsQuery = sql`websearch_to_tsquery('english', ${data.query})`;
-    const conditions = [eq(searchIndex.organizationId, ctx.organizationId)];
-
-    const searchCondition = sql`(
-      to_tsvector('english', ${searchIndex.searchText})
-      @@ ${tsQuery}
-      OR ${searchIndex.title} ILIKE ${'%' + data.query + '%'}
-      OR ${searchIndex.subtitle} ILIKE ${'%' + data.query + '%'}
-      OR ${searchIndex.description} ILIKE ${'%' + data.query + '%'}
-    )`;
-
-    conditions.push(searchCondition);
-
-    if (data.entityTypes && data.entityTypes.length > 0) {
-      conditions.push(inArray(searchIndex.entityType, data.entityTypes));
+    if (isQueryTooShort(normalizedQuery)) {
+      return emptyGlobalSearchResult(data);
     }
-
-    const relevanceScore = sql<number>`
-      ts_rank(
-        to_tsvector('english', ${searchIndex.searchText}),
-        ${tsQuery}
-      ) + ${searchIndex.rankBoost}
-    `.as('relevance_score');
 
     const offset = (data.page - 1) * data.pageSize;
 
-    const results = await db
-      .select({
-        entityType: searchIndex.entityType,
-        entityId: searchIndex.entityId,
-        title: searchIndex.title,
-        subtitle: searchIndex.subtitle,
-        description: searchIndex.description,
-        url: searchIndex.url,
-        rankBoost: searchIndex.rankBoost,
-        updatedAt: searchIndex.updatedAt,
-        relevanceScore,
-      })
-      .from(searchIndex)
-      .where(and(...conditions))
-      .orderBy(desc(relevanceScore))
-      .limit(data.pageSize)
-      .offset(offset);
-
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(searchIndex)
-      .where(and(...conditions));
-
-    const totalItems = Number(count ?? 0);
-
-    return {
-      results,
-      pagination: {
-        page: data.page,
-        pageSize: data.pageSize,
-        totalItems,
-        totalPages: Math.ceil(totalItems / data.pageSize),
-      },
-    };
+    return searchWithTsQueryFallback(
+      normalizedQuery,
+      data.entityTypes,
+      ctx.organizationId,
+      { limit: data.pageSize, offset },
+      ({ results, totalItems }) => ({
+        results,
+        pagination: {
+          page: data.page,
+          pageSize: data.pageSize,
+          totalItems,
+          totalPages: Math.ceil(totalItems / data.pageSize),
+        },
+      }),
+      emptyGlobalSearchResult(data)
+    );
   });
+
+const emptyQuickSearchResult = { results: [] as Awaited<ReturnType<typeof executeSearch>>['results'] };
 
 export const quickSearch = createServerFn({ method: 'GET' })
   .inputValidator(quickSearchSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const normalizedQuery = normalizeSearchQuery(data.query);
 
-    const tsQuery = sql`websearch_to_tsquery('english', ${data.query})`;
-    const conditions = [eq(searchIndex.organizationId, ctx.organizationId)];
-
-    const searchCondition = sql`(
-      to_tsvector('english', ${searchIndex.searchText})
-      @@ ${tsQuery}
-      OR ${searchIndex.title} ILIKE ${'%' + data.query + '%'}
-      OR ${searchIndex.subtitle} ILIKE ${'%' + data.query + '%'}
-      OR ${searchIndex.description} ILIKE ${'%' + data.query + '%'}
-    )`;
-
-    conditions.push(searchCondition);
-
-    if (data.entityTypes && data.entityTypes.length > 0) {
-      conditions.push(inArray(searchIndex.entityType, data.entityTypes));
+    if (isQueryTooShort(normalizedQuery)) {
+      return emptyQuickSearchResult;
     }
 
-    const relevanceScore = sql<number>`
-      ts_rank(
-        to_tsvector('english', ${searchIndex.searchText}),
-        ${tsQuery}
-      ) + ${searchIndex.rankBoost}
-    `.as('relevance_score');
-
-    const results = await db
-      .select({
-        entityType: searchIndex.entityType,
-        entityId: searchIndex.entityId,
-        title: searchIndex.title,
-        subtitle: searchIndex.subtitle,
-        description: searchIndex.description,
-        url: searchIndex.url,
-        rankBoost: searchIndex.rankBoost,
-        updatedAt: searchIndex.updatedAt,
-        relevanceScore,
-      })
-      .from(searchIndex)
-      .where(and(...conditions))
-      .orderBy(desc(relevanceScore))
-      .limit(data.limit);
-
-    return { results };
+    return searchWithTsQueryFallback(
+      normalizedQuery,
+      data.entityTypes,
+      ctx.organizationId,
+      { limit: data.limit, skipCount: true },
+      ({ results }) => ({ results }),
+      emptyQuickSearchResult
+    );
   });
 
 export const indexStatus = createServerFn({ method: 'GET' }).handler(async () => {

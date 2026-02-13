@@ -14,7 +14,7 @@
  * - Logical field grouping
  */
 import { memo, useState, useCallback } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -155,8 +155,8 @@ export const AlertConfigForm = memo(function AlertConfigForm({
 }: AlertConfigFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm({
-    resolver: zodResolver(alertConfigSchema) as any,
+  const form = useForm<AlertConfigValues>({
+    resolver: zodResolver(alertConfigSchema) as Resolver<AlertConfigValues>,
     defaultValues: {
       alertType: initialValues?.alertType ?? "low_stock",
       name: initialValues?.name ?? "",
@@ -170,11 +170,12 @@ export const AlertConfigForm = memo(function AlertConfigForm({
     },
   });
 
+   
   const alertType = form.watch("alertType") as AlertType;
   const alertConfig = ALERT_TYPE_CONFIG[alertType];
 
   const handleSubmit = useCallback(
-    async (values: any) => {
+    async (values: AlertConfigValues) => {
       try {
         setIsSubmitting(true);
         await onSubmit(values);
@@ -290,7 +291,7 @@ export const AlertConfigForm = memo(function AlertConfigForm({
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      Leave as "All" to monitor all products
+                      Leave as &quot;All&quot; to monitor all products
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

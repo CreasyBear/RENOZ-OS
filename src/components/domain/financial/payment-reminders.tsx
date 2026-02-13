@@ -9,6 +9,7 @@
  */
 
 import { memo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Plus, Mail, Clock, Edit, Trash2, Send } from 'lucide-react';
 import {
   Table,
@@ -344,7 +345,15 @@ export const PaymentReminders = memo(function PaymentReminders({
                         {format(new Date(reminder.sentAt), 'dd MMM yyyy HH:mm')}
                       </TableCell>
                       <TableCell>{reminder.templateName}</TableCell>
-                      <TableCell className="font-mono">{reminder.orderNumber}</TableCell>
+                      <TableCell className="font-mono">
+                        <Link
+                          to="/orders/$orderId"
+                          params={{ orderId: reminder.orderId }}
+                          className="text-primary hover:underline"
+                        >
+                          {reminder.orderNumber}
+                        </Link>
+                      </TableCell>
                       <TableCell>{reminder.recipientEmail}</TableCell>
                       <TableCell>
                         <Badge variant={statusConf.variant}>{statusConf.label}</Badge>

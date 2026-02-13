@@ -32,16 +32,9 @@ import {
 // TYPES
 // ============================================================================
 
-export type RelationType = 'blocks' | 'blocked_by' | 'duplicates' | 'duplicated_by' | 'relates_to';
+import type { RelationType, RelatedIssue } from '@/lib/schemas/support/issues';
 
-export interface RelatedIssue {
-  id: string;
-  issueNumber: string;
-  title: string;
-  status: string;
-  priority: string;
-  relationType: RelationType;
-}
+export type { RelationType, RelatedIssue };
 
 interface IssueSearchResult {
   id: string;
@@ -61,6 +54,10 @@ const relationConfig: Record<RelationType, { label: string; description: string 
   duplicated_by: { label: 'Duplicated by', description: 'This issue is duplicated by another' },
   relates_to: { label: 'Relates to', description: 'Related issue' },
 };
+
+function isRelationType(v: string): v is RelationType {
+  return v in relationConfig;
+}
 
 // ============================================================================
 // LINK ISSUE POPOVER
@@ -104,7 +101,12 @@ function LinkIssuePopover({
       <PopoverContent className="w-[400px] p-0" align="start">
         <div className="space-y-2 border-b p-3">
           <p className="text-sm font-medium">Link to Issue</p>
-          <Select value={relationType} onValueChange={(v) => setRelationType(v as RelationType)}>
+          <Select
+            value={relationType}
+            onValueChange={(v) => {
+              if (isRelationType(v)) setRelationType(v);
+            }}
+          >
             <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>

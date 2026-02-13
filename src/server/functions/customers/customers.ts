@@ -12,7 +12,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { cache } from 'react';
+import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull, count, sum, max, min, avg, notInArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
@@ -27,7 +29,9 @@ import {
   customerPriorities,
   orders,
 } from 'drizzle/schema';
+import { auditLogs } from 'drizzle/schema/_shared/audit-logs';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { customersLogger } from '@/lib/logger';
 import { computeChanges } from '@/lib/activity-logger';
 import {
   createCustomerSchema,
@@ -55,6 +59,7 @@ import {
   bulkUpdateCustomersSchema,
   bulkDeleteCustomersSchema,
   bulkAssignTagsSchema,
+  bulkUpdateHealthScoresSchema,
   mergeCustomersSchema,
 } from '@/lib/schemas/customers';
 import {
@@ -64,7 +69,7 @@ import {
 } from '@/lib/db/pagination';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { NotFoundError, ConflictError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError, ConflictError, ServerError } from '@/lib/server/errors';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -104,7 +109,7 @@ export const getCustomers = createServerFn({ method: 'GET' })
     // Build where conditions - ALWAYS include organizationId for isolation
     const conditions = [
       eq(customers.organizationId, ctx.organizationId),
-      sql`${customers.deletedAt} IS NULL`,
+      isNull(customers.deletedAt),
     ];
 
     if (search) {
@@ -140,13 +145,13 @@ export const getCustomers = createServerFn({ method: 'GET' })
     const validOrderCondition = and(
       eq(orders.organizationId, ctx.organizationId),
       isNull(orders.deletedAt),
-      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+      notInArray(orders.status, ['draft', 'cancelled'])
     );
 
     // Run count and paginated results in parallel to eliminate waterfall
     const [countResult, items] = await Promise.all([
       db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: count() })
         .from(customers)
         .where(whereClause),
       db
@@ -173,12 +178,13 @@ export const getCustomers = createServerFn({ method: 'GET' })
           healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
           // Aggregated order metrics using LEFT JOIN with GROUP BY
           // Pattern matches financial-dashboard.ts getTopCustomersByRevenue
-          lifetimeValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
-          totalOrderValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
-          averageOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
-          totalOrders: sql<number>`COUNT(${orders.id})::int`,
-          firstOrderDate: sql<Date | null>`MIN(${orders.orderDate})`,
-          lastOrderDate: sql<Date | null>`MAX(${orders.orderDate})`,
+          // Use Drizzle aggregation functions - handle nulls in JS
+          lifetimeValue: sum(orders.total),
+          totalOrderValue: sum(orders.total),
+          averageOrderValue: avg(orders.total),
+          totalOrders: count(orders.id),
+          firstOrderDate: min(orders.orderDate),
+          lastOrderDate: max(orders.orderDate),
           tags: customers.tags,
           customFields: customers.customFields,
           warrantyExpiryAlertOptOut: customers.warrantyExpiryAlertOptOut,
@@ -234,8 +240,19 @@ export const getCustomers = createServerFn({ method: 'GET' })
 
     const totalItems = Number(countResult[0]?.count ?? 0);
 
+    // Transform aggregation results: Drizzle functions return null when no rows match
+    // Convert to 0 to match previous COALESCE behavior
+    const transformedItems = items.map((item) => ({
+      ...item,
+      lifetimeValue: Number(item.lifetimeValue ?? 0),
+      totalOrderValue: Number(item.totalOrderValue ?? 0),
+      averageOrderValue: Number(item.averageOrderValue ?? 0),
+      totalOrders: Number(item.totalOrders ?? 0),
+      // Dates can remain null
+    }));
+
     return {
-      items,
+      items: transformedItems,
       pagination: {
         page,
         pageSize,
@@ -269,7 +286,7 @@ export const getCustomersCursor = createServerFn({ method: 'GET' })
     // Build where conditions
     const conditions = [
       eq(customers.organizationId, ctx.organizationId),
-      sql`${customers.deletedAt} IS NULL`,
+      isNull(customers.deletedAt),
     ];
 
     if (search) {
@@ -304,34 +321,101 @@ export const getCustomersCursor = createServerFn({ method: 'GET' })
       }
     }
 
+    // Build order aggregation conditions (same as getCustomers for consistency)
+    // Only count valid orders (not draft/cancelled) for lifetime metrics
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      notInArray(orders.status, ['draft', 'cancelled'])
+    );
+
     const whereClause = and(...conditions);
     const orderDirection = sortOrder === 'asc' ? asc : desc;
 
+    // Select only needed columns for list view (matches CustomerTableData interface)
+    // ✅ FIXED P0: Compute lifetime metrics on-the-fly using LEFT JOIN + GROUP BY
+    // This ensures consistency with getCustomers offset pagination
     const results = await db
-      .select()
+      .select({
+        id: customers.id,
+        organizationId: customers.organizationId,
+        customerCode: customers.customerCode,
+        name: customers.name,
+        legalName: customers.legalName,
+        email: customers.email,
+        phone: customers.phone,
+        website: customers.website,
+        status: customers.status,
+        type: customers.type,
+        size: customers.size,
+        industry: customers.industry,
+        healthScore: customers.healthScore,
+        healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
+        // Compute metrics on-the-fly from orders (consistent with getCustomers)
+        // Use Drizzle aggregation functions - handle nulls in JS
+        lifetimeValue: sum(orders.total),
+        totalOrders: count(orders.id),
+        lastOrderDate: max(orders.orderDate),
+        tags: customers.tags,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        deletedAt: customers.deletedAt,
+      })
       .from(customers)
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          validOrderCondition
+        )
+      )
       .where(whereClause)
+      .groupBy(
+        customers.id,
+        customers.organizationId,
+        customers.customerCode,
+        customers.name,
+        customers.legalName,
+        customers.email,
+        customers.phone,
+        customers.website,
+        customers.status,
+        customers.type,
+        customers.size,
+        customers.industry,
+        customers.healthScore,
+        customers.healthScoreUpdatedAt,
+        customers.tags,
+        customers.createdAt,
+        customers.updatedAt,
+        customers.deletedAt
+      )
       .orderBy(orderDirection(customers.createdAt), orderDirection(customers.id))
       .limit(pageSize + 1);
 
-    return buildStandardCursorResponse(results, pageSize);
+    // Transform aggregation results: Drizzle functions return null when no rows match
+    // Convert to 0 to match previous COALESCE behavior
+    const transformedResults = results.map((item) => ({
+      ...item,
+      lifetimeValue: Number(item.lifetimeValue ?? 0),
+      totalOrders: Number(item.totalOrders ?? 0),
+      // lastOrderDate can remain null
+    }));
+
+    return buildStandardCursorResponse(transformedResults, pageSize);
   });
 
 /**
- * Get single customer with 360-degree view (contacts, addresses, activities)
+ * Cached customer fetch for per-request deduplication.
+ * Use when same customer may be fetched multiple times in one request.
  */
-export const getCustomerById = createServerFn({ method: 'GET' })
-  .inputValidator(customerParamsSchema)
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
-
-    const { id } = data;
-
-    const customer = await db.query.customers.findFirst({
+const _getCustomerByIdCached = cache(
+  async (id: string, organizationId: string) =>
+    db.query.customers.findFirst({
       where: and(
         eq(customers.id, id),
-        eq(customers.organizationId, ctx.organizationId),
-        sql`${customers.deletedAt} IS NULL`
+        eq(customers.organizationId, organizationId),
+        isNull(customers.deletedAt)
       ),
       with: {
         contacts: true,
@@ -347,9 +431,21 @@ export const getCustomerById = createServerFn({ method: 'GET' })
         },
         priority: true,
       },
-    });
+    })
+);
+
+/**
+ * Get single customer with 360-degree view (contacts, addresses, activities)
+ */
+export const getCustomerById = createServerFn({ method: 'GET' })
+  .inputValidator(customerParamsSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+
+    const customer = await _getCustomerByIdCached(data.id, ctx.organizationId);
 
     if (!customer) {
+      setResponseStatus(404);
       throw new NotFoundError('Customer not found', 'customer');
     }
 
@@ -365,18 +461,19 @@ export const createCustomer = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.create });
     const logger = createActivityLoggerWithContext(ctx);
 
-    const created = await db.transaction(async (tx) => {
-      const [newCustomer] = await tx
-        .insert(customers)
-        .values({
-          ...data,
-          organizationId: ctx.organizationId,
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        })
-        .returning();
+    try {
+      const created = await db.transaction(async (tx) => {
+        const [newCustomer] = await tx
+          .insert(customers)
+          .values({
+            ...data,
+            organizationId: ctx.organizationId,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          })
+          .returning();
 
-      await enqueueSearchIndexOutbox(
+        await enqueueSearchIndexOutbox(
         {
           organizationId: ctx.organizationId,
           entityType: 'customer',
@@ -404,10 +501,21 @@ export const createCustomer = createServerFn({ method: 'POST' })
         description: `Created customer: ${newCustomer.name}`,
       });
 
-      return newCustomer;
-    });
+        return newCustomer;
+      });
 
-    return created;
+      return created;
+    } catch (error: unknown) {
+      const pgError = error as { code?: string };
+      if (pgError?.code === '23505') {
+        setResponseStatus(409);
+        throw new ConflictError('A customer with this email or identifier already exists');
+      }
+      if (error instanceof ValidationError) throw error;
+      customersLogger.error('createCustomer DB error', error);
+      setResponseStatus(500);
+      throw new ServerError('Failed to create customer', 500, 'INTERNAL_ERROR');
+    }
   });
 
 /**
@@ -426,7 +534,7 @@ export const updateCustomer = createServerFn({ method: 'POST' })
       where: and(
         eq(customers.id, id),
         eq(customers.organizationId, ctx.organizationId),
-        sql`${customers.deletedAt} IS NULL`
+        isNull(customers.deletedAt)
       ),
     });
 
@@ -445,7 +553,7 @@ export const updateCustomer = createServerFn({ method: 'POST' })
           and(
             eq(customers.id, id),
             eq(customers.organizationId, ctx.organizationId),
-            sql`${customers.deletedAt} IS NULL`
+            isNull(customers.deletedAt)
           )
         )
         .returning();
@@ -469,7 +577,7 @@ export const updateCustomer = createServerFn({ method: 'POST' })
         tx
       );
 
-      return result[0];
+      return result[0] ?? null;
     });
 
     // Log customer update (fire-and-forget after transaction)
@@ -509,7 +617,7 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
       where: and(
         eq(customers.id, id),
         eq(customers.organizationId, ctx.organizationId),
-        sql`${customers.deletedAt} IS NULL`
+        isNull(customers.deletedAt)
       ),
     });
 
@@ -517,7 +625,26 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
       throw new NotFoundError('Customer not found', 'customer');
     }
 
+    // Wrap child count check + soft delete in a transaction to prevent TOCTOU race
     const deleted = await db.transaction(async (tx) => {
+      // Business rule - prevent deleting customer with children (checked inside tx)
+      const childrenCount = await tx
+        .select({ count: count() })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.parentId, id),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
+        );
+
+      if (childrenCount[0]?.count > 0) {
+        throw new ConflictError(
+          `Cannot delete customer "${customerToDelete.name}" because it has ${childrenCount[0].count} child customer(s). Please reassign or delete children first.`
+        );
+      }
+
       const result = await tx
         .update(customers)
         .set({
@@ -528,7 +655,7 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
           and(
             eq(customers.id, id),
             eq(customers.organizationId, ctx.organizationId),
-            sql`${customers.deletedAt} IS NULL`
+            isNull(customers.deletedAt)
           )
         )
         .returning();
@@ -609,7 +736,7 @@ export const createContact = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -635,7 +762,7 @@ export const updateContact = createServerFn({ method: 'POST' })
       throw new NotFoundError('Contact not found', 'contact');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -701,7 +828,7 @@ export const createAddress = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -724,7 +851,7 @@ export const updateAddress = createServerFn({ method: 'POST' })
       throw new NotFoundError('Address not found', 'address');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -787,8 +914,26 @@ export const getCustomerActivities = createServerFn({ method: 'GET' })
       conditions.push(lte(customerActivities.createdAt, endDate));
     }
 
+    // Select only needed columns for activity list view
     const results = await db
-      .select()
+      .select({
+        id: customerActivities.id,
+        organizationId: customerActivities.organizationId,
+        customerId: customerActivities.customerId,
+        contactId: customerActivities.contactId,
+        activityType: customerActivities.activityType,
+        direction: customerActivities.direction,
+        subject: customerActivities.subject,
+        description: customerActivities.description,
+        outcome: customerActivities.outcome,
+        duration: customerActivities.duration,
+        scheduledAt: customerActivities.scheduledAt,
+        completedAt: customerActivities.completedAt,
+        assignedTo: customerActivities.assignedTo,
+        metadata: customerActivities.metadata,
+        createdAt: customerActivities.createdAt,
+        createdBy: customerActivities.createdBy,
+      })
       .from(customerActivities)
       .where(and(...conditions))
       .orderBy(desc(customerActivities.createdAt))
@@ -814,7 +959,7 @@ export const createCustomerActivity = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 // ============================================================================
@@ -831,7 +976,8 @@ export const getCustomerTags = createServerFn({ method: 'GET' }).handler(async (
     .select()
     .from(customerTags)
     .where(eq(customerTags.organizationId, ctx.organizationId))
-    .orderBy(desc(customerTags.usageCount), asc(customerTags.name));
+    .orderBy(desc(customerTags.usageCount), asc(customerTags.name))
+    .limit(200);
 
   return results;
 });
@@ -853,7 +999,7 @@ export const createCustomerTag = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -876,7 +1022,7 @@ export const updateCustomerTag = createServerFn({ method: 'POST' })
       throw new NotFoundError('Tag not found', 'customerTag');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -903,6 +1049,7 @@ export const deleteCustomerTag = createServerFn({ method: 'POST' })
 
 /**
  * Assign a tag to a customer
+ * ✅ P2 FIX: Wrapped in transaction for atomicity (prevents race conditions)
  */
 export const assignCustomerTag = createServerFn({ method: 'POST' })
   .inputValidator(assignCustomerTagSchema)
@@ -911,47 +1058,55 @@ export const assignCustomerTag = createServerFn({ method: 'POST' })
 
     const { customerId, tagId, notes } = data;
 
-    // Check if assignment already exists (include org filter for tenant isolation)
-    const existing = await db
-      .select()
-      .from(customerTagAssignments)
-      .where(
-        and(
-          eq(customerTagAssignments.customerId, customerId),
-          eq(customerTagAssignments.tagId, tagId),
-          eq(customerTagAssignments.organizationId, ctx.organizationId)
+    // ✅ Wrap entire operation in transaction for atomicity
+    return await db.transaction(async (tx) => {
+      // Check if assignment already exists (include org filter for tenant isolation)
+      const existing = await tx
+        .select()
+        .from(customerTagAssignments)
+        .where(
+          and(
+            eq(customerTagAssignments.customerId, customerId),
+            eq(customerTagAssignments.tagId, tagId),
+            eq(customerTagAssignments.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (existing.length > 0) {
-      throw new ConflictError('Tag already assigned to this customer');
-    }
+      if (existing.length > 0) {
+        throw new ConflictError('Tag already assigned to this customer');
+      }
 
-    const result = await db
-      .insert(customerTagAssignments)
-      .values({
-        customerId,
-        tagId,
-        notes,
-        organizationId: ctx.organizationId,
-        assignedBy: ctx.user.id,
-      })
-      .returning();
+      // Insert assignment
+      const [result] = await tx
+        .insert(customerTagAssignments)
+        .values({
+          customerId,
+          tagId,
+          notes,
+          organizationId: ctx.organizationId,
+          assignedBy: ctx.user.id,
+        })
+        .returning();
 
-    // Increment usage count
-    await db
-      .update(customerTags)
-      .set({
-        usageCount: sql`${customerTags.usageCount} + 1`,
-      })
-      .where(eq(customerTags.id, tagId));
+      // Update usage count atomically
+      // Note: Using SQL for arithmetic operations ensures atomicity at database level
+      // Drizzle doesn't provide arithmetic operators, and this prevents race conditions
+      // SECURITY: Filter by organizationId to prevent cross-tenant tag updates
+      await tx
+        .update(customerTags)
+        .set({
+          usageCount: sql`${customerTags.usageCount} + 1`,
+        })
+        .where(and(eq(customerTags.id, tagId), eq(customerTags.organizationId, ctx.organizationId)));
 
-    return result[0];
+      return result;
+    });
   });
 
 /**
  * Unassign a tag from a customer
+ * ✅ P2 FIX: Wrapped in transaction for atomicity (prevents race conditions)
  */
 export const unassignCustomerTag = createServerFn({ method: 'POST' })
   .inputValidator(unassignCustomerTagSchema)
@@ -960,30 +1115,35 @@ export const unassignCustomerTag = createServerFn({ method: 'POST' })
 
     const { customerId, tagId } = data;
 
-    const result = await db
-      .delete(customerTagAssignments)
-      .where(
-        and(
-          eq(customerTagAssignments.customerId, customerId),
-          eq(customerTagAssignments.tagId, tagId),
-          eq(customerTagAssignments.organizationId, ctx.organizationId)
+    // ✅ Wrap entire operation in transaction for atomicity
+    return await db.transaction(async (tx) => {
+      const result = await tx
+        .delete(customerTagAssignments)
+        .where(
+          and(
+            eq(customerTagAssignments.customerId, customerId),
+            eq(customerTagAssignments.tagId, tagId),
+            eq(customerTagAssignments.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .returning();
+        .returning();
 
-    if (result.length === 0) {
-      throw new NotFoundError('Tag assignment not found', 'customerTagAssignment');
-    }
+      if (result.length === 0) {
+        throw new NotFoundError('Tag assignment not found', 'customerTagAssignment');
+      }
 
-    // Decrement usage count
-    await db
-      .update(customerTags)
-      .set({
-        usageCount: sql`GREATEST(${customerTags.usageCount} - 1, 0)`,
-      })
-      .where(eq(customerTags.id, tagId));
+      // Update usage count atomically
+      // Note: Using SQL for arithmetic operations ensures atomicity at database level
+      // GREATEST() prevents negative counts - Drizzle doesn't provide this function
+      await tx
+        .update(customerTags)
+        .set({
+          usageCount: sql`GREATEST(${customerTags.usageCount} - 1, 0)`,
+        })
+        .where(and(eq(customerTags.id, tagId), eq(customerTags.organizationId, ctx.organizationId)));
 
-    return { success: true };
+      return { success: true };
+    });
   });
 
 // ============================================================================
@@ -1030,41 +1190,46 @@ export const createCustomerHealthMetric = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
-    const result = await db
-      .insert(customerHealthMetrics)
-      .values({
-        ...data,
-        organizationId: ctx.organizationId,
-      })
-      .onConflictDoUpdate({
-        target: [customerHealthMetrics.customerId, customerHealthMetrics.metricDate],
-        set: {
-          recencyScore: data.recencyScore,
-          frequencyScore: data.frequencyScore,
-          monetaryScore: data.monetaryScore,
-          engagementScore: data.engagementScore,
-          overallScore: data.overallScore,
-        },
-      })
-      .returning();
-
-    // Update customer's current health score (include org filter for tenant isolation)
-    if (data.overallScore !== undefined) {
-      await db
-        .update(customers)
-        .set({
-          healthScore: Math.round(data.overallScore),
-          healthScoreUpdatedAt: new Date().toISOString(),
+    // C24: Wrap UPSERT + UPDATE customer in transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      const [metric] = await tx
+        .insert(customerHealthMetrics)
+        .values({
+          ...data,
+          organizationId: ctx.organizationId,
         })
-        .where(
-          and(
-            eq(customers.id, data.customerId),
-            eq(customers.organizationId, ctx.organizationId)
-          )
-        );
-    }
+        .onConflictDoUpdate({
+          target: [customerHealthMetrics.customerId, customerHealthMetrics.metricDate],
+          set: {
+            recencyScore: data.recencyScore,
+            frequencyScore: data.frequencyScore,
+            monetaryScore: data.monetaryScore,
+            engagementScore: data.engagementScore,
+            overallScore: data.overallScore,
+          },
+        })
+        .returning();
 
-    return result[0];
+      // Update customer's current health score (include org filter for tenant isolation)
+      if (data.overallScore !== undefined) {
+        await tx
+          .update(customers)
+          .set({
+            healthScore: Math.round(data.overallScore),
+            healthScoreUpdatedAt: new Date().toISOString(),
+          })
+          .where(
+            and(
+              eq(customers.id, data.customerId),
+              eq(customers.organizationId, ctx.organizationId)
+            )
+          );
+      }
+
+      return metric;
+    });
+
+    return result;
   });
 
 // ============================================================================
@@ -1123,7 +1288,7 @@ export const setCustomerPriority = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 /**
@@ -1151,7 +1316,7 @@ export const updateCustomerPriority = createServerFn({ method: 'POST' })
       throw new NotFoundError('Customer priority settings not found', 'customerPriority');
     }
 
-    return result[0];
+    return result[0] ?? null;
   });
 
 // ============================================================================
@@ -1178,7 +1343,7 @@ export const bulkUpdateCustomers = createServerFn({ method: 'POST' })
         and(
           inArray(customers.id, customerIds),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
       .returning();
@@ -1206,7 +1371,7 @@ export const bulkDeleteCustomers = createServerFn({ method: 'POST' })
         and(
           inArray(customers.id, customerIds),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       )
       .returning();
@@ -1253,6 +1418,7 @@ export const bulkAssignTags = createServerFn({ method: 'POST' })
 
       if (Object.keys(tagCounts).length > 0) {
         const tagIds = Object.keys(tagCounts);
+        // RAW SQL (Phase 11 Keep): Bulk CASE WHEN for tag usage_count. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
         await db.execute(sql`
           UPDATE customer_tags
           SET usage_count = usage_count + CASE id
@@ -1269,6 +1435,112 @@ export const bulkAssignTags = createServerFn({ method: 'POST' })
     }
 
     return { success: true, assigned: result.length };
+  });
+
+/**
+ * Bulk update health scores for multiple customers
+ * Includes audit logging for rollback capability
+ */
+export const bulkUpdateHealthScores = createServerFn({ method: 'POST' })
+  .inputValidator(bulkUpdateHealthScoresSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
+
+    const { customerIds, healthScore, reason } = data;
+    const now = new Date().toISOString();
+
+    // C25: Wrap SELECT + UPDATEs + INSERT audit in transaction for atomicity
+    const txResult = await db.transaction(async (tx) => {
+      // Fetch existing health scores for audit logging
+      const existingCustomers = await tx
+        .select({
+          id: customers.id,
+          healthScore: customers.healthScore,
+          healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
+        })
+        .from(customers)
+        .where(
+          and(
+            inArray(customers.id, customerIds),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
+        );
+
+      if (existingCustomers.length !== customerIds.length) {
+        throw new NotFoundError('Some customers not found', 'customer');
+      }
+
+      // Build oldValues for audit log
+      const oldValues = existingCustomers.reduce(
+        (acc, customer) => {
+          acc[customer.id] = {
+            healthScore: customer.healthScore,
+            healthScoreUpdatedAt: customer.healthScoreUpdatedAt,
+          };
+          return acc;
+        },
+        {} as Record<string, { healthScore: number | null; healthScoreUpdatedAt: string | null }>
+      );
+
+      // Update health scores
+      const result = await tx
+        .update(customers)
+        .set({
+          healthScore,
+          healthScoreUpdatedAt: now,
+          updatedBy: ctx.user.id,
+        })
+        .where(
+          and(
+            inArray(customers.id, customerIds),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
+        )
+        .returning();
+
+      // Audit log for rollback capability
+      const [auditLog] = await tx
+        .insert(auditLogs)
+        .values({
+          organizationId: ctx.organizationId,
+          userId: ctx.user.id,
+          action: 'customer.bulk_update_health_scores',
+          entityType: 'customer',
+          entityId: null, // Bulk operation, no single entity
+          oldValues: oldValues,
+          newValues: {
+            healthScore,
+            healthScoreUpdatedAt: now,
+            reason: reason ?? null,
+            customerIds,
+            count: result.length,
+          },
+          metadata: {
+            affectedCount: result.length,
+            operationType: 'bulk_health_score_update',
+            reason: reason ?? undefined,
+          },
+        })
+        .returning();
+
+      return {
+        result,
+        auditLog,
+      };
+    });
+
+    return {
+      success: true,
+      updated: txResult.result.length,
+      auditLogId: txResult.auditLog.id, // Return audit log ID for rollback
+      results: txResult.result.map((r) => ({
+        customerId: r.id,
+        success: true,
+      })),
+      errors: [] as Array<{ customerId: string; error: string }>,
+    };
   });
 
 // ============================================================================
@@ -1301,7 +1573,7 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
         and(
           inArray(customers.id, allCustomerIds),
           eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
+          isNull(customers.deletedAt)
         )
       );
 
@@ -1501,9 +1773,8 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
         changes,
         description: `Merged ${duplicateCustomerIds.length} duplicate(s) into customer: ${primaryAfter.name}`,
         metadata: {
-          mergedCount: duplicateCustomerIds.length,
-          mergedCustomerIds: duplicateCustomerIds.join(','),
-          fieldResolutions: fieldResolutions ? JSON.stringify(fieldResolutions) : null,
+          recordCount: duplicateCustomerIds.length,
+          reason: fieldResolutions ? JSON.stringify(fieldResolutions) : undefined,
         },
       });
     }

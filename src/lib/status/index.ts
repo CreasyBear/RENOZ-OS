@@ -13,9 +13,11 @@ export {
   type SemanticColorDef,
   type ModeColors,
   getStatusColorClasses,
+  getStatusColorClassesSplit,
   getStatusHex,
   getStatusRgb,
   getStatusRgba,
+  getIconColorClasses,
 } from './colors';
 
 // Types

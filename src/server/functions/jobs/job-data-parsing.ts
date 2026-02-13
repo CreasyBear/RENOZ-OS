@@ -3,15 +3,20 @@
  *
  * Enhanced data parsing and validation for job-related data.
  * Uses midday-inspired parsing utilities for international formats.
+ *
+ * PHASE12-008: lookupCustomerAndInstallerCandidates returns candidates for disambiguation.
+ * Never auto-assign when multiple matches - caller must use disambiguation UI.
  */
 
 import { createServerFn } from '@tanstack/react-start';
 import { db } from '@/lib/db';
-import { jobAssignments } from 'drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { jobAssignments, customers, users } from 'drizzle/schema';
+import { eq, and, isNull, ilike } from 'drizzle-orm';
+import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError } from '@/lib/server/errors';
 import { z } from 'zod';
+import type { JsonValue } from '@/lib/schemas/_shared/patterns';
 import {
   parseJobDate,
   formatJobDate,
@@ -98,11 +103,11 @@ export const parseJobData = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await withAuth();
 
-    const parsedData: Record<string, any> = {};
+    const parsedData: Record<string, JsonValue> = {};
     const parsingResults: Array<{
       field: string;
-      originalValue: any;
-      parsedValue: any;
+      originalValue: JsonValue;
+      parsedValue: JsonValue;
       success: boolean;
       error?: string;
     }> = [];
@@ -117,19 +122,19 @@ export const parseJobData = createServerFn({ method: 'POST' })
             ? formatJobDate(parsedDate.toISOString().split('T')[0])
             : null;
 
-          parsedData[field] = formattedDate;
+          parsedData[field] = formattedDate ?? null;
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: formattedDate,
+            originalValue: rawValue as JsonValue,
+            parsedValue: (formattedDate ?? null) as JsonValue,
             success: !!formattedDate,
             error: formattedDate ? undefined : 'Invalid date format',
           });
         } catch (error) {
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: null,
+            originalValue: rawValue as JsonValue,
+            parsedValue: null as JsonValue,
             success: false,
             error: error instanceof Error ? error.message : 'Date parsing error',
           });
@@ -144,19 +149,19 @@ export const parseJobData = createServerFn({ method: 'POST' })
         try {
           const parsedTime = parseJobTime(String(rawValue));
 
-          parsedData[field] = parsedTime;
+          parsedData[field] = parsedTime ?? null;
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: parsedTime,
+            originalValue: rawValue as JsonValue,
+            parsedValue: (parsedTime ?? null) as JsonValue,
             success: !!parsedTime,
             error: parsedTime ? undefined : 'Invalid time format',
           });
         } catch (error) {
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: null,
+            originalValue: rawValue as JsonValue,
+            parsedValue: null as JsonValue,
             success: false,
             error: error instanceof Error ? error.message : 'Time parsing error',
           });
@@ -173,20 +178,20 @@ export const parseJobData = createServerFn({ method: 'POST' })
             currency: data.parseOptions.currency,
           });
 
-          parsedData[field] = parsedAmount?.value;
-          parsedData[`${field}Currency`] = parsedAmount?.currency;
+          parsedData[field] = parsedAmount?.value ?? null;
+          parsedData[`${field}Currency`] = parsedAmount?.currency ?? null;
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: parsedAmount,
+            originalValue: rawValue as JsonValue,
+            parsedValue: parsedAmount as JsonValue,
             success: !!parsedAmount,
             error: parsedAmount ? undefined : 'Invalid amount format',
           });
         } catch (error) {
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: null,
+            originalValue: rawValue as JsonValue,
+            parsedValue: null as JsonValue,
             success: false,
             error: error instanceof Error ? error.message : 'Amount parsing error',
           });
@@ -201,19 +206,19 @@ export const parseJobData = createServerFn({ method: 'POST' })
         try {
           const parsedJobNumber = parseJobNumber(String(rawValue));
 
-          parsedData[field] = parsedJobNumber;
+          parsedData[field] = parsedJobNumber ?? null;
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: parsedJobNumber,
+            originalValue: rawValue as JsonValue,
+            parsedValue: (parsedJobNumber ?? null) as JsonValue,
             success: !!parsedJobNumber,
             error: parsedJobNumber ? undefined : 'Invalid job number format',
           });
         } catch (error) {
           parsingResults.push({
             field,
-            originalValue: rawValue,
-            parsedValue: null,
+            originalValue: rawValue as JsonValue,
+            parsedValue: null as JsonValue,
             success: false,
             error: error instanceof Error ? error.message : 'Job number parsing error',
           });
@@ -224,7 +229,7 @@ export const parseJobData = createServerFn({ method: 'POST' })
     // Copy remaining fields as-is
     for (const [key, value] of Object.entries(data.rawData)) {
       if (!(key in parsedData)) {
-        parsedData[key] = value;
+        parsedData[key] = value as JsonValue;
       }
     }
 
@@ -260,7 +265,7 @@ export const validateAndParseJobSchedulingData = createServerFn({ method: 'POST'
         parsedAmount = parseJobAmount(data.jobData.amount, {
           currency: data.options.currency,
         });
-      } catch (error) {
+      } catch {
         if (data.options.strict) {
           validation.errors.push('Invalid amount format');
         }
@@ -271,7 +276,7 @@ export const validateAndParseJobSchedulingData = createServerFn({ method: 'POST'
     if (data.jobData.jobNumber) {
       try {
         parsedJobNumber = parseJobNumber(data.jobData.jobNumber);
-      } catch (error) {
+      } catch {
         if (data.options.strict) {
           validation.errors.push('Invalid job number format');
         }
@@ -303,8 +308,8 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
 
     const results = {
       parsedRows: [] as Array<{
-        originalRow: any;
-        parsedData: any;
+        originalRow: Record<string, JsonValue>;
+        parsedData: Record<string, JsonValue>;
         isValid: boolean;
         errors: string[];
       }>,
@@ -317,7 +322,7 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
     };
 
     for (const row of data.dataRows) {
-      const parsedData: any = {};
+      const parsedData: Record<string, JsonValue> = {};
       const errors: string[] = [];
 
       try {
@@ -359,7 +364,7 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
           if (!parsedDate) {
             errors.push('Invalid scheduled date format');
           } else {
-            parsedData.scheduledDate = formatJobDate(parsedDate.toISOString().split('T')[0]);
+            parsedData.scheduledDate = formatJobDate(parsedDate.toISOString().split('T')[0]) ?? '';
           }
         }
 
@@ -369,7 +374,7 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
           if (rawScheduledTime) {
             const parsedTime = parseJobTime(String(rawScheduledTime));
             if (parsedTime) {
-              parsedData.scheduledTime = parsedTime;
+              parsedData.scheduledTime = parsedTime as JsonValue;
             } else {
               errors.push('Invalid scheduled time format');
             }
@@ -395,11 +400,12 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
         errors.push(error instanceof Error ? error.message : 'Parsing error');
       }
 
-      const isValid =
-        errors.length === 0 && parsedData.jobNumber && parsedData.title && parsedData.scheduledDate;
+      const isValid = Boolean(
+        errors.length === 0 && parsedData.jobNumber && parsedData.title && parsedData.scheduledDate
+      );
 
       results.parsedRows.push({
-        originalRow: row,
+        originalRow: row as Record<string, JsonValue>,
         parsedData,
         isValid,
         errors,
@@ -421,11 +427,86 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
   });
 
 // ============================================================================
+// CUSTOMER / INSTALLER LOOKUP (PHASE12-008)
+// ============================================================================
+
+const lookupCandidatesSchema = z.object({
+  customerName: z.string().min(1),
+  installerName: z.string().optional(),
+});
+
+/**
+ * Lookup customer and installer candidates by name for disambiguation.
+ *
+ * Returns candidates with id and name. Caller MUST use disambiguation UI when
+ * multiple matches. Never auto-assign when multiple matches.
+ *
+ * @see PHASE12-008
+ */
+export const lookupCustomerAndInstallerCandidates = createServerFn({ method: 'GET' })
+  .inputValidator(lookupCandidatesSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+
+    const { customerName, installerName } = data;
+    const organizationId = ctx.organizationId;
+
+    const customerPattern = containsPattern(customerName.trim());
+    const customerRows = await db
+      .select({ id: customers.id, name: customers.name })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, organizationId),
+          isNull(customers.deletedAt),
+          ilike(customers.name, customerPattern)
+        )
+      )
+      .limit(10);
+
+    const customers_result = customerRows.map((c) => ({
+      id: c.id,
+      name: c.name ?? c.id,
+    }));
+
+    let installers_result: Array<{ id: string; name: string }> = [];
+    if (installerName && installerName.trim()) {
+      const installerPattern = containsPattern(installerName.trim());
+      const installerRows = await db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .where(
+          and(
+            eq(users.organizationId, organizationId),
+            isNull(users.deletedAt),
+            ilike(users.name, installerPattern)
+          )
+        )
+        .limit(10);
+
+      installers_result = installerRows.map((u) => ({
+        id: u.id,
+        name: u.name ?? u.id,
+      }));
+    }
+
+    return {
+      customers: customers_result,
+      installers: installers_result,
+      requiresDisambiguation:
+        customers_result.length > 1 || installers_result.length > 1,
+    };
+  });
+
+// ============================================================================
 // IMPORT FUNCTIONS
 // ============================================================================
 
 /**
  * Imports parsed job data into the database.
+ *
+ * Requires customerId and installerId in parsedData. Use lookupCustomerAndInstallerCandidates
+ * for disambiguation when mapping customerName/installerName from bulk parse.
  */
 export const importParsedJobData = createServerFn({ method: 'POST' })
   .inputValidator(
@@ -508,7 +589,7 @@ export const importParsedJobData = createServerFn({ method: 'POST' })
         }
 
         // Create new job - requires customerId and installerId
-        // TODO: Add customer/installer lookup logic before production use
+        // TODO(PHASE12-008): Add customer/installer lookup logic before production use
         // For now, these must be provided in parsedData or the import will fail validation
         const customerId = jobData.customerId as string | undefined;
         const installerId = jobData.installerId as string | undefined;

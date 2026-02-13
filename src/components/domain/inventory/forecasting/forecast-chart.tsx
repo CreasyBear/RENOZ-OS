@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableEmpty } from "@/components/shared/data-table";
 import {
   Select,
   SelectContent,
@@ -46,7 +47,7 @@ import { Progress } from "@/components/ui/progress";
 // TYPES
 // ============================================================================
 
-export type ForecastPeriod = "daily" | "weekly" | "monthly";
+export type ForecastPeriod = "daily" | "weekly" | "monthly" | "quarterly";
 
 export interface ForecastDataPoint {
   date: string;
@@ -139,12 +140,12 @@ export const ForecastChart = memo(function ForecastChart({
           <CardDescription>{productName}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <BarChart3 className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              No forecast data available
-            </p>
-          </div>
+          <DataTableEmpty
+            variant="empty"
+            icon={BarChart3}
+            title="No forecast data available"
+            description="Forecast data will appear here once demand forecasting is configured for this product."
+          />
         </CardContent>
       </Card>
     );

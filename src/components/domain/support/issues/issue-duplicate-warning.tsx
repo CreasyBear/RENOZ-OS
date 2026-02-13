@@ -16,14 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 // TYPES
 // ============================================================================
 
-export interface PotentialDuplicate {
-  id: string;
-  issueNumber: string;
-  title: string;
-  status: string;
-  createdAt: Date | string;
-  similarity: number; // 0-1 score
-}
+import type { PotentialDuplicate } from '@/lib/schemas/support/issues';
 
 // ============================================================================
 // COMPONENT

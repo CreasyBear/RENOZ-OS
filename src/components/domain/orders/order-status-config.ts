@@ -11,6 +11,7 @@ import {
   Clock,
   CheckCircle,
   Package,
+  PackageCheck,
   Truck,
   XCircle,
   FileEdit,
@@ -57,6 +58,11 @@ export const ORDER_STATUS_DETAIL_CONFIG: Record<OrderStatus, DetailStatusConfig>
     color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
     icon: Package,
   },
+  partially_shipped: {
+    label: 'Partially Shipped',
+    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
+    icon: PackageCheck,
+  },
   shipped: {
     label: 'Shipped',
     color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
@@ -101,6 +107,11 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatus, SemanticStatusConfigItem> 
     label: "Picked",
     color: "info",
     icon: Package,
+  },
+  partially_shipped: {
+    label: "Partially Shipped",
+    color: "warning",
+    icon: PackageCheck,
   },
   shipped: {
     label: "Shipped",

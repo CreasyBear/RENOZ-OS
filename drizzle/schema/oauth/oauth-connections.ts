@@ -9,7 +9,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   boolean,
@@ -18,9 +17,11 @@ import {
   index,
   integer,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
-import { timestampColumns } from '../_shared/patterns';
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from '../_shared/patterns';
 import { organizations } from '../settings/organizations';
 import { users } from '../users/users';
 
@@ -80,27 +81,7 @@ export const oauthConnections = pgTable(
     // Performance indexes for sync operations
     lastSyncedIdx: index('idx_oauth_connections_last_synced').on(table.lastSyncedAt),
     // RLS Policies
-    selectPolicy: pgPolicy("oauth_connections_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("oauth_connections_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("oauth_connections_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("oauth_connections_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("oauth_connections"),
   })
 );
 
@@ -158,27 +139,7 @@ export const oauthSyncLogs = pgTable(
     // Status filtering for monitoring
     statusIdx: index('idx_oauth_sync_logs_status').on(table.status),
     // RLS Policies
-    selectPolicy: pgPolicy("oauth_sync_logs_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("oauth_sync_logs_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("oauth_sync_logs_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("oauth_sync_logs_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("oauth_sync_logs"),
   })
 );
 
@@ -224,27 +185,7 @@ export const oauthServicePermissions = pgTable(
       table.serviceType
     ),
     // RLS Policies
-    selectPolicy: pgPolicy("oauth_service_permissions_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("oauth_service_permissions_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("oauth_service_permissions_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("oauth_service_permissions_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("oauth_service_permissions"),
   })
 );
 

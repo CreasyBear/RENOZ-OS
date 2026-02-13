@@ -7,7 +7,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { containsPattern } from '@/lib/db/utils';
+import { containsPattern, escapeLike } from '@/lib/db/utils';
 import { products, categories, productAttributes, productAttributeValues } from 'drizzle/schema';
 import { eq, and, or, isNull, ilike, sql, desc, asc, inArray, gte, lte } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
@@ -83,14 +83,16 @@ export const searchProducts = createServerFn({ method: 'GET' })
 
     // Full-text search condition using PostgreSQL tsvector
     // This searches name, description, sku, and tags
+    // SECURITY: Use containsPattern helper instead of string concatenation
+    const searchPattern = containsPattern(data.query);
     const searchCondition = sql`(
       to_tsvector('english', coalesce(${products.name}, '') || ' ' ||
                              coalesce(${products.description}, '') || ' ' ||
                              coalesce(${products.sku}, '') || ' ' ||
                              coalesce(array_to_string(${products.tags}, ' '), ''))
       @@ to_tsquery('english', ${searchTerms})
-      OR ${products.name} ILIKE ${'%' + data.query + '%'}
-      OR ${products.sku} ILIKE ${'%' + data.query + '%'}
+      OR ${products.name} ILIKE ${searchPattern}
+      OR ${products.sku} ILIKE ${searchPattern}
     )`;
 
     conditions.push(searchCondition);
@@ -112,7 +114,9 @@ export const searchProducts = createServerFn({ method: 'GET' })
       conditions.push(lte(products.basePrice, data.maxPrice));
     }
 
-    // Calculate relevance score
+    // Calculate relevance score (escape LIKE patterns to prevent injection)
+    const namePattern = containsPattern(data.query);
+    const skuPrefixPattern = `${escapeLike(data.query)}%`;
     const relevanceScore = sql<number>`
       ts_rank(
         to_tsvector('english', coalesce(${products.name}, '') || ' ' ||
@@ -120,8 +124,8 @@ export const searchProducts = createServerFn({ method: 'GET' })
                                coalesce(${products.sku}, '')),
         to_tsquery('english', ${searchTerms})
       ) +
-      CASE WHEN ${products.name} ILIKE ${'%' + data.query + '%'} THEN 1.0 ELSE 0 END +
-      CASE WHEN ${products.sku} ILIKE ${data.query + '%'} THEN 2.0 ELSE 0 END
+      CASE WHEN ${products.name} ILIKE ${namePattern} THEN 1.0 ELSE 0 END +
+      CASE WHEN ${products.sku} ILIKE ${skuPrefixPattern} THEN 2.0 ELSE 0 END
     `.as('relevance_score');
 
     // Determine sort order

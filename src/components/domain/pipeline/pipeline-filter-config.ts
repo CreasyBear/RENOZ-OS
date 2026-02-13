@@ -28,6 +28,7 @@ export interface PipelineFiltersState extends Record<string, unknown> {
   stages: OpportunityStage[];
   assignedTo: "me" | string | null; // 'me', user ID, or null for all
   valueRange: { min: number | null; max: number | null } | null;
+  expectedCloseDate: { from?: Date | null; to?: Date | null } | null;
   includeWonLost: boolean;
 }
 
@@ -36,6 +37,7 @@ export const DEFAULT_PIPELINE_FILTERS: PipelineFiltersState = {
   stages: [],
   assignedTo: null,
   valueRange: null,
+  expectedCloseDate: null,
   includeWonLost: false,
 };
 
@@ -102,6 +104,12 @@ export const PIPELINE_FILTER_CONFIG: FilterBarConfig<PipelineFiltersState> = {
         if (v.max !== null) return `≤ $${(v.max / 1000).toFixed(0)}k`;
         return "";
       },
+    },
+    {
+      key: "expectedCloseDate",
+      label: "Close Date",
+      type: "date-range",
+      primary: false,
     },
     {
       key: "includeWonLost",

@@ -135,6 +135,7 @@ export function DataTable<TData>({
     ]
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable(tableOptions)
 
   // Handle selection changes

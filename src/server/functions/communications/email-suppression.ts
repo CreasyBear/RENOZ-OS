@@ -8,7 +8,9 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { and, eq, ilike, isNull, sql, inArray, desc, asc, gte } from "drizzle-orm";
+import { and, eq, ilike, isNull, sql, inArray, desc, asc, gte, count } from "drizzle-orm";
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from "@/lib/db/pagination";
+import { containsPattern } from "@/lib/db/utils";
 import { db } from "@/lib/db";
 import { emailSuppression } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
@@ -16,10 +18,12 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { NotFoundError } from "@/lib/server/errors";
 import {
   suppressionListFiltersSchema,
+  suppressionListCursorSchema,
   checkSuppressionSchema,
   checkSuppressionBatchSchema,
   addSuppressionSchema,
   removeSuppressionSchema,
+  suppressionRecordSchema,
   type SuppressionListResult,
   type CheckSuppressionResult,
   type CheckSuppressionBatchResult,
@@ -61,9 +65,9 @@ export const getSuppressionList = createServerFn({ method: "GET" })
       conditions.push(eq(emailSuppression.reason, reason));
     }
 
-    // Search by email
+    // Search by email (use containsPattern for safe search)
     if (search) {
-      conditions.push(ilike(emailSuppression.email, `%${search}%`));
+      conditions.push(ilike(emailSuppression.email, containsPattern(search)));
     }
 
     // Build order by
@@ -78,7 +82,7 @@ export const getSuppressionList = createServerFn({ method: "GET" })
 
     // Count total matching records
     const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: count() })
       .from(emailSuppression)
       .where(and(...conditions));
 
@@ -93,13 +97,53 @@ export const getSuppressionList = createServerFn({ method: "GET" })
       .limit(pageSize)
       .offset((page - 1) * pageSize);
 
+    // Validate with Zod schema per SCHEMA-TRACE.md
+    const validatedItems: SuppressionRecord[] = items.map((item) =>
+      suppressionRecordSchema.parse(item)
+    );
+
     return {
-      items: items as SuppressionRecord[],
+      items: validatedItems,
       total,
       page,
       pageSize,
       hasMore: page * pageSize < total,
     };
+  });
+
+/**
+ * Get suppression list with cursor pagination (recommended for large datasets).
+ * Uses createdAt + id for stable sort.
+ */
+export const getSuppressionListCursor = createServerFn({ method: "GET" })
+  .inputValidator(suppressionListCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
+
+    const { cursor, pageSize = 20, sortOrder = "desc", reason, search, includeDeleted = false } = data;
+
+    const conditions = [eq(emailSuppression.organizationId, ctx.organizationId)];
+    if (!includeDeleted) conditions.push(isNull(emailSuppression.deletedAt));
+    if (reason) conditions.push(eq(emailSuppression.reason, reason));
+    if (search) conditions.push(ilike(emailSuppression.email, containsPattern(search)));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(emailSuppression.createdAt, emailSuppression.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === "asc" ? asc : desc;
+    const items = await db
+      .select()
+      .from(emailSuppression)
+      .where(and(...conditions))
+      .orderBy(orderDir(emailSuppression.createdAt), orderDir(emailSuppression.id))
+      .limit(pageSize + 1);
+
+    const validatedItems: SuppressionRecord[] = items.map((item) => suppressionRecordSchema.parse(item));
+    return buildStandardCursorResponse(validatedItems, pageSize);
   });
 
 // ============================================================================
@@ -234,7 +278,27 @@ export const addSuppression = createServerFn({ method: "POST" })
 
     const normalizedEmail = data.email.toLowerCase().trim();
 
-    // Check for existing active suppression
+    // C26: Use INSERT ... ON CONFLICT DO NOTHING to avoid race condition
+    const [inserted] = await db
+      .insert(emailSuppression)
+      .values({
+        organizationId: ctx.organizationId,
+        email: normalizedEmail,
+        reason: data.reason,
+        bounceType: data.bounceType ?? null,
+        source: data.source ?? "manual",
+        resendEventId: data.resendEventId ?? null,
+        metadata: data.metadata ?? {},
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (inserted) {
+      // New record was inserted
+      return suppressionRecordSchema.parse(inserted);
+    }
+
+    // Record already exists - fetch and return it
     const [existing] = await db
       .select()
       .from(emailSuppression)
@@ -247,26 +311,8 @@ export const addSuppression = createServerFn({ method: "POST" })
       )
       .limit(1);
 
-    if (existing) {
-      // Return existing record - email is already suppressed
-      return existing as SuppressionRecord;
-    }
-
-    // Insert new suppression
-    const [inserted] = await db
-      .insert(emailSuppression)
-      .values({
-        organizationId: ctx.organizationId,
-        email: normalizedEmail,
-        reason: data.reason,
-        bounceType: data.bounceType ?? null,
-        source: data.source ?? "manual",
-        resendEventId: data.resendEventId ?? null,
-        metadata: data.metadata ?? {},
-      })
-      .returning();
-
-    return inserted as SuppressionRecord;
+    // Validate with Zod schema per SCHEMA-TRACE.md
+    return suppressionRecordSchema.parse(existing);
   });
 
 // ============================================================================
@@ -327,7 +373,26 @@ export async function addSuppressionDirect(params: {
 }): Promise<{ id: string; isNew: boolean }> {
   const normalizedEmail = params.email.toLowerCase().trim();
 
-  // Check for existing active suppression
+  // C27: Use INSERT ... ON CONFLICT DO NOTHING to avoid race condition
+  const [inserted] = await db
+    .insert(emailSuppression)
+    .values({
+      organizationId: params.organizationId,
+      email: normalizedEmail,
+      reason: params.reason,
+      bounceType: params.bounceType ?? null,
+      source: params.source ?? "webhook",
+      resendEventId: params.resendEventId ?? null,
+      metadata: params.metadata ?? {},
+    })
+    .onConflictDoNothing()
+    .returning({ id: emailSuppression.id });
+
+  if (inserted) {
+    return { id: inserted.id, isNew: true };
+  }
+
+  // Record already exists - fetch its ID
   const [existing] = await db
     .select({ id: emailSuppression.id })
     .from(emailSuppression)
@@ -340,26 +405,7 @@ export async function addSuppressionDirect(params: {
     )
     .limit(1);
 
-  if (existing) {
-    // Email is already suppressed
-    return { id: existing.id, isNew: false };
-  }
-
-  // Insert new suppression
-  const [inserted] = await db
-    .insert(emailSuppression)
-    .values({
-      organizationId: params.organizationId,
-      email: normalizedEmail,
-      reason: params.reason,
-      bounceType: params.bounceType ?? null,
-      source: params.source ?? "webhook",
-      resendEventId: params.resendEventId ?? null,
-      metadata: params.metadata ?? {},
-    })
-    .returning({ id: emailSuppression.id });
-
-  return { id: inserted.id, isNew: true };
+  return { id: existing?.id ?? '', isNew: false };
 }
 
 /**
@@ -519,22 +565,26 @@ export async function trackSoftBounce(params: {
     .limit(1);
 
   if (existing) {
-    // Increment the bounce count
-    const newBounceCount = (existing.bounceCount ?? 0) + 1;
-    const shouldSuppress = newBounceCount >= SOFT_BOUNCE_THRESHOLD;
-
-    await db
+    // C28: Use atomic SQL increment to avoid race conditions
+    const [updated] = await db
       .update(emailSuppression)
       .set({
-        bounceCount: newBounceCount,
+        bounceCount: sql`COALESCE(${emailSuppression.bounceCount}, 0) + 1`,
         // Update resendEventId to the latest event
         resendEventId: params.resendEventId ?? undefined,
         // Merge new metadata with existing
+        // NOTE: JSONB merge operator (||) and COALESCE are PostgreSQL-specific
+        // Drizzle ORM doesn't provide a direct abstraction for JSONB merge operations
+        // This is acceptable raw SQL for PostgreSQL-specific JSONB operations
         metadata: params.metadata
           ? sql`COALESCE(${emailSuppression.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb`
           : undefined,
       })
-      .where(eq(emailSuppression.id, existing.id));
+      .where(eq(emailSuppression.id, existing.id))
+      .returning({ bounceCount: emailSuppression.bounceCount });
+
+    const newBounceCount = updated?.bounceCount ?? (existing.bounceCount ?? 0) + 1;
+    const shouldSuppress = newBounceCount >= SOFT_BOUNCE_THRESHOLD;
 
     return {
       id: existing.id,

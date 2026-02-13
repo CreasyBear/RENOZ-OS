@@ -1,12 +1,16 @@
+'use server';
+
 /**
  * Onboarding Server Functions
+ *
+ * ⚠️ SERVER-ONLY: Uses Drizzle ORM and database access.
  *
  * Server functions for tracking onboarding progress and checklist state.
  * Uses organization settings to persist dismissed state.
  */
 
 import { createServerFn } from "@tanstack/react-start"
-import { eq, sql } from "drizzle-orm"
+import { eq, count as drizzleCount } from "drizzle-orm"
 import { db } from "~/lib/db"
 import { organizations, customers, products, opportunities, type OrganizationSettings } from "../../drizzle/schema"
 import { withAuth } from "~/lib/server/protected"
@@ -35,7 +39,7 @@ export interface OnboardingProgress {
  * Checks if the welcome checklist has been dismissed and
  * whether first customer/product/quote have been created.
  */
-export const getOnboardingProgress = createServerFn({ method: "GET" }).handler(
+export const getOrganizationOnboardingProgress = createServerFn({ method: "GET" }).handler(
   async (): Promise<OnboardingProgress> => {
     const ctx = await withAuth()
 
@@ -65,17 +69,17 @@ export const getOnboardingProgress = createServerFn({ method: "GET" }).handler(
     // Using COUNT with LIMIT 1 for efficiency
     const [customerResult, productResult, quoteResult] = await Promise.all([
       db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: drizzleCount() })
         .from(customers)
         .where(eq(customers.organizationId, ctx.organizationId))
         .limit(1),
       db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: drizzleCount() })
         .from(products)
         .where(eq(products.organizationId, ctx.organizationId))
         .limit(1),
       db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: drizzleCount() })
         .from(opportunities)
         .where(eq(opportunities.organizationId, ctx.organizationId))
         .limit(1),

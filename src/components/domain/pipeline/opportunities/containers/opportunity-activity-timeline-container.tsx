@@ -4,20 +4,15 @@
  * Fetches and manages opportunity activities, delegates rendering to UnifiedActivityTimeline.
  * Handles activity completion mutations with proper cache invalidation.
  *
- * @source activities from getActivityTimeline server function
- * @source completion from completeActivity mutation
+ * @source activities from useActivityTimeline hook
+ * @source completion from useCompleteActivity hook
  */
 
 import { useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/query-keys';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { toastSuccess, toastError } from '@/hooks';
-import {
-  getActivityTimeline,
-  completeActivity,
-} from '@/server/functions/pipeline/pipeline';
+import { useActivityTimeline, useCompleteActivity } from '@/hooks/pipeline';
 
 // ============================================================================
 // TYPES
@@ -97,63 +92,42 @@ export function OpportunityActivityTimelineContainer({
   description,
   onActivityClick,
 }: OpportunityActivityTimelineContainerProps) {
-  const queryClient = useQueryClient();
-
-  // Fetch activities
+  // Fetch activities using hook
   const {
     data,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: queryKeys.pipeline.activityTimeline(opportunityId),
-    queryFn: async () => {
-      const result = await getActivityTimeline({
-        data: {
-          opportunityId,
-          days: 90,
-        },
-      });
-      return result;
-    },
+  } = useActivityTimeline({
+    opportunityId,
+    days: 90,
     enabled: !!opportunityId,
   });
 
-  // Complete activity mutation
-  const completeMutation = useMutation({
-    mutationFn: async (activityId: string) => {
-      return completeActivity({
-        data: { id: activityId },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess('Activity marked as complete.');
-      // Invalidate related queries
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.activityTimeline(opportunityId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.opportunities.detail(opportunityId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.activities.all,
-      });
-    },
-    onError: () => {
-      toastError('Failed to complete activity. Please try again.');
-    },
-  });
+  // Complete activity mutation using hook
+  const completeMutation = useCompleteActivity();
 
   // Transform activities to unified format
+  const rawActivities = data?.activities;
   const activities = useMemo((): UnifiedActivity[] => {
-    if (!data?.activities) return [];
-    return data.activities.map((activity: RawActivity) =>
+    if (!rawActivities) return [];
+    return rawActivities.map((activity: RawActivity) =>
       transformToUnifiedActivity(activity, opportunityId)
     );
-  }, [data?.activities, opportunityId]);
+  }, [rawActivities, opportunityId]);
 
   // Handle completion
   const handleComplete = (activityId: string) => {
-    completeMutation.mutate(activityId);
+    completeMutation.mutate(
+      { activityId, opportunityId },
+      {
+        onSuccess: () => {
+          toastSuccess('Activity marked as complete.');
+        },
+        onError: () => {
+          toastError('Failed to complete activity. Please try again.');
+        },
+      }
+    );
   };
 
   return (
@@ -161,7 +135,7 @@ export function OpportunityActivityTimelineContainer({
       activities={activities}
       isLoading={isLoading}
       hasError={!!error}
-      error={error as Error | null}
+      error={error instanceof Error ? error : null}
       title={title}
       description={description ?? `${activities.length} ${activities.length === 1 ? 'activity' : 'activities'}`}
       showFilters={showFilters}

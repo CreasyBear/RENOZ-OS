@@ -28,19 +28,23 @@ export const searchEntityTypeValues = [
   'warranty_claim',
   'quote',
   'shipment',
+  'invoice',
+  'installer',
+  'purchase_order',
+  'rma',
 ] as const;
 
 export const searchEntityTypeSchema = z.enum(searchEntityTypeValues);
 
 export const searchQuerySchema = z.object({
-  query: z.string().min(1, 'Query is required').max(200),
+  query: z.string().min(2, 'Query must be at least 2 characters').max(200),
   entityTypes: z.array(searchEntityTypeSchema).optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export const quickSearchSchema = z.object({
-  query: z.string().min(1, 'Query is required').max(200),
+  query: z.string().min(2, 'Query must be at least 2 characters').max(200),
   entityTypes: z.array(searchEntityTypeSchema).optional(),
   limit: z.coerce.number().int().min(1).max(20).default(5),
 });

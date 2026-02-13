@@ -43,8 +43,12 @@ import {
   calculateNewExpiryDate,
   formatDateAustralian,
   getDaysDifference,
+  parseDate,
 } from '@/lib/warranty/date-utils';
-import type { WarrantyExtensionTypeValue } from '@/lib/schemas/warranty/extensions';
+import {
+  isWarrantyExtensionTypeValue,
+  type WarrantyExtensionTypeValue,
+} from '@/lib/schemas/warranty';
 
 // ============================================================================
 // TYPES
@@ -128,11 +132,10 @@ export function ExtendWarrantyDialog({
   const [notes, setNotes] = React.useState('');
 
   // Derived values
-  const currentExpiryDate = React.useMemo(
-    () =>
-      typeof warranty.expiryDate === 'string' ? new Date(warranty.expiryDate) : warranty.expiryDate,
-    [warranty.expiryDate]
-  );
+  const currentExpiryDate = React.useMemo(() => {
+    const parsed = parseDate(warranty.expiryDate);
+    return parsed ?? new Date();
+  }, [warranty.expiryDate]);
 
   const newExpiryDate = React.useMemo(
     () => calculateNewExpiryDate(currentExpiryDate, extensionMonths),
@@ -143,6 +146,20 @@ export function ExtendWarrantyDialog({
     () => getDaysDifference(new Date(), currentExpiryDate),
     [currentExpiryDate]
   );
+
+  // Check if warranty is expired and within 90-day extension window
+  const isExpired = warranty.status === 'expired';
+  const daysSinceExpiry = React.useMemo(() => {
+    if (!isExpired) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(currentExpiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    return Math.floor((today.getTime() - expiry.getTime()) / (1000 * 60 * 60 * 24));
+  }, [isExpired, currentExpiryDate]);
+  
+  const canExtendExpired = isExpired && daysSinceExpiry !== null && daysSinceExpiry <= 90;
+  const daysLeftToExtend = canExtendExpired ? 90 - daysSinceExpiry : null;
 
   const additionalDays = React.useMemo(
     () => getDaysDifference(currentExpiryDate, newExpiryDate),
@@ -215,12 +232,36 @@ export function ExtendWarrantyDialog({
                 {warranty.customerName && (
                   <p className="text-muted-foreground text-sm">{warranty.customerName}</p>
                 )}
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Current Expiry:</span>
-                  <span className="font-medium">{formatDateAustralian(currentExpiryDate)}</span>
-                  <Badge variant="outline" className="ml-auto">
-                    {daysRemaining} days remaining
-                  </Badge>
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Current Expiry:</span>
+                    <span className="font-medium">{formatDateAustralian(currentExpiryDate)}</span>
+                    {!isExpired && (
+                      <Badge variant="outline" className="ml-auto">
+                        {daysRemaining} days remaining
+                      </Badge>
+                    )}
+                    {isExpired && (
+                      <Badge variant="destructive" className="ml-auto">
+                        Expired {daysSinceExpiry} days ago
+                      </Badge>
+                    )}
+                  </div>
+                  {canExtendExpired && daysLeftToExtend !== null && (
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2 text-xs">
+                      <span className="text-muted-foreground">
+                        ⚠️ This warranty expired but can still be extended within the 90-day grace period.
+                      </span>
+                      <Badge variant="outline" className="ml-auto">
+                        {daysLeftToExtend} days left to extend
+                      </Badge>
+                    </div>
+                  )}
+                  {isExpired && daysSinceExpiry !== null && daysSinceExpiry > 90 && (
+                    <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                      ⚠️ This warranty expired more than 90 days ago and cannot be extended.
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -231,7 +272,11 @@ export function ExtendWarrantyDialog({
             <Label htmlFor="extensionType">Extension Type</Label>
             <Select
               value={extensionType}
-              onValueChange={(value) => setExtensionType(value as WarrantyExtensionTypeValue)}
+              onValueChange={(value) =>
+                setExtensionType(
+                  isWarrantyExtensionTypeValue(value) ? value : extensionType
+                )
+              }
             >
               <SelectTrigger id="extensionType" className="w-full">
                 <SelectValue placeholder="Select extension type" />

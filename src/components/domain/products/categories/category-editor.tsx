@@ -43,7 +43,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { CategoryNode } from "./category-tree";
+import { toastError } from "@/hooks";
+import type { CategoryNode } from "@/lib/schemas/products";
 
 // Validation schema
 const categorySchema = z.object({
@@ -124,7 +125,9 @@ export function CategoryEditor({
       await onSave(data);
       onOpenChange(false);
     } catch (error) {
-      console.error("Failed to save category:", error);
+      toastError(
+        error instanceof Error ? error.message : "Failed to save category"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -240,7 +243,9 @@ export function CategoryEditor({
                     Parent Category
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                        <span className="inline-flex">
+                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent>
                         Select a parent to create a subcategory
@@ -302,7 +307,9 @@ export function CategoryEditor({
                       Inherit Parent Attributes
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          <span className="inline-flex">
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </span>
                         </TooltipTrigger>
                         <TooltipContent className="max-w-xs">
                           Products in this category will inherit attributes from parent categories

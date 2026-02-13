@@ -9,6 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import { getCustomerCommunications } from '@/server/functions/communications/customer-communications';
 
 export interface UseCustomerCommunicationsOptions {
@@ -23,11 +24,15 @@ export function useCustomerCommunications(options: UseCustomerCommunicationsOpti
 
   return useQuery({
     queryKey: queryKeys.communications.customerCommunications(customerId),
-    queryFn: () =>
-      getCustomerCommunications({
+    queryFn: async () => {
+      const result = await getCustomerCommunications({
         data: { customerId, limit, offset },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!customerId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - emails don't change often
+    staleTime: QUERY_CONFIG.STALE_TIME_LONG,
   });
 }

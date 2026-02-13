@@ -27,6 +27,7 @@ import {
   checkRateLimitSync,
   getClientIdentifier,
 } from "@/lib/server/rate-limit";
+import { logger } from "@/lib/logger";
 
 // ============================================================================
 // RATE LIMIT CONFIGURATION (SEC-003)
@@ -81,9 +82,7 @@ function verifyToken(token: string): VerifiedToken | null {
   // This should be removed after migration period
   const legacyData = verifyLegacyToken(token);
   if (legacyData) {
-    console.warn(
-      "[unsubscribe] Legacy token format used. Consider regenerating unsubscribe links."
-    );
+    logger.warn("[unsubscribe] Legacy token format used. Consider regenerating unsubscribe links.");
     return {
       contactId: legacyData.contactId,
       channel: legacyData.channel,
@@ -328,7 +327,7 @@ export async function POST({
         });
       } catch (error) {
         // Log but don't fail the unsubscribe if suppression fails
-        console.error("[unsubscribe] Failed to add to suppression list:", error);
+        logger.error("[unsubscribe] Failed to add to suppression list", error as Error, {});
       }
     }
   }

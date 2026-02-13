@@ -20,22 +20,29 @@ import type {
   CreateFileInput,
   UpdateFileInput,
   ProjectFileType,
+  ListFilesResponse,
 } from '@/lib/schemas/jobs/workstreams-notes';
 
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
 
-export function useFiles(projectId: string, options: { 
+export function useFiles(projectId: string, options: {
   siteVisitId?: string;
   fileType?: ProjectFileType;
   enabled?: boolean;
 } = {}) {
   const { siteVisitId, fileType, enabled } = options;
-  
-  return useQuery({
-    queryKey: [...queryKeys.projectFiles.byProject(projectId), { siteVisitId, fileType }],
-    queryFn: () => listFiles({ data: { projectId, siteVisitId, fileType } }),
+
+  return useQuery<ListFilesResponse>({
+    queryKey: queryKeys.projectFiles.byProjectFiltered(projectId, { siteVisitId, fileType }),
+    queryFn: async () => {
+      const result = await listFiles({
+        data: { projectId, siteVisitId, fileType } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled ?? !!projectId,
   });
 }
@@ -43,7 +50,13 @@ export function useFiles(projectId: string, options: {
 export function useFilesStats(projectId: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectFiles.stats(projectId),
-    queryFn: () => getProjectFilesStats({ data: { projectId } }),
+    queryFn: async () => {
+      const result = await getProjectFilesStats({
+        data: { projectId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options.enabled ?? !!projectId,
   });
 }
@@ -55,7 +68,13 @@ export function useFilesStats(projectId: string, options: { enabled?: boolean } 
 export function useFile(id: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectFiles.detail(id),
-    queryFn: () => getFile({ data: { id } }),
+    queryFn: async () => {
+      const result = await getFile({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: options.enabled ?? !!id,
   });
 }

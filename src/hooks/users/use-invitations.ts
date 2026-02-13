@@ -9,6 +9,7 @@ import {
   getInvitationByToken,
   acceptInvitation,
   listInvitations,
+  listInvitationStats,
   sendInvitation,
   cancelInvitation,
   resendInvitation,
@@ -16,19 +17,14 @@ import {
 } from '@/server/functions/users/invitations';
 import type {
   SendInvitation,
+  BatchInvitationItem,
+  BatchSendInvitationsInput,
 } from '@/lib/schemas/users';
-
-// Type for batch invitations (defined locally since schema is server-only)
-interface BatchInvitationItem {
-  email: string;
-  role: 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer';
-  personalMessage?: string;
-}
-
-interface BatchSendInvitationsInput {
-  invitations: BatchInvitationItem[];
-}
 import { toast } from '../_shared/use-toast';
+import { trackInviteSent, trackInviteAccepted, trackInviteResend, trackInviteCancelled } from '@/lib/analytics';
+
+// Re-export for route components
+export type { BatchInvitationItem, BatchSendInvitationsInput };
 
 // ============================================================================
 // QUERY HOOKS
@@ -41,9 +37,17 @@ import { toast } from '../_shared/use-toast';
 export function useInvitationByToken(token: string) {
   return useQuery({
     queryKey: queryKeys.users.invitations.byToken(token),
-    queryFn: () => getInvitationByToken({ data: { token } }),
+    queryFn: async () => {
+      const result = await getInvitationByToken({
+        data: { token } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: !!token,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
+    retryDelay: 1000,
   });
 }
 
@@ -53,8 +57,60 @@ export function useInvitationByToken(token: string) {
 export function useInvitations() {
   return useQuery({
     queryKey: queryKeys.users.invitations.lists(),
-    queryFn: () => listInvitations({ data: {} }),
+    queryFn: async () => {
+      const result = await listInvitations({
+        data: {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Filters for invitation list queries
+ */
+export interface InvitationFilters {
+  page?: number;
+  pageSize?: number;
+  status?: 'pending' | 'accepted' | 'expired' | 'cancelled';
+}
+
+/**
+ * Hook to fetch invitations with filters (pagination, status).
+ * Used for the admin invitations management page.
+ */
+export function useInvitationsFiltered(filters?: InvitationFilters) {
+  return useQuery({
+    queryKey: queryKeys.users.invitations.list(filters),
+    queryFn: async () => {
+      const result = await listInvitations({
+        data: filters ?? {} 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    staleTime: 30 * 1000, // 30 seconds
+    retry: 2,
+    retryDelay: 1000,
+  });
+}
+
+/**
+ * Hook to fetch org-wide invitation stats.
+ */
+export function useInvitationStats() {
+  return useQuery({
+    queryKey: queryKeys.users.invitations.stats(),
+    queryFn: async () => {
+      const result = await listInvitationStats();
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    staleTime: 30 * 1000, // 30 seconds
+    retry: 2,
+    retryDelay: 1000,
   });
 }
 
@@ -76,9 +132,16 @@ export function useAcceptInvitation() {
       password: string;
       confirmPassword: string;
     }) => acceptInvitation({ data }),
-    onSuccess: () => {
-      // Invalidate any invitation-related queries
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.byToken(variables.token) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
+      trackInviteAccepted({ email: result.email, role: 'unknown' });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to accept invitation');
     },
   });
 }
@@ -91,9 +154,11 @@ export function useSendInvitation() {
 
   return useMutation({
     mutationFn: (data: SendInvitation) => sendInvitation({ data }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
-      toast.success('Invitation sent successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
+      toast.success('Invitation sent. The invitee will receive an email shortly.');
+      trackInviteSent({ email: variables.email, role: variables.role });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to send invitation');
@@ -109,9 +174,11 @@ export function useCancelInvitation() {
 
   return useMutation({
     mutationFn: (data: { id: string; reason?: string }) => cancelInvitation({ data }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
       toast.success('Invitation cancelled');
+      trackInviteCancelled({ id: variables.id });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to cancel invitation');
@@ -127,9 +194,11 @@ export function useResendInvitation() {
 
   return useMutation({
     mutationFn: (data: { id: string }) => resendInvitation({ data }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
       toast.success('Invitation resent');
+      trackInviteResend({ id: variables.id });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to resend invitation');
@@ -147,6 +216,7 @@ export function useBatchSendInvitations() {
     mutationFn: (data: BatchSendInvitationsInput) => batchSendInvitations({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
       toast.success('Invitations sent successfully');
     },
     onError: (error) => {

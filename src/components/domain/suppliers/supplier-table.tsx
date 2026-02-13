@@ -26,25 +26,14 @@ import {
 import { MoreHorizontal, Star, Building2, Phone, Mail, ChevronUp, ChevronDown } from 'lucide-react';
 import { StatusCell } from '@/components/shared/data-table';
 import { SUPPLIER_STATUS_CONFIG } from './supplier-status-config';
-import type { SupplierStatus, SupplierType } from '@/lib/schemas/suppliers';
+import type { SupplierType, SupplierTableItem } from '@/lib/schemas/suppliers';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface SupplierTableData {
-  id: string;
-  supplierCode: string | null;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  status: SupplierStatus;
-  supplierType: SupplierType | null;
-  overallRating: number | null;
-  totalPurchaseOrders: number | null;
-  leadTimeDays: number | null;
-  lastOrderDate: string | null;
-}
+/** Alias for SupplierTableItem - used by SupplierDirectory and suppliers-page */
+export type SupplierTableData = SupplierTableItem;
 
 type SortField = 'name' | 'status' | 'supplierType' | 'overallRating' | 'totalPurchaseOrders' | 'leadTimeDays' | 'lastOrderDate';
 type SortDirection = 'asc' | 'desc';
@@ -177,11 +166,12 @@ export function SupplierTable({ suppliers, isLoading, onDelete, onEdit }: Suppli
         case 'leadTimeDays':
           comparison = (a.leadTimeDays ?? 0) - (b.leadTimeDays ?? 0);
           break;
-        case 'lastOrderDate':
+        case 'lastOrderDate': {
           const dateA = a.lastOrderDate ? new Date(a.lastOrderDate).getTime() : 0;
           const dateB = b.lastOrderDate ? new Date(b.lastOrderDate).getTime() : 0;
           comparison = dateA - dateB;
           break;
+        }
         default:
           comparison = 0;
       }
@@ -293,8 +283,13 @@ export function SupplierTable({ suppliers, isLoading, onDelete, onEdit }: Suppli
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link to="/suppliers/$supplierId" params={{ supplierId: supplier.id }}>
+                    <DropdownMenuItem className="p-0">
+                      {/* Avoid DropdownMenuItem asChild + TanStack Link SSR issues */}
+                      <Link
+                        to="/suppliers/$supplierId"
+                        params={{ supplierId: supplier.id }}
+                        className="flex w-full items-center px-2 py-1.5"
+                      >
                         View Details
                       </Link>
                     </DropdownMenuItem>

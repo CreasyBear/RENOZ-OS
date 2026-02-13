@@ -10,12 +10,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import type {
   ScheduleCallInput,
   UpdateScheduledCallInput,
   CancelScheduledCallInput,
   RescheduleCallInput,
   CompleteCallInput,
+  ListScheduledCallsResult,
 } from '@/lib/schemas/communications/scheduled-calls';
 import {
   getScheduledCalls,
@@ -54,13 +56,18 @@ export function useScheduledCalls(options: UseScheduledCallsOptions = {}) {
     enabled = true
   } = options;
 
-  return useQuery({
+  return useQuery<ListScheduledCallsResult>({
     queryKey: queryKeys.communications.scheduledCallsList({ customerId, assigneeId, status }),
-    queryFn: () => getScheduledCalls({
-      data: { customerId, assigneeId, status, fromDate, toDate, limit, offset }
-    }),
+    queryFn: async () => {
+      const result = await getScheduledCalls({
+        data: { customerId, assigneeId, status, fromDate, toDate, limit, offset }
+    
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 30 * 1000, // 30 seconds - calls list can change frequently
+    staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
   });
 }
 
@@ -74,9 +81,15 @@ export function useScheduledCall(options: UseScheduledCallOptions) {
 
   return useQuery({
     queryKey: queryKeys.communications.scheduledCallDetail(callId),
-    queryFn: () => getScheduledCallById({ data: { id: callId } }),
+    queryFn: async () => {
+      const result = await getScheduledCallById({
+        data: { id: callId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!callId,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
   });
 }
 
@@ -93,8 +106,9 @@ export function useUpcomingCalls(options: UseUpcomingCallsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.communications.upcomingCalls({ assigneeId, limit }),
-    queryFn: () => getScheduledCalls({
-      data: {
+    queryFn: async () => {
+      const result = await getScheduledCalls({
+        data: {
         assigneeId,
         status: 'pending',
         fromDate: now,
@@ -102,10 +116,14 @@ export function useUpcomingCalls(options: UseUpcomingCallsOptions = {}) {
         limit,
         offset: 0,
       }
-    }),
+    
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 60 * 1000, // 1 minute - upcoming calls need to stay fresh
-    refetchInterval: 5 * 60 * 1000, // Poll every 5 minutes for reminders
+    staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM, // upcoming calls need to stay fresh
+    refetchInterval: QUERY_CONFIG.REFETCH_INTERVAL_SLOW,
   });
 }
 

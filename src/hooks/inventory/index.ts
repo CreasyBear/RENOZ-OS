@@ -10,6 +10,7 @@ export {
   useInventoryItem,
   useInventoryMovements,
   useInventoryLowStock,
+  useInventorySearch,
   useMovements,
   useMovementsDashboard,
   useAdjustInventory,
@@ -17,6 +18,12 @@ export {
   useReceiveInventory,
   useInventoryDashboard,
   useLocationUtilization,
+} from './use-inventory';
+
+// Serial number management
+export {
+  useAvailableSerials,
+  type UseAvailableSerialsOptions,
 } from './use-inventory';
 
 // Location management
@@ -87,6 +94,34 @@ export {
   useCreateQualityInspection,
 } from './use-quality';
 
+// Detail View (composite hook)
+export { useInventoryDetail, type UseInventoryDetailReturn, type InventoryDetailActions } from './use-inventory-detail';
+
+// Availability check
+export {
+  useInventoryAvailability,
+  useCheckInventoryAvailability,
+  usePrefetchInventoryAvailability,
+  type AvailabilityCheck,
+  type UseInventoryAvailabilityOptions,
+} from './use-inventory-availability';
+
+// Item-specific alerts (derived from item state)
+export {
+  useInventoryItemAlerts,
+  deriveItemAlerts,
+  type UseInventoryItemAlertsOptions,
+  type UseInventoryItemAlertsReturn,
+} from './use-inventory-item-alerts';
+
+// WMS Dashboard
+export {
+  useWMSDashboard,
+  useStockByCategory,
+  useStockByLocation,
+  useRecentMovementsTimeline,
+} from './use-wms-dashboard';
+
 // Re-export types
 export type { InventoryItem, InventoryFilters, MovementRecord } from '@/lib/schemas/inventory';
 export type { WarehouseLocation, LocationType, LocationFilters } from './use-locations';
@@ -94,3 +129,9 @@ export type { AlertFilters, UseAlertsOptions } from './use-alerts';
 export type { ForecastFilters, UseForecastsOptions, ReorderFilters } from './use-forecasting';
 export type { CostLayerFilters, ValuationFilters, AgingFilters, TurnoverFilters } from './use-valuation';
 export type { StockCountFilters, UseStockCountsOptions } from './use-stock-counts';
+export type {
+  CategoryStock,
+  LocationStock,
+  RecentMovement,
+  WMSDashboardData,
+} from './use-wms-dashboard';

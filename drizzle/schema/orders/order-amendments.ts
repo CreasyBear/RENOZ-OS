@@ -9,7 +9,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   pgEnum,
   uuid,
   text,
@@ -18,13 +17,15 @@ import {
   integer,
   index,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
   softDeleteColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { amendmentStatusEnum } from "../_shared/enums";
+import type { AmendmentChanges, ApprovalNotes } from "@/lib/schemas/orders/order-amendments";
 import { orders } from "./orders";
 import { users } from "../users/users";
 import { organizations } from "../settings/organizations";
@@ -44,54 +45,6 @@ export const amendmentTypeEnum = pgEnum("amendment_type", [
   "cancel_order",       // Full order cancellation
   "other",              // Other changes
 ]);
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface AmendmentChanges {
-  // Generic structure for any change
-  type: string;
-  description: string;
-  before?: Record<string, unknown>;
-  after?: Record<string, unknown>;
-  // Specific item changes
-  itemChanges?: Array<{
-    orderLineItemId?: string;
-    productId?: string;
-    action: "add" | "modify" | "remove";
-    before?: {
-      quantity?: number;
-      unitPrice?: number;
-      description?: string;
-      discountPercent?: number;
-      discountAmount?: number;
-    };
-    after?: {
-      quantity?: number;
-      unitPrice?: number;
-      description?: string;
-      discountPercent?: number;
-      discountAmount?: number;
-    };
-  }>;
-  // Financial impact
-  financialImpact?: {
-    subtotalBefore: number;
-    subtotalAfter: number;
-    taxBefore: number;
-    taxAfter: number;
-    totalBefore: number;
-    totalAfter: number;
-    difference: number;
-  };
-}
-
-export interface AmendmentApprovalNotes {
-  note?: string;
-  conditions?: string[];
-  internalOnly?: boolean;
-}
 
 // ============================================================================
 // ORDER AMENDMENTS TABLE
@@ -131,7 +84,7 @@ export const orderAmendments = pgTable(
     reviewedBy: uuid("reviewed_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    approvalNotes: jsonb("approval_notes").$type<AmendmentApprovalNotes>(),
+    approvalNotes: jsonb("approval_notes").$type<ApprovalNotes>(),
 
     // Application info
     appliedAt: timestamp("applied_at", { withTimezone: true }),
@@ -148,43 +101,23 @@ export const orderAmendments = pgTable(
     ...auditColumns,
     ...softDeleteColumn,
   },
-  (table) => [
+  (table) => ({
     // Performance indexes
-    index("order_amendments_org_idx").on(table.organizationId),
-    index("order_amendments_order_idx").on(table.orderId),
-    index("order_amendments_status_idx").on(table.organizationId, table.status),
-    index("order_amendments_requested_idx").on(
+    orgIdx: index("order_amendments_org_idx").on(table.organizationId),
+    orderIdx: index("order_amendments_order_idx").on(table.orderId),
+    statusIdx: index("order_amendments_status_idx").on(table.organizationId, table.status),
+    requestedIdx: index("order_amendments_requested_idx").on(
       table.organizationId,
       table.requestedAt.desc()
     ),
-    index("order_amendments_org_created_idx").on(
+    orgCreatedIdx: index("order_amendments_org_created_idx").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
     // RLS Policies
-    pgPolicy("order_amendments_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_amendments_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_amendments_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_amendments_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("order_amendments"),
+  })
 );
 
 // ============================================================================

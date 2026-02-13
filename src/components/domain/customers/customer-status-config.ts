@@ -17,6 +17,7 @@ import {
   Heart,
 } from "lucide-react";
 import type { SemanticStatusConfigItem, TypeConfigItem } from "@/components/shared/data-table";
+import { getStatusColorClasses, type SemanticColor } from "@/lib/status/colors";
 
 /**
  * Customer status values (matches schema)
@@ -102,45 +103,83 @@ export const CUSTOMER_TYPE_CONFIG: Record<CustomerType, TypeConfigItem> = {
 
 /**
  * Customer size configuration
- * Using a custom config since sizes need colors, not just labels/icons
+ * Maps sizes to semantic colors based on business value:
+ * - micro/small: neutral (smallest businesses)
+ * - medium: info (growing businesses)
+ * - large: pending (established businesses)
+ * - enterprise: success (premium tier)
+ *
+ * Uses semantic colors from @/lib/status/colors per STATUS-BADGE-STANDARDS.md
  */
 export interface SizeConfigItem {
   label: string;
-  color: string;
+  semanticColor: SemanticColor;
+}
+
+/**
+ * Get size badge color classes using semantic colors
+ */
+export function getSizeColorClasses(size: CustomerSize): string {
+  const config = CUSTOMER_SIZE_CONFIG[size];
+  return getStatusColorClasses(config.semanticColor);
 }
 
 export const CUSTOMER_SIZE_CONFIG: Record<CustomerSize, SizeConfigItem> = {
   micro: {
     label: "Micro",
-    color: "bg-slate-100 text-slate-700",
+    semanticColor: "neutral", // Smallest businesses
   },
   small: {
     label: "Small",
-    color: "bg-blue-100 text-blue-700",
+    semanticColor: "neutral", // Small businesses
   },
   medium: {
     label: "Medium",
-    color: "bg-purple-100 text-purple-700",
+    semanticColor: "info", // Growing businesses
   },
   large: {
     label: "Large",
-    color: "bg-orange-100 text-orange-700",
+    semanticColor: "pending", // Established businesses
   },
   enterprise: {
     label: "Enterprise",
-    color: "bg-red-100 text-red-700",
+    semanticColor: "success", // Premium tier
   },
 };
 
 /**
  * Health score color utilities
+ * Uses semantic colors from @/lib/status/colors per STATUS-BADGE-STANDARDS.md
  */
 export function getHealthScoreColor(score: number | null): string {
-  if (score === null) return "bg-gray-200 text-gray-600";
-  if (score >= 80) return "bg-emerald-100 text-emerald-700";
-  if (score >= 60) return "bg-yellow-100 text-yellow-700";
-  if (score >= 40) return "bg-orange-100 text-orange-700";
-  return "bg-red-100 text-red-700";
+  if (score === null) return getStatusColorClasses("neutral");
+  if (score >= 80) return getStatusColorClasses("success");
+  if (score >= 60) return getStatusColorClasses("warning");
+  if (score >= 40) return getStatusColorClasses("pending");
+  return getStatusColorClasses("error");
+}
+
+/**
+ * Get semantic color for health score (for use in StatusCell or other components)
+ */
+export function getHealthScoreSemanticColor(score: number | null): SemanticColor {
+  if (score === null) return "neutral";
+  if (score >= 80) return "success";
+  if (score >= 60) return "warning";
+  if (score >= 40) return "pending";
+  return "error";
+}
+
+/**
+ * Get health score label (e.g., "Excellent", "Good", "Fair", "At Risk")
+ * Centralized logic to eliminate DRY violations across components
+ */
+export function getHealthScoreLabel(score: number | null | undefined): string {
+  if (score === null || score === undefined) return "Not Rated";
+  if (score >= 80) return "Excellent";
+  if (score >= 60) return "Good";
+  if (score >= 40) return "Fair";
+  return "At Risk";
 }
 
 /**

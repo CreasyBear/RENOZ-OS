@@ -5,6 +5,8 @@
  * Provides consistent error processing across the application.
  */
 
+import { logger } from "@/lib/logger";
+
 // ============================================================================
 // ERROR TYPES
 // ============================================================================
@@ -13,7 +15,7 @@ export interface AppError {
   message: string;
   code?: string;
   statusCode?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   stack?: string;
   timestamp: Date;
   context?: string;
@@ -23,7 +25,7 @@ export interface ErrorContext {
   component?: string;
   action?: string;
   userId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -95,7 +97,7 @@ export function useErrorHandler() {
       const normalizedError = normalizeError(error, context);
 
       // Log error
-      console.error(`[${context?.component || 'Unknown'}] ${normalizedError.message}`, {
+      logger.error(`[${context?.component || 'Unknown'}] ${normalizedError.message}`, normalizedError, {
         error: normalizedError,
         context,
       });
@@ -128,50 +130,52 @@ export function useErrorHandler() {
 // ============================================================================
 
 /**
- * Convert technical errors to user-friendly messages
+ * Convert technical errors to user-friendly messages.
+ * Accepts Error, AppError, or unknown; normalizes internally.
  */
-function getUserFriendlyMessage(error: AppError): string {
+export function getUserFriendlyMessage(error: AppError | Error | unknown): string {
+  const normalized = normalizeError(error);
   // Network errors
-  if (error.code === 'NETWORK_ERROR' || error.statusCode === 0) {
+  if (normalized.code === 'NETWORK_ERROR' || normalized.statusCode === 0) {
     return 'Unable to connect. Please check your internet connection and try again.';
   }
 
   // Authentication errors
-  if (error.statusCode === 401 || error.code === 'UNAUTHORIZED') {
+  if (normalized.statusCode === 401 || normalized.code === 'UNAUTHORIZED') {
     return 'Your session has expired. Please sign in again.';
   }
 
-  if (error.statusCode === 403 || error.code === 'FORBIDDEN') {
+  if (normalized.statusCode === 403 || normalized.code === 'FORBIDDEN') {
     return "You don't have permission to perform this action.";
   }
 
   // Validation errors
-  if (error.statusCode === 400 || error.code?.includes('VALIDATION')) {
+  if (normalized.statusCode === 400 || normalized.code?.includes('VALIDATION')) {
     return 'Please check your input and try again.';
   }
 
   // Not found errors
-  if (error.statusCode === 404) {
+  if (normalized.statusCode === 404) {
     return 'The requested item could not be found.';
   }
 
   // Server errors
-  if (error.statusCode && error.statusCode >= 500) {
+  if (normalized.statusCode && normalized.statusCode >= 500) {
     return 'Something went wrong on our end. Please try again later.';
   }
 
   // Conflict errors
-  if (error.statusCode === 409 || error.code === 'CONFLICT') {
+  if (normalized.statusCode === 409 || normalized.code === 'CONFLICT') {
     return 'This action conflicts with existing data. Please refresh and try again.';
   }
 
   // Rate limiting
-  if (error.statusCode === 429 || error.code === 'RATE_LIMITED') {
+  if (normalized.statusCode === 429 || normalized.code === 'RATE_LIMITED') {
     return 'Too many requests. Please wait a moment and try again.';
   }
 
   // Default fallback
-  return error.message || 'An unexpected error occurred. Please try again.';
+  return normalized.message || 'An unexpected error occurred. Please try again.';
 }
 
 // ============================================================================
@@ -181,7 +185,7 @@ function getUserFriendlyMessage(error: AppError): string {
 /**
  * Determine if an error should trigger a retry
  */
-function isRetryableError(error: AppError): boolean {
+export function isRetryableError(error: AppError): boolean {
   // Network errors
   if (error.code === 'NETWORK_ERROR' || error.statusCode === 0) {
     return true;
@@ -231,7 +235,7 @@ export function handleBoundaryError(
     },
   });
 
-  console.error('Error Boundary caught error:', appError);
+  logger.error('Error Boundary caught error', appError);
 
   // Here you could send to error reporting
   // errorReporting.captureException(appError);
@@ -246,7 +250,7 @@ export function handleBoundaryError(
 /**
  * Wrap async functions with error handling
  */
-export function withErrorHandling<T extends any[], R>(
+export function withErrorHandling<T extends unknown[], R>(
   fn: (...args: T) => Promise<R>,
   context?: ErrorContext
 ) {
@@ -255,7 +259,7 @@ export function withErrorHandling<T extends any[], R>(
       return await fn(...args);
     } catch (error) {
       const normalizedError = normalizeError(error, context);
-      console.error(`Async error in ${context?.component || 'unknown'}:`, normalizedError);
+      logger.error(`Async error in ${context?.component || 'unknown'}`, normalizedError);
       throw normalizedError;
     }
   };
@@ -266,13 +270,16 @@ export function withErrorHandling<T extends any[], R>(
 // ============================================================================
 
 /**
- * Show error toast with proper formatting
+ * Show error toast with proper formatting.
+ * Uses normalizeError + logger (no hooks) so it can be called from non-React code.
  */
 export function showErrorToast(error: unknown, context?: ErrorContext) {
-  const { handleError } = useErrorHandler();
-  const normalizedError = handleError(error, context);
+  const normalizedError = normalizeError(error, context);
+  logger.error(`[${context?.component ?? 'Unknown'}] ${normalizedError.message}`, normalizedError, {
+    error: normalizedError,
+    context,
+  });
 
-  // Import toast functions dynamically to avoid circular dependencies
   import('@/hooks').then(({ toastError }) => {
     const userMessage = getUserFriendlyMessage(normalizedError);
     toastError(userMessage, {

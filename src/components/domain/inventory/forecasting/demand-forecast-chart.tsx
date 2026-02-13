@@ -35,12 +35,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { DataTableEmpty } from '@/components/shared/data-table';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type ForecastPeriod = 'daily' | 'weekly' | 'monthly';
+export type ForecastPeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly';
 
 export interface ForecastDataPoint {
   date: string;
@@ -137,10 +138,12 @@ export const DemandForecastChart = memo(function DemandForecastChart({
           <CardDescription>{productName}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="py-8 text-center">
-            <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
-            <p className="text-muted-foreground mt-4 text-sm">No forecast data available</p>
-          </div>
+          <DataTableEmpty
+            variant="empty"
+            icon={BarChart3}
+            title="No forecast data available"
+            description="Forecast data will appear here once demand forecasting is configured for this product."
+          />
         </CardContent>
       </Card>
     );

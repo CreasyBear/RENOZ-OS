@@ -5,6 +5,22 @@
  * Handles contact synchronization, deduplication, and field mapping.
  */
 
+import type {
+  GoogleAddressRaw,
+  GoogleContactGroupRaw,
+  GoogleEmailRaw,
+  GoogleMembershipRaw,
+  GooglePersonRaw,
+  GooglePhoneRaw,
+  GoogleUrlRaw,
+  OutlookContactAddressRaw,
+  OutlookContactEmailRaw,
+  OutlookContactRaw,
+  OutlookContactFolderRaw,
+  OutlookContactPhoneRaw,
+  OutlookContactWebsiteRaw,
+} from '@/lib/schemas/integrations/contacts';
+
 // ============================================================================
 // CONTACT DATA TYPES
 // ============================================================================
@@ -43,7 +59,7 @@ export interface Contact {
   // System metadata
   isPrimary: boolean;
   groups: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   lastSyncedAt: Date;
@@ -247,8 +263,13 @@ export class GoogleContactsProvider implements ContactsProvider {
 
     const data = await response.json();
 
+    const connections = (data.connections ?? []) as GooglePersonRaw[]
     return {
-      contacts: data.connections?.map((person: any) => this.parseGoogleContact(person)) || [],
+      contacts: connections
+        .filter((p: GooglePersonRaw): p is GooglePersonRaw & { resourceName: string } =>
+          !!p.resourceName
+        )
+        .map((person) => this.parseGoogleContact(person)),
       totalCount: data.totalPeople || data.connections?.length || 0,
       hasMore: !!data.nextPageToken,
       nextSyncToken: data.nextSyncToken,
@@ -273,8 +294,11 @@ export class GoogleContactsProvider implements ContactsProvider {
       throw new Error(`Failed to fetch Google contact: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
-    return this.parseGoogleContact(data);
+    const data = (await response.json()) as GooglePersonRaw
+    if (!data.resourceName) {
+      throw new Error('Invalid Google contact response: missing resourceName')
+    }
+    return this.parseGoogleContact(data as GooglePersonRaw & { resourceName: string })
   }
 
   async createContact(
@@ -362,14 +386,12 @@ export class GoogleContactsProvider implements ContactsProvider {
 
     const data = await response.json();
 
-    return (
-      data.contactGroups?.map((group: any) => ({
-        id: group.resourceName,
-        name: group.name,
-        description: group.formattedName,
-        memberCount: group.memberCount || 0,
-      })) || []
-    );
+    return (data.contactGroups ?? []).map((group: GoogleContactGroupRaw) => ({
+      id: group.resourceName ?? '',
+      name: group.name ?? '',
+      description: group.formattedName,
+      memberCount: group.memberCount ?? 0,
+    }));
   }
 
   async getChanges(
@@ -402,15 +424,20 @@ export class GoogleContactsProvider implements ContactsProvider {
 
     const data = await response.json();
 
+    const updated = (data.updated ?? []) as GooglePersonRaw[]
     return {
-      contacts: data.updated?.map((person: any) => this.parseGoogleContact(person)) || [],
+      contacts: updated
+        .filter((p: GooglePersonRaw): p is GooglePersonRaw & { resourceName: string } =>
+          !!p.resourceName
+        )
+        .map((person) => this.parseGoogleContact(person)),
       deletedContacts: data.deleted || [],
       nextSyncToken: data.nextSyncToken,
     };
   }
 
   // Helper methods
-  private parseGoogleContact(person: any): Contact {
+  private parseGoogleContact(person: GooglePersonRaw & { resourceName: string }): Contact {
     const names = person.names?.[0];
     const organizations = person.organizations?.[0];
 
@@ -431,19 +458,23 @@ export class GoogleContactsProvider implements ContactsProvider {
       company: organizations?.name,
       department: organizations?.department,
       emails:
-        person.emailAddresses?.map((email: any, index: number) => ({
-          address: email.value,
-          type: this.mapGoogleEmailType(email.type),
-          isPrimary: index === 0,
-        })) || [],
+        person.emailAddresses
+          ?.filter((email): email is GoogleEmailRaw & { value: string } => !!email.value)
+          .map((email, index) => ({
+            address: email.value,
+            type: this.mapGoogleEmailType(email.type),
+            isPrimary: index === 0,
+          })) ?? [],
       phones:
-        person.phoneNumbers?.map((phone: any, index: number) => ({
-          number: phone.value,
-          type: this.mapGooglePhoneType(phone.type),
-          isPrimary: index === 0,
-        })) || [],
+        person.phoneNumbers
+          ?.filter((phone): phone is GooglePhoneRaw & { value: string } => !!phone.value)
+          .map((phone, index) => ({
+            number: phone.value,
+            type: this.mapGooglePhoneType(phone.type),
+            isPrimary: index === 0,
+          })) ?? [],
       addresses:
-        person.addresses?.map((address: any, index: number) => ({
+        person.addresses?.map((address: GoogleAddressRaw, index: number) => ({
           street: address.streetAddress,
           city: address.city,
           region: address.region,
@@ -453,10 +484,12 @@ export class GoogleContactsProvider implements ContactsProvider {
           isPrimary: index === 0,
         })) || [],
       websites:
-        person.urls?.map((url: any) => ({
-          url: url.value,
-          type: this.mapGoogleWebsiteType(url.type),
-        })) || [],
+        person.urls
+          ?.filter((url): url is GoogleUrlRaw & { value: string } => !!url.value)
+          .map((url) => ({
+            url: url.value,
+            type: this.mapGoogleWebsiteType(url.type),
+          })) ?? [],
       birthday: person.birthdays?.[0]?.date
         ? this.parseGoogleDate(person.birthdays[0].date)
         : undefined,
@@ -465,7 +498,7 @@ export class GoogleContactsProvider implements ContactsProvider {
       instantMessengers: [], // Not typically available in Google Contacts
       isPrimary: false,
       groups:
-        person.memberships?.map((membership: any) => membership.contactGroupResourceName) || [],
+        person.memberships?.map((m: GoogleMembershipRaw) => m.contactGroupResourceName).filter(Boolean) as string[] || [],
       metadata: {
         etag: person.etag,
         resourceName: person.resourceName,
@@ -480,7 +513,7 @@ export class GoogleContactsProvider implements ContactsProvider {
     };
   }
 
-  private convertToGoogleContact(contact: Partial<ContactInput>): any {
+  private convertToGoogleContact(contact: Partial<ContactInput>): Record<string, unknown> {
     return {
       names:
         contact.displayName || contact.firstName || contact.lastName
@@ -602,8 +635,11 @@ export class GoogleContactsProvider implements ContactsProvider {
     }
   }
 
-  private parseGoogleDate(date: any): Date {
-    return new Date(date.year || 2000, (date.month || 1) - 1, date.day || 1);
+  private parseGoogleDate(
+    date: { year?: number; month?: number; day?: number } | undefined
+  ): Date {
+    if (!date) return new Date(2000, 0, 1);
+    return new Date(date.year ?? 2000, (date.month ?? 1) - 1, date.day ?? 1);
   }
 
   private reverseMapEmailType(type: 'home' | 'work' | 'other'): string {
@@ -671,8 +707,11 @@ export class OutlookContactsProvider implements ContactsProvider {
 
     const data = await response.json();
 
+    const value = (data.value ?? []) as OutlookContactRaw[]
     return {
-      contacts: data.value?.map((contact: any) => this.parseOutlookContact(contact)) || [],
+      contacts: value
+        .filter((c: OutlookContactRaw): c is OutlookContactRaw & { id: string } => !!c.id)
+        .map((contact) => this.parseOutlookContact(contact)),
       totalCount: data['@odata.count'] || data.value?.length || 0,
       hasMore: !!data['@odata.nextLink'],
       nextSyncToken: undefined, // Outlook doesn't use sync tokens the same way
@@ -787,7 +826,7 @@ export class OutlookContactsProvider implements ContactsProvider {
     const data = await response.json();
 
     return (
-      data.value?.map((folder: any) => ({
+      (data.value ?? []).map((folder: OutlookContactFolderRaw) => ({
         id: folder.id,
         name: folder.displayName,
         description: folder.displayName,
@@ -821,15 +860,18 @@ export class OutlookContactsProvider implements ContactsProvider {
 
     const data = await response.json();
 
+    const value = (data.value ?? []) as OutlookContactRaw[]
     return {
-      contacts: data.value?.map((contact: any) => this.parseOutlookContact(contact)) || [],
+      contacts: value
+        .filter((c: OutlookContactRaw): c is OutlookContactRaw & { id: string } => !!c.id)
+        .map((contact) => this.parseOutlookContact(contact)),
       deletedContacts: [], // Would need to check for @removed properties
       nextSyncToken: data['@odata.deltaLink'] || syncToken,
     };
   }
 
   // Helper methods
-  private parseOutlookContact(contact: any): Contact {
+  private parseOutlookContact(contact: OutlookContactRaw & { id: string }): Contact {
     return {
       id: crypto.randomUUID(),
       externalId: contact.id,
@@ -847,19 +889,23 @@ export class OutlookContactsProvider implements ContactsProvider {
       company: contact.companyName,
       department: contact.department,
       emails:
-        contact.emailAddresses?.map((email: any, index: number) => ({
-          address: email.address,
-          type: this.mapOutlookEmailType(email.name),
-          isPrimary: index === 0,
-        })) || [],
+        contact.emailAddresses
+          ?.filter((e): e is OutlookContactEmailRaw & { address: string } => !!e.address)
+          .map((email, index) => ({
+            address: email.address,
+            type: this.mapOutlookEmailType(email.name),
+            isPrimary: index === 0,
+          })) ?? [],
       phones:
-        contact.phoneNumbers?.map((phone: any, index: number) => ({
-          number: phone.number,
-          type: this.mapOutlookPhoneType(phone.type),
-          isPrimary: index === 0,
-        })) || [],
+        contact.phoneNumbers
+          ?.filter((p): p is OutlookContactPhoneRaw & { number: string } => !!p.number)
+          .map((phone, index) => ({
+            number: phone.number,
+            type: this.mapOutlookPhoneType(phone.type),
+            isPrimary: index === 0,
+          })) ?? [],
       addresses:
-        contact.addresses?.map((address: any, index: number) => ({
+        contact.addresses?.map((address: OutlookContactAddressRaw, index: number) => ({
           street: address.street,
           city: address.city,
           region: address.state,
@@ -869,10 +915,12 @@ export class OutlookContactsProvider implements ContactsProvider {
           isPrimary: index === 0,
         })) || [],
       websites:
-        contact.websites?.map((website: any) => ({
-          url: website.address,
-          type: this.mapOutlookWebsiteType(website.type),
-        })) || [],
+        contact.websites
+          ?.filter((w): w is OutlookContactWebsiteRaw & { address: string } => !!w.address)
+          .map((website) => ({
+            url: website.address,
+            type: this.mapOutlookWebsiteType(website.type),
+          })) ?? [],
       birthday: contact.birthday ? new Date(contact.birthday) : undefined,
       anniversary: contact.anniversary ? new Date(contact.anniversary) : undefined,
       notes: contact.personalNotes,
@@ -891,7 +939,7 @@ export class OutlookContactsProvider implements ContactsProvider {
     };
   }
 
-  private convertToOutlookContact(contact: Partial<ContactInput>): any {
+  private convertToOutlookContact(contact: Partial<ContactInput>): Record<string, unknown> {
     return {
       displayName: contact.displayName,
       givenName: contact.firstName,

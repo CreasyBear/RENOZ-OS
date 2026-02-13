@@ -21,9 +21,9 @@ import { Loader2 } from "lucide-react";
 // ============================================================================
 
 export interface PreferencesPresenterProps {
-  preferences: Record<string, Record<string, any>>;
+  preferences: Record<string, Record<string, unknown>>;
   saving: string | null;
-  onSave: (category: string, key: string, value: any) => Promise<void>;
+  onSave: (category: string, key: string, value: unknown) => Promise<void>;
 }
 
 // ============================================================================
@@ -35,8 +35,8 @@ export function PreferencesSettingsPresenter({
   saving,
   onSave,
 }: PreferencesPresenterProps) {
-  const getValue = (category: string, key: string, defaultValue: any) => {
-    return preferences[category]?.[key] ?? defaultValue;
+  const getValue = <T,>(category: string, key: string, defaultValue: T): T => {
+    return (preferences[category]?.[key] ?? defaultValue) as T;
   };
 
   return (

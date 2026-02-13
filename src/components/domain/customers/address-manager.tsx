@@ -6,6 +6,10 @@
  * - Address types (billing, shipping, service, headquarters)
  * - Primary address flag
  * - Full address fields with Australian defaults
+ *
+ * @source addresses from props (parent provides)
+ * @source form state from useTanStackForm hook
+ * @source mutations from useCreateAddress, useUpdateAddress, useDeleteAddress hooks
  */
 import { useState, useEffect } from 'react'
 import { z } from 'zod'
@@ -169,6 +173,7 @@ function AddressCard({ address, onEdit, onDelete, onSetPrimary, disabled }: Addr
               onClick={onSetPrimary}
               disabled={disabled}
               title="Set as primary address"
+              aria-label="Set as primary address"
             >
               <Star className="h-4 w-4" />
             </Button>
@@ -180,6 +185,7 @@ function AddressCard({ address, onEdit, onDelete, onSetPrimary, disabled }: Addr
             className="h-8 w-8"
             onClick={onEdit}
             disabled={disabled}
+            aria-label="Edit address"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -190,6 +196,7 @@ function AddressCard({ address, onEdit, onDelete, onSetPrimary, disabled }: Addr
             className="h-8 w-8 text-destructive hover:text-destructive"
             onClick={() => setDeleteDialogOpen(true)}
             disabled={disabled}
+            aria-label="Delete address"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -511,7 +518,7 @@ export function AddressManager({ addresses, onChange, disabled = false }: Addres
           <div className="text-center py-8 text-muted-foreground">
             <MapPin className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No addresses added yet</p>
-            <p className="text-sm">Click "Add Address" to add the first address</p>
+            <p className="text-sm">Click &quot;Add Address&quot; to add the first address</p>
           </div>
         ) : (
           <div className="space-y-3">

@@ -13,11 +13,12 @@ import { ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
-import { ProductForm, type ProductFormValues } from "@/components/domain/products/product-form";
-import { getProduct, updateProduct, getCategoryTree, type CategoryWithChildren } from "@/server/functions/products/products";
+import { ProductForm, type ProductFormValues } from "@/components/domain/products";
+import { getProduct, updateProduct, getCategoryTree } from "@/server/functions/products/products";
+import type { Category, CategoryWithChildren, GetProductEditLoaderData } from "@/lib/schemas/products";
 
 export const Route = createFileRoute("/_authenticated/products/$productId/edit")({
-  loader: async ({ params }) => {
+  loader: async ({ params }): Promise<GetProductEditLoaderData> => {
     const [productData, categoryTree] = await Promise.all([
       getProduct({ data: { id: params.productId } }),
       getCategoryTree({}),
@@ -38,26 +39,26 @@ export const Route = createFileRoute("/_authenticated/products/$productId/edit")
   ),
 });
 
-// Type for product from loader
-type ProductData = Awaited<ReturnType<typeof getProduct>>;
-
 function EditProductPage() {
   const navigate = useNavigate();
-  const loaderData = Route.useLoaderData() as ProductData & { categoryTree: CategoryWithChildren[] };
+  const loaderData = Route.useLoaderData();
+  if (!loaderData?.product) {
+    return null;
+  }
   const { product, categoryTree } = loaderData;
 
-  // Flatten category tree for select
+  // Flatten category tree for select (preserve full Category shape)
   const flattenCategories = (
     categories: CategoryWithChildren[],
     prefix = ""
-  ): Array<{ id: string; name: string; parentId: string | null }> => {
-    return categories.flatMap((cat: CategoryWithChildren) => {
-      const name = prefix ? `${prefix} > ${cat.name}` : cat.name;
+  ): Category[] => {
+    return categories.flatMap((cat) => {
+      const displayName = prefix ? `${prefix} > ${cat.name}` : cat.name;
       const children = cat.children
-        ? flattenCategories(cat.children, name)
+        ? flattenCategories(cat.children, displayName)
         : [];
       return [
-        { id: cat.id, name, parentId: cat.parentId },
+        { ...cat, name: displayName },
         ...children,
       ];
     });
@@ -102,6 +103,7 @@ function EditProductPage() {
         seoTitle: data.seoTitle ?? undefined,
         seoDescription: data.seoDescription ?? undefined,
         barcode: data.barcode ?? undefined,
+        warrantyPolicyId: data.warrantyPolicyId ?? undefined,
         specifications: (data.specifications ?? undefined) as Record<string, string> | undefined,
       },
     });

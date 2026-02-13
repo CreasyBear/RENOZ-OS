@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + status config */
 /**
  * RMA Status Badge Component
  *
@@ -10,6 +11,7 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { StatusBadge, type StatusConfig } from '@/components/shared';
+import type { SemanticColor } from '@/lib/status';
 import type { RmaStatus, RmaReason, RmaResolution } from '@/lib/schemas/support/rma';
 
 /**
@@ -97,4 +99,19 @@ export function RmaResolutionBadge({ resolution, className }: RmaResolutionBadge
       {RESOLUTION_LABELS[resolution]}
     </Badge>
   );
+}
+
+/**
+ * Get RMA status config for EntityHeader
+ * Maps RmaStatus to EntityHeader status format (value + variant)
+ */
+export function getRmaStatusConfigForEntityHeader(status: RmaStatus): {
+  value: string;
+  variant: SemanticColor;
+} {
+  const config = RMA_STATUS_CONFIG[status];
+  return {
+    value: status,
+    variant: config.variant as SemanticColor,
+  };
 }

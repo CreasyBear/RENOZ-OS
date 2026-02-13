@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + field types */
 /**
  * BulkImportWizard Component
  *
@@ -567,7 +568,7 @@ function ImportProgressStep({
         <div className="py-8 text-center">
           <RefreshCw className="text-primary mx-auto mb-4 h-12 w-12 animate-spin" />
           <h3 className="mb-2 text-lg font-medium">Importing {entityNamePlural}...</h3>
-          <p className="text-muted-foreground mb-4">Please don't close this window</p>
+          <p className="text-muted-foreground mb-4">Please don&apos;t close this window</p>
           <Progress value={progress} className="mx-auto max-w-md" />
           <p className="text-muted-foreground mt-2 text-sm">{progress}% complete</p>
         </div>
@@ -817,7 +818,7 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
         return updated;
       });
     },
-    [sampleData, parsedRows]
+    []
   );
 
   // Re-validate when mappings change

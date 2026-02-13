@@ -471,7 +471,7 @@ export function MergeWizard({
           <DialogHeader>
             <DialogTitle>Confirm Customer Merge</DialogTitle>
             <DialogDescription>
-              This action will merge "{secondaryCustomer.name}" into "{primaryCustomer.name}".
+              This action will merge &quot;{secondaryCustomer.name}&quot; into &quot;{primaryCustomer.name}&quot;.
               The secondary customer will be archived.
             </DialogDescription>
           </DialogHeader>

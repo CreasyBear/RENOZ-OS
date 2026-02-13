@@ -20,7 +20,6 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Progress } from '@/components/ui/progress'
 import {
   Dialog,
   DialogContent,
@@ -29,6 +28,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { toastError } from '@/hooks'
+import { logger } from '@/lib/logger'
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -122,7 +123,6 @@ export function BulkExport({
   )
   const [format, setFormat] = useState<ExportFormat>('csv')
   const [isExporting, setIsExporting] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
 
   const exportCount = selectedCount > 0 ? selectedCount : totalCount
@@ -174,22 +174,14 @@ export function BulkExport({
   // Start export
   const handleExport = async () => {
     setIsExporting(true)
-    setProgress(0)
     setDownloadUrl(null)
-
-    // Simulate progress
-    const interval = setInterval(() => {
-      setProgress((p) => Math.min(p + 15, 90))
-    }, 200)
 
     try {
       const url = await onExport(Array.from(selectedFields), format)
-      clearInterval(interval)
-      setProgress(100)
       setDownloadUrl(url)
     } catch (error) {
-      clearInterval(interval)
-      console.error('Export failed:', error)
+      logger.error('Export failed', error as Error, { context: 'bulk-export' })
+      toastError(error instanceof Error ? error.message : 'Failed to export customers')
     } finally {
       setIsExporting(false)
     }
@@ -199,7 +191,6 @@ export function BulkExport({
   const handleClose = () => {
     if (!isExporting) {
       setDownloadUrl(null)
-      setProgress(0)
       onOpenChange(false)
     }
   }
@@ -235,15 +226,13 @@ export function BulkExport({
             </Button>
           </div>
         ) : isExporting ? (
-          // Export in progress
+          // Export in progress - no fake progress
           <div className="flex-1 flex flex-col items-center justify-center py-8">
             <RefreshCw className="h-12 w-12 text-primary animate-spin mb-4" />
-            <h3 className="text-lg font-medium mb-2">Exporting...</h3>
+            <h3 className="text-lg font-medium mb-2">Exporting…</h3>
             <p className="text-muted-foreground mb-4">
               Please wait while we prepare your export
             </p>
-            <Progress value={progress} className="max-w-xs" />
-            <p className="text-sm text-muted-foreground mt-2">{progress}%</p>
           </div>
         ) : (
           // Field selection

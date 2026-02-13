@@ -1,4 +1,6 @@
-import { ForgotPasswordForm } from '~/components/forgot-password-form';
+import { ForgotPasswordForm } from '@/components/auth/forgot-password-form';
+import { AuthLayout } from '@/components/auth/auth-layout';
+import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/forgot-password')({
@@ -7,10 +9,10 @@ export const Route = createFileRoute('/forgot-password')({
 
 function ForgotPassword() {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
+    <AuthErrorBoundary>
+      <AuthLayout>
         <ForgotPasswordForm />
-      </div>
-    </div>
+      </AuthLayout>
+    </AuthErrorBoundary>
   );
 }

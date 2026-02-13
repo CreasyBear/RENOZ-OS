@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Column file exports column factory with JSX cell renderers */
 /**
  * Customer Column Definitions
  *
@@ -5,7 +6,8 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { Eye, Edit, Trash2, Mail, Phone } from "lucide-react";
+import { Eye, Edit, Trash2 } from "lucide-react";
+import { memo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   CheckboxCell,
@@ -17,14 +19,15 @@ import {
   DataTableColumnHeader,
   ScoreCell,
   TagsCell,
+  ContactCell,
 } from "@/components/shared/data-table";
 import type { CellActionItem as ActionItem, TagItem } from "@/components/shared/data-table";
-import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import { cn } from "@/lib/utils";
 import {
   CUSTOMER_STATUS_CONFIG,
   CUSTOMER_TYPE_CONFIG,
   CUSTOMER_SIZE_CONFIG,
+  getSizeColorClasses,
   type CustomerStatus,
   type CustomerType,
   type CustomerSize,
@@ -80,51 +83,12 @@ export interface CreateCustomerColumnsOptions {
 }
 
 /**
- * Contact cell component for email/phone display
+ * Size cell component using semantic colors
+ * Memoized for performance optimization with smooth transitions
  */
-function ContactCell({
-  email,
-  phone,
-}: {
-  email: string | null;
-  phone: string | null;
-}) {
-  if (!email && !phone) {
-    return <span className="text-sm text-muted-foreground">-</span>;
-  }
-
-  return (
-    <div className="flex flex-col gap-1 text-sm">
-      {email && (
-        <a
-          href={`mailto:${email}`}
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Mail className="h-3 w-3 flex-shrink-0" />
-          <TruncateTooltip text={email} maxLength={20} maxWidth="max-w-[120px]" />
-        </a>
-      )}
-      {phone && (
-        <a
-          href={`tel:${phone}`}
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Phone className="h-3 w-3 flex-shrink-0" />
-          <span>{phone}</span>
-        </a>
-      )}
-    </div>
-  );
-}
-
-/**
- * Size cell component with custom colored badge
- */
-function SizeCell({ size }: { size: string | null }) {
+const SizeCell = memo(function SizeCell({ size }: { size: string | null }) {
   if (!size || !CUSTOMER_SIZE_CONFIG[size as CustomerSize]) {
-    return <span className="text-muted-foreground text-sm">-</span>;
+    return <span className="text-muted-foreground text-sm">—</span>;
   }
 
   const config = CUSTOMER_SIZE_CONFIG[size as CustomerSize];
@@ -132,14 +96,21 @@ function SizeCell({ size }: { size: string | null }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-        config.color
+        "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium",
+        "transition-all duration-200 ease-in-out",
+        "border border-transparent",
+        "hover:scale-105 hover:shadow-sm",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        getSizeColorClasses(size as CustomerSize)
       )}
+      title={`Customer size: ${config.label}`}
     >
       {config.label}
     </span>
   );
-}
+});
+
+SizeCell.displayName = "SizeCell";
 
 /**
  * Create column definitions for the customers table.
@@ -203,6 +174,7 @@ export function createCustomerColumns(
             <Link
               to="/customers/$customerId"
               params={{ customerId: customer.id }}
+              search={{}}
               className="font-medium hover:underline"
               onClick={(e) => e.stopPropagation()}
             >

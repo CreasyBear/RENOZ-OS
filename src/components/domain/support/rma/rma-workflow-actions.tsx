@@ -2,7 +2,7 @@
  * RMA Workflow Actions Component
  *
  * Provides workflow action buttons based on current RMA status.
- * Uses AlertDialog for confirmations as per mobile-ui-patterns.
+ * Uses useConfirmation for approve/reject; custom dialogs for receive/process (forms).
  *
  * @see src/hooks/use-rma.ts for mutations
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-003c
@@ -12,6 +12,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import {
   Dialog,
   DialogContent,
@@ -77,11 +78,10 @@ export function RmaWorkflowActions({
   onProcess,
   isPending = false,
 }: RmaWorkflowActionsProps) {
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const { confirm } = useConfirmation();
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
 
-  const [rejectReason, setRejectReason] = useState('');
   const [inspectionCondition, setInspectionCondition] = useState('good');
   const [inspectionNotes, setInspectionNotes] = useState('');
   const [resolution, setResolution] = useState<RmaResolution>('refund');
@@ -90,8 +90,10 @@ export function RmaWorkflowActions({
 
   const isLoading = isPending;
 
-  // Handle approve
+  // Handle approve (useConfirmation)
   const handleApprove = async () => {
+    const { confirmed } = await confirm(confirmations.approve(rma.rmaNumber));
+    if (!confirmed) return;
     try {
       await onApprove();
       onSuccess?.();
@@ -100,16 +102,12 @@ export function RmaWorkflowActions({
     }
   };
 
-  // Handle reject
+  // Handle reject (useConfirmation with required reason)
   const handleReject = async () => {
-    if (!rejectReason.trim()) {
-      toast.error('Please provide a reason for rejection.');
-      return;
-    }
+    const { confirmed, reason } = await confirm(confirmations.reject(rma.rmaNumber));
+    if (!confirmed || !reason?.trim()) return;
     try {
-      await onReject(rejectReason);
-      setRejectDialogOpen(false);
-      setRejectReason('');
+      await onReject(reason.trim());
       onSuccess?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to reject RMA');
@@ -188,7 +186,7 @@ export function RmaWorkflowActions({
           <Button
             variant="destructive"
             size="sm"
-            onClick={() => setRejectDialogOpen(true)}
+            onClick={handleReject}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -234,45 +232,6 @@ export function RmaWorkflowActions({
           </Button>
         )}
       </div>
-
-      {/* Reject dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject RMA</DialogTitle>
-            <DialogDescription>
-              Please provide a reason for rejecting this RMA request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="rejectReason">Rejection Reason</Label>
-            <Textarea
-              id="rejectReason"
-              placeholder="Enter reason for rejection..."
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="mt-2"
-              required
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRejectDialogOpen(false)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleReject}
-              disabled={isLoading || !rejectReason.trim()}
-            >
-              {isLoading ? 'Rejecting...' : 'Reject'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Receive dialog with inspection */}
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
@@ -332,7 +291,13 @@ export function RmaWorkflowActions({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="resolution">Resolution</Label>
-              <Select value={resolution} onValueChange={(v) => setResolution(v as RmaResolution)}>
+              <Select
+                value={resolution}
+                onValueChange={(v) => {
+                  const opt = RESOLUTION_OPTIONS.find((o) => o.value === v);
+                  if (opt) setResolution(opt.value);
+                }}
+              >
                 <SelectTrigger id="resolution">
                   <SelectValue placeholder="Select resolution" />
                 </SelectTrigger>

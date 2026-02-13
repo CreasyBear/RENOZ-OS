@@ -22,9 +22,18 @@ export {
   generateOrderDocument,
   generateOrderQuotePdf,
   generateOrderInvoicePdf,
+  generateOrderProFormaPdf,
   generateOrderPackingSlipPdf,
   generateOrderDeliveryNotePdf,
 } from "./generate-documents-sync";
+
+// Project Documents (Work Orders, Completion Certificates, Handover Pack)
+export {
+  generateProjectDocument,
+  generateProjectWorkOrderPdf,
+  generateProjectCompletionCertificatePdf,
+  generateProjectHandoverPackPdf,
+} from "./generate-project-documents-sync";
 
 // ============================================================================
 // DOCUMENT TEMPLATES (INT-DOC-005)

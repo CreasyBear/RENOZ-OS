@@ -45,7 +45,11 @@ export function useReportFavorites(options: UseReportFavoritesOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.reports.reportFavorites.list(filters),
-    queryFn: () => listReportFavorites({ data: filters as ListReportFavoritesInput }),
+    queryFn: async () => {
+      const result = await listReportFavorites({ data: filters as ListReportFavoritesInput });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });

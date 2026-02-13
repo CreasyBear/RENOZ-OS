@@ -24,10 +24,14 @@ import {
   index,
   uniqueIndex,
   pgEnum,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  auditColumns,
+  softDeleteColumn,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
 // Relations will be added when all schemas are in place
@@ -143,6 +147,7 @@ export const installerProfiles = pgTable(
     // Standard columns
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
     orgUserIdx: uniqueIndex("idx_installer_profiles_org_user").on(
@@ -156,27 +161,7 @@ export const installerProfiles = pgTable(
     userIdx: uniqueIndex("idx_installer_profiles_user").on(table.userId),
 
     // RLS policies
-    selectPolicy: pgPolicy("installer_profiles_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("installer_profiles_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("installer_profiles_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("installer_profiles_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("installer_profiles"),
   })
 );
 
@@ -224,6 +209,7 @@ export const installerCertifications = pgTable(
     ),
     typeIdx: index("idx_installer_certifications_type").on(table.certificationType),
     expiryIdx: index("idx_installer_certifications_expiry").on(table.expiryDate),
+    ...standardRlsPolicies("installer_certifications"),
   })
 );
 
@@ -265,6 +251,7 @@ export const installerSkills = pgTable(
       table.organizationId,
       table.installerId
     ),
+    ...standardRlsPolicies("installer_skills"),
   })
 );
 
@@ -304,6 +291,7 @@ export const installerTerritories = pgTable(
       table.organizationId,
       table.postcode
     ),
+    ...standardRlsPolicies("installer_territories"),
   })
 );
 
@@ -343,6 +331,7 @@ export const installerBlockouts = pgTable(
       table.organizationId,
       table.installerId
     ),
+    ...standardRlsPolicies("installer_blockouts"),
   })
 );
 

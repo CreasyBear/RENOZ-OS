@@ -27,6 +27,7 @@ import {
   formatStatus,
 } from '@/lib/ai/tools/formatters';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // PERIOD HELPERS
@@ -302,7 +303,7 @@ export const runReportTool = tool({
           return;
       }
     } catch (error) {
-      console.error('Error in runReportTool:', error);
+      logger.error('Error in runReportTool', error as Error, {});
       yield {
         text: `Failed to run report: ${error instanceof Error ? error.message : 'Unknown error'}. Check the parameters and try again.`,
       };
@@ -441,7 +442,7 @@ export const getMetricsTool = tool({
         formatted: isMonetary ? formatCurrency(currentValue) : currentValue.toLocaleString(),
       };
     } catch (error) {
-      console.error('Error in getMetricsTool:', error);
+      logger.error('Error in getMetricsTool', error as Error, {});
       return createErrorResult('Failed to retrieve metric', 'Check the parameters and try again', 'INTERNAL_ERROR');
     }
   },
@@ -547,7 +548,7 @@ export const getTrendsTool = tool({
 
       return { dataPoints, direction, average, range: { min, max } };
     } catch (error) {
-      console.error('Error in getTrendsTool:', error);
+      logger.error('Error in getTrendsTool', error as Error, {});
       return createErrorResult('Failed to retrieve trend data', 'Check the parameters and try again', 'INTERNAL_ERROR');
     }
   },

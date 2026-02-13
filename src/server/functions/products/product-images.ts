@@ -197,25 +197,26 @@ export const addProductImage = createServerFn({ method: 'POST' })
 
     const sortOrder = (maxSort?.max ?? -1) + 1;
 
-    // If setting as primary, unset current primary
-    if (data.setAsPrimary) {
-      await db
-        .update(productImages)
-        .set({ isPrimary: false })
-        .where(
-          and(
-            eq(productImages.organizationId, ctx.organizationId),
-            eq(productImages.productId, data.productId),
-            eq(productImages.isPrimary, true)
-          )
-        );
-    }
+    return db.transaction(async (tx) => {
+      // If setting as primary, unset current primary
+      if (data.setAsPrimary) {
+        await tx
+          .update(productImages)
+          .set({ isPrimary: false })
+          .where(
+            and(
+              eq(productImages.organizationId, ctx.organizationId),
+              eq(productImages.productId, data.productId),
+              eq(productImages.isPrimary, true)
+            )
+          );
+      }
 
-    // Check if this is the first image (auto-set as primary)
-    const isFirstImage = (countResult?.count ?? 0) === 0;
+      // Check if this is the first image (auto-set as primary)
+      const isFirstImage = (countResult?.count ?? 0) === 0;
 
-    // Insert image
-    const [image] = await db
+      // Insert image
+      const [image] = await tx
       .insert(productImages)
       .values({
         organizationId: ctx.organizationId,
@@ -229,9 +230,10 @@ export const addProductImage = createServerFn({ method: 'POST' })
         isPrimary: data.setAsPrimary || isFirstImage,
         uploadedBy: ctx.user.id,
       })
-      .returning();
+        .returning();
 
-    return image;
+      return image;
+    });
   });
 
 /**
@@ -292,31 +294,33 @@ export const deleteProductImage = createServerFn({ method: 'POST' })
 
     const wasPrimary = existing.isPrimary;
 
-    await db.delete(productImages).where(eq(productImages.id, data.id));
+    return db.transaction(async (tx) => {
+      await tx.delete(productImages).where(eq(productImages.id, data.id));
 
-    // If was primary, set next image as primary
-    if (wasPrimary) {
-      const [nextImage] = await db
-        .select({ id: productImages.id })
-        .from(productImages)
-        .where(
-          and(
-            eq(productImages.organizationId, ctx.organizationId),
-            eq(productImages.productId, existing.productId)
+      // If was primary, set next image as primary
+      if (wasPrimary) {
+        const [nextImage] = await tx
+          .select({ id: productImages.id })
+          .from(productImages)
+          .where(
+            and(
+              eq(productImages.organizationId, ctx.organizationId),
+              eq(productImages.productId, existing.productId)
+            )
           )
-        )
-        .orderBy(asc(productImages.sortOrder))
-        .limit(1);
+          .orderBy(asc(productImages.sortOrder))
+          .limit(1);
 
-      if (nextImage) {
-        await db
-          .update(productImages)
-          .set({ isPrimary: true })
-          .where(eq(productImages.id, nextImage.id));
+        if (nextImage) {
+          await tx
+            .update(productImages)
+            .set({ isPrimary: true })
+            .where(eq(productImages.id, nextImage.id));
+        }
       }
-    }
 
-    return { success: true, wassPrimary: wasPrimary };
+      return { success: true, wassPrimary: wasPrimary };
+    });
   });
 
 // ============================================================================
@@ -343,26 +347,28 @@ export const setPrimaryImage = createServerFn({ method: 'POST' })
       throw new NotFoundError('Image not found', 'productImage');
     }
 
-    // Unset current primary
-    await db
-      .update(productImages)
-      .set({ isPrimary: false })
-      .where(
-        and(
-          eq(productImages.organizationId, ctx.organizationId),
-          eq(productImages.productId, image.productId),
-          eq(productImages.isPrimary, true)
-        )
-      );
+    return db.transaction(async (tx) => {
+      // Unset current primary
+      await tx
+        .update(productImages)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(productImages.organizationId, ctx.organizationId),
+            eq(productImages.productId, image.productId),
+            eq(productImages.isPrimary, true)
+          )
+        );
 
-    // Set new primary
-    const [updated] = await db
-      .update(productImages)
-      .set({ isPrimary: true })
-      .where(eq(productImages.id, data.id))
-      .returning();
+      // Set new primary
+      const [updated] = await tx
+        .update(productImages)
+        .set({ isPrimary: true })
+        .where(eq(productImages.id, data.id))
+        .returning();
 
-    return updated;
+      return updated;
+    });
   });
 
 // ============================================================================
@@ -400,12 +406,26 @@ export const reorderProductImages = createServerFn({ method: 'POST' })
       });
     }
 
-    // Update sort orders
-    for (let i = 0; i < data.imageIds.length; i++) {
+    // RAW SQL (Phase 11 Keep): Dynamic CASE for bulk sort order. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
+    if (data.imageIds.length > 0) {
+      const sortOrderCase = sql`CASE ${productImages.id}
+        ${sql.join(
+          data.imageIds.map((id, index) => sql`WHEN ${id} THEN ${index}`),
+          sql` `
+        )}
+        ELSE ${productImages.sortOrder}
+      END`;
+
       await db
         .update(productImages)
-        .set({ sortOrder: i })
-        .where(eq(productImages.id, data.imageIds[i]));
+        .set({ sortOrder: sortOrderCase })
+        .where(
+          and(
+            eq(productImages.organizationId, ctx.organizationId),
+            eq(productImages.productId, data.productId),
+            inArray(productImages.id, data.imageIds)
+          )
+        );
     }
 
     return { success: true };
@@ -445,34 +465,51 @@ export const bulkDeleteImages = createServerFn({ method: 'POST' })
     // Get product IDs where primary image was deleted
     const primaryImageProductIds = images.filter((i) => i.isPrimary).map((i) => i.productId);
 
-    // Delete images
-    await db.delete(productImages).where(inArray(productImages.id, data.imageIds));
+    return db.transaction(async (tx) => {
+      // Delete images
+      await tx.delete(productImages).where(inArray(productImages.id, data.imageIds));
 
-    // Reassign primary images where needed
-    let primaryReassigned = false;
-    for (const productId of primaryImageProductIds) {
-      const [nextImage] = await db
-        .select({ id: productImages.id })
-        .from(productImages)
-        .where(
-          and(
-            eq(productImages.organizationId, ctx.organizationId),
-            eq(productImages.productId, productId)
-          )
-        )
-        .orderBy(asc(productImages.sortOrder))
-        .limit(1);
+      // Reassign primary images where needed
+    // PERFORMANCE: Batch fetch all next images in parallel instead of N sequential queries
+      let primaryReassigned = false;
+      if (primaryImageProductIds.length > 0) {
+        const nextImagesPromises = primaryImageProductIds.map((productId) =>
+          tx
+            .select({ id: productImages.id, productId: productImages.productId })
+            .from(productImages)
+            .where(
+              and(
+                eq(productImages.organizationId, ctx.organizationId),
+                eq(productImages.productId, productId)
+              )
+            )
+            .orderBy(asc(productImages.sortOrder))
+            .limit(1)
+            .then((results) => results[0] || null)
+        );
 
-      if (nextImage) {
-        await db
-          .update(productImages)
-          .set({ isPrimary: true })
-          .where(eq(productImages.id, nextImage.id));
-        primaryReassigned = true;
+      const nextImages = (await Promise.all(nextImagesPromises)).filter(
+        (img): img is NonNullable<typeof img> => img !== null
+      );
+
+        if (nextImages.length > 0) {
+          // Batch update all primary images
+          const nextImageIds = nextImages.map((img) => img.id);
+          await tx
+            .update(productImages)
+            .set({ isPrimary: true })
+            .where(
+              and(
+                eq(productImages.organizationId, ctx.organizationId),
+                inArray(productImages.id, nextImageIds)
+              )
+            );
+          primaryReassigned = true;
+        }
       }
-    }
 
-    return { deleted: images.length, primaryReassigned };
+      return { deleted: images.length, primaryReassigned };
+    });
   });
 
 /**
@@ -495,21 +532,31 @@ export const bulkUpdateAltText = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<{ updated: number }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
-    let updated = 0;
-
-    for (const update of data.updates) {
-      const result = await db
-        .update(productImages)
-        .set({ altText: update.altText })
-        .where(
-          and(eq(productImages.id, update.id), eq(productImages.organizationId, ctx.organizationId))
-        );
-
-      // Check if row was updated (drizzle returns the result)
-      if (result) updated++;
+    if (data.updates.length === 0) {
+      return { updated: 0 };
     }
 
-    return { updated };
+    // PERFORMANCE: Use batch update with CASE statements instead of N sequential queries
+    const updateIds = data.updates.map((u) => u.id);
+    const altTextCase = sql`CASE ${productImages.id}
+      ${sql.join(
+        data.updates.map((u) => sql`WHEN ${u.id} THEN ${u.altText ?? sql`NULL`}`),
+        sql` `
+      )}
+      ELSE ${productImages.altText}
+    END`;
+
+    await db
+      .update(productImages)
+      .set({ altText: altTextCase })
+      .where(
+        and(
+          eq(productImages.organizationId, ctx.organizationId),
+          inArray(productImages.id, updateIds)
+        )
+      );
+
+    return { updated: data.updates.length };
   });
 
 // ============================================================================

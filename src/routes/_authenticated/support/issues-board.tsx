@@ -17,13 +17,17 @@ import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportKanbanSkeleton } from '@/components/skeletons/support';
 import { Plus, LayoutGrid, List, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingState } from '@/components/shared/loading-state';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useAuth } from '@/lib/auth/hooks';
 import { IssueKanbanBoard, type IssueStatus } from '@/components/domain/support';
 import {
   IssueQuickFilters,
+  quickFilterFromSearch,
+  quickFilterToSearch,
   type QuickFilter,
 } from '@/components/domain/support';
 import {
@@ -35,14 +39,18 @@ import {
   type StatusChangeResult,
   type IssueStatus as DialogIssueStatus,
 } from '@/components/domain/support';
-import { useIssuesWithSlaMetrics, useUpdateIssue } from '@/hooks/support';
+import { useIssuesWithSlaMetrics, useUpdateIssue, useSupportMetrics } from '@/hooks/support';
 import type { IssueKanbanItem } from '@/components/domain/support';
+import type { IssuePriority } from '@/lib/schemas/support/issues';
+import { fromUrlParams } from '@/lib/utils/issues-filter-url';
+import { issuesSearchSchema } from './issues';
 
 // ============================================================================
 // ROUTE
 // ============================================================================
 
 export const Route = createFileRoute('/_authenticated/support/issues-board')({
+  validateSearch: issuesSearchSchema,
   component: IssuesBoardPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/support" />
@@ -66,9 +74,10 @@ export const Route = createFileRoute('/_authenticated/support/issues-board')({
 
 function IssuesBoardPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  const { user } = useAuth();
 
   // State
-  const [activeFilter, setActiveFilter] = useState<QuickFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [skipStatusPrompt, setSkipStatusPrompt] = useState(false);
 
@@ -81,8 +90,39 @@ function IssuesBoardPage() {
     toStatus: DialogIssueStatus;
   } | null>(null);
 
-  // Fetch issues
-  const { data, isLoading, error, refetch } = useIssuesWithSlaMetrics();
+  // activeFilter: always derived from URL for context preservation
+  const activeFilter = quickFilterFromSearch(
+    {
+      slaStatus: search.slaStatus,
+      escalated: search.escalated,
+      assignedToUserId: search.assignedToUserId,
+      quickFilter: search.quickFilter as QuickFilter | undefined,
+    },
+    user?.id
+  );
+
+  // Triage counts from support metrics
+  const { data: metrics } = useSupportMetrics();
+  const triage = useMemo(
+    () => metrics?.triage ?? { overdueSla: 0, escalated: 0, myIssues: 0 },
+    [metrics]
+  );
+
+  // Parse URL params to typed filters (status/priority are comma-separated strings)
+  const filters = fromUrlParams(search);
+
+  // Fetch issues (URL params drive server-side triage filters)
+  const { data, isLoading, error, refetch } = useIssuesWithSlaMetrics({
+    status: filters.status.length > 0 ? filters.status : undefined,
+    priority: filters.priority.length > 0 ? filters.priority : undefined,
+    type: search.type,
+    search: search.search,
+    slaStatus: search.slaStatus,
+    escalated: search.escalated,
+    assignedToUserId: search.assignedToUserId,
+    limit: search.pageSize,
+    offset: (search.page - 1) * search.pageSize,
+  });
 
   // Update mutation
   const updateMutation = useUpdateIssue();
@@ -91,7 +131,7 @@ function IssuesBoardPage() {
   const issues = useMemo<IssueKanbanItem[]>(() => {
     if (!data) return [];
 
-    return data.map((issue: any) => {
+    return data.map((issue: IssueKanbanItem) => {
       const slaStatus = issue.slaMetrics
         ? issue.slaMetrics.responseBreached || issue.slaMetrics.resolutionBreached
           ? 'breached'
@@ -107,6 +147,7 @@ function IssuesBoardPage() {
         priority: issue.priority,
         status: issue.status,
         type: issue.type,
+        customerId: issue.customerId ?? null,
         customer: issue.customer,
         assignedTo: issue.assignedTo,
         createdAt: issue.createdAt,
@@ -117,36 +158,38 @@ function IssuesBoardPage() {
     });
   }, [data]);
 
-  // Filter issues based on quick filter
+  // Filter issues: URL params already filter server-side for triage; client-side applies for others
   const filteredIssues = useMemo(() => {
     if (activeFilter === 'all') return issues;
+    // my_issues, overdue_sla, escalated are handled by server (assignedToUserId, slaStatus, escalated)
+    if (['my_issues', 'overdue_sla', 'escalated'].includes(activeFilter)) return issues;
 
     return issues.filter((issue) => {
       switch (activeFilter) {
-        case 'my_issues':
-          // Would need current user ID from auth context
-          return issue.assignedTo !== null;
         case 'unassigned':
           return issue.assignedTo === null;
         case 'sla_at_risk':
           return issue.slaStatus === 'at_risk' || issue.slaStatus === 'breached';
         case 'high_priority':
           return issue.priority === 'high' || issue.priority === 'critical';
-        case 'recent':
+        case 'recent': {
           const oneDayAgo = new Date();
           oneDayAgo.setDate(oneDayAgo.getDate() - 1);
           return new Date(issue.createdAt) > oneDayAgo;
+        }
         default:
           return true;
       }
     });
   }, [issues, activeFilter]);
 
-  // Filter counts
+  // Filter counts: triage from metrics, others from loaded issues
   const filterCounts = useMemo(() => {
     return {
       all: issues.length,
-      my_issues: issues.filter((i) => i.assignedTo !== null).length,
+      overdue_sla: triage.overdueSla,
+      escalated: triage.escalated,
+      my_issues: triage.myIssues,
       unassigned: issues.filter((i) => i.assignedTo === null).length,
       sla_at_risk: issues.filter((i) => i.slaStatus === 'at_risk' || i.slaStatus === 'breached')
         .length,
@@ -158,7 +201,20 @@ function IssuesBoardPage() {
         return new Date(i.createdAt) > oneDayAgo;
       }).length,
     };
-  }, [issues]);
+  }, [issues, triage]);
+
+  // Handle filter change: always navigate for URL sync (context preservation)
+  const handleFilterChange = useCallback(
+    (filter: QuickFilter) => {
+      const newSearch = quickFilterToSearch(filter, user?.id);
+      navigate({
+        to: '/support/issues-board',
+        search: { ...search, ...newSearch, page: 1 },
+        replace: true,
+      });
+    },
+    [navigate, search, user?.id]
+  );
 
   // Handle status change via drag-drop
   const handleStatusChange = useCallback(
@@ -168,11 +224,20 @@ function IssuesBoardPage() {
 
       if (skipStatusPrompt) {
         // Directly update without dialog
-        updateMutation.mutate({
-          issueId: event.issueId,
-          status: event.toStatus,
-        });
-        toast.success(`Issue moved to ${event.toStatus.replace('_', ' ')}`);
+        updateMutation.mutate(
+          { issueId: event.issueId, status: event.toStatus },
+          {
+            onSuccess: () => {
+              toast.success(`Issue moved to ${event.toStatus.replace('_', ' ')}`, {
+                action: {
+                  label: 'View',
+                  onClick: () =>
+                    navigate({ to: '/support/issues/$issueId', params: { issueId: event.issueId } }),
+                },
+              });
+            },
+          }
+        );
       } else {
         // Show dialog
         setStatusChangeDialog({
@@ -184,7 +249,7 @@ function IssuesBoardPage() {
         });
       }
     },
-    [issues, skipStatusPrompt, updateMutation]
+    [issues, skipStatusPrompt, updateMutation, navigate]
   );
 
   // Handle status change dialog confirmation
@@ -192,13 +257,26 @@ function IssuesBoardPage() {
     if (!statusChangeDialog) return;
 
     if (result.confirmed) {
-      updateMutation.mutate({
-        issueId: statusChangeDialog.issueId,
-        status: statusChangeDialog.toStatus,
-        ...(result.note && { resolutionNotes: result.note }),
-      });
-      toast.success(`Issue moved to ${statusChangeDialog.toStatus.replace('_', ' ')}`);
-
+      const issueId = statusChangeDialog.issueId;
+      const toStatus = statusChangeDialog.toStatus;
+      updateMutation.mutate(
+        {
+          issueId,
+          status: toStatus,
+          ...(result.note && { resolutionNotes: result.note }),
+        },
+        {
+          onSuccess: () => {
+            toast.success(`Issue moved to ${toStatus.replace('_', ' ')}`, {
+              action: {
+                label: 'View',
+                onClick: () =>
+                  navigate({ to: '/support/issues/$issueId', params: { issueId } }),
+              },
+            });
+          },
+        }
+      );
       if (result.skipPromptForSession) {
         setSkipStatusPrompt(true);
       }
@@ -228,13 +306,18 @@ function IssuesBoardPage() {
             assignedToUserId: event.value === 'unassigned' ? null : event.value,
           });
         } else if (event.action === 'change_priority') {
-          await updateMutation.mutateAsync({ issueId, priority: event.value as any });
+          await updateMutation.mutateAsync({ issueId, priority: event.value as IssuePriority });
         } else if (event.action === 'change_status' || event.action === 'close') {
-          await updateMutation.mutateAsync({ issueId, status: event.value as any });
+          await updateMutation.mutateAsync({ issueId, status: event.value as IssueStatus });
         }
       }
 
-      toast.success(`Updated ${ids.length} issue${ids.length > 1 ? 's' : ''}`);
+      toast.success(`Updated ${ids.length} issue${ids.length > 1 ? 's' : ''}`, {
+        action: {
+          label: 'View Issues',
+          onClick: () => navigate({ to: '/support/issues' }),
+        },
+      });
       setSelectedIds(new Set());
     } catch {
       toast.error('Failed to update issues');
@@ -279,7 +362,7 @@ function IssuesBoardPage() {
                   <TabsTrigger value="board" className="px-3">
                     <LayoutGrid className="h-4 w-4" />
                   </TabsTrigger>
-                  <Link to="/support/issues">
+                  <Link to="/support/issues" search={search}>
                     <TabsTrigger value="list" className="px-3">
                       <List className="h-4 w-4" />
                     </TabsTrigger>
@@ -291,11 +374,12 @@ function IssuesBoardPage() {
                 <RefreshCw className="h-4 w-4" />
               </Button>
 
-              <Link to="/support/issues/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Issue
-                </Button>
+              <Link
+                to="/support/issues/new"
+                className={cn(buttonVariants())}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Issue
               </Link>
             </div>
           }
@@ -306,18 +390,20 @@ function IssuesBoardPage() {
         {/* Quick Filters */}
         <IssueQuickFilters
           activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
+          onFilterChange={handleFilterChange}
           counts={filterCounts}
         />
 
-        {/* Kanban Board */}
-        <IssueKanbanBoard
+        {/* Kanban Board - min-w-0 constrains width so overflow-x-auto scrolls instead of page */}
+        <div className="min-w-0">
+          <IssueKanbanBoard
           issues={filteredIssues}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           onStatusChange={handleStatusChange}
           onIssueClick={handleIssueClick}
         />
+        </div>
 
         {/* Bulk Actions Toolbar */}
         <IssueBulkActions

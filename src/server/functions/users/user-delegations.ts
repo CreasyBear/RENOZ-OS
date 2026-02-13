@@ -10,7 +10,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, desc, sql, lte, gte, or } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, lte, gte, or, isNull, ne, count as drizzleCount, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { userDelegations, users } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -21,6 +21,8 @@ import {
   type Delegation,
 } from '@/lib/schemas/users';
 import { idParamSchema, paginationSchema } from '@/lib/schemas';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
@@ -67,7 +69,7 @@ export const createDelegation = createServerFn({ method: 'POST' })
         and(
           eq(userDelegations.delegatorId, ctx.user.id),
           eq(userDelegations.isActive, true),
-          sql`${userDelegations.deletedAt} IS NULL`,
+          isNull(userDelegations.deletedAt),
           // Date ranges overlap
           or(
             and(
@@ -176,7 +178,7 @@ export const listMyDelegations = createServerFn({ method: 'GET' })
       })
       .from(userDelegations)
       .where(
-        and(eq(userDelegations.delegatorId, ctx.user.id), sql`${userDelegations.deletedAt} IS NULL`)
+        and(eq(userDelegations.delegatorId, ctx.user.id), isNull(userDelegations.deletedAt))
       )
       .orderBy(desc(userDelegations.startDate))
       .limit(pageSize)
@@ -189,16 +191,16 @@ export const listMyDelegations = createServerFn({ method: 'GET' })
         ? await db
             .select({ id: users.id, email: users.email, name: users.name })
             .from(users)
-            .where(sql`${users.id} = ANY(${delegateIds})`)
+            .where(inArray(users.id, delegateIds))
         : [];
 
     const delegateMap = new Map(delegates.map((d) => [d.id, d]));
 
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(userDelegations)
       .where(
-        and(eq(userDelegations.delegatorId, ctx.user.id), sql`${userDelegations.deletedAt} IS NULL`)
+        and(eq(userDelegations.delegatorId, ctx.user.id), isNull(userDelegations.deletedAt))
       );
 
     return {
@@ -218,6 +220,68 @@ export const listMyDelegations = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(count / pageSize),
       },
     };
+  });
+
+/**
+ * List my delegations with cursor pagination (recommended for large datasets).
+ */
+export const listMyDelegationsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(cursorPaginationSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+
+    const { cursor, pageSize = 20, sortOrder = 'desc' } = data;
+
+    const conditions = [
+      eq(userDelegations.delegatorId, ctx.user.id),
+      isNull(userDelegations.deletedAt),
+    ];
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(userDelegations.createdAt, userDelegations.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const delegations = await db
+      .select({
+        id: userDelegations.id,
+        organizationId: userDelegations.organizationId,
+        delegatorId: userDelegations.delegatorId,
+        delegateId: userDelegations.delegateId,
+        startDate: userDelegations.startDate,
+        endDate: userDelegations.endDate,
+        reason: userDelegations.reason,
+        isActive: userDelegations.isActive,
+        createdAt: userDelegations.createdAt,
+        updatedAt: userDelegations.updatedAt,
+      })
+      .from(userDelegations)
+      .where(and(...conditions))
+      .orderBy(orderDir(userDelegations.createdAt), orderDir(userDelegations.id))
+      .limit(pageSize + 1);
+
+    const delegateIds = [...new Set(delegations.map((d) => d.delegateId))];
+    const delegates =
+      delegateIds.length > 0
+        ? await db
+            .select({ id: users.id, email: users.email, name: users.name })
+            .from(users)
+            .where(inArray(users.id, delegateIds))
+        : [];
+    const delegateMap = new Map(delegates.map((d) => [d.id, d]));
+
+    const items = delegations.map((d) => ({
+      ...d,
+      delegator: { id: ctx.user.id, email: ctx.user.email, name: ctx.user.name },
+      delegate: delegateMap.get(d.delegateId),
+    }));
+
+    return buildStandardCursorResponse(items, pageSize);
   });
 
 // ============================================================================
@@ -253,7 +317,7 @@ export const listDelegationsToMe = createServerFn({ method: 'GET' })
         and(
           eq(userDelegations.delegateId, ctx.user.id),
           eq(userDelegations.isActive, true),
-          sql`${userDelegations.deletedAt} IS NULL`
+          isNull(userDelegations.deletedAt)
         )
       )
       .orderBy(desc(userDelegations.startDate))
@@ -267,19 +331,19 @@ export const listDelegationsToMe = createServerFn({ method: 'GET' })
         ? await db
             .select({ id: users.id, email: users.email, name: users.name })
             .from(users)
-            .where(sql`${users.id} = ANY(${delegatorIds})`)
+            .where(inArray(users.id, delegatorIds))
         : [];
 
     const delegatorMap = new Map(delegators.map((d) => [d.id, d]));
 
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(userDelegations)
       .where(
         and(
           eq(userDelegations.delegateId, ctx.user.id),
           eq(userDelegations.isActive, true),
-          sql`${userDelegations.deletedAt} IS NULL`
+          isNull(userDelegations.deletedAt)
         )
       );
 
@@ -300,6 +364,69 @@ export const listDelegationsToMe = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(count / pageSize),
       },
     };
+  });
+
+/**
+ * List delegations to me with cursor pagination (recommended for large datasets).
+ */
+export const listDelegationsToMeCursor = createServerFn({ method: 'GET' })
+  .inputValidator(cursorPaginationSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+
+    const { cursor, pageSize = 20, sortOrder = 'desc' } = data;
+
+    const conditions = [
+      eq(userDelegations.delegateId, ctx.user.id),
+      eq(userDelegations.isActive, true),
+      isNull(userDelegations.deletedAt),
+    ];
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(userDelegations.createdAt, userDelegations.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const delegations = await db
+      .select({
+        id: userDelegations.id,
+        organizationId: userDelegations.organizationId,
+        delegatorId: userDelegations.delegatorId,
+        delegateId: userDelegations.delegateId,
+        startDate: userDelegations.startDate,
+        endDate: userDelegations.endDate,
+        reason: userDelegations.reason,
+        isActive: userDelegations.isActive,
+        createdAt: userDelegations.createdAt,
+        updatedAt: userDelegations.updatedAt,
+      })
+      .from(userDelegations)
+      .where(and(...conditions))
+      .orderBy(orderDir(userDelegations.createdAt), orderDir(userDelegations.id))
+      .limit(pageSize + 1);
+
+    const delegatorIds = [...new Set(delegations.map((d) => d.delegatorId))];
+    const delegators =
+      delegatorIds.length > 0
+        ? await db
+            .select({ id: users.id, email: users.email, name: users.name })
+            .from(users)
+            .where(inArray(users.id, delegatorIds))
+        : [];
+    const delegatorMap = new Map(delegators.map((d) => [d.id, d]));
+
+    const items = delegations.map((d) => ({
+      ...d,
+      delegator: delegatorMap.get(d.delegatorId),
+      delegate: { id: ctx.user.id, email: ctx.user.email, name: ctx.user.name },
+    }));
+
+    return buildStandardCursorResponse(items, pageSize);
   });
 
 // ============================================================================
@@ -324,7 +451,7 @@ export const listAllDelegations = createServerFn({ method: 'GET' })
 
     const conditions = [
       eq(userDelegations.organizationId, ctx.organizationId),
-      sql`${userDelegations.deletedAt} IS NULL`,
+      isNull(userDelegations.deletedAt),
     ];
     if (activeOnly) {
       conditions.push(eq(userDelegations.isActive, true));
@@ -361,13 +488,13 @@ export const listAllDelegations = createServerFn({ method: 'GET' })
         ? await db
             .select({ id: users.id, email: users.email, name: users.name })
             .from(users)
-            .where(sql`${users.id} = ANY(${userIds})`)
+            .where(inArray(users.id, userIds))
         : [];
 
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
 
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(userDelegations)
       .where(and(...conditions));
 
@@ -411,7 +538,7 @@ export const updateDelegation = createServerFn({ method: 'POST' })
         and(
           eq(userDelegations.id, data.id),
           eq(userDelegations.delegatorId, ctx.user.id),
-          sql`${userDelegations.deletedAt} IS NULL`
+          isNull(userDelegations.deletedAt)
         )
       )
       .limit(1);
@@ -431,8 +558,8 @@ export const updateDelegation = createServerFn({ method: 'POST' })
         and(
           eq(userDelegations.delegatorId, ctx.user.id),
           eq(userDelegations.isActive, true),
-          sql`${userDelegations.id} != ${data.id}`,
-          sql`${userDelegations.deletedAt} IS NULL`,
+          ne(userDelegations.id, data.id),
+          isNull(userDelegations.deletedAt),
           or(and(lte(userDelegations.startDate, endDate), gte(userDelegations.endDate, startDate)))
         )
       )
@@ -447,7 +574,7 @@ export const updateDelegation = createServerFn({ method: 'POST' })
       .set({
         ...data.updates,
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userDelegations.version} + 1`,
       })
       .where(eq(userDelegations.id, data.id))
       .returning();
@@ -526,7 +653,7 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
         and(
           eq(userDelegations.id, data.id),
           eq(userDelegations.delegatorId, ctx.user.id),
-          sql`${userDelegations.deletedAt} IS NULL`
+          isNull(userDelegations.deletedAt)
         )
       )
       .limit(1);
@@ -547,7 +674,7 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
       .set({
         isActive: false,
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userDelegations.version} + 1`,
       })
       .where(eq(userDelegations.id, data.id));
 
@@ -615,7 +742,7 @@ export const getActiveDelegate = createServerFn({ method: 'GET' })
           eq(userDelegations.isActive, true),
           lte(userDelegations.startDate, now),
           gte(userDelegations.endDate, now),
-          sql`${userDelegations.deletedAt} IS NULL`
+          isNull(userDelegations.deletedAt)
         )
       )
       .limit(1);

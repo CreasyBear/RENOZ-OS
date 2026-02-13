@@ -10,6 +10,7 @@
 
 
 import { format } from 'date-fns';
+import { Link } from '@tanstack/react-router';
 import {
   Building2,
   MapPin,
@@ -261,9 +262,14 @@ export function ProjectMetaPanel({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <Link
+                      to="/customers/$customerId"
+                      params={{ customerId: project.customer.id }}
+                      search={{}}
+                      className="text-sm font-medium truncate hover:underline block"
+                    >
                       {project.customer.name}
-                    </p>
+                    </Link>
                     {project.customer.companyName && (
                       <p className="text-xs text-muted-foreground">
                         {project.customer.companyName}

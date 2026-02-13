@@ -7,6 +7,7 @@
  * - Label and trend indicator
  */
 import { cn } from '@/lib/utils'
+import { getHealthScoreLabel } from '../customer-status-config'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 // ============================================================================
@@ -32,19 +33,20 @@ function getScoreColor(score: number | null): {
   text: string
   label: string
 } {
+  const label = getHealthScoreLabel(score)
   if (score === null) {
-    return { stroke: '#9ca3af', bg: 'bg-gray-100', text: 'text-gray-600', label: 'Not Rated' }
+    return { stroke: '#9ca3af', bg: 'bg-gray-100', text: 'text-gray-600', label }
   }
   if (score >= 80) {
-    return { stroke: '#22c55e', bg: 'bg-green-100', text: 'text-green-700', label: 'Excellent' }
+    return { stroke: '#22c55e', bg: 'bg-green-100', text: 'text-green-700', label }
   }
   if (score >= 60) {
-    return { stroke: '#eab308', bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Good' }
+    return { stroke: '#eab308', bg: 'bg-yellow-100', text: 'text-yellow-700', label }
   }
   if (score >= 40) {
-    return { stroke: '#f97316', bg: 'bg-orange-100', text: 'text-orange-700', label: 'Fair' }
+    return { stroke: '#f97316', bg: 'bg-orange-100', text: 'text-orange-700', label }
   }
-  return { stroke: '#ef4444', bg: 'bg-red-100', text: 'text-red-700', label: 'At Risk' }
+  return { stroke: '#ef4444', bg: 'bg-red-100', text: 'text-red-700', label }
 }
 
 function getTrend(current: number | null, previous: number | null): 'up' | 'down' | 'stable' | null {

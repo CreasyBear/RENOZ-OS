@@ -208,6 +208,70 @@ export const getSlaTrackingByIdSchema = z.object({
 });
 
 // ============================================================================
+// UI / COMPONENT TYPES (per SCHEMA-TRACE.md)
+// ============================================================================
+
+export type SlaStatusType =
+  | 'on_track'
+  | 'at_risk'
+  | 'breached'
+  | 'paused'
+  | 'resolved'
+  | 'responded';
+
+export interface SlaBadgeProps {
+  status: SlaStatusType;
+  label?: string;
+  showIcon?: boolean;
+  className?: string;
+  size?: 'sm' | 'default';
+}
+
+export interface SlaStatusData {
+  status: string;
+  isPaused: boolean;
+  responseBreached: boolean;
+  resolutionBreached: boolean;
+  responseDueAt: Date | null;
+  resolutionDueAt: Date | null;
+  respondedAt?: Date | null;
+  resolvedAt?: Date | null;
+  isResponseAtRisk: boolean;
+  isResolutionAtRisk: boolean;
+  responseTimeRemaining: number | null;
+  resolutionTimeRemaining: number | null;
+  responsePercentComplete: number | null;
+  resolutionPercentComplete: number | null;
+  responseTimeElapsed?: number | null;
+  resolutionTimeElapsed?: number | null;
+  configurationName?: string;
+}
+
+export interface SlaReportRow {
+  issueType: string;
+  total: number;
+  responseBreached: number;
+  resolutionBreached: number;
+  resolved: number;
+  responseBreachRate: number;
+  resolutionBreachRate: number;
+  avgResponseTimeSeconds: number | null;
+  avgResolutionTimeSeconds: number | null;
+}
+
+export interface SlaMetricsData {
+  total: number;
+  responseBreached: number;
+  resolutionBreached: number;
+  currentlyPaused: number;
+  resolved: number;
+  responseBreachRate: number;
+  resolutionBreachRate: number;
+  avgResponseTimeSeconds: number | null;
+  avgResolutionTimeSeconds: number | null;
+}
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 

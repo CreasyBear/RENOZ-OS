@@ -30,23 +30,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { IssueKanbanCard, IssueKanbanCardOverlay, type IssueKanbanItem } from './issue-kanban-card';
-import type { IssueStatus } from '@/lib/schemas/support';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface KanbanColumn {
-  id: IssueStatus;
-  title: string;
-  color: string;
-}
-
-interface StatusChangeEvent {
-  issueId: string;
-  fromStatus: IssueStatus;
-  toStatus: IssueStatus;
-}
+import type { KanbanColumn, StatusChangeEvent } from '@/lib/schemas/support';
+import type { IssueStatus } from '@/lib/schemas/support/issues';
 
 // ============================================================================
 // COLUMN CONFIG
@@ -64,7 +49,7 @@ const columns: KanbanColumn[] = [
 // KANBAN COLUMN
 // ============================================================================
 
-interface KanbanColumnProps {
+interface IssueKanbanColumnProps {
   column: KanbanColumn;
   issues: IssueKanbanItem[];
   selectedIds: Set<string>;
@@ -72,7 +57,7 @@ interface KanbanColumnProps {
   onIssueClick: (issue: IssueKanbanItem) => void;
 }
 
-function KanbanColumn({ column, issues, selectedIds, onSelect, onIssueClick }: KanbanColumnProps) {
+function IssueKanbanColumn({ column, issues, selectedIds, onSelect, onIssueClick }: IssueKanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
@@ -166,7 +151,7 @@ export function IssueKanbanBoard({
     };
 
     issues.forEach((issue) => {
-      const status = issue.status as IssueStatus;
+      const status = issue.status;
       if (grouped[status]) {
         grouped[status].push(issue);
       } else {
@@ -181,7 +166,8 @@ export function IssueKanbanBoard({
   const activeIssue = activeId ? issues.find((i) => i.id === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+    const id = event.active.id;
+    setActiveId(typeof id === 'string' ? id : String(id));
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -190,27 +176,29 @@ export function IssueKanbanBoard({
 
     if (!over) return;
 
-    const activeIssue = issues.find((i) => i.id === active.id);
+    const activeIdStr = typeof active.id === 'string' ? active.id : String(active.id);
+    const activeIssue = issues.find((i) => i.id === activeIdStr);
     if (!activeIssue) return;
 
     // Check if dropped on a column
-    const overColumn = columns.find((c) => c.id === over.id);
+    const overIdStr = typeof over.id === 'string' ? over.id : String(over.id);
+    const overColumn = columns.find((c) => c.id === overIdStr);
     if (overColumn && activeIssue.status !== overColumn.id) {
       onStatusChange({
         issueId: activeIssue.id,
-        fromStatus: activeIssue.status as IssueStatus,
+        fromStatus: activeIssue.status,
         toStatus: overColumn.id,
       });
       return;
     }
 
     // Check if dropped on another issue (get that issue's status)
-    const overIssue = issues.find((i) => i.id === over.id);
+    const overIssue = issues.find((i) => i.id === overIdStr);
     if (overIssue && activeIssue.status !== overIssue.status) {
       onStatusChange({
         issueId: activeIssue.id,
-        fromStatus: activeIssue.status as IssueStatus,
-        toStatus: overIssue.status as IssueStatus,
+        fromStatus: activeIssue.status,
+        toStatus: overIssue.status,
       });
     }
   };
@@ -234,7 +222,7 @@ export function IssueKanbanBoard({
     >
       <div className="flex h-[calc(100vh-220px)] gap-4 overflow-x-auto pb-4">
         {columns.map((column) => (
-          <KanbanColumn
+          <IssueKanbanColumn
             key={column.id}
             column={column}
             issues={issuesByStatus[column.id]}

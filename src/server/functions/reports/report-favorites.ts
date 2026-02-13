@@ -14,7 +14,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
@@ -23,10 +23,12 @@ import { reportFavorites, customReports, scheduledReports } from 'drizzle/schema
 import {
   createReportFavoriteSchema,
   listReportFavoritesSchema,
+  listReportFavoritesCursorSchema,
   deleteReportFavoriteSchema,
   bulkDeleteReportFavoritesSchema,
   type ReportFavoriteWithDetails,
 } from '@/lib/schemas/reports/report-favorites';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 
 // ============================================================================
 // FAVORITES CRUD
@@ -91,7 +93,7 @@ export const listReportFavorites = createServerFn({ method: 'GET' })
       id: row.id,
       organizationId: row.organizationId,
       userId: row.userId,
-      reportType: row.reportType,
+      reportType: row.reportType as ReportFavoriteWithDetails["reportType"],
       reportId: row.reportId,
       createdAt: row.createdAt,
       reportName:
@@ -117,6 +119,74 @@ export const listReportFavorites = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(totalItems / pageSize),
       },
     };
+  });
+
+/**
+ * List report favorites with cursor pagination (recommended for large datasets).
+ */
+export const listReportFavoritesCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listReportFavoritesCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.report.viewOperations });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', reportType } = data;
+
+    const conditions = [
+      eq(reportFavorites.organizationId, ctx.organizationId),
+      eq(reportFavorites.userId, ctx.user.id),
+    ];
+    if (reportType) conditions.push(eq(reportFavorites.reportType, reportType));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(reportFavorites.createdAt, reportFavorites.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const rows = await db
+      .select({
+        id: reportFavorites.id,
+        organizationId: reportFavorites.organizationId,
+        userId: reportFavorites.userId,
+        reportType: reportFavorites.reportType,
+        reportId: reportFavorites.reportId,
+        createdAt: reportFavorites.createdAt,
+        customReportName: customReports.name,
+        customReportDescription: customReports.description,
+        scheduledReportName: scheduledReports.name,
+        scheduledReportDescription: scheduledReports.description,
+      })
+      .from(reportFavorites)
+      .leftJoin(customReports, eq(reportFavorites.reportId, customReports.id))
+      .leftJoin(scheduledReports, eq(reportFavorites.reportId, scheduledReports.id))
+      .where(and(...conditions))
+      .orderBy(orderDir(reportFavorites.createdAt), orderDir(reportFavorites.id))
+      .limit(pageSize + 1);
+
+    const items: ReportFavoriteWithDetails[] = rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organizationId,
+      userId: row.userId,
+      reportType: row.reportType as ReportFavoriteWithDetails['reportType'],
+      reportId: row.reportId,
+      createdAt: row.createdAt,
+      reportName:
+        row.reportType === 'custom'
+          ? row.customReportName ?? undefined
+          : row.reportType === 'scheduled'
+            ? row.scheduledReportName ?? undefined
+            : undefined,
+      reportDescription:
+        row.reportType === 'custom'
+          ? row.customReportDescription ?? undefined
+          : row.reportType === 'scheduled'
+            ? row.scheduledReportDescription ?? undefined
+            : undefined,
+    }));
+
+    return buildStandardCursorResponse(items, pageSize);
   });
 
 /**

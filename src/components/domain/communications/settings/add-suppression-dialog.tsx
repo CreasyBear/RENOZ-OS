@@ -7,9 +7,6 @@
  */
 
 import { memo, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -18,48 +15,36 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Plus } from "lucide-react";
-import { toast } from "@/hooks";
+import { Plus } from "lucide-react";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { useAddSuppression } from "@/hooks/communications/use-email-suppression";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextField,
+  SelectField,
+  TextareaField,
+  FormActions,
+} from "@/components/shared/forms";
 
 // ============================================================================
 // SCHEMA
 // ============================================================================
 
-const addSuppressionFormSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  reason: z.enum(["bounce", "complaint", "unsubscribe", "manual"]),
-  notes: z.string().optional(),
-});
+import {
+  addSuppressionFormSchema,
+  type AddSuppressionDialogProps,
+  type AddSuppressionFormValues,
+} from "@/lib/schemas/communications";
 
-type FormValues = z.infer<typeof addSuppressionFormSchema>;
+type FormValues = AddSuppressionFormValues;
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface AddSuppressionDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
+const REASON_OPTIONS = [
+  { value: "manual", label: "Manual Suppression" },
+  { value: "bounce", label: "Bounce" },
+  { value: "complaint", label: "Complaint" },
+  { value: "unsubscribe", label: "Unsubscribe" },
+] as const;
 
 // ============================================================================
 // COMPONENT
@@ -71,17 +56,14 @@ export const AddSuppressionDialog = memo(function AddSuppressionDialog({
 }: AddSuppressionDialogProps) {
   const addMutation = useAddSuppression();
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(addSuppressionFormSchema),
+  const form = useTanStackForm<FormValues>({
+    schema: addSuppressionFormSchema,
     defaultValues: {
       email: "",
       reason: "manual",
       notes: "",
     },
-  });
-
-  const onSubmit = useCallback(
-    async (values: FormValues) => {
+    onSubmit: async (values) => {
       try {
         await addMutation.mutateAsync({
           email: values.email,
@@ -92,12 +74,13 @@ export const AddSuppressionDialog = memo(function AddSuppressionDialog({
         toast.success("Email added to suppression list");
         form.reset();
         onOpenChange(false);
-      } catch {
-        toast.error("Failed to add to suppression list");
+      } catch (error) {
+        toast.error("Failed to add to suppression list", {
+          description: getUserFriendlyMessage(error as Error),
+        });
       }
     },
-    [addMutation, form, onOpenChange]
-  );
+  });
 
   const handleCancel = useCallback(() => {
     form.reset();
@@ -117,92 +100,58 @@ export const AddSuppressionDialog = memo(function AddSuppressionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Email */}
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email Address *</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="user@example.com"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="email">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Email Address"
+                type="email"
+                placeholder="user@example.com"
+                required
+              />
+            )}
+          </form.Field>
 
-            {/* Reason */}
-            <FormField
-              control={form.control}
-              name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reason *</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select reason" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="manual">Manual Suppression</SelectItem>
-                      <SelectItem value="bounce">Bounce</SelectItem>
-                      <SelectItem value="complaint">Complaint</SelectItem>
-                      <SelectItem value="unsubscribe">Unsubscribe</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="reason">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Reason"
+                options={REASON_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                placeholder="Select reason"
+                required
+              />
+            )}
+          </form.Field>
 
-            {/* Notes */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Reason for suppression..."
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="notes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Notes (optional)"
+                placeholder="Reason for suppression..."
+                rows={3}
+              />
+            )}
+          </form.Field>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCancel}
-                disabled={addMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={addMutation.isPending}>
-                {addMutation.isPending && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
-                Add to List
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <FormActions
+              form={form}
+              submitLabel="Add to List"
+              cancelLabel="Cancel"
+              onCancel={handleCancel}
+              submitDisabled={addMutation.isPending}
+            />
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

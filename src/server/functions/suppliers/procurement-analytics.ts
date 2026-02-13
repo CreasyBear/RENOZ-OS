@@ -355,6 +355,8 @@ export const getOrderMetrics = createServerFn({ method: 'GET' })
       totalOrders,
       totalValue,
       avgOrderValue: totalOrders > 0 ? totalValue / totalOrders : 0,
+      onTimeDeliveries,
+      lateDeliveries,
       byStatus: {
         pendingApproval,
         awaitingDelivery,

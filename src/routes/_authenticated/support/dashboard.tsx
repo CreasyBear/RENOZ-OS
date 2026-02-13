@@ -10,7 +10,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-006
  */
 
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportDashboardSkeleton } from '@/components/skeletons/support';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -134,6 +134,7 @@ function BreakdownChart({ title, data, loading }: BreakdownChartProps) {
 // ============================================================================
 
 function SupportDashboardPage() {
+  const navigate = useNavigate();
   const { data: metrics, isLoading, error, refetch } = useSupportMetrics();
   const { data: csatMetrics, isLoading: csatLoading, error: csatError } = useCsatMetrics();
 
@@ -148,7 +149,7 @@ function SupportDashboardPage() {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button size="sm">
+            <Button size="sm" onClick={() => navigate({ to: '/support/issues/new' })}>
               <Plus className="mr-2 h-4 w-4" />
               New Issue
             </Button>
@@ -250,10 +251,12 @@ function SupportDashboardPage() {
                       <AlertTriangle className="mr-1 h-3 w-3" />
                       At Risk: {metrics?.sla.atRisk ?? 0}
                     </Badge>
-                    <Badge variant="outline" className="text-red-500">
-                      <AlertCircle className="mr-1 h-3 w-3" />
-                      Breached: {metrics?.sla.breached ?? 0}
-                    </Badge>
+                    <Link to="/support/issues" search={{ slaStatus: 'breached' }}>
+                      <Badge variant="outline" className="text-red-500 cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/20">
+                        <AlertCircle className="mr-1 h-3 w-3" />
+                        Breached: {metrics?.sla.breached ?? 0}
+                      </Badge>
+                    </Link>
                   </div>
                   <span className="text-muted-foreground">
                     {metrics?.sla.totalTracked ?? 0} tracked
@@ -264,14 +267,17 @@ function SupportDashboardPage() {
           </CardContent>
         </Card>
 
-        <MetricCard
-          title="SLA Breaches"
-          value={metrics?.sla.breached ?? 0}
-          subtitle="Issues that missed SLA"
-          icon={AlertCircle}
-          iconClassName={(metrics?.sla.breached ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
-          isLoading={isLoading}
-        />
+        <Link to="/support/issues" search={{ slaStatus: 'breached' }}>
+          <MetricCard
+            title="SLA Breaches"
+            value={metrics?.sla.breached ?? 0}
+            subtitle="Issues that missed SLA"
+            icon={AlertCircle}
+            iconClassName={(metrics?.sla.breached ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
+            isLoading={isLoading}
+            className="cursor-pointer hover:bg-muted/50 transition-colors"
+          />
+        </Link>
 
         <MetricCard
           title="Weekly Trend"

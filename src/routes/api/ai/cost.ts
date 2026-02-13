@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { aiCostTracking } from 'drizzle/schema/_ai';
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm';
 import { getOrgDailyLimit } from '@/server/functions/ai/utils/budget';
+import { logger } from '@/lib/logger';
 
 export async function GET({ request }: { request: Request }) {
   try {
@@ -117,7 +118,7 @@ export async function GET({ request }: { request: Request }) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('[API /ai/cost] Error:', error);
+    logger.error('[API /ai/cost] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {

@@ -10,8 +10,17 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-006b
  */
 
+import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, sql, count } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { z } from 'zod';
+import { eq, and, desc, asc, sql, count, like } from 'drizzle-orm';
+import {
+  decodeCursor,
+  buildCursorCondition,
+  buildStandardCursorResponse,
+  cursorPaginationSchema,
+} from '@/lib/db/pagination';
 import { db } from '@/lib/db';
 import {
   warrantyClaims,
@@ -25,17 +34,19 @@ import {
   slaEvents,
   businessHoursConfig,
   organizationHolidays,
+  type WarrantyClaim,
 } from 'drizzle/schema';
 import {
   calculateInitialTracking,
   calculateResolutionUpdate,
   buildStartedEventData,
   buildResolvedEventData,
+  toSlaTracking,
+  toWeeklySchedule,
 } from '@/lib/sla';
 import type {
   SlaConfiguration,
   BusinessHoursConfig as BusinessHoursConfigType,
-  SlaTracking,
 } from '@/lib/sla/types';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -57,7 +68,7 @@ import {
 } from '@/lib/schemas/warranty/claims';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
-import { computeChanges } from '@/lib/activity-logger';
+import { computeChanges, excludeFieldsForActivity } from '@/lib/activity-logger';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -66,7 +77,7 @@ import { computeChanges } from '@/lib/activity-logger';
 /**
  * Fields to exclude from activity change tracking (system-managed)
  */
-const WARRANTY_CLAIM_EXCLUDED_FIELDS: string[] = [
+const WARRANTY_CLAIM_EXCLUDED_FIELDS = [
   'updatedAt',
   'updatedBy',
   'createdAt',
@@ -75,7 +86,7 @@ const WARRANTY_CLAIM_EXCLUDED_FIELDS: string[] = [
   'version',
   'organizationId',
   'slaTrackingId',
-];
+] as const satisfies readonly string[];
 
 // ============================================================================
 // HELPERS
@@ -98,7 +109,7 @@ async function generateClaimNumber(organizationId: string): Promise<string> {
     .where(
       and(
         eq(warrantyClaims.organizationId, organizationId),
-        sql`${warrantyClaims.claimNumber} LIKE ${prefix + '%'}`
+        like(warrantyClaims.claimNumber, `${prefix}%`)
       )
     );
 
@@ -158,8 +169,10 @@ async function startSlaTrackingForClaim(
   organizationId: string,
   userId: string,
   claimId: string,
-  configId: string
+  configId: string,
+  executor?: typeof db
 ) {
+  const exec = executor ?? db;
   // Get the SLA configuration
   const [config] = await db
     .select()
@@ -184,7 +197,7 @@ async function startSlaTrackingForClaim(
         id: bh.id,
         organizationId: bh.organizationId,
         name: bh.name,
-        weeklySchedule: bh.weeklySchedule as BusinessHoursConfigType['weeklySchedule'],
+        weeklySchedule: toWeeklySchedule(bh.weeklySchedule),
         timezone: bh.timezone,
         isDefault: bh.isDefault,
       };
@@ -234,15 +247,13 @@ async function startSlaTrackingForClaim(
     holidayDates
   );
 
-  // Create tracking record
-  const [tracking] = await db.insert(slaTracking).values(initialValues).returning();
-
-  // Create SLA started event for audit trail
-  await db.insert(slaEvents).values({
+  // Create tracking record and event (atomic)
+  const [tracking] = await exec.insert(slaTracking).values(initialValues).returning();
+  await exec.insert(slaEvents).values({
     organizationId,
     slaTrackingId: tracking.id,
     eventType: 'started',
-    eventData: buildStartedEventData(tracking as SlaTracking),
+    eventData: buildStartedEventData(toSlaTracking(tracking)),
     triggeredByUserId: userId,
   });
 
@@ -287,6 +298,10 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
     }
 
     // Check warranty is active
+    // Business Rule: Only active or expiring_soon warranties can have claims filed.
+    // Transferred warranties are considered inactive and cannot have new claims.
+    // Voided warranties cannot have claims.
+    // Expired warranties cannot have claims (unless expiring_soon).
     if (warranty.warranty.status !== 'active' && warranty.warranty.status !== 'expiring_soon') {
       throw new ValidationError(`Cannot submit claim for warranty with status: ${warranty.warranty.status}`);
     }
@@ -298,42 +313,45 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
     // Get SLA configuration for warranty claims
     const slaConfig = await getWarrantySlaConfig(ctx.organizationId);
 
-    // Create the claim first (need ID for SLA tracking)
-    let slaTrackingId: string | null = null;
+    // Create claim and SLA tracking atomically
+    const [claim] = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(warrantyClaims)
+        .values({
+          organizationId: ctx.organizationId,
+          claimNumber,
+          warrantyId: data.warrantyId,
+          customerId: warranty.warranty.customerId,
+          claimType: data.claimType,
+          description: data.description,
+          status: 'submitted',
+          cycleCountAtClaim: data.cycleCountAtClaim ?? warranty.warranty.currentCycleCount,
+          notes: data.notes,
+          submittedAt: now,
+          slaTrackingId: null,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
 
-    // Create the claim first
-    const [claim] = await db
-      .insert(warrantyClaims)
-      .values({
-        organizationId: ctx.organizationId,
-        claimNumber,
-        warrantyId: data.warrantyId,
-        customerId: warranty.warranty.customerId,
-        claimType: data.claimType,
-        description: data.description,
-        status: 'submitted',
-        cycleCountAtClaim: data.cycleCountAtClaim ?? warranty.warranty.currentCycleCount,
-        notes: data.notes,
-        submittedAt: now,
-        slaTrackingId: null, // Will be set after SLA tracking is created
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+      if (slaConfig) {
+        const slaEntry = await startSlaTrackingForClaim(
+          ctx.organizationId,
+          ctx.user.id,
+          inserted.id,
+          slaConfig.id,
+          tx as unknown as typeof db
+        );
+        const [updated] = await tx
+          .update(warrantyClaims)
+          .set({ slaTrackingId: slaEntry.id })
+          .where(eq(warrantyClaims.id, inserted.id))
+          .returning();
+        return [updated!];
+      }
 
-    // Create SLA tracking using unified engine (with proper business hours/holidays)
-    if (slaConfig) {
-      const slaEntry = await startSlaTrackingForClaim(
-        ctx.organizationId,
-        ctx.user.id,
-        claim.id,
-        slaConfig.id
-      );
-      slaTrackingId = slaEntry.id;
-
-      // Update claim with SLA tracking ID
-      await db.update(warrantyClaims).set({ slaTrackingId }).where(eq(warrantyClaims.id, claim.id));
-    }
+      return [inserted];
+    });
 
     // Get customer email for notification
     const customerEmail = warranty.customer.email ?? undefined;
@@ -369,7 +387,7 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       changes: computeChanges({
         before: null,
         after: claim,
-        excludeFields: WARRANTY_CLAIM_EXCLUDED_FIELDS as never[],
+        excludeFields: excludeFieldsForActivity<WarrantyClaim>(WARRANTY_CLAIM_EXCLUDED_FIELDS),
       }),
       metadata: {
         customerId: warranty.warranty.customerId,
@@ -422,6 +440,7 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
       under_review: ['approved', 'denied', 'submitted'],
       approved: ['resolved', 'under_review'],
       denied: ['under_review'], // Can be reopened for review
+      cancelled: ['submitted'], // Can be reopened
       resolved: [], // Final state
     };
 
@@ -612,38 +631,7 @@ export const denyClaim = createServerFn({ method: 'POST' })
       throw new ValidationError(`Cannot deny claim with status: ${existingClaim.status}`);
     }
 
-    // Update SLA tracking to resolved (even though denied) using unified engine
     const now = new Date();
-    if (existingClaim.slaTrackingId) {
-      // Get current tracking state
-      const [currentTracking] = await db
-        .select()
-        .from(slaTracking)
-        .where(eq(slaTracking.id, existingClaim.slaTrackingId))
-        .limit(1);
-
-      if (currentTracking) {
-        // Calculate resolution update
-        const resolutionUpdate = calculateResolutionUpdate(currentTracking as SlaTracking, now);
-
-        // Update tracking record
-        await db
-          .update(slaTracking)
-          .set(resolutionUpdate)
-          .where(eq(slaTracking.id, existingClaim.slaTrackingId));
-
-        // Create resolved event for audit trail
-        const updatedTracking = { ...currentTracking, ...resolutionUpdate };
-        await db.insert(slaEvents).values({
-          organizationId: ctx.organizationId,
-          slaTrackingId: existingClaim.slaTrackingId,
-          eventType: 'resolved',
-          eventData: buildResolvedEventData(updatedTracking as SlaTracking, now),
-          triggeredByUserId: ctx.user.id,
-        });
-      }
-    }
-
     const updatedNotes = data.notes
       ? existingClaim.notes
         ? `${existingClaim.notes}\n\n[${new Date().toISOString()}] Denied by ${ctx.user.name || ctx.user.email}: ${data.denialReason}\nNotes: ${data.notes}`
@@ -652,16 +640,42 @@ export const denyClaim = createServerFn({ method: 'POST' })
         ? `${existingClaim.notes}\n\n[${new Date().toISOString()}] Denied by ${ctx.user.name || ctx.user.email}: ${data.denialReason}`
         : `[${new Date().toISOString()}] Denied by ${ctx.user.name || ctx.user.email}: ${data.denialReason}`;
 
-    const [claim] = await db
-      .update(warrantyClaims)
-      .set({
-        status: 'denied',
-        denialReason: data.denialReason,
-        notes: updatedNotes,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(warrantyClaims.id, data.claimId))
-      .returning();
+    const [claim] = await db.transaction(async (tx) => {
+      if (existingClaim.slaTrackingId) {
+        const [currentTracking] = await tx
+          .select()
+          .from(slaTracking)
+          .where(eq(slaTracking.id, existingClaim.slaTrackingId))
+          .limit(1);
+
+        if (currentTracking) {
+          const resolutionUpdate = calculateResolutionUpdate(toSlaTracking(currentTracking), now);
+          await tx
+            .update(slaTracking)
+            .set(resolutionUpdate)
+            .where(eq(slaTracking.id, existingClaim.slaTrackingId));
+          const updatedTracking = { ...currentTracking, ...resolutionUpdate };
+          await tx.insert(slaEvents).values({
+            organizationId: ctx.organizationId,
+            slaTrackingId: existingClaim.slaTrackingId,
+            eventType: 'resolved',
+            eventData: buildResolvedEventData(toSlaTracking(updatedTracking), now),
+            triggeredByUserId: ctx.user.id,
+          });
+        }
+      }
+
+      return await tx
+        .update(warrantyClaims)
+        .set({
+          status: 'denied',
+          denialReason: data.denialReason,
+          notes: updatedNotes,
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(warrantyClaims.id, data.claimId))
+        .returning();
+    });
 
     // Log claim denial
     logger.logAsync({
@@ -734,49 +748,44 @@ export const resolveClaim = createServerFn({ method: 'POST' })
     }
 
     const now = new Date();
+    const updatedNotes = data.resolutionNotes
+      ? existingClaim.claim.notes
+        ? `${existingClaim.claim.notes}\n\n[${now.toISOString()}] Resolved by ${ctx.user.name || ctx.user.email} - ${data.resolutionType}: ${data.resolutionNotes}`
+        : `[${now.toISOString()}] Resolved by ${ctx.user.name || ctx.user.email} - ${data.resolutionType}: ${data.resolutionNotes}`
+      : existingClaim.claim.notes;
 
-    // Update SLA tracking with unified engine
-    if (existingClaim.claim.slaTrackingId) {
-      // Get current tracking state
-      const [currentTracking] = await db
-        .select()
-        .from(slaTracking)
-        .where(eq(slaTracking.id, existingClaim.claim.slaTrackingId))
-        .limit(1);
+    const [claim] = await db.transaction(async (tx) => {
+      if (existingClaim.claim.slaTrackingId) {
+        const [currentTracking] = await tx
+          .select()
+          .from(slaTracking)
+          .where(eq(slaTracking.id, existingClaim.claim.slaTrackingId))
+          .limit(1);
 
-      if (currentTracking) {
-        // Calculate resolution update
-        const resolutionUpdate = calculateResolutionUpdate(currentTracking as SlaTracking, now);
-
-        // Update tracking record
-        await db
-          .update(slaTracking)
-          .set(resolutionUpdate)
-          .where(eq(slaTracking.id, existingClaim.claim.slaTrackingId));
-
-        // Create resolved event for audit trail
-        const updatedTracking = { ...currentTracking, ...resolutionUpdate };
-        await db.insert(slaEvents).values({
-          organizationId: ctx.organizationId,
-          slaTrackingId: existingClaim.claim.slaTrackingId,
-          eventType: 'resolved',
-          eventData: buildResolvedEventData(updatedTracking as SlaTracking, now),
-          triggeredByUserId: ctx.user.id,
-        });
+        if (currentTracking) {
+          const resolutionUpdate = calculateResolutionUpdate(toSlaTracking(currentTracking), now);
+          await tx
+            .update(slaTracking)
+            .set(resolutionUpdate)
+            .where(eq(slaTracking.id, existingClaim.claim.slaTrackingId));
+          const updatedTracking = { ...currentTracking, ...resolutionUpdate };
+          await tx.insert(slaEvents).values({
+            organizationId: ctx.organizationId,
+            slaTrackingId: existingClaim.claim.slaTrackingId,
+            eventType: 'resolved',
+            eventData: buildResolvedEventData(toSlaTracking(updatedTracking), now),
+            triggeredByUserId: ctx.user.id,
+          });
+        }
       }
-    }
 
-    // If resolution type is warranty_extension, extend the warranty
-    if (data.resolutionType === 'warranty_extension') {
-      if (data.extensionMonths && data.extensionMonths > 0) {
+      if (data.resolutionType === 'warranty_extension' && data.extensionMonths && data.extensionMonths > 0) {
         const currentExpiry = new Date(existingClaim.warranty.expiryDate);
         currentExpiry.setMonth(currentExpiry.getMonth() + data.extensionMonths);
-
-        await db
+        await tx
           .update(warranties)
           .set({
             expiryDate: currentExpiry,
-            // Reset status if was expiring_soon
             status:
               existingClaim.warranty.status === 'expiring_soon'
                 ? 'active'
@@ -784,27 +793,22 @@ export const resolveClaim = createServerFn({ method: 'POST' })
           })
           .where(eq(warranties.id, existingClaim.warranty.id));
       }
-    }
 
-    const updatedNotes = data.resolutionNotes
-      ? existingClaim.claim.notes
-        ? `${existingClaim.claim.notes}\n\n[${now.toISOString()}] Resolved by ${ctx.user.name || ctx.user.email} - ${data.resolutionType}: ${data.resolutionNotes}`
-        : `[${now.toISOString()}] Resolved by ${ctx.user.name || ctx.user.email} - ${data.resolutionType}: ${data.resolutionNotes}`
-      : existingClaim.claim.notes;
-
-    const [claim] = await db
-      .update(warrantyClaims)
-      .set({
-        status: 'resolved',
-        resolutionType: data.resolutionType,
-        resolutionNotes: data.resolutionNotes,
-        cost: data.cost ?? null,
-        resolvedAt: now,
-        notes: updatedNotes,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(warrantyClaims.id, data.claimId))
-      .returning();
+      const [updated] = await tx
+        .update(warrantyClaims)
+        .set({
+          status: 'resolved',
+          resolutionType: data.resolutionType,
+          resolutionNotes: data.resolutionNotes,
+          cost: data.cost ?? null,
+          resolvedAt: now,
+          notes: updatedNotes,
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(warrantyClaims.id, data.claimId))
+        .returning();
+      return [updated!];
+    });
 
     // Get customer email for notification
     const customerEmail = existingClaim.customer.email ?? undefined;
@@ -950,11 +954,12 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
       .where(and(...conditions))
       .orderBy(orderDirection(orderColumn))
       .limit(data.pageSize)
-      .offset((data.page - 1) * data.pageSize);
+      .offset((data.page - 1) * data.pageSize); // OFFSET pagination; consider cursor-based for >10k rows
 
     return {
       items: claims.map((row) => ({
         ...row.claim,
+        productId: row.product.id,
         warranty: row.warranty,
         customer: row.customer,
         product: row.product,
@@ -969,9 +974,156 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
     };
   });
 
+/**
+ * List warranty claims with cursor pagination (recommended for large datasets >10k rows)
+ */
+const listWarrantyClaimsCursorSchema = cursorPaginationSchema.extend({
+  warrantyId: z.string().uuid().optional(),
+  customerId: z.string().uuid().optional(),
+  status: listWarrantyClaimsSchema.shape.status.optional(),
+  claimType: listWarrantyClaimsSchema.shape.claimType.optional(),
+  assignedUserId: z.string().uuid().optional(),
+});
+
+export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listWarrantyClaimsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
+
+    const conditions = [eq(warrantyClaims.organizationId, ctx.organizationId)];
+    if (data.warrantyId) conditions.push(eq(warrantyClaims.warrantyId, data.warrantyId));
+    if (data.customerId) conditions.push(eq(warrantyClaims.customerId, data.customerId));
+    if (data.status) conditions.push(eq(warrantyClaims.status, data.status));
+    if (data.claimType) conditions.push(eq(warrantyClaims.claimType, data.claimType));
+    if (data.assignedUserId) conditions.push(eq(warrantyClaims.assignedUserId, data.assignedUserId));
+
+    if (data.cursor) {
+      const cursorPosition = decodeCursor(data.cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(
+            warrantyClaims.createdAt,
+            warrantyClaims.id,
+            cursorPosition,
+            data.sortOrder
+          )
+        );
+      }
+    }
+
+    const orderDirection = data.sortOrder === 'asc' ? asc : desc;
+    const pageSize = data.pageSize;
+
+    const results = await db
+      .select({
+        claim: warrantyClaims,
+        warranty: {
+          id: warranties.id,
+          warrantyNumber: warranties.warrantyNumber,
+          productSerial: warranties.productSerial,
+        },
+        customer: { id: customers.id, name: customers.name },
+        product: { id: products.id, name: products.name },
+        assignedUser: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        },
+      })
+      .from(warrantyClaims)
+      .innerJoin(warranties, eq(warrantyClaims.warrantyId, warranties.id))
+      .innerJoin(customers, eq(warrantyClaims.customerId, customers.id))
+      .innerJoin(products, eq(warranties.productId, products.id))
+      .leftJoin(users, eq(warrantyClaims.assignedUserId, users.id))
+      .where(and(...conditions))
+      .orderBy(orderDirection(warrantyClaims.createdAt), orderDirection(warrantyClaims.id))
+      .limit(pageSize + 1);
+
+    const response = buildStandardCursorResponse(
+      results.map((r) => r.claim),
+      pageSize
+    );
+    const items = results.slice(0, pageSize).map((row) => ({
+      ...row.claim,
+      productId: row.product.id,
+      warranty: row.warranty,
+      customer: row.customer,
+      product: row.product,
+      assignedUser: row.assignedUser?.id ? row.assignedUser : null,
+    }));
+    return {
+      items,
+      nextCursor: response.nextCursor,
+      hasNextPage: response.hasNextPage,
+    };
+  });
+
 // ============================================================================
 // GET WARRANTY CLAIM
 // ============================================================================
+
+/**
+ * Cached warranty claim fetch for per-request deduplication.
+ * @performance Uses React.cache() for automatic request deduplication
+ */
+const _getWarrantyClaimCached = cache(async (claimId: string, organizationId: string) => {
+  const [result] = await db
+    .select({
+      claim: warrantyClaims,
+      warranty: warranties,
+      customer: customers,
+      product: products,
+      policy: warrantyPolicies,
+      assignedUser: {
+        id: users.id,
+        name: users.name,
+        email: users.email,
+      },
+      sla: slaTracking,
+    })
+    .from(warrantyClaims)
+    .innerJoin(warranties, eq(warrantyClaims.warrantyId, warranties.id))
+    .innerJoin(customers, eq(warrantyClaims.customerId, customers.id))
+    .innerJoin(products, eq(warranties.productId, products.id))
+    .innerJoin(warrantyPolicies, eq(warranties.warrantyPolicyId, warrantyPolicies.id))
+    .leftJoin(users, eq(warrantyClaims.assignedUserId, users.id))
+    .leftJoin(slaTracking, eq(warrantyClaims.slaTrackingId, slaTracking.id))
+    .where(
+      and(
+        eq(warrantyClaims.id, claimId),
+        eq(warrantyClaims.organizationId, organizationId)
+      )
+    )
+    .limit(1);
+
+  if (!result) return null;
+
+  let approvedByUser = null;
+  if (result.claim.approvedByUserId) {
+    const [approver] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+      })
+      .from(users)
+      .where(eq(users.id, result.claim.approvedByUserId))
+      .limit(1);
+
+    approvedByUser = approver ?? null;
+  }
+
+  return {
+    ...result.claim,
+    warranty: result.warranty,
+    customer: result.customer,
+    product: result.product,
+    policy: result.policy,
+    assignedUser: result.assignedUser?.id ? result.assignedUser : null,
+    approvedByUser,
+    slaTracking: result.sla,
+  };
+});
 
 /**
  * Get a single warranty claim with full details
@@ -980,68 +1132,13 @@ export const getWarrantyClaim = createServerFn({ method: 'GET' })
   .inputValidator(getWarrantyClaimSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
-
-    const [result] = await db
-      .select({
-        claim: warrantyClaims,
-        warranty: warranties,
-        customer: customers,
-        product: products,
-        policy: warrantyPolicies,
-        assignedUser: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-        },
-        sla: slaTracking,
-      })
-      .from(warrantyClaims)
-      .innerJoin(warranties, eq(warrantyClaims.warrantyId, warranties.id))
-      .innerJoin(customers, eq(warrantyClaims.customerId, customers.id))
-      .innerJoin(products, eq(warranties.productId, products.id))
-      .innerJoin(warrantyPolicies, eq(warranties.warrantyPolicyId, warrantyPolicies.id))
-      .leftJoin(users, eq(warrantyClaims.assignedUserId, users.id))
-      .leftJoin(slaTracking, eq(warrantyClaims.slaTrackingId, slaTracking.id))
-      .where(
-        and(
-          eq(warrantyClaims.id, data.claimId),
-          eq(warrantyClaims.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
+    const result = await _getWarrantyClaimCached(data.claimId, ctx.organizationId);
     if (!result) {
+      setResponseStatus(404);
       throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
-
-    // Get approver info if approved
-    let approvedByUser = null;
-    if (result.claim.approvedByUserId) {
-      const [approver] = await db
-        .select({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-        })
-        .from(users)
-        .where(eq(users.id, result.claim.approvedByUserId))
-        .limit(1);
-
-      approvedByUser = approver ?? null;
-    }
-
-    return {
-      ...result.claim,
-      warranty: result.warranty,
-      customer: result.customer,
-      product: result.product,
-      policy: result.policy,
-      assignedUser: result.assignedUser?.id ? result.assignedUser : null,
-      approvedByUser,
-      slaTracking: result.sla,
-    };
-  }
-);
+    return result;
+  });
 
 // ============================================================================
 // ASSIGN CLAIM

@@ -55,38 +55,13 @@ import { SignatureEditor, type SignatureFormValues } from "./signature-editor";
 // TYPES
 // ============================================================================
 
-export interface Signature {
-  id: string;
-  name: string;
-  content: string;
-  isDefault: boolean;
-  isCompanyWide: boolean;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-}
+import type {
+  Signature,
+  SignaturesListProps,
+} from "@/lib/schemas/communications";
 
-/**
- * Props for the SignaturesList presenter component.
- * All data is passed from the container route.
- */
-export interface SignaturesListProps {
-  /** @source useEmailSignatures() in communications/signatures/index.tsx */
-  signatures: Signature[];
-  /** @source useEmailSignatures().isLoading in container */
-  isLoading: boolean;
-  /** @source useCreateEmailSignature() in container */
-  onCreate: (values: SignatureFormValues) => Promise<void>;
-  /** @source useUpdateEmailSignature() in container */
-  onUpdate: (id: string, values: SignatureFormValues) => Promise<void>;
-  /** @source useDeleteEmailSignature() in container */
-  onDelete: (id: string) => Promise<void>;
-  /** @source useSetDefaultSignature() in container */
-  onSetDefault: (id: string) => Promise<void>;
-  isDeleting?: boolean;
-  isSettingDefault?: boolean;
-  isSaving?: boolean;
-  className?: string;
-}
+// Re-export types for backward compatibility
+export type { Signature, SignatureFormValues, SignaturesListProps };
 
 // ============================================================================
 // COMPONENT
@@ -95,8 +70,8 @@ export interface SignaturesListProps {
 export function SignaturesList({
   signatures,
   isLoading,
-  onCreate,
-  onUpdate,
+  onCreate: _onCreate,
+  onUpdate: _onUpdate,
   onDelete,
   onSetDefault,
   isDeleting = false,
@@ -109,18 +84,6 @@ export function SignaturesList({
   const [isCreating, setIsCreating] = React.useState(false);
   const [deleteConfirm, setDeleteConfirm] = React.useState<Signature | null>(null);
 
-  // Note: This handler is defined for future use when SignatureEditor accepts onSubmit prop
-  const _handleSubmit = async (values: SignatureFormValues) => {
-    if (editingSignature) {
-      await onUpdate(editingSignature.id, values);
-    } else {
-      await onCreate(values);
-    }
-    setEditingSignature(null);
-    setIsCreating(false);
-  };
-  void _isSaving; // Silence unused variable warning
-  void _handleSubmit; // Silence unused variable warning
 
   const handleCancel = () => {
     setEditingSignature(null);
@@ -133,6 +96,16 @@ export function SignaturesList({
       setDeleteConfirm(null);
     }
   };
+
+  // Memoized filtering for performance (must be before any early returns for rules-of-hooks)
+  const personalSignatures = React.useMemo(
+    () => signatures.filter((s) => !s.isCompanyWide),
+    [signatures]
+  );
+  const companySignatures = React.useMemo(
+    () => signatures.filter((s) => s.isCompanyWide),
+    [signatures]
+  );
 
   // Show editor when creating or editing
   if (isCreating || editingSignature) {
@@ -148,10 +121,6 @@ export function SignaturesList({
       />
     );
   }
-
-  // Personal and company signatures
-  const personalSignatures = signatures.filter((s) => !s.isCompanyWide);
-  const companySignatures = signatures.filter((s) => s.isCompanyWide);
 
   return (
     <Card className={className} aria-label="signatures-list">
@@ -244,7 +213,7 @@ export function SignaturesList({
             <DialogHeader>
               <DialogTitle>Delete Signature</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete "{deleteConfirm?.name}"? This
+                Are you sure you want to delete &quot;{deleteConfirm?.name}&quot;? This
                 action cannot be undone.
               </DialogDescription>
             </DialogHeader>

@@ -19,6 +19,7 @@
  * ```
  */
 import { createBrowserClient } from '@supabase/ssr'
+import { authLogger } from '@/lib/logger'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -55,7 +56,7 @@ export async function getCurrentUser() {
     error,
   } = await supabase.auth.getUser()
   if (error) {
-    console.error('Error getting current user:', error.message)
+    authLogger.error('Error getting current user', new Error(error.message), {})
     return null
   }
   return user
@@ -71,7 +72,7 @@ export async function getSession() {
     error,
   } = await supabase.auth.getSession()
   if (error) {
-    console.error('Error getting session:', error.message)
+    authLogger.error('Error getting session', new Error(error.message), {})
     return null
   }
   return session

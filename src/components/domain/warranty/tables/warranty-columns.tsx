@@ -1,9 +1,11 @@
+/* eslint-disable react-refresh/only-export-components -- Column file exports column factory with JSX cell renderers */
 /**
  * Warranty Column Definitions
  *
  * TanStack Table column definitions using shared cell components.
  */
 
+import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Eye, FileText, Ban, ArrowRightLeft, AlertCircle } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -16,62 +18,39 @@ import {
 } from "@/components/shared/data-table";
 import type { ActionItem } from "@/components/shared/data-table/cells/actions-cell";
 import { cn } from "@/lib/utils";
-import type { WarrantyStatus } from "@/lib/schemas/warranty";
 import { WARRANTY_STATUS_CONFIG, formatExpiryDateRelative } from "./warranty-status-config";
+import type { WarrantyListItem, CreateWarrantyColumnsOptions } from '@/lib/schemas/warranty';
 
-/**
- * Warranty list item type - matches server function response
- */
-export interface WarrantyTableItem {
-  id: string;
-  warrantyNumber: string;
-  customerId: string;
-  customerName: string | null;
-  productId: string;
-  productName: string | null;
-  productSku: string | null;
-  productSerial: string | null;
-  warrantyPolicyId: string;
-  policyName: string;
-  policyType: "battery_performance" | "inverter_manufacturer" | "installation_workmanship";
-  registrationDate: string;
-  expiryDate: string;
-  status: WarrantyStatus;
-  currentCycleCount: number | null;
-  cycleLimit: number | null;
-  expiryAlertOptOut: boolean;
-  certificateUrl: string | null;
-}
-
-export interface CreateWarrantyColumnsOptions {
-  /** Handle single item selection */
-  onSelect: (id: string, checked: boolean) => void;
-  /** Handle shift-click range selection */
-  onShiftClickRange: (rowIndex: number) => void;
-  /** Whether all items are selected */
-  isAllSelected: boolean;
-  /** Whether some items are selected (indeterminate) */
-  isPartiallySelected: boolean;
-  /** Handle select all */
-  onSelectAll: (checked: boolean) => void;
-  /** Check if item is selected */
-  isSelected: (id: string) => boolean;
-  /** View warranty handler */
-  onViewWarranty: (id: string) => void;
-  /** View certificate handler */
-  onViewCertificate?: (id: string) => void;
-  /** Void warranty handler */
-  onVoidWarranty?: (id: string) => void;
-  /** Transfer warranty handler */
-  onTransferWarranty?: (id: string) => void;
-}
+// Memoized cell component for expiry date
+const ExpiryDateCell = memo(function ExpiryDateCell({
+  text,
+  isExpired,
+  isExpiringSoon,
+}: {
+  text: string;
+  isExpired: boolean;
+  isExpiringSoon: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 text-xs",
+        isExpired && "text-destructive font-medium",
+        isExpiringSoon && !isExpired && "text-warning font-medium"
+      )}
+    >
+      {(isExpired || isExpiringSoon) && <AlertCircle className="h-3 w-3" />}
+      <span>{text}</span>
+    </div>
+  );
+});
 
 /**
  * Create column definitions for the warranties table.
  */
 export function createWarrantyColumns(
   options: CreateWarrantyColumnsOptions
-): ColumnDef<WarrantyTableItem>[] {
+): ColumnDef<WarrantyListItem>[] {
   const {
     onSelect,
     onShiftClickRange,
@@ -108,6 +87,9 @@ export function createWarrantyColumns(
       enableSorting: false,
       enableHiding: false,
       size: 48,
+      meta: {
+        skeleton: { type: "checkbox" },
+      },
     },
 
     // Warranty Number column
@@ -133,6 +115,9 @@ export function createWarrantyColumns(
       ),
       enableSorting: true,
       size: 220,
+      meta: {
+        skeleton: { type: "icon-text", width: "w-44" },
+      },
     },
 
     // Customer column
@@ -140,11 +125,30 @@ export function createWarrantyColumns(
       id: "customerName",
       accessorKey: "customerName",
       header: "Customer",
-      cell: ({ row }) => (
-        <NameCell name={row.getValue("customerName")} maxWidth={200} />
-      ),
+      cell: ({ row }) => {
+        const customerId = row.original.customerId;
+        const val = row.getValue("customerName");
+        const customerName = val == null ? null : typeof val === "string" ? val : String(val);
+        const content = <NameCell name={customerName} maxWidth={200} />;
+        return customerId ? (
+          <Link
+            to="/customers/$customerId"
+            params={{ customerId }}
+            search={{}}
+            className="text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {content}
+          </Link>
+        ) : (
+          content
+        );
+      },
       enableSorting: false,
       size: 200,
+      meta: {
+        skeleton: { type: "text", width: "w-40" },
+      },
     },
 
     // Product column
@@ -152,15 +156,36 @@ export function createWarrantyColumns(
       id: "productName",
       accessorKey: "productName",
       header: "Product",
-      cell: ({ row }) => (
-        <NameCell
-          name={row.getValue("productName")}
-          subtitle={row.original.productSerial ?? row.original.productSku ?? undefined}
-          maxWidth={220}
-        />
-      ),
+      cell: ({ row }) => {
+        const productId = row.original.productId;
+        const val = row.getValue("productName");
+        const productName = val == null ? null : typeof val === "string" ? val : String(val);
+        const subtitle = row.original.productSerial ?? row.original.productSku ?? undefined;
+        const content = (
+          <NameCell
+            name={productName}
+            subtitle={subtitle}
+            maxWidth={220}
+          />
+        );
+        return productId ? (
+          <Link
+            to="/products/$productId"
+            params={{ productId }}
+            className="text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {content}
+          </Link>
+        ) : (
+          content
+        );
+      },
       enableSorting: false,
       size: 220,
+      meta: {
+        skeleton: { type: "icon-text", width: "w-44" },
+      },
     },
 
     // Status column
@@ -179,6 +204,9 @@ export function createWarrantyColumns(
       ),
       enableSorting: true,
       size: 130,
+      meta: {
+        skeleton: { type: "badge", width: "w-24" },
+      },
     },
 
     // Expiry Date column with highlighting
@@ -193,20 +221,18 @@ export function createWarrantyColumns(
           row.original.expiryDate
         );
         return (
-          <div
-            className={cn(
-              "flex items-center gap-1 text-xs",
-              isExpired && "text-destructive font-medium",
-              isExpiringSoon && !isExpired && "text-warning font-medium"
-            )}
-          >
-            {(isExpired || isExpiringSoon) && <AlertCircle className="h-3 w-3" />}
-            <span>{text}</span>
-          </div>
+          <ExpiryDateCell
+            text={text}
+            isExpired={isExpired}
+            isExpiringSoon={isExpiringSoon}
+          />
         );
       },
       enableSorting: true,
       size: 100,
+      meta: {
+        skeleton: { type: "text", width: "w-20" },
+      },
     },
 
     // Actions column
@@ -260,6 +286,9 @@ export function createWarrantyColumns(
       enableSorting: false,
       enableHiding: false,
       size: 48,
+      meta: {
+        skeleton: { type: "icon" },
+      },
     },
   ];
 }

@@ -17,10 +17,8 @@ import {
   orderLineItems,
   customers,
   addresses,
-  organizations,
-  type OrganizationBranding,
-  type OrganizationAddress,
 } from "drizzle/schema";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -29,8 +27,9 @@ import {
   generateStoragePath,
   calculateChecksum,
   type QuoteDocumentData,
-  type DocumentOrganization,
 } from "@/lib/documents";
+import { buildDocumentViewUrl } from "@/lib/documents/urls";
+import { buildDocumentOrderFromDb } from "@/lib/documents/builders";
 
 // ============================================================================
 // TYPES
@@ -53,18 +52,6 @@ export interface GenerateQuotePdfPayload {
 
 const STORAGE_BUCKET = "documents";
 const QUOTE_VALIDITY_DAYS = 30;
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Generate the public URL for viewing a quote
- */
-function getQuoteViewUrl(orderId: string): string {
-  const baseUrl = process.env.APP_URL || "https://app.renoz.com.au";
-  return `${baseUrl}/quotes/${orderId}`;
-}
 
 // ============================================================================
 // TASK DEFINITION
@@ -163,57 +150,8 @@ export const generateQuotePdf = task({
       })),
     };
 
-    // Step 2: Fetch organization details
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
-    const address = org.address as OrganizationAddress | null;
-    const branding = org.branding as OrganizationBranding | null;
-
-    const orgData: DocumentOrganization = {
-      id: org.id,
-      name: org.name,
-      email: org.email,
-      phone: org.phone,
-      website: org.website || branding?.websiteUrl,
-      taxId: org.abn,
-      currency: org.currency || "AUD",
-      locale: org.locale || "en-AU",
-      address: address
-        ? {
-            addressLine1: address.street1,
-            addressLine2: address.street2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: branding?.logoUrl,
-        primaryColor: branding?.primaryColor,
-        secondaryColor: branding?.secondaryColor,
-      },
-    };
+    // Step 2: Fetch organization details (with logo pre-fetched for PDF)
+    const orgData = await fetchOrganizationForDocument(organizationId);
 
     // Step 3: Fetch customer details with primary billing address
     const [customer] = await db
@@ -300,8 +238,8 @@ export const generateQuotePdf = task({
     };
 
     // Step 4: Generate QR code for quick access
-    const quoteUrl = getQuoteViewUrl(orderId);
-    const qrCodeDataUrl = await generateQRCode(quoteUrl, {
+    const viewOnlineUrl = buildDocumentViewUrl("order", orderId);
+    const qrCodeDataUrl = await generateQRCode(viewOnlineUrl, {
       width: 240,
       margin: 0,
       errorCorrectionLevel: "M",
@@ -316,6 +254,7 @@ export const generateQuotePdf = task({
     validUntil.setDate(validUntil.getDate() + QUOTE_VALIDITY_DAYS);
 
     // Build document data with all comprehensive fields
+    const orderForQuote = buildDocumentOrderFromDb(orderData, customerData);
     const quoteData: QuoteDocumentData = {
       type: "quote",
       documentNumber: `Q-${orderData.orderNumber}`,
@@ -323,49 +262,7 @@ export const generateQuotePdf = task({
       validUntil,
       notes: orderData.customerNotes,
       generatedAt: new Date(),
-      order: {
-        id: orderData.id,
-        orderNumber: orderData.orderNumber,
-        orderDate,
-        dueDate: orderData.dueDate ? new Date(orderData.dueDate) : undefined,
-        customer: {
-          id: customerData.id,
-          name: customerData.name,
-          email: customerData.email,
-          phone: customerData.phone,
-          address: customerData.address,
-        },
-        // Pass billing address from customer (separate from customer.address for flexibility)
-        billingAddress: customerData.address,
-        // Pass all line item fields for comprehensive display
-        lineItems: orderData.lineItems.map((item) => ({
-          id: item.id,
-          lineNumber: item.lineNumber,
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discountPercent: item.discountPercent,
-          discountAmount: item.discountAmount,
-          taxAmount: item.taxAmount,
-          total: item.lineTotal,
-          notes: item.notes,
-        })),
-        subtotal: orderData.subtotal,
-        discount: orderData.discountAmount,
-        discountPercent: orderData.discountPercent,
-        discountType: orderData.discountPercent
-          ? ("percentage" as const)
-          : ("fixed" as const),
-        taxRate:
-          orderData.subtotal > 0
-            ? (orderData.taxAmount / orderData.subtotal) * 100
-            : 10,
-        taxAmount: orderData.taxAmount,
-        total: orderData.total,
-        customerNotes: orderData.customerNotes,
-        internalNotes: orderData.internalNotes,
-      },
+      order: orderForQuote,
     };
 
     // Render PDF to buffer
@@ -374,6 +271,7 @@ export const generateQuotePdf = task({
         organization={orgData}
         data={quoteData}
         qrCodeDataUrl={qrCodeDataUrl}
+        viewOnlineUrl={viewOnlineUrl}
       />
     );
 

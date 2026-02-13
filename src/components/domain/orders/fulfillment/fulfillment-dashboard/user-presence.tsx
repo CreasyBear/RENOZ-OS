@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + ActiveUser type */
 /**
  * User Presence Indicator
  *
@@ -7,7 +8,7 @@
  * @see Jobs kanban user presence patterns
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, startTransition } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -39,7 +40,7 @@ export function UserPresence({ activeUsers = [], maxVisible = 3, className }: Us
 
   // Set initial time and update every minute for "last active" calculations
   useEffect(() => {
-    setCurrentTime(new Date());
+    startTransition(() => setCurrentTime(new Date()));
     const interval = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000); // Update every minute
@@ -251,7 +252,7 @@ export function useFulfillmentPresence() {
       // Record initial activity
       tracker.recordActivity(userWithName);
     }
-  }, [currentUser]);
+  }, [currentUser, tracker]);
 
   // Subscribe to presence updates
   useEffect(() => {
@@ -260,17 +261,17 @@ export function useFulfillmentPresence() {
     });
 
     // Get initial active users
-    setActiveUsers(tracker.getActiveUsers());
+    startTransition(() => setActiveUsers(tracker.getActiveUsers()));
 
     return unsubscribe;
-  }, []);
+  }, [tracker]);
 
   // Function to record user activity (call this on user interactions)
   const recordActivity = useCallback(() => {
     if (currentUser) {
       tracker.recordActivity({ id: currentUser.id, name: currentUser.email ?? null });
     }
-  }, [currentUser]);
+  }, [currentUser, tracker]);
 
   return {
     activeUsers,

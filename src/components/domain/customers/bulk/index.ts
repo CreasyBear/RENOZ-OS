@@ -4,5 +4,6 @@
 export { BulkCommunications } from './bulk-communications';
 export { BulkExport } from './bulk-export';
 export { BulkImport } from './bulk-import';
-export { BulkOperations } from './bulk-operations';
+export { BulkOperations, type OperationResult } from './bulk-operations';
 export { BulkSelector } from './bulk-selector';
+export { RollbackUI } from './rollback-ui';

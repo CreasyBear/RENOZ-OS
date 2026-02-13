@@ -1,61 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { useServerFn } from '@tanstack/react-start';
-import {
-  listPortalJobs,
-  listPortalOrders,
-  listPortalQuotes,
-} from '@/server/functions/portal/portal-read';
+import { usePortalOrders, usePortalJobs, usePortalQuotes } from '@/hooks/portal';
 import { PageLayout } from '@/components/layout/page-layout';
 
 export const Route = createFileRoute('/portal/')({
   component: PortalHome,
 });
 
-type PortalState = 'loading' | 'ready' | 'error';
-
 function PortalHome() {
-  const fetchOrders = useServerFn(listPortalOrders);
-  const fetchJobs = useServerFn(listPortalJobs);
-  const fetchQuotes = useServerFn(listPortalQuotes);
+  const { data: orders = [], isLoading: ordersLoading, error: ordersError } = usePortalOrders();
+  const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = usePortalJobs();
+  const { data: quotes = [], isLoading: quotesLoading, error: quotesError } = usePortalQuotes();
 
-  const [state, setState] = useState<PortalState>('loading');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [orders, setOrders] = useState<Array<Record<string, unknown>>>([]);
-  const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([]);
-  const [quotes, setQuotes] = useState<Array<Record<string, unknown>>>([]);
+  const isLoading = ordersLoading || jobsLoading || quotesLoading;
+  const error = ordersError || jobsError || quotesError;
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const load = async () => {
-      try {
-        const [ordersResult, jobsResult, quotesResult] = await Promise.all([
-          fetchOrders({ data: { page: 1, pageSize: 10 } }),
-          fetchJobs({ data: { page: 1, pageSize: 10 } }),
-          fetchQuotes({ data: { page: 1, pageSize: 10 } }),
-        ]);
-
-        if (!isMounted) return;
-
-        setOrders(ordersResult as Array<Record<string, unknown>>);
-        setJobs(jobsResult as Array<Record<string, unknown>>);
-        setQuotes(quotesResult as Array<Record<string, unknown>>);
-        setState('ready');
-      } catch (error) {
-        if (!isMounted) return;
-        setErrorMessage(error instanceof Error ? error.message : 'Failed to load portal data');
-        setState('error');
-      }
-    };
-
-    void load();
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchOrders, fetchJobs, fetchQuotes]);
-
-  if (state === 'loading') {
+  if (isLoading) {
     return (
       <PageLayout variant="container">
         <div className="text-muted-foreground py-12 text-sm">Loading portal data...</div>
@@ -63,10 +22,12 @@ function PortalHome() {
     );
   }
 
-  if (state === 'error') {
+  if (error) {
     return (
       <PageLayout variant="container">
-        <div className="py-12 text-sm text-destructive">{errorMessage ?? 'Something went wrong.'}</div>
+        <div className="py-12 text-sm text-destructive">
+          {error instanceof Error ? error.message : 'Something went wrong.'}
+        </div>
       </PageLayout>
     );
   }

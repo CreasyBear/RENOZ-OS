@@ -29,9 +29,30 @@ function Tooltip({
 }
 
 function TooltipTrigger({
+  children,
+  asChild,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  const childCount = React.Children.count(children)
+  if (childCount === 0) {
+    return null
+  }
+
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const shouldFallback = !!asChild && !isSingleElement
+
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      asChild={shouldFallback ? false : asChild}
+      {...props}
+    >
+      {children}
+    </TooltipPrimitive.Trigger>
+  )
 }
 
 function TooltipContent({

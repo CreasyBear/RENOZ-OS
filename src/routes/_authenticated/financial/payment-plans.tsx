@@ -10,26 +10,18 @@
  */
 
 import { useState, useCallback } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
-import { z } from 'zod';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FormSkeleton } from '@/components/skeletons/shared';
-import { PaymentPlansList, type PaymentSchedule } from '@/components/domain/financial/payment-plans-list';
+import { PaymentPlansList } from '@/components/domain/financial/payment-plans-list';
+import type { PaymentScheduleResponse } from '@/lib/schemas';
 import {
   usePaymentSchedule,
   useCreatePaymentPlan,
   useRecordInstallmentPayment,
 } from '@/hooks/financial';
-import type { PaymentPlanType } from '@/lib/schemas';
-
-// ============================================================================
-// SEARCH PARAMS SCHEMA
-// ============================================================================
-
-const paymentPlansSearchSchema = z.object({
-  orderId: z.string().optional(),
-  orderTotal: z.coerce.number().optional(),
-});
+import { paymentPlansSearchSchema, type PaymentPlanType } from '@/lib/schemas';
+import { toast } from '@/lib/toast';
 
 // ============================================================================
 // ROUTE
@@ -60,6 +52,7 @@ export const Route = createFileRoute('/_authenticated/financial/payment-plans')(
 
 function PaymentPlansPage() {
   const { orderId, orderTotal } = Route.useSearch();
+  const navigate = useNavigate();
 
   // Dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -74,10 +67,11 @@ function PaymentPlansPage() {
     data: scheduleData,
     isLoading,
     error,
+    refetch,
   } = usePaymentSchedule(orderId ?? '', !!orderId);
 
   // Cast to the expected type
-  const schedule = scheduleData as PaymentSchedule | null;
+  const schedule = scheduleData as PaymentScheduleResponse | null;
 
   // Mutation: Create payment plan using centralized hook
   const createPlanMutation = useCreatePaymentPlan();
@@ -85,7 +79,7 @@ function PaymentPlansPage() {
   // Mutation: Record installment payment using centralized hook
   const recordPaymentMutation = useRecordInstallmentPayment();
 
-  // Handler: Create payment plan
+  // Handler: Create payment plan with forward momentum
   const handleCreatePlan = useCallback(
     (planType: PaymentPlanType, monthlyCount?: number) => {
       if (!orderId) return;
@@ -93,11 +87,25 @@ function PaymentPlansPage() {
         {
           orderId,
           planType,
+          paymentTermsDays: 30,
           numberOfPayments: monthlyCount,
         },
         {
-          onSuccess: () => {
+          onSuccess: (schedule) => {
             setCreateDialogOpen(false);
+            toast.success('Payment plan created successfully', {
+              description: `${schedule.installments.length} installments scheduled.`,
+              action: {
+                label: 'View Schedule',
+                onClick: () => {
+                  // Schedule is already visible, but could scroll to it or highlight
+                  // For now, just show success
+                },
+              },
+            });
+          },
+          onError: (error) => {
+            toast.error(error.message || 'Failed to create payment plan');
           },
         }
       );
@@ -111,7 +119,7 @@ function PaymentPlansPage() {
     setRecordPaymentOpen(true);
   }, []);
 
-  // Handler: Record payment
+  // Handler: Record payment with forward momentum
   const handleRecordPayment = useCallback(
     (installmentId: string, amount: number, paymentRef?: string) => {
       recordPaymentMutation.mutate(
@@ -124,11 +132,21 @@ function PaymentPlansPage() {
           onSuccess: () => {
             setRecordPaymentOpen(false);
             setSelectedInstallment(null);
+            toast.success('Payment recorded successfully', {
+              description: 'Installment status updated.',
+              action: orderId ? {
+                label: 'View Order',
+                onClick: () => navigate({ to: '/orders/$orderId', params: { orderId } }),
+              } : undefined,
+            });
+          },
+          onError: (error) => {
+            toast.error(error.message || 'Failed to record payment');
           },
         }
       );
     },
-    [recordPaymentMutation]
+    [recordPaymentMutation, orderId, navigate]
   );
 
   // Show placeholder if no orderId provided
@@ -146,6 +164,14 @@ function PaymentPlansPage() {
               Payment plans are managed per order. Navigate from an order detail page to view or
               create a payment plan.
             </p>
+            <div className="mt-4">
+              <Link
+                to="/orders"
+                className="inline-flex items-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-accent"
+              >
+                Go to Orders
+              </Link>
+            </div>
           </div>
         </PageLayout.Content>
       </PageLayout>
@@ -165,6 +191,7 @@ function PaymentPlansPage() {
           schedule={schedule}
           isLoading={isLoading}
           error={error}
+          onRetry={() => refetch()}
           createDialogOpen={createDialogOpen}
           onCreateDialogOpenChange={setCreateDialogOpen}
           onCreatePlan={handleCreatePlan}

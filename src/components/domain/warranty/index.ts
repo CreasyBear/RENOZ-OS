@@ -13,21 +13,17 @@ export {
   isWarrantyExpired,
   formatExpiryDateRelative,
 } from './tables/warranty-status-config';
-export {
-  createWarrantyColumns,
-  type WarrantyTableItem,
-  type CreateWarrantyColumnsOptions,
-} from './tables/warranty-columns';
+export { createWarrantyColumns } from './tables/warranty-columns';
+export type { CreateWarrantyColumnsOptions } from '@/lib/schemas/warranty';
 
 // --- List components ---
 export { WarrantyListTable, type WarrantyListItem } from './tables/warranty-list-table';
 export { WarrantyListContainer, type WarrantyListContainerProps } from './containers/warranty-list-container';
+export { WarrantyStatusChips } from './warranty-status-chips';
 export { WarrantyDetailContainer, type WarrantyDetailContainerProps } from './containers/warranty-detail-container';
 export { WarrantyDetailView, type WarrantyDetailViewProps } from './views/warranty-detail-view';
-export {
-  WarrantyClaimsListContainer,
-  type WarrantyClaimsListContainerProps,
-} from './containers/warranty-claims-list-container';
+export { WarrantyClaimsListContainer } from './containers/warranty-claims-list-container';
+export type { WarrantyClaimsListContainerProps } from '@/lib/schemas/warranty';
 export {
   WarrantyClaimsListView,
   type WarrantyClaimsListViewProps,
@@ -36,10 +32,8 @@ export {
   WarrantyClaimDetailContainer,
   type WarrantyClaimDetailContainerProps,
 } from './containers/warranty-claim-detail-container';
-export {
-  WarrantyClaimDetailView,
-  type WarrantyClaimDetailViewProps,
-} from './views/warranty-claim-detail-view';
+export { WarrantyClaimDetailView } from './views/warranty-claim-detail-view';
+export type { WarrantyClaimDetailViewProps } from '@/lib/schemas/warranty';
 
 // --- Policies ---
 export { WarrantyPolicyList } from './views/warranty-policy-list';
@@ -47,11 +41,8 @@ export { WarrantyPolicyFormDialog } from './dialogs/warranty-policy-form-dialog'
 export {
   WarrantyPolicySettingsContainer,
 } from './containers/warranty-policy-settings-container';
-export {
-  WarrantyPolicySettingsView,
-  type WarrantyPolicySettingsViewProps,
-  type WarrantyPolicyFormPayload,
-} from './views/warranty-policy-settings-view';
+export { WarrantyPolicySettingsView } from './views/warranty-policy-settings-view';
+export type { WarrantyPolicySettingsViewProps, WarrantyPolicyFormPayload } from '@/lib/schemas/warranty';
 
 // --- Claims ---
 export {
@@ -67,13 +58,12 @@ export {
   type WarrantyCertificateButtonProps,
   type WarrantyCertificateLinkProps,
 } from './widgets/warranty-certificate-button';
-export {
-  WarrantyCertificateTemplate,
-  type WarrantyPolicyType,
-  type WarrantyCoverageDetails,
-  type CustomerAddress,
-  type WarrantyCertificateProps,
-} from './templates/warranty-certificate-template';
+export { WarrantyCertificateTemplate } from './templates/warranty-certificate-template';
+export type {
+  WarrantyCoverageDetails,
+  WarrantyCertificateCustomerAddress,
+  WarrantyCertificateProps,
+} from '@/lib/schemas/warranty';
 
 // --- Extensions ---
 export {
@@ -81,19 +71,19 @@ export {
   WarrantyExtensionHistoryCompact,
   type WarrantyExtensionHistoryProps,
   type WarrantyExtensionHistoryCompactProps,
-  type WarrantyExtensionItem,
 } from './views/warranty-extension-history';
+// Re-export schema types for convenience
+export type { WarrantyExtensionItem } from '@/lib/schemas/warranty/extensions';
 export { ExtendWarrantyDialog, type ExtendWarrantyDialogProps } from './dialogs/extend-warranty-dialog';
+export { TransferWarrantyDialog, type TransferWarrantyDialogProps } from './dialogs/transfer-warranty-dialog';
 
 // --- Bulk import ---
 export { BulkWarrantyImportDialog } from './dialogs/bulk-warranty-import-dialog';
 export {
   WarrantyImportSettingsContainer,
 } from './containers/warranty-import-settings-container';
-export {
-  WarrantyImportSettingsView,
-  type WarrantyImportSettingsViewProps,
-} from './views/warranty-import-settings-view';
+export { WarrantyImportSettingsView } from './views/warranty-import-settings-view';
+export type { WarrantyImportSettingsViewProps } from '@/lib/schemas/warranty';
 
 // --- SLA ---
 export { SlaCountdownBadge, type SlaCountdownBadgeProps } from './widgets/sla-countdown-badge';
@@ -107,5 +97,5 @@ export {
   createWarrantyFilterConfig,
   type WarrantyFiltersState,
   type WarrantyStatus,
-  type WarrantyPolicyType as WarrantyPolicyTypeFilter,
 } from './warranty-filter-config';
+

@@ -1,3 +1,4 @@
+
 /**
  * Win/Loss Reasons Server Functions
  *
@@ -8,7 +9,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, desc, asc, sql, gte, lte, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, gte, lte, isNull, isNotNull, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { winLossReasons, opportunities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -162,11 +163,9 @@ export const updateWinLossReason = createServerFn({ method: 'POST' })
       throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
     }
 
-    // Optimistic locking
-    if (updateData.version && existing[0].version !== updateData.version) {
-      throw new ConflictError('Win/Loss reason has been modified by another user');
-    }
-
+    // Optimistic locking: include version in WHERE clause to ensure atomicity.
+    // If another request updated the row between our read and write, the
+    // UPDATE will match zero rows and we throw a conflict error.
     const result = await db
       .update(winLossReasons)
       .set({
@@ -174,8 +173,18 @@ export const updateWinLossReason = createServerFn({ method: 'POST' })
         version: existing[0].version + 1,
         updatedBy: ctx.user.id,
       })
-      .where(eq(winLossReasons.id, id))
+      .where(
+        and(
+          eq(winLossReasons.id, id),
+          eq(winLossReasons.organizationId, ctx.organizationId),
+          eq(winLossReasons.version, existing[0].version)
+        )
+      )
       .returning();
+
+    if (!result[0]) {
+      throw new ConflictError('Win/Loss reason has been modified by another user');
+    }
 
     return { reason: result[0] };
   });
@@ -197,40 +206,53 @@ export const deleteWinLossReason = createServerFn({ method: 'POST' })
 
     const { id } = data;
 
-    // Verify reason exists and belongs to org
-    const existing = await db
-      .select()
-      .from(winLossReasons)
-      .where(and(eq(winLossReasons.id, id), eq(winLossReasons.organizationId, ctx.organizationId)))
-      .limit(1);
+    // Wrap in transaction to prevent race condition between check-then-delete
+    return await db.transaction(async (tx) => {
+      // Verify reason exists and belongs to org
+      const existing = await tx
+        .select()
+        .from(winLossReasons)
+        .where(and(eq(winLossReasons.id, id), eq(winLossReasons.organizationId, ctx.organizationId)))
+        .limit(1);
 
-    if (!existing[0]) {
-      throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
-    }
+      if (!existing[0]) {
+        throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
+      }
 
-    // Check if reason is in use
-    const usageCount = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(opportunities)
-      .where(eq(opportunities.winLossReasonId, id));
+      // Check if reason is in use
+      const [usageRow] = await tx
+        .select({ count: count() })
+        .from(opportunities)
+        .where(eq(opportunities.winLossReasonId, id));
 
-    if (Number(usageCount[0]?.count ?? 0) > 0) {
-      // Soft delete by setting isActive = false
-      await db
-        .update(winLossReasons)
-        .set({
-          isActive: false,
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(winLossReasons.id, id));
+      if (Number(usageRow?.count ?? 0) > 0) {
+        // Soft delete by setting isActive = false
+        await tx
+          .update(winLossReasons)
+          .set({
+            isActive: false,
+            updatedBy: ctx.user.id,
+          })
+          .where(
+            and(
+              eq(winLossReasons.id, id),
+              eq(winLossReasons.organizationId, ctx.organizationId)
+            )
+          );
 
-      return { deleted: false, deactivated: true, usageCount: Number(usageCount[0]?.count) };
-    }
+        return { deleted: false, deactivated: true, usageCount: Number(usageRow?.count ?? 0) };
+      }
 
-    // Hard delete if not in use
-    await db.delete(winLossReasons).where(eq(winLossReasons.id, id));
+      // Hard delete if not in use
+      await tx.delete(winLossReasons).where(
+        and(
+          eq(winLossReasons.id, id),
+          eq(winLossReasons.organizationId, ctx.organizationId)
+        )
+      );
 
-    return { deleted: true, deactivated: false };
+      return { deleted: true, deactivated: false };
+    });
   });
 
 // ============================================================================
@@ -267,68 +289,52 @@ export const getWinLossAnalysis = createServerFn({ method: 'GET' })
       oppConditions.push(lte(opportunities.actualCloseDate, dateTo.toISOString().split('T')[0]));
     }
 
-    // Get win analysis
-    const winResults = await db
-      .select({
-        reasonId: winLossReasons.id,
-        reasonName: winLossReasons.name,
-        reasonType: winLossReasons.type,
-        count: sql<number>`COUNT(*)`,
-        totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-        avgValue: sql<number>`COALESCE(AVG(${opportunities.value}), 0)`,
-        avgDaysToClose: sql<number>`COALESCE(AVG(
-          EXTRACT(EPOCH FROM (${opportunities.actualCloseDate} - ${opportunities.createdAt})) / 86400
-        ), 0)`,
-      })
-      .from(opportunities)
-      .leftJoin(winLossReasons, eq(opportunities.winLossReasonId, winLossReasons.id))
-      .where(
-        and(
-          ...oppConditions,
-          eq(opportunities.stage, 'won'),
-          type === 'loss' ? sql`FALSE` : sql`TRUE`
+    // Helper: fetch analysis for a given stage (win or loss)
+    function fetchAnalysis(stage: 'won' | 'lost', skipType?: 'win' | 'loss') {
+      return db
+        .select({
+          reasonId: winLossReasons.id,
+          reasonName: winLossReasons.name,
+          reasonType: winLossReasons.type,
+          count: sql<number>`COUNT(*)`,
+          totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+          avgValue: sql<number>`COALESCE(AVG(${opportunities.value}), 0)`,
+          avgDaysToClose: sql<number>`COALESCE(AVG(
+            EXTRACT(EPOCH FROM (${opportunities.actualCloseDate} - ${opportunities.createdAt})) / 86400
+          ), 0)`,
+          topCompetitor: sql<string>`MODE() WITHIN GROUP (ORDER BY ${opportunities.competitorName})`,
+        })
+        .from(opportunities)
+        .leftJoin(winLossReasons, eq(opportunities.winLossReasonId, winLossReasons.id))
+        .where(
+          and(
+            ...oppConditions,
+            eq(opportunities.stage, stage),
+            type === skipType ? sql`FALSE` : sql`TRUE`
+          )
         )
-      )
-      .groupBy(winLossReasons.id, winLossReasons.name, winLossReasons.type);
+        .groupBy(winLossReasons.id, winLossReasons.name, winLossReasons.type);
+    }
 
-    // Get loss analysis
-    const lossResults = await db
-      .select({
-        reasonId: winLossReasons.id,
-        reasonName: winLossReasons.name,
-        reasonType: winLossReasons.type,
-        count: sql<number>`COUNT(*)`,
-        totalValue: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-        avgValue: sql<number>`COALESCE(AVG(${opportunities.value}), 0)`,
-        avgDaysToClose: sql<number>`COALESCE(AVG(
-          EXTRACT(EPOCH FROM (${opportunities.actualCloseDate} - ${opportunities.createdAt})) / 86400
-        ), 0)`,
-        topCompetitor: sql<string>`MODE() WITHIN GROUP (ORDER BY ${opportunities.competitorName})`,
-      })
-      .from(opportunities)
-      .leftJoin(winLossReasons, eq(opportunities.winLossReasonId, winLossReasons.id))
-      .where(
-        and(
-          ...oppConditions,
-          eq(opportunities.stage, 'lost'),
-          type === 'win' ? sql`FALSE` : sql`TRUE`
-        )
-      )
-      .groupBy(winLossReasons.id, winLossReasons.name, winLossReasons.type);
-
-    // Get monthly trends
-    const monthlyTrends = await db
-      .select({
-        month: sql<string>`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`,
-        wonCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
-        lostCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
-        wonValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'won' THEN ${opportunities.value} ELSE 0 END), 0)`,
-        lostValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN ${opportunities.value} ELSE 0 END), 0)`,
-      })
-      .from(opportunities)
-      .where(and(...oppConditions))
-      .groupBy(sql`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`);
+    // Run win/loss analysis and monthly trends in parallel
+    const [winResults, lossResults, monthlyTrends] = await Promise.all([
+      fetchAnalysis('won', 'loss'),
+      fetchAnalysis('lost', 'win'),
+      db
+        .select({
+          // Raw SQL justified: SUM(CASE WHEN stage) for won/lost breakdown by month.
+          month: sql<string>`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`,
+          wonCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
+          lostCount: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
+          wonValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'won' THEN ${opportunities.value} ELSE 0 END), 0)`,
+          lostValue: sql<number>`COALESCE(SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN ${opportunities.value} ELSE 0 END), 0)`,
+        })
+        .from(opportunities)
+        .where(and(...oppConditions))
+        // RAW SQL (Phase 11 Keep): TO_CHAR for month grouping. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
+        .groupBy(sql`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(${opportunities.actualCloseDate}, 'YYYY-MM')`),
+    ]);
 
     // Format results
     const winAnalysis = winResults.map((row) => ({
@@ -412,7 +418,7 @@ export const getCompetitors = createServerFn({ method: 'GET' })
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
       eq(opportunities.stage, 'lost'),
-      sql`${opportunities.competitorName} IS NOT NULL`,
+      isNotNull(opportunities.competitorName),
       sql`${opportunities.competitorName} != ''`,
     ];
 

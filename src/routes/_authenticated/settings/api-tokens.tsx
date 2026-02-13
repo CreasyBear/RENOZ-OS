@@ -16,6 +16,7 @@ import {
   PermissionGuard,
   useHasPermission,
 } from "@/components/shared/permission-guard";
+import { Button } from "@/components/ui/button";
 import {
   useApiTokens,
   useCreateApiToken,
@@ -24,6 +25,7 @@ import {
   type CreateApiTokenResponse,
   type ApiTokenScope,
 } from "@/hooks/settings";
+import { DataTableEmpty } from "@/components/shared/data-table";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -50,7 +52,7 @@ function ApiTokensPage() {
           <PageLayout.Header title="Access Denied" />
           <PageLayout.Content>
             <p className="text-gray-600">
-              You don't have permission to view API tokens.
+              You don&apos;t have permission to view API tokens.
             </p>
           </PageLayout.Content>
         </PageLayout>
@@ -119,12 +121,7 @@ function ApiTokensContent() {
         description="Create and manage API tokens for third-party integrations."
         actions={
           canCreate && (
-            <button
-              onClick={() => setShowCreateDialog(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Create Token
-            </button>
+            <Button onClick={() => setShowCreateDialog(true)}>Create Token</Button>
           )
         }
       />
@@ -148,7 +145,16 @@ function ApiTokensContent() {
             canRevoke={canRevoke}
           />
       ) : (
-        <EmptyState onCreateClick={() => setShowCreateDialog(true)} />
+        <DataTableEmpty
+          variant="empty"
+          title="No API Tokens"
+          description="Create your first API token to enable third-party integrations."
+          action={
+            canCreate
+              ? { label: "Create Token", onClick: () => setShowCreateDialog(true) }
+              : undefined
+          }
+        />
       )}
 
       {/* Create dialog */}
@@ -202,7 +208,7 @@ function NewTokenDisplay({
             Token Created Successfully
           </h3>
           <p className="text-sm text-green-700 mt-1">
-            <strong>Important:</strong> Copy your token now. You won't be able
+            <strong>Important:</strong> Copy your token now. You won&apos;t be able
             to see it again!
           </p>
         </div>
@@ -341,24 +347,6 @@ function TokenStatusBadge({ token }: { token: ApiTokenListItem }) {
     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
       Active
     </span>
-  );
-}
-
-function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
-  return (
-    <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-      <div className="text-gray-400 text-4xl mb-3">🔑</div>
-      <h3 className="text-lg font-medium text-gray-900 mb-1">No API Tokens</h3>
-      <p className="text-gray-500 mb-4">
-        Create your first API token to enable third-party integrations.
-      </p>
-      <button
-        onClick={onCreateClick}
-        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-      >
-        Create Token
-      </button>
-    </div>
   );
 }
 

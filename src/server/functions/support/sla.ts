@@ -45,11 +45,12 @@ import {
   buildResumedEventData,
   buildRespondedEventData,
   buildResolvedEventData,
+  type SlaConfiguration,
+  type BusinessHoursConfig as BusinessHoursConfigType,
+  toSlaTracking,
+  toSlaConfiguration,
+  toBusinessHoursConfig,
 } from '@/lib/sla';
-import type {
-  SlaConfiguration,
-  BusinessHoursConfig as BusinessHoursConfigType,
-} from '@/lib/sla/types';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -263,14 +264,7 @@ export const startSlaTracking = createServerFn({ method: 'POST' })
         .where(eq(businessHoursConfig.id, config.businessHoursConfigId))
         .limit(1);
       if (bh) {
-        businessHours = {
-          id: bh.id,
-          organizationId: bh.organizationId,
-          name: bh.name,
-          weeklySchedule: bh.weeklySchedule as any,
-          timezone: bh.timezone,
-          isDefault: bh.isDefault,
-        };
+        businessHours = toBusinessHoursConfig(bh);
       }
     }
 
@@ -317,16 +311,16 @@ export const startSlaTracking = createServerFn({ method: 'POST' })
       holidayDates
     );
 
-    // Create tracking record
-    const [tracking] = await db.insert(slaTracking).values(initialValues).returning();
-
-    // Create started event
-    await db.insert(slaEvents).values({
-      organizationId: ctx.organizationId,
-      slaTrackingId: tracking.id,
-      eventType: 'started',
-      eventData: buildStartedEventData(tracking as any),
-      triggeredByUserId: ctx.user.id,
+    const tracking = await db.transaction(async (tx) => {
+      const [t] = await tx.insert(slaTracking).values(initialValues).returning();
+      await tx.insert(slaEvents).values({
+        organizationId: ctx.organizationId,
+        slaTrackingId: t.id,
+        eventType: 'started',
+        eventData: buildStartedEventData(toSlaTracking(t)),
+        triggeredByUserId: ctx.user.id,
+      });
+      return t;
     });
 
     return tracking;
@@ -354,22 +348,22 @@ export const pauseSla = createServerFn({ method: 'POST' })
     }
 
     // Calculate pause update
-    const updates = calculatePauseUpdate(existing as any, data.reason);
+    const updates = calculatePauseUpdate(toSlaTracking(existing), data.reason);
 
-    // Update tracking
-    const [tracking] = await db
-      .update(slaTracking)
-      .set(updates)
-      .where(eq(slaTracking.id, data.trackingId))
-      .returning();
-
-    // Create paused event
-    await db.insert(slaEvents).values({
-      organizationId: ctx.organizationId,
-      slaTrackingId: tracking.id,
-      eventType: 'paused',
-      eventData: buildPausedEventData(data.reason),
-      triggeredByUserId: ctx.user.id,
+    const [tracking] = await db.transaction(async (tx) => {
+      const [t] = await tx
+        .update(slaTracking)
+        .set(updates)
+        .where(eq(slaTracking.id, data.trackingId))
+        .returning();
+      await tx.insert(slaEvents).values({
+        organizationId: ctx.organizationId,
+        slaTrackingId: t.id,
+        eventType: 'paused',
+        eventData: buildPausedEventData(data.reason),
+        triggeredByUserId: ctx.user.id,
+      });
+      return [t];
     });
 
     return tracking;
@@ -397,23 +391,23 @@ export const resumeSla = createServerFn({ method: 'POST' })
     }
 
     // Calculate resume update
-    const updates = calculateResumeUpdate(existing as any);
+    const updates = calculateResumeUpdate(toSlaTracking(existing));
     const pauseDuration = updates.totalPausedDurationSeconds! - existing.totalPausedDurationSeconds;
 
-    // Update tracking
-    const [tracking] = await db
-      .update(slaTracking)
-      .set(updates)
-      .where(eq(slaTracking.id, data.trackingId))
-      .returning();
-
-    // Create resumed event
-    await db.insert(slaEvents).values({
-      organizationId: ctx.organizationId,
-      slaTrackingId: tracking.id,
-      eventType: 'resumed',
-      eventData: buildResumedEventData(pauseDuration, updates.totalPausedDurationSeconds!),
-      triggeredByUserId: ctx.user.id,
+    const [tracking] = await db.transaction(async (tx) => {
+      const [t] = await tx
+        .update(slaTracking)
+        .set(updates)
+        .where(eq(slaTracking.id, data.trackingId))
+        .returning();
+      await tx.insert(slaEvents).values({
+        organizationId: ctx.organizationId,
+        slaTrackingId: t.id,
+        eventType: 'resumed',
+        eventData: buildResumedEventData(pauseDuration, updates.totalPausedDurationSeconds!),
+        triggeredByUserId: ctx.user.id,
+      });
+      return [t];
     });
 
     return tracking;
@@ -443,22 +437,22 @@ export const recordSlaResponse = createServerFn({ method: 'POST' })
     const respondedAt = data.respondedAt ?? new Date();
 
     // Calculate response update
-    const updates = calculateResponseUpdate(existing as any, respondedAt);
+    const updates = calculateResponseUpdate(toSlaTracking(existing), respondedAt);
 
-    // Update tracking
-    const [tracking] = await db
-      .update(slaTracking)
-      .set(updates)
-      .where(eq(slaTracking.id, data.trackingId))
-      .returning();
-
-    // Create responded event
-    await db.insert(slaEvents).values({
-      organizationId: ctx.organizationId,
-      slaTrackingId: tracking.id,
-      eventType: 'responded',
-      eventData: buildRespondedEventData(existing as any, respondedAt),
-      triggeredByUserId: ctx.user.id,
+    const [tracking] = await db.transaction(async (tx) => {
+      const [t] = await tx
+        .update(slaTracking)
+        .set(updates)
+        .where(eq(slaTracking.id, data.trackingId))
+        .returning();
+      await tx.insert(slaEvents).values({
+        organizationId: ctx.organizationId,
+        slaTrackingId: t.id,
+        eventType: 'responded',
+        eventData: buildRespondedEventData(toSlaTracking(existing), respondedAt),
+        triggeredByUserId: ctx.user.id,
+      });
+      return [t];
     });
 
     return tracking;
@@ -488,22 +482,22 @@ export const recordSlaResolution = createServerFn({ method: 'POST' })
     const resolvedAt = data.resolvedAt ?? new Date();
 
     // Calculate resolution update
-    const updates = calculateResolutionUpdate(existing as any, resolvedAt);
+    const updates = calculateResolutionUpdate(toSlaTracking(existing), resolvedAt);
 
-    // Update tracking
-    const [tracking] = await db
-      .update(slaTracking)
-      .set(updates)
-      .where(eq(slaTracking.id, data.trackingId))
-      .returning();
-
-    // Create resolved event
-    await db.insert(slaEvents).values({
-      organizationId: ctx.organizationId,
-      slaTrackingId: tracking.id,
-      eventType: 'resolved',
-      eventData: buildResolvedEventData(existing as any, resolvedAt),
-      triggeredByUserId: ctx.user.id,
+    const [tracking] = await db.transaction(async (tx) => {
+      const [t] = await tx
+        .update(slaTracking)
+        .set(updates)
+        .where(eq(slaTracking.id, data.trackingId))
+        .returning();
+      await tx.insert(slaEvents).values({
+        organizationId: ctx.organizationId,
+        slaTrackingId: t.id,
+        eventType: 'resolved',
+        eventData: buildResolvedEventData(toSlaTracking(existing), resolvedAt),
+        triggeredByUserId: ctx.user.id,
+      });
+      return [t];
     });
 
     return tracking;
@@ -542,7 +536,10 @@ export const getSlaState = createServerFn({ method: 'GET' })
     }
 
     // Compute state snapshot
-    const snapshot = computeStateSnapshot(tracking as any, config as any);
+    const snapshot = computeStateSnapshot(
+      toSlaTracking(tracking),
+      toSlaConfiguration(config)
+    );
 
     return snapshot;
   });
@@ -605,7 +602,7 @@ export const getSlaMetrics = createServerFn({ method: 'GET' })
       conditions.push(lte(slaTracking.startedAt, new Date(data.endDate)));
     }
 
-    // Get total count and breach counts
+    // RAW SQL (Phase 11 Keep): count(CASE WHEN) for conditional counts. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
     const [metrics] = await db
       .select({
         total: count(),

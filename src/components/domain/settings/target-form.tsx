@@ -54,6 +54,14 @@ import {
   type CreateTargetInput,
 } from '@/lib/schemas/reports/targets';
 
+function isTargetMetric(v: string): v is TargetMetric {
+  return (targetMetricValues as readonly string[]).includes(v);
+}
+
+function isTargetPeriod(v: string): v is TargetPeriod {
+  return (targetPeriodValues as readonly string[]).includes(v);
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -245,7 +253,7 @@ export const TargetForm = memo(function TargetForm({
                 <Label htmlFor={field.name}>Metric *</Label>
                 <Select
                   value={field.state.value}
-                  onValueChange={(value) => field.handleChange(value as TargetMetric)}
+                  onValueChange={(value) => isTargetMetric(value) && field.handleChange(value)}
                 >
                   <SelectTrigger id={field.name}>
                     <SelectValue placeholder="Select metric" />
@@ -279,7 +287,7 @@ export const TargetForm = memo(function TargetForm({
                 <Label htmlFor={field.name}>Period *</Label>
                 <Select
                   value={field.state.value}
-                  onValueChange={(value) => field.handleChange(value as TargetPeriod)}
+                  onValueChange={(value) => isTargetPeriod(value) && field.handleChange(value)}
                 >
                   <SelectTrigger id={field.name}>
                     <SelectValue placeholder="Select period" />

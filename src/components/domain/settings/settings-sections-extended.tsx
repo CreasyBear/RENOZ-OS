@@ -5,7 +5,7 @@
  * Each can be slotted into the unified settings shell.
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { SettingsSection, SettingsRow } from "./settings-ui";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,26 +20,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import type {
+  PreferencesSettingsData,
+  EmailSettingsData,
+  SecuritySettingsData,
+  ApiToken,
+  SettingsCategory,
+  TargetsSettingsData,
+  SettingsWinLossReason,
+} from "@/lib/schemas/settings";
 
 // ============================================================================
 // PREFERENCES SECTION
 // ============================================================================
 
-export interface PreferencesSettingsData {
-  theme: string;
-  accentColor: string;
-  density: string;
-  notifications_email: boolean;
-  notifications_inApp: boolean;
-  notifications_sound: boolean;
-  tablePageSize: string;
-  stickyHeaders: boolean;
-  reduceMotion: boolean;
-}
+export type { PreferencesSettingsData };
 
 export interface PreferencesSectionProps {
   data: PreferencesSettingsData;
-  onSave: (key: keyof PreferencesSettingsData, value: any) => Promise<void>;
+  onSave: <K extends keyof PreferencesSettingsData>(key: K, value: PreferencesSettingsData[K]) => Promise<void>;
   isSaving?: string | null;
 }
 
@@ -48,14 +47,22 @@ export function PreferencesSettingsSection({
   onSave,
 }: PreferencesSectionProps) {
   const [local, setLocal] = useState(data);
+  const isSavingRef = useRef(false);
 
-  const update = async (key: keyof PreferencesSettingsData, value: any) => {
+  useEffect(() => {
+    if (!isSavingRef.current) setLocal(data);
+  }, [data]);
+
+  const update = async <K extends keyof PreferencesSettingsData>(key: K, value: PreferencesSettingsData[K]) => {
     setLocal((prev) => ({ ...prev, [key]: value }));
+    isSavingRef.current = true;
     try {
       await onSave(key, value);
       toast.success("Preference saved");
     } catch {
       toast.error("Failed to save");
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
@@ -138,13 +145,7 @@ export function PreferencesSettingsSection({
 // EMAIL SETTINGS SECTION
 // ============================================================================
 
-export interface EmailSettingsData {
-  defaultFromName: string;
-  defaultFromEmail: string;
-  replyToEmail: string;
-  bccEmail: string;
-  emailSignature: string;
-}
+export type { EmailSettingsData };
 
 export interface EmailSectionProps {
   data: EmailSettingsData;
@@ -214,16 +215,11 @@ export function EmailSettingsSection({
 // SECURITY SETTINGS SECTION
 // ============================================================================
 
-export interface SecuritySettingsData {
-  twoFactorEnabled: boolean;
-  sessionTimeout: string;
-  requirePasswordChange: boolean;
-  passwordExpiryDays: string;
-}
+export type { SecuritySettingsData };
 
 export interface SecuritySectionProps {
   data: SecuritySettingsData;
-  onSave: (key: keyof SecuritySettingsData, value: any) => Promise<void>;
+  onSave: <K extends keyof SecuritySettingsData>(key: K, value: SecuritySettingsData[K]) => Promise<void>;
   onChangePassword?: () => void;
   onViewSessions?: () => void;
   isSaving?: string | null;
@@ -237,7 +233,7 @@ export function SecuritySettingsSection({
 }: SecuritySectionProps) {
   const [local, setLocal] = useState(data);
 
-  const update = async (key: keyof SecuritySettingsData, value: any) => {
+  const update = async <K extends keyof SecuritySettingsData>(key: K, value: SecuritySettingsData[K]) => {
     setLocal((prev) => ({ ...prev, [key]: value }));
     await onSave(key, value);
   };
@@ -291,13 +287,7 @@ export function SecuritySettingsSection({
 // API TOKENS SECTION (List-based)
 // ============================================================================
 
-export interface ApiToken {
-  id: string;
-  name: string;
-  lastUsed: string | null;
-  expiresAt: string | null;
-  scopes: string[];
-}
+export type { ApiToken };
 
 export interface ApiTokensSectionProps {
   tokens: ApiToken[];
@@ -368,16 +358,10 @@ export function ApiTokensSettingsSection({
 // CATEGORIES SECTION (List-based)
 // ============================================================================
 
-export interface Category {
-  id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  childCount: number;
-}
+export type { SettingsCategory as Category } from "@/lib/schemas/settings";
 
 export interface CategoriesSectionProps {
-  categories: Category[];
+  categories: SettingsCategory[];
   onCreateCategory: () => void;
   onEditCategory: (id: string) => void;
   onDeleteCategory: (id: string) => void;
@@ -438,12 +422,7 @@ export function CategoriesSettingsSection({
 // TARGETS SECTION
 // ============================================================================
 
-export interface TargetsSettingsData {
-  salesTarget: number;
-  leadTarget: number;
-  conversionTarget: number;
-  revenueTarget: number;
-}
+export type { TargetsSettingsData };
 
 export interface TargetsSectionProps {
   data: TargetsSettingsData;
@@ -536,15 +515,10 @@ export function TargetsSettingsSection({
 // WIN/LOSS REASONS SECTION
 // ============================================================================
 
-export interface WinLossReason {
-  id: string;
-  label: string;
-  type: "win" | "loss";
-  isActive: boolean;
-}
+export type { SettingsWinLossReason as WinLossReason } from "@/lib/schemas/settings";
 
 export interface WinLossSectionProps {
-  reasons: WinLossReason[];
+  reasons: SettingsWinLossReason[];
   onCreateReason: (type: "win" | "loss") => void;
   onToggleReason: (id: string, isActive: boolean) => void;
   onDeleteReason: (id: string) => void;

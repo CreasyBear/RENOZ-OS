@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PriceCell } from "@/components/shared/data-table";
 import { cn } from "@/lib/utils";
-import type { OpportunityTableItem } from "./opportunity-columns";
+import type { OpportunityTableItem } from "@/lib/schemas/pipeline";
 import {
   STAGE_COLORS,
   formatExpectedCloseDateRelative,

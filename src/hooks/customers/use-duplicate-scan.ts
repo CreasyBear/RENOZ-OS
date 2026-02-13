@@ -58,6 +58,7 @@ export function useDuplicateScan(options: ScanDuplicatesOptions = {}) {
           batchSize,
         },
       });
+      if (result == null) throw new Error('Duplicate scan returned no data');
       return result;
     },
     enabled,
@@ -117,6 +118,7 @@ export function useMergeHistory(options: MergeHistoryOptions = {}) {
           action,
         },
       });
+      if (result == null) throw new Error('Merge history returned no data');
       return result;
     },
     enabled,

@@ -12,15 +12,17 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   boolean,
   index,
   unique,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "./_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "./_shared/patterns";
 import { organizations } from "./settings/organizations";
 
 // ============================================================================
@@ -119,27 +121,7 @@ export const documentTemplates = pgTable(
     orgIdx: index("idx_document_templates_org").on(table.organizationId),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("document_templates_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("document_templates_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("document_templates_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("document_templates_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("document_templates"),
   })
 );
 

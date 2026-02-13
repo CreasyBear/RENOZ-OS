@@ -8,12 +8,26 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, gte, lte, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, gte, lte, isNull, sql, inArray, ilike } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { orderShipments, shipmentItems, orders, orderLineItems } from 'drizzle/schema';
+import {
+  orderShipments,
+  shipmentItems,
+  orders,
+  orderLineItems,
+} from 'drizzle/schema';
+import {
+  inventory,
+  inventoryMovements,
+  inventoryCostLayers,
+} from 'drizzle/schema/inventory/inventory';
+import { products } from 'drizzle/schema/products/products';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError, NotFoundError } from '@/lib/server/errors';
+import { fulfillmentImportSchema } from '@/lib/schemas/orders/shipments';
 import {
   createShipmentSchema,
   updateShipmentSchema,
@@ -22,6 +36,7 @@ import {
   updateShipmentStatusSchema,
   shipmentParamsSchema,
   shipmentListQuerySchema,
+  shipmentListCursorQuerySchema,
   type ShipmentStatus,
   type TrackingEvent,
 } from '@/lib/schemas';
@@ -32,6 +47,7 @@ import {
 
 type OrderShipment = typeof orderShipments.$inferSelect;
 type ShipmentItem = typeof shipmentItems.$inferSelect;
+type MarkShippedInput = z.infer<typeof markShippedSchema>;
 
 interface ShipmentWithItems extends OrderShipment {
   items: ShipmentItem[];
@@ -57,7 +73,7 @@ async function generateShipmentNumber(organizationId: string, orderId: string): 
   const [order] = await db
     .select({ orderNumber: orders.orderNumber })
     .from(orders)
-    .where(eq(orders.id, orderId))
+    .where(and(eq(orders.id, orderId), eq(orders.organizationId, organizationId)))
     .limit(1);
 
   if (!order) {
@@ -101,40 +117,515 @@ function generateTrackingUrl(carrier: string | null, trackingNumber: string | nu
   return carrierUrls[normalizedCarrier] || null;
 }
 
+async function markShipmentAsShipped(
+  ctx: Awaited<ReturnType<typeof withAuth>>,
+  data: MarkShippedInput
+): Promise<OrderShipment> {
+  // Verify shipment exists and is pending
+  const [existing] = await db
+    .select()
+    .from(orderShipments)
+    .where(and(eq(orderShipments.id, data.id), eq(orderShipments.organizationId, ctx.organizationId)))
+    .limit(1);
+
+  if (!existing) {
+    throw new NotFoundError('Shipment not found');
+  }
+
+  if (existing.status !== 'pending') {
+    throw new ValidationError('Shipment already shipped', {
+      status: [`Current status is ${existing.status}`],
+    });
+  }
+
+  const shippedAt = data.shippedAt || new Date();
+  const trackingUrl =
+    data.trackingUrl || generateTrackingUrl(data.carrier, data.trackingNumber ?? null);
+
+  // Create initial tracking event
+  const trackingEvents: TrackingEvent[] = [
+    {
+      timestamp: shippedAt.toISOString(),
+      status: 'Shipped',
+      description: `Package picked up by ${data.carrier}`,
+    },
+  ];
+
+  // Wrap shipment update and line item updates in a transaction
+  const shipment = await db.transaction(async (tx) => {
+    // Update shipment
+    const [updatedShipment] = await tx
+      .update(orderShipments)
+      .set({
+        status: 'in_transit',
+        carrier: data.carrier,
+        carrierService: data.carrierService,
+        trackingNumber: data.trackingNumber,
+        trackingUrl,
+        shippedAt,
+        shippedBy: ctx.user.id,
+        trackingEvents,
+        updatedBy: ctx.user.id,
+        ...(data.shippingCost !== undefined && { shippingCost: data.shippingCost }),
+      })
+      .where(eq(orderShipments.id, data.id))
+      .returning();
+
+    // Update line item qtyShipped and consume COGS from cost layers
+    const items = await tx
+      .select()
+      .from(shipmentItems)
+      .where(eq(shipmentItems.shipmentId, data.id));
+
+    // Lock ordering: sort by orderLineItemId for deterministic lock acquisition
+    const sortedItems = [...items].sort((a, b) =>
+      a.orderLineItemId.localeCompare(b.orderLineItemId)
+    );
+
+    const lineItemIds = sortedItems.map((i) => i.orderLineItemId);
+    const allLineItems = lineItemIds.length > 0
+      ? await tx
+          .select({
+            id: orderLineItems.id,
+            productId: orderLineItems.productId,
+            allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
+          })
+          .from(orderLineItems)
+          .where(inArray(orderLineItems.id, lineItemIds))
+      : [];
+    const lineItemMap = new Map(allLineItems.map((li) => [li.id, li]));
+
+    // Collect (productId, serialNumber) pairs for serialized items
+    const serializedPairs: { productId: string; serialNumber: string }[] = [];
+    const nonSerializedProductIds: string[] = [];
+    for (const item of sortedItems) {
+      const lineItem = lineItemMap.get(item.orderLineItemId);
+      if (!lineItem?.productId) continue;
+      const serials = (item.serialNumbers as string[] | null) ?? [];
+      if (serials.length > 0) {
+        for (const sn of serials) {
+          serializedPairs.push({ productId: lineItem.productId, serialNumber: sn });
+        }
+      } else {
+        nonSerializedProductIds.push(lineItem.productId);
+      }
+    }
+
+    // Batch fetch serialized inventory: (productId, serialNumber) pairs
+    let inventoryBySerialKey = new Map<string, typeof inventory.$inferSelect>();
+    if (serializedPairs.length > 0) {
+      const productIds = [...new Set(serializedPairs.map((p) => p.productId))];
+      const serialNumbers = [...new Set(serializedPairs.map((p) => p.serialNumber))];
+      const serializedInventory = await tx
+        .select()
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.organizationId, ctx.organizationId),
+            inArray(inventory.productId, productIds),
+            inArray(inventory.serialNumber, serialNumbers)
+          )
+        );
+      for (const inv of serializedInventory) {
+        if (inv.serialNumber) {
+          inventoryBySerialKey.set(`${inv.productId}:${inv.serialNumber}`, inv);
+        }
+      }
+    }
+
+    // Batch fetch non-serialized inventory (one per product for FIFO)
+    let inventoryByProduct = new Map<string, typeof inventory.$inferSelect>();
+    if (nonSerializedProductIds.length > 0) {
+      const uniqueProductIds = [...new Set(nonSerializedProductIds)];
+      const nonSerialInv = await tx
+        .select()
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.organizationId, ctx.organizationId),
+            inArray(inventory.productId, uniqueProductIds)
+          )
+        );
+      for (const inv of nonSerialInv) {
+        if (!inventoryByProduct.has(inv.productId)) {
+          inventoryByProduct.set(inv.productId, inv);
+        }
+      }
+    }
+
+    for (const item of sortedItems) {
+      const lineItem = lineItemMap.get(item.orderLineItemId);
+      if (!lineItem?.productId) continue;
+
+      // Update qtyShipped
+      await tx
+        .update(orderLineItems)
+        .set({
+          qtyShipped: sql`${orderLineItems.qtyShipped} + ${item.quantity}`,
+        })
+        .where(eq(orderLineItems.id, item.orderLineItemId));
+
+      // Trim allocatedSerialNumbers when shipping serials
+      const serials = (item.serialNumbers as string[] | null) ?? [];
+      if (serials.length > 0) {
+        const currentAllocated = (lineItem.allocatedSerialNumbers as string[] | null) ?? [];
+        const remaining = currentAllocated.filter((s) => !serials.includes(s));
+        await tx
+          .update(orderLineItems)
+          .set({
+            allocatedSerialNumbers: remaining.length > 0 ? remaining : null,
+            updatedAt: new Date(),
+          })
+          .where(eq(orderLineItems.id, item.orderLineItemId));
+      }
+
+      if (serials.length > 0) {
+        // Serialized: consume from specific inventory rows by serial
+        const invRows = serials
+          .map((sn) => inventoryBySerialKey.get(`${lineItem.productId}:${sn}`))
+          .filter((inv): inv is NonNullable<typeof inv> => inv != null)
+          .sort((a, b) => a.id.localeCompare(b.id));
+
+        if (invRows.length !== serials.length) {
+          const foundSerials = new Set(invRows.map((r) => r.serialNumber));
+          const missing = serials.find((s) => !foundSerials.has(s));
+          throw new ValidationError('Serial not found in inventory', {
+            serialNumbers: [
+              `Serial "${missing ?? 'unknown'}" not found in inventory for this product`,
+            ],
+          });
+        }
+
+        let _totalCogs = 0;
+        for (const inv of invRows) {
+          const costLayers = await tx
+            .select()
+            .from(inventoryCostLayers)
+            .where(
+              and(
+                eq(inventoryCostLayers.inventoryId, inv.id),
+                sql`${inventoryCostLayers.quantityRemaining} > 0`
+              )
+            )
+            .orderBy(asc(inventoryCostLayers.receivedAt));
+
+          let remaining = 1;
+          let unitCogs = 0;
+          for (const layer of costLayers) {
+            if (remaining <= 0) break;
+            const consume = Math.min(remaining, layer.quantityRemaining);
+            unitCogs += consume * Number(layer.unitCost);
+            remaining -= consume;
+            await tx
+              .update(inventoryCostLayers)
+              .set({ quantityRemaining: layer.quantityRemaining - consume })
+              .where(eq(inventoryCostLayers.id, layer.id));
+          }
+          _totalCogs += unitCogs;
+
+          await tx.insert(inventoryMovements).values({
+            organizationId: ctx.organizationId,
+            inventoryId: inv.id,
+            productId: lineItem.productId,
+            locationId: inv.locationId,
+            movementType: 'ship',
+            quantity: -1,
+            previousQuantity: Number(inv.quantityOnHand),
+            newQuantity: Number(inv.quantityOnHand) - 1,
+            unitCost: unitCogs,
+            totalCost: unitCogs,
+            referenceType: 'order',
+            referenceId: existing.orderId,
+            metadata: {
+              shipmentId: data.id,
+              cogsTotal: unitCogs,
+              cogsUnitCost: unitCogs,
+            },
+            notes: `Shipped via ${updatedShipment.shipmentNumber}`,
+            createdBy: ctx.user.id,
+          });
+
+          await tx
+            .update(inventory)
+            .set({
+              quantityOnHand: sql`${inventory.quantityOnHand} - 1`,
+              updatedBy: ctx.user.id,
+            })
+            .where(eq(inventory.id, inv.id));
+        }
+
+        if (invRows.length > 0) {
+          const firstInv = invRows[0];
+          const activeLayers = await tx
+            .select({
+              quantityRemaining: inventoryCostLayers.quantityRemaining,
+              unitCost: inventoryCostLayers.unitCost,
+            })
+            .from(inventoryCostLayers)
+            .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+            .where(
+              and(
+                eq(inventory.productId, lineItem.productId),
+                eq(inventory.organizationId, ctx.organizationId),
+                eq(inventory.locationId, firstInv.locationId),
+                sql`${inventoryCostLayers.quantityRemaining} > 0`
+              )
+            );
+
+          if (activeLayers.length > 0) {
+            const totalRem = activeLayers.reduce((s, l) => s + l.quantityRemaining, 0);
+            const totalVal = activeLayers.reduce(
+              (s, l) => s + l.quantityRemaining * Number(l.unitCost),
+              0
+            );
+            const avgCost = totalRem > 0 ? totalVal / totalRem : 0;
+            await tx
+              .update(products)
+              .set({ costPrice: avgCost })
+              .where(eq(products.id, lineItem.productId));
+          }
+        }
+      } else {
+        // Non-serialized: original FIFO logic
+        const inv = inventoryByProduct.get(lineItem.productId);
+        if (!inv) continue;
+
+        const costLayers = await tx
+          .select()
+          .from(inventoryCostLayers)
+          .where(
+            and(
+              eq(inventoryCostLayers.inventoryId, inv.id),
+              sql`${inventoryCostLayers.quantityRemaining} > 0`
+            )
+          )
+          .orderBy(asc(inventoryCostLayers.receivedAt));
+
+        let remaining = item.quantity;
+        let totalCogs = 0;
+        for (const layer of costLayers) {
+          if (remaining <= 0) break;
+          const consume = Math.min(remaining, layer.quantityRemaining);
+          totalCogs += consume * Number(layer.unitCost);
+          remaining -= consume;
+          await tx
+            .update(inventoryCostLayers)
+            .set({ quantityRemaining: layer.quantityRemaining - consume })
+            .where(eq(inventoryCostLayers.id, layer.id));
+        }
+
+        const cogsUnitCost = item.quantity > 0 ? totalCogs / item.quantity : 0;
+
+        await tx.insert(inventoryMovements).values({
+          organizationId: ctx.organizationId,
+          inventoryId: inv.id,
+          productId: lineItem.productId,
+          locationId: inv.locationId,
+          movementType: 'ship',
+          quantity: -item.quantity,
+          previousQuantity: Number(inv.quantityOnHand),
+          newQuantity: Number(inv.quantityOnHand) - item.quantity,
+          unitCost: cogsUnitCost,
+          totalCost: totalCogs,
+          referenceType: 'order',
+          referenceId: existing.orderId,
+          metadata: {
+            shipmentId: data.id,
+            cogsTotal: totalCogs,
+            cogsUnitCost,
+          },
+          notes: `Shipped via ${updatedShipment.shipmentNumber}`,
+          createdBy: ctx.user.id,
+        });
+
+        await tx
+          .update(inventory)
+          .set({
+            quantityOnHand: sql`${inventory.quantityOnHand} - ${item.quantity}`,
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(inventory.id, inv.id));
+
+        const activeLayers = await tx
+          .select({
+            quantityRemaining: inventoryCostLayers.quantityRemaining,
+            unitCost: inventoryCostLayers.unitCost,
+          })
+          .from(inventoryCostLayers)
+          .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+          .where(
+            and(
+              eq(inventory.productId, lineItem.productId),
+              eq(inventory.organizationId, ctx.organizationId),
+              eq(inventory.locationId, inv.locationId),
+              sql`${inventoryCostLayers.quantityRemaining} > 0`
+            )
+          );
+
+        if (activeLayers.length > 0) {
+          const totalRem = activeLayers.reduce((s, l) => s + l.quantityRemaining, 0);
+          const totalVal = activeLayers.reduce(
+            (s, l) => s + l.quantityRemaining * Number(l.unitCost),
+            0
+          );
+          const avgCost = totalRem > 0 ? totalVal / totalRem : 0;
+          await tx
+            .update(products)
+            .set({ costPrice: avgCost })
+            .where(eq(products.id, lineItem.productId));
+        }
+      }
+    }
+
+    // Auto-advance order status based on fulfillment state (inside transaction)
+    // Check if all line items are fully shipped
+    const orderLineItemsForStatus = await tx
+      .select({
+        quantity: orderLineItems.quantity,
+        qtyShipped: orderLineItems.qtyShipped,
+      })
+      .from(orderLineItems)
+      .where(eq(orderLineItems.orderId, existing.orderId));
+
+    const totalOrdered = orderLineItemsForStatus.reduce((s, li) => s + li.quantity, 0);
+    const totalShipped = orderLineItemsForStatus.reduce((s, li) => s + (li.qtyShipped ?? 0), 0);
+
+    if (totalOrdered > 0 && totalShipped > 0) {
+      const newOrderStatus = totalShipped >= totalOrdered ? 'shipped' : 'partially_shipped';
+
+      // Only advance if current status allows it
+      const [currentOrder] = await tx
+        .select({ status: orders.status })
+        .from(orders)
+        .where(eq(orders.id, existing.orderId))
+        .limit(1);
+
+      const advanceable = ['picked', 'partially_shipped'];
+      if (currentOrder && advanceable.includes(currentOrder.status)) {
+        await tx
+          .update(orders)
+          .set({
+            status: newOrderStatus,
+            shippedDate: new Date().toISOString().slice(0, 10),
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(orders.id, existing.orderId));
+      }
+    }
+
+    return updatedShipment;
+  });
+
+  return shipment;
+}
+
+interface ValidateShipmentItem {
+  orderLineItemId: string;
+  quantity: number;
+  serialNumbers?: string[];
+}
+
 /**
- * Validate that all items belong to the order and have sufficient quantity.
+ * Validate that all items belong to the order, have sufficient quantity,
+ * and for serialized products: serialNumbers match quantity and are in allocatedSerialNumbers.
  */
 async function validateShipmentItems(
   organizationId: string,
   orderId: string,
-  items: Array<{ orderLineItemId: string; quantity: number }>
+  items: ValidateShipmentItem[]
 ): Promise<void> {
-  for (const item of items) {
-    // Get line item
-    const [lineItem] = await db
-      .select()
-      .from(orderLineItems)
-      .where(
-        and(
-          eq(orderLineItems.id, item.orderLineItemId),
-          eq(orderLineItems.organizationId, organizationId),
-          eq(orderLineItems.orderId, orderId)
-        )
-      )
-      .limit(1);
+  if (items.length === 0) return;
 
-    if (!lineItem) {
+  const lineItemIds = items.map((i) => i.orderLineItemId);
+
+  // Batch fetch line items with product isSerialized and allocatedSerialNumbers
+  const rows = await db
+    .select({
+      lineItemId: orderLineItems.id,
+      productId: orderLineItems.productId,
+      quantity: orderLineItems.quantity,
+      qtyShipped: orderLineItems.qtyShipped,
+      description: orderLineItems.description,
+      allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
+      isSerialized: products.isSerialized,
+    })
+    .from(orderLineItems)
+    .leftJoin(products, and(
+      eq(orderLineItems.productId, products.id),
+      eq(products.organizationId, organizationId),
+      isNull(products.deletedAt)
+    ))
+    .where(
+      and(
+        inArray(orderLineItems.id, lineItemIds),
+        eq(orderLineItems.organizationId, organizationId),
+        eq(orderLineItems.orderId, orderId)
+      )
+    );
+
+  const lineItemMap = new Map(
+    rows.map((r) => [
+      r.lineItemId,
+      {
+        productId: r.productId,
+        quantity: r.quantity,
+        qtyShipped: r.qtyShipped,
+        description: r.description,
+        allocatedSerialNumbers: (r.allocatedSerialNumbers as string[] | null) ?? [],
+        isSerialized: r.isSerialized ?? false,
+      },
+    ])
+  );
+
+  for (const item of items) {
+    const lineData = lineItemMap.get(item.orderLineItemId);
+
+    if (!lineData) {
       throw new ValidationError("Line item not found or doesn't belong to order", {
-        orderLineItemId: [`Line item ${item.orderLineItemId} not found`],
+        [item.orderLineItemId]: ['Line item not found'],
       });
     }
 
     // Check available quantity (ordered - already shipped)
-    const available = lineItem.quantity - lineItem.qtyShipped;
+    const available = Number(lineData.quantity) - Number(lineData.qtyShipped ?? 0);
     if (item.quantity > available) {
       throw new ValidationError('Insufficient quantity available for shipment', {
-        orderLineItemId: [`Only ${available} units available, requested ${item.quantity}`],
+        [item.orderLineItemId]: [`Only ${available} units available, requested ${item.quantity}`],
       });
+    }
+
+    // Validate serialized products: serialNumbers required, length === quantity, each in allocated
+    if (lineData.isSerialized && item.quantity > 0) {
+      const rawSerials = item.serialNumbers ?? [];
+      const serials = rawSerials.map((s) => s.trim());
+      const emptyIndex = serials.findIndex((s) => s === '');
+      if (emptyIndex >= 0) {
+        throw new ValidationError('Invalid serial number', {
+          [item.orderLineItemId]: [`Serial number at position ${emptyIndex + 1} is empty after trimming`],
+        });
+      }
+      if (serials.length === 0) {
+        throw new ValidationError('Serial numbers required for serialized product', {
+          [item.orderLineItemId]: [
+            `"${lineData.description}" requires ${item.quantity} serial number${item.quantity !== 1 ? 's' : ''}`,
+          ],
+        });
+      }
+      if (serials.length !== item.quantity) {
+        throw new ValidationError('Serial number count mismatch', {
+          [item.orderLineItemId]: [
+            `Expected ${item.quantity} serial number${item.quantity !== 1 ? 's' : ''} for "${lineData.description}", got ${serials.length}`,
+          ],
+        });
+      }
+      const allocatedSet = new Set(lineData.allocatedSerialNumbers);
+      for (const sn of serials) {
+        if (!allocatedSet.has(sn)) {
+          throw new ValidationError('Serial number not allocated to this line item', {
+            [item.orderLineItemId]: [`Serial number "${sn}" is not allocated to "${lineData.description}"`],
+          });
+        }
+      }
     }
   }
 }
@@ -159,7 +650,7 @@ export const listShipments = createServerFn({ method: 'GET' })
       conditions.push(eq(orderShipments.status, status));
     }
     if (carrier) {
-      conditions.push(sql`${orderShipments.carrier} ILIKE ${`%${carrier}%`}`);
+      conditions.push(ilike(orderShipments.carrier, containsPattern(carrier)));
     }
     if (dateFrom) {
       conditions.push(gte(orderShipments.createdAt, dateFrom));
@@ -202,6 +693,43 @@ export const listShipments = createServerFn({ method: 'GET' })
       pageSize,
       hasMore: page * pageSize < total,
     };
+  });
+
+/**
+ * List shipments with cursor pagination (recommended for large datasets).
+ */
+export const listShipmentsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(shipmentListCursorQuerySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', orderId, status, carrier, dateFrom, dateTo } = data;
+
+    const conditions = [eq(orderShipments.organizationId, ctx.organizationId)];
+    if (orderId) conditions.push(eq(orderShipments.orderId, orderId));
+    if (status) conditions.push(eq(orderShipments.status, status));
+    if (carrier) conditions.push(ilike(orderShipments.carrier, containsPattern(carrier)));
+    if (dateFrom) conditions.push(gte(orderShipments.createdAt, dateFrom));
+    if (dateTo) conditions.push(lte(orderShipments.createdAt, dateTo));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(orderShipments.createdAt, orderShipments.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const shipments = await db
+      .select()
+      .from(orderShipments)
+      .where(and(...conditions))
+      .orderBy(orderDir(orderShipments.createdAt), orderDir(orderShipments.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(shipments, pageSize);
   });
 
 // ============================================================================
@@ -263,8 +791,14 @@ export const createShipment = createServerFn({ method: 'POST' })
       throw new NotFoundError('Order not found');
     }
 
-    // Validate items
-    await validateShipmentItems(ctx.organizationId, data.orderId, data.items);
+    // Normalize serial numbers (trim whitespace from barcode scanners / paste)
+    const normalizedItems = data.items.map((item) => ({
+      ...item,
+      serialNumbers: item.serialNumbers?.map((s) => s.trim()) ?? undefined,
+    }));
+
+    // Validate items (uses normalized serials)
+    await validateShipmentItems(ctx.organizationId, data.orderId, normalizedItems);
 
     // Generate shipment number
     const shipmentNumber =
@@ -274,57 +808,58 @@ export const createShipment = createServerFn({ method: 'POST' })
     const trackingUrl =
       data.trackingUrl || generateTrackingUrl(data.carrier ?? null, data.trackingNumber ?? null);
 
-    // Create shipment
-    const [shipment] = await db
-      .insert(orderShipments)
-      .values({
-        organizationId: ctx.organizationId,
-        orderId: data.orderId,
-        shipmentNumber,
-        status: 'pending',
-        carrier: data.carrier,
-        carrierService: data.carrierService,
-        trackingNumber: data.trackingNumber,
-        trackingUrl,
-        shippingAddress: data.shippingAddress,
-        returnAddress: data.returnAddress,
-        weight: data.weight,
-        length: data.length,
-        width: data.width,
-        height: data.height,
-        packageCount: data.packageCount,
-        estimatedDeliveryAt: data.estimatedDeliveryAt,
-        notes: data.notes,
-        createdBy: ctx.user.id,
-      })
-      .returning();
-
-    // Create shipment items and update line item shipped quantities
-    const createdItems: ShipmentItem[] = [];
-    for (const item of data.items) {
-      const [shipmentItem] = await db
-        .insert(shipmentItems)
+    // Wrap shipment creation and item insertion in a transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Create shipment
+      const [shipment] = await tx
+        .insert(orderShipments)
         .values({
           organizationId: ctx.organizationId,
-          shipmentId: shipment.id,
-          orderLineItemId: item.orderLineItemId,
-          quantity: item.quantity,
-          serialNumbers: item.serialNumbers,
-          lotNumber: item.lotNumber,
-          expiryDate: item.expiryDate,
-          notes: item.notes,
+          orderId: data.orderId,
+          shipmentNumber,
+          status: 'pending',
+          carrier: data.carrier,
+          carrierService: data.carrierService,
+          trackingNumber: data.trackingNumber,
+          trackingUrl,
+          shippingAddress: data.shippingAddress,
+          returnAddress: data.returnAddress,
+          weight: data.weight,
+          length: data.length,
+          width: data.width,
+          height: data.height,
+          packageCount: data.packageCount,
+          estimatedDeliveryAt: data.estimatedDeliveryAt,
+          shippingCost: data.shippingCost,
+          notes: data.notes,
+          createdBy: ctx.user.id,
         })
         .returning();
 
-      createdItems.push(shipmentItem);
+      // Batch-insert all shipment items at once (use normalized items)
+      const createdItems = await tx
+        .insert(shipmentItems)
+        .values(
+          normalizedItems.map((item) => ({
+            organizationId: ctx.organizationId,
+            shipmentId: shipment.id,
+            orderLineItemId: item.orderLineItemId,
+            quantity: item.quantity,
+            serialNumbers: item.serialNumbers,
+            lotNumber: item.lotNumber,
+            expiryDate: item.expiryDate,
+            notes: item.notes,
+          }))
+        )
+        .returning();
 
-      // Update line item qtyShipped (this will be done when marking as shipped)
-    }
+      return {
+        ...shipment,
+        items: createdItems,
+      };
+    });
 
-    return {
-      ...shipment,
-      items: createdItems,
-    };
+    return result;
   });
 
 // ============================================================================
@@ -389,77 +924,155 @@ export const markShipped = createServerFn({ method: 'POST' })
   .inputValidator(markShippedSchema)
   .handler(async ({ data }): Promise<OrderShipment> => {
     const ctx = await withAuth();
+    return markShipmentAsShipped(ctx, data);
+  });
 
-    // Verify shipment exists and is pending
-    const [existing] = await db
-      .select()
-      .from(orderShipments)
-      .where(
-        and(eq(orderShipments.id, data.id), eq(orderShipments.organizationId, ctx.organizationId))
-      )
-      .limit(1);
+// ============================================================================
+// FULFILLMENT IMPORT
+// ============================================================================
 
-    if (!existing) {
-      throw new NotFoundError('Shipment not found');
-    }
+export const importFulfillmentShipments = createServerFn({ method: 'POST' })
+  .inputValidator(fulfillmentImportSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const results: Array<{
+      orderNumber: string;
+      shipmentId?: string;
+      shipmentNumber?: string | null;
+      status: 'imported' | 'skipped' | 'failed';
+      message?: string;
+    }> = [];
 
-    if (existing.status !== 'pending') {
-      throw new ValidationError('Shipment already shipped', {
-        status: [`Current status is ${existing.status}`],
-      });
-    }
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
 
-    const shippedAt = data.shippedAt || new Date();
-    const trackingUrl =
-      data.trackingUrl || generateTrackingUrl(data.carrier, data.trackingNumber ?? null);
+    // Batch-fetch all orders by orderNumber upfront to avoid N+1 queries
+    const uniqueOrderNumbers = [...new Set(data.rows.map((r) => r.orderNumber))];
+    const allOrders = uniqueOrderNumbers.length > 0
+      ? await db
+          .select({ id: orders.id, orderNumber: orders.orderNumber })
+          .from(orders)
+          .where(
+            and(
+              eq(orders.organizationId, ctx.organizationId),
+              inArray(orders.orderNumber, uniqueOrderNumbers),
+              isNull(orders.deletedAt)
+            )
+          )
+      : [];
+    const orderByNumber = new Map(allOrders.map((o) => [o.orderNumber, o]));
 
-    // Create initial tracking event
-    const trackingEvents: TrackingEvent[] = [
-      {
-        timestamp: shippedAt.toISOString(),
-        status: 'Shipped',
-        description: `Package picked up by ${data.carrier}`,
-      },
-    ];
+    for (const row of data.rows) {
+      try {
+        const order = orderByNumber.get(row.orderNumber);
 
-    // Wrap shipment update and line item updates in a transaction
-    const shipment = await db.transaction(async (tx) => {
-      // Update shipment
-      const [updatedShipment] = await tx
-        .update(orderShipments)
-        .set({
-          status: 'in_transit',
-          carrier: data.carrier,
-          carrierService: data.carrierService,
-          trackingNumber: data.trackingNumber,
-          trackingUrl,
-          shippedAt,
-          shippedBy: ctx.user.id,
-          trackingEvents,
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(orderShipments.id, data.id))
-        .returning();
+        if (!order) {
+          skipped += 1;
+          results.push({
+            orderNumber: row.orderNumber,
+            status: 'skipped',
+            message: 'Order not found',
+          });
+          continue;
+        }
 
-      // Update line item qtyShipped
-      const items = await tx
-        .select()
-        .from(shipmentItems)
-        .where(eq(shipmentItems.shipmentId, data.id));
+        let shipment: OrderShipment | undefined;
 
-      for (const item of items) {
-        await tx
-          .update(orderLineItems)
-          .set({
-            qtyShipped: sql`${orderLineItems.qtyShipped} + ${item.quantity}`,
-          })
-          .where(eq(orderLineItems.id, item.orderLineItemId));
+        if (row.shipmentNumber) {
+          const [matched] = await db
+            .select()
+            .from(orderShipments)
+            .where(
+              and(
+                eq(orderShipments.organizationId, ctx.organizationId),
+                eq(orderShipments.orderId, order.id),
+                eq(orderShipments.shipmentNumber, row.shipmentNumber)
+              )
+            )
+            .limit(1);
+
+          shipment = matched;
+        } else {
+          const [latestPending] = await db
+            .select()
+            .from(orderShipments)
+            .where(
+              and(
+                eq(orderShipments.organizationId, ctx.organizationId),
+                eq(orderShipments.orderId, order.id),
+                eq(orderShipments.status, 'pending')
+              )
+            )
+            .orderBy(desc(orderShipments.createdAt))
+            .limit(1);
+
+          shipment = latestPending;
+        }
+
+        if (!shipment) {
+          skipped += 1;
+          results.push({
+            orderNumber: row.orderNumber,
+            shipmentNumber: row.shipmentNumber ?? null,
+            status: 'skipped',
+            message: 'No matching shipment found',
+          });
+          continue;
+        }
+
+        if (shipment.status !== 'pending') {
+          skipped += 1;
+          results.push({
+            orderNumber: row.orderNumber,
+            shipmentId: shipment.id,
+            shipmentNumber: shipment.shipmentNumber,
+            status: 'skipped',
+            message: `Shipment status is ${shipment.status}`,
+          });
+          continue;
+        }
+
+        if (data.dryRun) {
+          skipped += 1;
+          results.push({
+            orderNumber: row.orderNumber,
+            shipmentId: shipment.id,
+            shipmentNumber: shipment.shipmentNumber,
+            status: 'skipped',
+            message: 'Dry run: no changes applied',
+          });
+          continue;
+        }
+
+        await markShipmentAsShipped(ctx, {
+          id: shipment.id,
+          carrier: row.carrier,
+          carrierService: row.carrierService,
+          trackingNumber: row.trackingNumber,
+          trackingUrl: row.trackingUrl,
+          shippedAt: row.shippedAt,
+        });
+
+        imported += 1;
+        results.push({
+          orderNumber: row.orderNumber,
+          shipmentId: shipment.id,
+          shipmentNumber: shipment.shipmentNumber,
+          status: 'imported',
+        });
+      } catch (error) {
+        failed += 1;
+        results.push({
+          orderNumber: row.orderNumber,
+          shipmentNumber: row.shipmentNumber ?? null,
+          status: 'failed',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
+    }
 
-      return updatedShipment;
-    });
-
-    return shipment;
+    return { imported, failed, skipped, results };
   });
 
 // ============================================================================
@@ -519,27 +1132,39 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
       updatedBy: ctx.user.id,
     };
 
-    // Handle delivery
+    // Handle delivery — wrap line item updates + shipment update in a transaction
     if (data.status === 'delivered') {
       updateValues.deliveredAt = new Date();
       if (data.deliveryConfirmation) {
         updateValues.deliveryConfirmation = data.deliveryConfirmation;
       }
 
-      // Update line item qtyDelivered
-      const items = await db
-        .select()
-        .from(shipmentItems)
-        .where(eq(shipmentItems.shipmentId, data.id));
+      const shipment = await db.transaction(async (tx) => {
+        // Update line item qtyDelivered in batch
+        const items = await tx
+          .select()
+          .from(shipmentItems)
+          .where(eq(shipmentItems.shipmentId, data.id));
 
-      for (const item of items) {
-        await db
-          .update(orderLineItems)
-          .set({
-            qtyDelivered: sql`${orderLineItems.qtyDelivered} + ${item.quantity}`,
-          })
-          .where(eq(orderLineItems.id, item.orderLineItemId));
-      }
+        for (const item of items) {
+          await tx
+            .update(orderLineItems)
+            .set({
+              qtyDelivered: sql`${orderLineItems.qtyDelivered} + ${item.quantity}`,
+            })
+            .where(eq(orderLineItems.id, item.orderLineItemId));
+        }
+
+        const [updatedShipment] = await tx
+          .update(orderShipments)
+          .set(updateValues)
+          .where(eq(orderShipments.id, data.id))
+          .returning();
+
+        return updatedShipment;
+      });
+
+      return shipment;
     }
 
     const [shipment] = await db
@@ -710,21 +1335,31 @@ export const getOrderShipments = createServerFn({ method: 'GET' })
           eq(orderShipments.organizationId, ctx.organizationId)
         )
       )
-      .orderBy(desc(orderShipments.createdAt));
+      .orderBy(desc(orderShipments.createdAt))
+      .limit(100);
 
-    // Get items for each shipment
-    const result: ShipmentWithItems[] = [];
-    for (const shipment of shipments) {
-      const items = await db
-        .select()
-        .from(shipmentItems)
-        .where(eq(shipmentItems.shipmentId, shipment.id));
+    // Batch fetch all shipment items in a single query
+    const shipmentIds = shipments.map((s) => s.id);
+    const allItems = shipmentIds.length > 0
+      ? await db
+          .select()
+          .from(shipmentItems)
+          .where(inArray(shipmentItems.shipmentId, shipmentIds))
+      : [];
+    // Group items by shipmentId (reduce for ES2022 compatibility)
+    type ShipmentItem = (typeof allItems)[number];
+    const itemsByShipment = allItems.reduce<Map<string, ShipmentItem[]>>((acc, item) => {
+      const key = item.shipmentId;
+      const arr = acc.get(key);
+      if (arr) arr.push(item);
+      else acc.set(key, [item]);
+      return acc;
+    }, new Map());
 
-      result.push({
-        ...shipment,
-        items,
-      });
-    }
+    const result: ShipmentWithItems[] = shipments.map((shipment) => ({
+      ...shipment,
+      items: itemsByShipment.get(shipment.id) ?? [],
+    }));
 
     return result;
   });
@@ -757,11 +1392,21 @@ export const deleteShipment = createServerFn({ method: 'POST' })
       });
     }
 
-    // Delete items first (cascade should handle this, but be explicit)
-    await db.delete(shipmentItems).where(eq(shipmentItems.shipmentId, data.id));
+    // Wrap both deletes in a transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Delete items first (cascade should handle this, but be explicit)
+      await tx.delete(shipmentItems).where(eq(shipmentItems.shipmentId, data.id));
 
-    // Delete shipment
-    await db.delete(orderShipments).where(eq(orderShipments.id, data.id));
+      // Delete shipment and verify it was actually deleted
+      const [deleted] = await tx
+        .delete(orderShipments)
+        .where(eq(orderShipments.id, data.id))
+        .returning({ id: orderShipments.id });
+
+      if (!deleted) {
+        throw new NotFoundError('Shipment not found or already deleted');
+      }
+    });
 
     return { success: true };
   });

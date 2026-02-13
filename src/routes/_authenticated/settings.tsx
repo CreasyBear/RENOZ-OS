@@ -9,11 +9,40 @@
  * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute, Link, Outlet, useLocation } from '@tanstack/react-router'
-import { PageLayout } from '@/components/layout'
+import {
+  BarChart3,
+  BookOpen,
+  Building2,
+  Key,
+  Lock,
+  Mail,
+  Settings as SettingsIcon,
+  Shield,
+  Tag,
+  Target,
+  Ticket,
+  TrendingUp,
+  Upload,
+  Users,
+  Wrench,
+} from 'lucide-react'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { PermissionGuard } from '@/components/shared/permission-guard'
+import { SettingsPageSkeleton } from '@/components/skeletons/settings'
 
 export const Route = createFileRoute('/_authenticated/settings')({
   component: Settings,
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Settings" />
+      <PageLayout.Content>
+        <SettingsPageSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
 })
 
 function Settings() {
@@ -47,7 +76,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🏢</span>
+                  <Building2 className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Organization</h3>
                     <p className="text-sm text-gray-600">
@@ -65,7 +94,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔑</span>
+                  <Key className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">API Tokens</h3>
                     <p className="text-sm text-gray-600">
@@ -83,7 +112,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🎯</span>
+                  <Target className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">KPI Targets</h3>
                     <p className="text-sm text-gray-600">
@@ -101,7 +130,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">📊</span>
+                  <BarChart3 className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Scheduled Reports</h3>
                     <p className="text-sm text-gray-600">
@@ -119,7 +148,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🏷️</span>
+                  <Tag className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Categories</h3>
                     <p className="text-sm text-gray-600">
@@ -137,7 +166,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">📈</span>
+                  <TrendingUp className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Win/Loss Reasons</h3>
                     <p className="text-sm text-gray-600">
@@ -163,7 +192,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🛡️</span>
+                  <Shield className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Warranty Policies</h3>
                     <p className="text-sm text-gray-600">
@@ -181,7 +210,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">📥</span>
+                  <Upload className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Warranty Import</h3>
                     <p className="text-sm text-gray-600">
@@ -199,7 +228,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">📚</span>
+                  <BookOpen className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Knowledge Base</h3>
                     <p className="text-sm text-gray-600">
@@ -225,7 +254,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔧</span>
+                  <Wrench className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Job Templates</h3>
                     <p className="text-sm text-gray-600">
@@ -243,7 +272,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🎫</span>
+                  <Ticket className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Issue Templates</h3>
                     <p className="text-sm text-gray-600">
@@ -268,7 +297,7 @@ function Settings() {
               className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">⚙️</span>
+                <SettingsIcon className="h-6 w-6 text-muted-foreground" />
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Preferences</h3>
                   <p className="text-sm text-gray-600">
@@ -285,7 +314,7 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">✉️</span>
+                  <Mail className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Email Settings</h3>
                     <p className="text-sm text-gray-600">
@@ -302,7 +331,7 @@ function Settings() {
               className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">🔒</span>
+                <Lock className="h-6 w-6 text-muted-foreground" />
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Security</h3>
                   <p className="text-sm text-gray-600">
@@ -319,11 +348,11 @@ function Settings() {
                 className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">👥</span>
+                  <Users className="h-6 w-6 text-muted-foreground" />
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Delegations</h3>
                     <p className="text-sm text-gray-600">
-                      Set up approval delegations for when you're away
+                      Set up approval delegations for when you&apos;re away
                     </p>
                   </div>
                 </div>

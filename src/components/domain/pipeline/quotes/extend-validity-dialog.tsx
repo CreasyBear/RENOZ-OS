@@ -8,8 +8,6 @@
  */
 
 import { memo, useState, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { CalendarPlus, Calendar as CalendarIcon } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -38,22 +36,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { toastSuccess, toastError } from "@/hooks";
-import { extendQuoteValidity } from "@/server/functions/pipeline/quote-versions";
+import { toastError } from "@/hooks";
+import { useExtendQuoteValidity } from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface ExtendValidityResult {
-  opportunity: {
-    id: string;
-    quoteExpiresAt: Date | null;
-    [key: string]: unknown;
-  };
-  previousExpiration: Date | null;
-  newExpiration: Date;
-}
 
 export interface ExtendValidityDialogProps {
   opportunityId: string;
@@ -62,6 +50,8 @@ export interface ExtendValidityDialogProps {
   onSuccess?: (newValidUntil: Date) => void;
   trigger?: React.ReactNode;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type ExtensionPreset = "7days" | "14days" | "30days" | "60days" | "90days" | "custom";
@@ -86,12 +76,17 @@ export const ExtendValidityDialog = memo(function ExtendValidityDialog({
   onSuccess,
   trigger,
   className,
+  open: controlledOpen,
+  onOpenChange,
 }: ExtendValidityDialogProps) {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange || setInternalOpen;
   const [preset, setPreset] = useState<ExtensionPreset>("30days");
   const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
   const [reason, setReason] = useState("");
+
+  const extendMutation = useExtendQuoteValidity();
 
   const currentDate = currentValidUntil
     ? typeof currentValidUntil === "string"
@@ -110,57 +105,47 @@ export const ExtendValidityDialog = memo(function ExtendValidityDialog({
     return addDays(new Date(), 30);
   }, [preset, customDate]);
 
-  const extendMutation = useMutation<ExtendValidityResult, Error, void>({
-    mutationFn: async (): Promise<ExtendValidityResult> => {
-      const newValidUntil = getNewValidUntil();
-      const reasonValue = reason.trim();
-      const result = await extendQuoteValidity({
-        data: {
-          opportunityId,
-          newExpirationDate: newValidUntil,
-          reason: reasonValue || "No reason provided",
-        },
-      });
-      return result as ExtendValidityResult;
-    },
-    onSuccess: (result) => {
-      toastSuccess(
-        `Quote validity extended to ${format(new Date(result.newExpiration), "PPP")}`
-      );
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiringQuotes() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
-      setOpen(false);
-      setReason("");
-      onSuccess?.(new Date(result.newExpiration));
-    },
-    onError: () => {
-      toastError("Failed to extend quote validity");
-    },
-  });
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (preset === "custom" && !customDate) {
       toastError("Please select a custom date");
       return;
     }
-    extendMutation.mutate();
+    const newValidUntil = getNewValidUntil();
+    extendMutation.mutate(
+      {
+        opportunityId,
+        newExpirationDate: newValidUntil,
+        reason: reason.trim() || "No reason provided",
+      },
+      {
+        onSuccess: () => {
+          if (!onOpenChange) {
+            setInternalOpen(false);
+          } else {
+            onOpenChange(false);
+          }
+          setReason("");
+          onSuccess?.(newValidUntil);
+        },
+      }
+    );
   };
 
   const newValidUntil = getNewValidUntil();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline" size="sm" className={className}>
-            <CalendarPlus className="h-4 w-4 mr-2" />
-            Extend Validity
-          </Button>
-        )}
-      </DialogTrigger>
+      {!controlledOpen && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="outline" size="sm" className={className}>
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              Extend Validity
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>

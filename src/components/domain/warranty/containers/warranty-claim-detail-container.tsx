@@ -8,22 +8,19 @@
  * @source claim from useWarrantyClaim hook
  */
 
-import { useMemo, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
+
 import {
-  ArrowLeft,
-  FileWarning,
   CheckCircle2,
   XCircle,
   Clock,
-  Loader2,
   Wrench,
   RefreshCw,
   Banknote,
   CalendarPlus,
+  Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/shared';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,35 +33,31 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { toast } from 'sonner';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { ErrorState } from '@/components/shared/error-state';
+import { EntityHeaderActions } from '@/components/shared';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConfirmation } from '@/hooks';
+import { useTrackView } from '@/hooks/search';
 import {
   useWarrantyClaim,
   useUpdateClaimStatus,
   useApproveClaim,
   useDenyClaim,
   useResolveClaim,
+  useCancelWarrantyClaim,
   type WarrantyClaimResolutionTypeValue,
-  type WarrantyClaimStatusValue,
-  type WarrantyClaimTypeValue,
 } from '@/hooks/warranty';
 import {
-  claimStatusConfig,
-  claimTypeConfig,
-  getSlaDueStatus,
-} from '@/lib/warranty/claims-utils';
-import { WarrantyClaimDetailView } from '../views/warranty-claim-detail-view';
+  isWarrantyClaimResolutionTypeValue,
+  type WarrantyClaimDetailContainerRenderProps,
+  type WarrantyClaimDetailContainerProps,
+} from '@/lib/schemas/warranty';
+import { getSlaDueStatus } from '@/lib/warranty/claims-utils';
+import { WarrantyClaimDetailView } from '@/components/domain/warranty/views/warranty-claim-detail-view';
 
-export interface WarrantyClaimDetailContainerRenderProps {
-  headerTitle: React.ReactNode;
-  headerActions?: React.ReactNode;
-  content: React.ReactNode;
-}
-
-export interface WarrantyClaimDetailContainerProps {
-  claimId: string;
-  children?: (props: WarrantyClaimDetailContainerRenderProps) => React.ReactNode;
-}
+export type { WarrantyClaimDetailContainerRenderProps, WarrantyClaimDetailContainerProps };
 
 const RESOLUTION_OPTIONS: {
   value: WarrantyClaimResolutionTypeValue;
@@ -81,14 +74,21 @@ export function WarrantyClaimDetailContainer({
   claimId,
   children,
 }: WarrantyClaimDetailContainerProps) {
-  const navigate = useNavigate();
-
   const { data: claim, isLoading, error, refetch } = useWarrantyClaim(claimId);
   const currentClaim = claim ?? null;
+  useTrackView(
+    'warranty_claim',
+    currentClaim?.id,
+    currentClaim?.claimNumber ?? `Claim ${claimId.slice(0, 8)}`,
+    currentClaim?.status ?? undefined,
+    `/support/claims/${claimId}`
+  );
 
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [denyDialogOpen, setDenyDialogOpen] = useState(false);
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+
+  const { confirm } = useConfirmation();
 
   const [approvalNotes, setApprovalNotes] = useState('');
   const [denialReason, setDenialReason] = useState('');
@@ -102,16 +102,7 @@ export function WarrantyClaimDetailContainer({
   const approveMutation = useApproveClaim();
   const denyMutation = useDenyClaim();
   const resolveMutation = useResolveClaim();
-
-  const statusConfig = useMemo(() => {
-    if (!currentClaim) return null;
-    return claimStatusConfig[currentClaim.status as WarrantyClaimStatusValue];
-  }, [currentClaim]);
-
-  const typeConfig = useMemo(() => {
-    if (!currentClaim) return null;
-    return claimTypeConfig[currentClaim.claimType as WarrantyClaimTypeValue];
-  }, [currentClaim]);
+  const cancelMutation = useCancelWarrantyClaim();
 
   const responseSla = currentClaim?.slaTracking?.responseDueAt
     ? getSlaDueStatus(
@@ -135,6 +126,8 @@ export function WarrantyClaimDetailContainer({
     currentClaim?.status === 'submitted' || currentClaim?.status === 'under_review';
   const canResolve = currentClaim?.status === 'approved';
   const canStartReview = currentClaim?.status === 'submitted';
+  const canCancel =
+    currentClaim?.status === 'submitted' || currentClaim?.status === 'under_review';
 
   const handleStartReview = async () => {
     if (!currentClaim) return;
@@ -180,74 +173,103 @@ export function WarrantyClaimDetailContainer({
     setResolutionCost('');
   };
 
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() =>
-          navigate({
-            to: '/support/claims',
-            search: { page: 1, pageSize: 20, sortBy: 'submittedAt', sortOrder: 'desc' },
-          })
+  const handleCancelClick = async () => {
+    if (!currentClaim) return;
+    await confirm({
+      title: 'Cancel Claim',
+      description: `Are you sure you want to cancel claim ${currentClaim.claimNumber}? This action cannot be undone.`,
+      confirmLabel: 'Cancel Claim',
+      variant: 'destructive',
+      onConfirm: async () => {
+        try {
+          await cancelMutation.mutateAsync({ id: currentClaim.id });
+          toast.success('Claim cancelled successfully');
+          refetch();
+        } catch (err) {
+          toast.error('Failed to cancel claim');
+          throw err;
         }
-      >
-        <ArrowLeft className="h-4 w-4" />
-      </Button>
-      <div>
-        <div className="flex items-center gap-2">
-          <FileWarning className="text-muted-foreground h-5 w-5" />
-          <span>{currentClaim?.claimNumber ?? 'Claim Details'}</span>
-          {statusConfig && currentClaim && (
-            <StatusBadge
-              status={currentClaim.status}
-              variant={statusConfig.variant}
-            />
-          )}
-        </div>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {typeConfig?.label ?? currentClaim?.claimType ?? ''}
-        </p>
-      </div>
-    </div>
-  );
+      },
+    });
+  };
 
-  const headerActions = currentClaim ? (
-    <div className="flex items-center gap-2">
-      {canStartReview && (
-        <Button
-          variant="outline"
-          onClick={handleStartReview}
-          disabled={updateStatusMutation.isPending}
-        >
-          {updateStatusMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Clock className="mr-2 h-4 w-4" />
-          )}
-          Start Review
-        </Button>
-      )}
-      {canApprove && (
-        <Button variant="default" onClick={() => setApproveDialogOpen(true)}>
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          Approve
-        </Button>
-      )}
-      {canDeny && (
-        <Button variant="destructive" onClick={() => setDenyDialogOpen(true)}>
-          <XCircle className="mr-2 h-4 w-4" />
-          Deny
-        </Button>
-      )}
-      {canResolve && (
-        <Button variant="default" onClick={() => setResolveDialogOpen(true)}>
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          Resolve
-        </Button>
-      )}
-    </div>
-  ) : undefined;
+  const primaryAction = currentClaim
+    ? canApprove
+      ? {
+          label: 'Approve',
+          onClick: () => setApproveDialogOpen(true),
+          icon: <CheckCircle2 className="h-4 w-4" />,
+          disabled: false,
+        }
+      : canResolve
+        ? {
+            label: 'Resolve',
+            onClick: () => setResolveDialogOpen(true),
+            icon: <CheckCircle2 className="h-4 w-4" />,
+            disabled: false,
+          }
+        : undefined
+    : undefined;
+
+  const secondaryActions = currentClaim
+    ? [
+        {
+          label: 'Start Review',
+          onClick: handleStartReview,
+          icon: <Clock className="h-4 w-4" />,
+          disabled: !canStartReview || updateStatusMutation.isPending,
+          disabledReason: !canStartReview
+            ? 'Only submitted claims can be moved to review'
+            : undefined,
+        },
+        ...(primaryAction?.label !== 'Approve'
+          ? [
+              {
+                label: 'Approve',
+                onClick: () => setApproveDialogOpen(true),
+                icon: <CheckCircle2 className="h-4 w-4" />,
+                disabled: !canApprove,
+                disabledReason: !canApprove
+                  ? 'Claim must be under review before approval'
+                  : undefined,
+              },
+            ]
+          : []),
+        {
+          label: 'Deny',
+          onClick: () => setDenyDialogOpen(true),
+          icon: <XCircle className="h-4 w-4" />,
+          destructive: true,
+          disabled: !canDeny,
+          disabledReason: !canDeny
+            ? 'Claim must be under review before denial'
+            : undefined,
+        },
+        ...(primaryAction?.label !== 'Resolve'
+          ? [
+              {
+                label: 'Resolve',
+                onClick: () => setResolveDialogOpen(true),
+                icon: <CheckCircle2 className="h-4 w-4" />,
+                disabled: !canResolve,
+                disabledReason: !canResolve
+                  ? 'Only approved claims can be resolved'
+                  : undefined,
+              },
+            ]
+          : []),
+        {
+          label: 'Cancel Claim',
+          onClick: handleCancelClick,
+          icon: <Ban className="h-4 w-4" />,
+          destructive: true,
+          disabled: !canCancel,
+          disabledReason: !canCancel
+            ? 'Only submitted or under review claims can be cancelled'
+            : undefined,
+        },
+      ]
+    : [];
 
   if (error) {
     const content = (
@@ -257,18 +279,29 @@ export function WarrantyClaimDetailContainer({
         onRetry={() => refetch()}
       />
     );
-    return children ? <>{children({ headerTitle, headerActions: undefined, content })}</> : content;
+    return children ? <>{children({ headerActions: null, content })}</> : content;
   }
 
   if (isLoading || !currentClaim) {
     const content = <SupportDetailSkeleton />;
-    return children ? <>{children({ headerTitle, headerActions: undefined, content })}</> : content;
+    return children
+      ? <>{children({ headerActions: <Skeleton className="h-10 w-32" />, content })}</>
+      : content;
   }
+
+  const headerActions = children ? (
+    <EntityHeaderActions
+      primaryAction={primaryAction}
+      secondaryActions={secondaryActions}
+    />
+  ) : undefined;
 
   const content = (
     <>
       <WarrantyClaimDetailView
         claim={currentClaim}
+        primaryAction={children ? undefined : primaryAction}
+        secondaryActions={children ? [] : secondaryActions}
         responseSla={responseSla}
         resolutionSla={resolutionSla}
       />
@@ -384,7 +417,11 @@ export function WarrantyClaimDetailContainer({
               </Label>
               <Select
                 value={resolutionType}
-                onValueChange={(value) => setResolutionType(value as WarrantyClaimResolutionTypeValue)}
+                onValueChange={(value) =>
+                  setResolutionType(
+                    isWarrantyClaimResolutionTypeValue(value) ? value : 'repair'
+                  )
+                }
               >
                 <SelectTrigger id="resolutionType">
                   <SelectValue placeholder="Select resolution type" />
@@ -461,7 +498,7 @@ export function WarrantyClaimDetailContainer({
   );
 
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
   return content;

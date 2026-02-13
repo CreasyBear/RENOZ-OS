@@ -24,17 +24,32 @@
  *
  * SPRINT-03: New route for project-centric jobs model
  * SPRINT-04: Migrated to Container/Presenter pattern
+ * SPRINT-05: Added header metrics, lifecycle progress, tab counts
  *
  * @see STANDARDS.md for route patterns
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
 import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router';
-import { useCallback } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
-import { Button } from '@/components/ui/button';
+import { z } from 'zod';
+import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { ProjectDetailContainer } from '@/components/domain/jobs/projects';
+import { ProjectDetailSkeleton } from '@/components/skeletons/projects/project-detail-skeleton';
+
+// ============================================================================
+// SEARCH PARAMS SCHEMA
+// ============================================================================
+
+const taskFilterSchema = z.object({
+  tab: z.enum(['overview', 'workstreams', 'schedule', 'tasks', 'bom', 'notes', 'files', 'documents', 'activity']).optional().default('overview'),
+  /** Open meta panel in edit mode when navigating from list */
+  edit: z.boolean().optional(),
+  // Task filters
+  taskStatus: z.string().optional(), // comma-separated: pending,in_progress,completed,blocked
+  taskPriority: z.string().optional(), // comma-separated: urgent,high,normal,low
+  taskAssignee: z.enum(['all', 'me', 'unassigned']).optional().default('all'),
+  taskSort: z.enum(['dueDate', 'priority', 'created', 'title']).optional().default('dueDate'),
+});
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -42,6 +57,7 @@ import { ProjectDetailContainer } from '@/components/domain/jobs/projects';
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
+  validateSearch: taskFilterSchema,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/projects" />
   ),
@@ -49,9 +65,7 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId')({
     <PageLayout variant="full-width">
       <PageLayout.Header title="Project" description="Loading project details..." />
       <PageLayout.Content>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
+        <ProjectDetailSkeleton />
       </PageLayout.Content>
     </PageLayout>
   ),
@@ -65,38 +79,20 @@ function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/_authenticated/projects/$projectId' });
   const navigate = useNavigate();
 
-  // Handlers
-  const handleBack = useCallback(() => {
-    navigate({ to: '/projects' });
-  }, [navigate]);
-
   return (
     <ProjectDetailContainer
       projectId={projectId}
-      onBack={handleBack}
+      onBack={() => navigate({ to: '/projects' })}
     >
-      {({ headerTitle, headerActions, content }) => (
-        <div className="flex h-full flex-col">
-          <PageLayout variant="full-width">
-            {/* Header */}
-            <PageLayout.Header
-              title={
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" size="icon" onClick={handleBack} className="mr-2">
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  {headerTitle}
-                </div>
-              }
-              actions={headerActions}
-            />
-
-            {/* Content */}
-            <PageLayout.Content className="p-0 flex-1">
-              {content}
-            </PageLayout.Content>
-          </PageLayout>
-        </div>
+      {({ headerActions, content }) => (
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title={null}
+            leading={<DetailPageBackButton to="/projects" aria-label="Back to projects" />}
+            actions={headerActions}
+          />
+          <PageLayout.Content>{content}</PageLayout.Content>
+        </PageLayout>
       )}
     </ProjectDetailContainer>
   );

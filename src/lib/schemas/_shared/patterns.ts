@@ -181,6 +181,14 @@ export const currencySchema = z.coerce
   .multipleOf(0.01, 'Amount must have at most 2 decimal places');
 
 /**
+ * Signed currency amount (can be negative, 2 decimal places).
+ * Used for differences, adjustments that can go either direction.
+ */
+export const signedCurrencySchema = z.coerce
+  .number()
+  .multipleOf(0.01, 'Amount must have at most 2 decimal places');
+
+/**
  * Percentage (0-100, 2 decimal places).
  */
 export const percentageSchema = z.coerce
@@ -237,6 +245,30 @@ export const auditFieldsSchema = z.object({
 export type AuditFields = z.infer<typeof auditFieldsSchema>;
 
 // ============================================================================
+// SERVERFN BOUNDARY (flexible JSON)
+// ============================================================================
+// TanStack Start serializes to JSON and infers { [x: string]: {} } for object values.
+// Use this schema for fields that cross ServerFn boundaries (metadata, filters, etc).
+// JsonValue is a recursive type covering all JSON-serializable values (no `any`).
+// @see SCHEMA-TRACE.md §4 ServerFn Serialization Boundary
+// @see docs/NO-EXPLICIT-ANY-REMEDIATION.md
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+
+const jsonPrimitiveSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    jsonPrimitiveSchema,
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
+);
+
+export const flexibleJsonSchema = z.record(z.string(), jsonValueSchema);
+export type FlexibleJson = z.infer<typeof flexibleJsonSchema>;
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -255,20 +287,15 @@ export const createEnumSchema = <T extends readonly [string, ...string[]]>(value
  * @example
  * const UpdateSchema = partialExcept(CreateSchema, ["id", "organizationId"]);
  */
-export const partialExcept = <T extends z.ZodObject<any>, K extends keyof z.infer<T>>(
+export const partialExcept = <T extends z.ZodObject<z.ZodRawShape>, K extends keyof z.infer<T>>(
   schema: T,
   requiredKeys: K[]
 ) => {
-  const shape = schema.shape;
-  const partialShape: any = {};
-
-  for (const key of Object.keys(shape)) {
-    if (requiredKeys.includes(key as K)) {
-      partialShape[key] = shape[key];
-    } else {
-      partialShape[key] = shape[key].optional();
-    }
-  }
-
+  const shape = schema.shape as Record<string, z.ZodTypeAny>;
+  const partialShape: z.ZodRawShape = Object.fromEntries(
+    Object.entries(shape).map(([key, zodType]) =>
+      requiredKeys.includes(key as K) ? [key, zodType] : [key, zodType.optional()]
+    )
+  );
   return z.object(partialShape);
 };

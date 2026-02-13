@@ -17,18 +17,9 @@ import {
   TrendingUp,
   PauseCircle,
 } from 'lucide-react';
+import type { SlaMetricsData } from '@/lib/schemas/support/sla';
 
-export interface SlaMetricsData {
-  total: number;
-  responseBreached: number;
-  resolutionBreached: number;
-  currentlyPaused: number;
-  resolved: number;
-  responseBreachRate: number;
-  resolutionBreachRate: number;
-  avgResponseTimeSeconds: number | null;
-  avgResolutionTimeSeconds: number | null;
-}
+export type { SlaMetricsData };
 
 interface SlaMetricsCardProps {
   metrics: SlaMetricsData | null;

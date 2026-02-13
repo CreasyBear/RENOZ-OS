@@ -25,6 +25,10 @@
  * ```
  */
 
+// Import filter types from schemas (single source of truth per SCHEMA-TRACE.md)
+import type { AuditLogsFilters } from '@/lib/schemas/users';
+import type { ReportType } from '@/lib/schemas/reports/report-favorites';
+
 // ============================================================================
 // FILTER TYPES
 // ============================================================================
@@ -45,6 +49,19 @@ export interface OrderFilters {
   search?: string
   status?: string
   customerId?: string
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  cursor?: string
+}
+
+export interface InvoiceFilters {
+  search?: string
+  status?: 'draft' | 'scheduled' | 'unpaid' | 'overdue' | 'paid' | 'canceled' | 'refunded'
+  customerId?: string
+  fromDate?: string
+  toDate?: string
   page?: number
   pageSize?: number
   sortBy?: string
@@ -74,7 +91,7 @@ export interface JobFilters {
 export interface InventoryFilters {
   search?: string
   category?: string
-  status?: string
+  status?: string | string[]
   lowStock?: boolean
   page?: number
   pageSize?: number
@@ -107,8 +124,8 @@ export interface RmaFilters {
 }
 
 export interface IssueFilters {
-  status?: string
-  priority?: string
+  status?: string | string[]
+  priority?: string | string[]
   type?: string
   customerId?: string
   assignedToUserId?: string
@@ -149,6 +166,9 @@ export interface AICostFilters {
   model?: string
   operation?: string
 }
+
+// AuditLogsFilters imported from schemas (see top of file)
+export type { AuditLogsFilters } from '@/lib/schemas/users';
 
 export interface KbCategoryFilters {
   parentId?: string | null
@@ -376,7 +396,7 @@ export interface ReportsCustomReportsFilters {
 }
 
 export interface ReportsReportFavoritesFilters {
-  reportType?: 'scheduled' | 'custom' | 'dashboard'
+  reportType?: ReportType
   page?: number
   pageSize?: number
 }
@@ -409,6 +429,14 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // APP USER (from server functions - cached auth context)
+  // -------------------------------------------------------------------------
+  appUser: {
+    all: ['appUser'] as const,
+    detail: () => [...queryKeys.appUser.all, 'detail'] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // USER PROFILE (avatar, password, MFA, preferences)
   // -------------------------------------------------------------------------
   user: {
@@ -422,6 +450,7 @@ export const queryKeys = {
     preferences: (category?: string) =>
       [...queryKeys.user.all, 'preferences', category ?? 'all'] as const,
     notifications: () => [...queryKeys.user.all, 'notifications'] as const,
+    onboarding: () => [...queryKeys.user.all, 'onboarding'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -468,6 +497,16 @@ export const queryKeys = {
       check: (input?: Record<string, unknown>) =>
         [...queryKeys.customers.duplicates.all(), 'check', input] as const,
     },
+    // Detail view extended data (alerts, active items, order summary)
+    alerts: (customerId: string) =>
+      [...queryKeys.customers.all, 'alerts', customerId] as const,
+    activeItems: (customerId: string) =>
+      [...queryKeys.customers.all, 'activeItems', customerId] as const,
+    orderSummary: (customerId: string) =>
+      [...queryKeys.customers.all, 'orderSummary', customerId] as const,
+    // Triage data (credit holds, low health scores)
+    triage: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customers.all, 'triage', filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -513,11 +552,35 @@ export const queryKeys = {
       [...queryKeys.orders.all, 'amendments', orderId] as const,
     amendmentDetail: (id: string) =>
       [...queryKeys.orders.all, 'amendments', 'detail', id] as const,
+    payments: (orderId: string) =>
+      [...queryKeys.orders.all, 'payments', orderId] as const,
+    paymentDetail: (id: string) =>
+      [...queryKeys.orders.all, 'payments', 'detail', id] as const,
     withCustomer: (orderId: string) =>
       [...queryKeys.orders.details(), orderId, 'withCustomer'] as const,
     assignees: (orgId?: string, roles?: readonly string[]) =>
       [...queryKeys.orders.all, 'assignees', orgId, roles] as const,
     stats: () => [...queryKeys.orders.all, 'stats'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // INVOICES
+  // -------------------------------------------------------------------------
+  invoices: {
+    all: ['invoices'] as const,
+    lists: () => [...queryKeys.invoices.all, 'list'] as const,
+    list: (filters?: InvoiceFilters) =>
+      [...queryKeys.invoices.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.invoices.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.invoices.details(), id] as const,
+    byCustomer: (customerId: string) =>
+      [...queryKeys.invoices.lists(), { customerId }] as const,
+    byStatus: (status: string) =>
+      [...queryKeys.invoices.lists(), { status }] as const,
+    summary: (statuses?: string[]) =>
+      [...queryKeys.invoices.all, 'summary', statuses ?? []] as const,
+    overdue: () => [...queryKeys.invoices.lists(), { status: 'overdue' }] as const,
+    unpaid: () => [...queryKeys.invoices.lists(), { status: 'unpaid' }] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -535,6 +598,9 @@ export const queryKeys = {
     byStage: (stage: string) =>
       [...queryKeys.opportunities.lists(), { stage }] as const,
     hotLeads: () => [...queryKeys.opportunities.all, 'hotLeads'] as const,
+    // Detail view extended data (alerts, active items)
+    alerts: (id: string) => [...queryKeys.opportunities.detail(id), 'alerts'] as const,
+    activeItems: (id: string) => [...queryKeys.opportunities.detail(id), 'active-items'] as const,
   },
 
   // Alias for pipeline views (same data, different UI context)
@@ -553,6 +619,12 @@ export const queryKeys = {
       [...queryKeys.pipeline.all, 'quoteVersions', opportunityId] as const,
     quoteCompare: (version1Id: string, version2Id: string) =>
       [...queryKeys.pipeline.all, 'quoteCompare', version1Id, version2Id] as const,
+    quoteVersion: (versionId: string) =>
+      [...queryKeys.pipeline.all, 'quote-version', versionId] as const,
+    quoteComparison: (version1Id: string, version2Id: string) =>
+      [...queryKeys.pipeline.all, 'quote-comparison', version1Id, version2Id] as const,
+    quoteValidityStats: () =>
+      [...queryKeys.pipeline.all, 'quote-validity-stats'] as const,
     activities: (opportunityId: string) =>
       [...queryKeys.pipeline.all, 'activities', opportunityId] as const,
     opportunity: (opportunityId: string) =>
@@ -618,6 +690,8 @@ export const queryKeys = {
     details: () => [...queryKeys.inventory.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.inventory.details(), id] as const,
     lowStock: () => [...queryKeys.inventory.all, 'lowStock'] as const,
+    search: (query: string, options?: { limit?: number }) =>
+      [...queryKeys.inventory.all, 'search', query, options ?? {}] as const,
     items: (filters?: { organizationId?: string }) =>
       [...queryKeys.inventory.all, 'items', filters ?? {}] as const,
     movements: (filters?: Record<string, unknown>) =>
@@ -638,6 +712,21 @@ export const queryKeys = {
     // Dashboard
     dashboard: () => [...queryKeys.inventory.all, 'dashboard'] as const,
 
+    // Availability
+    availability: (productId: string, locationId?: string) =>
+      [...queryKeys.inventory.all, 'availability', productId, locationId ?? ''] as const,
+
+    // Available Serials for Picking
+    availableSerials: (productId: string, locationId?: string) =>
+      [...queryKeys.inventory.all, 'availableSerials', productId, locationId ?? ''] as const,
+
+    // WMS Dashboard
+    wmsDashboard: () => [...queryKeys.inventory.all, 'wms'] as const,
+    stockByCategory: () => [...queryKeys.inventory.all, 'wms', 'byCategory'] as const,
+    stockByLocation: () => [...queryKeys.inventory.all, 'wms', 'byLocation'] as const,
+    recentMovementsTimeline: (limit?: number) =>
+      [...queryKeys.inventory.all, 'wms', 'movements', limit ?? 10] as const,
+
     // Forecasting
     forecastingAll: () => [...queryKeys.inventory.all, 'forecasting'] as const,
     reorderRecommendations: (filters?: Record<string, unknown>) =>
@@ -646,6 +735,8 @@ export const queryKeys = {
       [...queryKeys.inventory.forecastingAll(), 'product', productId, filters ?? {}] as const,
     forecastAccuracy: (productId?: string) =>
       [...queryKeys.inventory.forecastingAll(), 'accuracy', productId ?? ''] as const,
+    safetyStock: (productId: string, options?: { serviceLevel?: number; leadTimeDays?: number }) =>
+      [...queryKeys.inventory.forecastingAll(), 'safetyStock', productId, options ?? {}] as const,
 
     // Valuation
     valuationAll: () => [...queryKeys.inventory.all, 'valuation'] as const,
@@ -655,6 +746,12 @@ export const queryKeys = {
       [...queryKeys.inventory.valuationAll(), 'aging', filters ?? {}] as const,
     turnover: (filters?: Record<string, unknown>) =>
       [...queryKeys.inventory.valuationAll(), 'turnover', filters ?? {}] as const,
+    costLayers: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.valuationAll(), 'costLayers', filters ?? {}] as const,
+    costLayersDetail: (inventoryId: string) =>
+      [...queryKeys.inventory.valuationAll(), 'costLayers', inventoryId] as const,
+    cogs: (inventoryId: string, quantity?: number) =>
+      [...queryKeys.inventory.valuationAll(), 'cogs', inventoryId, quantity ?? 0] as const,
 
     // Stock counts
     stockCountsAll: () => [...queryKeys.inventory.all, 'stockCounts'] as const,
@@ -666,6 +763,8 @@ export const queryKeys = {
       [...queryKeys.inventory.stockCountsAll(), 'items', countId] as const,
     stockCountVariances: (countId: string) =>
       [...queryKeys.inventory.stockCountsAll(), 'variances', countId] as const,
+    stockCountsHistory: (options?: Record<string, unknown>) =>
+      [...queryKeys.inventory.stockCountsAll(), 'history', options ?? {}] as const,
 
     // Quality
     qualityAll: () => [...queryKeys.inventory.all, 'quality'] as const,
@@ -739,12 +838,48 @@ export const queryKeys = {
     details: () => [...queryKeys.users.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.users.details(), id] as const,
     stats: () => [...queryKeys.users.all, 'stats'] as const,
+    lookup: () => [...queryKeys.users.all, 'lookup'] as const,
+    activity: (userId: string, filters?: { page?: number; pageSize?: number }) =>
+      [...queryKeys.users.details(), userId, 'activity', filters ?? {}] as const,
     invitations: {
       all: () => [...queryKeys.users.all, 'invitations'] as const,
       lists: () => [...queryKeys.users.invitations.all(), 'list'] as const,
       list: (filters?: { page?: number; pageSize?: number; status?: string }) =>
         [...queryKeys.users.invitations.lists(), filters ?? {}] as const,
       byToken: (token: string) => [...queryKeys.users.invitations.all(), 'byToken', token] as const,
+      stats: () => [...queryKeys.users.invitations.all(), 'stats'] as const,
+    },
+    sessions: {
+      all: () => [...queryKeys.users.all, 'sessions'] as const,
+      list: () => [...queryKeys.users.sessions.all(), 'list'] as const,
+    },
+    myActivity: {
+      all: () => [...queryKeys.users.all, 'myActivity'] as const,
+      list: (filters?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.users.myActivity.all(), 'list', filters ?? {}] as const,
+    },
+    groups: {
+      all: () => [...queryKeys.users.all, 'groups'] as const,
+      lists: () => [...queryKeys.users.groups.all(), 'list'] as const,
+      list: (filters?: { page?: number; pageSize?: number; includeInactive?: boolean }) =>
+        [...queryKeys.users.groups.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.users.groups.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.users.groups.details(), id] as const,
+      members: (groupId: string, filters?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.users.groups.all(), 'members', groupId, filters ?? {}] as const,
+      userGroups: (userId: string) =>
+        [...queryKeys.users.groups.all(), 'userGroups', userId] as const,
+    },
+    delegations: {
+      all: () => [...queryKeys.users.all, 'delegations'] as const,
+      myDelegations: (filters?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.users.delegations.all(), 'my', filters ?? {}] as const,
+      delegationsToMe: (filters?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.users.delegations.all(), 'toMe', filters ?? {}] as const,
+      allDelegations: (filters?: { page?: number; pageSize?: number; activeOnly?: boolean }) =>
+        [...queryKeys.users.delegations.all(), 'all', filters ?? {}] as const,
+      activeDelegate: (userId: string) =>
+        [...queryKeys.users.delegations.all(), 'activeDelegate', userId] as const,
     },
   },
 
@@ -772,6 +907,24 @@ export const queryKeys = {
     inventory: () => [...queryKeys.dashboard.all, 'inventory'] as const,
     alerts: () => [...queryKeys.dashboard.all, 'alerts'] as const,
     hotLeads: () => [...queryKeys.dashboard.all, 'hotLeads'] as const,
+
+    // Recent items for popovers
+    recentOutstanding: (limit: number) =>
+      [...queryKeys.dashboard.all, 'recentOutstanding', limit] as const,
+    recentOverdue: (limit: number) =>
+      [...queryKeys.dashboard.all, 'recentOverdue', limit] as const,
+    recentOpportunities: (limit: number) =>
+      [...queryKeys.dashboard.all, 'recentOpportunities', limit] as const,
+    recentOrdersToShip: (limit: number) =>
+      [...queryKeys.dashboard.all, 'recentOrdersToShip', limit] as const,
+
+    // Inventory counts by SKU patterns (for overview stats)
+    inventoryCounts: (patterns: Array<{ key: string; patterns: string[] }>) =>
+      [...queryKeys.dashboard.all, 'inventoryCounts', patterns] as const,
+
+    // Inventory counts by product IDs (for tracked products)
+    trackedProductsInventory: (productIds: string[]) =>
+      [...queryKeys.dashboard.all, 'trackedProductsInventory', productIds] as const,
 
     // Targets nested factory
     targets: {
@@ -817,6 +970,12 @@ export const queryKeys = {
       default: () => [...queryKeys.dashboard.layouts.all(), 'default'] as const,
       userLayout: () => [...queryKeys.dashboard.layouts.all(), 'userLayout'] as const,
       widgets: () => [...queryKeys.dashboard.layouts.all(), 'widgets'] as const,
+    },
+
+    // Onboarding/Welcome Checklist
+    onboarding: {
+      all: () => [...queryKeys.dashboard.all, 'onboarding'] as const,
+      progress: () => [...queryKeys.dashboard.onboarding.all(), 'progress'] as const,
     },
   },
 
@@ -949,6 +1108,86 @@ export const queryKeys = {
     stock: () => [...queryKeys.products.all, 'stock'] as const,
     jobMaterials: (jobId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.products.all, 'jobMaterials', jobId, filters ?? {}] as const,
+    // Product inventory queries
+    inventory: (productId: string) =>
+      [...queryKeys.products.all, 'inventory', productId] as const,
+    inventoryStats: (productId: string) =>
+      [...queryKeys.products.all, 'inventoryStats', productId] as const,
+    // Product search
+    search: (query: string, options?: Record<string, unknown>) =>
+      [...queryKeys.products.all, 'search', query, options ?? {}] as const,
+    // Product attributes
+    attributes: {
+      all: ['products', 'attributes'] as const,
+      definitions: (filters?: { activeOnly?: boolean; categoryId?: string }) =>
+        [...queryKeys.products.attributes.all, 'definitions', filters ?? {}] as const,
+      definition: (id: string) =>
+        [...queryKeys.products.attributes.all, 'definition', id] as const,
+      values: (productId: string) =>
+        [...queryKeys.products.attributes.all, 'values', productId] as const,
+      validation: (productId: string) =>
+        [...queryKeys.products.attributes.all, 'validation', productId] as const,
+      filterable: (categoryId?: string) =>
+        [...queryKeys.products.attributes.all, 'filterable', categoryId ?? 'all'] as const,
+    },
+    // Product images
+    images: {
+      all: ['products', 'images'] as const,
+      list: (productId: string) =>
+        [...queryKeys.products.images.all, 'list', productId] as const,
+      stats: (productId: string) =>
+        [...queryKeys.products.images.all, 'stats', productId] as const,
+      primary: (productId: string) =>
+        [...queryKeys.products.images.all, 'primary', productId] as const,
+    },
+    // Product pricing
+    pricing: {
+      all: ['products', 'pricing'] as const,
+      tiers: (productId: string) =>
+        [...queryKeys.products.pricing.all, 'tiers', productId] as const,
+      customer: (productId: string, customerId?: string) =>
+        [...queryKeys.products.pricing.all, 'customer', productId, customerId ?? ''] as const,
+      history: (productId: string) =>
+        [...queryKeys.products.pricing.all, 'history', productId] as const,
+      resolve: (productId: string, context?: Record<string, unknown>) =>
+        [...queryKeys.products.pricing.all, 'resolve', productId, context ?? {}] as const,
+    },
+    // Product bundles
+    bundles: {
+      all: ['products', 'bundles'] as const,
+      components: (productId: string) =>
+        [...queryKeys.products.bundles.all, 'components', productId] as const,
+      price: (productId: string) =>
+        [...queryKeys.products.bundles.all, 'price', productId] as const,
+      validation: (productId: string) =>
+        [...queryKeys.products.bundles.all, 'validation', productId] as const,
+      expanded: (productId: string) =>
+        [...queryKeys.products.bundles.all, 'expanded', productId] as const,
+      containing: (productId: string) =>
+        [...queryKeys.products.bundles.all, 'containing', productId] as const,
+    },
+    // Product bulk operations
+    bulk: {
+      all: ['products', 'bulk'] as const,
+      template: () => [...queryKeys.products.bulk.all, 'template'] as const,
+    },
+    // Product advanced search
+    advancedSearch: {
+      all: ['products', 'advancedSearch'] as const,
+      results: (query: Record<string, unknown>) =>
+        [...queryKeys.products.advancedSearch.all, 'results', query] as const,
+      saved: () => [...queryKeys.products.advancedSearch.all, 'saved'] as const,
+    },
+    // Product stock/inventory extended
+    stockLevels: (productId: string) =>
+      [...queryKeys.products.all, 'stockLevels', productId] as const,
+    stockAlerts: (productId: string) =>
+      [...queryKeys.products.all, 'stockAlerts', productId] as const,
+    movements: (productId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.products.all, 'movements', productId, filters ?? {}] as const,
+    movementsAggregated: (productId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.products.all, 'movements', 'aggregated', productId, filters ?? {}] as const,
+    locations: () => [...queryKeys.products.all, 'locations'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -970,6 +1209,7 @@ export const queryKeys = {
     lists: () => [...queryKeys.warranties.all, 'list'] as const,
     list: (filters?: WarrantyFilters) =>
       [...queryKeys.warranties.lists(), filters ?? {}] as const,
+    statusCounts: () => [...queryKeys.warranties.all, 'statusCounts'] as const,
     details: () => [...queryKeys.warranties.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.warranties.details(), id] as const,
     byCustomer: (customerId: string) =>
@@ -1120,6 +1360,17 @@ export const queryKeys = {
     customerCommunications: (customerId: string) =>
       [...queryKeys.communications.all, 'customer', customerId] as const,
 
+    // Email History
+    emailHistory: () => [...queryKeys.communications.all, 'emailHistory'] as const,
+    emailHistoryList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.emailHistory(), 'list', filters ?? {}] as const,
+
+    // Unified Inbox
+    inbox: () => [...queryKeys.communications.all, 'inbox'] as const,
+    inboxList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.inbox(), 'list', filters ?? {}] as const,
+    inboxEmailAccounts: () => [...queryKeys.communications.all, 'inbox-email-accounts'] as const,
+
     // Email Suppression (Resend Integration)
     emailSuppression: {
       all: () => [...queryKeys.communications.all, 'emailSuppression'] as const,
@@ -1165,16 +1416,36 @@ export const queryKeys = {
     priceHistory: (supplierId: string, productId?: string) =>
       [...queryKeys.suppliers.all, 'priceHistory', supplierId, productId ?? ''] as const,
 
+    priceLists: {
+      all: () => [...queryKeys.suppliers.all, 'priceLists'] as const,
+      list: (filters?: Record<string, unknown>) =>
+        [...queryKeys.suppliers.priceLists.all(), 'list', filters ?? {}] as const,
+    },
+
     // Purchase Orders
     purchaseOrders: () => [...queryKeys.suppliers.all, 'purchaseOrders'] as const,
     purchaseOrdersList: (filters?: Record<string, unknown>) =>
       [...queryKeys.suppliers.purchaseOrders(), 'list', filters ?? {}] as const,
+    purchaseOrderStatusCounts: () =>
+      [...queryKeys.suppliers.purchaseOrders(), 'statusCounts'] as const,
     purchaseOrderDetail: (id: string) =>
       [...queryKeys.suppliers.purchaseOrders(), 'detail', id] as const,
     purchaseOrderItems: (poId: string) =>
       [...queryKeys.suppliers.purchaseOrders(), 'items', poId] as const,
     pendingApprovals: () =>
       [...queryKeys.suppliers.purchaseOrders(), 'pendingApprovals'] as const,
+
+    // PO Costs
+    purchaseOrderCosts: (poId: string) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'costs', poId] as const,
+    purchaseOrderAllocatedCosts: (poId: string) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'allocatedCosts', poId] as const,
+
+    // PO Receipts
+    purchaseOrderReceipts: (poId: string) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'receipts', poId] as const,
+    purchaseOrderReceiptDetail: (receiptId: string) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'receipt', receiptId] as const,
 
     // Backward compatibility aliases
     purchaseOrdersPendingApprovals: () =>
@@ -1223,6 +1494,8 @@ export const queryKeys = {
 
     // Reminders
     reminders: () => [...queryKeys.financial.all, 'reminders'] as const,
+    ordersForReminders: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.reminders(), 'orders-for-reminders', filters ?? {}] as const,
     reminderHistory: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.reminders(), 'history', filters ?? {}] as const,
     reminderTemplates: () => [...queryKeys.financial.reminders(), 'templates'] as const,
@@ -1237,6 +1510,10 @@ export const queryKeys = {
     // Statements
     statements: (customerId?: string) =>
       [...queryKeys.financial.all, 'statements', customerId ?? ''] as const,
+    statement: (statementId: string) =>
+      [...queryKeys.financial.all, 'statement', statementId] as const,
+    statementHistory: (customerId: string, filters?: { page?: number; pageSize?: number; dateFrom?: string; dateTo?: string }) =>
+      [...queryKeys.financial.statements(customerId), 'history', filters ?? {}] as const,
 
     // Other
     deferredBalance: () => [...queryKeys.financial.all, 'deferredBalance'] as const,
@@ -1294,6 +1571,8 @@ export const queryKeys = {
       [...queryKeys.unifiedActivities.entity(entityType, entityId), 'audit'] as const,
     entityPlanned: (entityType: string, entityId: string) =>
       [...queryKeys.unifiedActivities.entity(entityType, entityId), 'planned'] as const,
+    entityEmails: (customerId: string) =>
+      [...queryKeys.unifiedActivities.entity('customer', customerId), 'emails'] as const,
     filtered: (entityType: string, entityId: string, filters: Record<string, unknown>) =>
       [...queryKeys.unifiedActivities.entity(entityType, entityId), filters] as const,
   },
@@ -1314,6 +1593,8 @@ export const queryKeys = {
     oauth: {
       all: () => [...queryKeys.jobCalendar.all, 'oauth'] as const,
       status: () => [...queryKeys.jobCalendar.all, 'oauth', 'status'] as const,
+      stats: (organizationId?: string) =>
+        [...queryKeys.jobCalendar.all, 'oauth', 'status', 'stats', organizationId ?? ''] as const,
       calendars: () => [...queryKeys.jobCalendar.all, 'oauth', 'calendars'] as const,
       connection: () => [...queryKeys.jobCalendar.all, 'oauth', 'connection'] as const,
     },
@@ -1340,6 +1621,10 @@ export const queryKeys = {
     kanban: {
       all: ['jobTasks', 'kanban'] as const,
       list: (filters?: Record<string, unknown>) => [...queryKeys.jobTasks.kanban.all, 'list', filters ?? {}] as const,
+    },
+    myTasks: {
+      all: ['jobTasks', 'myTasks'] as const,
+      list: (filters?: Record<string, unknown>) => [...queryKeys.jobTasks.myTasks.all, 'list', filters ?? {}] as const,
     },
   },
 
@@ -1402,6 +1687,10 @@ export const queryKeys = {
     lists: () => [...queryKeys.projects.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) =>
       [...queryKeys.projects.lists(), filters ?? {}] as const,
+    listAll: (filters?: Record<string, unknown>) =>
+      [...queryKeys.projects.lists(), 'all', filters ?? {}] as const,
+    listCursor: (filters?: Record<string, unknown>) =>
+      [...queryKeys.projects.lists(), 'cursor', filters ?? {}] as const,
     details: () => [...queryKeys.projects.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.projects.details(), id] as const,
     byCustomer: (customerId: string) =>
@@ -1412,6 +1701,8 @@ export const queryKeys = {
       [...queryKeys.projects.all, 'members', projectId] as const,
     bom: (projectId: string) =>
       [...queryKeys.projects.all, 'bom', projectId] as const,
+    alerts: (projectId: string) =>
+      [...queryKeys.projects.detail(projectId), 'alerts'] as const,
   },
 
   // SPRINT-03: Site Visits
@@ -1426,8 +1717,9 @@ export const queryKeys = {
       [...queryKeys.siteVisits.all, 'byProject', projectId] as const,
     byInstaller: (installerId: string) =>
       [...queryKeys.siteVisits.all, 'byInstaller', installerId] as const,
-    schedule: (dateFrom: string, dateTo: string) =>
-      [...queryKeys.siteVisits.all, 'schedule', dateFrom, dateTo] as const,
+    schedule: (dateFrom: string, dateTo: string, projectId?: string) =>
+      [...queryKeys.siteVisits.all, 'schedule', dateFrom, dateTo, projectId ?? 'all'] as const,
+    pastDue: () => [...queryKeys.siteVisits.all, 'pastDue'] as const,
     myVisits: () => [...queryKeys.siteVisits.all, 'myVisits'] as const,
   },
 
@@ -1437,6 +1729,8 @@ export const queryKeys = {
     lists: () => [...queryKeys.installers.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) =>
       [...queryKeys.installers.lists(), filters ?? {}] as const,
+    allActive: () =>
+      [...queryKeys.installers.lists(), 'all-active'] as const,
     details: () => [...queryKeys.installers.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.installers.details(), id] as const,
     availability: (installerId: string, dateFrom?: string, dateTo?: string) =>
@@ -1469,6 +1763,8 @@ export const queryKeys = {
     all: ['projectNotes'] as const,
     byProject: (projectId: string) =>
       [...queryKeys.projectNotes.all, 'byProject', projectId] as const,
+    byProjectFiltered: (projectId: string, filters?: { siteVisitId?: string | null; noteType?: string }) =>
+      [...queryKeys.projectNotes.byProject(projectId), filters ?? {}] as const,
     detail: (id: string) =>
       [...queryKeys.projectNotes.all, 'detail', id] as const,
     stats: (projectId: string) =>
@@ -1480,6 +1776,8 @@ export const queryKeys = {
     all: ['projectFiles'] as const,
     byProject: (projectId: string) =>
       [...queryKeys.projectFiles.all, 'byProject', projectId] as const,
+    byProjectFiltered: (projectId: string, filters?: { siteVisitId?: string | null; fileType?: string }) =>
+      [...queryKeys.projectFiles.byProject(projectId), filters ?? {}] as const,
     detail: (id: string) =>
       [...queryKeys.projectFiles.all, 'detail', id] as const,
     stats: (projectId: string) =>
@@ -1577,6 +1875,8 @@ export const queryKeys = {
       [...queryKeys.settings.all, 'customFields', entityType ?? ''] as const,
     dataExports: () => [...queryKeys.settings.all, 'dataExports'] as const,
     winLossReasons: () => [...queryKeys.settings.all, 'winLossReasons'] as const,
+    winLossReasonsFiltered: (filters?: Record<string, unknown>) =>
+      [...queryKeys.settings.winLossReasons(), filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -1714,6 +2014,10 @@ export const queryKeys = {
       all: () => [...queryKeys.reports.all, 'metrics'] as const,
       available: () => [...queryKeys.reports.metrics.all(), 'available'] as const,
     },
+
+    // Financial Summary Report
+    financialSummary: (dateFrom: string, dateTo: string, periodType?: string) =>
+      [...queryKeys.reports.all, 'financialSummary', dateFrom, dateTo, periodType ?? 'monthly'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -1826,6 +2130,68 @@ export const queryKeys = {
       all: () => [...queryKeys.ai.all, 'artifacts'] as const,
       detail: (id: string) => [...queryKeys.ai.artifacts.all(), 'detail', id] as const,
     },
+  },
+
+  // -------------------------------------------------------------------------
+  // PORTAL
+  // -------------------------------------------------------------------------
+  portal: {
+    all: ['portal'] as const,
+    orders: {
+      all: () => [...queryKeys.portal.all, 'orders'] as const,
+      lists: () => [...queryKeys.portal.orders.all(), 'list'] as const,
+      list: (params?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.portal.orders.lists(), params ?? {}] as const,
+    },
+    jobs: {
+      all: () => [...queryKeys.portal.all, 'jobs'] as const,
+      lists: () => [...queryKeys.portal.jobs.all(), 'list'] as const,
+      list: (params?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.portal.jobs.lists(), params ?? {}] as const,
+    },
+    quotes: {
+      all: () => [...queryKeys.portal.all, 'quotes'] as const,
+      lists: () => [...queryKeys.portal.quotes.all(), 'list'] as const,
+      list: (params?: { page?: number; pageSize?: number }) =>
+        [...queryKeys.portal.quotes.lists(), params ?? {}] as const,
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // AUDIT LOGS
+  // -------------------------------------------------------------------------
+  auditLogs: {
+    all: ['auditLogs'] as const,
+    lists: () => [...queryKeys.auditLogs.all, 'list'] as const,
+    list: (filters?: Omit<AuditLogsFilters, 'enabled'>) =>
+      [...queryKeys.auditLogs.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.auditLogs.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.auditLogs.details(), id] as const,
+    stats: (filters?: { dateFrom?: Date; dateTo?: Date }) =>
+      [...queryKeys.auditLogs.all, 'stats', filters ?? {}] as const,
+    entity: (entityType: string, entityId: string) =>
+      [...queryKeys.auditLogs.all, 'entity', entityType, entityId] as const,
+    user: (userId: string) =>
+      [...queryKeys.auditLogs.all, 'user', userId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // SEARCH
+  // -------------------------------------------------------------------------
+  search: {
+    all: ['search'] as const,
+    quick: (query: string, options?: { entityTypes?: string[]; limit?: number }) =>
+      [...queryKeys.search.all, 'quick', query, options ?? {}] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // RECENT ITEMS
+  // -------------------------------------------------------------------------
+  recentItems: {
+    all: ['recentItems'] as const,
+    lists: () => [...queryKeys.recentItems.all, 'list'] as const,
+    list: (limit?: number) =>
+      [...queryKeys.recentItems.lists(), limit ?? 20] as const,
   },
 } as const
 

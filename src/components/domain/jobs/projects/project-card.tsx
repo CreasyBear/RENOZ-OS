@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusCell } from '@/components/shared/data-table';
 import { PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_CONFIG } from './project-status-config';
-import type { Project } from 'drizzle/schema/jobs/projects';
+import type { Project } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES

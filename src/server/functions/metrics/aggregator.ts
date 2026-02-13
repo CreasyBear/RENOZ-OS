@@ -12,7 +12,8 @@
  */
 
 import { db } from '@/lib/db';
-import { eq, and, gte, lte, isNull, inArray, sql, SQL, count, sum, avg } from 'drizzle-orm';
+import { eq, and, gte, lte, isNull, inArray, sql, count, sum, avg } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { orders } from 'drizzle/schema/orders/orders';
 import { customers } from 'drizzle/schema/customers/customers';
 import { opportunities } from 'drizzle/schema/pipeline';
@@ -22,6 +23,10 @@ import { slaTracking } from 'drizzle/schema/support/sla-tracking';
 import { getMetric, type MetricId } from '@/lib/metrics/registry';
 import type { MetricDefinition } from '@/lib/metrics/registry';
 import type { SQLWrapper } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
+import type { OrderStatus } from '@/lib/schemas/orders';
+import type { OpportunityStage } from '@/lib/schemas/pipeline';
+import type { WarrantyStatus } from '@/lib/schemas/warranty';
 
 // ============================================================================
 // TYPES
@@ -156,24 +161,20 @@ export async function calculateMetric(options: CalculateMetricOptions): Promise<
   if (metric.baseFilters.status && metric.baseFilters.status.length > 0) {
     switch (metric.table) {
       case 'orders':
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        conditions.push(inArray(orders.status, metric.baseFilters.status as any));
+        conditions.push(inArray(orders.status, metric.baseFilters.status as OrderStatus[]));
         break;
       case 'opportunities':
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        conditions.push(inArray(opportunities.stage, metric.baseFilters.status as any));
+        conditions.push(inArray(opportunities.stage, metric.baseFilters.status as OpportunityStage[]));
         break;
       case 'warranties':
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        conditions.push(inArray(warranties.status, metric.baseFilters.status as any));
+        conditions.push(inArray(warranties.status, metric.baseFilters.status as WarrantyStatus[]));
         break;
     }
   }
-  
-  // Apply domain filter for SLA tracking
+
+  // Apply domain filter for SLA tracking (domain enum: 'support' | 'warranty' | 'jobs')
   if (metric.baseFilters.domain && metric.table === 'slaTracking') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    conditions.push(eq(slaTracking.domain, metric.baseFilters.domain as any));
+    conditions.push(eq(slaTracking.domain, metric.baseFilters.domain as 'support' | 'warranty' | 'jobs'));
   }
   
   // Apply date range filter
@@ -463,7 +464,7 @@ export async function calculateMetrics(options: {
       });
     } catch (error) {
       // Log error but don't fail entire batch - return zero for failed metric
-      console.error(`Failed to calculate metric ${metricId}:`, error);
+      logger.error(`Failed to calculate metric ${metricId}`, error as Error, { metricId });
       return {
         value: 0,
         metricId,

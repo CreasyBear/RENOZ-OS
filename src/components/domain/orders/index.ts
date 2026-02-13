@@ -17,9 +17,9 @@ export {
 // --- Column Definitions ---
 export {
   createOrderColumns,
-  type OrderTableItem,
   type CreateOrderColumnsOptions,
 } from './order-columns';
+export type { OrderTableItem } from '@/lib/schemas/orders';
 
 // --- Presenters ---
 export {
@@ -38,6 +38,7 @@ export {
 // --- Container ---
 export {
   OrdersListContainer,
+  buildOrderQuery,
   type OrdersListContainerProps,
 } from './orders-list-container';
 
@@ -57,16 +58,22 @@ export { OrderDetail, type OrderDetailProps } from './order-detail';
 export {
   OrderDetailContainer,
   type OrderDetailContainerProps,
-  type OrderDetailContainerRenderProps,
 } from './containers/order-detail-container';
 export {
   OrderDetailView,
   type OrderDetailViewProps,
 } from './views/order-detail-view';
 
+// --- Alerts (Zone 3) ---
+export { OrderAlerts, OrderAlertsSkeleton, type OrderAlertsProps } from './alerts';
+
+// --- Shared Components ---
+export { MobileSidebarSheet, type MobileSidebarSheetProps } from './components';
+
 // --- Bulk Operations ---
 export {
   OrderBulkOperationsDialog,
+  OPERATION_CONFIGS,
   type OrderBulkOperationsDialogProps,
   type OrderBulkOperation,
   type BulkOperationConfig,
@@ -99,3 +106,10 @@ export * from './templates';
 export type { TemplateLibraryProps } from './templates/template-library';
 export type { TemplateSelectorProps } from './templates/template-selector';
 export type { TemplateEditorProps } from './templates/template-editor';
+
+// --- Dialogs ---
+export * from './dialogs';
+
+// --- Tabs ---
+export type { OrderPaymentsTabProps } from './tabs/order-payments-tab';
+export type { Payment, PaymentSummary } from '@/lib/schemas/orders';

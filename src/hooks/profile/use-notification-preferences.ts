@@ -10,17 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPreferences, setPreference, setPreferences } from "@/server/functions/users/user-preferences";
 import { toast } from "@/hooks/_shared/use-toast";
 import { queryKeys } from "@/lib/query-keys";
-// Note: PREFERENCE_CATEGORIES should be imported from drizzle/schema/users but having resolution issues
-// Hardcoding here for now
-const PREFERENCE_CATEGORIES = {
-  APPEARANCE: "appearance",
-  NOTIFICATIONS: "notifications",
-  DASHBOARD: "dashboard",
-  DATA_DISPLAY: "data_display",
-  SHORTCUTS: "shortcuts",
-  ACCESSIBILITY: "accessibility",
-  LOCALIZATION: "localization",
-} as const;
+import { PREFERENCE_CATEGORIES } from "@/lib/schemas/users";
 
 export interface NotificationPreferences {
   email: boolean;
@@ -87,23 +77,42 @@ export function useNotificationPreferences() {
 
   const { data: rawPreferences, isLoading } = useQuery({
     queryKey: queryKeys.user.preferences("notifications"),
-    queryFn: () => getPreferences({ data: { category: PREFERENCE_CATEGORIES.NOTIFICATIONS } }),
+    queryFn: async () => {
+      const result = await getPreferences({
+        data: { category: PREFERENCE_CATEGORIES.NOTIFICATIONS } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
   });
 
   // Transform raw preferences to typed NotificationPreferences
-  const preferences: NotificationPreferences = { ...DEFAULT_PREFERENCES };
+  const preferences = { ...DEFAULT_PREFERENCES } as NotificationPreferences;
   if (rawPreferences?.preferences) {
     for (const pref of rawPreferences.preferences) {
       const field = mapDbKeyToField(pref.key);
-      if (field in preferences) {
-        (preferences as unknown as Record<string, unknown>)[field as string] = pref.value;
+      if (field in DEFAULT_PREFERENCES) {
+        const key = field as keyof NotificationPreferences;
+        const val = pref.value;
+        if (
+          typeof val === 'boolean' ||
+          val === 'daily' || val === 'weekly' || val === 'realtime'
+        ) {
+          (preferences as unknown as Record<string, unknown>)[key] = val;
+        }
       }
     }
   }
 
   // Single preference update mutation
   const setSinglePreference = useMutation({
-    mutationFn: async ({ key, value }: { key: keyof NotificationPreferences; value: unknown }) => {
+    mutationFn: async ({
+      key,
+      value,
+    }: {
+      key: keyof NotificationPreferences;
+      value: string | number | boolean | null;
+    }) => {
       const dbKey = mapFieldToDbKey(key);
       const result = await setPreference({
         data: {
@@ -143,7 +152,7 @@ export function useNotificationPreferences() {
     },
   });
 
-  const updatePreference = (key: keyof NotificationPreferences, value: unknown) => {
+  const updatePreference = (key: keyof NotificationPreferences, value: string | number | boolean | null) => {
     setSinglePreference.mutate({ key, value });
   };
 

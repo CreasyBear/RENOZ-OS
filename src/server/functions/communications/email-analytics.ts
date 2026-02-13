@@ -51,6 +51,9 @@ export const getEmailMetrics = createServerFn({ method: "GET" })
     ];
 
     // Aggregate metrics in a single query
+    // NOTE: COUNT(*) FILTER (WHERE ...) is PostgreSQL-specific aggregation syntax
+    // This is more efficient than multiple separate COUNT queries with WHERE clauses
+    // Drizzle ORM doesn't provide a direct abstraction for FILTER, so raw SQL is acceptable here
     const [metricsResult] = await db
       .select({
         sent: sql<number>`COUNT(*) FILTER (WHERE ${emailHistory.sentAt} IS NOT NULL)::int`,

@@ -9,17 +9,21 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { z } from 'zod';
-import { eq, and, desc, sql, ilike, or, isNull } from 'drizzle-orm';
-import { cache } from 'react';
+import { eq, and, desc, asc, ilike, or, isNull, count, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { users, userGroupMembers, userGroups, userSessions } from 'drizzle/schema';
 import { createClient } from '@supabase/supabase-js';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { userListQuerySchema, updateUserSchema } from '@/lib/schemas/auth';
+import { userListQuerySchema, userListCursorSchema, updateUserSchema } from '@/lib/schemas/auth';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { idParamSchema } from '@/lib/schemas';
+import {
+  transferOwnershipSchema,
+  bulkUpdateServerSchema,
+  exportUsersServerSchema,
+} from '@/lib/schemas/users';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
@@ -29,6 +33,9 @@ import {
   AuthError,
   ServerError,
 } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { completeOnboardingStep } from './onboarding';
+import { authLogger } from '@/lib/logger';
 
 // ============================================================================
 // HELPER: Get server-side Supabase admin client
@@ -60,7 +67,7 @@ async function invalidateUserSessions(userId: string, authId: string): Promise<v
     await supabase.auth.admin.signOut(authId, 'global');
   } catch (error) {
     // Log but don't fail - the user is already deactivated
-    console.error('Failed to terminate Supabase sessions:', error);
+    authLogger.error('Failed to terminate Supabase sessions', error);
   }
 }
 
@@ -71,15 +78,27 @@ async function invalidateUserSessions(userId: string, authId: string): Promise<v
 /**
  * Get the current authenticated user's profile.
  * Requires: Authentication
- *
- * @performance Uses React.cache() for automatic request deduplication
  */
-const _getCurrentUser = cache(async () => {
-  const ctx = await withAuth();
-  return ctx.user;
+export const getCurrentUser = createServerFn({ method: 'GET' }).handler(async () => {
+  authLogger.debug('[getCurrentUser] start');
+  try {
+    const ctx = await withAuth();
+    authLogger.debug('[getCurrentUser] success', {
+      authId: ctx.user.authId,
+      userId: ctx.user.id,
+      organizationId: ctx.user.organizationId,
+      role: ctx.user.role,
+      status: ctx.user.status,
+    });
+    return ctx.user;
+  } catch (error) {
+    authLogger.error('[getCurrentUser] failed', error, {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
+  }
 });
-
-export const getCurrentUser = createServerFn({ method: 'GET' }).handler(_getCurrentUser);
 
 // ============================================================================
 // LIST USERS
@@ -153,8 +172,8 @@ export const listUsers = createServerFn({ method: 'GET' })
       .offset(offset);
 
     // Get total count
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+    const [{ total }] = await db
+      .select({ total: count() })
       .from(users)
       .where(and(...conditions));
 
@@ -163,10 +182,60 @@ export const listUsers = createServerFn({ method: 'GET' })
       pagination: {
         page,
         pageSize,
-        totalItems: count,
-        totalPages: Math.ceil(count / pageSize),
+        totalItems: total,
+        totalPages: Math.ceil(total / pageSize),
       },
     };
+  });
+
+/**
+ * List users with cursor pagination (recommended for large datasets).
+ * Uses createdAt + id for stable sort.
+ */
+export const listUsersCursor = createServerFn({ method: 'GET' })
+  .inputValidator(userListCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.user.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, role, status, type } = data;
+
+    const conditions = [eq(users.organizationId, ctx.organizationId), isNull(users.deletedAt)];
+    if (role) conditions.push(eq(users.role, role));
+    if (status) conditions.push(eq(users.status, status));
+    if (type) conditions.push(eq(users.type, type));
+    if (search) {
+      conditions.push(or(ilike(users.name, containsPattern(search)), ilike(users.email, containsPattern(search)))!);
+    }
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(users.createdAt, users.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const userList = await db
+      .select({
+        id: users.id,
+        authId: users.authId,
+        organizationId: users.organizationId,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        status: users.status,
+        type: users.type,
+        profile: users.profile,
+        preferences: users.preferences,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(orderDir(users.createdAt), orderDir(users.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(userList, pageSize);
   });
 
 // ============================================================================
@@ -222,7 +291,7 @@ export const getUser = createServerFn({ method: 'GET' })
       })
       .from(userGroupMembers)
       .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
-      .where(eq(userGroupMembers.userId, data.id));
+      .where(and(eq(userGroupMembers.userId, data.id), isNull(userGroupMembers.deletedAt)));
 
     return {
       ...user,
@@ -263,10 +332,9 @@ export const updateUser = createServerFn({ method: 'POST' })
       throw new ValidationError('Cannot demote the organization owner');
     }
 
-    // Build update object
+    // Build update object (users table has no version column)
     const updateData: Record<string, unknown> = {
       updatedBy: ctx.user.id,
-      version: sql`version + 1`,
     };
 
     if (updates.name !== undefined) updateData.name = updates.name;
@@ -290,7 +358,12 @@ export const updateUser = createServerFn({ method: 'POST' })
     const [updatedUser] = await db
       .update(users)
       .set(updateData)
-      .where(eq(users.id, id))
+      .where(
+        and(
+          eq(users.id, id),
+          eq(users.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     // Log audit event
@@ -313,6 +386,48 @@ export const updateUser = createServerFn({ method: 'POST' })
         type: updatedUser.type,
       },
     });
+
+    // Log activity for profile updates (if profile changed)
+    if (updates.profile !== undefined || updates.name !== undefined) {
+      const logger = createActivityLoggerWithContext(ctx);
+      await logger.logUpdate(
+        'user',
+        id,
+        {
+          name: existingUser.name,
+          profile: existingUser.profile as Record<string, unknown>,
+        },
+        {
+          name: updatedUser.name,
+          profile: updatedUser.profile as Record<string, unknown>,
+        },
+        {
+          description: 'Profile updated',
+          excludeFields: ['updatedAt', 'updatedBy'],
+        }
+      );
+    }
+
+    // Check if profile is complete enough for onboarding step
+    // Only mark complete if user is updating their own profile (self-service)
+    if (id === ctx.user.id && (updates.profile !== undefined || updates.name !== undefined)) {
+      const { calculateProfileCompleteness } = await import('@/lib/users/profile-helpers');
+      const completeness = calculateProfileCompleteness({
+        name: updatedUser.name,
+        profile: updatedUser.profile,
+      });
+
+      // Mark onboarding step complete if profile is 70%+ complete
+      if (completeness.isComplete) {
+        try {
+          await completeOnboardingStep({ data: { stepKey: 'profile_complete' } });
+        } catch (error) {
+          // Don't fail the update if onboarding step completion fails
+          // Log error but continue
+          authLogger.error('[updateUser] Failed to mark onboarding step complete', error);
+        }
+      }
+    }
 
     return {
       id: updatedUser.id,
@@ -457,10 +572,6 @@ export const reactivateUser = createServerFn({ method: 'POST' })
 // TRANSFER OWNERSHIP
 // ============================================================================
 
-const transferOwnershipSchema = z.object({
-  newOwnerId: z.string().uuid(),
-});
-
 /**
  * Transfer organization ownership to another user.
  * Only the current owner can transfer ownership.
@@ -569,20 +680,12 @@ export const transferOwnership = createServerFn({ method: 'POST' })
 // BULK UPDATE USERS
 // ============================================================================
 
-const bulkUpdateSchema = z.object({
-  userIds: z.array(z.string().uuid()).min(1).max(100),
-  updates: z.object({
-    role: z.enum(['admin', 'manager', 'sales', 'operations', 'support', 'viewer']).optional(),
-    status: z.enum(['active', 'suspended']).optional(),
-  }),
-});
-
 /**
  * Bulk update multiple users.
  * Requires: user.update permission
  */
 export const bulkUpdateUsers = createServerFn({ method: 'POST' })
-  .inputValidator(bulkUpdateSchema)
+  .inputValidator(bulkUpdateServerSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
@@ -599,7 +702,7 @@ export const bulkUpdateUsers = createServerFn({ method: 'POST' })
       .from(users)
       .where(
         and(
-          sql`${users.id} = ANY(${userIds}::uuid[])`,
+          inArray(users.id, userIds),
           eq(users.organizationId, ctx.organizationId),
           isNull(users.deletedAt)
         )
@@ -623,10 +726,9 @@ export const bulkUpdateUsers = createServerFn({ method: 'POST' })
       return { updated: 0, failed: userIds.length };
     }
 
-    // Build update
+    // Build update (users table has no version column)
     const updateData: Record<string, unknown> = {
       updatedBy: ctx.user.id,
-      version: sql`version + 1`,
     };
 
     if (updates.role) updateData.role = updates.role;
@@ -636,7 +738,7 @@ export const bulkUpdateUsers = createServerFn({ method: 'POST' })
     await db
       .update(users)
       .set(updateData)
-      .where(sql`${users.id} = ANY(${validUserIds}::uuid[])`);
+      .where(inArray(users.id, validUserIds));
 
     // Log audit event for bulk update
     await logAuditEvent({
@@ -671,7 +773,7 @@ export const getUserStats = createServerFn({ method: 'GET' }).handler(async () =
 
   // Total users
   const [{ totalUsers }] = await db
-    .select({ totalUsers: sql<number>`count(*)::int` })
+    .select({ totalUsers: count() })
     .from(users)
     .where(and(eq(users.organizationId, ctx.organizationId), isNull(users.deletedAt)));
 
@@ -679,7 +781,7 @@ export const getUserStats = createServerFn({ method: 'GET' }).handler(async () =
   const statusCounts = await db
     .select({
       status: users.status,
-      count: sql<number>`count(*)::int`,
+      count: count(),
     })
     .from(users)
     .where(and(eq(users.organizationId, ctx.organizationId), isNull(users.deletedAt)))
@@ -689,7 +791,7 @@ export const getUserStats = createServerFn({ method: 'GET' }).handler(async () =
   const roleCounts = await db
     .select({
       role: users.role,
-      count: sql<number>`count(*)::int`,
+      count: count(),
     })
     .from(users)
     .where(and(eq(users.organizationId, ctx.organizationId), isNull(users.deletedAt)))
@@ -706,17 +808,12 @@ export const getUserStats = createServerFn({ method: 'GET' }).handler(async () =
 // EXPORT USERS
 // ============================================================================
 
-const exportUsersSchema = z.object({
-  format: z.enum(['json', 'csv']).default('csv'),
-  userIds: z.array(z.string().uuid()).optional(), // If not provided, export all
-});
-
 /**
  * Export users to JSON or CSV.
  * Requires: user.read permission
  */
 export const exportUsers = createServerFn({ method: 'POST' })
-  .inputValidator(exportUsersSchema)
+  .inputValidator(exportUsersServerSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.read });
 
@@ -726,7 +823,7 @@ export const exportUsers = createServerFn({ method: 'POST' })
     const conditions = [eq(users.organizationId, ctx.organizationId), isNull(users.deletedAt)];
 
     if (userIds && userIds.length > 0) {
-      conditions.push(sql`${users.id} = ANY(${userIds}::uuid[])`);
+      conditions.push(inArray(users.id, userIds));
     }
 
     // Get users
@@ -782,4 +879,36 @@ export const exportUsers = createServerFn({ method: 'POST' })
       content: JSON.stringify(userList, null, 2),
       count: userList.length,
     };
+  });
+
+// ============================================================================
+// LIST USER NAMES FOR LOOKUP
+// ============================================================================
+
+/**
+ * Lightweight endpoint returning only {id, name, email} for all org users.
+ * No pagination limit — used for user lookup maps (task assignment, file creators, etc.).
+ * Returns up to 5000 users which covers any realistic organization size.
+ */
+export const listUserNamesForLookup = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const ctx = await withAuth();
+
+    const items = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+      })
+      .from(users)
+      .where(
+        and(
+          eq(users.organizationId, ctx.organizationId),
+          isNull(users.deletedAt),
+        )
+      )
+      .orderBy(users.name)
+      .limit(5000);
+
+    return { items };
   });

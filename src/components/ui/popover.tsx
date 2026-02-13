@@ -12,9 +12,30 @@ function Popover({
 }
 
 function PopoverTrigger({
+  children,
+  asChild,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+  const childCount = React.Children.count(children)
+  if (childCount === 0) {
+    return null
+  }
+
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const shouldFallback = !!asChild && !isSingleElement
+
+  return (
+    <PopoverPrimitive.Trigger
+      data-slot="popover-trigger"
+      asChild={shouldFallback ? false : asChild}
+      {...props}
+    >
+      {children}
+    </PopoverPrimitive.Trigger>
+  )
 }
 
 function PopoverContent({

@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -102,24 +102,25 @@ export function IssueTemplateFormDialog({
   // Reset form when dialog opens or template changes
   useEffect(() => {
     if (open) {
-      if (template) {
-        setName(template.name);
-        setDescription(template.description ?? '');
-        setType(template.type);
-        setDefaultPriority(template.defaultPriority);
-        setTitleTemplate(template.titleTemplate ?? '');
-        setDescriptionPrompt(template.descriptionPrompt ?? '');
-        setRequiredFields(template.requiredFields ?? {});
-      } else {
-        // Reset for create mode
-        setName('');
-        setDescription('');
-        setType('hardware_fault');
-        setDefaultPriority('medium');
-        setTitleTemplate('');
-        setDescriptionPrompt('');
-        setRequiredFields({});
-      }
+      startTransition(() => {
+        if (template) {
+          setName(template.name);
+          setDescription(template.description ?? '');
+          setType(template.type);
+          setDefaultPriority(template.defaultPriority);
+          setTitleTemplate(template.titleTemplate ?? '');
+          setDescriptionPrompt(template.descriptionPrompt ?? '');
+          setRequiredFields(template.requiredFields ?? {});
+        } else {
+          setName('');
+          setDescription('');
+          setType('hardware_fault');
+          setDefaultPriority('medium');
+          setTitleTemplate('');
+          setDescriptionPrompt('');
+          setRequiredFields({});
+        }
+      });
     }
   }, [open, template]);
 
@@ -198,7 +199,13 @@ export function IssueTemplateFormDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="type">Issue Type *</Label>
-              <Select value={type} onValueChange={(v) => setType(v as IssueType)}>
+              <Select
+                value={type}
+                onValueChange={(v) => {
+                  const opt = TYPE_OPTIONS.find((o) => o.value === v);
+                  if (opt) setType(opt.value);
+                }}
+              >
                 <SelectTrigger id="type">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -216,7 +223,10 @@ export function IssueTemplateFormDialog({
               <Label htmlFor="priority">Default Priority</Label>
               <Select
                 value={defaultPriority}
-                onValueChange={(v) => setDefaultPriority(v as IssuePriority)}
+                onValueChange={(v) => {
+                  const opt = PRIORITY_OPTIONS.find((o) => o.value === v);
+                  if (opt) setDefaultPriority(opt.value);
+                }}
               >
                 <SelectTrigger id="priority">
                   <SelectValue placeholder="Select priority" />

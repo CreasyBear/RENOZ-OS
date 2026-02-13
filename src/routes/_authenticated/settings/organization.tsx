@@ -8,22 +8,35 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { SettingsPageSkeleton } from "@/components/skeletons/settings";
 import { OrganizationSettingsContainer } from "@/components/domain/settings";
 
 export const Route = createFileRoute("/_authenticated/settings/organization")({
   component: OrganizationSettingsPage,
   errorComponent: ({ error }) => (
-    <div className="container mx-auto py-12 text-center">
-      <h2 className="text-xl font-semibold text-destructive mb-2">Failed to load settings</h2>
-      <p className="text-muted-foreground">{error.message}</p>
-    </div>
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Organization Settings" />
+      <PageLayout.Content>
+        <SettingsPageSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
 function OrganizationSettingsPage() {
   return (
-    <div className="container mx-auto py-6 px-4">
-      <OrganizationSettingsContainer />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Organization Settings"
+        description="Manage organization profile, regional, and financial settings"
+      />
+      <PageLayout.Content>
+        <OrganizationSettingsContainer />
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

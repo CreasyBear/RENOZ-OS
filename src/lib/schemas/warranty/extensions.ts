@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { currencySchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
@@ -22,6 +23,12 @@ export const warrantyExtensionTypeSchema = z.enum([
 ]);
 
 export type WarrantyExtensionTypeValue = z.infer<typeof warrantyExtensionTypeSchema>;
+
+export function isWarrantyExtensionTypeValue(
+  v: unknown
+): v is WarrantyExtensionTypeValue {
+  return warrantyExtensionTypeSchema.safeParse(v).success;
+}
 
 // ============================================================================
 // EXTEND WARRANTY
@@ -97,6 +104,16 @@ export const getExtensionHistorySchema = z.object({
 
 export type GetExtensionHistoryInput = z.input<typeof getExtensionHistorySchema>;
 
+export const getExtensionHistoryCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    extensionType: warrantyExtensionTypeSchema.optional(),
+    startDate: z.string().datetime().optional(),
+    endDate: z.string().datetime().optional(),
+  })
+);
+
+export type GetExtensionHistoryCursorInput = z.infer<typeof getExtensionHistoryCursorSchema>;
+
 // ============================================================================
 // GET EXTENSION BY ID
 // ============================================================================
@@ -106,3 +123,55 @@ export const getExtensionByIdSchema = z.object({
 });
 
 export type GetExtensionByIdInput = z.infer<typeof getExtensionByIdSchema>;
+
+// ============================================================================
+// RESPONSE TYPES
+// ============================================================================
+
+/**
+ * Warranty extension item (for list views).
+ * Matches the structure returned by listWarrantyExtensions server function.
+ */
+export interface WarrantyExtensionItem {
+  id: string;
+  warrantyId: string;
+  warrantyNumber: string;
+  extensionType: WarrantyExtensionTypeValue;
+  extensionMonths: number;
+  previousExpiryDate: string;
+  newExpiryDate: string;
+  price: number | null;
+  notes: string | null;
+  approvedById: string | null;
+  createdAt: string;
+}
+
+/**
+ * Response type for listing warranty extensions.
+ * Matches the structure returned by listWarrantyExtensions server function.
+ */
+export interface ListWarrantyExtensionsResult {
+  warrantyNumber: string;
+  extensions: WarrantyExtensionItem[];
+}
+
+/** Props for WarrantyExtensionHistory */
+export interface WarrantyExtensionHistoryProps {
+  warrantyId: string;
+  originalExpiryDate?: Date | string;
+  onExtendClick?: () => void;
+  showExtendButton?: boolean;
+  className?: string;
+  extensions?: WarrantyExtensionItem[];
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
+}
+
+/** Props for WarrantyExtensionHistoryCompact */
+export interface WarrantyExtensionHistoryCompactProps {
+  warrantyId: string;
+  maxItems?: number;
+  extensions?: WarrantyExtensionItem[];
+  isLoading?: boolean;
+}

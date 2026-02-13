@@ -7,7 +7,7 @@ export function createRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultStructuralSharing: true,
-    defaultPreloadStaleTime: 0,
+    defaultPreloadStaleTime: 30_000,
   })
 
   return router

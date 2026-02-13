@@ -10,20 +10,22 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, gte, lte, count, avg } from 'drizzle-orm';
+import { setResponseStatus } from '@tanstack/react-start/server';
+import { eq, and, desc, asc, gte, lte, count, avg, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { csatResponses } from 'drizzle/schema/support/csat-responses';
 import { issues } from 'drizzle/schema/support/issues';
 import { users } from 'drizzle/schema/users';
 import { customers } from 'drizzle/schema/customers';
 import { withAuth } from '@/lib/server/protected';
-import { NotFoundError, ConflictError, ValidationError, RateLimitError } from '@/lib/server/errors';
+import { NotFoundError, ConflictError, ValidationError, RateLimitError, ServerError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { nanoid } from 'nanoid';
 import {
   submitInternalFeedbackSchema,
   getIssueFeedbackSchema,
   listFeedbackSchema,
+  listFeedbackCursorSchema,
   getCsatMetricsSchema,
   generateFeedbackTokenSchema,
   type CsatResponseResponse,
@@ -31,6 +33,8 @@ import {
   type CsatMetricsResponse,
   type GenerateFeedbackTokenResponse,
 } from '@/lib/schemas/support/csat-responses';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { customersLogger } from '@/lib/logger';
 
 // ============================================================================
 // HELPERS
@@ -104,64 +108,87 @@ export const submitInternalFeedback = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<CsatResponseResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.support.create });
 
-    // Verify issue exists and belongs to organization
-    const [issue] = await db
-      .select({
-        id: issues.id,
-        organizationId: issues.organizationId,
-        title: issues.title,
-        issueNumber: issues.issueNumber,
-        status: issues.status,
-      })
-      .from(issues)
-      .where(and(eq(issues.id, data.issueId), eq(issues.organizationId, ctx.organizationId)))
-      .limit(1);
+    try {
+      return await db.transaction(async (tx) => {
+      // Verify issue exists and belongs to organization
+      const [issue] = await tx
+        .select({
+          id: issues.id,
+          organizationId: issues.organizationId,
+          title: issues.title,
+          issueNumber: issues.issueNumber,
+          status: issues.status,
+        })
+        .from(issues)
+        .where(and(eq(issues.id, data.issueId), eq(issues.organizationId, ctx.organizationId)))
+        .limit(1);
 
-    if (!issue) {
-      throw new NotFoundError('Issue not found', 'issue');
-    }
+      if (!issue) {
+        setResponseStatus(404);
+        throw new NotFoundError('Issue not found', 'issue');
+      }
 
-    // Check if feedback already exists
-    const [existing] = await db
-      .select({ id: csatResponses.id })
-      .from(csatResponses)
-      .where(eq(csatResponses.issueId, data.issueId))
-      .limit(1);
+      // M06: Check if feedback already exists (add orgId for tenant isolation)
+      const [existing] = await tx
+        .select({ id: csatResponses.id })
+        .from(csatResponses)
+        .where(
+          and(
+            eq(csatResponses.issueId, data.issueId),
+            eq(csatResponses.organizationId, ctx.organizationId),
+          )
+        )
+        .limit(1);
 
-    if (existing) {
-      throw new ConflictError('Feedback already submitted for this issue');
-    }
+      if (existing) {
+        setResponseStatus(409);
+        throw new ConflictError('Feedback already submitted for this issue');
+      }
 
-    // Insert feedback
-    const [feedback] = await db
-      .insert(csatResponses)
-      .values({
-        organizationId: ctx.organizationId,
-        issueId: data.issueId,
-        rating: data.rating,
-        comment: data.comment ?? null,
-        source: 'internal_entry',
-        submittedByUserId: ctx.user.id,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+      // Insert feedback
+      const [feedback] = await tx
+        .insert(csatResponses)
+        .values({
+          organizationId: ctx.organizationId,
+          issueId: data.issueId,
+          rating: data.rating,
+          comment: data.comment ?? null,
+          source: 'internal_entry',
+          submittedByUserId: ctx.user.id,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
 
-    // Get user details
-    const [user] = await db
-      .select({ name: users.name, email: users.email })
-      .from(users)
-      .where(eq(users.id, ctx.user.id))
-      .limit(1);
+      // Get user details
+      const [user] = await tx
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, ctx.user.id))
+        .limit(1);
 
-    return toCsatResponseResponse({
-      ...feedback,
-      issueTitle: issue.title,
-      issueNumber: issue.issueNumber,
-      issueStatus: issue.status,
-      userName: user?.name ?? null,
-      userEmail: user?.email ?? null,
+      return toCsatResponseResponse({
+        ...feedback,
+        issueTitle: issue.title,
+        issueNumber: issue.issueNumber,
+        issueStatus: issue.status,
+        userName: user?.name ?? null,
+        userEmail: user?.email ?? null,
+      });
     });
+    } catch (error: unknown) {
+      if (error instanceof NotFoundError || error instanceof ConflictError) {
+        throw error;
+      }
+      const pgError = error as { code?: string };
+      if (pgError?.code === '23505') {
+        setResponseStatus(409);
+        throw new ConflictError('Failed to submit feedback - duplicate submission');
+      }
+      customersLogger.error('submitInternalFeedback DB error', error);
+      setResponseStatus(500);
+      throw new ServerError('Failed to submit feedback', 500, 'INTERNAL_ERROR');
+    }
   });
 
 // ============================================================================
@@ -198,7 +225,11 @@ export const getIssueFeedback = createServerFn({ method: 'GET' })
       .from(csatResponses)
       .innerJoin(issues, eq(csatResponses.issueId, issues.id))
       .leftJoin(users, eq(csatResponses.submittedByUserId, users.id))
-      .leftJoin(customers, eq(csatResponses.submittedByCustomerId, customers.id))
+      // C39: Add soft-delete filter on customers JOIN
+      .leftJoin(customers, and(
+        eq(csatResponses.submittedByCustomerId, customers.id),
+        isNull(customers.deletedAt),
+      ))
       .where(
         and(
           eq(csatResponses.issueId, data.issueId),
@@ -298,7 +329,11 @@ export const listFeedback = createServerFn({ method: 'GET' })
       .from(csatResponses)
       .innerJoin(issues, eq(csatResponses.issueId, issues.id))
       .leftJoin(users, eq(csatResponses.submittedByUserId, users.id))
-      .leftJoin(customers, eq(csatResponses.submittedByCustomerId, customers.id))
+      // C39: Add soft-delete filter on customers JOIN
+      .leftJoin(customers, and(
+        eq(csatResponses.submittedByCustomerId, customers.id),
+        isNull(customers.deletedAt),
+      ))
       .where(and(...conditions))
       .orderBy(order)
       .limit(pageSize)
@@ -313,6 +348,67 @@ export const listFeedback = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(totalCount / pageSize),
       },
     };
+  });
+
+// ============================================================================
+// LIST FEEDBACK (CURSOR)
+// ============================================================================
+
+export const listFeedbackCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listFeedbackCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.support.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', issueId, rating, minRating, maxRating, source, startDate, endDate } = data;
+
+    const conditions = [eq(csatResponses.organizationId, ctx.organizationId)];
+    if (issueId) conditions.push(eq(csatResponses.issueId, issueId));
+    if (rating !== undefined) conditions.push(eq(csatResponses.rating, rating));
+    if (minRating !== undefined) conditions.push(gte(csatResponses.rating, minRating));
+    if (maxRating !== undefined) conditions.push(lte(csatResponses.rating, maxRating));
+    if (source) conditions.push(eq(csatResponses.source, source));
+    if (startDate) conditions.push(gte(csatResponses.submittedAt, new Date(startDate)));
+    if (endDate) conditions.push(lte(csatResponses.submittedAt, new Date(endDate)));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(csatResponses.createdAt, csatResponses.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const results = await db
+      .select({
+        id: csatResponses.id,
+        organizationId: csatResponses.organizationId,
+        issueId: csatResponses.issueId,
+        rating: csatResponses.rating,
+        comment: csatResponses.comment,
+        source: csatResponses.source,
+        submittedAt: csatResponses.submittedAt,
+        submittedByUserId: csatResponses.submittedByUserId,
+        submittedByCustomerId: csatResponses.submittedByCustomerId,
+        submittedByEmail: csatResponses.submittedByEmail,
+        createdAt: csatResponses.createdAt,
+        updatedAt: csatResponses.updatedAt,
+        issueTitle: issues.title,
+        issueNumber: issues.issueNumber,
+        issueStatus: issues.status,
+        userName: users.name,
+        userEmail: users.email,
+        customerName: customers.name,
+        customerEmail: customers.email,
+      })
+      .from(csatResponses)
+      .innerJoin(issues, eq(csatResponses.issueId, issues.id))
+      .leftJoin(users, eq(csatResponses.submittedByUserId, users.id))
+      .leftJoin(customers, and(eq(csatResponses.submittedByCustomerId, customers.id), isNull(customers.deletedAt)))
+      .where(and(...conditions))
+      .orderBy(orderDir(csatResponses.createdAt), orderDir(csatResponses.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(results.map(toCsatResponseResponse), pageSize);
   });
 
 // ============================================================================
@@ -417,7 +513,11 @@ export const getCsatMetrics = createServerFn({ method: 'GET' })
       .from(csatResponses)
       .innerJoin(issues, eq(csatResponses.issueId, issues.id))
       .leftJoin(users, eq(csatResponses.submittedByUserId, users.id))
-      .leftJoin(customers, eq(csatResponses.submittedByCustomerId, customers.id))
+      // C39: Add soft-delete filter on customers JOIN
+      .leftJoin(customers, and(
+        eq(csatResponses.submittedByCustomerId, customers.id),
+        isNull(customers.deletedAt),
+      ))
       .where(
         and(eq(csatResponses.organizationId, ctx.organizationId), lte(csatResponses.rating, 2))
       )

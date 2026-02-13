@@ -79,39 +79,82 @@ export type WorkingHours = z.infer<typeof workingHoursSchema>;
 // INSTALLER PROFILE SCHEMAS
 // ============================================================================
 
-export const createInstallerProfileSchema = z.object({
-  userId: z.string().uuid(),
-  status: installerStatusSchema.default('active'),
-  yearsExperience: z.number().int().min(0).default(0),
-  vehicleType: vehicleTypeSchema.default('none'),
-  vehicleReg: z.string().max(50).optional(),
-  equipment: z.array(z.string()).default([]),
-  maxJobsPerDay: z.number().int().min(1).max(10).default(2),
-  maxTravelKm: z.number().int().min(1).optional(),
-  workingHours: workingHoursSchema.optional(),
-  emergencyContactName: z.string().max(255).optional(),
-  emergencyContactPhone: z.string().max(50).optional(),
-  emergencyContactRelationship: z.string().max(100).optional(),
-  notes: z.string().optional(),
+export const createInstallerProfileSchema = z
+  .object({
+    userId: z.string().uuid(),
+    status: installerStatusSchema.default('active'),
+    yearsExperience: z.number().int().min(0).default(0),
+    vehicleType: vehicleTypeSchema.default('none'),
+    vehicleReg: z.string().max(50).optional(),
+    equipment: z.array(z.string()).default([]),
+    maxJobsPerDay: z.number().int().min(1).max(10).default(2),
+    maxTravelKm: z.number().int().min(1).optional(),
+    workingHours: workingHoursSchema.optional(),
+    emergencyContactName: z.string().max(255).optional(),
+    emergencyContactPhone: z.string().max(50).optional(),
+    emergencyContactRelationship: z.string().max(100).optional(),
+    notes: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // If any emergency contact field is filled, all 3 are required
+      const hasAny = Boolean(
+        data.emergencyContactName || data.emergencyContactPhone || data.emergencyContactRelationship
+      );
+      if (!hasAny) return true; // All empty is fine
+
+      return Boolean(
+        data.emergencyContactName && data.emergencyContactPhone && data.emergencyContactRelationship
+      );
+    },
+    {
+      message: 'All emergency contact fields are required if any are provided',
+      path: ['emergencyContactName'],
+    }
+  );
+
+export const createInstallerProfileDialogSchema = z.object({
+  userId: z.string().uuid('Select a user to continue.'),
 });
 
-export const updateInstallerProfileSchema = z.object({
-  id: z.string().uuid(),
-  status: installerStatusSchema.optional(),
-  yearsExperience: z.number().int().min(0).optional(),
-  vehicleType: vehicleTypeSchema.optional(),
-  vehicleReg: z.string().max(50).optional(),
-  equipment: z.array(z.string()).optional(),
-  maxJobsPerDay: z.number().int().min(1).max(10).optional(),
-  maxTravelKm: z.number().int().min(1).optional().nullable(),
-  workingHours: workingHoursSchema.optional(),
-  emergencyContactName: z.string().max(255).optional(),
-  emergencyContactPhone: z.string().max(50).optional(),
-  emergencyContactRelationship: z.string().max(100).optional(),
-  notes: z.string().optional(),
-});
+export const updateInstallerProfileSchema = z
+  .object({
+    id: z.string().uuid(),
+    status: installerStatusSchema.optional(),
+    yearsExperience: z.number().int().min(0).optional(),
+    vehicleType: vehicleTypeSchema.optional(),
+    vehicleReg: z.string().max(50).optional(),
+    equipment: z.array(z.string()).optional(),
+    maxJobsPerDay: z.number().int().min(1).max(10).optional(),
+    maxTravelKm: z.number().int().min(1).optional().nullable(),
+    workingHours: workingHoursSchema.optional(),
+    emergencyContactName: z.string().max(255).optional(),
+    emergencyContactPhone: z.string().max(50).optional(),
+    emergencyContactRelationship: z.string().max(100).optional(),
+    notes: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // If any emergency contact field is filled, all 3 are required
+      const hasAny = Boolean(
+        data.emergencyContactName || data.emergencyContactPhone || data.emergencyContactRelationship
+      );
+      if (!hasAny) return true; // All empty is fine
+
+      return Boolean(
+        data.emergencyContactName && data.emergencyContactPhone && data.emergencyContactRelationship
+      );
+    },
+    {
+      message: 'All emergency contact fields are required if any are provided',
+      path: ['emergencyContactName'],
+    }
+  );
 
 export type CreateInstallerProfileInput = z.infer<typeof createInstallerProfileSchema>;
+export type CreateInstallerProfileDialogInput = z.infer<
+  typeof createInstallerProfileDialogSchema
+>;
 export type UpdateInstallerProfileInput = z.infer<typeof updateInstallerProfileSchema>;
 
 // ============================================================================
@@ -197,21 +240,46 @@ export type UpdateTerritoryInput = z.infer<typeof updateTerritorySchema>;
 // BLOCKOUT SCHEMAS
 // ============================================================================
 
-export const createBlockoutSchema = z.object({
-  installerId: z.string().uuid(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-  reason: z.string().max(255).optional(),
-  blockoutType: z.enum(['vacation', 'sick', 'training', 'other']).optional(),
-});
+export const createBlockoutSchema = z
+  .object({
+    installerId: z.string().uuid(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+    reason: z.string().max(255).optional(),
+    blockoutType: z.enum(['vacation', 'sick', 'training', 'other']).optional(),
+  })
+  .refine(
+    (data) => {
+      // End date must be >= start date
+      return new Date(data.endDate) >= new Date(data.startDate);
+    },
+    {
+      message: 'End date must be on or after start date',
+      path: ['endDate'],
+    }
+  );
 
-export const updateBlockoutSchema = z.object({
-  id: z.string().uuid(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  reason: z.string().max(255).optional(),
-  blockoutType: z.enum(['vacation', 'sick', 'training', 'other']).optional(),
-});
+export const updateBlockoutSchema = z
+  .object({
+    id: z.string().uuid(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    reason: z.string().max(255).optional(),
+    blockoutType: z.enum(['vacation', 'sick', 'training', 'other']).optional(),
+  })
+  .refine(
+    (data) => {
+      // If both dates provided, end date must be >= start date
+      if (data.startDate && data.endDate) {
+        return new Date(data.endDate) >= new Date(data.startDate);
+      }
+      return true;
+    },
+    {
+      message: 'End date must be on or after start date',
+      path: ['endDate'],
+    }
+  );
 
 export type CreateBlockoutInput = z.infer<typeof createBlockoutSchema>;
 export type UpdateBlockoutInput = z.infer<typeof updateBlockoutSchema>;
@@ -279,3 +347,100 @@ export const territoryIdSchema = z.object({
 export const blockoutIdSchema = z.object({
   id: z.string().uuid(),
 });
+
+// ============================================================================
+// OUTPUT TYPES (server function return shapes)
+// ============================================================================
+
+export interface InstallerListItem {
+  id: string;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl?: string;
+  };
+  status: string;
+  yearsExperience: number | null;
+  maxJobsPerDay: number;
+  vehicleType: string;
+}
+
+export interface Certification {
+  id: string;
+  certificationType: string;
+  licenseNumber: string | null;
+  issuingAuthority: string | null;
+  issueDate: string | null;
+  expiryDate: string | null;
+  isVerified: boolean;
+  documentUrl: string | null;
+}
+
+export interface Skill {
+  id: string;
+  skill: string;
+  proficiencyLevel: number;
+  yearsExperience: number;
+  projectsCompleted: number;
+  isVerified: boolean;
+}
+
+export interface Territory {
+  id: string;
+  postcode: string;
+  suburb: string | null;
+  state: string | null;
+  priority: number;
+}
+
+export interface Blockout {
+  id: string;
+  startDate: string;
+  endDate: string;
+  reason: string | null;
+  blockoutType: string | null;
+}
+
+export interface InstallerDetail extends InstallerListItem {
+  user?: InstallerListItem['user'] & { phone?: string };
+  vehicleReg: string | null;
+  equipment: string[];
+  maxTravelKm: number | null;
+  workingHours: Record<string, { start: string; end: string; working: boolean }>;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactRelationship: string | null;
+  notes: string | null;
+  certifications: Certification[];
+  skills: Skill[];
+  territories: Territory[];
+  blockouts: Blockout[];
+}
+
+export interface AvailabilityResult {
+  installerId: string;
+  dateRange: { startDate: string; endDate: string };
+  availability: Record<
+    string,
+    { available: boolean; reason?: string; existingJobs: number }
+  >;
+  maxJobsPerDay: number;
+}
+
+export interface WorkloadResult {
+  installerId: string;
+  activeProjects: number;
+  upcomingVisits: number;
+  thisWeekVisits: number;
+}
+
+export interface InstallerSuggestion {
+  installerId: string;
+  name: string;
+  score: number;
+  skills: Skill[];
+  yearsExperience: number | null;
+  reasons: string[];
+  warnings: string[];
+}

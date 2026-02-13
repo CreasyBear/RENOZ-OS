@@ -10,7 +10,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, gte, lte, isNull, inArray, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, isNull, inArray, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { jobAssignments, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -27,7 +27,7 @@ import {
   type CalendarKanbanTask,
   type ListCalendarTasksForKanbanResponse,
 } from '@/lib/schemas';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -116,7 +116,8 @@ export const listCalendarJobs = createServerFn({ method: 'GET' })
       .from(jobAssignments)
       .innerJoin(users, eq(jobAssignments.installerId, users.id))
       .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
-      .where(and(...conditions));
+      .where(and(...conditions))
+      .limit(500);
 
     // Convert to calendar events
     const events: CalendarJobEvent[] = jobs.map((row) =>
@@ -143,8 +144,8 @@ export const listUnscheduledJobs = createServerFn({ method: 'GET' })
     const ctx = await withAuth();
 
     // Get total count first
-    const countResult = await db
-      .select({ count: sql<number>`count(*)` })
+    const [countRow] = await db
+      .select({ count: count() })
       .from(jobAssignments)
       .where(
         and(
@@ -153,7 +154,7 @@ export const listUnscheduledJobs = createServerFn({ method: 'GET' })
         )
       );
 
-    const total = Number(countResult[0]?.count ?? 0);
+    const total = countRow?.count ?? 0;
 
     // Query unscheduled jobs with pagination
     const jobs = await db
@@ -205,47 +206,68 @@ export const rescheduleJob = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Verify job exists and belongs to organization
-    const existingJob = await db.query.jobAssignments.findFirst({
-      where: and(
-        eq(jobAssignments.id, data.jobId),
-        eq(jobAssignments.organizationId, ctx.organizationId)
-      ),
+    // Wrap reschedule in transaction with optimistic locking
+    const result = await db.transaction(async (tx) => {
+      // Verify job exists and belongs to organization (with lock)
+      const [existingJob] = await tx
+        .select()
+        .from(jobAssignments)
+        .where(
+          and(
+            eq(jobAssignments.id, data.jobId),
+            eq(jobAssignments.organizationId, ctx.organizationId)
+          )
+        )
+        .for('update')
+        .limit(1);
+
+      if (!existingJob) {
+        throw new NotFoundError('Job not found', 'jobAssignment');
+      }
+
+      // Update the job with new date/time (optimistic lock via version check)
+      const [updatedJob] = await tx
+        .update(jobAssignments)
+        .set({
+          scheduledDate: data.newDate,
+          scheduledTime: data.newTime ?? null,
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+          version: existingJob.version + 1,
+        })
+        .where(
+          and(
+            eq(jobAssignments.id, data.jobId),
+            eq(jobAssignments.version, existingJob.version)
+          )
+        )
+        .returning();
+
+      if (!updatedJob) {
+        throw new ConflictError('Job was modified by another user. Please refresh and try again.');
+      }
+
+      // Fetch installer and customer for response
+      const [installer] = await tx
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, updatedJob.installerId))
+        .limit(1);
+
+      const [customer] = await tx
+        .select({ id: customers.id, name: customers.name })
+        .from(customers)
+        .where(eq(customers.id, updatedJob.customerId))
+        .limit(1);
+
+      if (!installer || !customer) {
+        throw new NotFoundError('Installer or customer not found', 'user');
+      }
+
+      return { updatedJob, installer, customer };
     });
 
-    if (!existingJob) {
-      throw new NotFoundError('Job not found', 'jobAssignment');
-    }
-
-    // Update the job with new date/time
-    const [updatedJob] = await db
-      .update(jobAssignments)
-      .set({
-        scheduledDate: data.newDate,
-        scheduledTime: data.newTime ?? null,
-        updatedAt: new Date(),
-        updatedBy: ctx.user.id,
-        version: existingJob.version + 1,
-      })
-      .where(eq(jobAssignments.id, data.jobId))
-      .returning();
-
-    // Fetch installer and customer for response
-    const installer = await db.query.users.findFirst({
-      where: eq(users.id, updatedJob.installerId),
-      columns: { id: true, name: true, email: true },
-    });
-
-    const customer = await db.query.customers.findFirst({
-      where: eq(customers.id, updatedJob.customerId),
-      columns: { id: true, name: true },
-    });
-
-    if (!installer || !customer) {
-      throw new NotFoundError('Installer or customer not found', 'user');
-    }
-
-    const event = toCalendarEvent(updatedJob, installer, customer);
+    const event = toCalendarEvent(result.updatedJob, result.installer, result.customer);
 
     return {
       success: true,
@@ -301,7 +323,8 @@ export const listCalendarTasksForKanban = createServerFn({ method: 'GET' })
       .innerJoin(users, eq(jobAssignments.installerId, users.id))
       .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
       .where(and(...conditions))
-      .orderBy(jobAssignments.scheduledDate, jobAssignments.scheduledTime);
+      .orderBy(jobAssignments.scheduledDate, jobAssignments.scheduledTime)
+      .limit(500);
 
     // Convert to calendar kanban tasks with time slot positioning
     const tasks: CalendarKanbanTask[] = jobs.map((row) => {

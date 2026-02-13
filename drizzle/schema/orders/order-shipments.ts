@@ -9,7 +9,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   timestamp,
@@ -17,12 +16,13 @@ import {
   index,
   integer,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { shipmentStatusEnum } from "../_shared/enums";
 import {
   timestampColumns,
   auditColumns,
   quantityColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { orders, orderLineItems } from "./orders";
 import { users } from "../users/users";
@@ -129,6 +129,9 @@ export const orderShipments = pgTable(
       onDelete: "set null",
     }),
 
+    // Shipping cost (actual cost from carrier)
+    shippingCost: integer("shipping_cost"), // in cents, null if not yet known
+
     // Notes
     notes: text("notes"),
     carrierNotes: text("carrier_notes"), // Notes from carrier
@@ -137,48 +140,28 @@ export const orderShipments = pgTable(
     ...timestampColumns,
     ...auditColumns,
   },
-  (table) => [
+  (table) => ({
     // Performance indexes
-    index("order_shipments_order_id_idx").on(table.orderId),
-    index("order_shipments_status_idx").on(table.status),
-    index("order_shipments_org_status_idx").on(
+    orderIdIdx: index("order_shipments_order_id_idx").on(table.orderId),
+    statusIdx: index("order_shipments_status_idx").on(table.status),
+    orgStatusIdx: index("order_shipments_org_status_idx").on(
       table.organizationId,
       table.status
     ),
-    index("order_shipments_org_created_idx").on(
+    orgCreatedIdx: index("order_shipments_org_created_idx").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
-    index("order_shipments_tracking_number_idx").on(table.trackingNumber),
-    index("order_shipments_shipped_at_idx").on(table.shippedAt.desc()),
-    index("order_shipments_org_delivered_idx").on(
+    trackingNumberIdx: index("order_shipments_tracking_number_idx").on(table.trackingNumber),
+    shippedAtIdx: index("order_shipments_shipped_at_idx").on(table.shippedAt.desc()),
+    orgDeliveredIdx: index("order_shipments_org_delivered_idx").on(
       table.organizationId,
       table.deliveredAt.desc()
     ),
     // RLS Policies
-    pgPolicy("order_shipments_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_shipments_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_shipments_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_shipments_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("order_shipments"),
+  })
 );
 
 // ============================================================================
@@ -217,37 +200,17 @@ export const shipmentItems = pgTable(
     // Timestamps
     ...timestampColumns,
   },
-  (table) => [
-    index("shipment_items_shipment_id_idx").on(table.shipmentId),
-    index("shipment_items_line_item_id_idx").on(table.orderLineItemId),
-    index("shipment_items_org_created_idx").on(
+  (table) => ({
+    shipmentIdIdx: index("shipment_items_shipment_id_idx").on(table.shipmentId),
+    lineItemIdIdx: index("shipment_items_line_item_id_idx").on(table.orderLineItemId),
+    orgCreatedIdx: index("shipment_items_org_created_idx").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
     // RLS Policies
-    pgPolicy("shipment_items_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("shipment_items_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("shipment_items_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("shipment_items_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("shipment_items"),
+  })
 );
 
 // ============================================================================

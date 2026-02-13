@@ -21,6 +21,7 @@ import { db } from "@/lib/db";
 import { organizations } from "drizzle/schema";
 import { eq } from "drizzle-orm";
 import { renderEmail } from "./render";
+import { logger } from "@/lib/logger";
 import {
   OrgEmailProvider,
   type OrgBranding,
@@ -106,14 +107,14 @@ export async function getOrgEmailData(
       if (strict) {
         throw new Error(`Organization not found: ${organizationId}`);
       }
-      console.warn(`Organization not found: ${organizationId}, using defaults`);
+      logger.warn('Organization not found, using defaults', { organizationId });
       return {
         branding: DEFAULT_BRANDING,
         settings: DEFAULT_SETTINGS,
       };
     }
 
-    // Extract branding (could be in branding column or settings.portalBranding)
+    // Extract branding from organizations.branding (single source of truth)
     const branding: OrgBranding = {
       logoUrl: org.branding?.logoUrl ?? null,
       primaryColor: org.branding?.primaryColor ?? null,
@@ -140,7 +141,7 @@ export async function getOrgEmailData(
         `Failed to fetch org email data for ${organizationId}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-    console.error(`Failed to fetch org email data for ${organizationId}:`, error);
+    logger.error('Failed to fetch org email data', error, { organizationId });
     return {
       branding: DEFAULT_BRANDING,
       settings: DEFAULT_SETTINGS,

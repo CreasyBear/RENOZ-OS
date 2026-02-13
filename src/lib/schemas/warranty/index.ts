@@ -26,6 +26,19 @@ export type {
   GetWarrantyInput,
   UpdateWarrantyOptOutInput,
   UpdateCustomerWarrantyOptOutInput,
+  // Expiring warranty types (for widgets and reports)
+  WarrantyUrgencyLevel,
+  ExpiringWarrantyItem,
+  GetExpiringWarrantiesResult,
+  ExpiringWarrantiesReportResult,
+  WarrantyListItem,
+  ListWarrantiesResult,
+  WarrantyDetail,
+  WarrantyDetailContainerRenderProps,
+  WarrantyDetailContainerProps,
+  WarrantyCertificateStatus,
+  CreateWarrantyColumnsOptions,
+  WarrantyDetailViewProps,
 } from './warranties';
 export type {
   WarrantyPolicyTypeValue,
@@ -37,7 +50,17 @@ export type {
   AssignWarrantyPolicyToProductInput,
   AssignDefaultWarrantyPolicyToCategoryInput,
   SeedDefaultPoliciesInput,
+  // Client-safe entity types
+  WarrantyPolicy,
+  WarrantyPolicyTerms,
+  WarrantyPolicyFormPayload,
+  WarrantyPolicySettingsViewProps,
 } from './policies';
+export {
+  isWarrantyClaimStatusValue,
+  isWarrantyClaimTypeValue,
+  isWarrantyClaimResolutionTypeValue,
+} from './claims';
 export type {
   WarrantyClaimStatusValue,
   WarrantyClaimTypeValue,
@@ -50,6 +73,17 @@ export type {
   ListWarrantyClaimsInput,
   GetWarrantyClaimInput,
   AssignClaimInput,
+  WarrantyClaimListItem,
+  ListWarrantyClaimsResult,
+  WarrantyClaimPagination,
+  WarrantyClaimsSearchParams,
+  WarrantyClaimsListContainerProps,
+  WarrantyClaimsListViewProps,
+  WarrantyClaimDetailContainerRenderProps,
+  WarrantyClaimDetailContainerProps,
+  WarrantyClaimDetailViewProps,
+  WarrantyClaimDetailViewClaim,
+  SlaDueStatus,
 } from './claims';
 export type {
   WarrantyExtensionTypeValue,
@@ -57,11 +91,18 @@ export type {
   ListWarrantyExtensionsInput,
   GetExtensionHistoryInput,
   GetExtensionByIdInput,
+  WarrantyExtensionItem,
+  ListWarrantyExtensionsResult,
+  WarrantyExtensionHistoryProps,
+  WarrantyExtensionHistoryCompactProps,
 } from './extensions';
 export type {
   GenerateWarrantyCertificateInput,
   GetWarrantyCertificateInput,
   RegenerateWarrantyCertificateInput,
+  WarrantyCoverageDetails,
+  WarrantyCertificateCustomerAddress,
+  WarrantyCertificateProps,
 } from './certificates';
 export type {
   WarrantyAnalyticsFilter,
@@ -80,4 +121,5 @@ export type {
   PreviewBulkWarrantyImportInput,
   ValidatedWarrantyRow,
   BulkRegisterWarrantiesInput,
+  WarrantyImportSettingsViewProps,
 } from './bulk-import';

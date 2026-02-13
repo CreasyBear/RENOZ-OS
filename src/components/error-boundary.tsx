@@ -1,4 +1,4 @@
-import { useRouter, ErrorComponent } from '@tanstack/react-router'
+import { useRouter } from '@tanstack/react-router'
 
 interface RootErrorBoundaryProps {
   error: Error
@@ -62,5 +62,3 @@ export function RootErrorBoundary({ error }: RootErrorBoundaryProps) {
     </div>
   )
 }
-
-export { ErrorComponent }

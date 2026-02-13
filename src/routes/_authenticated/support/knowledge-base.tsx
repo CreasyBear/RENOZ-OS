@@ -17,7 +17,8 @@ import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { KnowledgeBaseSkeleton } from '@/components/skeletons/support';
 import { BookOpen, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { LoadingState } from '@/components/shared/loading-state';
 import { KbCategoryTree } from '@/components/domain/support';
 import { KbArticleList } from '@/components/domain/support';
@@ -294,11 +295,12 @@ function KnowledgeBasePage() {
         title="Knowledge Base"
         description="Articles, guides, and documentation"
         actions={
-          <Link to="/settings/knowledge-base">
-            <Button variant="outline" size="sm">
-              <Settings className="mr-2 h-4 w-4" />
-              Manage Categories
-            </Button>
+          <Link
+            to="/settings/knowledge-base"
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Manage Categories
           </Link>
         }
       />

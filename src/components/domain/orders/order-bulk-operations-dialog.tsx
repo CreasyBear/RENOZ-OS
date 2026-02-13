@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Dialog exports component + constants */
 /**
  * OrderBulkOperationsDialog Component
  *
@@ -7,7 +8,7 @@
  * @see src/components/domain/jobs/jobs-bulk-actions.tsx for reference
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,12 +21,32 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Link } from '@tanstack/react-router';
 import { CheckCircle, AlertTriangle, Package, Truck, Loader2 } from 'lucide-react';
 import { FormatAmount } from '@/components/shared/format';
+import { StatusBadge, type StatusConfigItem } from '@/components/shared/status-badge';
+import { toastError } from '@/hooks';
+import type { OrderStatus } from '@/lib/schemas/orders';
+import { orderStatusValues } from '@/lib/schemas/orders';
+import { ORDER_STATUS_OPTIONS } from './order-filter-config';
+
+// Type guard for order status validation
+function isValidOrderStatus(value: string): value is OrderStatus {
+  return orderStatusValues.includes(value as OrderStatus);
+}
 
 export interface OrderBulkOperation {
   id: string;
   orderNumber: string;
+  customerId?: string | null;
   customerName: string;
   total: number;
   currentStatus: string;
@@ -45,11 +66,15 @@ export interface OrderBulkOperationsDialogProps {
   onOpenChange: (open: boolean) => void;
   operation: BulkOperationConfig | null;
   orders: OrderBulkOperation[];
-  onConfirm: () => Promise<void>;
+  onConfirm: (status?: OrderStatus) => Promise<void>;
   isLoading?: boolean;
 }
 
-const OPERATION_CONFIGS: Record<string, BulkOperationConfig> = {
+/**
+ * Bulk operation configurations.
+ * Shared between dialog and container components.
+ */
+export const OPERATION_CONFIGS: Record<string, BulkOperationConfig> = {
   allocate: {
     type: 'allocate',
     title: 'Bulk Allocate Orders',
@@ -76,6 +101,17 @@ const OPERATION_CONFIGS: Record<string, BulkOperationConfig> = {
   },
 };
 
+const ORDER_STATUS_BADGE_CONFIG: Record<OrderStatus, StatusConfigItem> = {
+  draft: { variant: 'neutral', label: 'Draft' },
+  confirmed: { variant: 'info', label: 'Confirmed' },
+  picking: { variant: 'progress', label: 'Picking' },
+  picked: { variant: 'info', label: 'Picked' },
+  partially_shipped: { variant: 'warning', label: 'Partially Shipped' },
+  shipped: { variant: 'info', label: 'Shipped' },
+  delivered: { variant: 'success', label: 'Delivered' },
+  cancelled: { variant: 'error', label: 'Cancelled' },
+};
+
 export function OrderBulkOperationsDialog({
   open,
   onOpenChange,
@@ -85,19 +121,34 @@ export function OrderBulkOperationsDialog({
   isLoading = false,
 }: OrderBulkOperationsDialogProps) {
   const [isConfirming, setIsConfirming] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const config = operation ? OPERATION_CONFIGS[operation.type] || operation : null;
+  const requiresStatus = config?.type === 'status_update';
 
-  if (!operation) return null;
+  useEffect(() => {
+    if (open) {
+      setSelectedStatus('');
+      setStatusError(null);
+    }
+  }, [open, config?.type]);
 
-  const config = OPERATION_CONFIGS[operation.type] || operation;
+  if (!config) return null;
+
   const totalValue = orders.reduce((sum, order) => sum + order.total, 0);
 
   const handleConfirm = async () => {
+    if (requiresStatus && !selectedStatus) {
+      setStatusError('Select a status to continue.');
+      return;
+    }
+
     setIsConfirming(true);
     try {
-      await onConfirm();
+      await onConfirm(selectedStatus || undefined);
       onOpenChange(false);
     } catch (error) {
-      console.error('Bulk operation failed:', error);
+      toastError(error instanceof Error ? error.message : 'Failed to complete bulk operation');
     } finally {
       setIsConfirming(false);
     }
@@ -131,7 +182,7 @@ export function OrderBulkOperationsDialog({
                 </p>
               </div>
               <Badge variant="secondary" className="text-xs">
-                {operation.type.replace('_', ' ')}
+                {config.type.replace('_', ' ')}
               </Badge>
             </div>
           </div>
@@ -149,6 +200,35 @@ export function OrderBulkOperationsDialog({
 
           <Separator />
 
+          {requiresStatus && (
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={selectedStatus}
+                onValueChange={(value) => {
+                  if (isValidOrderStatus(value)) {
+                    setSelectedStatus(value);
+                    setStatusError(null);
+                  } else {
+                    setStatusError('Invalid status selected');
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {statusError && <p className="text-sm text-destructive">{statusError}</p>}
+            </div>
+          )}
+
           {/* Orders List */}
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Selected Orders</h4>
@@ -160,15 +240,31 @@ export function OrderBulkOperationsDialog({
                 >
                   <div className="flex-1">
                     <div className="font-medium">{order.orderNumber}</div>
-                    <div className="text-muted-foreground">{order.customerName}</div>
+                    <div className="text-muted-foreground">
+                      {order.customerId ? (
+                        <Link
+                          to="/customers/$customerId"
+                          params={{ customerId: order.customerId }}
+                          search={{}}
+                          className="text-primary hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {order.customerName}
+                        </Link>
+                      ) : (
+                        order.customerName
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="font-medium">
                       <FormatAmount amount={order.total} />
                     </div>
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {order.currentStatus}
-                    </Badge>
+                    <StatusBadge
+                      status={order.currentStatus}
+                      statusConfig={ORDER_STATUS_BADGE_CONFIG}
+                      className="text-xs"
+                    />
                   </div>
                 </div>
               ))}
@@ -182,7 +278,7 @@ export function OrderBulkOperationsDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={isConfirming || isLoading}
+            disabled={isConfirming || isLoading || (requiresStatus && !selectedStatus)}
             variant={config.variant}
             className="gap-2"
           >

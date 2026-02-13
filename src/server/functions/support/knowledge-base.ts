@@ -9,10 +9,11 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, sql, count, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, count, isNull, or, ilike } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { kbArticles, kbCategories } from 'drizzle/schema/support/knowledge-base';
 import { users } from 'drizzle/schema/users';
+import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import {
   createCategorySchema,
@@ -390,8 +391,12 @@ export const listArticles = createServerFn({ method: 'GET' })
       conditions.push(eq(kbArticles.status, data.status));
     }
     if (data.search) {
+      const searchPattern = containsPattern(data.search);
       conditions.push(
-        sql`(${kbArticles.title} ILIKE ${`%${data.search}%`} OR ${kbArticles.content} ILIKE ${`%${data.search}%`})`
+        or(
+          ilike(kbArticles.title, searchPattern),
+          ilike(kbArticles.content, searchPattern)
+        )!
       );
     }
 

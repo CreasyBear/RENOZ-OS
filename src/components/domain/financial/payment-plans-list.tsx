@@ -8,8 +8,9 @@
  * @see _Initiation/_prd/2-domains/financial/financial.prd.json (DOM-FIN-002c)
  */
 
-import { memo, useState } from 'react';
-import { Plus, CheckCircle, CreditCard } from 'lucide-react';
+import { memo, useState, useCallback, useEffect, startTransition } from 'react';
+import { Plus, CheckCircle, CreditCard, ChevronLeft, ChevronRight, FileText, Calendar, Eye, AlertTriangle } from 'lucide-react';
+import { format } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -26,8 +27,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -39,54 +42,12 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
-import { format } from 'date-fns';
-import type { PaymentPlanType, InstallmentStatus } from '@/lib/schemas';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Payment schedule data structure returned by getPaymentSchedule.
- * Contains summary information and list of installments.
- */
-export interface PaymentSchedule {
-  orderId: string;
-  planType: string;
-  totalAmount: number;
-  paidAmount: number;
-  remainingAmount: number;
-  installmentCount: number;
-  paidCount: number;
-  overdueCount: number;
-  nextDueDate: Date | null;
-  nextDueAmount: number | null;
-  installments: Installment[];
-}
-
-/**
- * Single installment in a payment schedule.
- */
-export interface Installment {
-  id: string;
-  organizationId: string;
-  orderId: string;
-  planType: string;
-  installmentNo: number;
-  description: string | null;
-  dueDate: string;
-  amount: number;
-  gstAmount: number;
-  status: InstallmentStatus;
-  paidAmount: number | null;
-  paidAt: Date | null;
-  paymentReference: string | null;
-  notes: string | null;
-  createdBy: string;
-  updatedBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import type {
+  PaymentPlanType,
+  InstallmentStatus,
+  PaymentScheduleResponse,
+} from '@/lib/schemas';
+import { paymentPlanTypeSchema } from '@/lib/schemas';
 
 /**
  * Props for the PaymentPlansList presenter component.
@@ -98,11 +59,13 @@ export interface PaymentPlansListProps {
   /** @source route params or search params */
   orderTotal: number;
   /** @source useQuery(getPaymentSchedule) in /financial/payment-plans.tsx */
-  schedule: PaymentSchedule | undefined | null;
+  schedule: PaymentScheduleResponse | undefined | null;
   /** @source useQuery loading state */
   isLoading: boolean;
   /** @source useQuery error state */
   error?: unknown;
+  /** @source useQuery refetch - for retry without full page reload */
+  onRetry?: () => void;
   /** @source useState(createDialogOpen) */
   createDialogOpen: boolean;
   /** @source setState(createDialogOpen) */
@@ -142,8 +105,16 @@ const installmentStatusConfig: Record<
 };
 
 // ============================================================================
-// CREATE DIALOG
+// CREATE DIALOG - Multi-Step Wizard
 // ============================================================================
+
+type PaymentPlanWizardStep = 'plan-type' | 'schedule' | 'review';
+
+const WIZARD_STEPS: { id: PaymentPlanWizardStep; label: string; icon: typeof FileText }[] = [
+  { id: 'plan-type', label: 'Plan Type', icon: FileText },
+  { id: 'schedule', label: 'Schedule', icon: Calendar },
+  { id: 'review', label: 'Review', icon: Eye },
+];
 
 interface CreateDialogProps {
   open: boolean;
@@ -160,63 +131,388 @@ function CreatePaymentPlanDialog({
   onCreatePlan,
   isCreating,
 }: CreateDialogProps) {
+  const [currentStep, setCurrentStep] = useState<PaymentPlanWizardStep>('plan-type');
   const [planType, setPlanType] = useState<PaymentPlanType>('fifty_fifty');
   const [monthlyCount, setMonthlyCount] = useState('3');
+  const [errors, setErrors] = useState<string[]>([]);
 
-  const handleSubmit = () => {
-    onCreatePlan(
-      planType,
-      planType === 'monthly' ? parseInt(monthlyCount) : undefined
-    );
-  };
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!open) {
+      startTransition(() => {
+        setCurrentStep('plan-type');
+        setPlanType('fifty_fifty');
+        setMonthlyCount('3');
+        setErrors([]);
+      });
+    }
+  }, [open]);
+
+  const currentStepIndex = WIZARD_STEPS.findIndex((s) => s.id === currentStep);
+  const isFirstStep = currentStepIndex === 0;
+  const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
+
+  const handleStepClick = useCallback((step: PaymentPlanWizardStep) => {
+    // Only allow going back, not forward
+    const stepIndex = WIZARD_STEPS.findIndex((s) => s.id === step);
+    if (stepIndex <= currentStepIndex) {
+      setCurrentStep(step);
+      setErrors([]);
+    }
+  }, [currentStepIndex]);
+
+  const validateStep = useCallback((step: PaymentPlanWizardStep): string[] => {
+    const stepErrors: string[] = [];
+    
+    if (step === 'plan-type') {
+      // Plan type is always selected (has default)
+    } else if (step === 'schedule') {
+      if (planType === 'monthly') {
+        const count = parseInt(monthlyCount);
+        if (isNaN(count) || count < 2 || count > 24) {
+          stepErrors.push('Number of months must be between 2 and 24');
+        }
+      }
+    }
+    
+    return stepErrors;
+  }, [planType, monthlyCount]);
+
+  const handleNext = useCallback(() => {
+    const stepErrors = validateStep(currentStep);
+    if (stepErrors.length > 0) {
+      setErrors(stepErrors);
+      return;
+    }
+
+    if (isLastStep) {
+      // Submit
+      onCreatePlan(
+        planType,
+        planType === 'monthly' ? parseInt(monthlyCount) : undefined
+      );
+    } else {
+      setCurrentStep(WIZARD_STEPS[currentStepIndex + 1].id);
+      setErrors([]);
+    }
+  }, [currentStep, currentStepIndex, isLastStep, planType, monthlyCount, validateStep, onCreatePlan]);
+
+  const handlePrevious = useCallback(() => {
+    if (!isFirstStep) {
+      setCurrentStep(WIZARD_STEPS[currentStepIndex - 1].id);
+      setErrors([]);
+    }
+  }, [currentStepIndex, isFirstStep]);
+
+  // Calculate installment preview with actual dates
+  const calculateInstallments = useCallback(() => {
+    // Use today as base date for preview (actual dates calculated server-side)
+    const baseDate = new Date();
+    const paymentTermsDays = 30; // Standard payment terms
+
+    const addDays = (date: Date, days: number): Date => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result;
+    };
+
+    const formatDueDate = (date: Date): string => {
+      return format(date, 'dd MMM yyyy');
+    };
+
+    if (planType === 'fifty_fifty') {
+      const half = Math.round(orderTotal / 2);
+      return [
+        {
+          number: 1,
+          amount: half,
+          dueDate: formatDueDate(addDays(baseDate, paymentTermsDays)),
+        },
+        {
+          number: 2,
+          amount: orderTotal - half,
+          dueDate: formatDueDate(addDays(baseDate, paymentTermsDays + 30)),
+        },
+      ];
+    } else if (planType === 'thirds') {
+      const third = Math.round(orderTotal / 3);
+      return [
+        {
+          number: 1,
+          amount: third,
+          dueDate: formatDueDate(addDays(baseDate, paymentTermsDays)),
+        },
+        {
+          number: 2,
+          amount: third,
+          dueDate: formatDueDate(addDays(baseDate, paymentTermsDays + 30)),
+        },
+        {
+          number: 3,
+          amount: orderTotal - third * 2,
+          dueDate: formatDueDate(addDays(baseDate, paymentTermsDays + 60)),
+        },
+      ];
+    } else if (planType === 'monthly') {
+      const count = parseInt(monthlyCount) || 3;
+      const monthlyAmount = Math.round(orderTotal / count);
+      return Array.from({ length: count }, (_, i) => ({
+        number: i + 1,
+        amount: i === count - 1 ? orderTotal - monthlyAmount * (count - 1) : monthlyAmount,
+        dueDate: formatDueDate(addDays(baseDate, paymentTermsDays + i * 30)),
+      }));
+    }
+    return [];
+  }, [planType, monthlyCount, orderTotal]);
+
+  const installments = calculateInstallments();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Create Payment Plan</DialogTitle>
+          <DialogDescription>
+            Set up payment plan in {WIZARD_STEPS.length} steps
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="bg-muted rounded-lg p-3">
-            <p className="text-muted-foreground text-sm">Order Total</p>
-            <p className="text-lg font-semibold">
-              <FormatAmount amount={orderTotal} />
-            </p>
+
+        {/* Step Tabs */}
+        <Tabs
+          value={currentStep}
+          onValueChange={(v) => {
+            if (v === 'plan-type' || v === 'schedule' || v === 'review') {
+              handleStepClick(v);
+            }
+          }}
+          className="flex-1 flex flex-col min-h-0"
+        >
+          <TabsList className="w-full justify-start">
+            {WIZARD_STEPS.map((step, index) => {
+              const Icon = step.icon;
+              const isCompleted = index < currentStepIndex;
+              return (
+                <TabsTrigger
+                  key={step.id}
+                  value={step.id}
+                  disabled={index > currentStepIndex}
+                  className={cn(
+                    "gap-2",
+                    isCompleted && "text-green-600 dark:text-green-400"
+                  )}
+                  aria-label={`Step ${index + 1}: ${step.label}`}
+                >
+                  <span className="flex items-center justify-center w-5 h-5 text-xs rounded-full border">
+                    {index + 1}
+                  </span>
+                  <Icon className="h-4 w-4 hidden sm:inline" />
+                  <span className="hidden sm:inline">{step.label}</span>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          {/* Step Content */}
+          <div className="flex-1 overflow-y-auto py-4">
+            {/* Plan Type Step */}
+            <TabsContent value="plan-type" className="space-y-4 mt-0">
+              <div className="bg-muted rounded-lg p-4">
+                <p className="text-muted-foreground text-sm mb-1">Order Total</p>
+                <p className="text-2xl font-semibold">
+                  <FormatAmount amount={orderTotal} />
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Payment Plan Type</Label>
+                <Select
+                  value={planType}
+                  onValueChange={(v) => {
+                    const result = paymentPlanTypeSchema.safeParse(v);
+                    if (result.success) {
+                      setPlanType(result.data);
+                      setErrors([]);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fifty_fifty">50/50 Split (Commercial)</SelectItem>
+                    <SelectItem value="thirds">Three Installments (33/33/34)</SelectItem>
+                    <SelectItem value="monthly">Monthly Payments</SelectItem>
+                    <SelectItem value="custom">Custom Schedule</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  {planType === 'fifty_fifty' && 'Split payment into two equal installments'}
+                  {planType === 'thirds' && 'Split payment into three installments (33%, 33%, 34%)'}
+                  {planType === 'monthly' && 'Split payment into equal monthly installments'}
+                  {planType === 'custom' && 'Create a custom payment schedule'}
+                </p>
+              </div>
+
+              {/* Preview */}
+              {installments.length > 0 && (
+                <div className="border rounded-lg p-4 space-y-2">
+                  <p className="text-sm font-medium">Preview:</p>
+                  <div className="space-y-1">
+                    {installments.map((inst) => (
+                      <div key={inst.number} className="flex justify-between text-sm">
+                        <span>Installment {inst.number}:</span>
+                        <span className="font-medium">
+                          <FormatAmount amount={inst.amount} /> due {inst.dueDate}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {errors.length > 0 && (
+                <div className="text-sm text-destructive">
+                  {errors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Schedule Step */}
+            <TabsContent value="schedule" className="space-y-4 mt-0">
+              {planType === 'monthly' ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label>Number of Months</Label>
+                    <Input
+                      type="number"
+                      min="2"
+                      max="24"
+                      value={monthlyCount}
+                      onChange={(e) => {
+                        setMonthlyCount(e.target.value);
+                        setErrors([]);
+                      }}
+                      placeholder="Enter number of months"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Payment will be split into {monthlyCount || '?'} equal monthly installments
+                    </p>
+                  </div>
+
+                  {/* Updated Preview */}
+                  {installments.length > 0 && (
+                    <div className="border rounded-lg p-4 space-y-2">
+                      <p className="text-sm font-medium">Payment Schedule:</p>
+                      <div className="space-y-2">
+                        {installments.map((inst) => (
+                          <div key={inst.number} className="flex justify-between items-center p-2 bg-muted rounded">
+                            <div>
+                              <p className="text-sm font-medium">Installment {inst.number}</p>
+                              <p className="text-xs text-muted-foreground">Due {inst.dueDate}</p>
+                            </div>
+                            <p className="font-semibold">
+                              <FormatAmount amount={inst.amount} />
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-2 border-t flex justify-between font-semibold">
+                        <span>Total:</span>
+                        <span><FormatAmount amount={orderTotal} /></span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No additional schedule configuration needed for {planType === 'fifty_fifty' ? '50/50 split' : planType === 'thirds' ? 'three installments' : 'custom'} plan.</p>
+                  <p className="text-sm mt-2">Review the plan details in the next step.</p>
+                </div>
+              )}
+
+              {errors.length > 0 && (
+                <div className="text-sm text-destructive">
+                  {errors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Review Step */}
+            <TabsContent value="review" className="space-y-4 mt-0">
+              <div className="space-y-4">
+                <div className="bg-muted rounded-lg p-4">
+                  <p className="text-muted-foreground text-sm mb-1">Order Total</p>
+                  <p className="text-2xl font-semibold">
+                    <FormatAmount amount={orderTotal} />
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium mb-2">Plan Type:</p>
+                  <p className="text-sm text-muted-foreground">
+                    {planType === 'fifty_fifty' && '50/50 Split (Commercial)'}
+                    {planType === 'thirds' && 'Three Installments (33/33/34)'}
+                    {planType === 'monthly' && `Monthly Payments (${monthlyCount} months)`}
+                    {planType === 'custom' && 'Custom Schedule'}
+                  </p>
+                </div>
+
+                {installments.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Payment Schedule:</p>
+                    <div className="border rounded-lg divide-y">
+                      {installments.map((inst) => (
+                        <div key={inst.number} className="flex justify-between items-center p-3">
+                          <div>
+                            <p className="text-sm font-medium">Installment {inst.number}</p>
+                            <p className="text-xs text-muted-foreground">Due {inst.dueDate}</p>
+                          </div>
+                          <p className="font-semibold">
+                            <FormatAmount amount={inst.amount} />
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-3 border-t flex justify-between font-semibold">
+                      <span>Total:</span>
+                      <span><FormatAmount amount={orderTotal} /></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </div>
-          <div className="grid gap-2">
-            <Label>Payment Plan Type</Label>
-            <Select value={planType} onValueChange={(v) => setPlanType(v as PaymentPlanType)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fifty_fifty">50/50 Split (Commercial)</SelectItem>
-                <SelectItem value="thirds">Three Installments (33/33/34)</SelectItem>
-                <SelectItem value="monthly">Monthly Payments</SelectItem>
-                <SelectItem value="custom">Custom Schedule</SelectItem>
-              </SelectContent>
-            </Select>
+        </Tabs>
+
+        {/* Footer Navigation */}
+        <DialogFooter className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            onClick={handlePrevious}
+            disabled={isFirstStep}
+          >
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Previous
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleNext} disabled={isCreating}>
+              {isLastStep ? (
+                isCreating ? 'Creating...' : 'Create Plan'
+              ) : (
+                <>
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
           </div>
-          {planType === 'monthly' && (
-            <div className="grid gap-2">
-              <Label>Number of Months</Label>
-              <Input
-                type="number"
-                min="2"
-                max="24"
-                value={monthlyCount}
-                onChange={(e) => setMonthlyCount(e.target.value)}
-              />
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isCreating}>
-            {isCreating ? 'Creating...' : 'Create Plan'}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -295,6 +591,7 @@ export const PaymentPlansList = memo(function PaymentPlansList({
   schedule,
   isLoading,
   error,
+  onRetry,
   createDialogOpen,
   onCreateDialogOpenChange,
   onCreatePlan,
@@ -315,7 +612,25 @@ export const PaymentPlansList = memo(function PaymentPlansList({
   // Error state
   if (error) {
     return (
-      <div className={cn('text-destructive p-4', className)}>Failed to load payment schedule</div>
+      <div className={cn('rounded-lg border border-destructive/50 bg-destructive/10 p-4', className)}>
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium text-destructive">Failed to load payment schedule</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => onRetry?.()}
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
     );
   }
 

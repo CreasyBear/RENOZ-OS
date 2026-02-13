@@ -10,13 +10,14 @@
  * @see src/trigger/client.ts for event definitions
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-002
  */
-import { task } from '@trigger.dev/sdk/v3';
+import { task, logger } from '@trigger.dev/sdk/v3';
 import { Resend } from 'resend';
 import { db } from '@/lib/db';
 import { notifications, type NotificationData } from 'drizzle/schema';
 import { type WarrantyRegisteredPayload, type WarrantyExpiringSoonPayload } from '../client';
 import { isEmailSuppressedDirect } from '@/server/functions/communications/email-suppression';
 import { renderEmail, WarrantyExpiring } from '@/lib/email';
+import { buildDocumentViewUrl } from '@/lib/documents/urls';
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -286,7 +287,7 @@ export const sendWarrantyRegistrationEmail = task({
 
     // Skip if no customer email
     if (!customerEmail) {
-      console.log('Skipping warranty registration email - no customer email', {
+      logger.info('Skipping warranty registration email - no customer email', {
         warrantyId,
         warrantyNumber,
         customerId,
@@ -301,7 +302,7 @@ export const sendWarrantyRegistrationEmail = task({
     // Check email suppression before sending
     const suppression = await isEmailSuppressedDirect(organizationId, customerEmail);
     if (suppression.suppressed) {
-      console.log('Skipping warranty registration email - email suppressed', {
+      logger.info('Skipping warranty registration email - email suppressed', {
         warrantyId,
         warrantyNumber,
         customerEmail,
@@ -315,7 +316,7 @@ export const sendWarrantyRegistrationEmail = task({
       };
     }
 
-    console.log('Sending warranty registration confirmation', {
+    logger.info('Sending warranty registration confirmation', {
       warrantyId,
       warrantyNumber,
       customerEmail,
@@ -355,7 +356,7 @@ export const sendWarrantyRegistrationEmail = task({
     });
 
     // Step 1: Send email via Resend
-    console.log('Sending warranty confirmation email', {
+    logger.info('Sending warranty confirmation email', {
       to: customerEmail,
       warrantyNumber,
       policyType,
@@ -373,7 +374,7 @@ export const sendWarrantyRegistrationEmail = task({
     });
 
     if (sendError) {
-      console.error('Failed to send warranty registration email', {
+      logger.error('Failed to send warranty registration email', {
         warrantyId,
         warrantyNumber,
         customerEmail,
@@ -395,7 +396,7 @@ export const sendWarrantyRegistrationEmail = task({
 
     // Step 2: Create notification record
     let notificationId: string | undefined;
-    console.log('Creating notification record', {
+    logger.info('Creating notification record', {
       warrantyId,
       customerId,
     });
@@ -429,11 +430,14 @@ export const sendWarrantyRegistrationEmail = task({
 
       notificationId = record?.id;
     } catch (error) {
-      console.error('Failed to create notification record', error);
+      logger.error('Failed to create notification record', {
+        warrantyId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       // Continue without failing the entire operation
     }
 
-    console.log('Warranty registration notification complete', {
+    logger.info('Warranty registration notification complete', {
       warrantyId,
       warrantyNumber,
       emailSent: emailResult.success,
@@ -484,7 +488,7 @@ export const sendWarrantyExpiryReminder = task({
 
     // Skip if no customer email
     if (!customerEmail) {
-      console.log('Skipping warranty expiry reminder - no customer email', {
+      logger.info('Skipping warranty expiry reminder - no customer email', {
         warrantyId,
         warrantyNumber,
         customerId,
@@ -499,7 +503,7 @@ export const sendWarrantyExpiryReminder = task({
     // Check email suppression before sending
     const suppression = await isEmailSuppressedDirect(organizationId, customerEmail);
     if (suppression.suppressed) {
-      console.log('Skipping warranty expiry reminder - email suppressed', {
+      logger.info('Skipping warranty expiry reminder - email suppressed', {
         warrantyId,
         warrantyNumber,
         customerEmail,
@@ -513,7 +517,7 @@ export const sendWarrantyExpiryReminder = task({
       };
     }
 
-    console.log('Sending warranty expiry reminder', {
+    logger.info('Sending warranty expiry reminder', {
       warrantyId,
       warrantyNumber,
       daysUntilExpiry,
@@ -539,12 +543,12 @@ export const sendWarrantyExpiryReminder = task({
         currentCycleCount: currentCycleCount ?? undefined,
         cycleLimit: cycleLimit ?? undefined,
         renewalUrl: renewalUrl ?? undefined,
-        warrantyDetailsUrl: `${process.env.APP_URL ?? 'https://app.renoz.energy'}/warranty/${warrantyId}`,
+        warrantyDetailsUrl: buildDocumentViewUrl('warranty', warrantyId),
       })
     );
 
     // Step 1: Send email via Resend
-    console.log('Sending expiry reminder email', {
+    logger.info('Sending expiry reminder email', {
       to: customerEmail,
       urgencyLevel,
       daysUntilExpiry,
@@ -562,7 +566,7 @@ export const sendWarrantyExpiryReminder = task({
     });
 
     if (sendError) {
-      console.error('Failed to send warranty expiry reminder email', {
+      logger.error('Failed to send warranty expiry reminder email', {
         warrantyId,
         warrantyNumber,
         customerEmail,
@@ -615,7 +619,10 @@ export const sendWarrantyExpiryReminder = task({
 
       notificationId = record?.id;
     } catch (error) {
-      console.error('Failed to create notification record', error);
+      logger.error('Failed to create notification record', {
+        warrantyId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       // Continue without failing the entire operation
     }
 

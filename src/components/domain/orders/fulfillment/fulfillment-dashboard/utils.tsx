@@ -39,6 +39,7 @@ export const ORDER_STATUS_CONFIG: Record<
   confirmed: { label: 'Confirmed', variant: 'default', icon: CheckCircle },
   picking: { label: 'Picking', variant: 'default', icon: Package },
   picked: { label: 'Picked', variant: 'default', icon: Package },
+  partially_shipped: { label: 'Partial', variant: 'default', icon: Truck },
   shipped: { label: 'Shipped', variant: 'default', icon: Truck },
   delivered: { label: 'Delivered', variant: 'outline', icon: CheckCircle },
   cancelled: { label: 'Cancelled', variant: 'destructive', icon: Clock },

@@ -37,16 +37,16 @@
  * </form.Field>
  * ```
  */
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, startTransition } from "react"
 import { Minus, Plus } from "lucide-react"
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
 import { cn } from "~/lib/utils"
-import { extractFieldError, type AnyFieldApi } from "./types"
+import { extractFieldError, type FormFieldWithType } from "./types"
 
 export interface NumberFieldProps {
   /** TanStack Form field instance for number values (supports null/undefined for empty) */
-  field: AnyFieldApi<number | null | undefined>
+  field: FormFieldWithType<number | null | undefined>
   /** Field label */
   label: string
   /** Placeholder text */
@@ -102,13 +102,13 @@ export function NumberField({
     return val != null ? String(val) : ""
   })
 
-  // Sync internal state when external value changes (e.g., form reset)
+  // Sync internal state when external value changes (e.g., form reset).
+  // Defer via startTransition to avoid synchronous setState in effect (cascading renders).
   useEffect(() => {
     const val = field.state.value
     const newInternalValue = val != null ? String(val) : ""
-    // Only update if different to avoid cursor issues
     if (newInternalValue !== internalValue && val !== parseFloat(internalValue)) {
-      setInternalValue(newInternalValue)
+      startTransition(() => setInternalValue(newInternalValue))
     }
   }, [field.state.value]) // eslint-disable-line react-hooks/exhaustive-deps
 

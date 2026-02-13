@@ -15,10 +15,12 @@ import {
   boolean,
   uniqueIndex,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "../users";
 import { slaDomainEnum, slaTargetUnitEnum } from "../_shared/enums";
@@ -76,45 +78,25 @@ export const slaConfigurations = pgTable(
 
     ...timestampColumns,
   },
-  (table) => [
+  (table) => ({
     // Unique name per org + domain
-    uniqueIndex("idx_sla_config_org_domain_name").on(
+    nameOrgDomainUnique: uniqueIndex("idx_sla_config_org_domain_name").on(
       table.organizationId,
       table.domain,
       table.name
     ),
     // Quick lookup by org + domain
-    index("idx_sla_config_org_domain").on(table.organizationId, table.domain),
+    orgDomainIdx: index("idx_sla_config_org_domain").on(table.organizationId, table.domain),
     // Default lookup
-    index("idx_sla_config_default").on(
+    defaultIdx: index("idx_sla_config_default").on(
       table.organizationId,
       table.domain,
       table.isDefault
     ),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("sla_configurations_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("sla_configurations_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("sla_configurations_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("sla_configurations_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("sla_configurations"),
+  })
 );
 
 // ============================================================================

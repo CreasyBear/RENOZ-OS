@@ -18,7 +18,7 @@
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-FULFILLMENT-DASHBOARD)
  */
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, type ChangeEvent, type DragEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -35,6 +35,7 @@ import {
   Eye,
   MapPin,
   ExternalLink,
+  Upload,
 } from "lucide-react";
 import { format, differenceInDays, parseISO } from "date-fns";
 import {
@@ -56,6 +57,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -65,6 +79,8 @@ import { cn } from "@/lib/utils";
 import { FormatAmount, MetricCard } from "@/components/shared";
 import { toastSuccess, toastError } from "@/hooks";
 import type { OrderStatus, ShipmentStatus } from "@/lib/schemas/orders";
+import { fulfillmentImportRowSchema } from "@/lib/schemas/orders/shipments";
+import type { FulfillmentImport, FulfillmentImportRow } from "@/lib/schemas/orders/shipments";
 
 // ============================================================================
 // TYPES
@@ -102,6 +118,19 @@ interface ShipmentListResult {
   total: number;
 }
 
+interface FulfillmentImportResult {
+  imported: number;
+  failed: number;
+  skipped: number;
+  results: Array<{
+    orderNumber: string;
+    shipmentId?: string;
+    shipmentNumber?: string | null;
+    status: "imported" | "skipped" | "failed";
+    message?: string;
+  }>;
+}
+
 /**
  * Container props - what parent components pass
  */
@@ -130,6 +159,8 @@ export interface FulfillmentDashboardPresenterProps extends FulfillmentDashboard
   loadingShipments: boolean;
   /** @source useUpdateOrderStatus hook */
   updateOrderStatusMutation: UseMutationResult<unknown, Error, UpdateOrderStatusInput>;
+  /** @source useFulfillmentImport hook */
+  importFulfillmentMutation: UseMutationResult<FulfillmentImportResult, Error, FulfillmentImport>;
 }
 
 interface FulfillmentStats {
@@ -151,6 +182,7 @@ const ORDER_STATUS_CONFIG: Record<
   confirmed: { label: "Confirmed", variant: "default", icon: CheckCircle },
   picking: { label: "Picking", variant: "default", icon: Package },
   picked: { label: "Picked", variant: "default", icon: Package },
+  partially_shipped: { label: "Partial", variant: "default", icon: Truck },
   shipped: { label: "Shipped", variant: "default", icon: Truck },
   delivered: { label: "Delivered", variant: "outline", icon: CheckCircle },
   cancelled: { label: "Cancelled", variant: "destructive", icon: Clock },
@@ -201,6 +233,112 @@ function isOverdue(orderDate: string | Date): boolean {
   return differenceInDays(new Date(), date) > 3;
 }
 
+type FulfillmentImportPreviewRow = {
+  row: number;
+  raw: Record<string, string | undefined>;
+  data?: FulfillmentImportRow;
+  isValid: boolean;
+  errors: string[];
+};
+
+type FulfillmentImportPreview = {
+  totalRows: number;
+  validCount: number;
+  invalidCount: number;
+  rows: FulfillmentImportPreviewRow[];
+};
+
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current.trim());
+  return values.map((value) => value.replace(/^"|"$/g, ""));
+}
+
+function mapImportHeader(header: string): keyof FulfillmentImportRow | null {
+  const normalized = header.toLowerCase().replace(/[\s_-]/g, "");
+
+  if (normalized.includes("ordernumber") || normalized === "order") return "orderNumber";
+  if (normalized.includes("shipmentnumber")) return "shipmentNumber";
+  if (normalized.includes("trackingurl")) return "trackingUrl";
+  if (normalized.includes("trackingnumber") || normalized === "tracking") return "trackingNumber";
+  if (normalized.includes("carrierservice") || normalized === "service") return "carrierService";
+  if (normalized.includes("carrier")) return "carrier";
+  if (normalized.includes("shippedat") || normalized.includes("shipdate") || normalized.includes("shippeddate"))
+    return "shippedAt";
+
+  return null;
+}
+
+function parseFulfillmentImport(content: string): FulfillmentImportPreview {
+  const lines = content.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) {
+    throw new Error("CSV must include a header row and at least one data row.");
+  }
+
+  const headers = parseCsvLine(lines[0]);
+  const mappedHeaders = headers.map(mapImportHeader);
+
+  const rows: FulfillmentImportPreviewRow[] = lines.slice(1).map((line, index) => {
+    const values = parseCsvLine(line);
+    const raw: Record<string, string | undefined> = {};
+
+    mappedHeaders.forEach((field, columnIndex) => {
+      if (!field) return;
+      const value = values[columnIndex]?.trim() ?? "";
+      raw[field] = value.length > 0 ? value : undefined;
+    });
+
+    const result = fulfillmentImportRowSchema.safeParse(raw);
+
+    if (result.success) {
+      return {
+        row: index + 2,
+        raw,
+        data: result.data,
+        isValid: true,
+        errors: [],
+      };
+    }
+
+    return {
+      row: index + 2,
+      raw,
+      isValid: false,
+      errors: result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
+    };
+  });
+
+  const validCount = rows.filter((row) => row.isValid).length;
+  const invalidCount = rows.length - validCount;
+
+  return {
+    totalRows: rows.length,
+    validCount,
+    invalidCount,
+    rows,
+  };
+}
+
 // ============================================================================
 // STAT CARD VARIANT STYLES
 // ============================================================================
@@ -216,6 +354,341 @@ const STAT_CARD_STYLES = {
 // Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
+// IMPORT DIALOG (PRESENTER)
+// ============================================================================
+
+interface FulfillmentImportDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  importMutation: UseMutationResult<FulfillmentImportResult, Error, FulfillmentImport>;
+}
+
+function FulfillmentImportDialog({
+  open,
+  onOpenChange,
+  importMutation,
+}: FulfillmentImportDialogProps) {
+  const [step, setStep] = useState<"upload" | "preview" | "importing" | "complete">("upload");
+  const [preview, setPreview] = useState<FulfillmentImportPreview | null>(null);
+  const [importResults, setImportResults] = useState<FulfillmentImportResult | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [dryRun, setDryRun] = useState(false);
+
+  const resetState = useCallback(() => {
+    setStep("upload");
+    setPreview(null);
+    setImportResults(null);
+    setParseError(null);
+    setDryRun(false);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetState();
+    onOpenChange(false);
+  }, [onOpenChange, resetState]);
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        handleClose();
+        return;
+      }
+      onOpenChange(true);
+    },
+    [handleClose, onOpenChange]
+  );
+
+  const handleParse = useCallback(async (file: File) => {
+    if (!file.name.endsWith(".csv")) {
+      setParseError("Please upload a CSV file.");
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      const parsed = parseFulfillmentImport(content);
+      setPreview(parsed);
+      setParseError(null);
+      setStep("preview");
+    } catch (error) {
+      setParseError(error instanceof Error ? error.message : "Failed to parse CSV file.");
+    }
+  }, []);
+
+  const handleFileInput = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const selectedFile = event.target.files?.[0];
+      if (selectedFile) {
+        void handleParse(selectedFile);
+      }
+    },
+    [handleParse]
+  );
+
+  const handleDrop = useCallback(
+    (event: DragEvent) => {
+      event.preventDefault();
+      const droppedFile = event.dataTransfer.files?.[0];
+      if (droppedFile) {
+        void handleParse(droppedFile);
+      }
+    },
+    [handleParse]
+  );
+
+  const handleDragOver = useCallback((event: DragEvent) => {
+    event.preventDefault();
+  }, []);
+
+  const handleImport = useCallback(async () => {
+    if (!preview) return;
+
+    const validRows = preview.rows
+      .filter((row) => row.isValid && row.data)
+      .map((row) => row.data as FulfillmentImportRow);
+
+    if (validRows.length === 0) {
+      setParseError("No valid rows found to import.");
+      return;
+    }
+
+    setStep("importing");
+    try {
+      const result = await importMutation.mutateAsync({
+        rows: validRows,
+        dryRun,
+      });
+      setImportResults(result);
+      setStep("complete");
+      toastSuccess(dryRun ? "Dry run complete" : "Fulfillment import complete");
+    } catch (error) {
+      setParseError(error instanceof Error ? error.message : "Import failed.");
+      setStep("preview");
+    }
+  }, [dryRun, importMutation, preview]);
+
+  const handleDownloadResults = useCallback(() => {
+    if (!importResults) return;
+
+    const rows = importResults.results.map((result) => ({
+      orderNumber: result.orderNumber,
+      shipmentNumber: result.shipmentNumber ?? "",
+      status: result.status,
+      message: result.message ?? "",
+    }));
+
+    const headers = ["orderNumber", "shipmentNumber", "status", "message"];
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) =>
+        headers
+          .map((key) => `"${String(row[key as keyof typeof row]).replace(/"/g, '""')}"`)
+          .join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "fulfillment-import-results.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [importResults]);
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-h-[80vh] max-w-4xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import Fulfillment Shipments</DialogTitle>
+          <DialogDescription>
+            Upload a CSV file to mark existing shipments as shipped.
+          </DialogDescription>
+        </DialogHeader>
+
+        {parseError && (
+          <Alert variant="destructive">
+            <AlertTitle>Import error</AlertTitle>
+            <AlertDescription>{parseError}</AlertDescription>
+          </Alert>
+        )}
+
+        {step === "upload" && (
+          <div className="space-y-4">
+            <div
+              className="border-dashed flex flex-col items-center justify-center rounded-lg border-2 p-8 text-center"
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+            >
+              <Upload className="text-muted-foreground mb-3 h-8 w-8" />
+              <p className="text-sm font-medium">Drag and drop a CSV file here</p>
+              <p className="text-muted-foreground text-xs">
+                Required columns: orderNumber, carrier, trackingNumber
+              </p>
+              <div className="mt-4 w-full max-w-sm">
+                <Label htmlFor="fulfillment-import">Choose file</Label>
+                <Input
+                  id="fulfillment-import"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileInput}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === "preview" && preview && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">Total: {preview.totalRows}</Badge>
+              <Badge variant="outline">Valid: {preview.validCount}</Badge>
+              <Badge variant="outline">Invalid: {preview.invalidCount}</Badge>
+            </div>
+
+            {preview.invalidCount > 0 && (
+              <Alert>
+                <AlertTitle>Some rows have validation errors</AlertTitle>
+                <AlertDescription>
+                  Only valid rows will be imported. Review errors below before continuing.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Row</TableHead>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Shipment #</TableHead>
+                    <TableHead>Carrier</TableHead>
+                    <TableHead>Tracking #</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.rows.slice(0, 8).map((row) => (
+                    <TableRow key={row.row}>
+                      <TableCell>{row.row}</TableCell>
+                      <TableCell>{row.raw.orderNumber ?? "—"}</TableCell>
+                      <TableCell>{row.raw.shipmentNumber ?? "—"}</TableCell>
+                      <TableCell>{row.raw.carrier ?? "—"}</TableCell>
+                      <TableCell>{row.raw.trackingNumber ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant={row.isValid ? "secondary" : "destructive"}>
+                          {row.isValid ? "Valid" : "Invalid"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {preview.rows.length > 8 && (
+              <p className="text-muted-foreground text-xs">
+                Showing first 8 rows. Remaining rows will be processed on import.
+              </p>
+            )}
+          </div>
+        )}
+
+        {step === "importing" && (
+          <div className="space-y-4">
+            <p className="text-sm">Importing fulfillment shipments…</p>
+            <Progress value={60} />
+          </div>
+        )}
+
+        {step === "complete" && importResults && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">
+                Imported {importResults.imported} of{" "}
+                {importResults.imported + importResults.skipped + importResults.failed}
+              </Badge>
+              <Badge variant="outline">Skipped: {importResults.skipped}</Badge>
+              <Badge variant="outline">Failed: {importResults.failed}</Badge>
+              {dryRun && <Badge variant="secondary">Dry run</Badge>}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Showing first 10 results. Download the full CSV for all rows.
+              </p>
+              <Button variant="outline" size="sm" onClick={handleDownloadResults}>
+                Download Results
+              </Button>
+            </div>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Shipment #</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Message</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {importResults.results.slice(0, 10).map((result, index) => (
+                    <TableRow key={`${result.orderNumber}-${index}`}>
+                      <TableCell>{result.orderNumber}</TableCell>
+                      <TableCell>{result.shipmentNumber ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            result.status === "imported"
+                              ? "secondary"
+                              : result.status === "failed"
+                                ? "destructive"
+                                : "outline"
+                          }
+                        >
+                          {result.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {result.message ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          {step === "preview" && (
+            <div className="mr-auto flex items-center gap-2">
+              <Checkbox
+                id="fulfillment-dry-run"
+                checked={dryRun}
+                onCheckedChange={(value) => setDryRun(Boolean(value))}
+              />
+              <Label htmlFor="fulfillment-dry-run" className="text-sm">
+                Dry run (no changes applied)
+              </Label>
+            </div>
+          )}
+
+          <Button variant="outline" onClick={handleClose}>
+            {step === "complete" ? "Close" : "Cancel"}
+          </Button>
+
+          {step === "preview" && (
+            <Button onClick={handleImport} disabled={importMutation.isPending}>
+              {dryRun ? "Run Dry Import" : "Import Shipments"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT (PRESENTER)
 // ============================================================================
 
@@ -227,6 +700,7 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
   loadingPicked,
   loadingShipments,
   updateOrderStatusMutation,
+  importFulfillmentMutation,
   onShipOrder,
   onViewOrder,
   onConfirmDelivery,
@@ -234,6 +708,7 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
 }: FulfillmentDashboardPresenterProps) {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // Mutation handlers with toast feedback
   const handleStartPicking = useCallback((orderId: string) => {
@@ -285,15 +760,25 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
             Live order processing status (updates every 30s)
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportDialogOpen(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Shipments
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Summary Stats */}
@@ -402,6 +887,12 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
           />
         </CardContent>
       </Card>
+
+      <FulfillmentImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        importMutation={importFulfillmentMutation}
+      />
 
       {/* Active Shipments */}
       <Card>

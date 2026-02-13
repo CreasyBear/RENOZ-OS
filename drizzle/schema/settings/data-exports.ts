@@ -18,12 +18,12 @@ import {
   timestamp,
   jsonb,
   index,
-  pgPolicy,
   check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { organizations } from "./organizations";
 import { users } from "../users/users";
+import { standardRlsPolicies } from "../_shared/patterns";
 
 // ============================================================================
 // ENUMS (inline for this domain)
@@ -180,27 +180,7 @@ export const dataExports = pgTable(
     ),
 
     // RLS Policies
-    selectPolicy: pgPolicy("data_exports_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("data_exports_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("data_exports_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("data_exports_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("data_exports"),
   })
 );
 

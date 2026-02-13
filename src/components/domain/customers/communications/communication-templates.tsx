@@ -154,7 +154,7 @@ function TemplateCard({ template, onEdit, onDelete, onDuplicate, onUse }: Templa
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Template actions">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -373,7 +373,7 @@ function TemplateEditor({ template, open, onOpenChange, onSave }: TemplateEditor
                   </div>
                 )}
                 <div className="p-4 rounded-lg bg-muted/50 whitespace-pre-wrap text-sm">
-                  {previewBody || 'Enter template content to see preview...'}
+                  {previewBody || 'Enter template content to see preview…'}
                 </div>
               </CardContent>
             </Card>
@@ -476,7 +476,7 @@ export function CommunicationTemplates({
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search templates..."
+            placeholder="Search templates…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"

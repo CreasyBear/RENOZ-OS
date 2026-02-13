@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Column file exports column factory with JSX cell renderers */
 /**
  * Supplier Column Definitions
  *
@@ -18,7 +19,9 @@ import {
 } from "@/components/shared/data-table";
 import type { ActionItem } from "@/components/shared/data-table/cells/actions-cell";
 import { cn } from "@/lib/utils";
-import type { SupplierStatus, SupplierType } from "@/lib/schemas/suppliers";
+import type { SupplierTableItem } from "@/lib/schemas/suppliers";
+
+export type { SupplierTableItem };
 import {
   SUPPLIER_STATUS_CONFIG,
   SUPPLIER_TYPE_CONFIG,
@@ -28,23 +31,6 @@ import {
 // ============================================================================
 // TYPES
 // ============================================================================
-
-/**
- * Supplier table item type - matches server function response
- */
-export interface SupplierTableItem {
-  id: string;
-  supplierCode: string | null;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  status: SupplierStatus;
-  supplierType: SupplierType | null;
-  overallRating: number | null;
-  totalPurchaseOrders: number | null;
-  leadTimeDays: number | null;
-  lastOrderDate: string | null;
-}
 
 export interface CreateSupplierColumnsOptions {
   /** Handle single item selection */

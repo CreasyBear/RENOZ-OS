@@ -18,6 +18,8 @@ import {
   Archive,
 } from "lucide-react";
 import type { SemanticStatusConfigItem } from "@/components/shared/data-table";
+import type { StatusConfig } from "@/components/shared/status-badge";
+import type { SemanticColor } from "@/lib/status";
 import type { PurchaseOrderStatus } from "@/lib/schemas/purchase-orders";
 
 /**
@@ -65,6 +67,16 @@ export const PO_STATUS_CONFIG: Record<PurchaseOrderStatus, SemanticStatusConfigI
     icon: XCircle,
   },
 };
+
+/**
+ * PO status config for EntityHeader (StatusBadge format: variant + label)
+ */
+export const PO_STATUS_CONFIG_FOR_ENTITY_HEADER: StatusConfig = Object.fromEntries(
+  Object.entries(PO_STATUS_CONFIG).map(([k, v]) => [
+    k,
+    { variant: v.color as SemanticColor, label: v.label },
+  ])
+) as StatusConfig;
 
 /**
  * Check if receiving goods is allowed for this PO status

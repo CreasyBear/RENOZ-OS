@@ -18,10 +18,8 @@ import {
   addresses,
   orders,
   users,
-  organizations,
-  type OrganizationBranding,
-  type OrganizationAddress,
 } from "drizzle/schema";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -30,7 +28,6 @@ import {
   generateStoragePath,
   calculateChecksum,
   type CompletionCertificateData,
-  type DocumentOrganization,
 } from "@/lib/documents";
 
 // ============================================================================
@@ -55,17 +52,7 @@ export interface GenerateCompletionCertificatePdfPayload {
 
 const STORAGE_BUCKET = "documents";
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Generate the public URL for viewing a job completion certificate
- */
-function getJobViewUrl(jobAssignmentId: string): string {
-  const baseUrl = process.env.APP_URL || "https://app.renoz.com.au";
-  return `${baseUrl}/jobs/${jobAssignmentId}`;
-}
+import { buildDocumentViewUrl } from "@/lib/documents/urls";
 
 /**
  * Format address as single string
@@ -223,60 +210,11 @@ export const generateCompletionCertificatePdf = task({
       orderNumber = order?.orderNumber || null;
     }
 
-    // Step 6: Fetch organization details
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
-    const address = org.address as OrganizationAddress | null;
-    const branding = org.branding as OrganizationBranding | null;
-
-    const orgData: DocumentOrganization = {
-      id: org.id,
-      name: org.name,
-      email: org.email,
-      phone: org.phone,
-      website: org.website || branding?.websiteUrl,
-      taxId: org.abn,
-      currency: org.currency || "AUD",
-      locale: org.locale || "en-AU",
-      address: address
-        ? {
-            addressLine1: address.street1,
-            addressLine2: address.street2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: branding?.logoUrl,
-        primaryColor: branding?.primaryColor,
-        secondaryColor: branding?.secondaryColor,
-      },
-    };
+    // Step 6: Fetch organization details (with logo pre-fetched for PDF)
+    const orgData = await fetchOrganizationForDocument(organizationId);
 
     // Step 7: Generate QR code for verification
-    const jobUrl = getJobViewUrl(jobAssignmentId);
+    const jobUrl = buildDocumentViewUrl("job", jobAssignmentId);
     const qrCodeDataUrl = await generateQRCode(jobUrl, {
       width: 240,
       margin: 0,

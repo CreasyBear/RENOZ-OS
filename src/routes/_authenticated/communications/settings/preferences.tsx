@@ -2,87 +2,24 @@
  * Communication Preferences Settings Route
  *
  * Organization-wide communication preference settings and audit history.
- * Shows the preference change history across all contacts.
- *
- * Note: PreferenceHistory is a self-contained component that fetches its own data.
- * It requires either contactId or customerId to be functional - for org-wide history,
- * we display an info page instead.
- *
- * @see docs/plans/2026-01-24-communications-plumbing-review.md
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { RouteErrorFallback, PageLayout } from "@/components/layout";
+import { lazy, Suspense } from "react";
+import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Settings, Info } from "lucide-react";
 
-// ============================================================================
-// ROUTE DEFINITION
-// ============================================================================
+const PreferencesSettingsPage = lazy(() => import("./-preferences-page"));
 
 export const Route = createFileRoute(
   "/_authenticated/communications/settings/preferences"
 )({
-  component: PreferencesSettingsContainer,
+  component: () => (
+    <Suspense fallback={<CommunicationsListSkeleton />}>
+      <PreferencesSettingsPage />
+    </Suspense>
+  ),
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/communications" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Content>
-        <CommunicationsListSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <CommunicationsListSkeleton />,
 });
-
-// ============================================================================
-// CONTAINER COMPONENT
-// ============================================================================
-
-function PreferencesSettingsContainer() {
-  return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title={
-          <span className="flex items-center gap-2">
-            <Settings className="h-6 w-6" />
-            Communication Preferences
-          </span>
-        }
-        description="Manage communication preference settings and view audit history"
-      />
-      <PageLayout.Content>
-        <div className="max-w-4xl space-y-6">
-          {/* Info Card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Info className="h-4 w-4" />
-                About Communication Preferences
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>
-                Communication preferences control whether contacts can receive email and SMS
-                communications from your organization. All preference changes are logged for
-                compliance and audit purposes.
-              </p>
-              <p>
-                To manage preferences for a specific contact, navigate to their profile page
-                in the Customers section. The preference history is shown on a per-contact basis.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </PageLayout.Content>
-    </PageLayout>
-  );
-}
-
-export default PreferencesSettingsContainer;

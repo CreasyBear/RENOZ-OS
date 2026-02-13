@@ -9,6 +9,21 @@
 // Credit notes management (DOM-FIN-001c)
 export { CreditNotesList } from './credit-notes-list';
 export type { CreditNotesListProps } from './credit-notes-list';
+export { CreditNotesListContainer } from './credit-notes-list-container';
+export type { CreditNotesListContainerProps } from './credit-notes-list-container';
+export { CreditNotesListPresenter } from './credit-notes-list-presenter';
+export type { CreditNotesListPresenterProps } from './credit-notes-list-presenter';
+export { CreditNotesTablePresenter } from './credit-notes-table-presenter';
+export type { CreditNotesTablePresenterProps } from './credit-notes-table-presenter';
+export { createCreditNoteColumns } from './credit-note-columns';
+export type { CreditNoteTableItem, CreateCreditNoteColumnsOptions } from './credit-note-columns';
+export { CREDIT_NOTE_STATUS_CONFIG } from './credit-note-status-config';
+export {
+  CREDIT_NOTE_FILTER_CONFIG,
+  DEFAULT_CREDIT_NOTE_FILTERS,
+  CREDIT_NOTE_STATUS_OPTIONS,
+} from './credit-note-filter-config';
+export type { CreditNoteFiltersState } from './credit-note-filter-config';
 
 // Payment plans management (DOM-FIN-002c)
 export { PaymentPlansList } from './payment-plans-list';

@@ -8,6 +8,7 @@
  */
 
 import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
 import { ChevronRight, AlertTriangle, Building2, User, Download } from 'lucide-react';
 import {
   Table,
@@ -45,6 +46,8 @@ export interface ARAgingReportProps {
   onCommercialOnlyChange: (value: boolean) => void;
   /** @source navigate handler in /financial/ar-aging.tsx */
   onCustomerClick?: (customerId: string) => void;
+  /** @source export handler in /financial/ar-aging.tsx */
+  onExport?: () => void;
   className?: string;
 }
 
@@ -115,6 +118,7 @@ export const ARAgingReport = memo(function ARAgingReport({
   commercialOnly,
   onCommercialOnlyChange,
   onCustomerClick,
+  onExport,
   className,
 }: ARAgingReportProps) {
   if (isLoading) {
@@ -160,7 +164,7 @@ export const ARAgingReport = memo(function ARAgingReport({
             />
             <Label htmlFor="commercial-only">Commercial Only</Label>
           </div>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={onExport}>
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -235,7 +239,15 @@ export const ARAgingReport = memo(function ARAgingReport({
                       ) : (
                         <User className="h-4 w-4 text-gray-400" />
                       )}
-                      <span className="font-medium">{customer.customerName}</span>
+                      <Link
+                        to="/customers/$customerId"
+                        params={{ customerId: customer.customerId }}
+                        search={{}}
+                        className="font-medium hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {customer.customerName}
+                      </Link>
                       {customer.isCommercial && (
                         <Badge variant="outline" className="text-xs">
                           $50K+

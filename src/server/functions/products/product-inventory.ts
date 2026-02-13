@@ -7,7 +7,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, sql, isNull, lt, gte, or, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, isNull, lt, gte, or, inArray, ne, ilike, sum } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
@@ -17,9 +17,11 @@ import {
   warehouseLocations as locations,
   activities,
 } from 'drizzle/schema';
+import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import type { ActivityEntityType } from '@/lib/schemas/activities';
 import {
   createLocationSchema,
   updateLocationSchema,
@@ -28,6 +30,7 @@ import {
   stockTransferSchema,
   inventoryStatusValues,
   movementTypeValues,
+  isValidMovementType,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -44,7 +47,7 @@ interface InventoryWithProduct extends Inventory {
   product: Pick<Product, 'id' | 'sku' | 'name' | 'type' | 'status'>;
 }
 
-interface ProductInventorySummary {
+export interface ProductInventorySummary {
   productId: string;
   sku: string;
   name: string;
@@ -121,7 +124,7 @@ export const listLocations = createServerFn({ method: 'GET' })
     ]);
 
     return {
-      locations: results as Location[],
+      locations: results,
       total: countResult[0]?.count ?? 0,
       page: data.page,
       limit: data.limit,
@@ -146,7 +149,7 @@ export const getLocation = createServerFn({ method: 'GET' })
       throw new NotFoundError('Location not found', 'location');
     }
 
-    return location as Location;
+    return location;
   });
 
 /**
@@ -172,7 +175,7 @@ export const createLocation = createServerFn({ method: 'POST' })
       });
     }
 
-    // If setting as default, unset other defaults
+    // RAW SQL (Phase 11 Keep): jsonb_set, bulk CASE. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
     if (data.isDefault) {
       await db
         .update(locations)
@@ -243,7 +246,7 @@ export const updateLocation = createServerFn({ method: 'POST' })
           and(
             eq(locations.organizationId, ctx.organizationId),
             eq(locations.locationCode, data.data.code),
-            sql`${locations.id} != ${data.id}`
+            ne(locations.id, data.id)
           )
         )
         .limit(1);
@@ -263,7 +266,7 @@ export const updateLocation = createServerFn({ method: 'POST' })
           attributes: sql`jsonb_set(coalesce(${locations.attributes}, '{}'::jsonb), '{isDefault}', 'false'::jsonb, true)`,
         })
         .where(
-          and(eq(locations.organizationId, ctx.organizationId), sql`${locations.id} != ${data.id}`)
+          and(eq(locations.organizationId, ctx.organizationId), ne(locations.id, data.id))
         );
     }
 
@@ -355,7 +358,7 @@ export const deleteLocation = createServerFn({ method: 'POST' })
 /**
  * Get inventory for a product across all locations.
  */
-export const getProductInventory = createServerFn({ method: 'GET' })
+export const getProductInventory = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ productId: z.string().uuid() }))
   .handler(async ({ data }): Promise<ProductInventorySummary> => {
     const ctx = await withAuth();
@@ -381,27 +384,28 @@ export const getProductInventory = createServerFn({ method: 'GET' })
       throw new NotFoundError('Product not found', 'product');
     }
 
-    // Get inventory by location
-    const inventoryByLocation = await db
-      .select({
-        inventoryId: inventory.id,
-        locationId: inventory.locationId,
-        locationCode: locations.locationCode,
-        locationName: locations.name,
-        quantityOnHand: inventory.quantityOnHand,
-        quantityAllocated: inventory.quantityAllocated,
-        quantityAvailable: inventory.quantityAvailable,
-        totalValue: inventory.totalValue,
-      })
-      .from(inventory)
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
-      .where(
-        and(
-          eq(inventory.productId, data.productId),
-          eq(inventory.organizationId, ctx.organizationId)
+    // Transaction ensures set_config and query run on same connection (RLS requires app.organization_id)
+    const inventoryByLocation = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+      return tx
+        .select({
+          locationId: inventory.locationId,
+          quantityOnHand: sum(inventory.quantityOnHand),
+          quantityAllocated: sum(inventory.quantityAllocated),
+          totalValue: sum(inventory.totalValue),
+        })
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.productId, data.productId),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .orderBy(asc(locations.name));
+        .groupBy(inventory.locationId)
+        .orderBy(asc(inventory.locationId));
+    });
 
     const summary: ProductInventorySummary = {
       productId: product.id,
@@ -413,14 +417,14 @@ export const getProductInventory = createServerFn({ method: 'GET' })
       totalValue: 0,
       locationCount: inventoryByLocation.length,
       locations: inventoryByLocation.map((inv) => {
-        const onHand = Number(inv.quantityOnHand) || 0;
-        const allocated = Number(inv.quantityAllocated) || 0;
-        const available = Number(inv.quantityAvailable) || 0;
+        const onHand = Number(inv.quantityOnHand ?? 0);
+        const allocated = Number(inv.quantityAllocated ?? 0);
+        const available = onHand - allocated;
 
         return {
           locationId: inv.locationId,
-          locationCode: inv.locationCode,
-          locationName: inv.locationName,
+          locationCode: '',
+          locationName: 'Location',
           quantityOnHand: onHand,
           quantityAllocated: allocated,
           quantityAvailable: available,
@@ -428,12 +432,14 @@ export const getProductInventory = createServerFn({ method: 'GET' })
       }),
     };
 
-    // Calculate totals
+    // Calculate totals from aggregated rows
     for (const loc of inventoryByLocation) {
-      summary.totalOnHand += Number(loc.quantityOnHand) || 0;
-      summary.totalAllocated += Number(loc.quantityAllocated) || 0;
-      summary.totalAvailable += Number(loc.quantityAvailable) || 0;
-      summary.totalValue += Number(loc.totalValue) || 0;
+      const onHand = Number(loc.quantityOnHand ?? 0);
+      const allocated = Number(loc.quantityAllocated ?? 0);
+      summary.totalOnHand += onHand;
+      summary.totalAllocated += allocated;
+      summary.totalAvailable += onHand - allocated;
+      summary.totalValue += Number(loc.totalValue ?? 0);
     }
 
     return summary;
@@ -469,10 +475,10 @@ export const getLocationInventory = createServerFn({ method: 'GET' })
     // Build search condition if provided
     let searchCondition = undefined;
     if (data.search) {
-      const searchPattern = `%${data.search}%`;
+      const searchPattern = containsPattern(data.search);
       searchCondition = or(
-        sql`${products.sku} ILIKE ${searchPattern}`,
-        sql`${products.name} ILIKE ${searchPattern}`
+        ilike(products.sku, searchPattern),
+        ilike(products.name, searchPattern)
       );
     }
 
@@ -538,7 +544,8 @@ export const recordMovement = createServerFn({ method: 'POST' })
         )
         .limit(1);
 
-      const previousQuantity = Number(inv?.quantityOnHand) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const previousQuantity = inv?.quantityOnHand ?? 0;
       const newQuantity = previousQuantity + data.quantity;
 
       // Check for negative inventory
@@ -583,7 +590,8 @@ export const recordMovement = createServerFn({ method: 'POST' })
           .returning();
       } else {
         // Update existing inventory
-        const unitCost = data.unitCost ?? Number(inv.unitCost) ?? 0;
+        // Drizzle's numericCasted automatically converts to number, no Number() needed
+        const unitCost = data.unitCost ?? inv.unitCost ?? 0;
 
         [inv] = await tx
           .update(inventory)
@@ -688,7 +696,7 @@ export const recordMovement = createServerFn({ method: 'POST' })
 
           if (!existingActivity) {
             logger.logAsync({
-              entityType: entityType as any,
+              entityType: entityType as ActivityEntityType,
               entityId,
               action: 'updated',
               description: `${description} (movement: ${movementType})`,
@@ -774,7 +782,8 @@ export const allocateStock = createServerFn({ method: 'POST' })
         );
       }
 
-      const available = Number(inv.quantityAvailable) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const available = inv.quantityAvailable ?? 0;
       if (data.quantity > available) {
         throw new ValidationError(
           `Insufficient available stock. Available: ${available}, Requested: ${data.quantity}`,
@@ -786,7 +795,8 @@ export const allocateStock = createServerFn({ method: 'POST' })
         );
       }
 
-      const previousAllocated = Number(inv.quantityAllocated) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const previousAllocated = inv.quantityAllocated ?? 0;
       const newAllocated = previousAllocated + data.quantity;
       const newAvailable = available - data.quantity;
 
@@ -812,8 +822,9 @@ export const allocateStock = createServerFn({ method: 'POST' })
           quantity: -data.quantity, // Negative because available is reduced
           previousQuantity: available,
           newQuantity: newAvailable,
-          unitCost: Number(inv.unitCost) || 0,
-          totalCost: (Number(inv.unitCost) || 0) * data.quantity,
+          // Drizzle's numericCasted automatically converts to number, no Number() needed
+          unitCost: inv.unitCost ?? 0,
+          totalCost: (inv.unitCost ?? 0) * data.quantity,
           referenceType: data.referenceType,
           referenceId: data.referenceId,
           notes: data.notes,
@@ -867,7 +878,8 @@ export const deallocateStock = createServerFn({ method: 'POST' })
         throw new NotFoundError('No inventory found', 'inventory');
       }
 
-      const allocated = Number(inv.quantityAllocated) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const allocated = inv.quantityAllocated ?? 0;
       if (data.quantity > allocated) {
         throw new ValidationError(
           `Cannot deallocate more than allocated. Allocated: ${allocated}, Requested: ${data.quantity}`,
@@ -879,7 +891,8 @@ export const deallocateStock = createServerFn({ method: 'POST' })
         );
       }
 
-      const previousAvailable = Number(inv.quantityAvailable) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const previousAvailable = inv.quantityAvailable ?? 0;
       const newAllocated = allocated - data.quantity;
       const newAvailable = previousAvailable + data.quantity;
 
@@ -967,7 +980,8 @@ export const transferStock = createServerFn({ method: 'POST' })
         throw new NotFoundError('No inventory at source location', 'fromLocation');
       }
 
-      const sourceAvailable = Number(sourceInv.quantityAvailable) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const sourceAvailable = sourceInv.quantityAvailable ?? 0;
       if (data.quantity > sourceAvailable) {
         throw new ValidationError(
           `Insufficient available stock at source. Available: ${sourceAvailable}, Requested: ${data.quantity}`,
@@ -980,11 +994,11 @@ export const transferStock = createServerFn({ method: 'POST' })
       }
 
       // Deduct from source
-      const sourceOnHand = Number(sourceInv.quantityOnHand) || 0;
+      const sourceOnHand = sourceInv.quantityOnHand ?? 0;
       const newSourceOnHand = sourceOnHand - data.quantity;
-      const sourceAllocated = Number(sourceInv.quantityAllocated) || 0;
+      const sourceAllocated = sourceInv.quantityAllocated ?? 0;
       const newSourceAvailable = newSourceOnHand - sourceAllocated;
-      const unitCost = Number(sourceInv.unitCost) || 0;
+      const unitCost = sourceInv.unitCost ?? 0;
 
       await tx
         .update(inventory)
@@ -1027,7 +1041,8 @@ export const transferStock = createServerFn({ method: 'POST' })
         )
         .limit(1);
 
-      const destPreviousOnHand = Number(destInv?.quantityOnHand) || 0;
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      const destPreviousOnHand = destInv?.quantityOnHand ?? 0;
       const destNewOnHand = destPreviousOnHand + data.quantity;
 
       if (!destInv) {
@@ -1172,6 +1187,109 @@ export const getProductMovements = createServerFn({ method: 'GET' })
   });
 
 /**
+ * Get aggregated movement history for a product.
+ * Groups movements by type + reference + date so that e.g. 200 individual
+ * "allocate" rows for a single order collapse into one summary row.
+ */
+export const getAggregatedProductMovements = createServerFn({ method: 'GET' })
+  .inputValidator(
+    z.object({
+      productId: z.string().uuid(),
+      page: z.number().int().min(1).default(1),
+      limit: z.number().int().min(1).max(100).default(20),
+      movementType: z.enum(movementTypeValues).optional(),
+    })
+  )
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+
+    const offset = (data.page - 1) * data.limit;
+
+    // Raw SQL justified: CTE with window function (SUM OVER ROWS BETWEEN) and GROUP BY DATE()
+    // Drizzle ORM doesn't provide abstractions for running balance window functions.
+    const movementTypeFilter = data.movementType
+      ? sql`AND ${inventoryMovements.movementType} = ${data.movementType}`
+      : sql``;
+
+    interface AggregatedMovementRow {
+      [key: string]: unknown;
+      movement_type: string;
+      reference_type: string | null;
+      reference_id: string | null;
+      movement_date: string;
+      total_quantity: number;
+      total_cost: number;
+      movement_count: number;
+      first_at: string;
+      last_at: string;
+      notes: string | null;
+      running_balance: number;
+      total_groups: number;
+    }
+
+    const result = (await db.execute(sql`
+      WITH aggregated AS (
+        SELECT
+          ${inventoryMovements.movementType} as movement_type,
+          ${inventoryMovements.referenceType} as reference_type,
+          ${inventoryMovements.referenceId} as reference_id,
+          DATE(${inventoryMovements.createdAt}) as movement_date,
+          SUM(${inventoryMovements.quantity})::int as total_quantity,
+          COALESCE(SUM(${inventoryMovements.totalCost}), 0)::numeric as total_cost,
+          COUNT(*)::int as movement_count,
+          MIN(${inventoryMovements.createdAt}) as first_at,
+          MAX(${inventoryMovements.createdAt}) as last_at,
+          (array_agg(${inventoryMovements.notes} ORDER BY ${inventoryMovements.createdAt} DESC))[1] as notes
+        FROM ${inventoryMovements}
+        WHERE ${inventoryMovements.productId} = ${data.productId}
+          AND ${inventoryMovements.organizationId} = ${ctx.organizationId}
+          ${movementTypeFilter}
+        GROUP BY
+          ${inventoryMovements.movementType},
+          ${inventoryMovements.referenceType},
+          ${inventoryMovements.referenceId},
+          DATE(${inventoryMovements.createdAt})
+      ),
+      with_balance AS (
+        SELECT *,
+          SUM(total_quantity) OVER (
+            ORDER BY movement_date ASC, first_at ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          )::int as running_balance
+        FROM aggregated
+      )
+      SELECT *, (SELECT COUNT(*)::int FROM aggregated) as total_groups
+      FROM with_balance
+      ORDER BY movement_date DESC, last_at DESC
+      LIMIT ${data.limit}
+      OFFSET ${offset}
+    `)) as unknown as AggregatedMovementRow[];
+
+    const rows = result;
+
+    const totalGroups = rows.length > 0 ? Number(rows[0].total_groups) : 0;
+
+    return {
+      movements: rows.map((r) => ({
+        movementType: isValidMovementType(r.movement_type) ? r.movement_type : 'adjust',
+        referenceType: r.reference_type,
+        referenceId: r.reference_id,
+        movementDate: r.movement_date,
+        totalQuantity: Number(r.total_quantity) || 0,
+        totalCost: Number(r.total_cost) || 0,
+        movementCount: Number(r.movement_count) || 0,
+        firstAt: r.first_at,
+        lastAt: r.last_at,
+        notes: r.notes,
+        runningBalance: Number(r.running_balance) || 0,
+      })),
+      total: totalGroups,
+      page: data.page,
+      limit: data.limit,
+    };
+  });
+
+/**
  * Get movement history for a location.
  */
 export const getLocationMovements = createServerFn({ method: 'GET' })
@@ -1288,64 +1406,77 @@ export const getLowStockAlerts = createServerFn({ method: 'GET' })
       locationId: r.locationId,
       locationCode: r.locationCode,
       locationName: r.locationName,
-      quantityAvailable: Number(r.quantityAvailable) || 0,
+      // Drizzle's numericCasted automatically converts to number, no Number() needed
+      quantityAvailable: r.quantityAvailable ?? 0,
       reorderPoint: data.reorderPoint,
-      status: (Number(r.quantityAvailable) || 0) < data.criticalThreshold ? 'critical' : 'warning',
+      status: (r.quantityAvailable ?? 0) < data.criticalThreshold ? 'critical' : 'warning',
     }));
   });
 
 /**
  * Get inventory statistics for a product.
  */
-export const getInventoryStats = createServerFn({ method: 'GET' })
+export const getInventoryStats = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ productId: z.string().uuid() }))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Get aggregated stats
-    const [stats] = await db
-      .select({
-        totalOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
-        totalAllocated: sql<number>`COALESCE(SUM(${inventory.quantityAllocated}), 0)::int`,
-        totalAvailable: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::int`,
-        totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
-        locationCount: sql<number>`COUNT(DISTINCT ${inventory.locationId})::int`,
-        avgUnitCost: sql<number>`COALESCE(AVG(${inventory.unitCost}), 0)::numeric`,
-      })
-      .from(inventory)
-      .where(
-        and(
-          eq(inventory.productId, data.productId),
-          eq(inventory.organizationId, ctx.organizationId)
-        )
-      );
-
-    // Get recent movement count (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const [movementStats] = await db
-      .select({
-        movementCount: sql<number>`COUNT(*)::int`,
-        totalIn: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.quantity} > 0 THEN ${inventoryMovements.quantity} ELSE 0 END), 0)::int`,
-        totalOut: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.quantity} < 0 THEN ABS(${inventoryMovements.quantity}) ELSE 0 END), 0)::int`,
-      })
-      .from(inventoryMovements)
-      .where(
-        and(
-          eq(inventoryMovements.productId, data.productId),
-          eq(inventoryMovements.organizationId, ctx.organizationId),
-          gte(inventoryMovements.createdAt, thirtyDaysAgo)
-        )
+    // Transaction ensures set_config and queries run on same connection (RLS)
+    const [stats, movementStats] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      // Run both queries in parallel (same connection, shared RLS context)
+      const [statsResult, movementResult] = await Promise.all([
+        tx
+          .select({
+            totalOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
+            totalAllocated: sql<number>`COALESCE(SUM(${inventory.quantityAllocated}), 0)::int`,
+            totalAvailable: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::int`,
+            totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
+            locationCount: sql<number>`COUNT(DISTINCT ${inventory.locationId})::int`,
+            avgUnitCost: sql<number>`COALESCE(AVG(${inventory.unitCost}), 0)::numeric`,
+          })
+          .from(inventory)
+          .where(
+            and(
+              eq(inventory.productId, data.productId),
+              eq(inventory.organizationId, ctx.organizationId)
+            )
+          )
+          .then((rows) => rows[0]),
+        tx
+          .select({
+            movementCount: sql<number>`COUNT(*)::int`,
+            totalIn: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.quantity} > 0 THEN ${inventoryMovements.quantity} ELSE 0 END), 0)::int`,
+            totalOut: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.quantity} < 0 THEN ABS(${inventoryMovements.quantity}) ELSE 0 END), 0)::int`,
+          })
+          .from(inventoryMovements)
+          .where(
+            and(
+              eq(inventoryMovements.productId, data.productId),
+              eq(inventoryMovements.organizationId, ctx.organizationId),
+              gte(inventoryMovements.createdAt, thirtyDaysAgo)
+            )
+          )
+          .then((rows) => rows[0]),
+      ]);
+
+      return [statsResult, movementResult] as const;
+    });
 
     return {
       totalOnHand: stats?.totalOnHand ?? 0,
       totalAllocated: stats?.totalAllocated ?? 0,
       totalAvailable: stats?.totalAvailable ?? 0,
-      totalValue: Number(stats?.totalValue) ?? 0,
+      // Drizzle's sql<number> type annotation ensures these are numbers
+      totalValue: stats?.totalValue ?? 0,
       locationCount: stats?.locationCount ?? 0,
-      avgUnitCost: Number(stats?.avgUnitCost) ?? 0,
+      avgUnitCost: stats?.avgUnitCost ?? 0,
       last30Days: {
         movementCount: movementStats?.movementCount ?? 0,
         totalIn: movementStats?.totalIn ?? 0,
@@ -1437,9 +1568,10 @@ export const bulkReceiveStock = createServerFn({ method: 'POST' })
         }
 
         const existingInv = inventoryMap.get(item.productId);
-        const previousQuantity = Number(existingInv?.quantityOnHand) || 0;
+        // Drizzle's numericCasted automatically converts to number, no Number() needed
+        const previousQuantity = existingInv?.quantityOnHand ?? 0;
         const newQuantity = previousQuantity + item.quantity;
-        const unitCost = item.unitCost ?? Number(existingInv?.unitCost) ?? 0;
+        const unitCost = item.unitCost ?? existingInv?.unitCost ?? 0;
 
         if (!existingInv) {
           // Queue for creation
@@ -1479,17 +1611,43 @@ export const bulkReceiveStock = createServerFn({ method: 'POST' })
       });
 
       // Step 5: Execute batch updates for existing inventory records
-      for (const update of inventoryToUpdate) {
+      // PERFORMANCE: Use CASE statements for bulk update instead of N sequential queries
+      if (inventoryToUpdate.length > 0) {
+        const updateIds = inventoryToUpdate.map((u) => u.id);
+        const caseStatements = {
+          quantityOnHand: sql`CASE ${inventory.id}
+            ${sql.join(
+              inventoryToUpdate.map((u) => sql`WHEN ${u.id} THEN ${u.quantityOnHand}`),
+              sql` `
+            )}
+            ELSE ${inventory.quantityOnHand}
+          END`,
+          unitCost: sql`CASE ${inventory.id}
+            ${sql.join(
+              inventoryToUpdate.map((u) => sql`WHEN ${u.id} THEN ${u.unitCost}`),
+              sql` `
+            )}
+            ELSE ${inventory.unitCost}
+          END`,
+          totalValue: sql`CASE ${inventory.id}
+            ${sql.join(
+              inventoryToUpdate.map((u) => sql`WHEN ${u.id} THEN ${u.totalValue}`),
+              sql` `
+            )}
+            ELSE ${inventory.totalValue}
+          END`,
+        };
+
         await tx
           .update(inventory)
           .set({
-            quantityOnHand: update.quantityOnHand,
-            unitCost: update.unitCost,
-            totalValue: update.totalValue,
+            quantityOnHand: caseStatements.quantityOnHand,
+            unitCost: caseStatements.unitCost,
+            totalValue: caseStatements.totalValue,
             updatedBy: ctx.user.id,
             updatedAt: new Date(),
           })
-          .where(eq(inventory.id, update.id));
+          .where(inArray(inventory.id, updateIds));
       }
 
       // Step 6: Prepare movement records for all successful items
@@ -1501,11 +1659,11 @@ export const bulkReceiveStock = createServerFn({ method: 'POST' })
         const inv = inventoryMap.get(item.productId);
         if (!inv) continue;
 
+        // Drizzle's numericCasted automatically converts to number, no Number() needed
         const previousQuantity =
-          Number(existingInventory.find((i) => i.productId === item.productId)?.quantityOnHand) ||
-          0;
+          existingInventory.find((i) => i.productId === item.productId)?.quantityOnHand ?? 0;
         const newQuantity = previousQuantity + item.quantity;
-        const unitCost = item.unitCost ?? Number(inv.unitCost) ?? 0;
+        const unitCost = item.unitCost ?? inv.unitCost ?? 0;
 
         movementsToCreate.push({
           organizationId: ctx.organizationId,

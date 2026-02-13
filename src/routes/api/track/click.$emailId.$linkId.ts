@@ -9,26 +9,34 @@
  * @see DOM-COMMS-001b
  */
 
-import { recordEmailClick, validateTrackingSignature } from "@/lib/server/email-tracking";
-import { db } from "@/lib/db";
-import { emailHistory } from "drizzle/schema";
-import { eq } from "drizzle-orm";
+import { createFileRoute } from '@tanstack/react-router';
+import { recordEmailClick, validateTrackingSignature } from '@/lib/server/email-tracking';
+import { db } from '@/lib/db';
+import { emailHistory } from 'drizzle/schema';
+import { eq } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
-export async function GET({ request, params }: { request: Request; params: { emailId: string; linkId: string } }) {
+async function handleClick({
+  request,
+  params,
+}: {
+  request: Request;
+  params: { emailId: string; linkId: string };
+}) {
   const { emailId, linkId } = params;
 
   // Get the URL and signature from query params
   const url = new URL(request.url);
-  const originalUrl = url.searchParams.get("url");
-  const sig = url.searchParams.get("sig");
+  const originalUrl = url.searchParams.get('url');
+  const sig = url.searchParams.get('sig');
 
   // Validate HMAC signature
   if (!sig || !validateTrackingSignature(emailId, sig, linkId)) {
-    return new Response("Invalid tracking signature", { status: 403 });
+    return new Response('Invalid tracking signature', { status: 403 });
   }
 
   if (!originalUrl) {
-    return new Response("Missing URL parameter", { status: 400 });
+    return new Response('Missing URL parameter', { status: 400 });
   }
 
   // Decode the URL
@@ -36,14 +44,14 @@ export async function GET({ request, params }: { request: Request; params: { ema
   try {
     decodedUrl = decodeURIComponent(originalUrl);
   } catch {
-    return new Response("Invalid URL encoding", { status: 400 });
+    return new Response('Invalid URL encoding', { status: 400 });
   }
 
   // Validate the URL is a valid URL (basic security check)
   try {
     new URL(decodedUrl);
   } catch {
-    return new Response("Invalid URL", { status: 400 });
+    return new Response('Invalid URL', { status: 400 });
   }
 
   // ========================================================================
@@ -61,46 +69,44 @@ export async function GET({ request, params }: { request: Request; params: { ema
       .limit(1);
 
     if (!email) {
-      console.warn(`[track/click] Email not found: ${emailId}`);
-      return new Response("Email not found", { status: 404 });
+      logger.warn('[track/click] Email not found', { emailId });
+      return new Response('Email not found', { status: 404 });
     }
 
     // Check if linkMap exists in metadata
     const linkMap = email.metadata?.linkMap as Record<string, string> | undefined;
 
     if (!linkMap) {
-      console.warn(`[track/click] No linkMap found for email: ${emailId}`);
-      return new Response("Link tracking data not found", { status: 400 });
+      logger.warn('[track/click] No linkMap found for email', { emailId });
+      return new Response('Link tracking data not found', { status: 400 });
     }
 
     // Verify the linkId exists in the linkMap
     const storedUrl = linkMap[linkId];
 
     if (!storedUrl) {
-      console.warn(`[track/click] Invalid linkId: ${linkId} for email: ${emailId}`);
-      return new Response("Invalid link", { status: 400 });
+      logger.warn('[track/click] Invalid linkId for email', { linkId, emailId });
+      return new Response('Invalid link', { status: 400 });
     }
 
     // Verify the URL matches the stored URL
     if (storedUrl !== decodedUrl) {
-      console.warn(
-        `[track/click] URL mismatch for linkId ${linkId}: expected ${storedUrl}, got ${decodedUrl}`
-      );
-      return new Response("URL mismatch", { status: 400 });
+      logger.warn('[track/click] URL mismatch for linkId', { linkId, storedUrl, decodedUrl });
+      return new Response('URL mismatch', { status: 400 });
     }
 
     // URL is validated - safe to redirect
     decodedUrl = storedUrl;
   } catch (error) {
-    console.error("[track/click] Error validating URL:", error);
-    return new Response("Validation error", { status: 500 });
+    logger.error('[track/click] Error validating URL', error as Error, { emailId, linkId });
+    return new Response('Validation error', { status: 500 });
   }
 
   // Get request metadata for tracking
-  const userAgent = request.headers.get("user-agent") || undefined;
+  const userAgent = request.headers.get('user-agent') || undefined;
   const ipAddress =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
     undefined;
 
   // Record the click (fire-and-forget, don't block redirect)
@@ -108,7 +114,7 @@ export async function GET({ request, params }: { request: Request; params: { ema
     userAgent,
     ipAddress,
   }).catch((err) => {
-    console.error("[track/click] Error recording click:", err);
+    logger.error('[track/click] Error recording click', err as Error, { emailId, linkId });
   });
 
   // Redirect to the validated URL
@@ -117,7 +123,15 @@ export async function GET({ request, params }: { request: Request; params: { ema
     headers: {
       Location: decodedUrl,
       // Prevent caching of the redirect
-      "Cache-Control": "no-store, no-cache, must-revalidate",
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
     },
   });
 }
+
+export const Route = createFileRoute('/api/track/click/$emailId/$linkId')({
+  server: {
+    handlers: {
+      GET: handleClick,
+    },
+  },
+});

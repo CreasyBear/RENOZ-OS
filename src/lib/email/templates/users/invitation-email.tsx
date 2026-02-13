@@ -175,7 +175,7 @@ export function InvitationEmail({
                   margin: 0,
                 }}
               >
-                You're Invited!
+                You&apos;re Invited!
               </p>
               <p
                 style={{
@@ -243,7 +243,7 @@ export function InvitationEmail({
                           lineHeight: "1.5",
                         }}
                       >
-                        "{personalMessage}"
+                        &quot;{personalMessage}&quot;
                       </p>
                     </td>
                   </tr>
@@ -387,7 +387,7 @@ export function InvitationEmail({
                   margin: "24px 0 0 0",
                 }}
               >
-                If you weren't expecting this invitation, you can safely ignore
+                If you weren&apos;t expecting this invitation, you can safely ignore
                 this email. If you have questions, contact{" "}
                 <a
                   href={`mailto:${supportEmail}`}

@@ -4,6 +4,7 @@
  * Advanced procurement analytics and automated reporting dashboard.
  */
 import { useState, useCallback, useMemo } from 'react';
+import { useSearch, useNavigate } from '@tanstack/react-router';
 import { subDays } from 'date-fns';
 
 import {
@@ -11,6 +12,7 @@ import {
   type ProcurementAnalytics,
 } from '@/components/domain/reports/procurement-reports';
 import { type DateRange } from '@/components/ui/date-picker-with-range';
+import type { ProcurementTab } from '@/lib/schemas/reports/procurement';
 import { toast } from '@/lib/toast';
 import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv';
 import { useProcurementDashboard } from '@/hooks/suppliers';
@@ -22,11 +24,42 @@ import { ScheduledReportForm } from '@/components/domain/settings/scheduled-repo
  * @source hooks/useProcurementDashboard
  */
 export function ProcurementReportsPage() {
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
+  const search = useSearch({ from: '/_authenticated/reports/procurement/' });
+  const navigate = useNavigate();
   const [scheduleOpen, setScheduleOpen] = useState(false);
+
+  // Derive date range from URL or defaults
+  const dateRange = useMemo((): DateRange => {
+    const from = search.dateFrom
+      ? new Date(search.dateFrom)
+      : subDays(new Date(), 30);
+    const to = search.dateTo ? new Date(search.dateTo) : new Date();
+    return { from, to };
+  }, [search.dateFrom, search.dateTo]);
+
+  const handleTabChange = useCallback(
+    (tab: string) => {
+      navigate({
+        to: '.',
+        search: { ...search, tab: tab as ProcurementTab },
+      });
+    },
+    [navigate, search]
+  );
+
+  const handleDateRangeChange = useCallback(
+    (range: DateRange) => {
+      navigate({
+        to: '.',
+        search: {
+          ...search,
+          dateFrom: range.from?.toISOString().split('T')[0],
+          dateTo: range.to?.toISOString().split('T')[0],
+        },
+      });
+    },
+    [navigate, search]
+  );
 
   // Fetch real procurement dashboard data
   const { data, isLoading, error } = useProcurementDashboard({
@@ -65,11 +98,6 @@ export function ProcurementReportsPage() {
       },
     };
   }, [data]);
-
-  // Handle date range change
-  const handleDateRangeChange = useCallback((range: DateRange) => {
-    setDateRange(range);
-  }, []);
 
   // Handle export
   const handleExport = useCallback((format: 'pdf' | 'excel' | 'csv') => {
@@ -181,7 +209,9 @@ export function ProcurementReportsPage() {
         isLoading={isLoading}
         error={error}
         dateRange={dateRange}
-        onDateRangeChange={handleDateRangeChange}
+        activeTab={search.tab as ProcurementTab | undefined}
+        onTabChange={handleTabChange}
+        onDateRangeChange={(range) => handleDateRangeChange(range)}
         onExport={handleExport}
         onCreateCustomReport={handleCreateCustomReport}
         onScheduleReport={handleScheduleReport}

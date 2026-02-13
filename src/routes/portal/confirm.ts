@@ -1,17 +1,17 @@
 import { type EmailOtpType } from '@supabase/supabase-js';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
+import { sanitizeInternalRedirect } from '@/lib/auth/redirects';
+import { toAuthErrorCode } from '@/lib/auth/error-codes';
 
 const confirmPortalFn = createServerFn({ method: 'GET' })
   .inputValidator((searchParams: unknown) => {
-    if (
-      searchParams &&
-      typeof searchParams === 'object' &&
-      'token_hash' in searchParams &&
-      'type' in searchParams &&
-      'next' in searchParams
-    ) {
-      return searchParams;
+    if (searchParams && typeof searchParams === 'object') {
+      const params = searchParams as Record<string, unknown>;
+      if (typeof params.token_hash === 'string' && typeof params.type === 'string') {
+        return params;
+      }
     }
     throw new Error('Invalid search params');
   })
@@ -21,14 +21,17 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
 
     const request = getRequest();
     if (!request) {
-      throw redirect({ to: `/auth/error`, search: { error: 'No request' } });
+      throw redirect({ to: `/auth/error`, search: { error: 'invalid_request' } });
     }
 
     const searchParams = ctx.data;
     const token_hash = searchParams['token_hash'] as string;
     const type = searchParams['type'] as EmailOtpType | null;
-    const _next = searchParams['next'] as string;
-    const next = _next?.startsWith('/') ? _next : '/portal';
+    const next = sanitizeInternalRedirect(searchParams['next'], { fallback: '/portal' });
+
+    // Throttle token verification to reduce abuse and token-guess attempts.
+    const clientId = getClientIdentifier(request);
+    checkRateLimit('auth-confirm-portal', `${clientId}:${token_hash}`, RATE_LIMITS.publicAction);
 
     if (token_hash && type) {
       const supabase = createServerSupabase(request);
@@ -43,13 +46,13 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
 
       throw redirect({
         to: `/auth/error`,
-        search: { error: error?.message },
+        search: { error: toAuthErrorCode(error?.message) },
       });
     }
 
     throw redirect({
       to: `/auth/error`,
-      search: { error: 'No token hash or type' },
+      search: { error: 'invalid_request' },
     });
   });
 

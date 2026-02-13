@@ -19,7 +19,7 @@ export interface BulkActionsBarProps {
  * Floating bar for bulk selection operations.
  *
  * Features entrance/exit animation for smoother UX.
- * Only renders when `selectedCount > 0`.
+ * Only renders when `selectedCount >= 2` (bulk implies multiple).
  *
  * @example
  * ```tsx
@@ -44,14 +44,16 @@ export const BulkActionsBar = memo(function BulkActionsBar({
 }: BulkActionsBarProps) {
   return (
     <AnimatePresence>
-      {selectedCount > 0 && (
+      {selectedCount >= 2 && (
         <motion.div
-          initial={{ opacity: 0, y: -8, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.95 }}
-          transition={{ duration: 0.15, ease: "easeOut" }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
           className={cn(
-            "flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg border",
+            "fixed bottom-4 left-1/2 -translate-x-1/2 z-50",
+            "flex items-center gap-2 px-4 py-2.5 rounded-lg border shadow-lg",
+            "bg-background dark:bg-card dark:border-border",
             className
           )}
         >

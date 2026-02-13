@@ -19,29 +19,7 @@ import {
   Info,
 } from 'lucide-react';
 import { BulkWarrantyImportDialog } from '../dialogs/bulk-warranty-import-dialog';
-import type {
-  BulkRegisterResult,
-  BulkRegisterWarrantiesInput,
-  PreviewBulkWarrantyImportInput,
-  PreviewResult,
-} from '@/lib/schemas/warranty/bulk-import';
-
-export interface WarrantyImportSettingsViewProps {
-  dialogOpen: boolean;
-  lastImportResult: BulkRegisterResult | null;
-  onDialogOpenChange: (open: boolean) => void;
-  onStartImport: () => void;
-  onDownloadTemplate: () => void;
-  onViewWarranties: () => void;
-  onViewPolicies: () => void;
-  onImportComplete: (result: BulkRegisterResult) => void;
-  onPreview: (payload: PreviewBulkWarrantyImportInput) => Promise<PreviewResult>;
-  onRegister: (payload: BulkRegisterWarrantiesInput) => Promise<BulkRegisterResult>;
-  onResetPreview: () => void;
-  onResetRegister: () => void;
-  isPreviewing: boolean;
-  isRegistering: boolean;
-}
+import type { WarrantyImportSettingsViewProps } from '@/lib/schemas/warranty';
 
 export function WarrantyImportSettingsView({
   dialogOpen,

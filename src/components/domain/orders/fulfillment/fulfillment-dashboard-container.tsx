@@ -14,7 +14,12 @@
  * @see src/hooks/orders/use-order-status.ts (mutations)
  */
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
+import { queryKeys } from '@/lib/query-keys';
+import type { FulfillmentImport } from '@/lib/schemas/orders/shipments';
 import { useOrders, useShipments, useUpdateOrderStatus } from '@/hooks/orders';
+import { importFulfillmentShipments } from '@/server/functions/orders/order-shipments';
 import { FulfillmentDashboardPresenter } from './fulfillment-dashboard';
 import type { FulfillmentDashboardContainerProps } from './fulfillment-dashboard';
 
@@ -82,6 +87,18 @@ export function FulfillmentDashboardContainer({
   // ===========================================================================
 
   const updateOrderStatusMutation = useUpdateOrderStatus();
+  const queryClient = useQueryClient();
+
+  const importFulfillmentFn = useServerFn(importFulfillmentShipments);
+
+  const importFulfillmentMutation = useMutation({
+    mutationFn: (input: FulfillmentImport) => importFulfillmentFn({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+    },
+  });
 
   return (
     <FulfillmentDashboardPresenter
@@ -92,6 +109,7 @@ export function FulfillmentDashboardContainer({
       loadingPicked={loadingPicked}
       loadingShipments={loadingShipments}
       updateOrderStatusMutation={updateOrderStatusMutation}
+      importFulfillmentMutation={importFulfillmentMutation}
       onShipOrder={onShipOrder}
       onViewOrder={onViewOrder}
       onConfirmDelivery={onConfirmDelivery}

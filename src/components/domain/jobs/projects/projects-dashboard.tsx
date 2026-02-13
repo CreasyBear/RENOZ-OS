@@ -12,7 +12,8 @@
  * @see ui-ux-pro-max skill for design standards
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { Link } from '@tanstack/react-router';
 import { format, isPast, isToday, isTomorrow, addDays, isWithinInterval } from 'date-fns';
 import {
   Briefcase,
@@ -23,7 +24,6 @@ import {
   LayoutGrid,
   List,
   Plus,
-  ArrowRight,
   Flag,
   AlertCircle,
   MoreHorizontal,
@@ -61,10 +61,18 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useOrgFormat } from '@/hooks/use-org-format';
+import { useDebounce } from '@/hooks/_shared/use-debounce';
+import { ProjectsPageSkeleton } from '@/components/skeletons/projects/projects-page-skeleton';
 
 // Types
-import type { Project } from 'drizzle/schema/jobs/projects';
-import type { ProjectStatus, ProjectPriority } from '@/lib/schemas/jobs/projects';
+import type {
+  Project,
+  ProjectStatus,
+  ProjectPriority,
+  ProjectViewMode,
+  ProjectDateFilter,
+  ProjectsSearchParams,
+} from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES
@@ -73,14 +81,15 @@ import type { ProjectStatus, ProjectPriority } from '@/lib/schemas/jobs/projects
 interface ProjectsDashboardProps {
   projects: Project[];
   isLoading?: boolean;
+  /** URL-synced filters (DOMAIN-LANDING Zone 2) */
+  filters?: ProjectsSearchParams;
+  onFiltersChange?: (updates: Partial<ProjectsSearchParams>) => void;
   onProjectClick: (project: Project) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (project: Project) => void;
   onCreateProject: () => void;
 }
 
-type ViewMode = 'grid' | 'list';
-type DateFilter = 'all' | 'overdue' | 'today' | 'this-week' | 'this-month';
 
 // ============================================================================
 // STATUS CONFIG (extended with UI-specific properties)
@@ -253,76 +262,6 @@ function PortfolioStats({ projects }: { projects: Project[] }) {
 }
 
 // ============================================================================
-// URGENT ITEMS BANNER
-// ============================================================================
-
-function UrgentItemsBanner({
-  projects,
-  onProjectClick
-}: {
-  projects: Project[];
-  onProjectClick: (project: Project) => void;
-}) {
-  const urgentProjects = useMemo(() => {
-    return projects
-      .filter(p => {
-        if (['completed', 'cancelled'].includes(p.status)) return false;
-        // Urgent priority
-        if (p.priority === 'urgent') return true;
-        // Overdue
-        if (p.targetCompletionDate && isPast(new Date(p.targetCompletionDate)) && !isToday(new Date(p.targetCompletionDate))) {
-          return true;
-        }
-        return false;
-      })
-      .slice(0, 5); // Show max 5
-  }, [projects]);
-
-  if (urgentProjects.length === 0) return null;
-
-  return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <AlertTriangle className="h-5 w-5 text-red-600" />
-        <h3 className="font-semibold text-red-900">
-          Needs Attention ({urgentProjects.length})
-        </h3>
-      </div>
-      <div className="space-y-2">
-        {urgentProjects.map(project => {
-          const dueStatus = getDueDateStatus(project.targetCompletionDate);
-          const priorityCfg = PRIORITY_CONFIG[project.priority];
-
-          return (
-            <button
-              key={project.id}
-              onClick={() => onProjectClick(project)}
-              className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-red-100 hover:border-red-300 hover:shadow-sm transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className={cn('w-1 h-8 rounded-full', priorityCfg.color.replace('text-', 'bg-'))} />
-                <div>
-                  <p className="font-medium text-sm">{project.title}</p>
-                  <p className="text-xs text-muted-foreground">{project.projectNumber}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <StatusBadge
-                  status={dueStatus.label}
-                  variant={dueStatus.color.includes('red') ? 'error' : dueStatus.color.includes('orange') ? 'warning' : 'neutral'}
-                  className="text-xs"
-                />
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // ENHANCED PROJECT CARD
 // ============================================================================
 
@@ -337,7 +276,7 @@ function ProjectCardEnhanced({
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  viewMode: ViewMode;
+  viewMode: ProjectViewMode;
 }) {
   const { formatCurrency } = useOrgFormat();
   const formatCurrencyDisplay = (value: string | number | null | undefined) =>
@@ -376,7 +315,14 @@ function ProjectCardEnhanced({
         {/* Main Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold truncate">{project.title}</h3>
+            <Link
+              to="/projects/$projectId"
+              params={{ projectId: project.id }}
+              className="font-semibold truncate hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {project.title}
+            </Link>
             <span className="text-xs text-muted-foreground shrink-0">{project.projectNumber}</span>
             {dueStatus.isUrgent && (
               <StatusBadge
@@ -485,7 +431,14 @@ function ProjectCardEnhanced({
         </div>
 
         {/* Title & Number */}
-        <h3 className="font-semibold text-foreground line-clamp-2 mb-1">{project.title}</h3>
+        <Link
+          to="/projects/$projectId"
+          params={{ projectId: project.id }}
+          className="font-semibold text-foreground line-clamp-2 mb-1 hover:underline block"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {project.title}
+        </Link>
         <p className="text-xs text-muted-foreground mb-3">{project.projectNumber}</p>
 
         {/* Type & Address */}
@@ -559,10 +512,10 @@ function FilterBar({
   onStatusChange: (status: ProjectStatus | 'all') => void;
   priority: ProjectPriority | 'all';
   onPriorityChange: (priority: ProjectPriority | 'all') => void;
-  dateFilter: DateFilter;
-  onDateFilterChange: (filter: DateFilter) => void;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
+  dateFilter: ProjectDateFilter;
+  onDateFilterChange: (filter: ProjectDateFilter) => void;
+  viewMode: ProjectViewMode;
+  onViewModeChange: (mode: ProjectViewMode) => void;
 }) {
   return (
     <div className="flex flex-col lg:flex-row gap-3">
@@ -589,7 +542,11 @@ function FilterBar({
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
-        <Select value={status} onValueChange={(v) => onStatusChange(v as ProjectStatus | 'all')}>
+        <Select value={status} onValueChange={(v) => {
+          if (v === 'all' || v === 'quoting' || v === 'approved' || v === 'in_progress' || v === 'completed' || v === 'on_hold' || v === 'cancelled') {
+            onStatusChange(v);
+          }
+        }}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
@@ -604,7 +561,11 @@ function FilterBar({
           </SelectContent>
         </Select>
 
-        <Select value={priority} onValueChange={(v) => onPriorityChange(v as ProjectPriority | 'all')}>
+        <Select value={priority} onValueChange={(v) => {
+          if (v === 'all' || v === 'urgent' || v === 'high' || v === 'medium' || v === 'low') {
+            onPriorityChange(v);
+          }
+        }}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All Priorities" />
           </SelectTrigger>
@@ -617,7 +578,11 @@ function FilterBar({
           </SelectContent>
         </Select>
 
-        <Select value={dateFilter} onValueChange={(v) => onDateFilterChange(v as DateFilter)}>
+        <Select value={dateFilter} onValueChange={(v) => {
+          if (v === 'all' || v === 'overdue' || v === 'today' || v === 'this-week' || v === 'this-month') {
+            onDateFilterChange(v);
+          }
+        }}>
           <SelectTrigger className="w-[140px]">
             <Calendar className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Any Date" />
@@ -662,16 +627,65 @@ function FilterBar({
 export function ProjectsDashboard({
   projects,
   isLoading,
+  filters: externalFilters,
+  onFiltersChange,
   onProjectClick,
   onEditProject,
   onDeleteProject,
   onCreateProject,
 }: ProjectsDashboardProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all');
-  const [priorityFilter, setPriorityFilter] = useState<ProjectPriority | 'all'>('all');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [localViewMode, setLocalViewMode] = useState<ProjectViewMode>('grid');
+  const [localSearch, setLocalSearch] = useState('');
+  const [localStatus, setLocalStatus] = useState<ProjectStatus | 'all'>('all');
+  const [localPriority, setLocalPriority] = useState<ProjectPriority | 'all'>('all');
+  const [localDateFilter, setLocalDateFilter] = useState<ProjectDateFilter>('all');
+
+  const isControlled = externalFilters != null && onFiltersChange != null;
+  const viewMode = isControlled ? externalFilters.viewMode : localViewMode;
+  const statusFilter = isControlled ? externalFilters.status : localStatus;
+  const priorityFilter = isControlled ? externalFilters.priority : localPriority;
+  const dateFilter = isControlled ? externalFilters.dateFilter : localDateFilter;
+
+  const [searchDisplay, setSearchDisplay] = useState(externalFilters?.search ?? '');
+  const debouncedSearch = useDebounce(searchDisplay, 300);
+
+  useEffect(() => {
+    if (!isControlled || !externalFilters) return;
+    const urlSearch = externalFilters.search ?? '';
+    const id = requestAnimationFrame(() => setSearchDisplay(urlSearch));
+    return () => cancelAnimationFrame(id);
+    // Sync URL → display when URL changes (e.g. back/forward). Omit searchDisplay to avoid overwriting user typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isControlled, externalFilters?.search]);
+
+  useEffect(() => {
+    if (isControlled && debouncedSearch !== (externalFilters?.search ?? '')) {
+      onFiltersChange?.({ search: debouncedSearch });
+    }
+  }, [isControlled, debouncedSearch, externalFilters?.search, onFiltersChange]);
+
+  const search = isControlled ? searchDisplay : localSearch;
+
+  const setViewMode = (v: ProjectViewMode) => {
+    if (isControlled) onFiltersChange?.({ viewMode: v });
+    else setLocalViewMode(v);
+  };
+  const setSearch = (v: string) => {
+    if (isControlled) setSearchDisplay(v);
+    else setLocalSearch(v);
+  };
+  const setStatusFilter = (v: ProjectStatus | 'all') => {
+    if (isControlled) onFiltersChange?.({ status: v });
+    else setLocalStatus(v);
+  };
+  const setPriorityFilter = (v: ProjectPriority | 'all') => {
+    if (isControlled) onFiltersChange?.({ priority: v });
+    else setLocalPriority(v);
+  };
+  const setDateFilter = (v: ProjectDateFilter) => {
+    if (isControlled) onFiltersChange?.({ dateFilter: v });
+    else setLocalDateFilter(v);
+  };
 
   // Filter projects
   const filteredProjects = useMemo(() => {
@@ -713,28 +727,13 @@ export function ProjectsDashboard({
   }, [projects, search, statusFilter, priorityFilter, dateFilter]);
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
-          ))}
-        </div>
-        <div className="h-64 bg-muted rounded-lg animate-pulse" />
-      </div>
-    );
+    return <ProjectsPageSkeleton />;
   }
 
   return (
     <div className="space-y-6">
       {/* Portfolio Stats */}
       <PortfolioStats projects={projects} />
-
-      {/* Urgent Items Banner */}
-      <UrgentItemsBanner projects={projects} onProjectClick={onProjectClick} />
-
-      {/* Status Breakdown (could be added to sidebar in future) */}
-      {/* <StatusBreakdown projects={projects} /> */}
 
       {/* Filters */}
       <FilterBar
@@ -775,10 +774,20 @@ export function ProjectsDashboard({
             <Button
               variant="outline"
               onClick={() => {
-                setSearch('');
-                setStatusFilter('all');
-                setPriorityFilter('all');
-                setDateFilter('all');
+                if (isControlled) {
+                  setSearchDisplay('');
+                  onFiltersChange?.({
+                    search: '',
+                    status: 'all',
+                    priority: 'all',
+                    dateFilter: 'all',
+                  });
+                } else {
+                  setSearch('');
+                  setStatusFilter('all');
+                  setPriorityFilter('all');
+                  setDateFilter('all');
+                }
               }}
             >
               Clear Filters

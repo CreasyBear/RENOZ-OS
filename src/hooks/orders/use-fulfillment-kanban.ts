@@ -15,9 +15,8 @@ import {
   listFulfillmentKanbanOrders,
   updateOrderStatus,
   bulkUpdateOrderStatus,
-  type FulfillmentKanbanResult,
-  type FulfillmentKanbanOrder,
 } from '@/server/functions/orders/orders';
+import type { FulfillmentKanbanResult, FulfillmentKanbanOrder } from '@/lib/schemas/orders';
 import { useOrdersRealtime } from '@/hooks/realtime/use-orders-realtime';
 import { useCurrentOrg } from '@/hooks/auth';
 import type { OrderStatus } from '@/lib/schemas/orders';
@@ -73,21 +72,39 @@ export function useFulfillmentKanban(options: UseFulfillmentKanbanOptions = {}) 
   // Main kanban data query
   const query = useQuery({
     queryKey: queryKeys.fulfillment.list(filters),
-    queryFn: () => listFn({ data: filters }),
+    queryFn: async () => {
+      const result = await listFn({ data: filters });
+      if (result == null) throw new Error('Fulfillment kanban returned no data');
+      return result;
+    },
     enabled,
     refetchInterval: 30000, // Poll every 30 seconds for live updates
     staleTime: 10000, // Consider data stale after 10 seconds
     gcTime: 300000, // Keep in cache for 5 minutes
 
     // Transform data for kanban consumption
-    select: (data: FulfillmentKanbanResult): FulfillmentKanbanData => {
+    select: (data: FulfillmentKanbanResult | null): FulfillmentKanbanData => {
+      if (!data) {
+        return {
+          stages: {
+            to_allocate: [],
+            to_pick: [],
+            picking: [],
+            to_ship: [],
+            shipped_today: [],
+          },
+          total: 0,
+          filters,
+        };
+      }
       // Apply any additional sorting if needed
       const sortedStages = { ...data.stages };
 
       // Sort orders within each stage by creation date (newest first)
       Object.keys(sortedStages).forEach((stage) => {
         sortedStages[stage as keyof typeof sortedStages].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          (a: FulfillmentKanbanOrder, b: FulfillmentKanbanOrder) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       });
 

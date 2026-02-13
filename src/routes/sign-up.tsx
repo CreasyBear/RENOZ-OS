@@ -1,4 +1,6 @@
 import { SignUpForm } from '~/components/sign-up-form';
+import { AuthLayout } from '@/components/auth/auth-layout';
+import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/sign-up')({
@@ -8,10 +10,10 @@ export const Route = createFileRoute('/sign-up')({
 
 function SignUp() {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
+    <AuthErrorBoundary>
+      <AuthLayout maxWidth="max-w-md">
         <SignUpForm />
-      </div>
-    </div>
+      </AuthLayout>
+    </AuthErrorBoundary>
   );
 }

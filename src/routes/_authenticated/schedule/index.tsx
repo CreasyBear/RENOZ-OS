@@ -1,13 +1,29 @@
 /**
  * Schedule Route
  *
- * SPRINT-03: Calendar view is now at /schedule/calendar.
+ * Domain landing hub at /schedule per DOMAIN-LANDING-STANDARDS.
+ * Shows nav cards for Calendar and Timeline views.
+ *
+ * @see docs/design-system/DOMAIN-LANDING-STANDARDS.md
  */
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
+import { PageLayout } from '@/components/layout';
+import { ScheduleHub } from '@/components/domain/jobs';
 
 export const Route = createFileRoute('/_authenticated/schedule/')({
-  component: () => null,
-  beforeLoad: () => {
-    throw redirect({ to: '/schedule/calendar' });
-  },
+  component: ScheduleIndexPage,
 });
+
+function ScheduleIndexPage() {
+  return (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Schedule"
+        description="View and manage site visits across projects"
+      />
+      <PageLayout.Content>
+        <ScheduleHub />
+      </PageLayout.Content>
+    </PageLayout>
+  );
+}

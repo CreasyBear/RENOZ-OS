@@ -17,14 +17,12 @@ import {
   Layers,
 } from "lucide-react";
 import type { SemanticStatusConfigItem, TypeConfigItem } from "@/components/shared/data-table";
+import type { ProductStatus, ProductType, StockStatus } from "@/lib/schemas/products";
 
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
-
-export type ProductStatus = "active" | "inactive" | "discontinued";
-export type ProductType = "physical" | "service" | "digital" | "bundle";
-export type StockStatus = "in_stock" | "low_stock" | "out_of_stock" | "not_tracked";
+// ProductStatus, ProductType, StockStatus imported from schemas/products.ts
 
 // ============================================================================
 // STATUS CONFIGURATION

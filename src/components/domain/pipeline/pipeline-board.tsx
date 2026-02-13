@@ -1,40 +1,36 @@
 /**
  * PipelineBoard Component
  *
- * Main kanban board for pipeline management with drag-and-drop.
- * Uses DnD Kit for drag operations with optimistic updates.
+ * Pipeline kanban board using shared kanban components.
+ * Handles domain-specific logic (Won/Lost dialogs) while delegating
+ * rendering to the shared KanbanBoard component.
  *
- * Features:
- * - Drag opportunities between stages
- * - Optimistic updates with rollback on error
- * - Confirmation dialogs for Won/Lost transitions
- * - Keyboard navigation support
- *
- * @see _Initiation/_prd/2-domains/pipeline/wireframes/pipeline-kanban-board.wireframe.md
+ * @see docs/design-system/KANBAN-STANDARDS.md
  */
 
-import {
-  DndContext,
-  DragOverlay,
-  closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useState, useCallback, useMemo } from "react";
-import { cn } from "@/lib/utils";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { PipelineColumn } from "./pipeline-column";
-import { PipelineColumnVirtualized } from "./pipeline-column-virtualized";
-import { PipelineColumnSummary } from "./pipeline-column-summary";
-import { OpportunityCard } from "./opportunities/opportunity-card";
+import { useRouter } from "@tanstack/react-router";
+import {
+  Sparkles,
+  Target,
+  FileText,
+  MessageSquare,
+  Trophy,
+  XCircle,
+  Pencil,
+} from "lucide-react";
+import { FormatAmount } from "@/components/shared/format";
+import { Button } from "@/components/ui/button";
+import {
+  KanbanBoard,
+  SortableKanbanCard,
+  type KanbanColumnDef,
+  type KanbanMoveEvent,
+  type KanbanPriority,
+} from "@/components/shared/kanban";
 import { WonLostDialog } from "./won-lost-dialog";
 import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
+import { PIPELINE_STAGE_COLORS, PIPELINE_TAG_COLORS } from "./pipeline-stage-colors";
 
 // ============================================================================
 // TYPES
@@ -53,26 +49,151 @@ export interface PipelineBoardProps {
 }
 
 // ============================================================================
-// CONSTANTS
+// COLUMN CONFIGURATION
 // ============================================================================
 
-const STAGES: OpportunityStage[] = [
-  "new",
-  "qualified",
-  "proposal",
-  "negotiation",
-  "won",
-  "lost",
+const PIPELINE_COLUMNS: KanbanColumnDef<OpportunityStage>[] = [
+  {
+    key: "new",
+    title: "New",
+    color: PIPELINE_STAGE_COLORS.new,
+    icon: Sparkles,
+  },
+  {
+    key: "qualified",
+    title: "Qualified",
+    color: PIPELINE_STAGE_COLORS.qualified,
+    icon: Target,
+  },
+  {
+    key: "proposal",
+    title: "Proposal",
+    color: PIPELINE_STAGE_COLORS.proposal,
+    icon: FileText,
+  },
+  {
+    key: "negotiation",
+    title: "Negotiation",
+    color: PIPELINE_STAGE_COLORS.negotiation,
+    icon: MessageSquare,
+  },
+  {
+    key: "won",
+    title: "Won",
+    color: PIPELINE_STAGE_COLORS.won,
+    icon: Trophy,
+    acceptsDrop: true,
+  },
+  {
+    key: "lost",
+    title: "Lost",
+    color: PIPELINE_STAGE_COLORS.lost,
+    icon: XCircle,
+    acceptsDrop: true,
+  },
 ];
 
-/** Threshold for using virtualization - columns with more items use virtual scrolling */
-const VIRTUALIZATION_THRESHOLD = 30;
+// ============================================================================
+// HELPERS
+// ============================================================================
 
-/** Threshold for showing summary mode option - columns with many more items show summary as default */
-const SUMMARY_THRESHOLD = 50;
+function getDaysUntil(date: Date | string | null): number | null {
+  if (!date) return null;
+  const d = new Date(date);
+  const now = new Date();
+  const diffTime = d.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+function getPriorityFromProbability(probability: number | null): KanbanPriority | undefined {
+  if (probability === null) return undefined;
+  if (probability >= 80) return "urgent"; // High probability = urgent to close
+  if (probability >= 60) return "high";
+  if (probability >= 30) return "medium";
+  return "low";
+}
 
 // ============================================================================
-// COMPONENT
+// OPPORTUNITY CARD RENDERER
+// ============================================================================
+
+interface OpportunityCardRendererProps {
+  opportunity: Opportunity;
+  onEdit?: (id: string) => void;
+}
+
+function OpportunityCardRenderer({ opportunity, onEdit }: OpportunityCardRendererProps) {
+  const router = useRouter();
+
+  const daysUntilClose = getDaysUntil(opportunity.expectedCloseDate);
+  const isOverdue = daysUntilClose !== null && daysUntilClose < 0;
+  const isStale = opportunity.daysInStage >= 30;
+
+  const daysUntilQuoteExpires = getDaysUntil(opportunity.quoteExpiresAt);
+  const isQuoteExpiring = daysUntilQuoteExpires !== null && daysUntilQuoteExpires <= 7 && daysUntilQuoteExpires > 0;
+  const isQuoteExpired = daysUntilQuoteExpires !== null && daysUntilQuoteExpires <= 0;
+
+  // Build tags from states
+  const tags = useMemo(() => {
+    const result: { label: string; color?: string }[] = [];
+
+    if (isStale) {
+      result.push({ label: `Stale ${opportunity.daysInStage}d`, color: PIPELINE_TAG_COLORS.stale });
+    }
+    if (isOverdue) {
+      result.push({ label: `Overdue ${Math.abs(daysUntilClose!)}d`, color: PIPELINE_TAG_COLORS.overdue });
+    }
+    if (isQuoteExpiring) {
+      result.push({ label: `Quote expires ${daysUntilQuoteExpires}d`, color: PIPELINE_TAG_COLORS.expiring });
+    }
+    if (isQuoteExpired) {
+      result.push({ label: "Quote expired", color: PIPELINE_TAG_COLORS.expired });
+    }
+
+    return result;
+  }, [isStale, isOverdue, isQuoteExpiring, isQuoteExpired, opportunity.daysInStage, daysUntilClose, daysUntilQuoteExpires]);
+
+  const handleClick = useCallback(() => {
+    router.navigate({
+      to: "/pipeline/$opportunityId",
+      params: { opportunityId: opportunity.id },
+    });
+  }, [router, opportunity.id]);
+
+  return (
+    <SortableKanbanCard
+      id={opportunity.id}
+      title={opportunity.title}
+      subtitle={opportunity.description ?? undefined}
+      value={<FormatAmount amount={opportunity.value} />}
+      priority={getPriorityFromProbability(opportunity.probability)}
+      dueDate={opportunity.expectedCloseDate ?? undefined}
+      tags={tags.length > 0 ? tags : undefined}
+      onClick={handleClick}
+      actions={
+        onEdit ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onEdit(opportunity.id)}
+            data-no-card-click
+            aria-label="Edit opportunity"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        ) : null
+      }
+      status={{
+        key: opportunity.stage,
+        name: `${opportunity.probability ?? 0}%`,
+      }}
+    />
+  );
+}
+
+// ============================================================================
+// MAIN COMPONENT
 // ============================================================================
 
 export function PipelineBoard({
@@ -82,10 +203,12 @@ export function PipelineBoard({
   onEditOpportunity,
   isLoading = false,
 }: PipelineBoardProps) {
-  // Track active drag
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-
+  const handleAddForColumn = useCallback(
+    (column: KanbanColumnDef<OpportunityStage>) => {
+      onAddOpportunity?.(column.key);
+    },
+    [onAddOpportunity]
+  );
   // Track pending Won/Lost confirmation
   const [pendingTransition, setPendingTransition] = useState<{
     opportunityId: string;
@@ -93,116 +216,53 @@ export function PipelineBoard({
     targetStage: "won" | "lost";
   } | null>(null);
 
-  // Track which columns are in summary mode (user override)
-  const [summaryModeColumns, setSummaryModeColumns] = useState<
-    Set<OpportunityStage>
-  >(() => new Set());
-
-  // Force a column out of summary mode (for "View All" button)
-  const showColumnDetails = useCallback((stage: OpportunityStage) => {
-    setSummaryModeColumns((prev) => {
-      const next = new Set(prev);
-      next.delete(stage);
-      return next;
-    });
-  }, []);
-
-  // Configure sensors for drag detection
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // 8px movement before drag starts
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  // Group opportunities by stage
-  const opportunitiesByStage = useMemo(() => {
-    const grouped: Record<OpportunityStage, Opportunity[]> = {
-      new: [],
-      qualified: [],
-      proposal: [],
-      negotiation: [],
-      won: [],
-      lost: [],
+  // Calculate column aggregates
+  const columnsWithAggregates = useMemo(() => {
+    const totals: Record<OpportunityStage, number> = {
+      new: 0,
+      qualified: 0,
+      proposal: 0,
+      negotiation: 0,
+      won: 0,
+      lost: 0,
     };
 
     for (const opp of opportunities) {
-      if (grouped[opp.stage]) {
-        grouped[opp.stage].push(opp);
-      }
+      totals[opp.stage] += opp.value;
     }
 
-    return grouped;
+    return PIPELINE_COLUMNS.map((col) => ({
+      ...col,
+      aggregate: {
+        label: "Total",
+        value: <FormatAmount amount={totals[col.key]} />,
+      },
+    }));
   }, [opportunities]);
 
-  // Get active opportunity for drag overlay
-  const activeOpportunity = useMemo(() => {
-    if (!activeId) return null;
-    return opportunities.find((o) => o.id === activeId) ?? null;
-  }, [activeId, opportunities]);
-
-  // Handle drag start
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  }, []);
-
-  // Handle drag over (for visual feedback)
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { over } = event;
-    setOverId(over?.id as string ?? null);
-  }, []);
-
-  // Handle drag end
-  const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
-      const { active, over } = event;
-
-      setActiveId(null);
-      setOverId(null);
-
-      if (!over) return;
-
-      const opportunityId = active.id as string;
-      const opportunity = opportunities.find((o) => o.id === opportunityId);
+  // Handle move event from kanban board
+  const handleMove = useCallback(
+    async (event: KanbanMoveEvent<OpportunityStage>) => {
+      const { itemId, toColumn } = event;
+      const opportunity = opportunities.find((o) => o.id === itemId);
       if (!opportunity) return;
 
-      // Determine target stage
-      let targetStage: OpportunityStage | null = null;
-
-      // Check if dropped on a column
-      if (STAGES.includes(over.id as OpportunityStage)) {
-        targetStage = over.id as OpportunityStage;
-      }
-      // Check if dropped on another card (use that card's stage)
-      else {
-        const targetOpp = opportunities.find((o) => o.id === over.id);
-        if (targetOpp) {
-          targetStage = targetOpp.stage;
-        }
-      }
-
-      if (!targetStage || targetStage === opportunity.stage) return;
-
       // If moving to Won or Lost, show confirmation dialog
-      if (targetStage === "won" || targetStage === "lost") {
+      if (toColumn === "won" || toColumn === "lost") {
         setPendingTransition({
-          opportunityId,
+          opportunityId: itemId,
           opportunity,
-          targetStage,
+          targetStage: toColumn,
         });
         return;
       }
 
       // Otherwise, update stage directly
       try {
-        await onStageChange(opportunityId, targetStage);
-      } catch (error) {
-        console.error("Failed to update stage:", error);
-        // Toast error is handled in parent
+        await onStageChange(itemId, toColumn);
+      } catch {
+        // Error is handled by onStageChange callback (toast shown in container)
+        // Silently fail here to prevent unhandled promise rejection
       }
     },
     [opportunities, onStageChange]
@@ -219,8 +279,9 @@ export function PipelineBoard({
           pendingTransition.targetStage,
           reason
         );
-      } catch (error) {
-        console.error("Failed to update stage:", error);
+      } catch {
+        // Error is handled by onStageChange callback (toast shown in container)
+        // Silently fail here to prevent unhandled promise rejection
       } finally {
         setPendingTransition(null);
       }
@@ -232,87 +293,28 @@ export function PipelineBoard({
     setPendingTransition(null);
   }, []);
 
+  // Render card function for kanban board
+  const renderCard = useCallback(
+    (opportunity: Opportunity) => (
+      <OpportunityCardRenderer opportunity={opportunity} onEdit={onEditOpportunity} />
+    ),
+    [onEditOpportunity]
+  );
+
   return (
     <>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <ScrollArea className="w-full">
-          <div
-            className={cn(
-              "flex gap-4 p-4 min-w-max",
-              isLoading && "opacity-50 pointer-events-none"
-            )}
-            role="region"
-            aria-label="Pipeline board"
-          >
-            {STAGES.map((stage) => {
-              const stageOpportunities = opportunitiesByStage[stage];
-              const itemCount = stageOpportunities.length;
-              const isSummaryMode = summaryModeColumns.has(stage);
-
-              // Determine which view to render
-              // 1. Summary mode (user override or very large)
-              // 2. Virtualized (large lists)
-              // 3. Regular (small lists)
-              const shouldShowSummary =
-                isSummaryMode ||
-                (itemCount > SUMMARY_THRESHOLD && !isSummaryMode);
-              const shouldVirtualize =
-                !shouldShowSummary && itemCount > VIRTUALIZATION_THRESHOLD;
-
-              if (shouldShowSummary) {
-                return (
-                  <PipelineColumnSummary
-                    key={stage}
-                    stage={stage}
-                    opportunities={stageOpportunities}
-                    isOver={overId === stage}
-                    onAddOpportunity={onAddOpportunity}
-                    onViewAll={() => showColumnDetails(stage)}
-                  />
-                );
-              }
-
-              if (shouldVirtualize) {
-                return (
-                  <PipelineColumnVirtualized
-                    key={stage}
-                    stage={stage}
-                    opportunities={stageOpportunities}
-                    isOver={overId === stage}
-                    onAddOpportunity={onAddOpportunity}
-                    onEditOpportunity={onEditOpportunity}
-                  />
-                );
-              }
-
-              return (
-                <PipelineColumn
-                  key={stage}
-                  stage={stage}
-                  opportunities={stageOpportunities}
-                  isOver={overId === stage}
-                  onAddOpportunity={onAddOpportunity}
-                  onEditOpportunity={onEditOpportunity}
-                />
-              );
-            })}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-
-        {/* Drag Overlay */}
-        <DragOverlay>
-          {activeOpportunity ? (
-            <OpportunityCard opportunity={activeOpportunity} isOverlay />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+      <KanbanBoard
+        columns={columnsWithAggregates}
+        items={opportunities}
+        getColumnKey={(opp) => opp.stage}
+        getItemKey={(opp) => opp.id}
+        onMove={handleMove}
+        renderCard={renderCard}
+        isLoading={isLoading}
+        emptyMessage="No opportunities"
+        height="calc(100vh - 320px)"
+        onAddItem={handleAddForColumn}
+      />
 
       {/* Won/Lost Confirmation Dialog */}
       <WonLostDialog

@@ -5,23 +5,22 @@
  * Implements render props pattern for flexible header/action composition.
  *
  * @source product from useProduct hook
+ * @source inventorySummary from useProductInventorySummary hook
  * @source activities from useUnifiedActivities hook
  *
  * @see STANDARDS.md - Container/Presenter pattern
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Edit,
   Copy,
   Printer,
   MoreHorizontal,
   Trash2,
-  Package,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -41,44 +40,34 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { cn } from '@/lib/utils';
+import { EntityActivityLogger } from '@/components/shared/activity';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toastSuccess, toastError } from '@/hooks';
-import { useProduct, useDeleteProduct, useDuplicateProduct } from '@/hooks/products';
+import { useProduct, useDeleteProduct, useDuplicateProduct, useUpdateProduct, useProductInventorySummary, useCustomerPrices } from '@/hooks/products';
 import { useUnifiedActivities } from '@/hooks/activities';
-import { getProductInventory, getInventoryStats } from '@/server/functions/products/product-inventory';
-import { ProductDetailView, type ProductWithRelations, type Category, type PriceTier, type ProductImage } from '../views/product-detail-view';
-import { PRODUCT_STATUS_CONFIG, type ProductStatus } from '../product-status-config';
+import { useTrackView } from '@/hooks/search';
+import { isGetProductResponse, type GetProductResponse, type UpdateProduct } from '@/lib/schemas/products';
+import { ProductDetailView } from '../views/product-detail-view';
+import { ProductEditDialog } from '../product-edit-dialog';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface ProductDetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
-  /** Header action buttons */
+  /** Header action buttons (Edit, More menu) */
   headerActions: React.ReactNode;
-  /** Main content */
+  /** Main content (ProductDetailView) */
   content: React.ReactNode;
 }
 
 export interface ProductDetailContainerProps {
   /** Product ID to display */
   productId: string;
-  /** Pre-loaded product data (from route loader) */
-  loaderData?: {
-    product: ProductWithRelations;
-    category: Category | null;
-    images: ProductImage[];
-    priceTiers: PriceTier[];
-    attributeValues: unknown[];
-    relations: unknown[];
-    bundleComponents?: unknown[];
-  };
+  /** Pre-loaded product data (from route loader); same shape as getProduct return */
+  loaderData?: GetProductResponse;
   /** Callback when user navigates back */
   onBack?: () => void;
-  /** Callback when user clicks edit */
-  onEdit?: () => void;
   /** Callback after successful duplication */
   onDuplicate?: (newProductId: string) => void;
   /** Render props pattern for layout composition */
@@ -104,57 +93,6 @@ function ProductDetailSkeleton() {
 }
 
 // ============================================================================
-// INVENTORY SUMMARY HOOK
-// ============================================================================
-
-interface InventorySummary {
-  totalOnHand: number;
-  totalAvailable: number;
-  totalAllocated: number;
-  locationCount: number;
-  totalValue: number;
-}
-
-function useInventorySummary(productId: string, trackInventory: boolean) {
-  const [summary, setSummary] = useState<InventorySummary | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!trackInventory) {
-      setSummary(null);
-      return;
-    }
-
-    async function fetchInventory() {
-      setLoading(true);
-      try {
-        const [inventoryData, statsData] = await Promise.all([
-          getProductInventory({ data: { productId } }),
-          getInventoryStats({ data: { productId } }),
-        ]);
-
-        setSummary({
-          totalOnHand: inventoryData?.totalOnHand ?? 0,
-          totalAvailable: inventoryData?.totalAvailable ?? 0,
-          totalAllocated: inventoryData?.totalAllocated ?? 0,
-          locationCount: inventoryData?.locationCount ?? 0,
-          totalValue: statsData?.totalValue ?? 0,
-        });
-      } catch (error) {
-        console.error('Failed to fetch inventory:', error);
-        setSummary(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchInventory();
-  }, [productId, trackInventory]);
-
-  return { summary, loading };
-}
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -162,7 +100,6 @@ export function ProductDetailContainer({
   productId,
   loaderData,
   onBack,
-  onEdit,
   onDuplicate,
   children,
   className,
@@ -172,6 +109,7 @@ export function ProductDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('overview');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [showMetaPanel, setShowMetaPanel] = useState(true);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -191,14 +129,28 @@ export function ProductDetailContainer({
     refetch,
   } = useProduct(productId, !loaderData);
 
-  // Prefer loader data over fetched data
-  const productData = loaderData ?? fetchedData;
+  // Prefer loader data over fetched data (both typed as GetProductResponse)
+  const productData: GetProductResponse | undefined = loaderData ?? fetchedData;
 
-  // Fetch inventory summary
-  const { summary: inventorySummary } = useInventorySummary(
+  const { onLogActivity, loggerProps } = useEntityActivityLogging({
+    entityType: 'product',
+    entityId: productId,
+    entityLabel: `Product: ${productData?.product?.name ?? productId}`,
+  });
+
+  useTrackView('product', productData?.product?.id, productData?.product?.name, productData?.product?.sku ?? undefined, `/products/${productId}`);
+
+  // Fetch inventory summary using TanStack Query hook
+  const { summary: inventorySummary } = useProductInventorySummary({
     productId,
-    productData?.product?.trackInventory ?? false
-  );
+    enabled: productData?.product?.trackInventory ?? false,
+  });
+
+  // Fetch customer-specific prices for pricing tab
+  const { data: customerPricesData } = useCustomerPrices({
+    productId,
+    enabled: !!productData?.product,
+  });
 
   const {
     activities,
@@ -214,6 +166,7 @@ export function ProductDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const deleteMutation = useDeleteProduct();
   const duplicateMutation = useDuplicateProduct();
+  const updateMutation = useUpdateProduct();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -239,17 +192,21 @@ export function ProductDetailContainer({
     }
   }, [deleteMutation, productId, onBack]);
 
+  const handleEdit = useCallback(async (data: UpdateProduct) => {
+    await updateMutation.mutateAsync({ id: productId, data });
+  }, [updateMutation, productId]);
+
+  const handlePriceUpdate = useCallback(async (newPrice: number) => {
+    await updateMutation.mutateAsync({
+      id: productId,
+      data: { basePrice: newPrice },
+    });
+    toastSuccess(`Price updated to ${new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(newPrice)}`);
+  }, [updateMutation, productId]);
+
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Derived State
-  // ─────────────────────────────────────────────────────────────────────────
-  const statusConfig = useMemo(() => {
-    if (!productData?.product) return null;
-    return PRODUCT_STATUS_CONFIG[productData.product.status as ProductStatus] ?? PRODUCT_STATUS_CONFIG.active;
-  }, [productData?.product]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
@@ -260,7 +217,6 @@ export function ProductDetailContainer({
       return (
         <>
           {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
             headerActions: <Skeleton className="h-10 w-32" />,
             content: loadingContent,
           })}
@@ -273,7 +229,7 @@ export function ProductDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Error
   // ─────────────────────────────────────────────────────────────────────────
-  if (error || !productData?.product) {
+  if (error || !productData || !isGetProductResponse(productData)) {
     const errorContent = (
       <ErrorState
         title="Product not found"
@@ -286,7 +242,6 @@ export function ProductDetailContainer({
       return (
         <>
           {children({
-            headerTitle: 'Product Not Found',
             headerActions: null,
             content: errorContent,
           })}
@@ -297,36 +252,29 @@ export function ProductDetailContainer({
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Destructure product data
+  // Destructure product data (getProduct returns schema-validated data)
   // ─────────────────────────────────────────────────────────────────────────
   const { product, category, images, priceTiers } = productData;
+
+  const customerPrices = (customerPricesData ?? []).map((price) => ({
+    ...price,
+    discountPercent: price.discountPercent ?? null,
+  }));
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Header Elements
   // ─────────────────────────────────────────────────────────────────────────
-  const StatusIcon = statusConfig?.icon ?? Package;
-
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <span className="text-xl font-semibold">{product.name}</span>
-      {statusConfig && (
-        <Badge className={cn('gap-1', `bg-${statusConfig.color}/10`)}>
-          <StatusIcon className="h-3 w-3" />
-          {statusConfig.label}
-        </Badge>
-      )}
-    </div>
-  );
+  // Entity identity (name, status) is displayed by ProductHeader in the view
+  // No headerTitle needed - follows single-responsibility principle
+  // @see docs/design-system/DETAIL-VIEW-STANDARDS.md
 
   const headerActions = (
     <div className="flex items-center gap-2">
       {/* Edit Action */}
-      {onEdit && (
-        <Button variant="outline" onClick={onEdit}>
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
-        </Button>
-      )}
+      <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
+        <Edit className="h-4 w-4 mr-2" />
+        Edit
+      </Button>
 
       {/* More Actions */}
       <DropdownMenu>
@@ -371,6 +319,7 @@ export function ProductDetailContainer({
         category={category}
         images={images}
         priceTiers={priceTiers}
+        customerPrices={customerPrices}
         inventorySummary={inventorySummary}
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -379,7 +328,20 @@ export function ProductDetailContainer({
         activities={activities}
         activitiesLoading={activitiesLoading}
         activitiesError={activitiesError}
+        onLogActivity={onLogActivity}
+        onPriceUpdate={handlePriceUpdate}
         className={className}
+      />
+
+      <EntityActivityLogger {...loggerProps} />
+
+      {/* Edit Product Dialog */}
+      <ProductEditDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        product={product}
+        onSubmit={handleEdit}
+        isLoading={updateMutation.isPending}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -388,7 +350,7 @@ export function ProductDetailContainer({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{product.name}"? This
+              Are you sure you want to delete &quot;{product.name}&quot;? This
               action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -411,16 +373,17 @@ export function ProductDetailContainer({
   // Render: With Render Props or Default
   // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
   // Default rendering (standalone usage)
   return (
     <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
-        {headerActions}
-      </div>
+      {headerActions && (
+        <div className="flex items-center justify-end mb-4">
+          {headerActions}
+        </div>
+      )}
       {content}
     </div>
   );

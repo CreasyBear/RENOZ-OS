@@ -57,6 +57,8 @@ export interface SuppliersListPresenterProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
+  /** Retry handler for error state */
+  onRetry?: () => void;
   /** Additional className */
   className?: string;
 }
@@ -187,6 +189,7 @@ export const SuppliersListPresenter = memo(function SuppliersListPresenter({
   pageSize,
   total,
   onPageChange,
+  onRetry,
   className,
 }: SuppliersListPresenterProps) {
   // Error state
@@ -196,6 +199,7 @@ export const SuppliersListPresenter = memo(function SuppliersListPresenter({
         variant="error"
         title="Failed to load suppliers"
         description={error.message ?? "An unexpected error occurred"}
+        action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
     );
@@ -204,7 +208,7 @@ export const SuppliersListPresenter = memo(function SuppliersListPresenter({
   // Loading state
   if (isLoading) {
     return (
-      <div className={cn("space-y-4", className)}>
+      <div className={cn("space-y-3", className)}>
         <DesktopSkeleton />
         <MobileSkeleton />
       </div>
@@ -225,7 +229,7 @@ export const SuppliersListPresenter = memo(function SuppliersListPresenter({
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-3", className)}>
       {/* Desktop Table */}
       <div className="hidden md:block">
         <SuppliersTablePresenter

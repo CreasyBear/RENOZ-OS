@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Context file exports provider + hook */
 /**
  * Sidebar Provider
  *
@@ -20,9 +21,11 @@ import {
   useState,
   useEffect,
   useCallback,
+  startTransition,
   type ReactNode,
 } from 'react'
 import { useIsMobile } from '@/hooks'
+import { useKeyboardShortcut } from './use-keyboard-shortcut'
 
 // ============================================================================
 // CONSTANTS
@@ -165,7 +168,7 @@ export function SidebarProvider({
   // Close mobile sheet when switching to desktop
   useEffect(() => {
     if (!isMobile) {
-      setOpenMobile(false)
+      startTransition(() => setOpenMobile(false))
     }
   }, [isMobile])
 
@@ -177,17 +180,9 @@ export function SidebarProvider({
   }, [state, persistState])
 
   // Keyboard shortcut: Cmd/Ctrl + B
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault()
-        setState((prev) => (prev === 'expanded' ? 'collapsed' : 'expanded'))
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  useKeyboardShortcut('toggle-sidebar', () => {
+    setState((prev) => (prev === 'expanded' ? 'collapsed' : 'expanded'))
+  })
 
   const toggle = useCallback(() => {
     setState((prev) => (prev === 'expanded' ? 'collapsed' : 'expanded'))

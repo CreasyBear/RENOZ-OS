@@ -1,0 +1,141 @@
+# Deployment Guide: Renoz CRM to Vercel & GitHub
+
+This guide covers deploying Renoz CRM v3 to Vercel with GitHub integration.
+
+> **Before deploying:** Run through [PRE-DEPLOYMENT-CHECKLIST.md](./PRE-DEPLOYMENT-CHECKLIST.md) — build, env vars, database migrations, Supabase auth, and known gaps.
+
+> **Repo structure**: This deployment setup assumes renoz-v3 is the root of your GitHub repository. If renoz-v3 lives inside a monorepo, set **Root Directory** to `renoz-v3` in Vercel Project Settings.
+
+## Prerequisites
+
+- GitHub repository
+- Vercel account
+- Supabase project
+- Environment variables (see `.env.example`)
+
+---
+
+## Option A: Vercel GitHub Integration (Recommended)
+
+The simplest approach: connect your repo to Vercel and let it auto-deploy on every push.
+
+> **Note**: If using Option A, disable the GitHub Actions deploy workflow to avoid duplicate deployments: rename `.github/workflows/deploy-vercel.yml` to `deploy-vercel.yml.disabled` or delete it.
+
+### 1. Create Vercel Project
+
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import your GitHub repository (the renoz-v3 root)
+3. Vercel will auto-detect TanStack Start
+
+### 2. Configure Environment Variables
+
+In Vercel Project Settings → Environment Variables, add all variables from `.env.example`:
+
+**Required (minimum for deployment):**
+- `DATABASE_URL` – Supabase Postgres connection string
+- `VITE_SUPABASE_URL` – Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` – Supabase anon key
+- `SUPABASE_SERVICE_ROLE_KEY` – Supabase service role key
+- `APP_URL` – Production URL (e.g. `https://your-app.vercel.app`)
+- `VITE_APP_URL` – Same as `APP_URL` (used by client)
+
+**For preview deployments**, Vercel provides `VERCEL_URL`. You can set:
+- `APP_URL` = `https://$VERCEL_URL` (or your production domain)
+- `VITE_APP_URL` = same
+
+**Optional (add as needed):**
+- `RESEND_API_KEY`, `EMAIL_FROM`, etc. for email
+- `UPSTASH_REDIS_*` for rate limiting
+- `TRIGGER_API_KEY`, `TRIGGER_PROJECT_ID` for background jobs
+
+### 3. Deploy
+
+Push to `main` – Vercel will build and deploy automatically. Preview deployments are created for pull requests.
+
+---
+
+## Option B: GitHub Actions Deploy
+
+Use this if you prefer deploying via CI (e.g. to run custom steps before deploy). **Do not use both Option A and B** – choose one to avoid duplicate deployments.
+
+### 1. Link Vercel Project
+
+```bash
+npx vercel link
+```
+
+Follow prompts to link to your Vercel project/team.
+
+### 2. Add GitHub Secrets
+
+In your repo: Settings → Secrets and variables → Actions. Add:
+
+| Secret | Description |
+|--------|-------------|
+| `VERCEL_ORG_ID` | From `.vercel/project.json` after `vercel link`, or Vercel dashboard |
+| `VERCEL_PROJECT_ID` | Same |
+| `VERCEL_TOKEN` | [Vercel → Settings → Tokens](https://vercel.com/account/tokens) |
+
+### 3. Configure Vercel Environment
+
+Ensure all env vars are set in Vercel (Project Settings → Environment Variables). The deploy workflow uses `vercel pull` to fetch them during build.
+
+### 4. Deploy
+
+Push to `main`. The workflow runs:
+1. **CI** (lint, typecheck, tests) – on every push and pull request
+2. **Deploy** – on push to `main`
+
+---
+
+## Database Migrations
+
+Before first deploy (or after schema changes), run migrations against your production database:
+
+```bash
+DATABASE_URL="your-production-connection-string" npm run db:migrate
+```
+
+Use the Supabase connection pooler URL for serverless (recommended for Vercel).
+
+---
+
+## Supabase Redirect URLs
+
+For auth (OAuth, magic links, password reset) to work in production:
+
+1. Supabase Dashboard → Authentication → URL Configuration
+2. Set **Site URL** to your production URL (e.g. `https://your-app.vercel.app`)
+3. Add **Redirect URLs**:
+   - `https://your-app.vercel.app/**`
+   - `https://*-your-team.vercel.app/**` (for preview deployments)
+
+---
+
+## Build Configuration
+
+- **Framework**: TanStack Start (auto-detected by Vercel)
+- **Build command**: `NODE_OPTIONS=--max-old-space-size=8192 npm run build`
+- **Output**: Handled by TanStack Start / Nitro (`.output`)
+
+The `vercel.json` in this directory adds:
+- Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
+- Increased Node memory for large builds
+
+---
+
+## Troubleshooting
+
+### Build fails with OOM
+The build uses 8GB Node memory. If it still fails, increase in `vercel.json`:
+```json
+"buildCommand": "NODE_OPTIONS=--max-old-space-size=12288 npm run build"
+```
+
+### Auth redirects to localhost
+- Ensure `APP_URL` and `VITE_APP_URL` are set in Vercel
+- For previews, consider: `APP_URL=https://${VERCEL_URL}` (Vercel injects `VERCEL_URL`)
+
+### Database connection errors
+- Use Supabase connection pooler URL for serverless: `?pgbouncer=true` or the pooler connection string
+- Ensure `DATABASE_URL` uses `sslmode=require`

@@ -104,17 +104,17 @@ function DayCell({ date, installer, availability, onClick, onAddBlockout }: DayC
   }
 
   const statusColors = {
-    available: 'bg-green-100 hover:bg-green-200 border-green-200',
-    busy: 'bg-orange-100 hover:bg-orange-200 border-orange-200',
-    unavailable: 'bg-red-100 hover:bg-red-200 border-red-200',
-    blockout: 'bg-gray-100 hover:bg-gray-200 border-gray-200',
+    available: 'bg-success/10 hover:bg-success/20 border-success/20',
+    busy: 'bg-warning/10 hover:bg-warning/20 border-warning/20',
+    unavailable: 'bg-destructive/10 hover:bg-destructive/20 border-destructive/20',
+    blockout: 'bg-muted hover:bg-muted/80 border-border',
   };
 
   const statusDots = {
-    available: 'bg-green-500',
-    busy: 'bg-orange-500',
-    unavailable: 'bg-red-500',
-    blockout: 'bg-gray-500',
+    available: 'bg-success',
+    busy: 'bg-warning',
+    unavailable: 'bg-destructive',
+    blockout: 'bg-muted-foreground',
   };
 
   return (
@@ -142,7 +142,7 @@ function DayCell({ date, installer, availability, onClick, onAddBlockout }: DayC
       {/* Blockout indicator */}
       {status === 'blockout' && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[10px] font-medium text-gray-600">OFF</span>
+          <span className="text-[10px] font-medium text-muted-foreground">OFF</span>
         </div>
       )}
 
@@ -336,19 +336,19 @@ export function InstallerAvailabilityCalendar({
         {/* Legend */}
         <div className="flex flex-wrap gap-4 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
+            <div className="w-3 h-3 rounded-full bg-success" />
             <span>Available</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
+            <div className="w-3 h-3 rounded-full bg-warning" />
             <span>Busy</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <div className="w-3 h-3 rounded-full bg-destructive" />
             <span>Unavailable</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-gray-500" />
+            <div className="w-3 h-3 rounded-full bg-muted-foreground" />
             <span>Blockout</span>
           </div>
         </div>

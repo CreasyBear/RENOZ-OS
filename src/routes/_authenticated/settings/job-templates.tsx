@@ -68,7 +68,7 @@ function JobTemplatesSettingsPage() {
         })),
         isActive: true,
       });
-    } catch (err) {
+    } catch {
       // Error toast is handled by the mutation hook
     }
   };

@@ -4,7 +4,7 @@
  * Server action to handle OAuth callback from external providers.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import {
   handleOAuthCallback as handleOAuthCallbackLib,
   type OAuthCallbackResult,
@@ -23,7 +23,7 @@ export interface HandleOAuthCallbackRequest {
  * Exchanges authorization code for tokens and creates/updates connection.
  */
 export async function handleOAuthCallback(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: HandleOAuthCallbackRequest
 ): Promise<OAuthCallbackResult> {
   try {

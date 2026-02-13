@@ -8,7 +8,7 @@
  */
 
 import * as React from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getActivityFeed,
@@ -17,6 +17,7 @@ import {
   getActivityStats,
   getActivityLeaderboard,
   getActivity,
+  logEntityActivity,
 } from '@/server/functions/activities/activities';
 import type {
   ActivityStatsQuery,
@@ -26,6 +27,9 @@ import type {
   Activity,
   ActivityStatsResult,
   ActivityLeaderboardItem,
+  ActivityFeedResult,
+  EntityActivitiesResult,
+  ActivityFilter,
 } from '@/lib/schemas/activities';
 import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 
@@ -33,15 +37,8 @@ import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 // TYPES
 // ============================================================================
 
-/** Filters for activity feed queries */
-interface ActivityFeedFilters extends Record<string, unknown> {
-  entityType?: ActivityEntityType;
-  entityId?: string;
-  action?: ActivityAction;
-  userId?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-}
+// Note: Use ActivityFilter from schemas for consistency
+// ActivityFeedFilters was an alias that has been removed
 
 // ============================================================================
 // QUERY KEYS
@@ -90,13 +87,13 @@ export function useActivityFeed(options: UseActivityFeedOptions = {}) {
     enabled = true,
   } = options;
 
-  const filters: ActivityFeedFilters = {
+  const filters: Partial<ActivityFilter> = {
     entityType,
     entityId,
     action,
-    userId,
     dateFrom,
     dateTo,
+    ...(userId ? { createdBy: userId } : {}), // Map userId to createdBy for ActivityFilter
   };
 
   return useInfiniteQuery({
@@ -105,11 +102,12 @@ export function useActivityFeed(options: UseActivityFeedOptions = {}) {
       const result = await getActivityFeed({
         data: {
           ...filters,
-          cursor: pageParam as string | undefined,
+          cursor: typeof pageParam === 'string' ? pageParam : undefined,
           pageSize,
         },
       });
-      return result as CursorPaginatedResponse<ActivityWithUser>;
+      if (result == null) throw new Error('Activity feed returned no data');
+      return result;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
@@ -150,11 +148,12 @@ export function useEntityActivities(options: UseEntityActivitiesOptions) {
         data: {
           entityType,
           entityId,
-          cursor: pageParam as string | undefined,
+          cursor: typeof pageParam === 'string' ? pageParam : undefined,
           pageSize,
         },
       });
-      return result as CursorPaginatedResponse<ActivityWithUser>;
+      if (result == null) throw new Error('Entity activities returned no data');
+      return result;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
@@ -190,11 +189,12 @@ export function useUserActivities(options: UseUserActivitiesOptions) {
       const result = await getUserActivities({
         data: {
           userId,
-          cursor: pageParam as string | undefined,
+          cursor: typeof pageParam === 'string' ? pageParam : undefined,
           pageSize,
         },
       });
-      return result as CursorPaginatedResponse<Activity>;
+      if (result == null) throw new Error('User activities returned no data');
+      return result;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
@@ -215,7 +215,8 @@ export function useActivity(id: string, enabled = true) {
     queryKey: queryKeys.activities.detail(id),
     queryFn: async (): Promise<ActivityWithUser> => {
       const result = await getActivity({ data: { id } });
-      return result as ActivityWithUser;
+      if (result == null) throw new Error('Activity not found');
+      return result;
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000, // 1 minute
@@ -258,6 +259,7 @@ export function useActivityStats(options: UseActivityStatsOptions = {}) {
     queryKey: queryKeys.activities.stats(query),
     queryFn: async (): Promise<ActivityStatsResult> => {
       const result = await getActivityStats({ data: query });
+      if (result == null) throw new Error('Activity stats returned no data');
       return result;
     },
     enabled,
@@ -298,7 +300,7 @@ export function useActivityLeaderboard(options: UseActivityLeaderboardOptions = 
       const result = await getActivityLeaderboard({
         data: { dateFrom, dateTo, groupBy: 'userId' },
       });
-      return result;
+      return result ?? [];
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -309,25 +311,22 @@ export function useActivityLeaderboard(options: UseActivityLeaderboardOptions = 
 // UTILITY HOOKS
 // ============================================================================
 
-type ActivityFeedResult = ReturnType<typeof useActivityFeed>;
-type EntityActivitiesResult = ReturnType<typeof useEntityActivities>;
-
 /**
  * Get flattened activities from infinite query result.
+ * Works with ActivityFeedResult or EntityActivitiesResult (both return ActivityWithUser[]).
  * Memoized to prevent unnecessary recalculation.
  * Useful for virtualized lists.
  */
 export function useFlattenedActivities(
   infiniteQueryResult: ActivityFeedResult | EntityActivitiesResult
-) {
+): ActivityWithUser[] {
   const { data } = infiniteQueryResult;
-
+  
   return React.useMemo(() => {
-    return (
-      data?.pages.flatMap(
-        (page: CursorPaginatedResponse<ActivityWithUser | Activity>) => page.items
-      ) ?? []
-    );
+    if (!data) return [];
+    // InfiniteData has pages property
+    // Both ActivityFeedResult and EntityActivitiesResult return ActivityWithUser[]
+    return data.pages.flatMap((page) => page.items);
   }, [data]); // data reference is stable from TanStack Query
 }
 
@@ -392,4 +391,60 @@ export function useInvalidateActivities() {
       });
     },
   };
+}
+
+// ============================================================================
+// MUTATIONS
+// ============================================================================
+
+/** Input for logging an activity on any entity */
+export interface LogEntityActivityInput {
+  entityType: ActivityEntityType;
+  entityId: string;
+  activityType: 'call' | 'email' | 'meeting' | 'note' | 'follow_up';
+  description: string;
+  outcome?: string;
+  scheduledAt?: Date;
+  isFollowUp?: boolean;
+}
+
+/**
+ * Hook to log an activity (call, email, meeting, note, follow-up) on any entity.
+ *
+ * @example
+ * ```tsx
+ * const logActivity = useLogEntityActivity();
+ *
+ * const handleLogCall = async () => {
+ *   await logActivity.mutateAsync({
+ *     entityType: 'order',
+ *     entityId: orderId,
+ *     activityType: 'call',
+ *     description: 'Discussed delivery timeline',
+ *     outcome: 'positive',
+ *   });
+ * };
+ * ```
+ */
+export function useLogEntityActivity() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: LogEntityActivityInput) =>
+      logEntityActivity({ data }),
+    onSuccess: (_result, variables) => {
+      // Invalidate entity-specific activities
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.activities.entity(variables.entityType, variables.entityId),
+      });
+      // Invalidate unified activities for this entity
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.unifiedActivities.entity(variables.entityType, variables.entityId),
+      });
+      // Invalidate general activity feeds
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.activities.feeds(),
+      });
+    },
+  });
 }

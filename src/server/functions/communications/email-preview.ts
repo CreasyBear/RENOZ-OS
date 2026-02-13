@@ -25,6 +25,9 @@ import {
   getSampleTemplateData,
 } from "@/lib/server/email-templates";
 import { NotFoundError } from "@/lib/server/errors";
+import { getCustomerById } from "@/server/functions/customers/customers";
+import { logger } from "@/lib/logger";
+import { getResendApiKey, getEmailFrom, getEmailFromName } from "@/lib/email/config";
 
 // ============================================================================
 // UTILITIES
@@ -114,13 +117,41 @@ export const renderEmailPreview = createServerFn({ method: "POST" })
       throw new NotFoundError("Template not found", "emailTemplate");
     }
 
-    // Build variables: start with sample data, overlay provided variables
-    let variables = getSampleTemplateData();
+    // Build variables: start with sample data, overlay customer data if provided
+    let variables: Record<string, unknown> = { ...getSampleTemplateData() };
 
-    // TODO: If sampleCustomerId is provided, fetch real customer data
-    // This would require importing customer functions
+    // If sampleCustomerId is provided, fetch real customer data
+    if (data.sampleCustomerId) {
+      try {
+        const customer = await getCustomerById({ data: { id: data.sampleCustomerId } });
+        if (customer) {
+          // Map customer data to template variable format
+          const sampleData = getSampleTemplateData();
+          const customerName = customer.name || sampleData.customer.name;
+          const customerEmail = customer.email || sampleData.customer.email;
+          const customerPhone = customer.phone || sampleData.customer.phone;
+          
+          variables = {
+            ...sampleData,
+            customer: {
+              name: customerName,
+              email: customerEmail,
+              phone: customerPhone,
+            },
+            first_name: customerName.split(' ')[0] || 'there',
+          };
+        }
+      } catch (error) {
+        // Log but don't fail - fall back to sample data
+        logger.warn('Failed to fetch customer data for preview', {
+          domain: 'communications',
+          customerId: data.sampleCustomerId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
-    // Overlay any provided variables
+    // Overlay any provided variables (these take precedence)
     if (data.variables) {
       variables = { ...variables, ...data.variables };
     }
@@ -182,11 +213,13 @@ export const sendTestEmail = createServerFn({ method: "POST" })
     }
 
     // Validate Resend API key is configured
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (!resendApiKey) {
+    let resendApiKey: string;
+    try {
+      resendApiKey = getResendApiKey();
+    } catch (error) {
       return {
         success: false,
-        error: "RESEND_API_KEY is not configured. Please add it to your environment variables.",
+        error: error instanceof Error ? error.message : "RESEND_API_KEY is not configured. Please add it to your environment variables.",
       };
     }
 
@@ -209,9 +242,9 @@ export const sendTestEmail = createServerFn({ method: "POST" })
     // Use current user's email as default, or the provided recipient
     const recipientEmail = data.recipientEmail || ctx.user.email;
 
-    // Get sender email from environment or use a default
-    const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
-    const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+    // Get sender email from config with fallback
+    const fromEmail = getEmailFrom();
+    const fromName = getEmailFromName();
 
     try {
       const resend = new Resend(resendApiKey);

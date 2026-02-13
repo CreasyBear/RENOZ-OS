@@ -27,3 +27,68 @@ export const getPreferenceHistorySchema = z.object({
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>
 export type GetPreferencesInput = z.infer<typeof getPreferencesSchema>
 export type GetPreferenceHistoryInput = z.infer<typeof getPreferenceHistorySchema>
+
+// ============================================================================
+// OUTPUT TYPES (from server functions)
+// ============================================================================
+
+/**
+ * Contact preferences - matches what getContactPreferences returns
+ */
+export interface ContactPreferences {
+  id: string
+  firstName: string
+  lastName: string
+  email: string | null
+  emailOptIn: boolean
+  smsOptIn: boolean
+  /** API returns ISO string; component accepts string | Date */
+  emailOptInAt: Date | string | null
+  smsOptInAt: Date | string | null
+}
+
+/**
+ * Preference history item - matches what getPreferenceHistory returns
+ */
+export interface PreferenceHistoryItem {
+  id: string
+  description: string
+  createdAt: Date | string
+  /** Extended metadata for UI display (contactName, channel, newValue, changedAt) */
+  metadata?: {
+    contactName?: string
+    channel?: string
+    newValue?: boolean
+    changedAt?: string
+  } | null
+}
+
+/**
+ * Preference history response - matches what getPreferenceHistory returns
+ */
+export interface PreferenceHistoryResponse {
+  items: PreferenceHistoryItem[]
+  total: number
+}
+
+// ============================================================================
+// COMPONENT PROP TYPES
+// ============================================================================
+
+/**
+ * Props for CommunicationPreferences component
+ */
+export interface CommunicationPreferencesProps {
+  contactId: string
+  contactName?: string
+  className?: string
+}
+
+/**
+ * Props for PreferenceHistory component
+ */
+export interface PreferenceHistoryProps {
+  contactId?: string
+  customerId?: string
+  className?: string
+}

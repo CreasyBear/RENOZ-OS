@@ -3,92 +3,31 @@
  *
  * Centralized confirmation dialog management.
  * Eliminates scattered confirm() calls and provides consistent UX.
+ *
+ * Requires ConfirmationProvider in the tree (e.g. _authenticated layout).
+ * useConfirmation reads from context so all callers share state with ConfirmationDialog.
  */
 
-import { useState, useCallback } from 'react';
+import {
+  useConfirmationContext,
+  type ConfirmationOptions,
+  type ConfirmationState,
+} from '@/contexts/confirmation-context';
+import { logger } from '@/lib/logger';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface ConfirmationOptions {
-  title?: string;
-  description?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  variant?: 'default' | 'destructive';
-  requireReason?: boolean;
-  reasonLabel?: string;
-  reasonPlaceholder?: string;
-}
-
-export interface ConfirmationState extends ConfirmationOptions {
-  isOpen: boolean;
-  resolve?: (result: { confirmed: boolean; reason?: string }) => void;
-}
+// Re-export types for consumers
+export type { ConfirmationOptions, ConfirmationState };
 
 // ============================================================================
 // HOOK
 // ============================================================================
 
 /**
- * Centralized confirmation dialog hook
- * Replaces scattered window.confirm() and confirm() calls throughout the codebase
+ * Centralized confirmation dialog hook.
+ * Must be used within ConfirmationProvider.
  */
 export function useConfirmation() {
-  const [state, setState] = useState<ConfirmationState>({
-    isOpen: false,
-  });
-
-  const confirm = useCallback(
-    (options: ConfirmationOptions = {}): Promise<{ confirmed: boolean; reason?: string }> => {
-      return new Promise((resolve) => {
-        setState({
-          ...options,
-          isOpen: true,
-          resolve,
-        });
-      });
-    },
-    []
-  );
-
-  const handleConfirm = useCallback(
-    (reason?: string) => {
-      state.resolve?.({ confirmed: true, reason });
-      setState({ isOpen: false });
-    },
-    [state]
-  );
-
-  const handleCancel = useCallback(() => {
-    state.resolve?.({ confirmed: false });
-    setState({ isOpen: false });
-  }, [state]);
-
-  const close = useCallback(() => {
-    state.resolve?.({ confirmed: false });
-    setState({ isOpen: false });
-  }, [state]);
-
-  return {
-    // State for rendering
-    isOpen: state.isOpen,
-    title: state.title || 'Confirm Action',
-    description: state.description || 'Are you sure you want to proceed?',
-    confirmLabel: state.confirmLabel || 'Confirm',
-    cancelLabel: state.cancelLabel || 'Cancel',
-    variant: state.variant || 'default',
-    requireReason: state.requireReason || false,
-    reasonLabel: state.reasonLabel || 'Reason',
-    reasonPlaceholder: state.reasonPlaceholder || 'Please provide a reason...',
-
-    // Actions
-    confirm,
-    handleConfirm,
-    handleCancel,
-    close,
-  };
+  return useConfirmationContext();
 }
 
 // ============================================================================
@@ -99,6 +38,16 @@ export function useConfirmation() {
  * Preset confirmation dialogs for common scenarios
  */
 export const confirmations = {
+  /**
+   * Deactivate confirmation (user/entity loses access, can be reactivated)
+   */
+  deactivate: (itemName: string, itemType = 'user') => ({
+    title: `Deactivate ${itemType}`,
+    description: `Are you sure you want to deactivate "${itemName}"? They will lose access to the system. They can be reactivated later.`,
+    confirmLabel: `Deactivate ${itemType}`,
+    variant: 'destructive' as const,
+  }),
+
   /**
    * Generic delete confirmation
    */
@@ -171,6 +120,36 @@ export const confirmations = {
     description: `Export ${itemCount} items in ${format} format?`,
     confirmLabel: 'Export',
   }),
+
+  /**
+   * Send campaign confirmation
+   */
+  sendCampaign: (campaignName: string, recipientCount: number) => ({
+    title: 'Send Campaign',
+    description: `Send "${campaignName}" to ${recipientCount.toLocaleString()} recipients? This will start sending emails immediately.`,
+    confirmLabel: 'Send Now',
+    variant: 'default' as const,
+  }),
+
+  /**
+   * Pause campaign confirmation
+   */
+  pauseCampaign: (campaignName: string) => ({
+    title: 'Pause Campaign',
+    description: `Pause sending for "${campaignName}"? You can resume it later.`,
+    confirmLabel: 'Pause',
+    variant: 'default' as const,
+  }),
+
+  /**
+   * Cancel RMA confirmation
+   */
+  cancelRma: (rmaNumber: string) => ({
+    title: 'Cancel RMA',
+    description: `Are you sure you want to cancel RMA ${rmaNumber}? This action cannot be undone.`,
+    confirmLabel: 'Cancel RMA',
+    variant: 'destructive' as const,
+  }),
 };
 
 // ============================================================================
@@ -182,7 +161,7 @@ export const confirmations = {
  * @deprecated Use useConfirmation hook instead
  */
 export function legacyConfirm(message: string): Promise<boolean> {
-  console.warn('legacyConfirm is deprecated. Use useConfirmation hook instead.');
+  logger.warn('legacyConfirm is deprecated. Use useConfirmation hook instead.');
 
   return new Promise((resolve) => {
     if (window.confirm(message)) {

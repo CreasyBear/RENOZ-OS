@@ -22,10 +22,14 @@ import {
   index,
   uniqueIndex,
   pgEnum,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { timestampColumns, auditColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  auditColumns,
+  softDeleteColumn,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { customers } from "../customers/customers";
 import { orders } from "../orders/orders";
@@ -172,6 +176,7 @@ export const projects = pgTable(
     // Standard columns
     ...timestampColumns,
     ...auditColumns,
+    ...softDeleteColumn,
   },
   (table) => ({
     orgStatusIdx: index("idx_projects_org_status").on(
@@ -190,37 +195,16 @@ export const projects = pgTable(
       table.organizationId,
       table.priority
     ),
-    projectNumberIdx: uniqueIndex("idx_projects_org_number").on(
-      table.organizationId,
-      table.projectNumber
-    ),
+    projectNumberIdx: uniqueIndex("idx_projects_org_number")
+      .on(table.organizationId, table.projectNumber)
+      .where(sql`deleted_at IS NULL`),
     orgCreatedIdx: index("idx_projects_org_created").on(
       table.organizationId,
       table.createdAt.desc()
     ),
 
     // RLS policies
-    selectPolicy: pgPolicy("projects_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("projects_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("projects_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("projects_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("projects"),
   })
 );
 

@@ -14,9 +14,9 @@ export {
 // --- Column Definitions ---
 export {
   createOpportunityColumns,
-  type OpportunityTableItem,
   type CreateOpportunityColumnsOptions,
 } from './opportunity-columns';
+export type { OpportunityTableItem } from '@/lib/schemas/pipeline';
 
 // --- List Components ---
 export {
@@ -53,12 +53,9 @@ export {
 } from './containers/opportunity-activity-timeline-container';
 
 // --- Core Components ---
-/**
- * @deprecated Use OpportunityActivityTimelineContainer or UnifiedActivityTimeline directly.
- * This component uses the old shared ActivityTimeline.
- */
-export { OpportunityActivityTimeline } from './opportunity-activity-timeline';
-export { OpportunityCard } from './opportunity-card';
-/** @deprecated Use OpportunityDetailContainer + OpportunityDetailView instead */
-export { OpportunityDetail } from './opportunity-detail';
 export { OpportunityForm } from './opportunity-form';
+
+// NOTE: Deprecated components removed from exports:
+// - OpportunityActivityTimeline: Use OpportunityActivityTimelineContainer or UnifiedActivityTimeline
+// - OpportunityDetail: Use OpportunityDetailContainer + OpportunityDetailView
+// - OpportunityCard: Use SortableKanbanCard from @/components/shared/kanban

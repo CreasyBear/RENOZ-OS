@@ -6,6 +6,8 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { approvalsSearchSchema } from './approval-search';
 
 // ============================================================================
 // APPROVAL STATUS ENUM
@@ -134,3 +136,158 @@ export type ApprovalRuleInput = z.infer<typeof approvalRuleSchema>;
 export interface ApprovalRuleData extends ApprovalRuleInput {
   id: string;
 }
+
+// ============================================================================
+// SERVER FUNCTION INPUT SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for listing pending approvals with filtering and pagination.
+ */
+export const listPendingApprovalsSchema = z.object({
+  status: approvalStatusEnum.optional(),
+  search: z.string().optional(),
+  type: z.enum(['all', 'purchase_order', 'amendment']).optional(),
+  priority: z.enum(['all', 'low', 'medium', 'high', 'urgent']).optional(),
+  sortBy: z.enum(['createdAt', 'dueAt', 'level']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(20),
+});
+export type ListPendingApprovalsInput = z.infer<typeof listPendingApprovalsSchema>;
+
+/** Cursor pagination for list pending approvals */
+export const listPendingApprovalsCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    status: approvalStatusEnum.optional(),
+    search: z.string().optional(),
+    type: z.enum(['all', 'purchase_order', 'amendment']).optional(),
+    priority: z.enum(['all', 'low', 'medium', 'high', 'urgent']).optional(),
+  })
+);
+export type ListPendingApprovalsCursorInput = z.infer<typeof listPendingApprovalsCursorSchema>;
+
+/**
+ * Schema for getting approval details.
+ */
+export const getApprovalDetailsSchema = z.object({
+  approvalId: z.string().uuid(),
+});
+export type GetApprovalDetailsInput = z.infer<typeof getApprovalDetailsSchema>;
+
+/**
+ * Schema for approving an approval request.
+ */
+export const approveRejectSchema = z.object({
+  approvalId: z.string().uuid(),
+  comments: z.string().optional(),
+});
+export type ApproveRejectInput = z.infer<typeof approveRejectSchema>;
+
+/**
+ * Schema for rejecting an approval request.
+ */
+export const rejectSchema = z.object({
+  approvalId: z.string().uuid(),
+  reason: approvalRejectionReasonEnum,
+  comments: z.string().min(1, 'Rejection comments are required'),
+});
+export type RejectInput = z.infer<typeof rejectSchema>;
+
+/**
+ * Schema for escalating an approval.
+ */
+export const escalateSchema = z.object({
+  approvalId: z.string().uuid(),
+  escalateTo: z.string().uuid(),
+  reason: z.string().min(1, 'Escalation reason is required'),
+});
+export type EscalateInput = z.infer<typeof escalateSchema>;
+
+/**
+ * Schema for delegating an approval.
+ */
+export const delegateSchema = z.object({
+  approvalId: z.string().uuid(),
+  delegateTo: z.string().uuid(),
+});
+export type DelegateInput = z.infer<typeof delegateSchema>;
+
+/**
+ * Schema for revoking a delegation.
+ * Only the original delegator or current delegatee can revoke.
+ */
+export const revokeDelegationSchema = z.object({
+  approvalId: z.string().uuid(),
+});
+export type RevokeDelegationInput = z.infer<typeof revokeDelegationSchema>;
+
+/**
+ * Schema for bulk approving multiple approvals.
+ */
+export const bulkApproveSchema = z.object({
+  approvalIds: z.array(z.string().uuid()).min(1),
+  comments: z.string().optional(),
+});
+export type BulkApproveInput = z.infer<typeof bulkApproveSchema>;
+
+/**
+ * Schema for resolving approval IDs from purchase order IDs.
+ * Used when bulk approving from the PO list.
+ */
+export const getApprovalIdsForPurchaseOrdersSchema = z.object({
+  purchaseOrderIds: z.array(z.string().uuid()).min(1),
+});
+export type GetApprovalIdsForPurchaseOrdersInput = z.infer<
+  typeof getApprovalIdsForPurchaseOrdersSchema
+>;
+
+/**
+ * Schema for evaluating approval rules for a purchase order.
+ */
+export const evaluateRulesSchema = z.object({
+  purchaseOrderId: z.string().uuid(),
+});
+export type EvaluateRulesInput = z.infer<typeof evaluateRulesSchema>;
+
+// ============================================================================
+// APPROVAL ITEM (UI Component Type)
+// ============================================================================
+
+/**
+ * Approval item for dashboard display.
+ * Represents a purchase order or amendment requiring approval.
+ */
+export interface ApprovalItem {
+  id: string;
+  type: 'purchase_order' | 'amendment';
+  title: string;
+  description: string;
+  amount: number;
+  currency: string;
+  requester: string;
+  submittedAt: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  dueDate?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'escalated';
+  supplierName?: string;
+  poNumber?: string;
+  level?: number;
+  escalatedTo?: string | null;
+}
+
+/**
+ * Approval filters for dashboard filtering.
+ */
+export interface ApprovalFilters extends Record<string, unknown> {
+  type: 'all' | 'purchase_order' | 'amendment';
+  priority: 'all' | 'low' | 'medium' | 'high' | 'urgent';
+  search: string;
+}
+
+// ============================================================================
+// ROUTE SEARCH SCHEMAS
+// ============================================================================
+
+export { approvalsSearchSchema };
+export type { ApprovalsSearch } from './approval-search';

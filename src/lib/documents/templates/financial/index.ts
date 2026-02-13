@@ -28,3 +28,11 @@ export {
   type ProFormaPdfDocumentProps,
   type ProFormaPdfTemplateProps,
 } from "./pro-forma";
+
+export {
+  CreditNotePdfDocument,
+  CreditNotePdfTemplate,
+  type CreditNoteDocumentData,
+  type CreditNotePdfDocumentProps,
+  type CreditNotePdfTemplateProps,
+} from "./credit-note";

@@ -32,7 +32,7 @@ export function useFulfillmentKanbanExport() {
       const { filters, format } = options;
 
       // Convert kanban filters to export filters
-      const exportFilters: Record<string, any> = {};
+      const exportFilters: Record<string, unknown> = {};
 
       if (filters.priority && filters.priority !== 'all') {
         exportFilters.priority = filters.priority;

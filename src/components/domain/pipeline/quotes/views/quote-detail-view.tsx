@@ -20,7 +20,6 @@ import {
   Phone,
   Mail,
   Link2,
-  ChevronRight,
   Calendar,
   Percent,
   Banknote,
@@ -28,6 +27,7 @@ import {
   ExternalLink,
   History,
   Target,
+  Plus,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +54,7 @@ import { FormatAmount } from '@/components/shared/format';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import { StatusCell } from '@/components/shared/data-table';
 import { OPPORTUNITY_STAGE_CONFIG } from '@/components/domain/pipeline/opportunities/opportunity-status-config';
-import type { QuoteVersion, QuoteLineItem, Opportunity, OpportunityStage } from '@/lib/schemas/pipeline';
+import type { QuoteVersion, QuoteLineItem, Opportunity } from '@/lib/schemas/pipeline';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import {
   QUOTE_STATUS_CONFIG,
@@ -68,25 +68,9 @@ import {
 // TYPES
 // ============================================================================
 
-export interface QuoteDetailCustomer {
-  id: string;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  customerCode?: string | null;
-  type?: string | null;
-}
-
-export interface QuoteVersionSummary {
-  id: string;
-  versionNumber: number;
-  subtotal: number;
-  taxAmount: number;
-  total: number;
-  notes: string | null;
-  createdAt: string | Date;
-  items: QuoteLineItem[];
-}
+// Types moved to schemas - import from there
+import type { QuoteDetailCustomer, QuoteVersionSummary } from "@/lib/schemas/pipeline";
+import { isValidOpportunityStage } from "@/lib/schemas/pipeline";
 
 export interface QuoteDetailViewProps {
   quote: QuoteVersion;
@@ -100,6 +84,10 @@ export interface QuoteDetailViewProps {
   activities?: UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
+  /** Handler to open activity logging dialog */
+  onLogActivity?: () => void;
+  /** Header actions (panel toggle, copy link, etc.) to display next to entity header */
+  headerActions?: React.ReactNode;
   className?: string;
 }
 
@@ -163,9 +151,11 @@ function MetaChipsRow({ items }: { items: MetaChip[] }) {
 interface QuoteHeaderProps {
   quote: QuoteVersion;
   opportunity: Opportunity | null;
+  /** Actions to display in header (panel toggle, copy link, etc.) */
+  headerActions?: React.ReactNode;
 }
 
-function QuoteHeader({ quote, opportunity }: QuoteHeaderProps) {
+function QuoteHeader({ quote, opportunity, headerActions }: QuoteHeaderProps) {
   const displayStatus = getQuoteDisplayStatus(opportunity?.quoteExpiresAt);
   const statusConfig = DETAIL_STATUS_CONFIG[displayStatus];
   const StatusIcon = QUOTE_STATUS_CONFIG[displayStatus]?.icon ?? FileText;
@@ -187,7 +177,7 @@ function QuoteHeader({ quote, opportunity }: QuoteHeaderProps) {
       ),
       icon: <Clock className="h-3.5 w-3.5" />,
     }] : []),
-    { label: 'Items', value: String((quote.items as QuoteLineItem[])?.length ?? 0), icon: <Tag className="h-3.5 w-3.5" /> },
+    { label: 'Items', value: String(quote.items?.length ?? 0), icon: <Tag className="h-3.5 w-3.5" /> },
   ];
 
   return (
@@ -209,6 +199,12 @@ function QuoteHeader({ quote, opportunity }: QuoteHeaderProps) {
             )}
           </div>
         </div>
+        {/* Panel toggle and utility actions next to entity header */}
+        {headerActions && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {headerActions}
+          </div>
+        )}
       </div>
 
       {/* Expiry Alert */}
@@ -260,6 +256,7 @@ function CustomerInfo({ customer }: CustomerInfoProps) {
             <Link
               to="/customers/$customerId"
               params={{ customerId: customer.id }}
+              search={{}}
               className="text-sm font-medium hover:underline"
             >
               {customer.name}
@@ -268,7 +265,7 @@ function CustomerInfo({ customer }: CustomerInfoProps) {
               <div className="text-xs text-muted-foreground font-mono">{customer.customerCode}</div>
             )}
             {customer.type && (
-              <Badge variant="outline" className="text-[10px] mt-1">{customer.type}</Badge>
+              <Badge variant="outline" className="text-[11px] mt-1">{customer.type}</Badge>
             )}
           </div>
         </div>
@@ -374,7 +371,7 @@ interface PricingSummaryProps {
 }
 
 function PricingSummary({ quote }: PricingSummaryProps) {
-  const items = quote.items as QuoteLineItem[];
+  const items = quote.items;
   const totalDiscount = items.reduce((sum, item) => {
     if (item.discountPercent && item.discountPercent > 0) {
       const originalTotal = item.unitPrice * item.quantity;
@@ -560,7 +557,7 @@ function VersionHistory({ versions, currentVersionId }: VersionHistoryProps) {
                 <div>
                   <div className="text-sm font-medium flex items-center gap-2">
                     Version {version.versionNumber}
-                    {isCurrent && <Badge variant="outline" className="text-[10px]">Current</Badge>}
+                    {isCurrent && <Badge variant="outline" className="text-[11px]">Current</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {formatDate(version.createdAt)} - {version.items?.length ?? 0} items
@@ -622,7 +619,7 @@ function LinkedOpportunity({ opportunity }: LinkedOpportunityProps) {
               )}
               <div className="flex items-center gap-2 mt-2">
                 <StatusCell
-                  status={opportunity.stage as OpportunityStage}
+                  status={opportunity.stage}
                   statusConfig={OPPORTUNITY_STAGE_CONFIG}
                   showIcon
                 />
@@ -697,6 +694,7 @@ function RightMetaPanel({ quote, opportunity, customer }: RightMetaPanelProps) {
                 <Link
                   to="/customers/$customerId"
                   params={{ customerId: customer.id }}
+                  search={{}}
                   className="text-sm font-medium truncate hover:underline block"
                 >
                   {customer.name}
@@ -746,7 +744,7 @@ function RightMetaPanel({ quote, opportunity, customer }: RightMetaPanelProps) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status</span>
                 <Badge className={cn(
-                  'text-[10px] h-5',
+                  'text-[11px] h-5',
                   expiryStatus === 'expired' && 'bg-destructive/10 text-destructive',
                   expiryStatus === 'expiring' && 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
                   expiryStatus === 'valid' && 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
@@ -776,7 +774,7 @@ function RightMetaPanel({ quote, opportunity, customer }: RightMetaPanelProps) {
             </Link>
             <div className="mt-2 flex items-center gap-2">
               <StatusCell
-                status={opportunity.stage as OpportunityStage}
+                status={isValidOpportunityStage(opportunity.stage) ? opportunity.stage : 'new'}
                 statusConfig={OPPORTUNITY_STAGE_CONFIG}
               />
             </div>
@@ -823,60 +821,56 @@ export const QuoteDetailView = memo(function QuoteDetailView({
   activities = [],
   activitiesLoading = false,
   activitiesError,
+  onLogActivity,
+  headerActions,
   className,
 }: QuoteDetailViewProps) {
-  const items = useMemo(() => (quote.items as QuoteLineItem[]) ?? [], [quote.items]);
+  const items = useMemo(() => quote.items ?? [], [quote.items]);
   const itemsCount = items.length;
 
+  // Build header actions for panel toggle and copy link
+  const internalHeaderActions = (
+    <div className="flex items-center gap-2">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0" onClick={() => copyToClipboard(window.location.href)} aria-label="Copy link">
+              <Link2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Copy link</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn('h-8 w-8 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0', showMetaPanel && 'bg-muted')}
+              onClick={onToggleMetaPanel}
+              aria-label={showMetaPanel ? 'Hide details panel' : 'Show details panel'}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{showMetaPanel ? 'Hide' : 'Show'} details panel</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {headerActions}
+    </div>
+  );
+
   return (
-    <div className={cn('flex flex-1 flex-col min-w-0 m-2 border border-border rounded-lg', className)}>
-      {/* Top Bar */}
-      <div className="flex items-center justify-between gap-4 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Quotes</span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">v{quote.versionNumber}</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(window.location.href)}>
-                  <Link2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Copy link</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn('h-8 w-8', showMetaPanel && 'bg-muted')}
-                  onClick={onToggleMetaPanel}
-                >
-                  <PanelRight className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{showMetaPanel ? 'Hide' : 'Show'} details panel</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
-
-      {/* Main Content - FULL WIDTH (no max-w-7xl) */}
-      <div className="flex flex-1 flex-col bg-background px-2 rounded-b-lg min-w-0 border-t">
-        <div className="px-4">
-          <div className={cn(
-            'grid grid-cols-1 gap-12',
-            showMetaPanel ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,320px)]' : 'lg:grid-cols-1'
-          )}>
-            {/* Primary Content */}
-            <div className="space-y-6 pt-4 pb-6">
-              <QuoteHeader quote={quote} opportunity={opportunity} />
+    <div className={cn('space-y-6', className)}>
+      {/* Main Content Grid */}
+      <div className={cn(
+        'grid grid-cols-1 gap-6',
+        showMetaPanel ? 'lg:grid-cols-[1fr_320px]' : 'lg:grid-cols-1'
+      )}>
+        {/* Primary Content */}
+        <div className="space-y-6">
+          <QuoteHeader quote={quote} opportunity={opportunity} headerActions={internalHeaderActions} />
 
               <Tabs value={activeTab} onValueChange={onTabChange}>
                 <TabsList className="w-full gap-6 bg-transparent border-b border-border rounded-none h-auto p-0">
@@ -917,40 +911,46 @@ export const QuoteDetailView = memo(function QuoteDetailView({
 
                 {/* Activity Tab */}
                 <TabsContent value="activity" className="mt-0 pt-6">
-                  <UnifiedActivityTimeline
-                    activities={activities}
-                    isLoading={activitiesLoading}
-                    hasError={!!activitiesError}
-                    error={activitiesError || undefined}
-                    title="Activity Timeline"
-                    description="Complete history of quote changes, status updates, and system events"
-                    showFilters={true}
-                    emptyMessage="No activity recorded yet"
-                    emptyDescription="Quote activities will appear here when changes are made."
-                  />
+                  <div className="space-y-4">
+                    {onLogActivity && (
+                      <div className="flex items-center justify-end">
+                        <Button size="sm" onClick={onLogActivity}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Log Activity
+                        </Button>
+                      </div>
+                    )}
+                    <UnifiedActivityTimeline
+                      activities={activities}
+                      isLoading={activitiesLoading}
+                      hasError={!!activitiesError}
+                      error={activitiesError || undefined}
+                      title="Activity Timeline"
+                      description="Complete history of quote changes, status updates, and system events"
+                      showFilters={true}
+                      emptyMessage="No activity recorded yet"
+                      emptyDescription="Quote activities will appear here when changes are made."
+                    />
+                  </div>
                 </TabsContent>
-              </Tabs>
-            </div>
-
-            {/* Animated Side Meta Panel */}
-            <AnimatePresence initial={false}>
-              {showMetaPanel && (
-                <motion.div
-                  key="meta-panel"
-                  initial={{ x: 80, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: 80, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-                  className="lg:border-l lg:border-border"
-                >
-                  <RightMetaPanel quote={quote} opportunity={opportunity} customer={customer} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          </Tabs>
         </div>
 
-        <Separator className="mt-auto" />
+        {/* Animated Side Meta Panel */}
+        <AnimatePresence initial={false}>
+          {showMetaPanel && (
+            <motion.div
+              key="meta-panel"
+              initial={{ x: 80, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 80, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+              className="hidden lg:block border-l pl-6"
+            >
+              <RightMetaPanel quote={quote} opportunity={opportunity} customer={customer} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

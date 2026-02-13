@@ -5,6 +5,10 @@
  * Coordinates state between CustomerFilters and CustomerTable components.
  */
 import { useState, useCallback, useMemo } from 'react'
+import { useCustomerNavigation } from '@/hooks/customers'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useServerFn } from '@tanstack/react-start'
+import { normalizeCustomerFilters } from '@/lib/utils/customer-filters'
 import {
   Download,
   Plus,
@@ -16,6 +20,8 @@ import {
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { toastError, toastSuccess } from '@/hooks'
+import { logger } from '@/lib/logger'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   AlertDialog,
@@ -27,6 +33,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { CustomerTable, type CustomerTableData } from './customer-table'
 import { CustomerCard, CustomerCardSkeleton } from './customer-card'
 import {
@@ -37,6 +51,8 @@ import {
 import { DomainFilterBar } from '@/components/shared/filters'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
+import { bulkAssignTags } from '@/server/customers'
+import { queryKeys } from '@/lib/query-keys'
 
 // ============================================================================
 // TYPES
@@ -104,7 +120,7 @@ function BulkDeleteDialog({
             disabled={isProcessing}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {isProcessing ? 'Deleting...' : 'Delete'}
+            {isProcessing ? 'Deleting…' : 'Delete'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -131,7 +147,7 @@ function BulkActionsBar({
   onExport,
   onClearSelection,
 }: BulkActionsBarProps) {
-  if (selectedCount === 0) return null
+  if (selectedCount < 2) return null
 
   return (
     <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-2">
@@ -257,6 +273,7 @@ export function CustomerDirectory({
   onRefresh,
   onFiltersChange,
 }: CustomerDirectoryProps) {
+  const { navigateToCustomer } = useCustomerNavigation()
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -275,8 +292,31 @@ export function CustomerDirectory({
   // Bulk operation state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showTagDialog, setShowTagDialog] = useState(false)
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [tagAssignError, setTagAssignError] = useState<string | null>(null)
   // TODO: Implement progress tracking for bulk operations
   // const [bulkProgress, setBulkProgress] = useState<number | null>(null)
+  const queryClient = useQueryClient()
+  const bulkAssignFn = useServerFn(bulkAssignTags)
+  const bulkAssignMutation = useMutation({
+    mutationFn: (tagIds: string[]) =>
+      bulkAssignFn({
+        data: { customerIds: Array.from(selectedIds), tagIds },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.tags.list() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.segments.lists() })
+      toastSuccess('Tags assigned to selected customers')
+      setSelectedTagIds([])
+      setShowTagDialog(false)
+    },
+    onError: () => {
+      toastError('Failed to assign tags')
+    },
+  })
 
   // Selection handlers
   const handleSelectAll = useCallback(
@@ -321,14 +361,23 @@ export function CustomerDirectory({
   // Filter handler
   const handleFiltersChange = useCallback(
     (newFilters: CustomerFiltersState) => {
-      setFilters(newFilters)
-      onFiltersChange?.(newFilters)
+      const normalizedFilters = normalizeCustomerFilters(newFilters)
+      setFilters(normalizedFilters)
+      onFiltersChange?.(normalizedFilters)
     },
     [onFiltersChange]
   )
 
+  // View customer handler
+  const handleViewCustomer = useCallback(
+    (customerId: string) => {
+      navigateToCustomer(customerId)
+    },
+    [navigateToCustomer]
+  )
+
   // Bulk delete
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = useCallback(async () => {
     if (!onBulkDelete) return
 
     setIsProcessing(true)
@@ -336,28 +385,59 @@ export function CustomerDirectory({
       await onBulkDelete(Array.from(selectedIds))
       setSelectedIds(new Set())
       setShowDeleteDialog(false)
+    } catch (error) {
+      logger.error('Failed to delete customers', error)
+      toastError(error instanceof Error ? error.message : 'Failed to delete customers')
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [onBulkDelete, selectedIds])
 
   // Bulk assign tags (placeholder - would open a modal)
   const handleBulkAssignTags = () => {
-    // TODO: Open tag assignment modal
-    console.log('Assign tags to:', Array.from(selectedIds))
+    if (selectedIds.size === 0) return
+    setSelectedTagIds([])
+    setTagAssignError(null)
+    setShowTagDialog(true)
   }
 
   // Export
-  const handleExport = async (format: 'csv' | 'xlsx' | 'json') => {
+  const handleExport = useCallback(async (format: 'csv' | 'xlsx' | 'json') => {
     if (!onExport) return
 
     setIsProcessing(true)
     try {
       await onExport(Array.from(selectedIds), format)
+    } catch (error) {
+      logger.error('Failed to export customers', error)
+      toastError(error instanceof Error ? error.message : 'Failed to export customers')
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [onExport, selectedIds])
+
+  const handleConfirmTagAssign = useCallback(async () => {
+    if (selectedTagIds.length === 0) {
+      setTagAssignError('Select at least one tag to continue.')
+      return
+    }
+
+    try {
+      if (_onBulkAssignTags) {
+        await _onBulkAssignTags(Array.from(selectedIds), selectedTagIds)
+        toastSuccess('Tags assigned to selected customers')
+        setSelectedTagIds([])
+        setShowTagDialog(false)
+      } else {
+        await bulkAssignMutation.mutateAsync(selectedTagIds)
+      }
+    } catch (error) {
+      logger.error('Failed to assign tags', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to assign tags'
+      setTagAssignError(errorMessage)
+      toastError(errorMessage)
+    }
+  }, [_onBulkAssignTags, selectedIds, selectedTagIds, bulkAssignMutation])
 
   return (
     <div className="space-y-4">
@@ -418,7 +498,7 @@ export function CustomerDirectory({
         <div className="space-y-1">
           <Progress value={bulkProgress} className="h-2" />
           <p className="text-xs text-muted-foreground">
-            Processing... {bulkProgress}%
+            Processing… {bulkProgress}%
           </p>
         </div>
       )}
@@ -436,6 +516,7 @@ export function CustomerDirectory({
             onSort={handleSort}
             sortColumn={sortColumn}
             sortDirection={sortDirection}
+            onViewCustomer={handleViewCustomer}
             onEdit={onEditCustomer}
             onDelete={onDeleteCustomer}
           />
@@ -471,8 +552,7 @@ export function CustomerDirectory({
               onEdit={onEditCustomer}
               onDelete={onDeleteCustomer}
               onClick={(c) => {
-                // Navigate to detail view
-                window.location.href = `/customers/${c.id}`
+                handleViewCustomer(c.id)
               }}
             />
           ))
@@ -497,6 +577,57 @@ export function CustomerDirectory({
         onCancel={() => setShowDeleteDialog(false)}
         isProcessing={isProcessing}
       />
+
+      {/* Bulk Tag Assignment */}
+      <Dialog open={showTagDialog} onOpenChange={setShowTagDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Assign Tags</DialogTitle>
+            <DialogDescription>
+              Choose tags to assign to {selectedIds.size} selected customer
+              {selectedIds.size === 1 ? '' : 's'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            {tags.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tags available.</p>
+            ) : (
+              tags.map((tag) => {
+                const isSelected = selectedTagIds.includes(tag.id)
+                return (
+                  <Button
+                    key={tag.id}
+                    type="button"
+                    size="sm"
+                    variant={isSelected ? 'default' : 'outline'}
+                    style={!isSelected && tag.color ? { borderColor: tag.color, color: tag.color } : undefined}
+                    onClick={() => {
+                      setSelectedTagIds((prev) =>
+                        prev.includes(tag.id) ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                      )
+                      setTagAssignError(null)
+                    }}
+                  >
+                    {tag.name}
+                  </Button>
+                )
+              })
+            )}
+          </div>
+          {tagAssignError && <p className="text-sm text-destructive">{tagAssignError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTagDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmTagAssign}
+              disabled={bulkAssignMutation.isPending || selectedTagIds.length === 0}
+            >
+              {bulkAssignMutation.isPending ? 'Assigning…' : 'Assign Tags'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

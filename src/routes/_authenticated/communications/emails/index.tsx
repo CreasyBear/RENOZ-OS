@@ -1,80 +1,34 @@
 /**
  * Scheduled Emails Route
  *
- * Route for ScheduledEmailsList which is self-contained (fetches its own data).
- * Provides edit and compose callbacks.
+ * Route definition for scheduled emails page with lazy-loaded component.
+ *
+ * @performance Code-split for reduced initial bundle size
+ * @see src/routes/_authenticated/communications/emails/scheduled-emails-page.tsx - Page component
  */
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
-import { ScheduledEmailsList } from "@/components/domain/communications";
-import { ScheduleEmailDialog } from "@/components/domain/communications";
+import { createFileRoute } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
+import { z } from "zod";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
+import { scheduledEmailsSearchSchema } from "@/lib/schemas/communications/scheduled-emails";
 
-// ============================================================================
-// ROUTE DEFINITION
-// ============================================================================
+const ScheduledEmailsPage = lazy(() => import('./scheduled-emails-page'));
+
+export type SearchParams = z.infer<typeof scheduledEmailsSearchSchema>;
 
 export const Route = createFileRoute("/_authenticated/communications/emails/")({
-  component: ScheduledEmailsContainer,
+  validateSearch: scheduledEmailsSearchSchema,
+  component: function EmailsRouteComponent() {
+    const search = Route.useSearch();
+    return (
+      <Suspense fallback={<CommunicationsListSkeleton />}>
+        <ScheduledEmailsPage search={search} />
+      </Suspense>
+    );
+  },
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/communications" />
   ),
   pendingComponent: () => <CommunicationsListSkeleton />,
 });
-
-// ============================================================================
-// CONTAINER
-// ============================================================================
-
-function ScheduledEmailsContainer() {
-  const navigate = useNavigate();
-  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
-  const [composeOpen, setComposeOpen] = useState(false);
-
-  // ============================================================================
-  // HANDLERS
-  // ============================================================================
-  const handleEdit = useCallback((id: string) => {
-    setEditingEmailId(id);
-  }, []);
-
-  const handleCompose = useCallback(() => {
-    setComposeOpen(true);
-  }, []);
-
-  const handleCreateSignature = useCallback(() => {
-    navigate({ to: "/communications/signatures" });
-  }, [navigate]);
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-  return (
-    <>
-      {/* ScheduledEmailsList is self-contained - fetches its own data */}
-      <ScheduledEmailsList
-        onEdit={handleEdit}
-        onCompose={handleCompose}
-      />
-
-      {/* Schedule Email Dialog handled by parent */}
-      <ScheduleEmailDialog
-        open={composeOpen || !!editingEmailId}
-        onOpenChange={(open) => {
-          if (!open) {
-            setComposeOpen(false);
-            setEditingEmailId(null);
-          }
-        }}
-        onCreateSignature={handleCreateSignature}
-        onSuccess={() => {
-          setComposeOpen(false);
-          setEditingEmailId(null);
-        }}
-      />
-    </>
-  );
-}
-
-export default ScheduledEmailsContainer;

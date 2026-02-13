@@ -21,24 +21,10 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrgFormat } from "@/hooks/use-org-format";
-import type { ForecastPeriod } from "@/lib/schemas/pipeline";
+import type { ForecastChartProps } from "@/lib/schemas/reports/forecast-chart";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface ForecastChartProps {
-  data: ForecastPeriod[];
-  showWeighted?: boolean;
-  showWonLost?: boolean;
-  title?: string;
-  height?: number;
-  className?: string;
-}
-
-// ============================================================================
-// HELPERS
-// ============================================================================
+// Re-export
+export type { ForecastChartProps };
 
 // ============================================================================
 // COMPONENT

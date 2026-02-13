@@ -348,7 +348,7 @@ export interface CommunicationLogEntry {
     size: number;
     mimeType: string;
   }>;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   sentAt: Date;
   receivedAt?: Date;
   processedAt: Date;
@@ -450,7 +450,7 @@ export interface ProcessedAttachment {
   processingResult?: {
     extractedText?: string;
     thumbnailUrl?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     virusScanResult?: 'clean' | 'infected' | 'unknown';
   };
   errorMessage?: string;

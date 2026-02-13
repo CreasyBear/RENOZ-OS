@@ -13,6 +13,7 @@
  */
 
 import { getRedisMemoryProvider } from '../memory/redis-provider';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // CONFIGURATION
@@ -96,7 +97,7 @@ export async function getCachedUserContext(
     const cached = await provider.get<CachedUserContext>(key);
     return cached;
   } catch (error) {
-    console.warn('[ContextCache] Failed to get user context from cache:', error);
+    logger.warn('[ContextCache] Failed to get user context from cache', { error: String(error) });
     return null;
   }
 }
@@ -117,7 +118,7 @@ export function setCachedUserContext(
 
   // Fire and forget - don't await to avoid blocking
   provider.set(key, context, CACHE_TTL.user).catch((error) => {
-    console.warn('[ContextCache] Failed to set user context in cache:', error);
+    logger.warn('[ContextCache] Failed to set user context in cache', { error: String(error) });
   });
 }
 
@@ -134,7 +135,7 @@ export async function invalidateUserContext(userId: string): Promise<void> {
   try {
     await provider.delete(key);
   } catch (error) {
-    console.warn('[ContextCache] Failed to invalidate user context:', error);
+    logger.warn('[ContextCache] Failed to invalidate user context', { error: String(error) });
   }
 }
 
@@ -158,7 +159,7 @@ export async function getCachedOrgContext(
     const cached = await provider.get<CachedOrgContext>(key);
     return cached;
   } catch (error) {
-    console.warn('[ContextCache] Failed to get org context from cache:', error);
+    logger.warn('[ContextCache] Failed to get org context from cache', { error: String(error) });
     return null;
   }
 }
@@ -179,7 +180,7 @@ export function setCachedOrgContext(
 
   // Fire and forget - don't await to avoid blocking
   provider.set(key, context, CACHE_TTL.organization).catch((error) => {
-    console.warn('[ContextCache] Failed to set org context in cache:', error);
+    logger.warn('[ContextCache] Failed to set org context in cache', { error: String(error) });
   });
 }
 
@@ -196,7 +197,7 @@ export async function invalidateOrgContext(organizationId: string): Promise<void
   try {
     await provider.delete(key);
   } catch (error) {
-    console.warn('[ContextCache] Failed to invalidate org context:', error);
+    logger.warn('[ContextCache] Failed to invalidate org context', { error: String(error) });
   }
 }
 

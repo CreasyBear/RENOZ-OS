@@ -145,6 +145,11 @@ const VALID_CHILDREN: Record<LocationType | "root", LocationType[]> = {
   bin: [],
 };
 
+// Icon lookup by type (avoids component creation during render)
+const LOCATION_TYPE_ICONS: Record<LocationType, typeof Warehouse> = Object.fromEntries(
+  LOCATION_TYPES.map((t) => [t.value, t.icon])
+) as Record<LocationType, typeof Warehouse>;
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -200,7 +205,7 @@ export const LocationForm = memo(function LocationForm({
   }, [location, form, validTypes]);
 
   const handleSubmit = useCallback(
-    async (values: any) => {
+    async (values: LocationFormValues) => {
       await onSubmit({
         ...values,
         parentId: isEditing ? (location?.parentId ?? null) : (parentLocation?.id ?? null),
@@ -209,16 +214,17 @@ export const LocationForm = memo(function LocationForm({
     [onSubmit, isEditing, location, parentLocation]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
   const selectedType = form.watch("locationType");
   const typeConfig = LOCATION_TYPES.find((t) => t.value === selectedType);
-  const TypeIcon = typeConfig?.icon ?? Package;
+  const IconComponent = LOCATION_TYPE_ICONS[selectedType] ?? Package;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <TypeIcon className="h-5 w-5" aria-hidden="true" />
+            <IconComponent className="h-5 w-5" aria-hidden="true" />
             {isEditing ? "Edit Location" : "New Location"}
           </DialogTitle>
           <DialogDescription>

@@ -13,6 +13,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, gte, lte, sql, inArray } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
@@ -22,6 +23,7 @@ import {
   createTargetSchema,
   updateTargetSchema,
   listTargetsSchema,
+  listTargetsCursorSchema,
   getTargetSchema,
   deleteTargetSchema,
   getTargetProgressSchema,
@@ -29,10 +31,10 @@ import {
   bulkUpdateTargetsSchema,
   bulkDeleteTargetsSchema,
   type TargetProgress,
-  type TargetProgressResponse,
   type TargetMetric,
 } from '@/lib/schemas/reports/targets';
 import { NotFoundError } from '@/lib/server/errors';
+import { logger } from '@/lib/logger';
 import { calculateMetric } from '@/server/functions/metrics/aggregator';
 import { type MetricId } from '@/lib/metrics/registry';
 
@@ -155,6 +157,41 @@ export const listTargets = createServerFn({ method: 'GET' })
   });
 
 /**
+ * List targets with cursor pagination (recommended for large datasets).
+ */
+export const listTargetsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listTargetsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', search, metric, period, startDate, endDate } = data;
+
+    const conditions = [eq(targets.organizationId, ctx.organizationId)];
+    if (search) conditions.push(ilike(targets.name, containsPattern(search)));
+    if (metric) conditions.push(eq(targets.metric, metric));
+    if (period) conditions.push(eq(targets.period, period));
+    if (startDate) conditions.push(gte(targets.startDate, startDate));
+    if (endDate) conditions.push(lte(targets.endDate, endDate));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(targets.createdAt, targets.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const items = await db
+      .select()
+      .from(targets)
+      .where(and(...conditions))
+      .orderBy(orderDir(targets.createdAt), orderDir(targets.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(items, pageSize);
+  });
+
+/**
  * Get a single target by ID.
  */
 export const getTarget = createServerFn({ method: 'GET' })
@@ -272,9 +309,9 @@ export const deleteTarget = createServerFn({ method: 'POST' })
 /**
  * Get progress toward targets with real metric calculations.
  */
-export const getTargetProgress = createServerFn({ method: 'GET' })
+export const getTargetProgress = createServerFn({ method: 'POST' })
   .inputValidator(getTargetProgressSchema)
-  .handler(async ({ data }): Promise<TargetProgressResponse> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
 
     const today = new Date().toISOString().split('T')[0];
@@ -322,7 +359,7 @@ export const getTargetProgress = createServerFn({ method: 'GET' })
           );
         } catch (error) {
           // Log error but don't fail entire request - show 0 progress for failed metric
-          console.error(`Failed to calculate progress for target ${target.id} (${target.metric}):`, error);
+          logger.error(`Failed to calculate progress for target ${target.id} (${target.metric})`, error);
           currentValue = 0;
         }
 
@@ -353,8 +390,8 @@ export const getTargetProgress = createServerFn({ method: 'GET' })
           percentage: Math.round(percentage * 100) / 100,
           status,
           daysRemaining,
-          startDate: startDateObj,
-          endDate: endDateObj,
+          startDate: new Date(target.startDate),
+          endDate: new Date(target.endDate),
         };
       })
     );

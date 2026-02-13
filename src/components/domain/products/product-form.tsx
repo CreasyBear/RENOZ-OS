@@ -7,7 +7,6 @@
  * SPRINT-05: Migrated to TanStack Form
  */
 import { useState } from "react";
-import { z } from "zod";
 import {
   Package,
   DollarSign,
@@ -38,60 +37,17 @@ import {
   NumberField,
   SwitchField,
 } from "@/components/shared/forms";
+import { productFormSchema, type ProductFormValues } from "./product-form/types";
 
-// Form validation schema
-const productFormSchema = z.object({
-  // Basic info
-  sku: z.string().min(1, "SKU is required").max(100),
-  name: z.string().min(1, "Name is required").max(255),
-  description: z.string().optional(),
-  type: z.enum(["physical", "service", "digital", "bundle"]).default("physical"),
-  status: z.enum(["active", "inactive", "discontinued"]).default("active"),
-  categoryId: z.string().uuid().optional().nullable(),
+export type { ProductFormValues };
+import type { Category } from "@/lib/schemas/products";
+import { PRODUCT_TYPE_OPTIONS, PRODUCT_STATUS_OPTIONS } from "./product-filter-config";
+import type { SelectOption } from "@/components/shared/forms";
 
-  // Pricing
-  basePrice: z.coerce.number().min(0, "Price must be positive"),
-  costPrice: z.coerce.number().min(0).optional().nullable(),
-
-  // Settings
-  trackInventory: z.boolean().default(true),
-  isSerialized: z.boolean().default(false),
-  isSellable: z.boolean().default(true),
-  isPurchasable: z.boolean().default(true),
-
-  // Physical attributes
-  weight: z.coerce.number().min(0).optional().nullable(),
-  dimensions: z.object({
-    length: z.coerce.number().min(0).optional(),
-    width: z.coerce.number().min(0).optional(),
-    height: z.coerce.number().min(0).optional(),
-  }).optional().nullable(),
-
-  // SEO
-  seoTitle: z.string().max(255).optional().nullable(),
-  seoDescription: z.string().optional().nullable(),
-
-  // Other
-  barcode: z.string().max(100).optional().nullable(),
-  tags: z.array(z.string()).default([]),
-  specifications: z.record(z.string(), z.unknown()).optional().nullable(),
-
-  // Inventory settings
-  reorderPoint: z.coerce.number().min(0).default(0),
-  reorderQty: z.coerce.number().min(0).default(0),
-});
-
-export type ProductFormValues = z.infer<typeof productFormSchema>;
+// Schema imported from types.ts to avoid duplication
 
 // Type for passing form to section sub-components
 type ProductFormApi = TanStackFormApi<ProductFormValues>;
-
-interface Category {
-  id: string;
-  name: string;
-  parentId: string | null;
-  children?: Category[];
-}
 
 interface ProductFormProps {
   defaultValues?: Partial<ProductFormValues>;
@@ -101,19 +57,16 @@ interface ProductFormProps {
   isEdit?: boolean;
 }
 
-// Options for select fields
-const productTypeOptions = [
-  { value: "physical", label: "Physical" },
-  { value: "service", label: "Service" },
-  { value: "digital", label: "Digital" },
-  { value: "bundle", label: "Bundle" },
-];
+// Convert FilterOption to SelectOption (SelectField format)
+const productTypeOptions: SelectOption[] = PRODUCT_TYPE_OPTIONS.map((opt) => ({
+  value: opt.value,
+  label: opt.label,
+}));
 
-const statusOptions = [
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-  { value: "discontinued", label: "Discontinued" },
-];
+const statusOptions: SelectOption[] = PRODUCT_STATUS_OPTIONS.map((opt) => ({
+  value: opt.value,
+  label: opt.label,
+}));
 
 // Section component for collapsible form sections
 function FormSection({
@@ -234,14 +187,16 @@ function BasicInfoSection({
         <form.Field name="categoryId">
           {(field) => (
             <SelectField
-              field={{
-                ...field,
-                state: {
-                  ...field.state,
-                  value: field.state.value ?? "__NONE__",
-                },
-                handleChange: (v: string) => field.handleChange(v !== "__NONE__" ? v : null),
-              }}
+              field={
+                {
+                  ...field,
+                  state: {
+                    ...field.state,
+                    value: field.state.value ?? "__NONE__",
+                  },
+                  handleChange: (v: string) => field.handleChange(v !== "__NONE__" ? v : null),
+                } as Parameters<typeof SelectField>[0]["field"]
+              }
               label="Category"
               options={categoryOptions}
             />
@@ -629,6 +584,7 @@ export function ProductForm({
       specifications: null,
       reorderPoint: 0,
       reorderQty: 0,
+      warrantyPolicyId: null,
       ...defaultValues,
     },
     onSubmit: async (data) => {

@@ -6,19 +6,25 @@
  */
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { type UseFormProps, useForm } from 'react-hook-form';
+import { type FieldValues, type UseFormProps, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 /**
  * Enhanced useForm hook with Zod resolver
  * Based on Midday's gold standard pattern
+ *
+ * Note: zodResolver return type doesn't align with react-hook-form's Resolver
+ * generic (zod Input vs Output). Cast needed until @hookform/resolvers is updated.
  */
-export const useZodForm = <T extends z.ZodType<any, any>>(
+export const useZodForm = <T extends z.ZodType<FieldValues>>(
   schema: T,
   options?: Omit<UseFormProps<z.infer<T>>, 'resolver'>
 ) => {
   return useForm<z.infer<T>>({
-    resolver: zodResolver(schema) as any,
+    // Zod 4 + zodResolver type mismatch; remove when @hookform/resolvers supports Zod 4
+    // Zod 4 + zodResolver type mismatch; cast needed until @hookform/resolvers supports Zod 4
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(schema as Parameters<typeof zodResolver>[0]) as any,
     mode: 'onChange', // Validate on change for better UX
     ...options,
   });
@@ -43,7 +49,7 @@ export const fieldSchemas = {
   phone: z
     .string()
     .min(1, 'Phone number is required')
-    .regex(/^\+?[\d\s\-\(\)]+$/, 'Please enter a valid phone number'),
+    .regex(/^\+?[\d\s\-()]+$/, 'Please enter a valid phone number'),
 
   currency: z
     .number()
@@ -201,7 +207,7 @@ export function useUserForm(
 /**
  * Bulk operations form hook
  */
-export function useBulkOperationForm<T extends Record<string, any>>(
+export function useBulkOperationForm<T extends Record<string, unknown>>(
   schema: z.ZodType<T>,
   options?: Omit<UseFormProps<T>, 'resolver'>
 ) {
@@ -214,13 +220,15 @@ export function useBulkOperationForm<T extends Record<string, any>>(
 /**
  * Search/filter form hook with debouncing
  */
-export function useFilterForm<T extends Record<string, any>>(
+export function useFilterForm<T extends Record<string, unknown>>(
   schema: z.ZodType<T>,
   options?: Omit<UseFormProps<T>, 'resolver'>
 ) {
   return useZodForm(schema, {
     mode: 'onChange',
-    defaultValues: {} as any,
+    // Empty defaultValues for filter forms; cast needed for partial init
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    defaultValues: (options?.defaultValues ?? {}) as any,
     ...options,
   });
 }

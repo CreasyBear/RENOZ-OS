@@ -15,18 +15,21 @@ import {
   type DnsRecord,
   type DomainStatus,
 } from "@/lib/schemas/communications/email-domain";
+import { getResendApiKey, getResendDomainId } from "@/lib/email/config";
+import { logger } from "@/lib/logger";
 
 // ============================================================================
 // RESEND CLIENT
 // ============================================================================
 
 function getResendClient(): Resend | null {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn("RESEND_API_KEY not configured");
+  try {
+    const apiKey = getResendApiKey();
+    return new Resend(apiKey);
+  } catch (error) {
+    logger.warn("Resend API key not configured", { error });
     return null;
   }
-  return new Resend(apiKey);
 }
 
 // ============================================================================
@@ -41,7 +44,7 @@ export const getDomainVerificationStatus = createServerFn({ method: "GET" })
   .handler(async (): Promise<DomainVerificationResult> => {
     await withAuth({ permission: PERMISSIONS.settings.read });
 
-    const domainId = process.env.RESEND_DOMAIN_ID;
+    const domainId = getResendDomainId();
 
     // Check if Resend is configured
     if (!domainId) {
@@ -65,7 +68,10 @@ export const getDomainVerificationStatus = createServerFn({ method: "GET" })
       const { data, error } = await resend.domains.get(domainId);
 
       if (error) {
-        console.error("Resend domain fetch error:", error);
+        logger.error("Resend domain fetch error", new Error(error.message || "Failed to fetch domain status"), {
+          domain: "communications",
+          domainId,
+        });
         return {
           configured: true,
           domain: null,
@@ -119,7 +125,10 @@ export const getDomainVerificationStatus = createServerFn({ method: "GET" })
         },
       };
     } catch (err) {
-      console.error("Failed to fetch domain verification status:", err);
+      logger.error("Failed to fetch domain verification status", err instanceof Error ? err : new Error(String(err)), {
+        domain: "communications",
+        domainId,
+      });
       return {
         configured: true,
         domain: null,

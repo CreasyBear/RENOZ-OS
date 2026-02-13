@@ -7,13 +7,10 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  * @see src/components/domain/pipeline/quotes/containers/quote-detail-container.tsx
  */
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
-import { buttonVariants } from '@/components/ui/button';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { QuoteDetailContainer } from '@/components/domain/pipeline/quotes';
-import { cn } from '@/lib/utils';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -26,7 +23,7 @@ export const Route = createFileRoute('/_authenticated/pipeline/quotes/$quoteId')
   ),
   pendingComponent: () => (
     <PageLayout variant="full-width">
-      <PageLayout.Header title="Loading Quote..." />
+      <PageLayout.Header title={null} />
       <PageLayout.Content>
         <div className="space-y-6">
           <div className="flex items-center gap-4">
@@ -65,26 +62,14 @@ function QuoteDetailPage() {
       onBack={handleBack}
       onEdit={handleEdit}
     >
-      {({ headerTitle, headerActions, content }) => (
+      {({ headerActions, content }) => (
         <PageLayout variant="full-width">
           <PageLayout.Header
-            title={headerTitle}
-            actions={
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/pipeline"
-                  className={cn(buttonVariants({ variant: 'outline' }))}
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Pipeline
-                </Link>
-                {headerActions}
-              </div>
-            }
+            title={null}
+            leading={<DetailPageBackButton to="/pipeline" aria-label="Back to pipeline" />}
+            actions={headerActions}
           />
-          <PageLayout.Content className="p-0">
-            {content}
-          </PageLayout.Content>
+          <PageLayout.Content className="p-0">{content}</PageLayout.Content>
         </PageLayout>
       )}
     </QuoteDetailContainer>

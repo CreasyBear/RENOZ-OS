@@ -6,7 +6,7 @@
  * @path src/components/jobs/presentation/workstreams/ProjectWorkstreamsView.tsx
  */
 
-import { useState } from 'react';
+import { useState, useEffect, startTransition } from 'react';
 import { format } from 'date-fns';
 import {
   ChevronDown,
@@ -59,7 +59,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/shared/empty-state';
 import { cn } from '@/lib/utils';
-import type { ProjectWorkstream } from 'drizzle/schema/jobs/workstreams-notes';
+import type { ProjectWorkstream } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // TYPES
@@ -451,6 +451,44 @@ export function ProjectWorkstreamsView({
   isLoading,
   isReorderable = false,
 }: ProjectWorkstreamsViewProps) {
+  // All hooks must run unconditionally before any returns
+  const [sortedWorkstreams, setSortedWorkstreams] = useState<WorkstreamWithTasks[]>([]);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  useEffect(() => {
+    const sorted = [...workstreams]
+      .sort((a, b) => a.position - b.position)
+      .map(w => ({ ...w, tasks: (w as unknown as WorkstreamWithTasks).tasks || [] }));
+    startTransition(() => setSortedWorkstreams(sorted));
+  }, [workstreams]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setSortedWorkstreams((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        
+        // Call the callback with new order
+        onReorderWorkstreams?.(newItems.map((item) => item.id));
+        
+        return newItems;
+      });
+    }
+  };
+
+  const workstreamList = sortedWorkstreams.length > 0 ? sortedWorkstreams : 
+    [...workstreams]
+      .sort((a, b) => a.position - b.position)
+      .map(w => ({ ...w, tasks: (w as unknown as WorkstreamWithTasks).tasks || [] }));
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -484,48 +522,6 @@ export function ProjectWorkstreamsView({
       />
     );
   }
-
-  // Sort by position and ensure tasks array exists
-  const [sortedWorkstreams, setSortedWorkstreams] = useState<WorkstreamWithTasks[]>([]);
-  
-  // Update sorted workstreams when prop changes
-  useState(() => {
-    setSortedWorkstreams(
-      [...workstreams]
-        .sort((a, b) => a.position - b.position)
-        .map(w => ({ ...w, tasks: (w as unknown as WorkstreamWithTasks).tasks || [] }))
-    );
-  });
-
-  // DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setSortedWorkstreams((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        const newItems = arrayMove(items, oldIndex, newIndex);
-        
-        // Call the callback with new order
-        onReorderWorkstreams?.(newItems.map((item) => item.id));
-        
-        return newItems;
-      });
-    }
-  };
-
-  const workstreamList = sortedWorkstreams.length > 0 ? sortedWorkstreams : 
-    [...workstreams]
-      .sort((a, b) => a.position - b.position)
-      .map(w => ({ ...w, tasks: (w as unknown as WorkstreamWithTasks).tasks || [] }));
 
   return (
     <div className="space-y-4">

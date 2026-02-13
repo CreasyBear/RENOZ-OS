@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { calculateLineItemTotal } from '@/lib/order-calculations';
 import { useOrderForm, useOrderFormLineItems } from './order-form-context';
+import type { TaxType } from '@/lib/schemas/products';
 
 // ============================================================================
 // TYPES
@@ -242,7 +243,7 @@ const LineItemRow = React.memo(function LineItemRow({
         {isEditing ? (
           <Select
             value={item.taxType}
-            onValueChange={(value) => setValue(`lineItems.${index}.taxType`, value as any)}
+            onValueChange={(value) => setValue(`lineItems.${index}.taxType`, value as TaxType)}
           >
             <SelectTrigger className="h-8 w-24">
               <SelectValue />
@@ -322,8 +323,9 @@ export const OrderLineItems = React.memo(function OrderLineItems({
     name: 'lineItems',
   });
 
-  // Watch line items for calculations
-  const lineItems = watch('lineItems') || [];
+  // Watch line items for calculations (memoized for stable deps)
+  const rawLineItems = watch('lineItems');
+  const lineItems = useMemo(() => rawLineItems || [], [rawLineItems]);
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
 
   // Keyboard navigation support

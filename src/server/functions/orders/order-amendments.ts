@@ -8,7 +8,8 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, isNull, sql, inArray } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
 import { orderAmendments, orders, orderLineItems, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -21,18 +22,14 @@ import {
   cancelAmendmentSchema,
   amendmentParamsSchema,
   amendmentListQuerySchema,
+  amendmentListCursorQuerySchema,
   type ItemChange,
 } from '@/lib/schemas';
 import { GST_RATE } from '@/lib/order-calculations';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type OrderAmendment = typeof orderAmendments.$inferSelect;
+import { calculateLineItemTotals } from '@/server/functions/orders/orders';
 
 interface ListAmendmentsResult {
-  amendments: OrderAmendment[];
+  amendments: (typeof orderAmendments.$inferSelect)[];
   total: number;
   page: number;
   pageSize: number;
@@ -44,46 +41,18 @@ interface ListAmendmentsResult {
 // ============================================================================
 
 /**
- * Calculate line item totals including tax.
+ * Recalculate order totals with explicit shipping amount.
+ * Used when applying shipping_change amendments.
+ * 
+ * Calculation: subtotal + shipping = taxable amount
+ *              taxable amount * GST_RATE = tax
+ *              taxable amount + tax = total
  */
-function calculateLineItemTotals(lineItem: {
-  quantity: number;
-  unitPrice: number;
-  discountPercent?: number | null;
-  discountAmount?: number | null;
-  taxType?: string;
-}): { taxAmount: number; lineTotal: number } {
-  const subtotal = lineItem.quantity * lineItem.unitPrice;
-
-  // Apply discount
-  let discountedAmount = subtotal;
-  if (lineItem.discountPercent) {
-    discountedAmount -= subtotal * (lineItem.discountPercent / 100);
-  }
-  if (lineItem.discountAmount) {
-    discountedAmount -= lineItem.discountAmount;
-  }
-  discountedAmount = Math.max(0, discountedAmount);
-
-  // Calculate tax
-  const taxAmount = lineItem.taxType === 'exempt' ? 0 : discountedAmount * GST_RATE;
-
-  // Round to 2 decimal places
-  const lineTotal = Math.round((discountedAmount + taxAmount) * 100) / 100;
-
-  return {
-    taxAmount: Math.round(taxAmount * 100) / 100,
-    lineTotal,
-  };
-}
-
-/**
- * Recalculate order totals from line items.
- */
-async function recalculateOrderTotals(
+async function recalculateOrderTotalsWithShipping(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   orderId: string,
-  organizationId: string
+  organizationId: string,
+  shippingAmount: number
 ): Promise<{
   subtotal: number;
   taxAmount: number;
@@ -99,18 +68,24 @@ async function recalculateOrderTotals(
       and(eq(orderLineItems.orderId, orderId), eq(orderLineItems.organizationId, organizationId))
     );
 
+  // Subtotal from line items (line totals already include tax per line)
   const lineSubtotal = lineItems.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
   const lineTaxTotal = lineItems.reduce((sum, item) => sum + (item.taxAmount ?? 0), 0);
-
-  // The subtotal is line totals minus their tax
+  
+  // Subtotal is line totals minus their tax (net of GST)
   const subtotal = lineSubtotal - lineTaxTotal;
-  const taxAmount = lineTaxTotal;
-  const total = lineSubtotal;
+  
+  // Calculate GST on (subtotal + shipping)
+  const taxableAmount = subtotal + shippingAmount;
+  const taxAmount = Math.round(taxableAmount * GST_RATE * 100) / 100;
+  
+  // Total = taxable amount + tax
+  const total = Math.round((taxableAmount + taxAmount) * 100) / 100;
 
   return {
     subtotal: Math.round(subtotal * 100) / 100,
-    taxAmount: Math.round(taxAmount * 100) / 100,
-    total: Math.round(total * 100) / 100,
+    taxAmount,
+    total,
   };
 }
 
@@ -120,7 +95,6 @@ async function recalculateOrderTotals(
 
 export const listAmendments = createServerFn({ method: 'GET' })
   .inputValidator(amendmentListQuerySchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
   .handler(async ({ data }): Promise<ListAmendmentsResult> => {
     const ctx = await withAuth();
     const { orderId, status, amendmentType, requestedBy, page, pageSize, sortBy, sortOrder } = data;
@@ -179,14 +153,52 @@ export const listAmendments = createServerFn({ method: 'GET' })
     };
   });
 
+/**
+ * List amendments with cursor pagination (recommended for large datasets).
+ */
+export const listAmendmentsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(amendmentListCursorQuerySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const { cursor, pageSize = 20, sortOrder = 'desc', orderId, status, amendmentType, requestedBy } = data;
+
+    const conditions = [
+      eq(orderAmendments.organizationId, ctx.organizationId),
+      isNull(orderAmendments.deletedAt),
+    ];
+    if (orderId) conditions.push(eq(orderAmendments.orderId, orderId));
+    if (status) conditions.push(eq(orderAmendments.status, status));
+    if (amendmentType) conditions.push(eq(orderAmendments.amendmentType, amendmentType));
+    if (requestedBy) conditions.push(eq(orderAmendments.requestedBy, requestedBy));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(orderAmendments.createdAt, orderAmendments.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+
+    const amendments = await db
+      .select()
+      .from(orderAmendments)
+      .where(and(...conditions))
+      .orderBy(orderDir(orderAmendments.createdAt), orderDir(orderAmendments.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(amendments, pageSize);
+  });
+
 // ============================================================================
 // GET AMENDMENT
 // ============================================================================
 
 export const getAmendment = createServerFn({ method: 'GET' })
   .inputValidator(amendmentParamsSchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
-  .handler(async ({ data }): Promise<OrderAmendment> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const [amendment] = await db
@@ -214,8 +226,7 @@ export const getAmendment = createServerFn({ method: 'GET' })
 
 export const requestAmendment = createServerFn({ method: 'POST' })
   .inputValidator(requestAmendmentSchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
-  .handler(async ({ data }): Promise<OrderAmendment> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify order exists and belongs to org
@@ -235,10 +246,19 @@ export const requestAmendment = createServerFn({ method: 'POST' })
       throw new NotFoundError('Order not found');
     }
 
-    // Cannot amend cancelled or delivered orders
-    if (order.status === 'cancelled' || order.status === 'delivered') {
-      throw new ValidationError('Cannot amend completed order', {
-        status: [`Order is ${order.status}`],
+    // Cannot amend cancelled orders
+    if (order.status === 'cancelled') {
+      throw new ValidationError('Cannot amend cancelled order', {
+        status: ['Order is cancelled'],
+      });
+    }
+
+    // Cannot amend delivered orders that are fully paid
+    const isDelivered = order.status === 'delivered';
+    const isPaid = order.paymentStatus === 'paid' || Number(order.balanceDue) <= 0;
+    if (isDelivered && isPaid) {
+      throw new ValidationError('Cannot amend completed and paid order', {
+        status: ['Order is delivered and fully paid'],
       });
     }
 
@@ -268,8 +288,7 @@ export const requestAmendment = createServerFn({ method: 'POST' })
 
 export const approveAmendment = createServerFn({ method: 'POST' })
   .inputValidator(approveAmendmentSchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
-  .handler(async ({ data }): Promise<OrderAmendment> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify amendment exists and is pending
@@ -317,8 +336,7 @@ export const approveAmendment = createServerFn({ method: 'POST' })
 
 export const rejectAmendment = createServerFn({ method: 'POST' })
   .inputValidator(rejectAmendmentSchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
-  .handler(async ({ data }): Promise<OrderAmendment> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify amendment exists and is pending
@@ -366,8 +384,7 @@ export const rejectAmendment = createServerFn({ method: 'POST' })
 
 export const applyAmendment = createServerFn({ method: 'POST' })
   .inputValidator(applyAmendmentSchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
-  .handler(async ({ data }): Promise<OrderAmendment> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify amendment exists and is approved
@@ -393,56 +410,73 @@ export const applyAmendment = createServerFn({ method: 'POST' })
       });
     }
 
-    // Get order for version check
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(
-        and(
-          eq(orders.id, existing.orderId),
-          eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!order) {
-      throw new NotFoundError('Order not found');
-    }
-
-    // Check version unless force apply
-    if (!data.forceApply && order.version !== existing.orderVersionBefore) {
-      throw new ConflictError('Order has been modified since amendment was created');
-    }
-
     // FIX #4: Wrap entire apply operation in transaction
+    // Version check moved inside transaction with row lock to prevent race conditions
     const amendment = await db.transaction(async (tx) => {
+      // Re-fetch order with row lock for version check
+      const [order] = await tx
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.id, existing.orderId),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .limit(1)
+        .for('update');
+
+      if (!order) {
+        throw new NotFoundError('Order not found');
+      }
+
+      // Check version unless force apply (inside transaction with row lock)
+      if (!data.forceApply && order.version !== existing.orderVersionBefore) {
+        throw new ConflictError('Order has been modified since amendment was created');
+      }
       // Apply item changes
-      const changes = existing.changes as { itemChanges?: ItemChange[] };
+      const changes = existing.changes as { itemChanges?: ItemChange[]; shippingAmount?: number };
       if (changes.itemChanges) {
+        // Batch fetch all products needed for 'add' actions upfront
+        const addProductIds = changes.itemChanges
+          .filter((ic) => ic.action === 'add' && ic.productId)
+          .map((ic) => ic.productId!);
+        const productMap = new Map<string, typeof products.$inferSelect>();
+        if (addProductIds.length > 0) {
+          const fetchedProducts = await tx
+            .select()
+            .from(products)
+            .where(and(
+              inArray(products.id, addProductIds),
+              eq(products.organizationId, ctx.organizationId),
+              isNull(products.deletedAt)
+            ));
+          for (const p of fetchedProducts) {
+            productMap.set(p.id, p);
+          }
+        }
+
+        // Get max line number once before the loop
+        const [maxLine] = await tx
+          .select({ max: sql<number>`COALESCE(MAX(${orderLineItems.lineNumber}), 0)` })
+          .from(orderLineItems)
+          .where(
+            and(
+              eq(orderLineItems.orderId, order.id),
+              eq(orderLineItems.organizationId, ctx.organizationId)
+            )
+          );
+        let lineNumber = (maxLine?.max ?? 0);
+
         for (const itemChange of changes.itemChanges) {
           if (itemChange.action === 'add' && itemChange.productId) {
             // Add new line item
-            const [product] = await tx
-              .select()
-              .from(products)
-              .where(eq(products.id, itemChange.productId))
-              .limit(1);
+            const product = productMap.get(itemChange.productId);
 
             if (!product) continue;
 
-            // Get next line number
-            const [maxLine] = await tx
-              .select({ max: sql<number>`COALESCE(MAX(${orderLineItems.lineNumber}), 0)` })
-              .from(orderLineItems)
-              .where(
-                and(
-                  eq(orderLineItems.orderId, order.id),
-                  eq(orderLineItems.organizationId, ctx.organizationId)
-                )
-              );
-
-            const lineNumber = (maxLine?.max ?? 0) + 1;
+            lineNumber += 1;
             const quantity = itemChange.after?.quantity ?? 1;
             const unitPrice = itemChange.after?.unitPrice ?? product.basePrice ?? 0;
             const { taxAmount, lineTotal } = calculateLineItemTotals({
@@ -509,8 +543,28 @@ export const applyAmendment = createServerFn({ method: 'POST' })
         }
       }
 
-      // Recalculate order totals
-      const totals = await recalculateOrderTotals(tx, order.id, ctx.organizationId);
+      // Apply shipping amount change if this is a shipping_change amendment
+      let newShippingAmount = order.shippingAmount;
+      if (existing.amendmentType === 'shipping_change' && changes.shippingAmount !== undefined) {
+        newShippingAmount = changes.shippingAmount;
+        
+        // Update order with new shipping amount
+        await tx
+          .update(orders)
+          .set({
+            shippingAmount: newShippingAmount,
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(orders.id, order.id));
+      }
+
+      // Recalculate order totals (passes new shipping amount)
+      const totals = await recalculateOrderTotalsWithShipping(
+        tx, 
+        order.id, 
+        ctx.organizationId,
+        Number(newShippingAmount)
+      );
 
       // Update order with new totals and increment version
       await tx
@@ -550,8 +604,7 @@ export const applyAmendment = createServerFn({ method: 'POST' })
 
 export const cancelAmendment = createServerFn({ method: 'POST' })
   .inputValidator(cancelAmendmentSchema)
-  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
-  .handler(async ({ data }): Promise<OrderAmendment> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify amendment exists and is pending or approved
@@ -571,7 +624,7 @@ export const cancelAmendment = createServerFn({ method: 'POST' })
       throw new NotFoundError('Amendment not found');
     }
 
-    if (!['pending', 'approved'].includes(existing.status)) {
+    if (!['requested', 'approved'].includes(existing.status)) {
       throw new ValidationError('Amendment cannot be cancelled', {
         status: [`Current status is ${existing.status}`],
       });

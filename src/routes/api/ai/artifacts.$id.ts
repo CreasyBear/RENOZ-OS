@@ -13,6 +13,7 @@ import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { aiConversations, aiAgentTasks } from 'drizzle/schema/_ai';
 import { eq, and } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -268,7 +269,7 @@ export async function GET({ params }: { params: { id: string } }) {
     const generator = generateArtifactStream(artifactId, ctx.organizationId);
     return createSSEStream(generator);
   } catch (error) {
-    console.error('[API /ai/artifacts/:id] Error:', error);
+    logger.error('[API /ai/artifacts/:id] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {

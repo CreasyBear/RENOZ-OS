@@ -49,39 +49,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import {
-  ScheduledEmailBadge,
-  type ScheduledEmailStatus,
-} from "./scheduled-email-badge";
-import {
-  useScheduledEmails,
-  useCancelScheduledEmail,
-} from "@/hooks/communications/use-scheduled-emails";
+import { ScheduledEmailBadge } from "./scheduled-email-badge";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface ScheduledEmailsListProps {
-  status?: ScheduledEmailStatus;
-  customerId?: string;
-  onEdit?: (emailId: string) => void;
-  onCompose?: () => void;
-  className?: string;
-}
+import type {
+  ScheduledEmail,
+  ScheduledEmailStatus,
+  ScheduledEmailsListProps,
+} from "@/lib/schemas/communications";
 
-interface ScheduledEmail {
-  id: string;
-  recipientEmail: string;
-  recipientName: string | null;
-  subject: string;
-  templateType: string;
-  scheduledAt: Date;
-  timezone: string;
-  status: ScheduledEmailStatus;
-  createdAt: Date;
-}
+// Re-export types for backward compatibility
+export type { ScheduledEmail, ScheduledEmailStatus, ScheduledEmailsListProps };
 
 // ============================================================================
 // SKELETON
@@ -110,8 +91,15 @@ export function ScheduledEmailsSkeleton() {
 // ============================================================================
 
 export const ScheduledEmailsList = memo(function ScheduledEmailsList({
-  status,
-  customerId,
+  items,
+  total,
+  totalAll,
+  isLoading = false,
+  error,
+  onRefresh,
+  isRefreshing = false,
+  onCancel,
+  isCancelling = false,
   onEdit,
   onCompose,
   className,
@@ -119,43 +107,20 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [emailToCancel, setEmailToCancel] = useState<ScheduledEmail | null>(null);
 
-  // Fetch scheduled emails
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-  } = useScheduledEmails({ status, customerId, limit: 50, offset: 0 });
-
-  // Cancel mutation
-  const cancelMutation = useCancelScheduledEmail();
-
   const handleCancelClick = useCallback((email: ScheduledEmail) => {
     setEmailToCancel(email);
     setCancelDialogOpen(true);
   }, []);
 
-  const handleConfirmCancel = useCallback(() => {
-    if (emailToCancel) {
-      cancelMutation.mutate(
-        { id: emailToCancel.id },
-        {
-          onSuccess: () => {
-            toast.success("Email cancelled", {
-              description: "The scheduled email has been cancelled.",
-            });
-            setCancelDialogOpen(false);
-            setEmailToCancel(null);
-          },
-          onError: (error) => {
-            toast.error("Failed to cancel email", {
-              description: error instanceof Error ? error.message : "Please try again.",
-            });
-          },
-        }
-      );
+  const handleConfirmCancel = useCallback(async () => {
+    if (!emailToCancel || !onCancel) return;
+
+    const didCancel = await onCancel(emailToCancel.id);
+    if (didCancel) {
+      setCancelDialogOpen(false);
+      setEmailToCancel(null);
     }
-  }, [emailToCancel, cancelMutation]);
+  }, [emailToCancel, onCancel]);
 
   // Loading state
   if (isLoading) {
@@ -177,7 +142,7 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
                 {error instanceof Error ? error.message : "An error occurred"}
               </p>
             </div>
-            <Button variant="outline" onClick={() => refetch()}>
+            <Button variant="outline" onClick={() => onRefresh?.()}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Try Again
             </Button>
@@ -187,10 +152,8 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
     );
   }
 
-  const emails = data?.items ?? [];
-
   // Empty state
-  if (emails.length === 0) {
+  if (items.length === 0) {
     return (
       <Empty className={className}>
         <EmptyHeader>
@@ -215,12 +178,22 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
       <Card className={className}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-medium">
-              Scheduled Emails
-            </CardTitle>
-            <span className="text-sm text-muted-foreground">
-              {data?.total ?? 0} total
-            </span>
+            <CardTitle className="text-lg font-medium">Scheduled Emails</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+                Refresh
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {total} {total === 1 ? "email" : "emails"}
+                {totalAll && totalAll !== total && ` of ${totalAll}`}
+              </span>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -237,7 +210,7 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {emails.map((email) => (
+              {items.map((email) => (
                 <TableRow key={email.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -324,15 +297,15 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={cancelMutation.isPending}>
+            <AlertDialogCancel disabled={isCancelling}>
               Keep Scheduled
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmCancel}
-              disabled={cancelMutation.isPending}
+              disabled={isCancelling}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {cancelMutation.isPending ? "Cancelling..." : "Cancel Email"}
+              {isCancelling ? "Cancelling..." : "Cancel Email"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

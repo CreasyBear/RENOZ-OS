@@ -14,7 +14,7 @@
  * - Numeric inputs with proper constraints
  */
 import { memo, useState, useCallback, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -126,8 +126,8 @@ export const ReceivingForm = memo(function ReceivingForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
-  const form = useForm({
-    resolver: zodResolver(receivingFormSchema) as any,
+  const form = useForm<ReceivingFormValues>({
+    resolver: zodResolver(receivingFormSchema) as Resolver<ReceivingFormValues>,
     defaultValues: {
       productId: "",
       locationId: defaultLocationId ?? "",
@@ -143,6 +143,7 @@ export const ReceivingForm = memo(function ReceivingForm({
     },
   });
 
+   
   const selectedProductId = form.watch("productId");
   const selectedProduct = products.find((p) => p.id === selectedProductId);
 
@@ -154,7 +155,7 @@ export const ReceivingForm = memo(function ReceivingForm({
   }, [selectedProduct, form]);
 
   const handleSubmit = useCallback(
-    async (values: any) => {
+    async (values: ReceivingFormValues) => {
       try {
         setIsSubmitting(true);
         await onSubmit(values);
@@ -168,6 +169,7 @@ export const ReceivingForm = memo(function ReceivingForm({
 
   const quantity = form.watch("quantity") || 0;
   const unitCost = form.watch("unitCost") || 0;
+   
   const totalValue = quantity * unitCost;
 
   return (

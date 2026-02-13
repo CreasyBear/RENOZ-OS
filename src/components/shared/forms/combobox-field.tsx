@@ -54,7 +54,7 @@
  * </form.Field>
  * ```
  */
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react"
 import { useDebounce } from "~/hooks/_shared/use-debounce"
 import { Button } from "~/components/ui/button"
@@ -72,6 +72,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover"
 import { FormField } from "./form-field"
+import { logger } from "~/lib/logger"
 import { cn } from "~/lib/utils"
 import { extractFieldError, type AnyFieldApi } from "./types"
 
@@ -182,7 +183,7 @@ export function ComboboxField({
           setAsyncOptions(results)
         }
       } catch (err) {
-        console.error("Failed to load options:", err)
+        logger.error("Failed to load options", err as Error, { context: "combobox-field" })
         if (!cancelled) {
           setAsyncOptions([])
         }
@@ -239,7 +240,7 @@ export function ComboboxField({
       setOpen(false)
       field.handleBlur()
     } catch (err) {
-      console.error("Failed to create option:", err)
+      logger.error("Failed to create option", err as Error, { context: "combobox-field" })
     } finally {
       setIsCreating(false)
     }
@@ -447,7 +448,7 @@ export function MultiComboboxField({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
 
-  const selectedValues = field.state.value ?? []
+  const selectedValues = useMemo(() => field.state.value ?? [], [field.state.value])
   const selectedOptions = options.filter((opt) =>
     selectedValues.includes(opt.value)
   )

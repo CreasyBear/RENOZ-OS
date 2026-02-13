@@ -25,8 +25,10 @@ export * from './projects';
 // Schedule - Cross-project scheduling (active)
 export {
   ScheduleCalendarContainer,
+  type ScheduleCalendarContainerProps,
   ScheduleTimelineContainer,
   ScheduleDashboard,
+  ScheduleHub,
   type ScheduleVisit,
   type ScheduleDay,
 } from './schedule';
@@ -35,7 +37,8 @@ export {
 export { TechnicianDashboard } from './technician';
 
 // Site Visits - Project site visits (active)
-export { SiteVisitList, CompactSiteVisitList, SiteVisitDetail } from './site-visits';
+// SiteVisitList, CompactSiteVisitList deprecated - use ScheduleDashboard
+export { SiteVisitDetail } from './site-visits';
 
 // Installer Management (active)
 export {

@@ -17,10 +17,8 @@ import {
   warrantyPolicies,
   customers,
   products,
-  organizations,
-  type OrganizationBranding,
-  type OrganizationAddress,
 } from "drizzle/schema";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -29,8 +27,8 @@ import {
   generateStoragePath,
   calculateChecksum,
   type WarrantyCertificateData,
-  type DocumentOrganization,
 } from "@/lib/documents";
+import { warrantyPolicyTermsSchema } from "@/lib/schemas/warranty/policies";
 
 // ============================================================================
 // TYPES
@@ -52,17 +50,7 @@ export interface GenerateWarrantyCertificatePdfPayload {
 
 const STORAGE_BUCKET = "documents";
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Generate the public URL for viewing a warranty certificate
- */
-function getWarrantyViewUrl(warrantyId: string): string {
-  const baseUrl = process.env.APP_URL || "https://app.renoz.com.au";
-  return `${baseUrl}/warranty/${warrantyId}`;
-}
+import { buildDocumentViewUrl } from "@/lib/documents/urls";
 
 /**
  * Calculate warranty duration from dates
@@ -201,60 +189,11 @@ export const generateWarrantyCertificatePdf = task({
       throw new Error(`Product ${warranty.productId} not found`);
     }
 
-    // Step 4: Fetch organization details
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
-    const address = org.address as OrganizationAddress | null;
-    const branding = org.branding as OrganizationBranding | null;
-
-    const orgData: DocumentOrganization = {
-      id: org.id,
-      name: org.name,
-      email: org.email,
-      phone: org.phone,
-      website: org.website || branding?.websiteUrl,
-      taxId: org.abn,
-      currency: org.currency || "AUD",
-      locale: org.locale || "en-AU",
-      address: address
-        ? {
-            addressLine1: address.street1,
-            addressLine2: address.street2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: branding?.logoUrl,
-        primaryColor: branding?.primaryColor,
-        secondaryColor: branding?.secondaryColor,
-      },
-    };
+    // Step 4: Fetch organization details (with logo pre-fetched for PDF)
+    const orgData = await fetchOrganizationForDocument(organizationId);
 
     // Step 5: Generate QR code for verification
-    const warrantyUrl = getWarrantyViewUrl(warrantyId);
+    const warrantyUrl = buildDocumentViewUrl("warranty", warrantyId);
     const qrCodeDataUrl = await generateQRCode(warrantyUrl, {
       width: 240,
       margin: 0,
@@ -279,12 +218,12 @@ export const generateWarrantyCertificatePdf = task({
       }
     };
 
-    // Extract terms as string from JSONB
+    // Extract terms as string from JSONB (validated per sf-input-validation.md)
     const getTermsString = (terms: unknown): string | undefined => {
-      if (!terms || typeof terms !== "object") return undefined;
-      const termsObj = terms as Record<string, unknown>;
-      const coverage = termsObj.coverage as string[] | undefined;
-      const exclusions = termsObj.exclusions as string[] | undefined;
+      const parsed = warrantyPolicyTermsSchema.safeParse(terms);
+      const termsData = parsed.success ? parsed.data : null;
+      const coverage = termsData?.coverage;
+      const exclusions = termsData?.exclusions;
       const parts: string[] = [];
       if (coverage && coverage.length > 0) {
         parts.push(`Coverage: ${coverage.join(", ")}`);

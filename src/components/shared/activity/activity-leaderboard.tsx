@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, Medal, Award } from "lucide-react";
 import { useActivityLeaderboard } from "@/hooks";
+import type { LeaderboardEntry } from "@/lib/schemas/activities";
 
 // ============================================================================
 // TYPES
@@ -26,14 +27,6 @@ export interface ActivityLeaderboardProps {
   /** Show loading skeleton */
   showSkeleton?: boolean;
   className?: string;
-}
-
-interface LeaderboardEntry {
-  userId: string;
-  userName: string | null;
-  userEmail: string;
-  activityCount: number;
-  rank: number;
 }
 
 // ============================================================================
@@ -203,7 +196,8 @@ export function ActivityLeaderboard({
   }
 
   // Limit entries client-side since API doesn't support limit param
-  const allEntries = (data ?? []) as LeaderboardEntry[];
+  // data is already typed as ActivityLeaderboardItem[] from useActivityLeaderboard hook
+  const allEntries: LeaderboardEntry[] = data ?? [];
   const entries = allEntries.slice(0, limit);
 
   if (entries.length === 0) {

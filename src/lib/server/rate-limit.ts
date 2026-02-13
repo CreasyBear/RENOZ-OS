@@ -161,19 +161,21 @@ export function getClientIdentifier(request?: Request): string {
     return 'unknown';
   }
 
-  // Try common headers for real IP (behind proxies)
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    // Take the first IP (client's actual IP)
-    return forwardedFor.split(',')[0].trim();
+  const trustProxy = process.env.TRUST_PROXY === 'true';
+  if (trustProxy) {
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    if (forwardedFor) {
+      // Take the first IP (client's actual IP)
+      return forwardedFor.split(',')[0].trim();
+    }
+
+    const realIp = request.headers.get('x-real-ip');
+    if (realIp) {
+      return realIp.trim();
+    }
   }
 
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
-  }
-
-  // Fallback to a default identifier
+  // Conservative fallback when proxy headers are untrusted.
   return 'default-client';
 }
 

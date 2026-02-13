@@ -11,13 +11,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { OrderStatus } from '@/lib/schemas/orders';
+import {
+  getOrderWithCustomer,
+  updateOrderStatus,
+  deleteOrder,
+  duplicateOrder,
+} from '@/server/functions/orders/orders';
 
-// Dynamic imports to prevent server-only code from being bundled to client
-const loadOrdersModule = async () => import('@/server/functions/orders/orders');
-
-// Types inferred from server functions
-type OrdersModule = Awaited<ReturnType<typeof loadOrdersModule>>;
-export type OrderWithCustomer = Awaited<ReturnType<OrdersModule['getOrderWithCustomer']>>;
+export type OrderWithCustomer = Awaited<ReturnType<typeof getOrderWithCustomer>>;
 
 // ============================================================================
 // ORDER WITH CUSTOMER HOOK
@@ -39,16 +40,17 @@ export function useOrderWithCustomer({
   enabled = true,
   refetchInterval = 30000,
 }: UseOrderWithCustomerOptions) {
-  const getOrderWithCustomerFn = useServerFn(
-    async ({ data }: { data: { id: string } }) => {
-      const { getOrderWithCustomer } = await loadOrdersModule();
-      return getOrderWithCustomer({ data });
-    }
-  );
+  const getOrderWithCustomerFn = useServerFn(getOrderWithCustomer);
 
   return useQuery({
     queryKey: queryKeys.orders.withCustomer(orderId),
-    queryFn: () => getOrderWithCustomerFn({ data: { id: orderId } }),
+    queryFn: async () => {
+      const result = await getOrderWithCustomerFn({
+        data: { id: orderId }
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds
     refetchInterval,
@@ -67,12 +69,7 @@ export interface UpdateStatusInput {
 export function useOrderDetailStatusUpdate(orderId: string) {
   const queryClient = useQueryClient();
 
-  const updateStatusFn = useServerFn(
-    async ({ data }: { data: { id: string; data: UpdateStatusInput } }) => {
-      const { updateOrderStatus } = await loadOrdersModule();
-      return updateOrderStatus({ data });
-    }
-  );
+  const updateStatusFn = useServerFn(updateOrderStatus);
 
   return useMutation({
     mutationFn: (input: UpdateStatusInput) =>
@@ -93,10 +90,7 @@ export function useOrderDetailStatusUpdate(orderId: string) {
 export function useDeleteOrderWithConfirmation(orderId: string) {
   const queryClient = useQueryClient();
 
-  const deleteFn = useServerFn(async ({ data }: { data: { id: string } }) => {
-    const { deleteOrder } = await loadOrdersModule();
-    return deleteOrder({ data });
-  });
+  const deleteFn = useServerFn(deleteOrder);
 
   return useMutation({
     mutationFn: () => deleteFn({ data: { id: orderId } }),
@@ -116,10 +110,7 @@ export function useDeleteOrderWithConfirmation(orderId: string) {
 export function useDuplicateOrderById(orderId: string) {
   const queryClient = useQueryClient();
 
-  const duplicateFn = useServerFn(async ({ data }: { data: { id: string } }) => {
-    const { duplicateOrder } = await loadOrdersModule();
-    return duplicateOrder({ data });
-  });
+  const duplicateFn = useServerFn(duplicateOrder);
 
   return useMutation({
     mutationFn: () => duplicateFn({ data: { id: orderId } }),

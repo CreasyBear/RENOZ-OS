@@ -1,83 +1,53 @@
 /**
  * Project Detail Container
  *
- * Handles data fetching, mutations, and state management for project detail view.
+ * Handles data fetching via composite hook and passes data to presenter.
  * Implements render props pattern for flexible header/action composition.
  *
- * @source project from useProject hook
- * @source activities from useUnifiedActivities hook
+ * @source project from useProjectDetail hook
+ * @source siteVisits from useProjectDetail hook (enriched with installerName for tabs)
+ * @source workstreams from useProjectDetail hook
+ * @source tasks from useProjectDetail hook
+ * @source bom from useProjectDetail hook
+ * @source notes from useProjectDetail hook
+ * @source files from useProjectDetail hook
+ * @source activities from useProjectDetail hook
+ * @source actions (onDelete, onStatusChange) from useProjectDetail hook
  *
- * @see STANDARDS.md - Container/Presenter pattern
+ * @see STANDARDS.md §2 Container/Presenter pattern
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
+ * @see docs/design-system/PROJECTS-DOMAIN-PHILOSOPHY.md Part 6.2
  */
 
-import { useState, useCallback, useMemo } from 'react';
-import {
-  Edit,
-  MoreHorizontal,
-  Trash2,
-  CheckCircle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { useCallback, useMemo, useState } from 'react';
+import { Edit, Trash2, CheckCircle, FileOutput, Award } from 'lucide-react';
 import { ErrorState } from '@/components/shared/error-state';
-import { StatusCell } from '@/components/shared/data-table';
+import { EntityHeaderActions } from '@/components/shared';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toast } from '@/lib/toast';
-import {
-  useProject,
-  useDeleteProject,
-  useCompleteProject,
-  useSiteVisitsByProject,
-  useWorkstreams,
-} from '@/hooks/jobs';
-import { useUnifiedActivities } from '@/hooks/activities';
-import { PROJECT_STATUS_CONFIG } from '../project-status-config';
-import { StatusProgressCircle } from '../progress-circle';
-import {
-  ProjectDetailView,
-  type ProjectDetailData,
-  type ProjectMember,
-} from '../views/project-detail-view';
-import {
-  ProjectOverviewTab,
-  ProjectWorkstreamsTab,
-  ProjectVisitsTab,
-  ProjectTasksTab,
-  ProjectBomTab,
-  ProjectNotesTab,
-  ProjectFilesTab,
-} from '../project-detail-tabs';
-import { ProjectCompletionDialog, ProjectEditDialog } from '../';
-import type { ProjectStatus } from '@/lib/schemas/jobs/projects';
-import type { Project } from 'drizzle/schema/jobs/projects';
+import { useProjectDetail, useUpdateProjectTask, useRescheduleSiteVisit } from '@/hooks/jobs';
+import { useUserLookup } from '@/hooks/users';
+import { format } from 'date-fns';
+import { ProjectDetailView } from '../views/project-detail-view';
+import { useProjectDetailTabRenderers } from './use-project-detail-tab-renderers';
+import { ProjectDetailDialogs } from './project-detail-dialogs';
+import { getBomCompletionStats } from '@/lib/schemas/jobs/project-bom';
+import type { CompletionValidation } from '@/lib/schemas/jobs/projects';
+import type { SiteVisitItem } from '@/lib/schemas/jobs/site-visits';
+import { toProjectTabVisit } from '@/lib/schemas/jobs/project-detail';
+// Mobile sidebar is now implemented in project-detail-view.tsx
+import { useTrackView } from '@/hooks/search';
+import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface ProjectDetailContainerRenderProps {
-  /** Header title element */
-  headerTitle: React.ReactNode;
-  /** Header action buttons */
-  headerActions: React.ReactNode;
-  /** Main content */
+  /** Header action buttons (for PageLayout.Header when using layout pattern) */
+  headerActions?: React.ReactNode;
+  /** Main content (includes EntityHeader with actions) */
   content: React.ReactNode;
 }
 
@@ -94,32 +64,7 @@ export interface ProjectDetailContainerProps {
   className?: string;
 }
 
-// ============================================================================
-// LOADING SKELETON
-// ============================================================================
-
-function ProjectDetailSkeleton() {
-  return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-10 w-10 rounded-full" />
-          <Skeleton className="h-10 w-24" />
-        </div>
-      </div>
-      <Skeleton className="h-12 w-full" />
-      <div className="grid grid-cols-2 gap-6">
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
-      </div>
-      <Skeleton className="h-64" />
-    </div>
-  );
-}
+import { ProjectDetailSkeleton } from '@/components/skeletons/projects';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -133,383 +78,172 @@ export function ProjectDetailContainer({
   className,
 }: ProjectDetailContainerProps) {
   // ─────────────────────────────────────────────────────────────────────────
-  // State
+  // Composite Hook (handles all data fetching, state, and mutations)
   // ─────────────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('overview');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [showMetaPanel, setShowMetaPanel] = useState(true);
-  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const detail = useProjectDetail(projectId);
+  const { onLogActivity, onScheduleFollowUp, loggerProps: activityLoggerProps } =
+    useEntityActivityLogging({
+      entityType: 'project',
+      entityId: projectId,
+      entityLabel: `Project: ${detail.project?.title ?? projectId}`,
+    });
+  const { getUser } = useUserLookup();
+  const updateTask = useUpdateProjectTask(projectId);
+  const rescheduleVisit = useRescheduleSiteVisit();
+  useTrackView('job', detail.project?.id, detail.project?.title, detail.project?.projectNumber ?? undefined, `/projects/${projectId}`);
+  useDetailBreadcrumb(
+    `/projects/${projectId}`,
+    detail.project ? (detail.project.title || detail.project.projectNumber || projectId) : undefined,
+    !!detail.project
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Panel Toggle Handler
+  // Event Handlers
   // ─────────────────────────────────────────────────────────────────────────
-  const handleToggleMetaPanel = useCallback(() => {
-    setShowMetaPanel((prev) => !prev);
-  }, []);
+  const [isGeneratingWorkOrder, setIsGeneratingWorkOrder] = useState(false);
+  const [isGeneratingCompletionCertificate, setIsGeneratingCompletionCertificate] = useState(false);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Data Fetching
-  // ─────────────────────────────────────────────────────────────────────────
-  const {
-    data: rawProject,
-    isLoading,
-    error,
-    refetch,
-  } = useProject({ projectId });
-
-  const { data: rawSiteVisits } = useSiteVisitsByProject(projectId);
-  useWorkstreams(projectId);
-
-  const {
-    activities,
-    isLoading: activitiesLoading,
-    error: activitiesError,
-  } = useUnifiedActivities({
-    entityType: 'project',
-    entityId: projectId,
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Mutations
-  // ─────────────────────────────────────────────────────────────────────────
-  const deleteMutation = useDeleteProject();
-  useCompleteProject();
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Transform Data
-  // ─────────────────────────────────────────────────────────────────────────
-  interface SiteVisitItem {
-    id: string;
-    projectId: string;
-    visitNumber: string;
-    visitType: string;
-    status: string;
-    scheduledDate: string;
-    scheduledTime: string | null;
-    installerName?: string;
-  }
-
-  const siteVisits = ((rawSiteVisits as { items?: unknown[] } | undefined)?.items ?? []) as SiteVisitItem[];
-
-  // Transform project data to match presenter interface
-  const project = useMemo((): ProjectDetailData | null => {
-    if (!rawProject) return null;
-
-    const raw = rawProject as {
-      id: string;
-      title: string;
-      projectNumber: string;
-      description: string | null;
-      status: ProjectStatus;
-      progressPercent: number;
-      projectType: string;
-      priority: 'urgent' | 'high' | 'medium' | 'low';
-      startDate: string | null;
-      targetCompletionDate: string | null;
-      actualCompletionDate: string | null;
-      estimatedTotalValue: string | number | null;
-      actualTotalCost: string | number | null;
-      siteAddress: {
-        street: string;
-        city: string;
-        state: string;
-        postalCode: string;
-        country: string;
-      } | null;
-      scope: {
-        inScope: string[];
-        outOfScope: string[];
-      } | null;
-      outcomes: string[] | null;
-      keyFeatures: {
-        p0: string[];
-        p1: string[];
-        p2: string[];
-      } | null;
-      customer?: {
-        id: string;
-        name: string;
-        email?: string;
-        phone?: string;
-        companyName?: string;
-      } | null;
-      members?: Array<{
-        user: {
-          id: string;
-          name: string | null;
-          email: string;
-          avatarUrl?: string;
-        };
-        role: 'owner' | 'manager' | 'member';
-      }>;
-      createdAt: string;
-      updatedAt: string;
-      version?: number;
-    };
-
-    return {
-      id: raw.id,
-      title: raw.title,
-      projectNumber: raw.projectNumber,
-      description: raw.description,
-      status: raw.status,
-      progressPercent: raw.progressPercent,
-      projectType: raw.projectType,
-      priority: raw.priority,
-      startDate: raw.startDate,
-      targetCompletionDate: raw.targetCompletionDate,
-      actualCompletionDate: raw.actualCompletionDate,
-      estimatedTotalValue: raw.estimatedTotalValue,
-      actualTotalCost: raw.actualTotalCost,
-      siteAddress: raw.siteAddress,
-      scope: raw.scope,
-      outcomes: raw.outcomes,
-      keyFeatures: raw.keyFeatures,
-      customer: raw.customer,
-      members: raw.members as ProjectMember[],
-      createdAt: raw.createdAt,
-      updatedAt: raw.updatedAt,
-      version: raw.version,
-    };
-  }, [rawProject]);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Handlers
-  // ─────────────────────────────────────────────────────────────────────────
   const handleEdit = useCallback(() => {
     if (onEdit) {
       onEdit();
     } else {
-      setEditDialogOpen(true);
+      detail.setEditDialogOpen(true);
     }
-  }, [onEdit]);
+  }, [onEdit, detail]);
 
   const handleDelete = useCallback(async () => {
     try {
-      await deleteMutation.mutateAsync(projectId);
+      await detail.actions.onDelete();
       toast.success('Project deleted successfully');
-      setDeleteDialogOpen(false);
       onBack?.();
     } catch {
       toast.error('Failed to delete project');
     }
-  }, [deleteMutation, projectId, onBack]);
+  }, [detail.actions, onBack]);
+
+  const handleGenerateWorkOrder = useCallback(async () => {
+    if (isGeneratingWorkOrder) return;
+    setIsGeneratingWorkOrder(true);
+    try {
+      await detail.actions.onGenerateWorkOrder();
+      toast.success('Work order generated');
+    } catch {
+      toast.error('Failed to generate work order');
+    } finally {
+      setIsGeneratingWorkOrder(false);
+    }
+  }, [detail.actions, isGeneratingWorkOrder]);
+
+  const handleGenerateCompletionCertificate = useCallback(async () => {
+    if (isGeneratingCompletionCertificate) return;
+    setIsGeneratingCompletionCertificate(true);
+    try {
+      await detail.actions.onGenerateCompletionCertificate();
+      toast.success('Completion certificate generated');
+    } catch {
+      toast.error('Failed to generate completion certificate');
+    } finally {
+      setIsGeneratingCompletionCertificate(false);
+    }
+  }, [detail.actions, isGeneratingCompletionCertificate]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Completion validation (for completion dialog)
+  // ─────────────────────────────────────────────────────────────────────────
+  const completionValidation = ((): CompletionValidation | undefined => {
+    const bomStats = getBomCompletionStats(detail.bom);
+    return {
+      completedTasks: detail.completedTasks,
+      totalTasks: detail.totalTasks,
+      installedBomItems: bomStats.installedBomItems,
+      totalBomItems: bomStats.totalBomItems,
+    };
+  })();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Derived State
   // ─────────────────────────────────────────────────────────────────────────
-  const canComplete = project
-    ? !['completed', 'cancelled'].includes(project.status)
+  const canComplete = detail.project
+    ? !['completed', 'cancelled'].includes(detail.project.status)
     : false;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Tab Content Renderers
+  // Related Links (Cross-Entity Navigation - WORKFLOW-CONTINUITY P3)
   // ─────────────────────────────────────────────────────────────────────────
-  const renderOverviewTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectOverviewTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-        visits={siteVisits}
-      />
+  const relatedLinks = useMemo(() => {
+    const siteVisits = detail.siteVisits ?? [];
+    const firstVisitWithInstaller = siteVisits.find(
+      (v: SiteVisitItem) => v.installerId
     );
-  }, [project, siteVisits]);
+    const installerId = firstVisitWithInstaller?.installerId ?? null;
+    const installerUser = installerId ? getUser(installerId) : null;
+    return {
+      orderId: detail.project?.orderId ?? null,
+      installerId: installerId ?? null,
+      installerName: installerUser?.name ?? installerUser?.email ?? null,
+    };
+  }, [detail.siteVisits, detail.project?.orderId, getUser]);
 
-  const renderWorkstreamsTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectWorkstreamsTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-      />
-    );
-  }, [project]);
+  // Enrich site visits with installerName and normalize to ProjectTabVisit for tab renderers (SCHEMA-TRACE §8)
+  const enrichedSiteVisits = useMemo(() => {
+    const visits = detail.siteVisits ?? [];
+    return visits.map((v: SiteVisitItem) => {
+      const installerUser = v.installerId ? getUser(v.installerId) : null;
+      return toProjectTabVisit({
+        ...v,
+        installerName: installerUser?.name ?? installerUser?.email ?? undefined,
+      });
+    });
+  }, [detail.siteVisits, getUser]);
 
-  const renderVisitsTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectVisitsTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-        visits={siteVisits}
-      />
-    );
-  }, [project, siteVisits]);
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tab Content Renderers (extracted to hook)
+  // ─────────────────────────────────────────────────────────────────────────
+  const workstreamNames = useMemo(() => {
+    const w = detail.workstreams ?? [];
+    return Object.fromEntries(w.map((ws) => [ws.id, ws.name]));
+  }, [detail.workstreams]);
 
-  const renderTasksTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectTasksTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-      />
-    );
-  }, [project]);
+  const handleGanttDateChange = useCallback(
+    async (taskId: string, visitId: string | undefined, isTask: boolean, startDate: Date, _endDate: Date) => {
+      const dateStr = format(startDate, 'yyyy-MM-dd');
+      try {
+        if (isTask) {
+          await updateTask.mutateAsync({ taskId, dueDate: dateStr });
+          toast.success('Task date updated');
+        } else if (visitId) {
+          await rescheduleVisit.mutateAsync({ siteVisitId: visitId, scheduledDate: dateStr });
+          toast.success('Visit rescheduled');
+        }
+      } catch {
+        toast.error(isTask ? 'Failed to update task date' : 'Failed to reschedule visit');
+      }
+    },
+    [updateTask, rescheduleVisit]
+  );
 
-  const renderBomTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectBomTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-      />
-    );
-  }, [project]);
-
-  const renderNotesTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectNotesTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-      />
-    );
-  }, [project]);
-
-  const renderFilesTab = useCallback(() => {
-    if (!project) return null;
-    return (
-      <ProjectFilesTab
-        project={{
-          id: project.id,
-          title: project.title,
-          projectNumber: project.projectNumber,
-          description: project.description,
-          status: project.status,
-          progressPercent: project.progressPercent,
-          projectType: project.projectType,
-          priority: project.priority,
-          startDate: project.startDate,
-          targetCompletionDate: project.targetCompletionDate,
-          actualCompletionDate: project.actualCompletionDate,
-          estimatedTotalValue: project.estimatedTotalValue,
-          actualTotalCost: project.actualTotalCost,
-          siteAddress: project.siteAddress,
-          scope: project.scope,
-          outcomes: project.outcomes,
-          keyFeatures: project.keyFeatures,
-        }}
-      />
-    );
-  }, [project]);
+  const tabs = useProjectDetailTabRenderers({
+    project: detail.project,
+    siteVisits: enrichedSiteVisits,
+    tasks: detail.tasks ?? [],
+    workstreamNames,
+    onGanttDateChange: handleGanttDateChange,
+    onGenerateWorkOrder: handleGenerateWorkOrder,
+    onGenerateCompletionCertificate: handleGenerateCompletionCertificate,
+    isGeneratingWorkOrder,
+    isGeneratingCompletionCertificate,
+    onCompleteProjectClick: canComplete ? detail.actions.onComplete : undefined,
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
   // ─────────────────────────────────────────────────────────────────────────
-  if (isLoading) {
+  if (detail.isLoading) {
     const loadingContent = <ProjectDetailSkeleton />;
     if (children) {
       return (
         <>
-          {children({
-            headerTitle: <Skeleton className="h-8 w-48" />,
-            headerActions: <Skeleton className="h-10 w-32" />,
-            content: loadingContent,
-          })}
+          {children({ headerActions: <Skeleton className="h-10 w-32" />, content: loadingContent })}
         </>
       );
     }
@@ -519,23 +253,19 @@ export function ProjectDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Error
   // ─────────────────────────────────────────────────────────────────────────
-  if (error || !project) {
+  if (detail.error || !detail.project) {
     const errorContent = (
       <ErrorState
         title="Project not found"
         message="The project you're looking for doesn't exist or has been deleted."
-        onRetry={() => refetch()}
+        onRetry={detail.actions.onRefresh}
         retryLabel="Try Again"
       />
     );
     if (children) {
       return (
         <>
-          {children({
-            headerTitle: 'Project Not Found',
-            headerActions: null,
-            content: errorContent,
-          })}
+          {children({ headerActions: null, content: errorContent })}
         </>
       );
     }
@@ -543,81 +273,49 @@ export function ProjectDetailContainer({
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render: Header Elements
+  // Render: EntityHeader actions (per DETAIL-VIEW-STANDARDS)
   // ─────────────────────────────────────────────────────────────────────────
-  const headerTitle = (
-    <div className="flex items-center gap-3">
-      <div>
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-semibold">{project.title}</span>
-          <StatusCell status={project.status} statusConfig={PROJECT_STATUS_CONFIG} showIcon />
-        </div>
-        <p className="text-sm text-muted-foreground">{project.projectNumber}</p>
-      </div>
-    </div>
-  );
+  const primaryAction = canComplete
+    ? {
+        label: 'Complete',
+        onClick: detail.actions.onComplete,
+        icon: <CheckCircle className="h-4 w-4" />,
+      }
+    : undefined;
 
-  const headerActions = (
-    <div className="flex items-center gap-2">
-      {/* Progress Circle */}
-      <div className="hidden sm:flex items-center gap-2 pr-4 border-r">
-        <StatusProgressCircle
-          status={project.status}
-          progress={project.progressPercent}
-          size={40}
-          strokeWidth={3}
-          showLabel
-        />
-        <div className="text-xs">
-          <p className="text-muted-foreground">Progress</p>
-          <p className="font-medium">{project.progressPercent}%</p>
-        </div>
-      </div>
+  const secondaryActions = [
+    { label: 'Edit Project', onClick: handleEdit, icon: <Edit className="h-4 w-4" /> },
+    { label: 'Generate Work Order', onClick: handleGenerateWorkOrder, icon: <FileOutput className="h-4 w-4" />, disabled: isGeneratingWorkOrder },
+    ...(detail.project.status === 'completed'
+      ? [
+          {
+            label: 'Generate Completion Certificate',
+            onClick: handleGenerateCompletionCertificate,
+            icon: <Award className="h-4 w-4" />,
+            disabled: isGeneratingCompletionCertificate,
+          },
+        ]
+      : []),
+    { label: 'Delete Project', onClick: () => detail.setDeleteDialogOpen(true), icon: <Trash2 className="h-4 w-4" />, destructive: true },
+  ];
 
-      {/* Complete Button */}
-      {canComplete && (
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setCompletionDialogOpen(true)}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          <CheckCircle className="h-4 w-4 mr-1.5" />
-          Complete
-        </Button>
-      )}
+  const headerActions = children ? (
+    <EntityHeaderActions
+      primaryAction={primaryAction}
+      secondaryActions={secondaryActions}
+      onEdit={handleEdit}
+      onDelete={() => detail.setDeleteDialogOpen(true)}
+    />
+  ) : undefined;
 
-      {/* Edit Button */}
-      <Button variant="outline" size="sm" onClick={handleEdit}>
-        <Edit className="h-4 w-4 mr-1.5" />
-        Edit
-      </Button>
-
-      {/* More Actions */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon">
-            <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">More actions</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleEdit}>
-            <Edit className="h-4 w-4 mr-2" />
-            Edit Project
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setDeleteDialogOpen(true)}
-            className="text-destructive"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete Project
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
+  const actionPropsForView = children
+    ? { primaryAction: undefined, secondaryActions: [], onEdit: undefined, onDelete: undefined }
+    : {
+        primaryAction,
+        secondaryActions,
+        onEdit: handleEdit,
+        onDelete: () => detail.setDeleteDialogOpen(true),
+      };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Main Content
@@ -625,71 +323,56 @@ export function ProjectDetailContainer({
   const content = (
     <>
       <ProjectDetailView
-        project={project}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        showMetaPanel={showMetaPanel}
-        onToggleMetaPanel={handleToggleMetaPanel}
-        activities={activities}
-        activitiesLoading={activitiesLoading}
-        activitiesError={activitiesError}
-        renderOverviewTab={renderOverviewTab}
-        renderWorkstreamsTab={renderWorkstreamsTab}
-        renderVisitsTab={renderVisitsTab}
-        renderTasksTab={renderTasksTab}
-        renderBomTab={renderBomTab}
-        renderNotesTab={renderNotesTab}
-        renderFilesTab={renderFilesTab}
+        project={detail.project}
+        alerts={detail.alerts}
+        activeTab={detail.activeTab}
+        onTabChange={detail.onTabChange}
+        showSidebar={detail.showSidebar}
+        primaryAction={actionPropsForView.primaryAction}
+        secondaryActions={actionPropsForView.secondaryActions}
+        onEdit={actionPropsForView.onEdit}
+        onDelete={actionPropsForView.onDelete}
+        onToggleSidebar={detail.toggleSidebar}
+        activities={detail.activities}
+        activitiesLoading={detail.isLoadingSecondary}
+        scheduleStatus={detail.scheduleStatus}
+        budgetStatus={detail.budgetStatus}
+        completedTasks={detail.completedTasks}
+        totalTasks={detail.totalTasks}
+        tabCounts={{
+          workstreams: detail.workstreams?.length,
+          tasks: detail.totalTasks,
+          notes: detail.notes?.length,
+          files: detail.files?.length,
+        }}
+        renderOverviewTab={tabs.renderOverviewTab}
+        renderWorkstreamsTab={tabs.renderWorkstreamsTab}
+        renderVisitsTab={tabs.renderVisitsTab}
+        renderTasksTab={tabs.renderTasksTab}
+        renderBomTab={tabs.renderBomTab}
+        renderNotesTab={tabs.renderNotesTab}
+        renderFilesTab={tabs.renderFilesTab}
+        renderDocumentsTab={tabs.renderDocumentsTab}
+        onLogActivity={onLogActivity}
+        onScheduleFollowUp={onScheduleFollowUp}
+        relatedLinks={relatedLinks}
         className={className}
       />
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Project</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete project {project.projectNumber}? This
-              action cannot be undone and will delete all associated data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Project Completion Dialog */}
-      <ProjectCompletionDialog
-        open={completionDialogOpen}
-        onOpenChange={setCompletionDialogOpen}
+      <ProjectDetailDialogs
         projectId={projectId}
-        projectTitle={project.title}
-        estimatedTotalValue={
-          project.estimatedTotalValue
-            ? parseFloat(project.estimatedTotalValue.toString())
-            : undefined
-        }
-        onSuccess={() => {
-          // Project data will refresh automatically via cache invalidation
-        }}
-      />
-
-      {/* Project Edit Dialog */}
-      <ProjectEditDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        project={rawProject as unknown as Project}
-        onSuccess={() => {
-          // Project data will refresh automatically via cache invalidation
-        }}
+        project={detail.project}
+        activityLoggerProps={activityLoggerProps}
+        siteVisitCreateOpen={tabs.siteVisitCreateOpen}
+        setSiteVisitCreateOpen={tabs.setSiteVisitCreateOpen}
+        deleteDialogOpen={detail.deleteDialogOpen}
+        setDeleteDialogOpen={detail.setDeleteDialogOpen}
+        onDelete={handleDelete}
+        completionDialogOpen={detail.completionDialogOpen}
+        setCompletionDialogOpen={detail.setCompletionDialogOpen}
+        completionValidation={completionValidation}
+        editDialogOpen={detail.editDialogOpen}
+        setEditDialogOpen={detail.setEditDialogOpen}
       />
     </>
   );
@@ -698,19 +381,11 @@ export function ProjectDetailContainer({
   // Render: With Render Props or Default
   // ─────────────────────────────────────────────────────────────────────────
   if (children) {
-    return <>{children({ headerTitle, headerActions, content })}</>;
+    return <>{children({ headerActions, content })}</>;
   }
 
-  // Default rendering (standalone usage)
-  return (
-    <div className={className}>
-      <div className="flex items-center justify-between mb-6">
-        {headerTitle}
-        {headerActions}
-      </div>
-      {content}
-    </div>
-  );
+  // Default rendering (standalone usage) - content has EntityHeader with actions
+  return <div className={className}>{content}</div>;
 }
 
 export default ProjectDetailContainer;

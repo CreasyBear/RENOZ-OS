@@ -121,6 +121,29 @@ export interface ClaimsTrendResult {
   items: ClaimsTrendItem[];
 }
 
+/** Row shape from db.execute() for claims trend SQL (snake_case). */
+export const claimsTrendRowSchema = z.object({
+  month: z.string(),
+  claims_count: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  avg_cost: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  total_cost: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+});
+
+export type ClaimsTrendRow = z.infer<typeof claimsTrendRowSchema>;
+
+/** Row shape from db.execute() for SLA compliance metrics SQL (snake_case). */
+export const slaComplianceMetricsRowSchema = z.object({
+  total_claims: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  resolved_claims: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  pending_claims: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  within_response_sla: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  within_resolution_sla: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  avg_response_hours: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  avg_resolution_days: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+});
+
+export type SlaComplianceMetricsRow = z.infer<typeof slaComplianceMetricsRowSchema>;
+
 // ============================================================================
 // CLAIMS BY TYPE
 // ============================================================================

@@ -65,7 +65,7 @@ export const addJobMaterial = createServerFn({ method: 'POST' })
         jobId: data.jobId,
         productId: data.productId,
         quantityRequired: data.quantityRequired,
-        unitCost: data.unitCost.toString(),
+        unitCost: data.unitCost,
         notes: data.notes,
       })
       .returning();

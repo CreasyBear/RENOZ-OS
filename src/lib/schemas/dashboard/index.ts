@@ -25,3 +25,6 @@ export * from './comparison';
 
 // AI Insights
 export * from './ai-insights';
+
+// Tracked Products (user-configurable inventory tracking)
+export * from './tracked-products';

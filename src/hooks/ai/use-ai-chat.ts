@@ -11,6 +11,7 @@
 import { useChat as useAIChat, type UIMessage } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useState, useMemo } from 'react';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -206,7 +207,7 @@ export function useChat(options: UseAIChatOptions = {}): AIChatResult {
       }
     },
     onError: (error) => {
-      console.error('[AI Chat] Error:', error);
+      logger.error('[AI Chat] Error', error as Error, {});
     },
   });
 

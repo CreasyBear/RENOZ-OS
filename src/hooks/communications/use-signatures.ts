@@ -10,11 +10,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { QUERY_CONFIG } from '@/lib/constants';
 import type {
   CreateSignatureInput,
   UpdateSignatureInput,
   DeleteSignatureInput,
   SetDefaultSignatureInput,
+  Signature,
 } from '@/lib/schemas/communications/email-signatures';
 import {
   getEmailSignatures,
@@ -37,11 +39,17 @@ export interface UseSignaturesOptions {
 export function useSignatures(options: UseSignaturesOptions = {}) {
   const { includeCompanyWide = true, enabled = true } = options;
 
-  return useQuery({
+  return useQuery<Signature[]>({
     queryKey: queryKeys.communications.signaturesList({ includeCompanyWide }),
-    queryFn: () => getEmailSignatures({ data: { includeCompanyWide } }),
+    queryFn: async () => {
+      const result = await getEmailSignatures({
+        data: { includeCompanyWide } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes - signatures don't change often
+    staleTime: QUERY_CONFIG.STALE_TIME_LONG,
   });
 }
 
@@ -53,9 +61,15 @@ export interface UseSignatureOptions {
 export function useSignature(options: UseSignatureOptions) {
   const { signatureId, enabled = true } = options;
 
-  return useQuery({
+  return useQuery<Signature | null>({
     queryKey: queryKeys.communications.signatureDetail(signatureId),
-    queryFn: () => getEmailSignature({ data: { id: signatureId } }),
+    queryFn: async () => {
+      const result = await getEmailSignature({
+        data: { id: signatureId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!signatureId,
     staleTime: 5 * 60 * 1000,
   });

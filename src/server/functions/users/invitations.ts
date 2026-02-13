@@ -12,16 +12,20 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, desc, sql, lt } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, lt, count as drizzleCount } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
-import { userInvitations, users, organizations } from 'drizzle/schema';
-import { withAuth } from '@/lib/server/protected';
+import { userInvitations, users, organizations, userPreferences } from 'drizzle/schema';
+import { withAuth, withInternalAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   sendInvitationSchema,
   invitationFilterSchema,
-  acceptInvitationSchema,
+  invitationCursorSchema,
+  acceptInvitationApiSchema,
+  batchSendInvitationsSchema,
   type Invitation,
+  type BatchInvitationResult,
 } from '@/lib/schemas/users';
 import { idParamSchema } from '@/lib/schemas';
 import { createClient } from '@supabase/supabase-js';
@@ -32,6 +36,8 @@ import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { client, userEvents, type InvitationSentPayload, type BatchInvitationSentPayload } from '@/trigger/client';
 import { NotFoundError, ConflictError, ValidationError, ServerError } from '@/lib/server/errors';
+import { getDefaultPreferences } from './user-preferences';
+import { authLogger } from '@/lib/logger';
 
 // ============================================================================
 // HELPER: Generate secure invitation token
@@ -39,6 +45,23 @@ import { NotFoundError, ConflictError, ValidationError, ServerError } from '@/li
 
 function generateInvitationToken(): string {
   return randomBytes(32).toString('hex');
+}
+
+function generateTemporaryPassword(): string {
+  // Strong random temporary password; user sets their own password on acceptance.
+  return `${randomBytes(24).toString('base64url')}Aa1!`;
+}
+
+function isAuthUserAlreadyExists(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const message = (error.message ?? '').toLowerCase();
+  const code = (error.code ?? '').toLowerCase();
+  return (
+    code.includes('already') ||
+    message.includes('already exists') ||
+    message.includes('already registered') ||
+    message.includes('duplicate')
+  );
 }
 
 // ============================================================================
@@ -106,7 +129,7 @@ async function sendInvitationEmail(params: {
     });
   } catch (error) {
     // Log error but don't throw - email sending should not block invitation creation
-    console.error('Failed to queue invitation email:', error);
+    authLogger.error('Failed to queue invitation email', error);
   }
 }
 
@@ -122,17 +145,18 @@ export const sendInvitation = createServerFn({ method: 'POST' })
   .inputValidator(sendInvitationSchema)
   .handler(async ({ data }): Promise<Invitation> => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.invite });
+    const normalizedEmail = data.email.toLowerCase();
 
     // Check if email already exists in organization
-    const existingUser = await db
-      .select({ id: users.id })
+    const [existingUser] = await db
+      .select({ id: users.id, status: users.status })
       .from(users)
       .where(
-        and(eq(users.organizationId, ctx.organizationId), eq(users.email, data.email.toLowerCase()))
+        and(eq(users.organizationId, ctx.organizationId), eq(users.email, normalizedEmail))
       )
       .limit(1);
 
-    if (existingUser.length > 0) {
+    if (existingUser && existingUser.status !== 'invited') {
       throw new ConflictError('User with this email already exists in the organization');
     }
 
@@ -143,7 +167,7 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(userInvitations.organizationId, ctx.organizationId),
-          eq(userInvitations.email, data.email.toLowerCase()),
+          eq(userInvitations.email, normalizedEmail),
           eq(userInvitations.status, 'pending')
         )
       )
@@ -167,12 +191,59 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .where(eq(organizations.id, ctx.organizationId))
       .limit(1);
 
+    const supabase = getServerSupabase();
+
+    if (!existingUser) {
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: normalizedEmail,
+        password: generateTemporaryPassword(),
+        email_confirm: false,
+      });
+
+      if (authError || !authData.user?.id) {
+        if (isAuthUserAlreadyExists(authError)) {
+          throw new ConflictError('This email is already registered. Ask the user to sign in instead.');
+        }
+        throw new ServerError(`Failed to provision invited user: ${authError?.message ?? 'Unknown error'}`);
+      }
+
+      try {
+        await db
+          .insert(users)
+          .values({
+            authId: authData.user.id,
+            organizationId: ctx.organizationId,
+            email: normalizedEmail,
+            role: data.role,
+            status: 'invited',
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          });
+      } catch (error) {
+        // Compensating action: if app row fails, remove the pre-provisioned auth user.
+        try {
+          await supabase.auth.admin.deleteUser(authData.user.id);
+        } catch (deleteError) {
+          authLogger.error('[sendInvitation] Failed to rollback auth user after DB failure', deleteError);
+        }
+        throw error;
+      }
+    } else if (existingUser.status === 'invited') {
+      await db
+        .update(users)
+        .set({
+          role: data.role,
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(users.id, existingUser.id));
+    }
+
     // Create invitation
     const [invitation] = await db
       .insert(userInvitations)
       .values({
         organizationId: ctx.organizationId,
-        email: data.email.toLowerCase(),
+        email: normalizedEmail,
         role: data.role,
         invitedBy: ctx.user.id,
         token,
@@ -274,7 +345,7 @@ export const listInvitations = createServerFn({ method: 'GET' })
 
     // Get total count
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(userInvitations)
       .where(and(...conditions));
 
@@ -287,6 +358,87 @@ export const listInvitations = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(count / pageSize),
       },
     };
+  });
+
+/**
+ * Get org-level invitation stats across all pages.
+ * Requires: user.read permission
+ */
+export const listInvitationStats = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const ctx = await withAuth({ permission: PERMISSIONS.user.read });
+
+    const [stats] = await db
+      .select({
+        total: drizzleCount(),
+        pending: sql<number>`count(*) filter (where ${userInvitations.status} = 'pending')`,
+        accepted: sql<number>`count(*) filter (where ${userInvitations.status} = 'accepted')`,
+        expired: sql<number>`count(*) filter (where ${userInvitations.status} = 'expired')`,
+      })
+      .from(userInvitations)
+      .where(eq(userInvitations.organizationId, ctx.organizationId));
+
+    return {
+      total: Number(stats?.total ?? 0),
+      pending: Number(stats?.pending ?? 0),
+      accepted: Number(stats?.accepted ?? 0),
+      expired: Number(stats?.expired ?? 0),
+    };
+  });
+
+/**
+ * List invitations with cursor pagination (recommended for large datasets).
+ * Uses invitedAt + id for stable sort.
+ */
+export const listInvitationsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(invitationCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.user.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', status } = data;
+
+    const conditions = [eq(userInvitations.organizationId, ctx.organizationId)];
+    if (status) conditions.push(eq(userInvitations.status, status));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(
+          buildCursorCondition(userInvitations.invitedAt, userInvitations.id, cursorPosition, sortOrder)
+        );
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const invitations = await db
+      .select({
+        id: userInvitations.id,
+        organizationId: userInvitations.organizationId,
+        email: userInvitations.email,
+        role: userInvitations.role,
+        status: userInvitations.status,
+        personalMessage: userInvitations.personalMessage,
+        invitedAt: userInvitations.invitedAt,
+        expiresAt: userInvitations.expiresAt,
+        acceptedAt: userInvitations.acceptedAt,
+        inviter: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+        },
+      })
+      .from(userInvitations)
+      .leftJoin(users, eq(userInvitations.invitedBy, users.id))
+      .where(and(...conditions))
+      .orderBy(orderDir(userInvitations.invitedAt), orderDir(userInvitations.id))
+      .limit(pageSize + 1);
+
+    return buildCursorResponse(
+      invitations,
+      pageSize,
+      (i) => (i.invitedAt instanceof Date ? i.invitedAt.toISOString() : i.invitedAt),
+      (i) => i.id
+    );
   });
 
 // ============================================================================
@@ -362,7 +514,7 @@ export const getInvitationByToken = createServerFn({ method: 'GET' })
 // ============================================================================
 
 /**
- * Accept an invitation and create user account.
+ * Accept an invitation and activate pre-provisioned user account.
  * Public endpoint - uses token for authentication.
  * Rate limited: 5 requests per minute per IP.
  *
@@ -370,119 +522,174 @@ export const getInvitationByToken = createServerFn({ method: 'GET' })
  * where multiple requests could accept the same invitation.
  */
 export const acceptInvitation = createServerFn({ method: 'POST' })
-  .inputValidator(acceptInvitationSchema)
+  .inputValidator(acceptInvitationApiSchema)
   .handler(async ({ data }) => {
     // Rate limit check (outside transaction)
     const request = getRequest();
     const clientId = getClientIdentifier(request);
     checkRateLimit('invitation-accept', clientId, RATE_LIMITS.publicAction);
 
-    // Use transaction to prevent race conditions
-    return await db.transaction(async (tx) => {
-      // Get invitation with row lock to prevent concurrent acceptance
-      // Note: FOR UPDATE requires raw SQL in Drizzle
-      const [invitation] = await tx
-        .select()
-        .from(userInvitations)
-        .where(and(eq(userInvitations.token, data.token), eq(userInvitations.status, 'pending')))
-        .limit(1);
+    // Lookup invitation first so we can create auth account with the canonical invitation email.
+    const [invitation] = await db
+      .select()
+      .from(userInvitations)
+      .where(and(eq(userInvitations.token, data.token), eq(userInvitations.status, 'pending')))
+      .limit(1);
 
-      if (!invitation) {
-        throw new NotFoundError('Invalid or expired invitation', 'invitation');
-      }
+    if (!invitation) {
+      throw new NotFoundError('Invalid or expired invitation', 'invitation');
+    }
 
-      // Check expiry
-      if (new Date() > invitation.expiresAt) {
-        await tx
-          .update(userInvitations)
-          .set({ status: 'expired', version: sql`version + 1` })
-          .where(eq(userInvitations.id, invitation.id));
-        throw new ValidationError('Invitation has expired');
-      }
-
-      // Mark as processing immediately to prevent race condition
-      // Use optimistic locking with version check
-      const updateResult = await tx
+    if (new Date() > invitation.expiresAt) {
+      await db
         .update(userInvitations)
-        .set({
-          status: 'accepted', // Immediately mark as accepted
-          version: sql`version + 1`,
-        })
-        .where(
-          and(
-            eq(userInvitations.id, invitation.id),
-            eq(userInvitations.status, 'pending'), // Only if still pending
-            eq(userInvitations.version, invitation.version) // Version check
-          )
-        )
-        .returning({ id: userInvitations.id });
-
-      // If no rows returned, another request beat us to it
-      if (updateResult.length === 0) {
-        throw new ConflictError('Invitation has already been accepted');
-      }
-
-      // Create Supabase auth user (external system - cannot rollback)
-      const supabase = getServerSupabase();
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: invitation.email,
-        password: data.password,
-        email_confirm: true, // Skip email confirmation since they used invitation link
-      });
-
-      if (authError) {
-        // Note: The invitation is already marked as accepted, which prevents retries
-        // This is intentional - we don't want to allow multiple Supabase user creations
-        // If this fails, admin will need to cancel and resend the invitation
-        throw new ServerError(`Failed to create account: ${authError.message}`);
-      }
-
-      // Create application user
-      const [newUser] = await tx
-        .insert(users)
-        .values({
-          authId: authData.user.id,
-          organizationId: invitation.organizationId,
-          email: invitation.email,
-          name:
-            data.firstName && data.lastName
-              ? `${data.firstName} ${data.lastName}`
-              : data.firstName || data.lastName || null,
-          role: invitation.role as any,
-          status: 'active',
-          profile: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-          },
-        })
-        .returning();
-
-      // Update invitation with acceptance timestamp
-      await tx
-        .update(userInvitations)
-        .set({
-          acceptedAt: new Date(),
-          version: sql`version + 1`,
-        })
+        .set({ status: 'expired', version: sql<number>`${userInvitations.version} + 1` })
         .where(eq(userInvitations.id, invitation.id));
+      throw new ValidationError('Invitation has expired');
+    }
 
-      // Log audit event (after transaction succeeds, user can see in audit trail)
-      // Note: This is outside tx but still atomic since invitation is marked accepted
-      await logAuditEvent({
-        organizationId: invitation.organizationId,
-        userId: newUser.id,
-        action: AUDIT_ACTIONS.INVITATION_ACCEPT,
-        entityType: AUDIT_ENTITY_TYPES.INVITATION,
-        entityId: invitation.id,
-        metadata: { email: invitation.email, role: invitation.role },
+    // Admin invite flow must pre-provision the org user; acceptance should claim/activate it.
+    const [existingProvisionedUser] = await db
+      .select({
+        id: users.id,
+        authId: users.authId,
+        status: users.status,
+      })
+      .from(users)
+      .where(
+        and(eq(users.organizationId, invitation.organizationId), eq(users.email, invitation.email))
+      )
+      .limit(1);
+
+    const supabase = getServerSupabase();
+
+    // Backward compatibility: older invitations may exist without pre-provisioned users.
+    const provisionedUser =
+      existingProvisionedUser ??
+      (await (async () => {
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: invitation.email,
+          password: generateTemporaryPassword(),
+          email_confirm: false,
+        });
+
+        if (authError || !authData.user?.id) {
+          throw new ServerError(`Failed to provision invited user: ${authError?.message ?? 'Unknown error'}`);
+        }
+
+        let createdUser: { id: string; authId: string; status: 'active' | 'invited' | 'suspended' | 'deactivated' };
+        try {
+          [createdUser] = await db
+            .insert(users)
+            .values({
+              authId: authData.user.id,
+              organizationId: invitation.organizationId,
+              email: invitation.email,
+              role: invitation.role,
+              status: 'invited',
+            })
+            .returning({ id: users.id, authId: users.authId, status: users.status });
+        } catch (error) {
+          try {
+            await supabase.auth.admin.deleteUser(authData.user.id);
+          } catch (deleteError) {
+            authLogger.error('[acceptInvitation] Failed to rollback auth user during legacy provisioning', deleteError);
+          }
+          throw error;
+        }
+
+        return createdUser;
+      })());
+    if (provisionedUser.status !== 'invited') {
+      throw new ConflictError(`Invitation cannot be accepted because user is ${provisionedUser.status}.`);
+    }
+    const { error: updateAuthError } = await supabase.auth.admin.updateUserById(provisionedUser.authId, {
+      password: data.password,
+      email_confirm: true,
+    });
+
+    if (updateAuthError) {
+      throw new ServerError(`Failed to activate account: ${updateAuthError.message}`);
+    }
+
+    const result = await db.transaction(async (tx) => {
+        // Use optimistic locking to ensure only one accept succeeds.
+        const updateResult = await tx
+          .update(userInvitations)
+          .set({
+            status: 'accepted',
+            acceptedAt: new Date(),
+            version: sql<number>`${userInvitations.version} + 1`,
+          })
+          .where(
+            and(
+              eq(userInvitations.id, invitation.id),
+              eq(userInvitations.status, 'pending'),
+              eq(userInvitations.version, invitation.version)
+            )
+          )
+          .returning({ id: userInvitations.id });
+
+        if (updateResult.length === 0) {
+          throw new ConflictError('Invitation has already been accepted');
+        }
+
+        const [activatedUser] = await tx
+          .update(users)
+          .set({
+            name:
+              data.firstName && data.lastName
+                ? `${data.firstName} ${data.lastName}`
+                : data.firstName || data.lastName || null,
+            role: invitation.role,
+            status: 'active',
+            profile: {
+              firstName: data.firstName,
+              lastName: data.lastName,
+            },
+            updatedBy: provisionedUser.id,
+          })
+          .where(eq(users.id, provisionedUser.id))
+          .returning({ id: users.id, email: users.email });
+
+        const defaultPreferences = getDefaultPreferences(invitation.role);
+        if (defaultPreferences.length > 0) {
+          await tx
+            .insert(userPreferences)
+            .values(
+              defaultPreferences.map((pref) => ({
+                organizationId: invitation.organizationId,
+                userId: activatedUser.id,
+                category: pref.category,
+                key: pref.key,
+                value: pref.value,
+                createdBy: activatedUser.id,
+                updatedBy: activatedUser.id,
+              }))
+            )
+            .onConflictDoNothing();
+        }
+
+        return {
+          userId: activatedUser.id,
+          email: activatedUser.email,
+        };
       });
 
-      return {
-        success: true,
-        userId: newUser.id,
-        email: newUser.email,
-      };
+    await logAuditEvent({
+      organizationId: invitation.organizationId,
+      userId: result.userId,
+      action: AUDIT_ACTIONS.INVITATION_ACCEPT,
+      entityType: AUDIT_ENTITY_TYPES.INVITATION,
+      entityId: invitation.id,
+      metadata: { email: invitation.email, role: invitation.role },
     });
+
+    return {
+      success: true,
+      userId: result.userId,
+      email: result.email,
+    };
   });
 
 // ============================================================================
@@ -521,7 +728,7 @@ export const cancelInvitation = createServerFn({ method: 'POST' })
       .set({
         status: 'cancelled',
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userInvitations.version} + 1`,
       })
       .where(eq(userInvitations.id, data.id));
 
@@ -589,7 +796,7 @@ export const resendInvitation = createServerFn({ method: 'POST' })
         expiresAt: newExpiresAt,
         status: 'pending', // Reset to pending if was expired
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userInvitations.version} + 1`,
       })
       .where(eq(userInvitations.id, data.id));
 
@@ -638,6 +845,8 @@ const expireInvitationsSchema = z.object({});
 export const expireOldInvitations = createServerFn({ method: 'POST' })
   .inputValidator(expireInvitationsSchema)
   .handler(async () => {
+  await withInternalAuth();
+
   const result = await db
     .update(userInvitations)
     .set({ status: 'expired' })
@@ -652,28 +861,6 @@ export const expireOldInvitations = createServerFn({ method: 'POST' })
 // ============================================================================
 // BATCH SEND INVITATIONS
 // ============================================================================
-
-/**
- * Schema for batch invitation input
- */
-const batchInvitationItemSchema = z.object({
-  email: z.string().email(),
-  role: z.enum(['admin', 'manager', 'sales', 'operations', 'support', 'viewer']),
-  personalMessage: z.string().optional(),
-});
-
-const batchSendInvitationsSchema = z.object({
-  invitations: z.array(batchInvitationItemSchema).min(1).max(100),
-});
-
-export type BatchInvitationItem = z.infer<typeof batchInvitationItemSchema>;
-
-export interface BatchInvitationResult {
-  email: string;
-  success: boolean;
-  error?: string;
-  invitationId?: string;
-}
 
 /**
  * Send multiple invitations in a batch.
@@ -691,11 +878,17 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
     }> => {
       const ctx = await withAuth({ permission: PERMISSIONS.user.invite });
 
+      const supabase = getServerSupabase();
+
       // Check for existing users and pending invitations in bulk
       const [existingUsers, existingInvitations] = await Promise.all([
         // Check existing users
         db
-          .select({ email: users.email })
+          .select({
+            id: users.id,
+            email: users.email,
+            status: users.status,
+          })
           .from(users)
           .where(eq(users.organizationId, ctx.organizationId)),
         // Check pending invitations
@@ -710,7 +903,7 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
           ),
       ]);
 
-      const existingUserEmails = new Set(existingUsers.map((u) => u.email.toLowerCase()));
+      const existingUsersByEmail = new Map(existingUsers.map((u) => [u.email.toLowerCase(), u]));
       const existingInvitationEmails = new Set(
         existingInvitations.map((i) => i.email.toLowerCase())
       );
@@ -724,13 +917,15 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         personalMessage?: string;
         token: string;
         expiresAt: Date;
+        existingInvitedUserId?: string;
       }> = [];
 
       // Pre-validate and prepare
       for (const invitation of data.invitations) {
         const email = invitation.email.toLowerCase();
+        const existingUser = existingUsersByEmail.get(email);
 
-        if (existingUserEmails.has(email)) {
+        if (existingUser && existingUser.status !== 'invited') {
           results.push({
             email,
             success: false,
@@ -759,6 +954,7 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
           personalMessage: invitation.personalMessage,
           token,
           expiresAt,
+          existingInvitedUserId: existingUser?.status === 'invited' ? existingUser.id : undefined,
         });
       }
 
@@ -781,12 +977,77 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         expiresAt: Date;
       }> = [];
 
+      const readyInvitations: Array<{
+        email: string;
+        role: InvitationRole;
+        personalMessage?: string;
+        token: string;
+        expiresAt: Date;
+      }> = [];
+
+      // Ensure each invited email has a pre-provisioned org user before invitation is sent.
+      for (const item of toInsert) {
+        if (item.existingInvitedUserId) {
+          await db
+            .update(users)
+            .set({
+              role: item.role,
+              updatedBy: ctx.user.id,
+            })
+            .where(eq(users.id, item.existingInvitedUserId));
+          readyInvitations.push(item);
+          continue;
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: item.email,
+          password: generateTemporaryPassword(),
+          email_confirm: false,
+        });
+
+        if (authError || !authData.user?.id) {
+          results.push({
+            email: item.email,
+            success: false,
+            error: isAuthUserAlreadyExists(authError)
+              ? 'Email already registered'
+              : authError?.message || 'Failed to provision invited user',
+          });
+          continue;
+        }
+
+        try {
+          await db.insert(users).values({
+            authId: authData.user.id,
+            organizationId: ctx.organizationId,
+            email: item.email,
+            role: item.role,
+            status: 'invited',
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          });
+          readyInvitations.push(item);
+        } catch (error) {
+          try {
+            await supabase.auth.admin.deleteUser(authData.user.id);
+          } catch (deleteError) {
+            authLogger.error('[batchSendInvitations] Failed to rollback auth user after DB failure', deleteError);
+          }
+
+          results.push({
+            email: item.email,
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to provision invited user',
+          });
+        }
+      }
+
       // Batch insert valid invitations
-      if (toInsert.length > 0) {
+      if (readyInvitations.length > 0) {
         const BATCH_SIZE = 10;
 
-        for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
-          const batch = toInsert.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < readyInvitations.length; i += BATCH_SIZE) {
+          const batch = readyInvitations.slice(i, i + BATCH_SIZE);
 
           try {
             const inserted = await db
@@ -861,7 +1122,7 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
           });
         } catch (error) {
           // Log error but don't throw - email sending should not block
-          console.error('Failed to queue batch invitation emails:', error);
+          authLogger.error('Failed to queue batch invitation emails', error);
         }
       }
 

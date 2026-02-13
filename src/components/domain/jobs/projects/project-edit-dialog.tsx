@@ -32,7 +32,12 @@ import {
 import { useUpdateProject } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 import { format, parseISO } from 'date-fns';
-import type { Project } from 'drizzle/schema/jobs/projects';
+import {
+  projectStatusSchema,
+  projectTypeSchema,
+  projectPrioritySchema,
+  type ProjectEditFormInput,
+} from '@/lib/schemas/jobs';
 
 // ============================================================================
 // SCHEMA
@@ -41,9 +46,9 @@ import type { Project } from 'drizzle/schema/jobs/projects';
 const editProjectFormSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title too long'),
   description: z.string().optional(),
-  status: z.enum(['quoting', 'approved', 'in_progress', 'completed', 'cancelled', 'on_hold']),
-  projectType: z.enum(['solar', 'battery', 'solar_battery', 'service', 'warranty', 'inspection', 'commissioning']),
-  priority: z.enum(['urgent', 'high', 'medium', 'low']),
+  status: projectStatusSchema,
+  projectType: projectTypeSchema,
+  priority: projectPrioritySchema,
   siteAddress: z.object({
     street: z.string().min(1, 'Street is required'),
     city: z.string().min(1, 'City is required'),
@@ -84,13 +89,14 @@ const priorityOptions = [
 ];
 
 // ============================================================================
-// TYPES
+// TYPES (Schema-through: ProjectEditFormInput from @/lib/schemas/jobs)
 // ============================================================================
 
 export interface ProjectEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  project: Project | null;
+  /** Use toProjectEditFormInput(project) in container before passing */
+  project: ProjectEditFormInput | null;
   onSuccess?: () => void;
 }
 
@@ -162,15 +168,9 @@ export function ProjectEditDialog({
         title: project.title,
         description: project.description || '',
         status: project.status,
-        projectType: project.projectType as 'solar' | 'battery' | 'solar_battery' | 'service' | 'warranty' | 'inspection' | 'commissioning',
-        priority: project.priority as 'urgent' | 'high' | 'medium' | 'low',
-        siteAddress: project.siteAddress || {
-          street: '',
-          city: '',
-          state: '',
-          postalCode: '',
-          country: 'Australia',
-        },
+        projectType: (project.projectType === 'solar' || project.projectType === 'battery' || project.projectType === 'solar_battery' || project.projectType === 'service' || project.projectType === 'warranty' || project.projectType === 'inspection' || project.projectType === 'commissioning') ? project.projectType : 'solar_battery',
+        priority: (project.priority === 'urgent' || project.priority === 'high' || project.priority === 'medium' || project.priority === 'low') ? project.priority : 'medium',
+        siteAddress: project.siteAddress,
         startDate: project.startDate ? parseISO(project.startDate) : null,
         targetCompletionDate: project.targetCompletionDate
           ? parseISO(project.targetCompletionDate)

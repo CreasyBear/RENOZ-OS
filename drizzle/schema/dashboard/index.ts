@@ -12,3 +12,4 @@
 export * from "./targets";
 export * from "./scheduled-reports";
 export * from "./dashboard-layouts";
+export * from "./materialized-views";

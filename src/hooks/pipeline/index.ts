@@ -44,10 +44,36 @@ export {
   useUpdateOpportunity,
   useDeleteOpportunity,
   useUpdateOpportunityStage,
+  useBulkUpdateOpportunityStage,
   useConvertToOrder,
   type StageChangeInput,
+  type BulkStageChangeInput,
   type ConvertToOrderInput,
 } from './use-opportunity-mutations';
+
+// ============================================================================
+// OPPORTUNITY DETAIL HOOKS (5-zone layout pattern)
+// ============================================================================
+export {
+  useOpportunityDetail,
+  type UseOpportunityDetailReturn,
+  type OpportunityDetailActions,
+  type WonLostInput,
+} from './use-opportunity-detail';
+
+export {
+  useOpportunityAlerts,
+  useOpportunityActiveItems,
+  type UseOpportunityAlertsOptions,
+  type UseOpportunityActiveItemsOptions,
+  type OpportunityAlertsResponse,
+  type OpportunityActiveItems,
+  type OpportunityAlert,
+  type OpportunityAlertType,
+  type OpportunityAlertSeverity,
+  type PendingActivity,
+  type RecentQuoteVersion,
+} from './use-opportunity-detail-extended';
 
 // ============================================================================
 // QUOTE HOOKS
@@ -67,6 +93,7 @@ export {
   type QuoteAlertItem,
   type QuoteVersionListResult,
   type QuoteComparisonResult,
+  useDeleteQuote,
 } from './use-quotes';
 
 export {

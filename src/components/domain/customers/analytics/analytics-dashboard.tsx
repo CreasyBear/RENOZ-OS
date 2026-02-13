@@ -79,6 +79,7 @@ interface QuickStatsData {
 interface AnalyticsDashboardProps {
   dateRange?: string
   onDateRangeChange?: (range: string) => void
+  showFilters?: boolean
   /** KPI metrics from server */
   kpis?: KpiMetric[]
   /** Health score distribution percentages */
@@ -466,6 +467,7 @@ export function AnalyticsDashboard({
   quickStats,
   isLoading = false,
   className,
+  showFilters = true,
 }: AnalyticsDashboardProps) {
   const { formatCurrency } = useOrgFormat()
   const formatCurrencyCompact = (amount: number) =>
@@ -480,18 +482,20 @@ export function AnalyticsDashboard({
             Executive insights and performance metrics
           </p>
         </div>
-        <Select value={dateRange} onValueChange={onDateRangeChange}>
-          <SelectTrigger className="w-[160px]">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7d">Last 7 days</SelectItem>
-            <SelectItem value="30d">Last 30 days</SelectItem>
-            <SelectItem value="90d">Last 90 days</SelectItem>
-            <SelectItem value="365d">Last year</SelectItem>
-          </SelectContent>
-        </Select>
+        {showFilters && (
+          <Select value={dateRange} onValueChange={onDateRangeChange}>
+            <SelectTrigger className="w-[160px]">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="365d">Last year</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* KPI Cards */}

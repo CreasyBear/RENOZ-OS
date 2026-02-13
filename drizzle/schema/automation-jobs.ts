@@ -9,7 +9,6 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   integer,
@@ -17,9 +16,12 @@ import {
   index,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { jobStatusEnum, jobTypeEnum } from "./_shared/enums";
-import { timestampColumns } from "./_shared/patterns";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "./_shared/patterns";
 import { users } from "./users/users";
 import { organizations } from "./settings/organizations";
 
@@ -114,27 +116,7 @@ export const automationJobs = pgTable(
     externalIdIdx: index("idx_jobs_external_id").on(table.externalId),
 
     // RLS Policies
-    selectPolicy: pgPolicy("jobs_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("jobs_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("jobs_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("jobs_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("jobs"),
   })
 );
 

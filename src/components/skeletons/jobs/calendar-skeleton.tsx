@@ -2,6 +2,9 @@
  * Jobs Calendar Skeleton
  *
  * Layout-preserving skeleton for the jobs calendar view.
+ *
+ * @deprecated Use schedule loading state or ScheduleDashboard skeleton instead.
+ * This component is unused. The schedule calendar uses its own loading UI.
  */
 import { Skeleton } from '@/components/ui/skeleton'
 

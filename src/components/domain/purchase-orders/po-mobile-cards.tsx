@@ -10,6 +10,7 @@ import { StatusCell, PriceCell, DateCell } from "@/components/shared/data-table"
 import { cn } from "@/lib/utils";
 import type { PurchaseOrderTableData } from "@/lib/schemas/purchase-orders";
 import { PO_STATUS_CONFIG } from "./po-status-config";
+import { FALLBACK_SUPPLIER_NAME } from "@/lib/constants/procurement";
 
 export interface POMobileCardsProps {
   /** Purchase orders to display */
@@ -67,7 +68,7 @@ export const POMobileCards = memo(function POMobileCards({
               <div>
                 <p className="font-medium">{po.poNumber}</p>
                 <p className="text-sm text-muted-foreground truncate max-w-[180px]">
-                  {po.supplierName ?? "Unknown Supplier"}
+                  {po.supplierName ?? FALLBACK_SUPPLIER_NAME}
                 </p>
               </div>
               <StatusCell
@@ -89,7 +90,7 @@ export const POMobileCards = memo(function POMobileCards({
                   </span>
                 )}
               </div>
-              <PriceCell value={po.totalAmount} className="font-semibold" />
+              <PriceCell value={po.totalAmount} currency={po.currency} className="font-semibold" />
             </div>
           </CardContent>
         </Card>

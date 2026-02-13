@@ -16,23 +16,12 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
 import { idParamSchema } from '@/lib/schemas';
-import { getRequest } from '@tanstack/react-start/server';
+import type { SessionInfo } from '@/lib/schemas/users';
 import { UAParser } from 'ua-parser-js';
+import { extractSessionToken } from '@/lib/server/session-utils';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface SessionInfo {
-  id: string;
-  device: string;
-  deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
-  browser: string;
-  ipAddress: string | null;
-  lastActiveAt: Date | null;
-  createdAt: Date;
-  isCurrent: boolean;
-}
+// Re-export for hook consumers
+export type { SessionInfo };
 
 // ============================================================================
 // HELPERS
@@ -104,26 +93,7 @@ export const listMySessions = createServerFn({ method: 'GET' })
     const ctx = await withAuth({ permission: PERMISSIONS.user.read });
 
     // Get current session token from request
-    const request = getRequest();
-    let currentToken: string | null = null;
-    try {
-      // Try to get session from cookie or authorization header
-      const authHeader = request?.headers.get('authorization');
-      if (authHeader?.startsWith('Bearer ')) {
-        currentToken = authHeader.substring(7);
-      } else {
-        // Check for session cookie
-        const cookies = request?.headers.get('cookie');
-        if (cookies) {
-          const sessionCookie = cookies.split(';').find((c) => c.trim().startsWith('session='));
-          if (sessionCookie) {
-            currentToken = sessionCookie.split('=')[1]?.trim() || null;
-          }
-        }
-      }
-    } catch {
-      currentToken = null;
-    }
+    const currentToken = extractSessionToken();
 
     // Get active sessions (not expired)
     const sessions = await db
@@ -196,26 +166,7 @@ export const terminateAllOtherSessions = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
     // Get current session token from request
-    const request = getRequest();
-    let currentToken: string | null = null;
-    try {
-      // Try to get session from cookie or authorization header
-      const authHeader = request?.headers.get('authorization');
-      if (authHeader?.startsWith('Bearer ')) {
-        currentToken = authHeader.substring(7);
-      } else {
-        // Check for session cookie
-        const cookies = request?.headers.get('cookie');
-        if (cookies) {
-          const sessionCookie = cookies.split(';').find((c) => c.trim().startsWith('session='));
-          if (sessionCookie) {
-            currentToken = sessionCookie.split('=')[1]?.trim() || null;
-          }
-        }
-      }
-    } catch {
-      currentToken = null;
-    }
+    const currentToken = extractSessionToken();
 
     // Build delete condition
     const conditions = [eq(userSessions.userId, ctx.user.id)];
@@ -247,26 +198,7 @@ export const recordSessionActivity = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
     // Get current session token from request
-    const request = getRequest();
-    let currentToken: string | null = null;
-    try {
-      // Try to get session from cookie or authorization header
-      const authHeader = request?.headers.get('authorization');
-      if (authHeader?.startsWith('Bearer ')) {
-        currentToken = authHeader.substring(7);
-      } else {
-        // Check for session cookie
-        const cookies = request?.headers.get('cookie');
-        if (cookies) {
-          const sessionCookie = cookies.split(';').find((c) => c.trim().startsWith('session='));
-          if (sessionCookie) {
-            currentToken = sessionCookie.split('=')[1]?.trim() || null;
-          }
-        }
-      }
-    } catch {
-      currentToken = null;
-    }
+    const currentToken = extractSessionToken();
 
     if (!currentToken) {
       return { success: false };
@@ -277,7 +209,7 @@ export const recordSessionActivity = createServerFn({ method: 'POST' })
       .set({
         lastActiveAt: new Date(),
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userSessions.version} + 1`,
       })
       .where(
         and(eq(userSessions.userId, ctx.user.id), eq(userSessions.sessionToken, currentToken))

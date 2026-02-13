@@ -202,7 +202,7 @@ function PublicFeedbackPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
             <p className="text-muted-foreground text-xs">
-              Provide your email if you'd like us to follow up on your feedback.
+              Provide your email if you&apos;d like us to follow up on your feedback.
             </p>
           </div>
 

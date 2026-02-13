@@ -18,7 +18,9 @@ import {
   getIssuesWithSlaMetrics,
   createIssue,
   updateIssue,
+  deleteIssue,
 } from '@/server/functions/support/issues';
+import { escalateIssue } from '@/server/functions/support/escalation';
 import type {
   CreateIssueInput,
   UpdateIssueInput,
@@ -35,12 +37,15 @@ type IssueDetail = Awaited<ReturnType<typeof getIssueById>>;
 // ============================================================================
 
 export interface IssueListFilters {
-  status?: IssueStatus;
-  priority?: IssuePriority;
+  status?: IssueStatus | IssueStatus[];
+  priority?: IssuePriority | IssuePriority[];
   type?: IssueType;
   customerId?: string;
   assignedToUserId?: string;
+  assignedToFilter?: 'me' | 'unassigned';
   search?: string;
+  slaStatus?: 'breached' | 'at_risk';
+  escalated?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -60,7 +65,11 @@ export function useIssues(options: UseIssuesOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.support.issuesListFiltered(filters),
-    queryFn: () => getIssues({ data: filters }),
+    queryFn: async () => {
+      const result = await getIssues({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - issues change frequently
   });
@@ -78,7 +87,11 @@ export function useIssuesWithSlaMetrics(options: UseIssuesOptions = {}) {
       ...filters,
       includeSlaMetrics: true,
     }),
-    queryFn: () => getIssuesWithSlaMetrics({ data: filters }),
+    queryFn: async () => {
+      const result = await getIssuesWithSlaMetrics({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - issues change frequently
   });
@@ -96,7 +109,13 @@ export interface UseIssueOptions {
 export function useIssue({ issueId, enabled = true }: UseIssueOptions) {
   return useQuery({
     queryKey: queryKeys.support.issueDetail(issueId),
-    queryFn: () => getIssueById({ data: { issueId } }),
+    queryFn: async () => {
+      const result = await getIssueById({
+        data: { issueId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!issueId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -186,6 +205,54 @@ export function useUpdateIssue() {
         queryKey: queryKeys.support.issueDetail(variables.issueId),
       });
       // Invalidate all lists (status/priority may have changed)
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
+    },
+  });
+}
+
+// ============================================================================
+// DELETE ISSUE MUTATION
+// ============================================================================
+
+/**
+ * Soft-delete an issue (sets deletedAt)
+ */
+export function useDeleteIssue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteIssue({ data: { id } }),
+    onSuccess: (_, id) => {
+      // Invalidate both list and detail caches per STANDARDS.md
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(id) });
+    },
+  });
+}
+
+// ============================================================================
+// ESCALATE ISSUE MUTATION
+// ============================================================================
+
+export interface EscalateIssueInput {
+  issueId: string;
+  reason: string;
+  escalateToUserId?: string;
+}
+
+/**
+ * Manually escalate an issue.
+ * @see src/server/functions/support/escalation.ts
+ */
+export function useEscalateIssue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: EscalateIssueInput) => escalateIssue({ data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.support.issueDetail(variables.issueId),
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
     },
   });

@@ -29,7 +29,7 @@ import { useAddBomItem } from '@/hooks/jobs';
 import { useProductSearch } from '@/hooks/products';
 import { useDebounce } from '@/hooks/_shared';
 import { toast } from '@/lib/toast';
-import type { Product } from 'drizzle/schema';
+import type { ProductSearchItem } from '@/lib/schemas/products';
 
 // ============================================================================
 // SCHEMAS
@@ -65,15 +65,14 @@ export function BomAddItemDialog({
 }: BomAddItemDialogProps) {
   const addBomItem = useAddBomItem(projectId);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
   const debouncedQuery = useDebounce(searchQuery, 300);
   const { data: searchResults, isFetching: isSearching } = useProductSearch(
     debouncedQuery,
     { limit: 20 },
     debouncedQuery.length >= 2
   );
-  // quickSearchProducts returns { products, total }
-  const products: Product[] = searchResults?.products || [];
+  const products: ProductSearchItem[] = searchResults?.products ?? [];
 
   const form = useTanStackForm({
     schema: bomItemFormSchema,
@@ -106,7 +105,7 @@ export function BomAddItemDialog({
     },
   });
 
-  const handleSelectProduct = (product: Product) => {
+  const handleSelectProduct = (product: ProductSearchItem) => {
     setSelectedProduct(product);
     form.setFieldValue('productId', product.id);
     form.setFieldValue('unitCost', product.basePrice ?? undefined);

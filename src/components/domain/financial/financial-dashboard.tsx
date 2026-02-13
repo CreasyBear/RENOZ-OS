@@ -11,6 +11,7 @@
  */
 
 import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   TrendingUp,
   TrendingDown,
@@ -52,6 +53,7 @@ import type {
   TopCustomersResult,
   OutstandingInvoicesResult,
 } from '@/lib/schemas';
+import { periodTypeSchema } from '@/lib/schemas';
 
 // ============================================================================
 // TYPES
@@ -252,7 +254,7 @@ export const FinancialDashboard = memo(function FinancialDashboard({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KPICard title="Revenue MTD" icon={DollarSign} metric={metrics.revenueMTD} />
         <KPICard title="AR Balance" icon={Receipt} metric={metrics.arBalance} />
         <KPICard title="Cash Received MTD" icon={CreditCard} metric={metrics.cashReceivedMTD} />
@@ -260,7 +262,7 @@ export const FinancialDashboard = memo(function FinancialDashboard({
       </div>
 
       {/* Secondary KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
@@ -296,6 +298,30 @@ export const FinancialDashboard = memo(function FinancialDashboard({
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              <span className="text-muted-foreground text-sm">Payment Rate</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold">
+              {(metrics.paymentRate * 100).toFixed(1)}%
+            </p>
+            <p className="text-muted-foreground text-xs">paid in period</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <span className="text-muted-foreground text-sm">Overdue Rate</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold">
+              {(metrics.overdueRate * 100).toFixed(1)}%
+            </p>
+            <p className="text-muted-foreground text-xs">overdue in period</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-purple-500" />
               <span className="text-muted-foreground text-sm">Revenue YTD</span>
             </div>
@@ -312,7 +338,16 @@ export const FinancialDashboard = memo(function FinancialDashboard({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Revenue Trend</CardTitle>
-            <Select value={periodType} onValueChange={(v) => onPeriodTypeChange(v as PeriodType)}>
+            <Select
+              value={periodType}
+              onValueChange={(v) => {
+                // Validate enum value before calling handler
+                const result = periodTypeSchema.safeParse(v);
+                if (result.success) {
+                  onPeriodTypeChange(result.data);
+                }
+              }}
+            >
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -348,7 +383,15 @@ export const FinancialDashboard = memo(function FinancialDashboard({
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {customer.isCommercial && <Building2 className="h-4 w-4 text-blue-500" />}
-                          <span className="font-medium">{customer.customerName}</span>
+                          <Link
+                            to="/customers/$customerId"
+                            params={{ customerId: customer.customerId }}
+                            search={{}}
+                            className="font-medium hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {customer.customerName}
+                          </Link>
                           {customer.isCommercial && (
                             <Badge variant="outline" className="text-xs">
                               $50K+
@@ -394,8 +437,27 @@ export const FinancialDashboard = memo(function FinancialDashboard({
               <TableBody>
                 {outstanding?.invoices.map((inv) => (
                   <TableRow key={inv.orderId}>
-                    <TableCell className="font-mono">{inv.orderNumber}</TableCell>
-                    <TableCell>{inv.customerName}</TableCell>
+                    <TableCell className="font-mono">
+                      <Link
+                        to="/orders/$orderId"
+                        params={{ orderId: inv.orderId }}
+                        className="hover:underline text-primary"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {inv.orderNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        to="/customers/$customerId"
+                        params={{ customerId: inv.customerId }}
+                        search={{}}
+                        className="hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {inv.customerName}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="destructive">{inv.daysOverdue} days</Badge>
                     </TableCell>

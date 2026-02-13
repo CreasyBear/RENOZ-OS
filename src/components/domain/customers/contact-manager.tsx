@@ -6,6 +6,10 @@
  * - Contact details (name, email, phone, mobile)
  * - Role flags (primary, decision maker, influencer)
  * - Department and title
+ *
+ * @source contacts from props (parent provides)
+ * @source form state from useTanStackForm hook
+ * @source mutations from useCreateContact, useUpdateContact, useDeleteContact hooks
  */
 import { useState, useEffect } from 'react'
 import { z } from 'zod'
@@ -47,6 +51,7 @@ import {
   PhoneField,
   CheckboxField,
 } from '@/components/shared/forms'
+import { getInitials } from '@/lib/customer-utils'
 
 // ============================================================================
 // TYPES
@@ -82,10 +87,6 @@ interface ContactManagerProps {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-function getInitials(firstName: string, lastName: string): string {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
-}
 
 function generateTempId(): string {
   return `temp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -182,6 +183,7 @@ function ContactCard({ contact, onEdit, onDelete, onSetPrimary, disabled }: Cont
               onClick={onSetPrimary}
               disabled={disabled}
               title="Set as primary contact"
+              aria-label="Set as primary contact"
             >
               <Star className="h-4 w-4" />
             </Button>
@@ -193,6 +195,7 @@ function ContactCard({ contact, onEdit, onDelete, onSetPrimary, disabled }: Cont
             className="h-8 w-8"
             onClick={onEdit}
             disabled={disabled}
+            aria-label="Edit contact"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -203,6 +206,7 @@ function ContactCard({ contact, onEdit, onDelete, onSetPrimary, disabled }: Cont
             className="h-8 w-8 text-destructive hover:text-destructive"
             onClick={() => setDeleteDialogOpen(true)}
             disabled={disabled}
+            aria-label="Delete contact"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -522,7 +526,7 @@ export function ContactManager({ contacts, onChange, disabled = false }: Contact
           <div className="text-center py-8 text-muted-foreground">
             <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No contacts added yet</p>
-            <p className="text-sm">Click "Add Contact" to add the first contact</p>
+            <p className="text-sm">Click &quot;Add Contact&quot; to add the first contact</p>
           </div>
         ) : (
           <div className="space-y-3">

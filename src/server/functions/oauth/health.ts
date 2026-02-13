@@ -5,7 +5,7 @@
  * Implements automated health checks for all OAuth services.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { oauthConnections, oauthSyncLogs } from 'drizzle/schema/oauth';
@@ -26,6 +26,7 @@ import {
   DEFAULT_HEALTH_CONFIG,
 } from '@/lib/oauth/health-types';
 import { ServerError } from '@/lib/server/errors';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -89,7 +90,7 @@ export type ValidateConnectionResponse =
  * Based on midday's connection validation patterns.
  */
 export async function validateOAuthConnection(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: ValidateConnectionRequest
 ): Promise<ValidateConnectionResponse> {
   const startTime = Date.now();
@@ -147,7 +148,7 @@ export async function validateOAuthConnection(
     let accessToken: string;
     try {
       accessToken = decryptOAuthToken(connection.accessToken, connection.organizationId);
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: 'Failed to decrypt access token',
@@ -169,18 +170,37 @@ export async function validateOAuthConnection(
     // Calculate overall health status
     const overallStatus = calculateOverallHealthStatus(serviceChecks);
 
-    // Update connection status if needed
-    const newIsActive = overallStatus === HealthStatus.HEALTHY;
-    if (connection.isActive !== newIsActive) {
-      await db
-        .update(oauthConnections)
-        .set({
-          isActive: newIsActive,
-          lastSyncedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(oauthConnections.id, request.connectionId));
-    }
+    // Update connection status and log health check in a single transaction
+    await db.transaction(async (tx) => {
+      const newIsActive = overallStatus === HealthStatus.HEALTHY;
+      if (connection.isActive !== newIsActive) {
+        await tx
+          .update(oauthConnections)
+          .set({
+            isActive: newIsActive,
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(oauthConnections.id, request.connectionId));
+      }
+
+      await tx.insert(oauthSyncLogs).values({
+        organizationId: connection.organizationId,
+        connectionId: connection.id,
+        serviceType: servicesToCheck[0],
+        operation: 'health_check',
+        status: overallStatus === HealthStatus.HEALTHY ? 'completed' : 'failed',
+        recordCount: servicesToCheck.length,
+        metadata: {
+          connectionId: connection.id,
+          overallStatus,
+          servicesChecked: serviceChecks.length,
+          responseTime: Date.now() - startTime,
+        },
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
+    });
 
     // Create health check result
     const healthCheck: ConnectionHealthCheck = {
@@ -197,24 +217,6 @@ export async function validateOAuthConnection(
         servicesChecked: servicesToCheck.length,
       },
     };
-
-    // Log health check
-    await db.insert(oauthSyncLogs).values({
-      organizationId: connection.organizationId,
-      connectionId: connection.id,
-      serviceType: servicesToCheck[0],
-      operation: 'health_check',
-      status: overallStatus === HealthStatus.HEALTHY ? 'completed' : 'failed',
-      recordCount: servicesToCheck.length,
-      metadata: {
-        connectionId: connection.id,
-        overallStatus,
-        servicesChecked: serviceChecks.length,
-        responseTime: Date.now() - startTime,
-      },
-      startedAt: new Date(),
-      completedAt: new Date(),
-    });
 
     return {
       success: true,
@@ -240,7 +242,7 @@ export async function validateOAuthConnection(
         completedAt: new Date(),
       });
     } catch (logError) {
-      console.error('Failed to log health check error:', logError);
+      logger.error('Failed to log health check error', logError);
     }
 
     return {
@@ -560,7 +562,7 @@ export type BulkHealthCheckResponse = BulkHealthCheckResponseSuccess | BulkHealt
  * Implements concurrent checking with configurable limits.
  */
 export async function bulkHealthCheck(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: BulkHealthCheckRequest
 ): Promise<BulkHealthCheckResponse> {
   try {
@@ -670,7 +672,7 @@ export async function bulkHealthCheck(
  * Gets health monitoring statistics for reporting.
  */
 export async function getHealthMonitoringStats(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   organizationId?: string
 ): Promise<{
   totalConnections: number;

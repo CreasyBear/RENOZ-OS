@@ -5,6 +5,8 @@
  * Extracts 3-letter ISO codes from strings, falls back to AUD if invalid.
  */
 
+import { logger } from '@/lib/logger';
+
 // ============================================================================
 // CURRENCY NORMALIZATION
 // ============================================================================
@@ -52,9 +54,28 @@ export function normalizeCurrencyCode(currency: string | null | undefined): stri
     // Default fallback
     return 'AUD';
   } catch (error) {
-    console.warn(`Error normalizing currency code: ${currency}, falling back to AUD`, error);
+    logger.warn('Error normalizing currency code', { currency, error: String(error) });
     return 'AUD';
   }
+}
+
+// ============================================================================
+// MONEY UNIT HELPERS
+// ============================================================================
+
+/**
+ * Monetary amounts are stored in dollars by default.
+ * Use these helpers only for explicit cents fields (e.g. shipping_cost).
+ */
+export type MoneyDollars = number;
+export type MoneyCents = number;
+
+export function toCents(dollars: MoneyDollars): MoneyCents {
+  return Math.round(dollars * 100);
+}
+
+export function fromCents(cents: MoneyCents): MoneyDollars {
+  return cents / 100;
 }
 
 // ============================================================================
@@ -185,10 +206,11 @@ export function formatAmount({
     return formatted;
   } catch (error) {
     // Fallback to AUD if currency is invalid
-    console.warn(
-      `Invalid currency code: ${currency} (normalized to ${normalizedCurrency}), falling back to AUD`,
-      error
-    );
+    logger.warn('Invalid currency code, falling back to AUD', {
+      currency,
+      normalizedCurrency,
+      error: String(error),
+    });
     const formatted = Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',

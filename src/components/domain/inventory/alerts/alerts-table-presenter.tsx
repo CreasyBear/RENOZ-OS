@@ -120,6 +120,7 @@ export const AlertsTablePresenter = memo(function AlertsTablePresenter({
     }
   };
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable({
     data: alerts,
     columns,

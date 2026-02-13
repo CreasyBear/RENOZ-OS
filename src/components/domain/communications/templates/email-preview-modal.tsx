@@ -27,7 +27,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { useEmailPreview, useSendTestEmail } from "@/hooks/communications/use-email-preview";
 
@@ -115,7 +115,7 @@ export function EmailPreviewModal({
       });
     } else {
       toast.error("Failed to send test email", {
-        description: result.error,
+        description: result.error || "Please try again.",
       });
     }
   };
@@ -266,7 +266,7 @@ export function EmailPreviewModal({
                   <div className="space-y-4">
                     <h4 className="font-medium">Fill Missing Variables</h4>
                     <p className="text-sm text-muted-foreground">
-                      Provide values for variables that couldn't be filled from sample data.
+                      Provide values for variables that couldn&apos;t be filled from sample data.
                     </p>
 
                     <div className="grid gap-3">

@@ -173,3 +173,93 @@ export const filesListQuerySchema = z.object({
 export type CreateFileInput = z.infer<typeof createFileSchema>;
 export type UpdateFileInput = z.infer<typeof updateFileSchema>;
 export type FilesListQuery = z.infer<typeof filesListQuerySchema>;
+
+// ============================================================================
+// ENTITY INTERFACES (client-safe, mirrors drizzle types)
+// ============================================================================
+
+/**
+ * Project workstream entity.
+ * Mirrors drizzle/schema/jobs/workstreams-notes.ts ProjectWorkstream.
+ */
+export interface ProjectWorkstream {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  position: number;
+  defaultVisitType: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Project note entity.
+ * Mirrors drizzle/schema/jobs/workstreams-notes.ts ProjectNote.
+ */
+export interface ProjectNote {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  siteVisitId: string | null;
+  title: string;
+  content: string | null;
+  noteType: NoteType;
+  status: NoteStatus;
+  audioData: AudioNoteData | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+// Alias for backwards compatibility
+export type ProjectNoteType = NoteType;
+export type ProjectNoteStatus = NoteStatus;
+
+/**
+ * Project file entity.
+ * Mirrors drizzle/schema/jobs/workstreams-notes.ts ProjectFile.
+ */
+export interface ProjectFile {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  fileUrl: string | null;
+  fileName: string;
+  fileSize: number | null;
+  mimeType: string | null;
+  fileType: ProjectFileType;
+  description: string | null;
+  siteVisitId: string | null;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+// ============================================================================
+// API RESPONSE TYPES (for typed hooks - SCHEMA-TRACE.md §4)
+// ============================================================================
+
+/** List workstreams API response */
+export interface ListWorkstreamsResponse {
+  success: boolean;
+  data: ProjectWorkstream[];
+}
+
+/** List notes API response */
+export interface ListNotesResponse {
+  success: boolean;
+  data: ProjectNote[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}
+
+/** List files API response */
+export interface ListFilesResponse {
+  success: boolean;
+  data: ProjectFile[];
+  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}

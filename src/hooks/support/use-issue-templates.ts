@@ -18,6 +18,7 @@ import {
   incrementTemplateUsage,
   getPopularTemplates,
 } from '@/server/functions/support/issue-templates';
+import { deleteEscalationRule } from '@/server/functions/support/escalation';
 import type {
   ListIssueTemplatesInput,
   CreateIssueTemplateInput,
@@ -68,8 +69,8 @@ export function useIssueTemplates({
 
   return useQuery({
     queryKey: queryKeys.support.issueTemplatesListFiltered(filters),
-    queryFn: () =>
-      listIssueTemplates({
+    queryFn: async () => {
+      const result = await listIssueTemplates({
         data: {
           ...filters,
           page: page ?? 1,
@@ -77,7 +78,11 @@ export function useIssueTemplates({
           sortBy: sortBy ?? 'usageCount',
           sortOrder: sortOrder ?? 'desc',
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -95,7 +100,13 @@ export interface UseIssueTemplateOptions {
 export function useIssueTemplate({ templateId, enabled = true }: UseIssueTemplateOptions) {
   return useQuery({
     queryKey: queryKeys.support.issueTemplateDetail(templateId),
-    queryFn: () => getIssueTemplate({ data: { templateId } }),
+    queryFn: async () => {
+      const result = await getIssueTemplate({
+        data: { templateId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!templateId,
     staleTime: 60 * 1000,
   });
@@ -116,7 +127,13 @@ export function usePopularTemplates({
 }: UsePopularTemplatesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.support.issueTemplatesPopular(),
-    queryFn: () => getPopularTemplates({ data: { pageSize: limit } }),
+    queryFn: async () => {
+      const result = await getPopularTemplates({
+        data: { pageSize: limit } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -183,6 +200,25 @@ export function useIncrementTemplateUsage() {
     onSuccess: () => {
       // Invalidate popular templates since usage counts changed
       queryClient.invalidateQueries({ queryKey: queryKeys.support.issueTemplatesPopular() });
+    },
+  });
+}
+
+// ============================================================================
+// ESCALATION RULES MUTATIONS
+// ============================================================================
+
+/**
+ * Delete an escalation rule.
+ */
+export function useDeleteEscalationRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ruleId: string) => deleteEscalationRule({ data: { ruleId } }),
+    onSuccess: () => {
+      // Invalidate both list and detail caches per STANDARDS.md
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.all });
     },
   });
 }

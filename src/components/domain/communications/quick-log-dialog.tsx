@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Dialog exports component + constants */
 /**
  * Quick Log Dialog Component
  *
@@ -15,15 +16,11 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Link } from "@tanstack/react-router";
 import {
   Phone,
   FileText,
   Users,
-  Clock,
-  Loader2,
   ArrowLeft,
 } from "lucide-react";
 
@@ -36,45 +33,30 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { useCreateQuickLog } from "@/hooks/communications/use-quick-log";
 import { CustomerSelectorContainer } from "@/components/domain/orders/creation/customer-selector-container";
 import type { SelectedCustomer } from "@/components/domain/orders/creation/customer-selector";
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export type LogType = "call" | "note" | "meeting";
-
-interface QuickLogDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  customerId?: string;
-  opportunityId?: string;
-  customerName?: string;
-  className?: string;
-}
-
-interface QuickLogDialogPresenterProps extends QuickLogDialogProps {
-  /** @source useCreateQuickLog mutation in container */
-  onSubmit: (values: QuickLogFormValues & { customerId?: string }) => Promise<boolean>;
-  /** @source useCreateQuickLog mutation state in container */
-  isSubmitting: boolean;
-}
+import {
+  quickLogFormSchema,
+  type LogType,
+  type QuickLogDialogProps,
+  type QuickLogDialogPresenterProps,
+  type QuickLogFormValues,
+  type QuickLogButtonProps,
+} from "@/lib/schemas/communications";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  NumberField,
+  FormField,
+  FormActions,
+  extractFieldError,
+} from "@/components/shared/forms";
+import { Textarea } from "@/components/ui/textarea";
 
 // ============================================================================
 // STORAGE KEY FOR REMEMBERING LAST LOG TYPE
@@ -95,18 +77,6 @@ function setLastLogType(type: LogType): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(LAST_LOG_TYPE_KEY, type);
 }
-
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const quickLogSchema = z.object({
-  type: z.enum(["call", "note", "meeting"]),
-  notes: z.string().min(1, "Please add some notes"),
-  duration: z.number().min(0).optional(),
-});
-
-type QuickLogFormValues = z.infer<typeof quickLogSchema>;
 
 // ============================================================================
 // LOG TYPE CONFIG
@@ -140,7 +110,9 @@ const LOG_TYPES: { value: LogType; label: string; icon: typeof Phone; descriptio
 function QuickLogDialogPresenter({
   open,
   onOpenChange,
+  customerId,
   customerName: initialCustomerName,
+  defaultType,
   className,
   onSubmit,
   isSubmitting,
@@ -148,19 +120,42 @@ function QuickLogDialogPresenter({
 }: QuickLogDialogPresenterProps & { requireCustomerSelection?: boolean }) {
   const notesRef = React.useRef<HTMLTextAreaElement>(null);
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
-  const [selectedCustomer, setSelectedCustomer] = React.useState<SelectedCustomer | null>(null);
-  const [showCustomerSelector, setShowCustomerSelector] = React.useState(requireCustomerSelection);
+  const [selectedCustomer, setSelectedCustomer] =
+    React.useState<SelectedCustomer | null>(null);
+  const [showCustomerSelector, setShowCustomerSelector] =
+    React.useState(requireCustomerSelection);
 
-  const form = useForm<QuickLogFormValues>({
-    resolver: zodResolver(quickLogSchema),
+  const initialType = defaultType ?? getLastLogType();
+
+  const form = useTanStackForm<QuickLogFormValues>({
+    schema: quickLogFormSchema,
     defaultValues: {
-      type: getLastLogType(),
+      type: initialType,
       notes: "",
       duration: undefined,
     },
+    onSubmit: async (values) => {
+      setLastLogType(values.type);
+
+      const didSucceed = await onSubmit({
+        ...values,
+        customerId: selectedCustomer?.id,
+      });
+      if (didSucceed) {
+        setSubmitSuccess(true);
+        onOpenChange(false);
+      }
+    },
   });
 
-  const selectedType = form.watch("type");
+  // Reset type when defaultType changes (e.g. user clicked "Phone Call" from dropdown)
+  React.useEffect(() => {
+    if (open && defaultType) {
+      form.setFieldValue("type", defaultType);
+    }
+  }, [open, defaultType, form]);
+
+  const selectedType = form.useWatch("type");
   const customerName = selectedCustomer?.name || initialCustomerName;
 
   // Reset state when dialog opens/closes
@@ -206,20 +201,6 @@ function QuickLogDialogPresenter({
     setSelectedCustomer(null);
   };
 
-  const handleSubmit = form.handleSubmit(async (values) => {
-    // Remember the log type for next time
-    setLastLogType(values.type);
-
-    const didSucceed = await onSubmit({
-      ...values,
-      customerId: selectedCustomer?.id,
-    });
-    if (didSucceed) {
-      setSubmitSuccess(true);
-      onOpenChange(false);
-    }
-  });
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -243,7 +224,25 @@ function QuickLogDialogPresenter({
             {showCustomerSelector
               ? "Choose a customer to log activity for"
               : customerName
-                ? `Log activity for ${customerName}`
+                ? (
+                    <>
+                      Log activity for{" "}
+                      {customerId ? (
+                        <Link
+                          to="/customers/$customerId"
+                          params={{ customerId }}
+                          search={{}}
+                          className="font-medium hover:underline text-primary"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {customerName}
+                        </Link>
+                      ) : (
+                        customerName
+                      )}
+                      .
+                    </>
+                  )
                 : "Log a call, note, or meeting"}
           </DialogDescription>
         </DialogHeader>
@@ -256,119 +255,120 @@ function QuickLogDialogPresenter({
             />
           </div>
         ) : (
-
-        <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              form.handleSubmit();
+            }}
+            className="space-y-4"
+          >
             <fieldset disabled={isSubmitting} className="space-y-4">
-              {/* Log Type Selection */}
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <RadioGroup
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      className="flex gap-2"
+              <form.Field name="type">
+                {(field) => {
+                  const error = extractFieldError(field);
+                  return (
+                    <FormField
+                      label="Log Type"
+                      name={field.name}
+                      error={error}
                     >
-                      {LOG_TYPES.map((logType) => {
-                        const Icon = logType.icon;
-                        const isSelected = field.value === logType.value;
-                        return (
-                          <label
-                            key={logType.value}
-                            className={cn(
-                              "flex-1 flex flex-col items-center gap-1 p-3 rounded-md border transition-colors cursor-pointer",
-                              isSelected
-                                ? "border-primary bg-primary/10"
-                                : "border-border hover:bg-muted"
-                            )}
-                          >
-                            <RadioGroupItem
-                              value={logType.value}
-                              className="sr-only"
-                              aria-label={logType.label}
-                            />
-                            <Icon className={cn("h-5 w-5", isSelected && "text-primary")} />
-                            <span className={cn("text-sm font-medium", isSelected && "text-primary")}>
-                              {logType.label}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      <RadioGroup
+                        value={field.state.value ?? ""}
+                        onValueChange={(v) =>
+                          form.setFieldValue("type", v as LogType)
+                        }
+                        onBlur={field.handleBlur}
+                        className="flex gap-2"
+                        aria-invalid={!!error}
+                      >
+                        {LOG_TYPES.map((logType) => {
+                          const Icon = logType.icon;
+                          const isSelected = field.state.value === logType.value;
+                          return (
+                            <Label
+                              key={logType.value}
+                              className={cn(
+                                "flex-1 flex flex-col items-center gap-1 p-3 rounded-md border transition-colors cursor-pointer",
+                                isSelected
+                                  ? "border-primary bg-primary/10"
+                                  : "border-border hover:bg-muted"
+                              )}
+                            >
+                              <RadioGroupItem
+                                value={logType.value}
+                                className="sr-only"
+                                aria-label={logType.label}
+                              />
+                              <Icon
+                                className={cn(
+                                  "h-5 w-5",
+                                  isSelected && "text-primary"
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  "text-sm font-medium",
+                                  isSelected && "text-primary"
+                                )}
+                              >
+                                {logType.label}
+                              </span>
+                            </Label>
+                          );
+                        })}
+                      </RadioGroup>
+                    </FormField>
+                  );
+                }}
+              </form.Field>
 
-            {/* Notes */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <Label htmlFor="notes">Notes</Label>
-                  <FormControl>
-                    <Textarea
-                      id="notes"
-                      placeholder={
-                        selectedType === "call"
-                          ? "What was discussed?"
-                          : selectedType === "meeting"
-                            ? "Meeting notes..."
-                            : "Add your note..."
-                      }
-                      className="resize-none"
-                      rows={4}
-                      {...field}
-                      ref={(e) => {
-                        field.ref(e);
-                        notesRef.current = e;
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Duration (only for calls and meetings) */}
-            {(selectedType === "call" || selectedType === "meeting") && (
-              <FormField
-                control={form.control}
-                name="duration"
-                render={({ field }) => (
-                  <FormItem>
-                    <Label htmlFor="duration" className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Duration (minutes)
-                      <span className="text-muted-foreground text-xs">(optional)</span>
-                    </Label>
-                    <FormControl>
-                      <Input
-                        id="duration"
-                        type="number"
-                        min={0}
-                        placeholder="e.g., 15"
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          field.onChange(val === "" ? undefined : parseInt(val, 10));
-                        }}
+              <form.Field name="notes">
+                {(field) => {
+                  const error = extractFieldError(field);
+                  return (
+                    <FormField
+                      label="Notes"
+                      name={field.name}
+                      error={error}
+                      required
+                    >
+                      <Textarea
+                        ref={notesRef}
+                        placeholder={
+                          selectedType === "call"
+                            ? "What was discussed?"
+                            : selectedType === "meeting"
+                              ? "Meeting notes..."
+                              : "Add your note..."
+                        }
+                        className="resize-none"
+                        rows={4}
+                        value={field.state.value ?? ""}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                        disabled={isSubmitting}
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+                    </FormField>
+                  );
+                }}
+              </form.Field>
+
+              {(selectedType === "call" || selectedType === "meeting") && (
+                <form.Field name="duration">
+                  {(field) => (
+                    <NumberField
+                      field={field}
+                      label="Duration (minutes)"
+                      description="Optional"
+                      min={0}
+                      placeholder="e.g., 15"
+                    />
+                  )}
+                </form.Field>
+              )}
             </fieldset>
 
-            <DialogFooter className="gap-2">
+            <DialogFooter className="gap-2 flex flex-wrap">
               {requireCustomerSelection && (
                 <Button
                   type="button"
@@ -380,23 +380,17 @@ function QuickLogDialogPresenter({
                   Back
                 </Button>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Save Log
-              </Button>
+              <FormActions
+                form={form}
+                submitLabel="Save Log"
+                cancelLabel="Cancel"
+                loadingLabel="Saving..."
+                onCancel={() => onOpenChange(false)}
+                submitDisabled={isSubmitting}
+                className="flex-1 justify-end"
+              />
             </DialogFooter>
           </form>
-        </Form>
         )}
       </DialogContent>
     </Dialog>
@@ -433,8 +427,8 @@ export function QuickLogDialog(props: QuickLogDialogProps) {
 
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save log';
-      toast.error(message, {
+      toast.error('Failed to save log', {
+        description: getUserFriendlyMessage(error as Error),
         action: {
           label: 'Retry',
           onClick: () => {
@@ -500,14 +494,7 @@ export function useQuickLogShortcut(onOpen: () => void): void {
 // QUICK LOG BUTTON COMPONENT
 // ============================================================================
 
-interface QuickLogButtonProps {
-  customerId?: string;
-  opportunityId?: string;
-  customerName?: string;
-  variant?: "default" | "outline" | "ghost" | "link";
-  size?: "default" | "sm" | "lg" | "icon";
-  className?: string;
-}
+// QuickLogButtonProps imported from schemas
 
 /**
  * Self-contained quick log button with dialog.

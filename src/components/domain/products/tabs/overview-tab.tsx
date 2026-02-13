@@ -17,7 +17,7 @@ interface Product {
   barcode: string | null;
   weight: number | null;
   dimensions: { length?: number | null; width?: number | null; height?: number | null; unit?: string | null } | null;
-  specifications: Record<string, unknown> | null;
+  specifications: Record<string, string | number | boolean> | null;
   tags: string[] | null;
   seoTitle: string | null;
   seoDescription: string | null;

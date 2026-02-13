@@ -209,10 +209,13 @@ export const FulfillmentHeader = memo(function FulfillmentHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onImport} className="gap-2">
-                <Upload className="size-4" />
-                Import Orders
-              </DropdownMenuItem>
+              {/* Import functionality is available in the Fulfillment Overview dashboard */}
+              {onImport && (
+                <DropdownMenuItem onClick={onImport} className="gap-2">
+                  <Upload className="size-4" />
+                  Import Orders
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={onExport} disabled={isExporting} className="gap-2">
                 <Download className="size-4" />
                 {isExporting ? 'Exporting...' : 'Export Data'}

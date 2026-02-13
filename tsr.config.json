@@ -1,0 +1,3 @@
+{
+  "routeFileIgnorePattern": "-(page|layout|nav|tab|types|container)\\.(tsx|ts)$"
+}

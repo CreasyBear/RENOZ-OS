@@ -107,7 +107,7 @@ export function useChatStatus(chat: Pick<AIChatResult, 'status' | 'error' | 'mes
       hasMessages,
       messageCount,
     };
-  }, [rawStatus, error, messages.length, messages]);
+  }, [rawStatus, error, messages]);
 }
 
 /**

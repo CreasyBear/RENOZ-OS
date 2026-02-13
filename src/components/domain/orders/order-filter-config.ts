@@ -7,7 +7,7 @@
  * @see docs/design-system/FILTER-STANDARDS.md
  */
 
-import { Clock, AlertTriangle, DollarSign, Package, Truck } from "lucide-react";
+import { Clock, AlertTriangle, DollarSign, Package, Truck, Zap } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
 import type { OrderStatus, PaymentStatus } from "@/lib/schemas/orders";
 
@@ -21,6 +21,7 @@ export interface OrderFiltersState extends Record<string, unknown> {
   paymentStatus: PaymentStatus | null;
   dateRange: { from: Date | null; to: Date | null } | null;
   totalRange: { min: number | null; max: number | null } | null;
+  customerId: string | null;
 }
 
 export const DEFAULT_ORDER_FILTERS: OrderFiltersState = {
@@ -29,6 +30,7 @@ export const DEFAULT_ORDER_FILTERS: OrderFiltersState = {
   paymentStatus: null,
   dateRange: null,
   totalRange: null,
+  customerId: null,
 };
 
 // ============================================================================
@@ -104,6 +106,12 @@ export const ORDER_FILTER_CONFIG: FilterBarConfig<OrderFiltersState> = {
     },
   ],
   presets: [
+    {
+      id: "urgent",
+      label: "Urgent Orders",
+      icon: Zap,
+      filters: { paymentStatus: "overdue" },
+    },
     {
       id: "pending-payment",
       label: "Pending Payment",

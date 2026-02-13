@@ -14,10 +14,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listPurchaseOrders,
+  getPurchaseOrderStatusCounts,
   getPurchaseOrder,
   createPurchaseOrder,
   updatePurchaseOrder,
   deletePurchaseOrder,
+  bulkDeletePurchaseOrders,
   submitForApproval,
   approvePurchaseOrder,
   rejectPurchaseOrder,
@@ -54,26 +56,49 @@ type RemovePurchaseOrderItemInput = Parameters<typeof removePurchaseOrderItem>[0
 
 export interface UsePurchaseOrdersOptions extends Partial<ListPurchaseOrdersInput> {
   enabled?: boolean;
+  refetchInterval?: number;
 }
 
 export function usePurchaseOrders(options: UsePurchaseOrdersOptions = {}) {
-  const { enabled = true, ...filters } = options;
+  const { enabled = true, refetchInterval, ...filters } = options;
 
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersList(filters),
-    queryFn: () => listPurchaseOrders({ data: filters as PurchaseOrderFilters }),
+    queryFn: async () => {
+      const result = await listPurchaseOrders({ data: filters as PurchaseOrderFilters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
+    refetchInterval,
   });
 }
 
 export function usePendingApprovals() {
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersPendingApprovals(),
-    queryFn: () =>
-      listPurchaseOrders({
-        data: { status: 'pending_approval', page: 1, pageSize: 100 } as PurchaseOrderFilters,
-      }),
+    queryFn: async () => {
+      const result = await listPurchaseOrders({
+        data: { status: ['pending_approval'], page: 1, pageSize: 100 },
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+// Status counts for filter chips (DOMAIN-LANDING-STANDARDS)
+export function usePurchaseOrderStatusCounts() {
+  return useQuery({
+    queryKey: queryKeys.suppliers.purchaseOrderStatusCounts(),
+    queryFn: async () => {
+      const result = await getPurchaseOrderStatusCounts();
+      if (result == null) throw new Error('Purchase order status counts returned no data');
+      return result;
+    },
     staleTime: 30 * 1000,
   });
 }
@@ -87,7 +112,13 @@ export function usePurchaseOrder(id: string, options: { enabled?: boolean } = {}
 
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderDetail(id),
-    queryFn: () => getPurchaseOrder({ data: { id } }),
+    queryFn: async () => {
+      const result = await getPurchaseOrder({
+        data: { id } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -104,6 +135,7 @@ export function useCreatePurchaseOrder() {
     mutationFn: (data: CreatePurchaseOrderInput) => createPurchaseOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
     },
   });
 }
@@ -115,6 +147,7 @@ export function useUpdatePurchaseOrder() {
     mutationFn: (data: UpdatePurchaseOrderInput) => updatePurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
@@ -129,6 +162,20 @@ export function useDeletePurchaseOrder() {
     mutationFn: (data: DeletePurchaseOrderInput) => deletePurchaseOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
+    },
+  });
+}
+
+export function useBulkDeletePurchaseOrders() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { purchaseOrderIds: string[] }) =>
+      bulkDeletePurchaseOrders({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
     },
   });
 }
@@ -144,6 +191,7 @@ export function useSubmitForApproval() {
     mutationFn: (data: SubmitForApprovalInput) => submitForApproval({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
@@ -161,6 +209,7 @@ export function useApprovePurchaseOrder() {
     mutationFn: (data: ApprovePurchaseOrderInput) => approvePurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
@@ -178,6 +227,7 @@ export function useRejectPurchaseOrder() {
     mutationFn: (data: RejectPurchaseOrderInput) => rejectPurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
@@ -195,10 +245,10 @@ export function useMarkAsOrdered() {
     mutationFn: (data: MarkAsOrderedInput) => markAsOrdered({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
-      // Update supplier stats when order is placed
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
     },
   });
@@ -211,6 +261,7 @@ export function useCancelPurchaseOrder() {
     mutationFn: (data: CancelPurchaseOrderInput) => cancelPurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
@@ -225,10 +276,10 @@ export function useClosePurchaseOrder() {
     mutationFn: (data: ClosePurchaseOrderInput) => closePurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.id),
       });
-      // Update supplier performance when order is closed
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
     },
   });

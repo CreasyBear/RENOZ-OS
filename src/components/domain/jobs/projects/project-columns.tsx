@@ -1,9 +1,11 @@
+/* eslint-disable react-refresh/only-export-components -- Column file exports column factory with JSX cell renderers */
 /**
  * Project Column Definitions
  *
  * TanStack Table column definitions using shared cell components.
  */
 
+import { Link } from "@tanstack/react-router";
 import { Eye, Edit, Trash2, AlertCircle } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -138,10 +140,14 @@ export function createProjectColumns(
         <DataTableColumnHeader column={column} title="Project" />
       ),
       cell: ({ row }) => (
-        <div>
+        <Link
+          to="/projects/$projectId"
+          params={{ projectId: row.original.id }}
+          className="block hover:underline"
+        >
           <p className="font-medium">{row.original.title}</p>
           <p className="text-xs text-muted-foreground">{row.original.projectNumber}</p>
-        </div>
+        </Link>
       ),
       enableSorting: true,
       size: 200,

@@ -1,3 +1,5 @@
+'use server';
+
 /**
  * User Groups Server Functions
  *
@@ -10,7 +12,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull, count as drizzleCount, ne, asc, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { userGroups, userGroupMembers, users } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -21,10 +23,13 @@ import {
   updateGroupSchema,
   addGroupMemberSchema,
   updateGroupMemberRoleSchema,
+  listGroupMembersSchema,
+  listGroupsCursorSchema,
   type Group,
   type GroupWithMemberCount,
   type GroupMember,
 } from '@/lib/schemas/users';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { idParamSchema, paginationSchema } from '@/lib/schemas';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
@@ -60,7 +65,7 @@ export const createGroup = createServerFn({ method: 'POST' })
         and(
           eq(userGroups.organizationId, ctx.organizationId),
           eq(userGroups.name, data.name),
-          sql`${userGroups.deletedAt} IS NULL`
+          isNull(userGroups.deletedAt)
         )
       )
       .limit(1);
@@ -137,7 +142,7 @@ export const listGroups = createServerFn({ method: 'GET' })
     // Build conditions
     const conditions = [
       eq(userGroups.organizationId, ctx.organizationId),
-      sql`${userGroups.deletedAt} IS NULL`,
+      isNull(userGroups.deletedAt),
     ];
     if (!includeInactive) {
       conditions.push(eq(userGroups.isActive, true));
@@ -169,7 +174,7 @@ export const listGroups = createServerFn({ method: 'GET' })
 
     // Get total count
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(userGroups)
       .where(and(...conditions));
 
@@ -182,6 +187,53 @@ export const listGroups = createServerFn({ method: 'GET' })
         totalPages: Math.ceil(count / pageSize),
       },
     };
+  });
+
+/**
+ * List groups with cursor pagination (recommended for large datasets).
+ * Uses createdAt + id for stable sort.
+ */
+export const listGroupsCursor = createServerFn({ method: 'GET' })
+  .inputValidator(listGroupsCursorSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.team.read });
+
+    const { cursor, pageSize = 20, sortOrder = 'desc', includeInactive } = data;
+
+    const conditions = [eq(userGroups.organizationId, ctx.organizationId), isNull(userGroups.deletedAt)];
+    if (!includeInactive) conditions.push(eq(userGroups.isActive, true));
+
+    if (cursor) {
+      const cursorPosition = decodeCursor(cursor);
+      if (cursorPosition) {
+        conditions.push(buildCursorCondition(userGroups.createdAt, userGroups.id, cursorPosition, sortOrder));
+      }
+    }
+
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const groups = await db
+      .select({
+        id: userGroups.id,
+        organizationId: userGroups.organizationId,
+        name: userGroups.name,
+        description: userGroups.description,
+        color: userGroups.color,
+        isActive: userGroups.isActive,
+        createdAt: userGroups.createdAt,
+        updatedAt: userGroups.updatedAt,
+        createdBy: userGroups.createdBy,
+        updatedBy: userGroups.updatedBy,
+        memberCount: sql<number>`(
+          SELECT COUNT(*)::int FROM user_group_members
+          WHERE group_id = ${userGroups.id}
+        )`.as('member_count'),
+      })
+      .from(userGroups)
+      .where(and(...conditions))
+      .orderBy(orderDir(userGroups.createdAt), orderDir(userGroups.id))
+      .limit(pageSize + 1);
+
+    return buildStandardCursorResponse(groups as GroupWithMemberCount[], pageSize);
   });
 
 // ============================================================================
@@ -219,7 +271,7 @@ export const getGroup = createServerFn({ method: 'GET' })
         and(
           eq(userGroups.id, data.id),
           eq(userGroups.organizationId, ctx.organizationId),
-          sql`${userGroups.deletedAt} IS NULL`
+          isNull(userGroups.deletedAt)
         )
       )
       .limit(1);
@@ -254,7 +306,7 @@ export const updateGroup = createServerFn({ method: 'POST' })
         and(
           eq(userGroups.id, data.id),
           eq(userGroups.organizationId, ctx.organizationId),
-          sql`${userGroups.deletedAt} IS NULL`
+          isNull(userGroups.deletedAt)
         )
       )
       .limit(1);
@@ -272,8 +324,8 @@ export const updateGroup = createServerFn({ method: 'POST' })
           and(
             eq(userGroups.organizationId, ctx.organizationId),
             eq(userGroups.name, data.updates.name),
-            sql`${userGroups.id} != ${data.id}`,
-            sql`${userGroups.deletedAt} IS NULL`
+            ne(userGroups.id, data.id),
+            isNull(userGroups.deletedAt)
           )
         )
         .limit(1);
@@ -288,7 +340,7 @@ export const updateGroup = createServerFn({ method: 'POST' })
       .set({
         ...data.updates,
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userGroups.version} + 1`,
       })
       .where(eq(userGroups.id, data.id))
       .returning();
@@ -347,7 +399,7 @@ export const deleteGroup = createServerFn({ method: 'POST' })
         and(
           eq(userGroups.id, data.id),
           eq(userGroups.organizationId, ctx.organizationId),
-          sql`${userGroups.deletedAt} IS NULL`
+          isNull(userGroups.deletedAt)
         )
       )
       .limit(1);
@@ -358,7 +410,7 @@ export const deleteGroup = createServerFn({ method: 'POST' })
 
     // Get member count for logging
     const [{ memberCount }] = await db
-      .select({ memberCount: sql<number>`count(*)::int` })
+      .select({ memberCount: drizzleCount() })
       .from(userGroupMembers)
       .where(eq(userGroupMembers.groupId, data.id));
 
@@ -368,12 +420,15 @@ export const deleteGroup = createServerFn({ method: 'POST' })
       .set({
         deletedAt: new Date(),
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userGroups.version} + 1`,
       })
       .where(eq(userGroups.id, data.id));
 
-    // Also delete all memberships
-    await db.delete(userGroupMembers).where(eq(userGroupMembers.groupId, data.id));
+    // Soft delete memberships
+    await db
+      .update(userGroupMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(userGroupMembers.groupId, data.id));
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -396,10 +451,6 @@ export const deleteGroup = createServerFn({ method: 'POST' })
 // ============================================================================
 // LIST GROUP MEMBERS
 // ============================================================================
-
-const listGroupMembersSchema = paginationSchema.extend({
-  groupId: z.string().uuid(),
-});
 
 /**
  * List members of a group.
@@ -442,16 +493,16 @@ export const listGroupMembers = createServerFn({ method: 'GET' })
       })
       .from(userGroupMembers)
       .innerJoin(users, eq(userGroupMembers.userId, users.id))
-      .where(eq(userGroupMembers.groupId, groupId))
+      .where(and(eq(userGroupMembers.groupId, groupId), isNull(userGroupMembers.deletedAt)))
       .orderBy(userGroupMembers.joinedAt)
       .limit(pageSize)
       .offset(offset);
 
     // Get total count
     const [{ count }] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: drizzleCount() })
       .from(userGroupMembers)
-      .where(eq(userGroupMembers.groupId, groupId));
+      .where(and(eq(userGroupMembers.groupId, groupId), isNull(userGroupMembers.deletedAt)));
 
     return {
       items: members as GroupMember[],
@@ -506,7 +557,11 @@ export const addGroupMember = createServerFn({ method: 'POST' })
       .select({ id: userGroupMembers.id })
       .from(userGroupMembers)
       .where(
-        and(eq(userGroupMembers.groupId, data.groupId), eq(userGroupMembers.userId, data.userId))
+        and(
+          eq(userGroupMembers.groupId, data.groupId),
+          eq(userGroupMembers.userId, data.userId),
+          isNull(userGroupMembers.deletedAt)
+        )
       )
       .limit(1);
 
@@ -586,7 +641,8 @@ export const updateGroupMemberRole = createServerFn({ method: 'POST' })
         and(
           eq(userGroupMembers.groupId, data.groupId),
           eq(userGroupMembers.userId, data.userId),
-          eq(userGroupMembers.organizationId, ctx.organizationId)
+          eq(userGroupMembers.organizationId, ctx.organizationId),
+          isNull(userGroupMembers.deletedAt)
         )
       )
       .limit(1);
@@ -616,7 +672,7 @@ export const updateGroupMemberRole = createServerFn({ method: 'POST' })
       .set({
         role: data.role,
         updatedBy: ctx.user.id,
-        version: sql`version + 1`,
+        version: sql<number>`${userGroups.version} + 1`,
       })
       .where(
         and(eq(userGroupMembers.groupId, data.groupId), eq(userGroupMembers.userId, data.userId))
@@ -673,7 +729,8 @@ export const removeGroupMember = createServerFn({ method: 'POST' })
         and(
           eq(userGroupMembers.groupId, data.groupId),
           eq(userGroupMembers.userId, data.userId),
-          eq(userGroupMembers.organizationId, ctx.organizationId)
+          eq(userGroupMembers.organizationId, ctx.organizationId),
+          isNull(userGroupMembers.deletedAt)
         )
       )
       .limit(1);
@@ -695,9 +752,10 @@ export const removeGroupMember = createServerFn({ method: 'POST' })
       .where(eq(users.id, data.userId))
       .limit(1);
 
-    // Remove member
+    // Soft delete member
     await db
-      .delete(userGroupMembers)
+      .update(userGroupMembers)
+      .set({ deletedAt: new Date(), updatedBy: ctx.user.id })
       .where(
         and(eq(userGroupMembers.groupId, data.groupId), eq(userGroupMembers.userId, data.userId))
       );
@@ -760,7 +818,7 @@ export const getUserGroups = createServerFn({ method: 'GET' })
       })
       .from(userGroupMembers)
       .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
-      .where(and(eq(userGroupMembers.userId, data.id), sql`${userGroups.deletedAt} IS NULL`))
+      .where(and(eq(userGroupMembers.userId, data.id), isNull(userGroupMembers.deletedAt), isNull(userGroups.deletedAt)))
       .orderBy(userGroups.name);
 
     return groups;

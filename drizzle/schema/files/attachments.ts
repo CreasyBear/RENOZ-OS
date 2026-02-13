@@ -17,12 +17,12 @@ import {
   jsonb,
   index,
   uniqueIndex,
-  pgPolicy,
   timestamp,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
+import { standardRlsPolicies } from "../_shared/patterns";
 
 // ============================================================================
 // INTERFACES
@@ -101,27 +101,7 @@ export const attachments = pgTable(
     uploaderIdx: index("idx_attachments_uploader").on(table.uploadedBy),
 
     // RLS Policies - users can only access own org's attachments
-    selectPolicy: pgPolicy("attachments_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("attachments_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("attachments_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("attachments_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("attachments"),
   })
 );
 

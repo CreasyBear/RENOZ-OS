@@ -10,7 +10,8 @@
 import { Link } from '@tanstack/react-router';
 import { FileText, Eye, ThumbsUp, TrendingUp, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { KbArticleResponse } from '@/lib/schemas/support/knowledge-base';
@@ -155,11 +156,12 @@ export function KbPopularArticles({
           </Tabs>
 
           <div className="mt-4 border-t pt-3">
-            <Link to="/support/knowledge-base">
-              <Button variant="ghost" size="sm" className="w-full">
-                View All Articles
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+            <Link
+              to="/support/knowledge-base"
+              className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'w-full')}
+            >
+              View All Articles
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </div>
         </CardContent>

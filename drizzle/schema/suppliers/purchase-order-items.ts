@@ -15,12 +15,15 @@ import {
   date,
   check,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   currencyColumn,
+  standardRlsPolicies,
+  nonNullableRangeCheck,
+  positiveCheck,
+  nonNegativeCheck,
 } from "../_shared/patterns";
 import { purchaseOrders } from "./purchase-orders";
 import { products } from "../products/products";
@@ -114,16 +117,10 @@ export const purchaseOrderItems = pgTable(
     ),
 
     // Quantity must be positive
-    quantityCheck: check(
-      "purchase_order_items_quantity_positive",
-      sql`${table.quantity} > 0`
-    ),
+    quantityCheck: positiveCheck("purchase_order_items_quantity_positive", table.quantity),
 
     // Unit price must be non-negative
-    unitPriceCheck: check(
-      "purchase_order_items_unit_price_non_negative",
-      sql`${table.unitPrice} >= 0`
-    ),
+    unitPriceCheck: nonNegativeCheck("purchase_order_items_unit_price_non_negative", table.unitPrice),
 
     // Line total calculation validation
     lineTotalCheck: check(
@@ -150,39 +147,13 @@ export const purchaseOrderItems = pgTable(
     ),
 
     // Discount percent range
-    discountCheck: check(
-      "purchase_order_items_discount_range",
-      sql`${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100`
-    ),
+    discountCheck: nonNullableRangeCheck("purchase_order_items_discount_range", table.discountPercent, 0, 100),
 
     // Tax rate range
-    taxRateCheck: check(
-      "purchase_order_items_tax_rate_range",
-      sql`${table.taxRate} >= 0 AND ${table.taxRate} <= 100`
-    ),
+    taxRateCheck: nonNullableRangeCheck("purchase_order_items_tax_rate_range", table.taxRate, 0, 100),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("purchase_order_items_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("purchase_order_items_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("purchase_order_items_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("purchase_order_items_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("purchase_order_items"),
   })
 );
 

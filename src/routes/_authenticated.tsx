@@ -20,82 +20,50 @@
  */
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { AppShell } from '../components/layout'
 import {
   QuickLogDialog,
   useQuickLogShortcut,
 } from '../components/domain/communications/quick-log-dialog'
+import { useOpenQuickLog } from '../contexts/open-quick-log-context'
+import { ConfirmationDialog } from '../components/ui/confirmation-dialog'
+import { ConfirmationProvider } from '../contexts/confirmation-context'
+import { OpenQuickLogProvider } from '../contexts/open-quick-log-provider'
 import { OrganizationSettingsProvider } from '../contexts/organization-settings-context'
 import { useOrganizationSettingsQuery } from '../hooks/organizations/use-organization'
+import { getAuthContext } from '../lib/auth/route-auth'
+import { authLogger } from '@/lib/logger'
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ location }) => {
-    let supabase: SupabaseClient
     if (typeof window === 'undefined') {
       const { getRequest } = await import('@tanstack/react-start/server')
       const { createServerSupabase } = await import('~/lib/supabase/server')
-      supabase = createServerSupabase(getRequest())
-    } else {
-      const { supabase: browserSupabase } = await import('~/lib/supabase/client')
-      supabase = browserSupabase
+      const supabase = createServerSupabase(getRequest())
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        throw redirect({
+          to: '/login',
+          search: { redirect: location.pathname },
+        })
+      }
+      return
     }
 
-    // Check if user is authenticated with Supabase
-    // Use getUser() for reliable auth check (validates JWT with server)
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (!user || authError) {
-      // Redirect to login with return URL
-      throw redirect({
-        to: '/login',
-        search: {
-          redirect: location.href,
-        },
-      })
-    }
-
-    // Verify user exists and is active in application database
-    // This catches: deactivated users, deleted users, users not in users table
-    const { data: appUser, error } = await supabase
-      .from('users')
-      .select('id, status, organization_id, role, deleted_at')
-      .eq('auth_id', user.id)
-      .is('deleted_at', null)
-      .single()
-
-    if (error || !appUser) {
-      // User not found in app database or has been deleted
-      // Sign them out and redirect to login
-      await supabase.auth.signOut()
-      throw redirect({
-        to: '/login',
-        search: {
-          redirect: undefined, // Clear any redirect
-        },
-      })
-    }
-
-    if (appUser.status !== 'active') {
-      // User exists but is not active (deactivated, suspended, etc.)
-      await supabase.auth.signOut()
-      throw redirect({
-        to: '/login',
-        search: {
-          redirect: undefined, // Clear any redirect
-        },
-      })
-    }
+    const { user, appUser } = await getAuthContext(location)
 
     // Return user context for child routes
+    authLogger.debug('[auth] beforeLoad ok', {
+      path: location.pathname,
+      userId: appUser.id,
+      organizationId: appUser.organizationId,
+    })
     return {
       user,
-      appUser: {
-        id: appUser.id,
-        organizationId: appUser.organization_id,
-        role: appUser.role,
-        status: appUser.status,
-      },
+      appUser,
     }
   },
   component: AuthenticatedLayout,
@@ -104,6 +72,7 @@ export const Route = createFileRoute('/_authenticated')({
 function AuthenticatedLayout() {
   // Quick Log Dialog state
   const [quickLogOpen, setQuickLogOpen] = useState(false)
+  const openQuickLogContext = useOpenQuickLog()
 
   // Enable Cmd+L keyboard shortcut for quick log
   const handleOpenQuickLog = useCallback(() => {
@@ -124,15 +93,25 @@ function AuthenticatedLayout() {
       isLoading={isSettingsLoading}
       error={settingsError}
     >
-      <AppShell>
-        <Outlet />
+      <OpenQuickLogProvider value={{ openQuickLog: handleOpenQuickLog }}>
+        <ConfirmationProvider>
+          <AppShell>
+            <Outlet />
 
-        {/* Global Quick Log Dialog - accessible from anywhere via Cmd+L */}
-        <QuickLogDialog
-          open={quickLogOpen}
-          onOpenChange={setQuickLogOpen}
-        />
-      </AppShell>
+            {/* Global Quick Log Dialog - accessible via Cmd+L or Command Palette.
+                Pre-fills customer/opportunity when on those pages. */}
+            <QuickLogDialog
+              open={quickLogOpen}
+              onOpenChange={setQuickLogOpen}
+              customerId={openQuickLogContext?.context?.customerId}
+              opportunityId={openQuickLogContext?.context?.opportunityId}
+            />
+
+            {/* Global Confirmation Dialog - accessible from anywhere via useConfirmation hook */}
+            <ConfirmationDialog />
+          </AppShell>
+        </ConfirmationProvider>
+      </OpenQuickLogProvider>
     </OrganizationSettingsProvider>
   )
 }

@@ -5,10 +5,7 @@
  *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-SHIPPING-UI)
  */
-
 import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   CheckCircle,
   Camera,
@@ -37,7 +34,10 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { confirmDelivery } from "@/server/functions/orders/order-shipments";
+import { useConfirmDelivery } from "@/hooks/orders";
+import { useUploadFile, useFetchDownloadUrl } from "@/hooks/files";
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 // ============================================================================
 // TYPES
@@ -208,8 +208,6 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
   shipmentId,
   onSuccess,
 }: ConfirmDeliveryDialogProps) {
-  const queryClient = useQueryClient();
-
   // Form state
   const [signedBy, setSignedBy] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
@@ -218,55 +216,86 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [activeTab, setActiveTab] = useState("signature");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Confirm mutation
-  const confirmMutation = useMutation({
-    mutationFn: async () => {
-      // TODO: Upload photo to storage if provided
-      // For now, we'll use the URL directly or skip photo
-      let finalPhotoUrl = photoUrl;
-      if (photoFile && !photoUrl) {
-        // In production, upload to Supabase Storage here
-        // For now, create a data URL
-        finalPhotoUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(photoFile);
-        });
+  // Use the hook for confirm delivery
+  const confirmDeliveryMutation = useConfirmDelivery();
+  const uploadFile = useUploadFile();
+  const fetchDownloadUrl = useFetchDownloadUrl();
+
+  const uploadPhoto = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Please select an image file.");
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        throw new Error("Image must be 10MB or smaller.");
       }
 
-      return confirmDelivery({
-        data: {
-          id: shipmentId,
-          signedBy: signedBy || undefined,
-          signature: signature || undefined,
-          photoUrl: finalPhotoUrl || undefined,
-          notes: notes || undefined,
-        },
+      const uploadResult = await uploadFile.mutateAsync({
+        file,
+        entityType: "shipment",
+        entityId: shipmentId,
       });
-    },
-    onSuccess: () => {
-      toastSuccess("Delivery confirmed successfully");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      onOpenChange(false);
-      onSuccess?.();
-      // Reset form
-      setSignedBy("");
-      setSignature(null);
-      setPhotoUrl("");
-      setPhotoFile(null);
-      setPhotoPreview(null);
-      setNotes("");
-    },
-    onError: (error) => {
-      toastError(
-        error instanceof Error ? error.message : "Failed to confirm delivery"
+
+      const download = await fetchDownloadUrl.mutateAsync(
+        uploadResult.attachment.id
       );
+
+      return download?.downloadUrl ?? "";
     },
-  });
+    [fetchDownloadUrl, shipmentId, uploadFile]
+  );
+
+  // Wrapper mutation to handle file upload logic
+  const handleConfirm = async () => {
+    let finalPhotoUrl = photoUrl;
+    if (photoFile && !photoUrl) {
+      try {
+        setIsUploadingPhoto(true);
+        finalPhotoUrl = await uploadPhoto(photoFile);
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to upload photo");
+        setIsUploadingPhoto(false);
+        return;
+      }
+      setIsUploadingPhoto(false);
+    }
+
+    confirmDeliveryMutation.mutate(
+      {
+        id: shipmentId,
+        signedBy: signedBy || undefined,
+        signature: signature || undefined,
+        photoUrl: finalPhotoUrl || undefined,
+        notes: notes || undefined,
+      },
+      {
+        onSuccess: () => {
+          toastSuccess("Delivery confirmed successfully");
+          onOpenChange(false);
+          onSuccess?.();
+          // Reset form
+          setSignedBy("");
+          setSignature(null);
+          setPhotoUrl("");
+          setPhotoFile(null);
+          setPhotoPreview(null);
+          setNotes("");
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+        },
+        onError: (error) => {
+          toastError(
+            error instanceof Error ? error.message : "Failed to confirm delivery"
+          );
+        },
+      }
+    );
+  };
 
   // Handle file selection
   const handleFileSelect = useCallback(
@@ -280,9 +309,9 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
         return;
       }
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toastError("Image must be smaller than 5MB");
+      // Validate file size (max 10MB)
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toastError("Image must be 10MB or smaller");
         return;
       }
 
@@ -369,6 +398,7 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
                     size="icon"
                     className="absolute top-2 right-2 h-8 w-8"
                     onClick={clearPhoto}
+                    aria-label="Remove photo"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -437,18 +467,18 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={confirmMutation.isPending}
+            disabled={confirmDeliveryMutation.isPending || isUploadingPhoto}
           >
             Cancel
           </Button>
           <Button
-            onClick={() => confirmMutation.mutate()}
-            disabled={confirmMutation.isPending}
+            onClick={handleConfirm}
+            disabled={confirmDeliveryMutation.isPending || isUploadingPhoto}
           >
-            {confirmMutation.isPending ? (
+            {confirmDeliveryMutation.isPending || isUploadingPhoto ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Confirming...
+                {isUploadingPhoto ? "Uploading..." : "Confirming..."}
               </>
             ) : (
               <>

@@ -46,10 +46,12 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/shared/empty-state";
+import { CustomerSelectorContainer } from "@/components/domain/orders/creation/customer-selector-container";
 import {
-  setCustomerPrice,
-  deleteCustomerPrice,
-} from "@/server/functions/products/product-pricing";
+  useSetCustomerPrice,
+  useDeleteCustomerPrice,
+} from "@/hooks/products";
+import type { CustomerPrice } from "@/lib/schemas/products";
 
 // Customer price form schema
 const customerPriceFormSchema = z.object({
@@ -69,21 +71,15 @@ const customerPriceFormSchema = z.object({
 
 type CustomerPriceFormValues = z.infer<typeof customerPriceFormSchema>;
 
-interface CustomerPrice {
-  id: string;
-  customerId: string;
+/** Extended with customerName for display - schema CustomerPrice has required productId */
+interface CustomerPriceWithName extends CustomerPrice {
   customerName?: string;
-  price: number | null;
-  discountPercent: number | null;
-  validFrom: Date;
-  validTo: Date | null;
-  createdAt: Date;
 }
 
 interface CustomerPricingProps {
   productId: string;
   basePrice: number;
-  customerPrices: CustomerPrice[];
+  customerPrices: CustomerPriceWithName[];
   onPricesChange?: () => void;
 }
 
@@ -104,7 +100,7 @@ function formatDate(date: Date): string {
 }
 
 // Check if a customer price is currently active
-function isActive(price: CustomerPrice): boolean {
+function isActive(price: CustomerPriceWithName): boolean {
   const now = new Date();
   const from = new Date(price.validFrom);
   const to = price.validTo ? new Date(price.validTo) : null;
@@ -118,8 +114,13 @@ export function CustomerPricing({
   onPricesChange,
 }: CustomerPricingProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [deletingPrice, setDeletingPrice] = useState<CustomerPrice | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingPrice, setDeletingPrice] = useState<CustomerPriceWithName | null>(null);
+
+  // Use mutation hooks
+  const setCustomerPriceMutation = useSetCustomerPrice();
+  const deleteCustomerPriceMutation = useDeleteCustomerPrice();
+
+  const isSubmitting = setCustomerPriceMutation.isPending || deleteCustomerPriceMutation.isPending;
 
   const {
     register,
@@ -129,7 +130,7 @@ export function CustomerPricing({
     setValue,
     formState: { errors },
   } = useForm<CustomerPriceFormValues>({
-    resolver: zodResolver(customerPriceFormSchema) as never,
+    resolver: zodResolver(customerPriceFormSchema),
     defaultValues: {
       customerId: "",
       price: null,
@@ -139,10 +140,13 @@ export function CustomerPricing({
     },
   });
 
+  /* eslint-disable react-hooks/incompatible-library -- React Hook Form watch(); known limitation */
   const watchPrice = watch("price");
   const watchDiscount = watch("discountPercent");
   const watchValidFrom = watch("validFrom");
   const watchValidTo = watch("validTo");
+  const selectedCustomerId = watch("customerId") || null;
+  /* eslint-enable react-hooks/incompatible-library */
 
   // Sort prices: active first, then by customer name
   const sortedPrices = [...customerPrices].sort((a, b) => {
@@ -165,45 +169,38 @@ export function CustomerPricing({
   };
 
   // Submit form
-  const onSubmit = async (data: CustomerPriceFormValues) => {
-    setIsSubmitting(true);
-    try {
-      await setCustomerPrice({
-        data: {
-          productId,
-          customerId: data.customerId,
-          price: data.price ?? undefined,
-          discountPercent: data.discountPercent ?? undefined,
-          validFrom: data.validFrom,
-          validTo: data.validTo ?? undefined,
+  const onSubmit = (data: CustomerPriceFormValues) => {
+    setCustomerPriceMutation.mutate(
+      {
+        productId,
+        customerId: data.customerId,
+        price: data.price ?? undefined,
+        discountPercent: data.discountPercent ?? undefined,
+        validFrom: data.validFrom,
+        validTo: data.validTo ?? undefined,
+      },
+      {
+        onSuccess: () => {
+          setIsDialogOpen(false);
+          onPricesChange?.();
         },
-      });
-      setIsDialogOpen(false);
-      onPricesChange?.();
-    } catch (error) {
-      console.error("Failed to save customer price:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
+      }
+    );
   };
 
   // Delete customer price
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deletingPrice) return;
-    setIsSubmitting(true);
-    try {
-      await deleteCustomerPrice({ data: { id: deletingPrice.id } });
-      setDeletingPrice(null);
-      onPricesChange?.();
-    } catch (error) {
-      console.error("Failed to delete customer price:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    deleteCustomerPriceMutation.mutate(deletingPrice.id, {
+      onSuccess: () => {
+        setDeletingPrice(null);
+        onPricesChange?.();
+      },
+    });
   };
 
   // Calculate effective price
-  const getEffectivePrice = (price: CustomerPrice): number => {
+  const getEffectivePrice = (price: CustomerPriceWithName): number => {
     if (price.price !== null) return price.price;
     if (price.discountPercent !== null) {
       return basePrice * (1 - price.discountPercent / 100);
@@ -327,17 +324,17 @@ export function CustomerPricing({
             {/* Customer Selection */}
             <div className="space-y-2">
               <Label htmlFor="customerId">Customer</Label>
-              <Input
-                id="customerId"
-                placeholder="Enter customer ID (TODO: add search)"
-                {...register("customerId")}
+              <input type="hidden" {...register("customerId")} />
+              <CustomerSelectorContainer
+                selectedCustomerId={selectedCustomerId}
+                onSelect={(customer) => {
+                  setValue("customerId", customer?.id ?? "");
+                  setValue("customerName", customer?.name);
+                }}
               />
               {errors.customerId && (
                 <p className="text-sm text-destructive">{errors.customerId.message}</p>
               )}
-              <p className="text-xs text-muted-foreground">
-                Customer search coming soon - enter customer ID for now
-              </p>
             </div>
 
             {/* Pricing Options */}

@@ -178,7 +178,12 @@ export function ApprovalConfirmDialog({
           </div>
 
           {/* Error message */}
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">

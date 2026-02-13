@@ -46,13 +46,33 @@ export interface UseEnhancedComparisonOptions extends EnhancedComparisonInput {
 
 /**
  * Get dashboard metrics summary with KPIs, charts, and activity.
+ *
+ * Uses direct server function call (no useServerFn) per backup pattern -
+ * matches working implementation from renoz-v3 6.
  */
 export function useDashboardMetrics(options: UseDashboardMetricsOptions = {}) {
   const { enabled = true, ...filters } = options;
 
   return useQuery({
     queryKey: queryKeys.dashboard.metrics.summary(filters as Record<string, unknown>),
-    queryFn: () => getDashboardMetrics({ data: filters }),
+    queryFn: async () => {
+      const result = await getDashboardMetrics({ data: filters });
+      if (result == null) throw new Error('Dashboard metrics returned no data');
+      // Normalize dateRange and lastUpdated from ISO strings (RPC serialization) to Date objects
+      const dr = result.dateRange;
+      return {
+        ...result,
+        dateRange: {
+          from: typeof dr.from === 'string' ? new Date(dr.from) : dr.from,
+          to: typeof dr.to === 'string' ? new Date(dr.to) : dr.to,
+          preset: dr.preset,
+        },
+        lastUpdated:
+          typeof result.lastUpdated === 'string'
+            ? new Date(result.lastUpdated)
+            : result.lastUpdated,
+      };
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - metrics refresh frequently
     refetchOnWindowFocus: true,
@@ -74,10 +94,13 @@ export function useMetricsComparison({
       endDate: dateTo,
       comparisonType: comparisonType === 'none' ? 'previous_period' : comparisonType,
     }),
-    queryFn: () =>
-      getMetricsComparison({
+    queryFn: async () => {
+      const result = await getMetricsComparison({
         data: { dateFrom, dateTo, comparisonType },
-      }),
+      });
+      if (result == null) throw new Error('Metrics comparison returned no data');
+      return result;
+    },
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 60 * 1000, // 1 minute - comparison data changes less frequently
   });
@@ -110,8 +133,8 @@ export function useEnhancedComparison({
       includeTrends: includeTrend,
       includeInsights,
     }),
-    queryFn: () =>
-      getEnhancedComparison({
+    queryFn: async () => {
+      const result = await getEnhancedComparison({
         data: {
           dateFrom,
           dateTo,
@@ -123,7 +146,10 @@ export function useEnhancedComparison({
           includeSignificance,
           includeInsights,
         },
-      }),
+      });
+      if (result == null) throw new Error('Enhanced comparison returned no data');
+      return result;
+    },
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 60 * 1000, // 1 minute - comparison data changes less frequently
   });

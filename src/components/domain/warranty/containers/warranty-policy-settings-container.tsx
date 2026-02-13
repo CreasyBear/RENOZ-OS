@@ -20,14 +20,8 @@ import {
   useUpdateWarrantyPolicy,
 } from '@/hooks/warranty';
 import { WarrantyPolicySettingsView } from '../views/warranty-policy-settings-view';
-import type { WarrantyPolicy } from 'drizzle/schema';
-import type { WarrantyPolicySettingsViewProps } from '../views/warranty-policy-settings-view';
-
-type WarrantyPolicyFormPayload = WarrantyPolicySettingsViewProps['onSubmitPolicy'] extends (
-  payload: infer P
-) => Promise<void>
-  ? P
-  : never;
+import type { WarrantyPolicy, WarrantyPolicyFormPayload } from '@/lib/schemas/warranty';
+import { WARRANTY_POLICY_LABELS } from '@/lib/warranty';
 
 export function WarrantyPolicySettingsContainer() {
   const confirm = useConfirmation();
@@ -86,7 +80,7 @@ export function WarrantyPolicySettingsContainer() {
     const confirmed = await confirm.confirm({
       title: 'Set Default Policy',
       description: `Are you sure you want to set "${policy.name}" as the default warranty policy? This will be used for new products without a specific policy.`,
-      confirmLabel: 'Set as Default',
+      confirmLabel: WARRANTY_POLICY_LABELS.SET_AS_DEFAULT,
     });
 
     if (confirmed.confirmed) {

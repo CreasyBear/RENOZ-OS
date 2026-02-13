@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Context file exports provider + hook */
 /**
  * Inventory Context
  *
@@ -21,7 +22,18 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "@/hooks";
-import { getTriggeredAlerts, getInventoryDashboard, listInventory } from "@/server/functions/inventory";
+import {
+  useInventoryDashboard,
+  useTriggeredAlerts,
+  useAcknowledgeAlert,
+  useCheckInventoryAvailability,
+  type AvailabilityCheck,
+} from "@/hooks/inventory";
+import { inventoryLogger } from "@/lib/logger";
+import type { TriggeredAlert, TriggeredAlertResult } from "@/lib/schemas/inventory";
+
+const ALERT_TYPES = ["low_stock", "out_of_stock", "overstock", "expiry", "slow_moving"] as const;
+type AlertType = (typeof ALERT_TYPES)[number];
 
 // ============================================================================
 // TYPES
@@ -61,15 +73,7 @@ export interface InventoryMetrics {
   alertsCount: number;
 }
 
-export interface AvailabilityCheck {
-  productId: string;
-  locationId?: string;
-  requestedQty: number;
-  availableQty: number;
-  reservedQty: number;
-  isAvailable: boolean;
-  shortfall: number;
-}
+// AvailabilityCheck type is imported from @/hooks/inventory
 
 interface InventoryContextValue {
   // State
@@ -117,76 +121,89 @@ export function InventoryProvider({
   children,
   alertPollInterval = 60000,
 }: InventoryProviderProps) {
-  const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
-  const [metrics, setMetrics] = useState<InventoryMetrics | null>(null);
   const [reservations, setReservations] = useState<StockReservation[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch triggered alerts
+  // Use hooks instead of direct server function calls (per STANDARDS.md)
+  const { data: dashboardData, isLoading: isDashboardLoading, refetch: refetchDashboard } = useInventoryDashboard();
+  const { data: triggeredAlertsData, refetch: refetchTriggeredAlerts } = useTriggeredAlerts();
+  const acknowledgeAlertMutation = useAcknowledgeAlert();
+
+  // Stable "now" for alert fallback when triggeredAt is missing
+  // eslint-disable-next-line react-hooks/purity -- cached now for component lifetime is intentional
+  const now = useMemo(() => Date.now(), []);
+
+  // Transform alerts data
+  const alerts = useMemo<InventoryAlert[]>(() => {
+    if (!triggeredAlertsData?.alerts) return [];
+    return triggeredAlertsData.alerts.map((a: TriggeredAlert | TriggeredAlertResult): InventoryAlert => {
+      const alertType = a.alert?.alertType ?? "low_stock";
+      const type: AlertType = ALERT_TYPES.includes(alertType as AlertType) ? (alertType as AlertType) : "low_stock";
+      return {
+        id: a.alert?.id ?? crypto.randomUUID(),
+        type,
+        severity:
+          a.severity === "critical"
+            ? "critical"
+            : a.severity === "high"
+              ? "warning"
+              : "info",
+        productId: a.product?.id,
+        productName: a.product?.name,
+        locationId: a.location?.id,
+        locationName: a.location?.name,
+        message: a.message ?? "Alert triggered",
+        createdAt: (() => {
+          const t = a.alert?.lastTriggeredAt;
+          if (t instanceof Date) return t;
+          if (typeof t === "string") return new Date(t);
+          return new Date(now);
+        })(),
+        acknowledged: false,
+      };
+    });
+  }, [triggeredAlertsData, now]);
+
+  // Transform metrics data
+  const metrics = useMemo<InventoryMetrics | null>(() => {
+    if (!dashboardData?.metrics) return null;
+    return {
+      totalValue: dashboardData.metrics.totalValue ?? 0,
+      totalItems: dashboardData.metrics.totalItems ?? 0,
+      totalSkus: dashboardData.metrics.totalSkus ?? 0,
+      totalUnits: dashboardData.metrics.totalUnits ?? 0,
+      lowStockCount: dashboardData.metrics.lowStockCount ?? 0,
+      outOfStockCount: dashboardData.metrics.outOfStockCount ?? 0,
+      alertsCount: triggeredAlertsData?.alerts?.length ?? 0,
+    };
+  }, [dashboardData, triggeredAlertsData]);
+
+  const isLoading = isDashboardLoading;
+
+  // Refresh alerts using hook refetch
   const refreshAlerts = useCallback(async () => {
     try {
-      const data = (await getTriggeredAlerts()) as any;
-      if (data?.alerts) {
-        setAlerts(
-          data.alerts.map((a: any) => ({
-            id: a.alert?.id ?? a.id,
-            type: a.alert?.alertType ?? a.type ?? "low_stock",
-            severity:
-              a.severity === "critical"
-                ? "critical"
-                : a.severity === "high"
-                  ? "warning"
-                  : "info",
-            productId: a.product?.id,
-            productName: a.product?.name,
-            locationId: a.location?.id,
-            locationName: a.location?.name,
-            message: a.message ?? `${a.alert?.name ?? "Alert"} triggered`,
-            createdAt: new Date(a.triggeredAt ?? Date.now()),
-            acknowledged: false,
-          }))
-        );
-      }
+      await refetchTriggeredAlerts();
     } catch (error) {
-      console.error("Failed to fetch alerts:", error);
+      inventoryLogger.error("Failed to fetch alerts", error as Error, {});
     }
-  }, []);
+  }, [refetchTriggeredAlerts]);
 
-  // Fetch dashboard metrics
+  // Refresh metrics using hook refetch
   const refreshMetrics = useCallback(async () => {
     try {
-      setIsLoading(true);
-      const data = (await getInventoryDashboard()) as any;
-      if (data?.metrics) {
-        setMetrics({
-          totalValue: data.metrics.totalValue ?? 0,
-          totalItems: data.metrics.totalItems ?? 0,
-          totalSkus: data.metrics.totalSkus ?? 0,
-          totalUnits: data.metrics.totalUnits ?? 0,
-          lowStockCount: data.metrics.lowStockCount ?? 0,
-          outOfStockCount: data.metrics.outOfStockCount ?? 0,
-          alertsCount: data.alerts?.length ?? 0,
-        });
-      }
+      await refetchDashboard();
     } catch (error) {
-      console.error("Failed to fetch metrics:", error);
-    } finally {
-      setIsLoading(false);
+      inventoryLogger.error("Failed to fetch metrics", error as Error, {});
     }
-  }, []);
+  }, [refetchDashboard]);
 
-  // Acknowledge an alert
+  // Acknowledge an alert using mutation hook
   const acknowledgeAlert = useCallback(async (alertId: string) => {
-    // In a real implementation, this would call a server function
-    setAlerts((prev) =>
-      prev.map((a) =>
-        a.id === alertId ? { ...a, acknowledged: true } : a
-      )
-    );
-    toast.success("Alert acknowledged");
-  }, []);
+    await acknowledgeAlertMutation.mutateAsync(alertId);
+  }, [acknowledgeAlertMutation]);
 
-  // Check stock availability
+  // Check stock availability - uses mutation hook
+  const checkAvailabilityMutation = useCheckInventoryAvailability();
   const checkStockAvailability = useCallback(
     async (
       productId: string,
@@ -194,37 +211,13 @@ export function InventoryProvider({
       locationId?: string
     ): Promise<AvailabilityCheck> => {
       try {
-        // Use listInventory to check availability for the product
-        const data = (await listInventory({
-          data: {
-            productId,
-            ...(locationId && { locationId }),
-            page: 1,
-            pageSize: 100,
-          },
-        })) as any;
-
-        // Sum available quantities across all locations
-        const totalAvailable = (data?.items ?? []).reduce(
-          (sum: number, item: any) => sum + (item.quantityAvailable ?? 0),
-          0
-        );
-        const totalReserved = (data?.items ?? []).reduce(
-          (sum: number, item: any) => sum + (item.quantityAllocated ?? 0),
-          0
-        );
-
-        return {
+        return await checkAvailabilityMutation.mutateAsync({
           productId,
+          quantity,
           locationId,
-          requestedQty: quantity,
-          availableQty: totalAvailable,
-          reservedQty: totalReserved,
-          isAvailable: totalAvailable >= quantity,
-          shortfall: Math.max(0, quantity - totalAvailable),
-        };
+        });
       } catch (error) {
-        console.error("Availability check failed:", error);
+        inventoryLogger.error("Availability check failed", error as Error, { productId, locationId });
         return {
           productId,
           locationId,
@@ -236,7 +229,7 @@ export function InventoryProvider({
         };
       }
     },
-    []
+    [checkAvailabilityMutation]
   );
 
   // Reserve stock (placeholder - would call server function)
@@ -287,19 +280,15 @@ export function InventoryProvider({
     return true;
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    refreshAlerts();
-    refreshMetrics();
-  }, []);
-
-  // Poll for alerts
+  // Poll for alerts using refetch
   useEffect(() => {
     if (alertPollInterval <= 0) return;
 
-    const interval = setInterval(refreshAlerts, alertPollInterval);
+    const interval = setInterval(() => {
+      refetchTriggeredAlerts();
+    }, alertPollInterval);
     return () => clearInterval(interval);
-  }, [alertPollInterval, refreshAlerts]);
+  }, [alertPollInterval, refetchTriggeredAlerts]);
 
   const value = useMemo<InventoryContextValue>(
     () => ({

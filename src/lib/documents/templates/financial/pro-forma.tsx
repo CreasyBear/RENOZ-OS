@@ -6,16 +6,19 @@
  * Same structure as invoice but clearly marked as non-binding estimate.
  */
 
-import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
 import {
   DocumentHeader,
+  FixedDocumentHeader,
   AddressColumns,
   LineItems,
   Summary,
   DocumentFooter,
   PageNumber,
   QRCode,
+  ExternalLinkIcon,
   pageMargins,
+  fixedHeaderClearance,
   colors,
   spacing,
   fontSize,
@@ -39,11 +42,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    marginTop: fixedHeaderClearance,
   },
   qrSection: {
     marginTop: spacing.xl,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "flex-end",
+    gap: spacing.lg,
   },
   // Pro forma disclaimer banner
   disclaimerBanner: {
@@ -172,6 +178,8 @@ export interface ProFormaPdfTemplateProps {
   data: ProFormaDocumentData;
   /** Optional QR code data URL (pre-generated) */
   qrCodeDataUrl?: string;
+  /** Optional URL for viewing document online */
+  viewOnlineUrl?: string;
 }
 
 export interface ProFormaPdfDocumentProps extends ProFormaPdfTemplateProps {
@@ -183,7 +191,7 @@ export interface ProFormaPdfDocumentProps extends ProFormaPdfTemplateProps {
 // INTERNAL COMPONENT (uses context)
 // ============================================================================
 
-function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
+function ProFormaContent({ data, qrCodeDataUrl, viewOnlineUrl }: ProFormaPdfTemplateProps) {
   const { organization } = useOrgDocument();
 
   const { order } = data;
@@ -226,6 +234,11 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
 
   return (
     <Page size="A4" style={styles.page}>
+      <FixedDocumentHeader
+        orgName={organization.name}
+        documentType="Pro Forma"
+        documentNumber={data.documentNumber}
+      />
       <View style={styles.content}>
         {/* Header with logo and document info */}
         <DocumentHeader
@@ -256,7 +269,8 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
           showNotes={order.lineItems.some((item) => item.notes)}
         />
 
-        {/* Totals summary (no balance section since not invoiced yet) */}
+        {/* Totals summary - unbreakable */}
+        <View wrap={false}>
         <Summary
           subtotal={order.subtotal}
           discountAmount={order.discount}
@@ -267,8 +281,10 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
           total={order.total}
           balanceDue={null}
         />
+        </View>
 
-        {/* Footer with payment details, terms, and notes */}
+        {/* Footer with payment details, terms, and notes - unbreakable */}
+        <View wrap={false}>
         <DocumentFooter
           paymentDetails={
             data.paymentDetails
@@ -285,11 +301,20 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
           terms={data.terms}
           notes={resolvedNotes}
         />
+        </View>
 
-        {/* QR Code for quick access */}
-        {qrCodeDataUrl && (
+        {/* QR Code and View online link */}
+        {(qrCodeDataUrl || viewOnlineUrl) && (
           <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={80} />
+            {qrCodeDataUrl && <QRCode dataUrl={qrCodeDataUrl} size={80} />}
+            {viewOnlineUrl && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <ExternalLinkIcon size={10} color={colors.status.info} />
+                <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
+                  <Text>View online</Text>
+                </Link>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -320,6 +345,7 @@ export function ProFormaPdfDocument({
   organization,
   data,
   qrCodeDataUrl,
+  viewOnlineUrl,
 }: ProFormaPdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -328,8 +354,10 @@ export function ProFormaPdfDocument({
         author={organization.name}
         subject={`Pro Forma Invoice for ${data.order.customer.name}`}
         creator="Renoz CRM"
+        language="en-AU"
+        keywords={`pro forma, ${data.documentNumber}, ${data.order.customer.name}`}
       >
-        <ProFormaContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <ProFormaContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
       </Document>
     </OrgDocumentProvider>
   );
@@ -344,6 +372,7 @@ export function ProFormaPdfDocument({
 export function ProFormaPdfTemplate({
   data,
   qrCodeDataUrl,
+  viewOnlineUrl,
 }: ProFormaPdfTemplateProps) {
-  return <ProFormaContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+  return <ProFormaContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />;
 }

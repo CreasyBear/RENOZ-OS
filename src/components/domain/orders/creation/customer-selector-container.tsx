@@ -12,7 +12,7 @@
 
 import { memo, useState, useCallback } from 'react';
 import { CustomerSelector, type SelectedCustomer } from './customer-selector';
-import { useCustomers } from '@/hooks/customers/use-customers';
+import { useCustomers } from '@/hooks/customers';
 
 // ============================================================================
 // TYPES

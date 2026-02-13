@@ -12,6 +12,7 @@
 import { withAuth } from '@/lib/server/protected';
 import { executeAction, rejectAction } from '@/server/functions/ai/approvals';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // VALIDATION SCHEMA
@@ -110,7 +111,7 @@ export async function POST({ request }: { request: Request }) {
       );
     }
   } catch (error) {
-    console.error('[API /ai/approve] Error:', error);
+    logger.error('[API /ai/approve] Error', error as Error, {});
 
     // Handle auth errors
     if (error instanceof Error && error.message.includes('Authentication')) {

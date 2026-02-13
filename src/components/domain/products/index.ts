@@ -16,17 +16,15 @@ export {
   calculateMargin,
   formatMargin,
   getStockStatusConfig,
-  type ProductStatus,
-  type ProductType,
-  type StockStatus,
 } from './product-status-config';
+export type { ProductStatus, ProductType, StockStatus } from '@/lib/schemas/products';
 
 // --- Column Definitions ---
 export {
   createProductColumns,
-  type ProductTableItem,
   type CreateProductColumnsOptions,
 } from './product-columns';
+export type { ProductTableItem } from '@/lib/schemas/products';
 
 // --- Core Product Components ---
 export { ProductTable } from './product-table';
@@ -80,10 +78,10 @@ export { ProductRelationsTab as RelationsTab } from './tabs/relations-tab';
 export { ProductDetailContainer } from './containers/product-detail-container';
 export type { ProductDetailContainerProps, ProductDetailContainerRenderProps } from './containers/product-detail-container';
 export { ProductDetailView } from './views/product-detail-view';
+export type { ProductDetailViewProps } from './views/product-detail-view';
 export type {
-  ProductDetailViewProps,
   ProductWithRelations,
   Category as ProductCategory,
   PriceTier as ProductPriceTier,
   ProductImage,
-} from './views/product-detail-view';
+} from '@/lib/schemas/products';

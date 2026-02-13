@@ -31,6 +31,8 @@ import type {
   HookLocationFilters,
   CreateLocationInput,
   UpdateLocationInput,
+  CreateWarehouseLocationInput,
+  UpdateWarehouseLocationInput,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -128,8 +130,8 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   });
 
   const { data: locationsData, isLoading } = locationsQuery;
-  const locations = locationsData?.locations ?? [];
-  const hierarchy = locationsData?.hierarchy ?? [];
+  const locations = useMemo(() => locationsData?.locations ?? [], [locationsData]);
+  const hierarchy = useMemo(() => locationsData?.hierarchy ?? [], [locationsData]);
 
   // Query for single location details
   const [currentLocationId, setCurrentLocationId] = useState<string | null>(null);
@@ -159,23 +161,15 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       });
 
       if (data?.items) {
-        interface InventoryItemWithQuantity {
-          id: string;
-          productId: string;
-          productName?: string;
-          productSku?: string;
-          quantity?: number;
-          quantityOnHand?: number;
-          totalValue?: number;
-          capacity?: number;
-        }
-        const items = data.items as InventoryItemWithQuantity[];
+        // ListInventoryResult.items contains inventory items with product/location relations
+        // The items match the Inventory type from schema which includes all needed fields
+        const items = data.items;
         const totalValue = items.reduce(
           (sum, item) => sum + (item.totalValue || 0),
           0
         );
-        const quantities = items.map(item => item.quantity ?? item.quantityOnHand ?? 0);
-        const capacities = items.map(item => item.capacity || 1);
+        const quantities = items.map(item => item.quantityOnHand ?? 0);
+        const capacities = items.map(item => item.location?.capacity ?? 1);
         const utilization =
           items.length > 0
             ? (quantities.reduce((sum, q) => sum + q, 0) /
@@ -187,9 +181,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
           items: items.map((item) => ({
             inventoryId: item.id,
             productId: item.productId,
-            productName: item.productName ?? '',
-            productSku: item.productSku ?? '',
-            quantity: item.quantity ?? item.quantityOnHand ?? 0,
+            productName: item.product?.name ?? '',
+            productSku: item.product?.sku ?? '',
+            quantity: item.quantityOnHand ?? 0,
             totalValue: item.totalValue ?? 0,
           })),
           totalItems: items.length,
@@ -268,7 +262,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const createNewLocation = useCallback(
     async (data: CreateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await createLocationMutation.mutateAsync(data);
-      return result ?? null;
+      if (result == null) throw new Error('Query returned no data');
+
+      return result;
     },
     [createLocationMutation]
   );
@@ -302,7 +298,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const updateExistingLocation = useCallback(
     async (locationId: string, data: UpdateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await updateLocationMutation.mutateAsync({ locationId, data });
-      return result ?? null;
+      if (result == null) throw new Error('Query returned no data');
+
+      return result;
     },
     [updateLocationMutation]
   );
@@ -609,34 +607,7 @@ export function useLocationDetail(locationId: string, enabled = true) {
   });
 }
 
-/**
- * Input type for creating a warehouse location
- */
-interface CreateWarehouseLocationInput {
-  locationCode: string;
-  name: string;
-  locationType: LocationType;
-  parentId?: string | null;
-  capacity?: number | null;
-  isActive?: boolean;
-  isPickable?: boolean;
-  isReceivable?: boolean;
-  attributes?: Record<string, unknown>;
-}
-
-/**
- * Input type for updating a warehouse location
- */
-interface UpdateWarehouseLocationData {
-  name?: string;
-  locationType?: LocationType;
-  parentId?: string | null;
-  capacity?: number | null;
-  isActive?: boolean;
-  isPickable?: boolean;
-  isReceivable?: boolean;
-  attributes?: Record<string, unknown>;
-}
+// Types imported from schema - CreateWarehouseLocationInput, UpdateWarehouseLocationInput
 
 /**
  * Create a warehouse location
@@ -664,7 +635,7 @@ export function useUpdateWarehouseLocation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseLocationData }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseLocationInput }) =>
       updateWarehouseLocation({ data: { id, data } }),
     onSuccess: (_data, variables) => {
       toast.success('Location updated');

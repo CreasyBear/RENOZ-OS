@@ -16,12 +16,12 @@ import {
   index,
   uniqueIndex,
   check,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { organizations } from "../settings/organizations";
 import { productRelationTypeEnum } from "../_shared/enums";
 import { products } from "./products";
+import { standardRlsPolicies } from "../_shared/patterns";
 
 // ============================================================================
 // PRODUCT RELATIONS TABLE
@@ -103,27 +103,7 @@ export const productRelations = pgTable(
       sql`${table.productId} != ${table.relatedProductId}`
     ),
     // RLS Policies
-    selectPolicy: pgPolicy("product_relations_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("product_relations_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("product_relations_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("product_relations_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("product_relations"),
   })
 );
 

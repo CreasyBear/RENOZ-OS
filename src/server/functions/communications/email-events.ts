@@ -34,96 +34,108 @@ export const handleEmailEvent = createServerFn({ method: 'POST' })
       throw new NotFoundError('Email not found', 'email');
     }
 
-    const baseUpdate = {
-      status: eventType,
-    } as const;
-
-    if (eventType === 'delivered') {
-      await db
-        .update(emailHistory)
-        .set({
-          ...baseUpdate,
-          deliveredAt: email.deliveredAt ?? eventTime,
-        })
-        .where(eq(emailHistory.id, emailId));
+    // Validate organizationId from the email record for tenant isolation
+    const orgId = email.organizationId;
+    if (!orgId) {
+      throw new ValidationError('Email record missing organizationId');
     }
 
-    if (eventType === 'opened') {
-      await db
-        .update(emailHistory)
-        .set({
-          ...baseUpdate,
-          openedAt: email.openedAt ?? eventTime,
-        })
-        .where(eq(emailHistory.id, emailId));
+    // Wrap all event processing in a transaction for atomicity
+    await db.transaction(async (tx) => {
+      const baseUpdate = {
+        status: eventType,
+      } as const;
 
-      const existing = await db
-        .select({ id: activities.id })
-        .from(activities)
-        .where(and(eq(activities.sourceRef, emailId), eq(activities.action, 'email_opened')))
-        .limit(1);
-
-      if (existing.length === 0) {
-        await createEmailOpenedActivity({
-          emailId,
-          organizationId: email.organizationId,
-          customerId: email.customerId,
-          subject: email.subject,
-          recipientEmail: email.toAddress,
-          recipientName: email.metadata?.fromName ?? null,
-        });
-      }
-    }
-
-    if (eventType === 'clicked') {
-      if (!linkId || !clickedUrl) {
-        throw new ValidationError('Clicked events require linkId and clickedUrl');
+      if (eventType === 'delivered') {
+        await tx
+          .update(emailHistory)
+          .set({
+            ...baseUpdate,
+            deliveredAt: email.deliveredAt ?? eventTime,
+          })
+          .where(eq(emailHistory.id, emailId));
       }
 
-      await db
-        .update(emailHistory)
-        .set({
-          ...baseUpdate,
-          clickedAt: email.clickedAt ?? eventTime,
-        })
-        .where(eq(emailHistory.id, emailId));
+      if (eventType === 'opened') {
+        await tx
+          .update(emailHistory)
+          .set({
+            ...baseUpdate,
+            openedAt: email.openedAt ?? eventTime,
+          })
+          .where(eq(emailHistory.id, emailId));
 
-      const existing = await db
-        .select({ id: activities.id })
-        .from(activities)
-        .where(
-          and(
-            eq(activities.sourceRef, emailId),
-            eq(activities.action, 'email_clicked'),
-            sql`${activities.metadata} ->> 'linkId' = ${linkId}`
+        const existing = await tx
+          .select({ id: activities.id })
+          .from(activities)
+          .where(and(eq(activities.sourceRef, emailId), eq(activities.action, 'email_opened')))
+          .limit(1);
+
+        if (existing.length === 0) {
+          await createEmailOpenedActivity({
+            emailId,
+            organizationId: email.organizationId,
+            customerId: email.customerId,
+            subject: email.subject,
+            recipientEmail: email.toAddress,
+            recipientName: email.metadata?.fromName ?? null,
+          });
+        }
+      }
+
+      if (eventType === 'clicked') {
+        if (!linkId || !clickedUrl) {
+          throw new ValidationError('Clicked events require linkId and clickedUrl');
+        }
+
+        await tx
+          .update(emailHistory)
+          .set({
+            ...baseUpdate,
+            clickedAt: email.clickedAt ?? eventTime,
+          })
+          .where(eq(emailHistory.id, emailId));
+
+        const existing = await tx
+          .select({ id: activities.id })
+          .from(activities)
+          .where(
+            and(
+              eq(activities.sourceRef, emailId),
+              eq(activities.action, 'email_clicked'),
+              // NOTE: JSONB operator (->>) is PostgreSQL-specific
+              // Drizzle ORM doesn't provide a direct abstraction for JSONB path queries
+              // This is acceptable raw SQL for PostgreSQL-specific JSONB operations
+              sql`${activities.metadata} ->> 'linkId' = ${linkId}`
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (existing.length === 0) {
-        await createEmailClickedActivity({
-          emailId,
-          organizationId: email.organizationId,
-          customerId: email.customerId,
-          subject: email.subject,
-          recipientEmail: email.toAddress,
-          recipientName: email.metadata?.fromName ?? null,
-          clickedUrl,
-          linkId,
-        });
+        if (existing.length === 0) {
+          await createEmailClickedActivity({
+            emailId,
+            organizationId: email.organizationId,
+            customerId: email.customerId,
+            subject: email.subject,
+            recipientEmail: email.toAddress,
+            recipientName: email.metadata?.fromName ?? null,
+            clickedUrl,
+            linkId,
+          });
+        }
       }
-    }
 
-    if (eventType === 'bounced') {
-      await db
-        .update(emailHistory)
-        .set({
-          ...baseUpdate,
-          bouncedAt: email.bouncedAt ?? eventTime,
-          bounceReason: bounceReason ?? email.bounceReason,
-        })
-        .where(eq(emailHistory.id, emailId));
-    }
+      if (eventType === 'bounced') {
+        await tx
+          .update(emailHistory)
+          .set({
+            ...baseUpdate,
+            bouncedAt: email.bouncedAt ?? eventTime,
+            bounceReason: bounceReason ?? email.bounceReason,
+          })
+          .where(eq(emailHistory.id, emailId));
+      }
+    });
 
     return { success: true };
   });

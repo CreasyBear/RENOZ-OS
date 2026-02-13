@@ -18,10 +18,12 @@ import {
   timestamp,
   index,
   uniqueIndex,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
-import { timestampColumns } from "../_shared/patterns";
+import { relations } from "drizzle-orm";
+import {
+  timestampColumns,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { attributeTypeEnum } from "../_shared/enums";
 import { products } from "./products";
 import { organizations } from "../settings/organizations";
@@ -135,27 +137,7 @@ export const productAttributes = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("product_attributes_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("product_attributes_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("product_attributes_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("product_attributes_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("product_attributes"),
   })
 );
 
@@ -183,9 +165,9 @@ export const productAttributeValues = pgTable(
       .notNull()
       .references(() => productAttributes.id, { onDelete: "cascade" }),
 
-    // The attribute value (JSONB to support all types)
+    // The attribute value (JSONB to support all types including multiselect arrays)
     // Type uses {} union for TanStack serialization compatibility
-    value: jsonb("value").$type<{ [key: string]: {} } | string | number | boolean | null>().notNull(),
+    value: jsonb("value").$type<{ [key: string]: {} } | string | number | boolean | string[] | null>().notNull(),
 
     // Timestamps
     ...timestampColumns,
@@ -215,27 +197,7 @@ export const productAttributeValues = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("product_attribute_values_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("product_attribute_values_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("product_attribute_values_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("product_attribute_values_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("product_attribute_values"),
   })
 );
 

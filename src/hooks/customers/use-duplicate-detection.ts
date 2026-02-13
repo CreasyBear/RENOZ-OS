@@ -100,8 +100,8 @@ export function useDuplicateDetection(
       excludeCustomerId,
       limit,
     }),
-    queryFn: () =>
-      detectDuplicatesFn({
+    queryFn: async () => {
+      const result = await detectDuplicatesFn({
         data: {
           name: hasName ? debouncedInput.name : undefined,
           email: hasEmail ? debouncedInput.email : undefined,
@@ -110,7 +110,11 @@ export function useDuplicateDetection(
           excludeCustomerId,
           limit,
         },
-      }),
+      
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: isEnabled,
     staleTime: 10 * 1000,
     retry: 1,

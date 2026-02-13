@@ -62,6 +62,8 @@ export type {
 
 // Utilities
 export { isEmptyFilterValue, countActiveFilters } from "./types";
+export { buildFilterItems } from "./build-filter-items";
+export type { FilterItem } from "../filter-empty-state";
 
 // Primitive Components
 export { FilterSearchInput } from "./filter-search-input";

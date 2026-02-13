@@ -1,3 +1,8 @@
+---
+description:
+alwaysApply: true
+---
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -27,7 +32,21 @@ npm run db:studio        # Open Drizzle Studio GUI
 bun test                 # Run all tests
 bun test tests/unit      # Unit tests only
 npm run test:vitest      # Vitest run mode
+
+# Pre-deploy (typecheck + lint + test + build)
+npm run predeploy
 ```
+
+## React Grab (UI to Code)
+
+React Grab is installed for local dev and is loaded only in `import.meta.env.DEV`.
+
+Usage:
+- Hover any UI element in the browser.
+- Press `Cmd+C` (Mac) or `Ctrl+C` (Windows/Linux).
+- Paste into your coding agent; it includes component + file path + HTML snippet.
+
+If you just installed it, restart the dev server and refresh the browser.
 
 ## Architecture
 
@@ -45,7 +64,7 @@ npm run test:vitest      # Vitest run mode
 src/
 ├── routes/              # File-based routes (TanStack Router)
 │   ├── _authenticated/  # Protected route layouts
-│   └── api/             # API endpoints
+│   └── api/             # API endpoints (use createFileRoute with server.handlers)
 ├── server/functions/    # Server functions by domain
 │   ├── customers/
 │   ├── orders/
@@ -109,6 +128,10 @@ export function useCreateCustomer() {
 
 **Polling**: Use `refetchInterval`, never `setInterval`.
 
+### Route Search Schemas
+
+- Define route search schemas in `src/lib/schemas/` (not inline in route files).
+
 ### Server Function Pattern
 
 Server functions use `createServerFn` with Zod validation and auth middleware:
@@ -134,10 +157,54 @@ export const getCustomers = createServerFn({ method: 'GET' })
 ### Database Conventions
 
 - **Casing**: snake_case for all tables and columns
-- **Soft deletes**: Use `deletedAt` column, filter with `deletedAt IS NULL`
-- **Multi-tenant**: Always filter by `organizationId`
+- **Soft deletes**: Use `deletedAt` column, filter with `isNull(table.deletedAt)` on every read query
+- **Multi-tenant**: Always filter by `organizationId` — including on joined tables (addresses, contacts, images, etc.)
 - **Currency**: Use `numeric(12,2)`, never float
-- **Pagination**: Prefer cursor-based (createdAt + id composite)
+- **Pagination**: Prefer cursor-based (createdAt + id composite). Always enforce a LIMIT.
+
+### Drizzle ORM Rules (Server Functions)
+
+**Transactions**: Wrap multi-step mutations in `db.transaction()`. If you insert/update more than one table, use a transaction. Check affected row count on updates/deletes via `.returning()`.
+
+```typescript
+// ✅ CORRECT — atomic multi-step mutation
+const result = await db.transaction(async (tx) => {
+  const [item] = await tx.insert(lineItems).values({...}).returning();
+  await recalculateTotals(tx, orderId);
+  return item;
+});
+
+// ❌ WRONG — non-atomic, partial failure leaves inconsistent state
+const [item] = await db.insert(lineItems).values({...}).returning();
+await recalculateTotals(db, orderId); // if this fails, totals are stale
+```
+
+**No N+1 queries**: Never query inside a loop. Batch-fetch with `inArray()`, then group in JS.
+
+```typescript
+// ✅ CORRECT — single query, group in JS
+const allItems = await db.select().from(shipmentItems)
+  .where(inArray(shipmentItems.shipmentId, shipmentIds));
+const byShipment = Map.groupBy(allItems, (i) => i.shipmentId);
+
+// ❌ WRONG — N+1
+for (const shipment of shipments) {
+  const items = await db.select().from(shipmentItems)
+    .where(eq(shipmentItems.shipmentId, shipment.id));
+}
+```
+
+**Aggregate in SQL, not JS**: Use `SUM`, `COUNT`, `GROUP BY`, `CASE WHEN` instead of fetching all rows and calculating in a loop. Use `sql` template tag for window functions when Drizzle's query builder can't express the operation.
+
+**Race conditions**: For check-then-act patterns (e.g., "is this name unique? then insert"), wrap in a transaction. For counter increments or sequence generation, use `.for('update')` row locks or database sequences.
+
+**Raw SQL**: Acceptable only when Drizzle can't express the operation (CTEs with window functions, pg_trgm operators, dynamic CASE WHEN). Always use the `sql` template tag — never string concatenation. Document the reason with a comment.
+
+**organizationId on joins**: When joining related tables (addresses, contacts, images, product attributes), add `eq(joinedTable.organizationId, ctx.organizationId)` to the join condition. Don't rely on the parent row's org scoping alone.
+
+**Soft-delete on joins**: When joining a table that has `softDeleteColumn`, add `isNull(joinedTable.deletedAt)` to the join condition.
+
+**Unbounded queries**: Every list/search query must have a `LIMIT`. Dashboard aggregations over historical data should have a date floor (e.g., last 2 years).
 
 ### Path Aliases
 
@@ -177,6 +244,10 @@ useEffect(() => {
 ### UI State
 Use Zustand for global UI state, useState for local component state. Never mix UI state with data fetching hooks.
 
+### Separation of Concerns (Presenter/Container)
+- Presenter components must be pure UI: no data fetching hooks or server calls.
+- Data fetching belongs in hooks + container/route components that pass data via props.
+
 ### Route Patterns
 All authenticated routes must use `PageLayout` with appropriate variant and include error/loading handling:
 
@@ -204,7 +275,7 @@ Use [docs/templates/route-template.tsx](./docs/templates/route-template.tsx) as 
 
 ## Standards Reference
 
-See [STANDARDS.md](./STANDARDS.md) for authoritative patterns on:
+See [SCHEMA-TRACE.md](./SCHEMA-TRACE.md) for schema boundary patterns and [STANDARDS.md](./STANDARDS.md) for authoritative patterns on:
 - Barrel exports (index.ts structure)
 - Component architecture (container/presenter pattern)
 - Hook patterns (TanStack Query conventions)
@@ -221,3 +292,10 @@ Key commands:
 - `/tdd` - Test-driven implementation
 - `/verify` - Before claiming work complete
 - `/code-review` - After implementation
+
+## Corrections Log
+
+- When a user selection list is empty, provide an "Invite user" action that links to `/admin/users/invite`.
+- Financial amounts are stored in AUD dollars (numeric 12,2); do not treat them as cents or scale payment/Xero values.
+- **No temporary shortcuts**: Always implement the proper solution. Eliminate technical debt immediately rather than deferring it. Never create TODO comments or temporary workarounds that will need to be fixed later.
+- **Typecheck fixes must follow SCHEMA-TRACE.md and STANDARDS.md**: When fixing TypeScript errors, do NOT use type assertions (`as X`, `as unknown as X`), `params: {} as never`, or ad-hoc `?? null`/`?? undefined` scattered in views. Fix at boundaries: (1) schema types in `lib/schemas/`, (2) server fn return types, (3) normalize at a single boundary per SCHEMA-TRACE §8. Use proper route types instead of `as never`. See [docs/remediation/typecheck-phase3-debt.md](./docs/remediation/typecheck-phase3-debt.md) for remediation patterns.

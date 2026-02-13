@@ -5,9 +5,10 @@
  *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-TEMPLATES-UI)
  */
+/* eslint-disable react-hooks/incompatible-library -- form.watch() used inline in form fields; React Hook Form API limitation */
 
 import { memo, useState, useCallback } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -64,9 +65,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
-import { listProducts } from "@/server/functions/products/products";
+import { useProducts } from "@/hooks/products";
 
 // ============================================================================
 // TYPES
@@ -134,8 +133,7 @@ export const TemplateEditor = memo(function TemplateEditor({
   const [productSearch, setProductSearch] = useState("");
 
   const form = useForm<TemplateFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(templateFormSchema) as any,
+    resolver: zodResolver(templateFormSchema) as Resolver<z.infer<typeof templateFormSchema>>,
     defaultValues: {
       name: "",
       description: "",
@@ -169,18 +167,12 @@ export const TemplateEditor = memo(function TemplateEditor({
     name: "items",
   });
 
-  // Product search query
-  const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: queryKeys.products.list({ search: productSearch, status: "active" }),
-    queryFn: () =>
-      listProducts({
-        data: {
-          search: productSearch || undefined,
-          isActive: true,
-          page: 1,
-          pageSize: 20,
-        },
-      }),
+  // Product search query using hook
+  const { data: productsData, isLoading: productsLoading } = useProducts({
+    search: productSearch || undefined,
+    isActive: true,
+    page: 1,
+    pageSize: 20,
     enabled: productSearchOpen !== null,
   });
 
@@ -493,7 +485,7 @@ export const TemplateEditor = memo(function TemplateEditor({
                                   min={0}
                                   {...form.register(`items.${index}.fixedUnitPrice`, {
                                     setValueAs: (v) =>
-                                      v === "" ? undefined : Math.round(parseFloat(v) * 100),
+                                      v === "" ? undefined : parseFloat(v),
                                   })}
                                   className="pl-7"
                                   placeholder="0.00"
@@ -630,14 +622,14 @@ export const TemplateEditor = memo(function TemplateEditor({
                               className="pl-7"
                               value={
                                 field.value !== undefined
-                                  ? (field.value / 100).toFixed(2)
+                                  ? field.value.toFixed(2)
                                   : ""
                               }
                               onChange={(e) =>
                                 field.onChange(
                                   e.target.value === ""
                                     ? undefined
-                                    : Math.round(parseFloat(e.target.value) * 100)
+                                    : parseFloat(e.target.value)
                                 )
                               }
                             />
@@ -667,14 +659,14 @@ export const TemplateEditor = memo(function TemplateEditor({
                               className="pl-7"
                               value={
                                 field.value !== undefined
-                                  ? (field.value / 100).toFixed(2)
+                                  ? field.value.toFixed(2)
                                   : ""
                               }
                               onChange={(e) =>
                                 field.onChange(
                                   e.target.value === ""
                                     ? undefined
-                                    : Math.round(parseFloat(e.target.value) * 100)
+                                    : parseFloat(e.target.value)
                                 )
                               }
                             />

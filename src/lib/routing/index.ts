@@ -11,6 +11,7 @@ export {
   getRouteMetadata,
   getNavRoutes,
   getNavRoutesByGroup,
+  getSearchableRoutes,
   getBreadcrumbLabel,
   isPublicRoute,
 } from './routes'

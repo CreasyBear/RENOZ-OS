@@ -3,7 +3,8 @@
  *
  * Sales forecasting dashboard with multiple views, charts, and analytics.
  */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   TrendingUp,
   Users,
@@ -23,18 +24,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,16 +35,108 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ForecastChart } from "@/components/domain/reports/forecast-chart";
 import { ForecastTable } from "@/components/domain/reports/forecast-table";
+import {
+  DomainFilterBar,
+  type FilterBarConfig,
+} from "@/components/shared/filters";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { ScheduledReportForm } from "@/components/domain/settings/scheduled-report-form";
+import { ReportFavoriteButton } from "./report-favorite-button";
 import { useCreateScheduledReport, useGenerateReport } from "@/hooks/reports";
+import { useFilterUrlState, type NavigateFn } from "@/hooks/filters";
 import {
   usePipelineForecast,
   usePipelineVelocity,
   useRevenueAttribution,
 } from "@/hooks/pipeline";
 import type { ForecastGroupBy } from "@/lib/schemas/pipeline";
+import type { PipelineForecastSearch } from "@/lib/schemas/reports/pipeline-forecast";
+
+type PipelineForecastFilterState = Pick<
+  PipelineForecastSearch,
+  "period" | "groupBy" | "showWeighted"
+>;
+
+const PIPELINE_FORECAST_DEFAULTS: PipelineForecastSearch = {
+  period: "next-12-months",
+  groupBy: "month",
+  showWeighted: true,
+  tab: "overview",
+};
+
+const PIPELINE_FORECAST_FILTER_DEFAULTS: PipelineForecastFilterState = {
+  period: PIPELINE_FORECAST_DEFAULTS.period,
+  groupBy: PIPELINE_FORECAST_DEFAULTS.groupBy,
+  showWeighted: PIPELINE_FORECAST_DEFAULTS.showWeighted,
+};
+
+const PERIOD_LABELS: Record<PipelineForecastSearch["period"], string> = {
+  "this-month": "This Month",
+  "next-3-months": "Next 3 Months",
+  "this-quarter": "This Quarter",
+  "this-year": "This Year",
+  "next-12-months": "Next 12 Months",
+};
+
+const GROUP_BY_LABELS: Record<PipelineForecastSearch["groupBy"], string> = {
+  week: "By Week",
+  month: "By Month",
+  quarter: "By Quarter",
+};
+
+const PIPELINE_FORECAST_FILTER_CONFIG: FilterBarConfig<PipelineForecastFilterState> =
+  {
+    filters: [
+      {
+        key: "period",
+        label: "Period",
+        type: "select",
+        primary: true,
+        options: Object.entries(PERIOD_LABELS).map(([value, label]) => ({
+          value,
+          label,
+        })),
+        formatChip: (value) =>
+          value === PIPELINE_FORECAST_DEFAULTS.period
+            ? ""
+            : PERIOD_LABELS[value as PipelineForecastSearch["period"]] ??
+              String(value),
+      },
+      {
+        key: "groupBy",
+        label: "Group by",
+        type: "select",
+        primary: true,
+        options: Object.entries(GROUP_BY_LABELS).map(([value, label]) => ({
+          value,
+          label,
+        })),
+        formatChip: (value) =>
+          value === PIPELINE_FORECAST_DEFAULTS.groupBy
+            ? ""
+            : GROUP_BY_LABELS[value as PipelineForecastSearch["groupBy"]] ??
+              String(value),
+      },
+      {
+        key: "showWeighted",
+        label: "Weighted",
+        type: "toggle",
+        primary: true,
+        formatChip: (value) =>
+          value === PIPELINE_FORECAST_DEFAULTS.showWeighted
+            ? ""
+            : value
+              ? "On"
+              : "Off",
+      },
+    ],
+    labels: {
+      period: "Period",
+      groupBy: "Group by",
+      showWeighted: "Weighted",
+    },
+  };
 
 // ============================================================================
 // HELPERS
@@ -79,11 +163,12 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
       startDate.setDate(1);
       endDate.setMonth(endDate.getMonth() + 3, 0);
       break;
-    case "this-quarter":
+    case "this-quarter": {
       const quarterStart = Math.floor(now.getMonth() / 3) * 3;
       startDate.setMonth(quarterStart, 1);
       endDate.setMonth(quarterStart + 3, 0);
       break;
+    }
     case "this-year":
       startDate.setMonth(0, 1);
       endDate.setMonth(11, 31);
@@ -104,12 +189,53 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
  * @source hooks/usePipelineForecast, usePipelineVelocity, useRevenueAttribution
  */
 export function PipelineForecastPage() {
-  // State
-  const [timePeriod, setTimePeriod] = useState("next-12-months");
-  const [groupBy, setGroupBy] = useState<ForecastGroupBy>("month");
-  const [showWeighted, setShowWeighted] = useState(true);
-  const [activeTab, setActiveTab] = useState("overview");
+  const search = useSearch({
+    from: "/_authenticated/reports/pipeline-forecast",
+  }) as PipelineForecastSearch;
+  const navigate = useNavigate();
+  const navigateFn = useCallback<NavigateFn>(
+    ({ to, search: nextSearch }) =>
+      navigate({ to, search: () => nextSearch }),
+    [navigate]
+  );
   const [scheduleOpen, setScheduleOpen] = useState(false);
+
+  const { filters, setFilters } = useFilterUrlState<PipelineForecastSearch>({
+    currentSearch: search,
+    navigate: navigateFn,
+    defaults: PIPELINE_FORECAST_DEFAULTS,
+  });
+
+  const timePeriod = filters.period;
+  const groupBy = filters.groupBy as ForecastGroupBy;
+  const showWeighted = filters.showWeighted;
+  const activeTab = filters.tab;
+
+  const filterBarFilters: PipelineForecastFilterState = {
+    period: timePeriod,
+    groupBy: filters.groupBy,
+    showWeighted: showWeighted,
+  };
+
+  const hasActiveFilterBarFilters =
+    filterBarFilters.period !== PIPELINE_FORECAST_FILTER_DEFAULTS.period ||
+    filterBarFilters.groupBy !== PIPELINE_FORECAST_FILTER_DEFAULTS.groupBy ||
+    filterBarFilters.showWeighted !==
+      PIPELINE_FORECAST_FILTER_DEFAULTS.showWeighted;
+
+  const handleFilterBarChange = useCallback(
+    (nextFilters: PipelineForecastFilterState) => {
+      setFilters(nextFilters);
+    },
+    [setFilters]
+  );
+
+  const handleTabChange = useCallback(
+    (value: string) => {
+      setFilters({ tab: value as PipelineForecastSearch["tab"] });
+    },
+    [setFilters]
+  );
 
   // Calculate date range from selection
   const { startDate, endDate } = useMemo(
@@ -180,7 +306,7 @@ export function PipelineForecastPage() {
   // Render metric card
   const renderMetricCard = (
     title: string,
-    value: string,
+    value: ReactNode,
     change?: number,
     icon?: React.ReactNode,
     description?: string
@@ -221,66 +347,64 @@ export function PipelineForecastPage() {
   return (
     <div className="space-y-6">
       {/* Filter controls */}
-      <div className="flex flex-wrap items-center gap-4">
-        {/* Time period selector */}
-        <Select value={timePeriod} onValueChange={setTimePeriod}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="this-month">This Month</SelectItem>
-            <SelectItem value="next-3-months">Next 3 Months</SelectItem>
-            <SelectItem value="this-quarter">This Quarter</SelectItem>
-            <SelectItem value="this-year">This Year</SelectItem>
-            <SelectItem value="next-12-months">Next 12 Months</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Group by selector */}
-        <Select value={groupBy} onValueChange={(v) => setGroupBy(v as ForecastGroupBy)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Group by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="week">By Week</SelectItem>
-            <SelectItem value="month">By Month</SelectItem>
-            <SelectItem value="quarter">By Quarter</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Refresh button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => {
-            forecastQuery.refetch();
-            velocityQuery.refetch();
-            attributionQuery.refetch();
-          }}
-          disabled={isLoading}
-        >
-          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleExport("pdf")}>
-              Export PDF
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport("excel")}>
-              Export Excel
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button variant="outline" onClick={handleScheduleReport}>
-          <Mail className="mr-2 h-4 w-4" />
-          Schedule
-        </Button>
+      <div className="space-y-4">
+        <DomainFilterBar
+          config={PIPELINE_FORECAST_FILTER_CONFIG}
+          filters={filterBarFilters}
+          onFiltersChange={handleFilterBarChange}
+          defaultFilters={PIPELINE_FORECAST_FILTER_DEFAULTS}
+          showResultCount={false}
+          showPresets={false}
+          showChips={hasActiveFilterBarFilters}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>Filters sync to the URL for shareable views.</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleFilterBarChange(PIPELINE_FORECAST_FILTER_DEFAULTS)}
+            disabled={!hasActiveFilterBarFilters}
+            className="h-7 px-2 text-xs"
+          >
+            Reset filters
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              forecastQuery.refetch();
+              velocityQuery.refetch();
+              attributionQuery.refetch();
+            }}
+            disabled={isLoading}
+            aria-label="Refresh forecast data"
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          </Button>
+          <DropdownMenu>
+            <ReportFavoriteButton reportType="pipeline-forecast" />
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                Export PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("excel")}>
+                Export Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" onClick={handleScheduleReport}>
+            <Mail className="mr-2 h-4 w-4" />
+            Schedule
+          </Button>
+        </div>
       </div>
 
       {/* Summary metrics */}
@@ -302,21 +426,21 @@ export function PipelineForecastPage() {
           <>
             {renderMetricCard(
               "Total Pipeline",
-              <FormatAmount amount={forecast?.summary.totalValue ?? 0} /> as any,
+              <FormatAmount amount={forecast?.summary.totalValue ?? 0} />,
               undefined,
               <BarChart3 className="h-4 w-4 text-muted-foreground" />,
               `${forecast?.summary.opportunityCount ?? 0} opportunities`
             )}
             {renderMetricCard(
               "Weighted Forecast",
-              <FormatAmount amount={forecast?.summary.weightedValue ?? 0} /> as any,
+              <FormatAmount amount={forecast?.summary.weightedValue ?? 0} />,
               undefined,
               <TrendingUp className="h-4 w-4 text-muted-foreground" />,
               "Probability-weighted value"
             )}
             {renderMetricCard(
               "Avg Deal Size",
-              <FormatAmount amount={velocity?.avgDealSize ?? 0} /> as any,
+              <FormatAmount amount={velocity?.avgDealSize ?? 0} />,
               undefined,
               <Building2 className="h-4 w-4 text-muted-foreground" />,
               "Based on won deals"
@@ -332,18 +456,8 @@ export function PipelineForecastPage() {
         )}
       </div>
 
-      {/* Weighted toggle */}
-      <div className="flex items-center space-x-2">
-        <Switch
-          id="show-weighted"
-          checked={showWeighted}
-          onCheckedChange={setShowWeighted}
-        />
-        <Label htmlFor="show-weighted">Show weighted values</Label>
-      </div>
-
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="by-period">By Period</TabsTrigger>

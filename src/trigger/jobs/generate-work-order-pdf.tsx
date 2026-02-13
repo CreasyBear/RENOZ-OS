@@ -13,20 +13,13 @@
  * @see https://trigger.dev/docs/v3/tasks
  */
 import { task, logger } from "@trigger.dev/sdk/v3";
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  organizations,
-  type OrganizationBranding,
-  type OrganizationAddress,
-} from "drizzle/schema";
+import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
   generateFilename,
   generateStoragePath,
   calculateChecksum,
-  type DocumentOrganization,
 } from "@/lib/documents";
 import {
   WorkOrderPdfDocument,
@@ -153,57 +146,8 @@ export const generateWorkOrderPdf = task({
       organizationId,
     });
 
-    // Step 1: Fetch organization details for branding
-    const [org] = await db
-      .select({
-        id: organizations.id,
-        name: organizations.name,
-        email: organizations.email,
-        phone: organizations.phone,
-        website: organizations.website,
-        abn: organizations.abn,
-        address: organizations.address,
-        currency: organizations.currency,
-        locale: organizations.locale,
-        branding: organizations.branding,
-        settings: organizations.settings,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1);
-
-    if (!org) {
-      throw new Error(`Organization ${organizationId} not found`);
-    }
-
-    const address = org.address as OrganizationAddress | null;
-    const branding = org.branding as OrganizationBranding | null;
-
-    const orgData: DocumentOrganization = {
-      id: org.id,
-      name: org.name,
-      email: org.email,
-      phone: org.phone,
-      website: org.website || branding?.websiteUrl,
-      taxId: org.abn,
-      currency: org.currency || "AUD",
-      locale: org.locale || "en-AU",
-      address: address
-        ? {
-            addressLine1: address.street1,
-            addressLine2: address.street2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined,
-      branding: {
-        logoUrl: branding?.logoUrl,
-        primaryColor: branding?.primaryColor,
-        secondaryColor: branding?.secondaryColor,
-      },
-    };
+    // Step 1: Fetch organization details (with logo pre-fetched for PDF)
+    const orgData = await fetchOrganizationForDocument(organizationId);
 
     // Step 2: Build work order document data
     const documentNumber = workOrderNumber.startsWith("WO-")

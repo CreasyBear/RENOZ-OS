@@ -7,33 +7,21 @@
  * - Communication logging
  * - Quick actions
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
-  Mail,
   Phone,
   Calendar,
   MessageSquare,
   FileText,
-  Send,
-  Clock,
-  ChevronDown,
-  ChevronUp,
   Search,
   Plus,
-  MoreHorizontal,
-  Reply,
-  Forward,
-  Archive,
-  ExternalLink,
   Download,
   CalendarRange,
   X,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Select,
   SelectContent,
@@ -45,287 +33,25 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { Badge } from '@/components/ui/badge'
 import { Calendar as CalendarUI } from '@/components/ui/calendar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type CommunicationType = 'email' | 'phone' | 'meeting' | 'portal' | 'note'
-type CommunicationDirection = 'inbound' | 'outbound' | 'internal'
-type CommunicationStatus = 'sent' | 'delivered' | 'read' | 'replied' | 'failed'
-
-interface Communication {
-  id: string
-  type: CommunicationType
-  direction: CommunicationDirection
-  status?: CommunicationStatus
-  subject: string
-  preview: string
-  content?: string
-  from: {
-    name: string
-    email?: string
-  }
-  to?: {
-    name: string
-    email?: string
-  }
-  timestamp: string
-  duration?: number // For calls, in seconds
-  attachments?: number
-  contactId?: string
-  customerId: string
-}
-
-interface CommunicationTimelineProps {
-  customerId: string
-  communications?: Communication[]
-  isLoading?: boolean
-  onLogCommunication?: (type: CommunicationType) => void
-  onReply?: (communicationId: string) => void
-  className?: string
-}
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-const typeConfig: Record<CommunicationType, { icon: typeof Mail; label: string; color: string }> = {
-  email: { icon: Mail, label: 'Email', color: 'text-blue-600 bg-blue-100' },
-  phone: { icon: Phone, label: 'Phone', color: 'text-green-600 bg-green-100' },
-  meeting: { icon: Calendar, label: 'Meeting', color: 'text-purple-600 bg-purple-100' },
-  portal: { icon: MessageSquare, label: 'Portal', color: 'text-orange-600 bg-orange-100' },
-  note: { icon: FileText, label: 'Note', color: 'text-gray-600 bg-gray-100' },
-}
-
-const directionConfig: Record<CommunicationDirection, { label: string; icon: typeof Send }> = {
-  inbound: { label: 'Received', icon: Mail },
-  outbound: { label: 'Sent', icon: Send },
-  internal: { label: 'Internal', icon: FileText },
-}
-
-function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  if (mins >= 60) {
-    const hours = Math.floor(mins / 60)
-    const remainMins = mins % 60
-    return `${hours}h ${remainMins}m`
-  }
-  return `${mins}m ${secs}s`
-}
-
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays === 0) {
-    return date.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
-  }
-  if (diffDays === 1) {
-    return 'Yesterday'
-  }
-  if (diffDays < 7) {
-    return date.toLocaleDateString('en-AU', { weekday: 'short' })
-  }
-  return date.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })
-}
-
-function getInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-}
-
-// ============================================================================
-// COMMUNICATION ITEM
-// ============================================================================
-
-interface CommunicationItemProps {
-  communication: Communication
-  onReply?: () => void
-}
-
-function CommunicationItem({ communication, onReply }: CommunicationItemProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const config = typeConfig[communication.type]
-  const Icon = config.icon
-  const dirConfig = directionConfig[communication.direction]
-
-  return (
-    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <div className="relative pl-8 pb-6 last:pb-0">
-        {/* Timeline line */}
-        <div className="absolute left-3 top-6 bottom-0 w-px bg-border" />
-
-        {/* Timeline dot */}
-        <div className={cn(
-          'absolute left-0 top-1 w-6 h-6 rounded-full flex items-center justify-center',
-          config.color
-        )}>
-          <Icon className="h-3 w-3" />
-        </div>
-
-        {/* Content */}
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="pb-2 cursor-pointer hover:bg-muted/50">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className="text-xs">
-                      {config.label}
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs">
-                      {dirConfig.label}
-                    </Badge>
-                    {communication.status && (
-                      <Badge
-                        variant={communication.status === 'read' || communication.status === 'replied' ? 'default' : 'secondary'}
-                        className="text-xs"
-                      >
-                        {communication.status}
-                      </Badge>
-                    )}
-                  </div>
-                  <CardTitle className="text-sm font-medium line-clamp-1">
-                    {communication.subject}
-                  </CardTitle>
-                  <CardDescription className="line-clamp-1 mt-1">
-                    {communication.preview}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground">
-                    {formatTimestamp(communication.timestamp)}
-                  </span>
-                  {isExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              {/* Participants */}
-              <div className="flex items-center gap-4 mb-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-xs">
-                      {getInitials(communication.from.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-muted-foreground">
-                    <span className="font-medium text-foreground">{communication.from.name}</span>
-                    {communication.from.email && ` <${communication.from.email}>`}
-                  </span>
-                </div>
-                {communication.to && (
-                  <>
-                    <span className="text-muted-foreground">→</span>
-                    <span className="text-muted-foreground">
-                      <span className="font-medium text-foreground">{communication.to.name}</span>
-                      {communication.to.email && ` <${communication.to.email}>`}
-                    </span>
-                  </>
-                )}
-              </div>
-
-              {/* Metadata */}
-              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground mb-3">
-                <div className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {new Date(communication.timestamp).toLocaleString('en-AU', {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                  })}
-                </div>
-                {communication.duration && (
-                  <div className="flex items-center gap-1">
-                    <Phone className="h-3 w-3" />
-                    {formatDuration(communication.duration)}
-                  </div>
-                )}
-                {communication.attachments && communication.attachments > 0 && (
-                  <div className="flex items-center gap-1">
-                    <FileText className="h-3 w-3" />
-                    {communication.attachments} attachment{communication.attachments > 1 ? 's' : ''}
-                  </div>
-                )}
-              </div>
-
-              {/* Full content */}
-              {communication.content && (
-                <div className="p-3 rounded-lg bg-muted/50 text-sm mb-3">
-                  {communication.content}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                {communication.type === 'email' && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={onReply}>
-                      <Reply className="h-4 w-4 mr-1" />
-                      Reply
-                    </Button>
-                    <Button size="sm" variant="outline">
-                      <Forward className="h-4 w-4 mr-1" />
-                      Forward
-                    </Button>
-                  </>
-                )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="ghost">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Open in new tab
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Archive className="h-4 w-4 mr-2" />
-                      Archive
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </div>
-    </Collapsible>
-  )
-}
+import { CommunicationItem } from './communication-item'
+import type {
+  CommunicationTimelineProps,
+  CommunicationType,
+  CommunicationDirection,
+} from './communication-timeline.types'
 
 // ============================================================================
 // MAIN COMPONENT
@@ -344,8 +70,11 @@ export function CommunicationTimeline({
   const [directionFilter, setDirectionFilter] = useState<CommunicationDirection | 'all'>('all')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
-  // Use provided communications or empty array
-  const communications = propCommunications ?? []
+  // Use provided communications or empty array (memoized for stable deps)
+  const communications = useMemo(
+    () => propCommunications ?? [],
+    [propCommunications]
+  )
 
   // Filter communications
   const filteredCommunications = useMemo(() => {
@@ -377,7 +106,7 @@ export function CommunicationTimeline({
   }, [communications, searchQuery, typeFilter, directionFilter, dateRange])
 
   // Export functions
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     const headers = ['Date', 'Type', 'Direction', 'Subject', 'From', 'To', 'Preview']
     const rows = filteredCommunications.map(comm => [
       new Date(comm.timestamp).toISOString(),
@@ -397,11 +126,11 @@ export function CommunicationTimeline({
     a.download = `communications-${customerId}-${format(new Date(), 'yyyy-MM-dd')}.csv`
     a.click()
     URL.revokeObjectURL(url)
-  }
+  }, [filteredCommunications, customerId])
 
-  const clearDateRange = () => {
+  const clearDateRange = useCallback(() => {
     setDateRange(undefined)
-  }
+  }, [])
 
   const hasActiveFilters = searchQuery || typeFilter !== 'all' || directionFilter !== 'all' || dateRange
 
@@ -412,7 +141,7 @@ export function CommunicationTimeline({
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search communications..."
+            placeholder="Search communications…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -510,10 +239,6 @@ export function CommunicationTimeline({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onLogCommunication('email')}>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Email
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onLogCommunication('phone')}>
                   <Phone className="h-4 w-4 mr-2" />
                   Phone Call

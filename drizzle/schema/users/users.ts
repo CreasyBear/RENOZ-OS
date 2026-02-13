@@ -17,11 +17,22 @@ import {
   index,
   uniqueIndex,
   pgPolicy,
+  pgSchema,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { userRoleEnum, userStatusEnum, userTypeEnum } from "../_shared/enums";
-import { timestampColumns, auditColumns, softDeleteColumn } from "../_shared/patterns";
+import {
+  timestampColumns,
+  auditColumns,
+  softDeleteColumn,
+  standardRlsPolicies,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
+
+const authSchema = pgSchema("auth");
+const authUsers = authSchema.table("users", {
+  id: uuid("id").primaryKey(),
+});
 
 // ============================================================================
 // INTERFACES
@@ -62,7 +73,9 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     // Link to Supabase Auth (auth.users.id)
-    authId: uuid("auth_id").notNull(),
+    authId: uuid("auth_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
 
     // Organization membership
     organizationId: uuid("organization_id")
@@ -116,27 +129,7 @@ export const users = pgTable(
     emailIdx: index("idx_users_email").on(table.email),
 
     // RLS Policies - users can only see/edit within their organization
-    selectPolicy: pgPolicy("users_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("users_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("users_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("users_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("users"),
   })
 );
 
@@ -164,17 +157,8 @@ export const userSessions = pgTable(
     // Session lifecycle
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-
-    // Audit tracking
-    createdBy: uuid("created_by"),
-    updatedBy: uuid("updated_by"),
+    ...timestampColumns,
+    ...auditColumns,
     version: integer("version").notNull().default(1),
   },
   (table) => ({

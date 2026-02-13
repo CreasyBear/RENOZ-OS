@@ -6,11 +6,8 @@
  *
  * @see INV-001c Create PO from Alert
  */
-import { useState, useEffect } from 'react';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Package, Truck, AlertTriangle, Loader2 } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Package, Truck, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,22 +15,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
+import type { InventoryAlert } from "./alerts-panel";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useSuppliers } from '@/hooks/suppliers';
-import { useCreatePurchaseOrder } from '@/hooks/suppliers';
-import type { InventoryAlert } from './alerts-panel';
+  createPOFromAlertFormSchema,
+  type CreatePOFromAlertFormValues,
+} from "@/lib/schemas/inventory";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import {
+  SelectField,
+  NumberField,
+  TextareaField,
+  FormActions,
+} from "@/components/shared/forms";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -46,15 +42,7 @@ interface CreatePOFromAlertDialogProps {
   onSuccess?: () => void;
 }
 
-// Inline schema per reviewer guidance (dialog owns its form)
-const createPOFromAlertSchema = z.object({
-  supplierId: z.string().min(1, 'Select a supplier'),
-  quantity: z.number().int().positive('Quantity must be at least 1'),
-  unitPrice: z.number().positive('Price must be positive'),
-  notes: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof createPOFromAlertSchema>;
+type FormValues = CreatePOFromAlertFormValues;
 
 // ============================================================================
 // COMPONENT
@@ -68,77 +56,78 @@ export function CreatePOFromAlertDialog({
 }: CreatePOFromAlertDialogProps) {
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch suppliers for dropdown
   const { data: suppliersData, isLoading: loadingSuppliers } = useSuppliers({
     enabled: open,
   });
   const suppliers = suppliersData?.items ?? [];
 
-  // PO creation mutation
   const createPO = useCreatePurchaseOrder();
 
-  // Calculate suggested reorder quantity based on threshold vs current
-  const suggestedQuantity =
-    alert?.threshold && alert?.value
-      ? Math.max(1, alert.threshold * 2 - (alert.value ?? 0))
-      : 10;
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(createPOFromAlertSchema),
+  const form = useTanStackForm<FormValues>({
+    schema: createPOFromAlertFormSchema,
     defaultValues: {
-      supplierId: '',
-      quantity: suggestedQuantity,
+      supplierId: "",
+      quantity: 10,
       unitPrice: 0,
-      notes: '',
+      notes: "",
+    },
+    onSubmit: async (values) => {
+      if (!alert?.productId || !alert?.productName) {
+        setError("Product information is missing");
+        return;
+      }
+
+      setError(null);
+
+      try {
+        await createPO.mutateAsync({
+          supplierId: values.supplierId,
+          items: [
+            {
+              productId: alert.productId,
+              productName: alert.productName,
+              quantity: values.quantity,
+              unitPrice: values.unitPrice,
+              notes: values.notes || undefined,
+            },
+          ],
+        });
+
+        onOpenChange(false);
+        onSuccess?.();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to create purchase order"
+        );
+      }
     },
   });
 
-  // Reset form when alert changes
   useEffect(() => {
     if (alert && open) {
+      const suggestedQuantity =
+        alert.threshold != null && alert.value != null
+          ? Math.max(1, alert.threshold * 2 - (alert.value ?? 0))
+          : 10;
       form.reset({
-        supplierId: '',
+        supplierId: "",
         quantity: suggestedQuantity,
         unitPrice: 0,
-        notes: '',
+        notes: "",
       });
     }
-  }, [alert, open, form, suggestedQuantity]);
-
-  const onSubmit = async (data: FormValues) => {
-    if (!alert?.productId || !alert?.productName) {
-      setError('Product information is missing');
-      return;
-    }
-
-    setError(null);
-
-    try {
-      await createPO.mutateAsync({
-        supplierId: data.supplierId,
-        items: [
-          {
-            productId: alert.productId,
-            productName: alert.productName,
-            quantity: data.quantity,
-            unitPrice: data.unitPrice,
-            notes: data.notes || undefined,
-          },
-        ],
-      });
-
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create purchase order');
-    }
-  };
+  }, [alert, open, form]);
 
   const handleClose = () => {
     form.reset();
     setError(null);
     onOpenChange(false);
   };
+
+  const supplierOptions = suppliers.map((s) => ({
+    value: s.id,
+    label: s.name,
+  }));
 
   if (!alert) return null;
 
@@ -150,17 +139,22 @@ export function CreatePOFromAlertDialog({
             <Truck className="h-5 w-5" />
             Order Stock
           </DialogTitle>
-          <DialogDescription>Create a purchase order for low-stock item</DialogDescription>
+          <DialogDescription>
+            Create a purchase order for low-stock item
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Product Info Banner */}
         <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
           <Package className="h-8 w-8 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium">{alert.productName}</p>
             <p className="text-sm text-muted-foreground">
               Current stock: {alert.value ?? 0}
-              {alert.threshold && <span className="ml-2 text-orange-600">(min: {alert.threshold})</span>}
+              {alert.threshold && (
+                <span className="ml-2 text-orange-600">
+                  (min: {alert.threshold})
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -172,82 +166,74 @@ export function CreatePOFromAlertDialog({
           </Alert>
         )}
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {/* Supplier Select */}
-          <div className="space-y-2">
-            <Label htmlFor="supplierId">Supplier *</Label>
-            <Select
-              value={form.watch('supplierId')}
-              onValueChange={(value) => form.setValue('supplierId', value)}
-              disabled={loadingSuppliers}
-            >
-              <SelectTrigger id="supplierId">
-                <SelectValue placeholder={loadingSuppliers ? 'Loading...' : 'Select supplier'} />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((supplier) => (
-                  <SelectItem key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.formState.errors.supplierId && (
-              <p className="text-sm text-destructive">{form.formState.errors.supplierId.message}</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="supplierId">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Supplier"
+                options={supplierOptions}
+                placeholder={
+                  loadingSuppliers ? "Loading..." : "Select supplier"
+                }
+                required
+                disabled={loadingSuppliers}
+              />
             )}
-          </div>
+          </form.Field>
 
-          {/* Quantity and Price Row */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity *</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min={1}
-                {...form.register('quantity', { valueAsNumber: true })}
-                placeholder="10"
-              />
-              {form.formState.errors.quantity && (
-                <p className="text-sm text-destructive">{form.formState.errors.quantity.message}</p>
+            <form.Field name="quantity">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Quantity"
+                  min={1}
+                  placeholder="10"
+                  required
+                />
               )}
-            </div>
+            </form.Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="unitPrice">Unit Price *</Label>
-              <Input
-                id="unitPrice"
-                type="number"
-                min={0}
-                step={0.01}
-                {...form.register('unitPrice', { valueAsNumber: true })}
-                placeholder="0.00"
-              />
-              {form.formState.errors.unitPrice && (
-                <p className="text-sm text-destructive">{form.formState.errors.unitPrice.message}</p>
+            <form.Field name="unitPrice">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Unit Price"
+                  min={0}
+                  step={0.01}
+                  placeholder="0.00"
+                  required
+                />
               )}
-            </div>
+            </form.Field>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
-            <Textarea
-              id="notes"
-              {...form.register('notes')}
-              placeholder="Special instructions or notes..."
-              rows={2}
-            />
-          </div>
+          <form.Field name="notes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Notes (optional)"
+                placeholder="Special instructions or notes..."
+                rows={2}
+              />
+            )}
+          </form.Field>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createPO.isPending}>
-              {createPO.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create PO
-            </Button>
+            <FormActions
+              form={form}
+              submitLabel="Create PO"
+              cancelLabel="Cancel"
+              onCancel={handleClose}
+              submitDisabled={createPO.isPending}
+            />
           </DialogFooter>
         </form>
       </DialogContent>

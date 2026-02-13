@@ -7,7 +7,7 @@
  * @see DOM-COMMS-002c
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, startTransition } from "react";
 import {
   useScheduleEmail,
   useUpdateScheduledEmail,
@@ -34,7 +34,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { DateTimePicker } from "../date-time-picker";
 import { TimezoneSelect, getLocalTimezone } from "../timezone-select";
 import { SignatureSelector } from "../signatures/signature-selector";
@@ -43,39 +44,14 @@ import { SignatureSelector } from "../signatures/signature-selector";
 // TYPES
 // ============================================================================
 
-export interface ScheduleEmailDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Pre-fill for editing an existing scheduled email */
-  initialData?: {
-    id: string;
-    recipientEmail: string;
-    recipientName?: string;
-    subject: string;
-    templateType: string;
-    templateData?: Record<string, unknown>;
-    scheduledAt: Date;
-    timezone: string;
-  };
-  /** Pre-fill recipient for new email */
-  defaultRecipient?: {
-    email: string;
-    name?: string;
-    customerId?: string;
-  };
-  /** Callback when user wants to create a new signature */
-  onCreateSignature?: () => void;
-  onSuccess?: () => void;
-}
+import type {
+  ScheduleEmailDialogProps,
+  TemplateType,
+} from "@/lib/schemas/communications";
+import type { JsonValue } from "@/lib/schemas/_shared/patterns";
 
-type TemplateType =
-  | "welcome"
-  | "follow_up"
-  | "quote"
-  | "order_confirmation"
-  | "shipping_notification"
-  | "reminder"
-  | "custom";
+// Re-export for backward compatibility
+export type { TemplateType, ScheduleEmailDialogProps };
 
 const TEMPLATE_OPTIONS: { value: TemplateType; label: string }[] = [
   { value: "custom", label: "Custom Email" },
@@ -96,6 +72,8 @@ export function ScheduleEmailDialog({
   onOpenChange,
   initialData,
   defaultRecipient,
+  defaultCustomerId,
+  defaultTemplate,
   onCreateSignature,
   onSuccess,
 }: ScheduleEmailDialogProps) {
@@ -112,10 +90,10 @@ export function ScheduleEmailDialog({
   );
   const [subject, setSubject] = useState(initialData?.subject ?? "");
   const [templateType, setTemplateType] = useState<TemplateType>(
-    (initialData?.templateType as TemplateType) ?? "custom"
+    initialData?.templateType ?? "custom"
   );
   const [bodyOverride, setBodyOverride] = useState(
-    (initialData?.templateData?.bodyOverride as string) ?? ""
+    initialData?.templateData?.bodyOverride ?? ""
   );
   const [scheduledAt, setScheduledAt] = useState<Date | undefined>(
     initialData?.scheduledAt ?? addHours(new Date(), 1)
@@ -124,10 +102,10 @@ export function ScheduleEmailDialog({
     initialData?.timezone ?? getLocalTimezone()
   );
   const [signatureId, setSignatureId] = useState<string | undefined>(
-    (initialData?.templateData?.signatureId as string) ?? undefined
+    initialData?.templateData?.signatureId
   );
   const [signatureContent, setSignatureContent] = useState<string>(
-    (initialData?.templateData?.signatureContent as string) ?? ""
+    initialData?.templateData?.signatureContent ?? ""
   );
 
   // Handle signature selection
@@ -142,19 +120,29 @@ export function ScheduleEmailDialog({
   // Reset form when dialog opens/closes or initialData changes
   useEffect(() => {
     if (open) {
-      setRecipientEmail(initialData?.recipientEmail ?? defaultRecipient?.email ?? "");
-      setRecipientName(initialData?.recipientName ?? defaultRecipient?.name ?? "");
-      setSubject(initialData?.subject ?? "");
-      setTemplateType((initialData?.templateType as TemplateType) ?? "custom");
-      setBodyOverride((initialData?.templateData?.bodyOverride as string) ?? "");
-      setScheduledAt(initialData?.scheduledAt ?? addHours(new Date(), 1));
-      setTimezone(initialData?.timezone ?? getLocalTimezone());
-      setSignatureId((initialData?.templateData?.signatureId as string) ?? undefined);
-      setSignatureContent((initialData?.templateData?.signatureContent as string) ?? "");
+      startTransition(() => {
+        setRecipientEmail(initialData?.recipientEmail ?? defaultRecipient?.email ?? "");
+        setRecipientName(initialData?.recipientName ?? defaultRecipient?.name ?? "");
+        setSubject(initialData?.subject ?? defaultTemplate?.subject ?? "");
+        setTemplateType(
+          initialData?.templateType ??
+            defaultTemplate?.templateType ??
+            "custom"
+        );
+        setBodyOverride(
+          initialData?.templateData?.bodyOverride ??
+            defaultTemplate?.body ??
+            ""
+        );
+        setScheduledAt(initialData?.scheduledAt ?? addHours(new Date(), 1));
+        setTimezone(initialData?.timezone ?? getLocalTimezone());
+        setSignatureId(initialData?.templateData?.signatureId);
+        setSignatureContent(initialData?.templateData?.signatureContent ?? "");
+      });
     }
-  }, [open, initialData, defaultRecipient]);
+  }, [open, initialData, defaultRecipient, defaultTemplate]);
 
-  const submitScheduledEmail = () => {
+  const submitScheduledEmail = useCallback(() => {
     if (!scheduledAt) {
       throw new Error("Please select a date and time");
     }
@@ -171,10 +159,10 @@ export function ScheduleEmailDialog({
     const payload = {
       recipientEmail,
       recipientName: recipientName || undefined,
-      customerId: defaultRecipient?.customerId,
+      customerId: defaultRecipient?.customerId ?? defaultCustomerId,
       subject,
       templateType,
-      templateData: Object.keys(templateData).length > 0 ? templateData : undefined,
+      templateData: Object.keys(templateData).length > 0 ? (templateData as Record<string, JsonValue>) : undefined,
       scheduledAt,
       timezone,
     };
@@ -195,7 +183,7 @@ export function ScheduleEmailDialog({
           },
           onError: (error) => {
             toast.error("Failed to update email", {
-              description: error instanceof Error ? error.message : "Please try again.",
+              description: getUserFriendlyMessage(error as Error),
             });
           },
         }
@@ -215,12 +203,30 @@ export function ScheduleEmailDialog({
         },
         onError: (error) => {
           toast.error("Failed to schedule email", {
-            description: error instanceof Error ? error.message : "Please try again.",
+            description: getUserFriendlyMessage(error as Error),
           });
         },
       }
     );
-  };
+  }, [
+    scheduledAt,
+    templateType,
+    bodyOverride,
+    signatureId,
+    signatureContent,
+    recipientEmail,
+    recipientName,
+    subject,
+    timezone,
+    defaultRecipient?.customerId,
+    defaultCustomerId,
+    isEditing,
+    initialData,
+    onOpenChange,
+    onSuccess,
+    updateEmailMutation,
+    scheduleEmailMutation,
+  ]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -248,7 +254,7 @@ export function ScheduleEmailDialog({
         submitScheduledEmail();
       } catch (error) {
         toast.error(isEditing ? "Failed to update email" : "Failed to schedule email", {
-          description: error instanceof Error ? error.message : "Please try again.",
+          description: getUserFriendlyMessage(error as Error),
         });
       }
     },

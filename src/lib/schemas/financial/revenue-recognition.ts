@@ -209,6 +209,7 @@ export interface RevenueRecognitionRecord {
   id: string;
   orderId: string;
   orderNumber: string;
+  customerId: string;
   customerName: string;
   recognitionType: RecognitionType;
   milestoneName: string | null;

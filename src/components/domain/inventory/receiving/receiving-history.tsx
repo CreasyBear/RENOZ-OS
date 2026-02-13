@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableEmpty } from "@/components/shared/data-table";
 import {
   Table,
   TableBody,
@@ -164,12 +165,12 @@ export const ReceivingHistory = memo(function ReceivingHistory({
           </CardHeader>
         )}
         <CardContent>
-          <div className="text-center py-8">
-            <ArrowDown className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              No receiving records found
-            </p>
-          </div>
+          <DataTableEmpty
+            variant="empty"
+            icon={ArrowDown}
+            title="No receiving records found"
+            description="Receiving records will appear here once you start receiving inventory."
+          />
         </CardContent>
       </Card>
     );

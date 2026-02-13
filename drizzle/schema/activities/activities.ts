@@ -16,9 +16,12 @@
  */
 
 import { pgTable, uuid, text, jsonb, index, inet, pgPolicy } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { activityActionEnum, activityEntityTypeEnum, activitySourceEnum } from "../_shared/enums";
-import { timestampColumns } from "../_shared/patterns";
+import {
+  timestampColumns,
+  organizationRlsUsing,
+  organizationRlsWithCheck,
+} from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
 
@@ -199,6 +202,14 @@ export interface ActivityMetadata {
   recognitionDate?: string;
   /** Number of deleted records */
   deletedCount?: number;
+
+  // ============================================
+  // SITE VISIT RESCHEDULING FIELDS
+  // ============================================
+  /** Previous scheduled date (for rescheduling) */
+  previousScheduledDate?: string;
+  /** New scheduled date (for rescheduling) */
+  newScheduledDate?: string;
 
   // ============================================
   // SUPPLIER FIELDS
@@ -429,6 +440,22 @@ export interface ActivityMetadata {
   endDate?: string;
 
   // ============================================
+  // DOCUMENT GENERATION FIELDS (exported action)
+  // ============================================
+  /** Type of document generated (quote, invoice, packing-slip, etc.) */
+  documentType?: string;
+  /** Generated document filename */
+  filename?: string;
+  /** Generated file size in bytes */
+  fileSize?: number;
+  /** Whether this is a regeneration (vs first generation) */
+  isRegeneration?: boolean;
+  /** Number of times document has been regenerated */
+  regenerationCount?: number;
+  /** Quote version ID (for opportunity quotes) */
+  quoteVersionId?: string;
+
+  // ============================================
   // CUSTOM EXTENSION
   // ============================================
   /** Additional custom fields - use explicit types, not unknown */
@@ -475,6 +502,13 @@ export const activities = pgTable(
     // Denormalized entity name for display without joins
     // Populated at write time to avoid N+1 queries in activity feeds
     entityName: text("entity_name"),
+
+    // Computed columns from metadata (for efficient queries without JSONB extraction)
+    // These are GENERATED ALWAYS AS STORED columns created via migration 0009
+    // Defined as regular columns here since they're already created by migration
+    // Drizzle doesn't need to know they're computed - they behave like regular columns
+    customerIdFromMetadata: uuid("customer_id_from_metadata"),
+    movementIdFromMetadata: uuid("movement_id_from_metadata"),
 
     // Source tracking: how the activity was created (COMMS-AUTO-002)
     source: activitySourceEnum("source").notNull().default("manual"),
@@ -529,16 +563,16 @@ export const activities = pgTable(
       table.createdAt.desc()
     ),
 
-    // RLS Policies (append-only)
+    // RLS Policies (append-only: select + insert only)
     selectPolicy: pgPolicy("activities_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      using: organizationRlsUsing(),
     }),
     insertPolicy: pgPolicy("activities_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: organizationRlsWithCheck(),
     }),
   })
 );

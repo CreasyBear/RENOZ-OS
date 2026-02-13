@@ -61,6 +61,74 @@ function ARAgingReportPage() {
     [navigate]
   );
 
+  const handleExport = useCallback(() => {
+    if (!data) return;
+
+    const bucketTotals = data.bucketSummary.reduce(
+      (acc, bucket) => {
+        acc[bucket.bucket] = bucket.amount;
+        return acc;
+      },
+      {
+        current: 0,
+        '1-30': 0,
+        '31-60': 0,
+        '61-90': 0,
+        '90+': 0,
+      } as Record<string, number>
+    );
+
+    const rows = [
+      [
+        'Customer',
+        'Current',
+        '1-30',
+        '31-60',
+        '61-90',
+        '90+',
+        'Total Outstanding',
+      ],
+      ...data.customers.map((customer) => [
+        customer.customerName,
+        customer.current,
+        customer.overdue1_30,
+        customer.overdue31_60,
+        customer.overdue61_90,
+        customer.overdue90Plus,
+        customer.totalOutstanding,
+      ]),
+      [
+        'Totals',
+        bucketTotals.current,
+        bucketTotals['1-30'],
+        bucketTotals['31-60'],
+        bucketTotals['61-90'],
+        bucketTotals['90+'],
+        data.totals.totalOutstanding,
+      ],
+    ];
+
+    const csv = rows
+      .map((row) =>
+        row
+          .map((value) =>
+            typeof value === 'string'
+              ? `"${value.replaceAll('"', '""')}"`
+              : value ?? ''
+          )
+          .join(',')
+      )
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ar-aging-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [data]);
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
@@ -75,6 +143,7 @@ function ARAgingReportPage() {
           commercialOnly={commercialOnly}
           onCommercialOnlyChange={setCommercialOnly}
           onCustomerClick={handleCustomerClick}
+          onExport={handleExport}
         />
       </PageLayout.Content>
     </PageLayout>

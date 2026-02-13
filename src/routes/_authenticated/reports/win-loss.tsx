@@ -43,6 +43,10 @@ export const Route = createFileRoute('/_authenticated/reports/win-loss')({
 function WinLossAnalysisPage() {
   return (
     <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Win/Loss Analysis"
+        description="Analyze win/loss patterns in pipeline opportunities"
+      />
       <PageLayout.Content>
         <WinLossAnalysisContainer />
       </PageLayout.Content>

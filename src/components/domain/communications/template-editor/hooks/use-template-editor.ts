@@ -81,13 +81,16 @@ export function useTemplateEditor({
     }
   }, [template?.bodyHtml]);
 
-  // Generate preview content
+  // Generate preview content (extract watched values for deps)
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
+  const watchedSubject = form.watch('subject');
+  const watchedBodyHtml = form.watch('bodyHtml');
   const previewContent = React.useMemo(() => {
     const sampleData = getSampleTemplateData();
-    const subject = substituteTemplateVariables(form.watch('subject') || '', sampleData);
-    const body = substituteTemplateVariables(form.watch('bodyHtml') || '', sampleData);
+    const subject = substituteTemplateVariables(watchedSubject || '', sampleData);
+    const body = substituteTemplateVariables(watchedBodyHtml || '', sampleData);
     return { subject, body };
-  }, [form.watch('subject'), form.watch('bodyHtml')]);
+  }, [watchedSubject, watchedBodyHtml]);
 
   return {
     form,

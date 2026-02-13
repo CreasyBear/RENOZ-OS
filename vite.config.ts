@@ -1,22 +1,47 @@
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { devtools } from '@tanstack/devtools-vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import { fileURLToPath, URL } from 'node:url'
 
+const VIRTUAL_ID = '\0tanstack-start-injected-head-scripts:v'
+
+/**
+ * Provides the tanstack-start-injected-head-scripts virtual module.
+ * TanStack Start's built-in plugin only applies when env.config.consumer === 'server',
+ * which can fail during import analysis. This plugin ensures the module always resolves
+ * and provides the real scripts from Vite's transformIndexHtml (same as TanStack).
+ */
 function virtualTanstackHeadScripts() {
+  let injectedHeadScripts: string | undefined
   return {
     name: 'virtual-tanstack-head-scripts',
-    resolveId(id: string) {
-      if (id === 'tanstack-start-injected-head-scripts:v') {
-        return id
+    async configureServer(viteDevServer: import('vite').ViteDevServer) {
+      const templateHtml = `<html><head></head><body></body></html>`
+      const transformedHtml = await viteDevServer.transformIndexHtml(
+        '/',
+        templateHtml,
+      )
+      const scripts: string[] = []
+      const regex = /<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi
+      let match
+      while ((match = regex.exec(transformedHtml)) !== null) {
+        const content = match[1]?.trim()
+        if (content) scripts.push(content)
       }
+      injectedHeadScripts = scripts.join(';') || undefined
+    },
+    resolveId(id: string) {
+      if (id === 'tanstack-start-injected-head-scripts:v') return VIRTUAL_ID
     },
     load(id: string) {
-      if (id === 'tanstack-start-injected-head-scripts:v') {
-        return 'export const injectedHeadScripts = null;'
+      if (id === VIRTUAL_ID) {
+        const value =
+          injectedHeadScripts !== undefined
+            ? JSON.stringify(injectedHeadScripts)
+            : 'undefined'
+        return `export const injectedHeadScripts = ${value};`
       }
     },
   }
@@ -89,6 +114,11 @@ export class AsyncLocalStorage {
   enterWith(store) {}
 }
 `,
+    // bcrypt is a native Node.js module - cannot run in browser
+    bcrypt: `
+function throwServerOnly() { throw new Error('[bcrypt] Server-only module'); }
+export default { hash: () => throwServerOnly(), compare: () => throwServerOnly() };
+`,
   }
 
   return {
@@ -121,6 +151,7 @@ export class AsyncLocalStorage {
 }
 
 export default defineConfig({
+  logLevel: 'warn',
   server: { port: 3000 },
   plugins: [
     serverOnlyModulesStub(),
@@ -128,7 +159,6 @@ export default defineConfig({
     react(),
     virtualTanstackHeadScripts(),
     tailwindcss(),
-    devtools(),
   ],
   resolve: {
     alias: {
@@ -146,5 +176,29 @@ export default defineConfig({
   },
   ssr: {
     external: ['postgres', '@trigger.dev/sdk', '@trigger.dev/sdk/v3'],
+  },
+  build: {
+    rollupOptions: {
+      // Reduce parallelism to lower peak memory (mitigates OOM with Nitro + TanStack Start)
+      maxParallelFileOps: 2,
+      onwarn(warning, warn) {
+        // Suppress "use client" directive warnings from node_modules (framer-motion, radix, etc.)
+        // - harmless: Rollup strips them during SSR bundle; apps work correctly
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message?.includes('use client')) {
+          return
+        }
+        warn(warning)
+      },
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('recharts')) return 'recharts';
+            if (id.includes('@tanstack')) return 'tanstack';
+            if (id.includes('@radix-ui')) return 'radix';
+            if (id.includes('framer-motion')) return 'framer-motion';
+          }
+        },
+      },
+    },
   },
 })

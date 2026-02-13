@@ -165,6 +165,16 @@ export const PERMISSIONS = {
     delete: 'team.delete',
   },
 
+  // User Groups (admin groups management - alias for team in admin context)
+  group: {
+    read: 'group.read',
+  },
+
+  // Invitations domain
+  invitation: {
+    read: 'invitation.read',
+  },
+
   // Audit Trail domain
   audit: {
     read: 'audit.read',
@@ -312,6 +322,8 @@ export type PermissionAction =
   | typeof PERMISSIONS.scheduledReport[keyof typeof PERMISSIONS.scheduledReport]
   | typeof PERMISSIONS.job[keyof typeof PERMISSIONS.job]
   | typeof PERMISSIONS.team[keyof typeof PERMISSIONS.team]
+  | typeof PERMISSIONS.group[keyof typeof PERMISSIONS.group]
+  | typeof PERMISSIONS.invitation[keyof typeof PERMISSIONS.invitation]
   | typeof PERMISSIONS.audit[keyof typeof PERMISSIONS.audit]
   | typeof PERMISSIONS.settings[keyof typeof PERMISSIONS.settings]
   | typeof PERMISSIONS.suppliers[keyof typeof PERMISSIONS.suppliers]
@@ -443,6 +455,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.team.read,
     PERMISSIONS.team.update,
     PERMISSIONS.team.delete,
+    PERMISSIONS.group.read,
+    PERMISSIONS.invitation.read,
     // Audit
     PERMISSIONS.audit.read,
     PERMISSIONS.audit.export,
@@ -567,6 +581,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.team.read,
     PERMISSIONS.team.update,
     PERMISSIONS.team.delete,
+    PERMISSIONS.group.read,
+    PERMISSIONS.invitation.read,
     // Audit
     PERMISSIONS.audit.read,
     PERMISSIONS.audit.export,

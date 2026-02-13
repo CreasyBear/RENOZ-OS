@@ -10,6 +10,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { toast } from '../_shared/use-toast';
 import {
   listUsers,
   getUser,
@@ -22,13 +23,6 @@ import {
   transferOwnership,
 } from '@/server/functions/users/users';
 import { getUserActivity } from '@/server/functions/_shared/audit-logs';
-import {
-  sendInvitation,
-  listInvitations,
-  cancelInvitation,
-  resendInvitation,
-} from '@/server/functions/users/invitations';
-import type { SendInvitation } from '@/lib/schemas/users';
 import type { UpdateUser, UserListQuery } from '@/lib/schemas/auth';
 
 // ============================================================================
@@ -40,12 +34,6 @@ import type { UpdateUser, UserListQuery } from '@/lib/schemas/auth';
  */
 export type UserFilters = UserListQuery;
 
-export interface InvitationFilters {
-  page?: number;
-  pageSize?: number;
-  status?: 'pending' | 'accepted' | 'cancelled' | 'expired';
-}
-
 // ============================================================================
 // USER QUERIES
 // ============================================================================
@@ -56,7 +44,13 @@ export interface InvitationFilters {
 export function useUsers(filters?: UserFilters, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.list(filters),
-    queryFn: () => listUsers({ data: filters ?? { page: 1, pageSize: 20 } }),
+    queryFn: async () => {
+      const result = await listUsers({
+        data: filters ?? { page: 1, pageSize: 20 } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled,
     staleTime: 30 * 1000,
   });
@@ -68,7 +62,13 @@ export function useUsers(filters?: UserFilters, enabled = true) {
 export function useUser(userId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.detail(userId),
-    queryFn: () => getUser({ data: { id: userId } }),
+    queryFn: async () => {
+      const result = await getUser({
+        data: { id: userId } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
   });
@@ -80,7 +80,11 @@ export function useUser(userId: string, enabled = true) {
 export function useUserStats(enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.stats(),
-    queryFn: () => getUserStats(),
+    queryFn: async () => {
+      const result = await getUserStats();
+      if (result == null) throw new Error('User stats returned no data');
+      return result;
+    },
     enabled,
     staleTime: 60 * 1000,
   });
@@ -114,8 +118,9 @@ export function useDeactivateUser() {
 
   return useMutation({
     mutationFn: (userId: string) => deactivateUser({ data: { id: userId } }),
-    onSuccess: () => {
+    onSuccess: (_, userId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
     },
   });
@@ -129,8 +134,9 @@ export function useReactivateUser() {
 
   return useMutation({
     mutationFn: (userId: string) => reactivateUser({ data: { id: userId } }),
-    onSuccess: () => {
+    onSuccess: (_, userId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
     },
   });
@@ -155,9 +161,13 @@ export function useBulkUpdateUsers() {
 
   return useMutation({
     mutationFn: (data: BulkUpdateInput) => bulkUpdateUsers({ data }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
+      // Invalidate each affected user's detail cache
+      variables.userIds.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(id) });
+      });
     },
   });
 }
@@ -169,6 +179,9 @@ export function useExportUsers() {
   return useMutation({
     mutationFn: (data: { format: 'csv' | 'json'; userIds?: string[] }) =>
       exportUsers({ data }),
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to export users');
+    },
   });
 }
 
@@ -180,9 +193,11 @@ export function useTransferOwnership() {
 
   return useMutation({
     mutationFn: (newOwnerId: string) => transferOwnership({ data: { newOwnerId } }),
-    onSuccess: () => {
+    onSuccess: (_, newOwnerId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
+      // Invalidate new owner's detail cache (role changed to owner)
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(newOwnerId) });
       // Also invalidate current user since their role may have changed
       queryClient.invalidateQueries({ queryKey: queryKeys.currentUser.all });
     },
@@ -194,72 +209,16 @@ export function useTransferOwnership() {
  */
 export function useUserActivity(userId: string, page = 1, pageSize = 10, enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.users.detail(userId), 'activity', { page, pageSize }] as const,
-    queryFn: () => getUserActivity({ data: { userId, page, pageSize } }),
+    queryKey: queryKeys.users.activity(userId, { page, pageSize }),
+    queryFn: async () => {
+      const result = await getUserActivity({
+        data: { userId, page, pageSize } 
+      });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
   });
 }
 
-// ============================================================================
-// INVITATION QUERIES
-// ============================================================================
-
-/**
- * Hook to fetch paginated list of invitations.
- */
-export function useInvitations(filters?: InvitationFilters, enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.users.invitations.list(filters),
-    queryFn: () => listInvitations({ data: filters ?? { page: 1, pageSize: 20 } }),
-    enabled,
-    staleTime: 30 * 1000,
-  });
-}
-
-// ============================================================================
-// INVITATION MUTATIONS
-// ============================================================================
-
-/**
- * Hook to send a new invitation.
- */
-export function useSendInvitation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: SendInvitation) => sendInvitation({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.all() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
-    },
-  });
-}
-
-/**
- * Hook to cancel a pending invitation.
- */
-export function useCancelInvitation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (invitationId: string) => cancelInvitation({ data: { id: invitationId } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.all() });
-    },
-  });
-}
-
-/**
- * Hook to resend an invitation.
- */
-export function useResendInvitation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (invitationId: string) => resendInvitation({ data: { id: invitationId } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.all() });
-    },
-  });
-}

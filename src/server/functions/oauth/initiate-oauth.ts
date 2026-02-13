@@ -4,7 +4,7 @@
  * Server action to initiate OAuth flow for external service integration.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { initiateOAuthFlow } from '@/lib/oauth/flow';
 
 export interface InitiateOAuthFlowRequest {
@@ -35,7 +35,7 @@ export type InitiateOAuthFlowResponse =
  * Validates permissions and generates authorization URL.
  */
 export async function initiateOAuth(
-  db: PostgresJsDatabase<any>,
+  db: OAuthDatabase,
   request: InitiateOAuthFlowRequest,
   userId: string // From auth context
 ): Promise<InitiateOAuthFlowResponse> {

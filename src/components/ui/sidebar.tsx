@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- UI primitive exports Sidebar compound components */
 "use client"
 
 import * as React from "react"
@@ -606,10 +607,11 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
+  // Deterministic width for skeleton (50–90% range, varies by render position)
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+    const hash = (className ?? '').length + (showIcon ? 1 : 0)
+    return `${50 + (hash % 41)}%`
+  }, [className, showIcon])
 
   return (
     <div

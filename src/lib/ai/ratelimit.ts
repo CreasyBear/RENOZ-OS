@@ -9,6 +9,7 @@
 
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -86,7 +87,7 @@ function getRedisClient(): Redis | null {
       return null;
     }
     // Timeout elapsed, allow retry
-    console.info('[AI Rate Limit] Circuit breaker timeout elapsed, retrying Redis connection');
+    logger.info('[AI Rate Limit] Circuit breaker timeout elapsed, retrying Redis connection');
     redisAvailable = true;
   }
 
@@ -98,9 +99,7 @@ function getRedisClient(): Redis | null {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    console.warn(
-      '[AI Rate Limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set. Rate limiting disabled.'
-    );
+    logger.warn('[AI Rate Limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set. Rate limiting disabled.');
     redisAvailable = false;
     lastRedisFailure = Date.now();
     return null;
@@ -113,7 +112,7 @@ function getRedisClient(): Redis | null {
     });
     return redisClient;
   } catch (error) {
-    console.error('[AI Rate Limit] Failed to initialize Redis client:', error);
+    logger.error('[AI Rate Limit] Failed to initialize Redis client', error as Error, {});
     redisAvailable = false;
     lastRedisFailure = Date.now();
     return null;
@@ -214,10 +213,10 @@ export const aiRateLimiters = {
       if (!limiter) {
         // Security: fail-closed in production, fail-open in development
         if (FAIL_CLOSED) {
-          console.error('[AI Rate Limit] Redis unavailable in production - rejecting request');
+          logger.error('[AI Rate Limit] Redis unavailable in production - rejecting request');
           return createFailClosedResult();
         }
-        console.warn('[AI Rate Limit] Redis unavailable in development - allowing request');
+        logger.warn('[AI Rate Limit] Redis unavailable in development - allowing request');
         return createFailOpenResult('chat');
       }
 
@@ -230,17 +229,17 @@ export const aiRateLimiters = {
           limit: result.limit,
         };
       } catch (error) {
-        console.error('[AI Rate Limit] Chat rate limit check failed:', error);
+        logger.error('[AI Rate Limit] Chat rate limit check failed', error as Error, {});
         // Mark Redis as unavailable and trigger circuit breaker
         redisAvailable = false;
         lastRedisFailure = Date.now();
         chatLimiter = null; // Reset limiter for next attempt
 
         if (FAIL_CLOSED) {
-          console.error('[AI Rate Limit] Failing closed due to error in production');
+          logger.error('[AI Rate Limit] Failing closed due to error in production');
           return createFailClosedResult();
         }
-        console.warn('[AI Rate Limit] Failing open due to error in development');
+        logger.warn('[AI Rate Limit] Failing open due to error in development');
         return createFailOpenResult('chat');
       }
     },
@@ -258,10 +257,10 @@ export const aiRateLimiters = {
       if (!limiter) {
         // Security: fail-closed in production, fail-open in development
         if (FAIL_CLOSED) {
-          console.error('[AI Rate Limit] Redis unavailable in production - rejecting request');
+          logger.error('[AI Rate Limit] Redis unavailable in production - rejecting request');
           return createFailClosedResult();
         }
-        console.warn('[AI Rate Limit] Redis unavailable in development - allowing request');
+        logger.warn('[AI Rate Limit] Redis unavailable in development - allowing request');
         return createFailOpenResult('agent');
       }
 
@@ -274,17 +273,17 @@ export const aiRateLimiters = {
           limit: result.limit,
         };
       } catch (error) {
-        console.error('[AI Rate Limit] Agent rate limit check failed:', error);
+        logger.error('[AI Rate Limit] Agent rate limit check failed', error as Error, {});
         // Mark Redis as unavailable and trigger circuit breaker
         redisAvailable = false;
         lastRedisFailure = Date.now();
         agentLimiter = null; // Reset limiter for next attempt
 
         if (FAIL_CLOSED) {
-          console.error('[AI Rate Limit] Failing closed due to error in production');
+          logger.error('[AI Rate Limit] Failing closed due to error in production');
           return createFailClosedResult();
         }
-        console.warn('[AI Rate Limit] Failing open due to error in development');
+        logger.warn('[AI Rate Limit] Failing open due to error in development');
         return createFailOpenResult('agent');
       }
     },

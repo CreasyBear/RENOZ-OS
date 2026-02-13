@@ -7,12 +7,17 @@
 // Warranties (core)
 export {
   getExpiringWarranties,
+  getWarrantyStatusCounts,
   listWarranties,
   getExpiringWarrantiesReport,
   getExpiringWarrantiesFilterOptions,
   getWarranty,
   updateWarrantyOptOut,
   updateCustomerWarrantyOptOut,
+  deleteWarranty,
+  voidWarranty,
+  transferWarranty,
+  cancelWarrantyClaim,
 } from './core/warranties';
 
 // Warranty Policies

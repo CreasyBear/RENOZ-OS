@@ -110,15 +110,18 @@ export function useAttachments(
 ): UseQueryResult<ListAttachmentsResponse, Error> {
   return useQuery({
     queryKey: queryKeys.files.list(entityType ?? "", entityId ?? ""),
-    queryFn: () =>
-      listAttachments({
+    queryFn: async () => {
+      const result = await listAttachments({
         data: {
-          ...(entityType && { entityType }),
-          ...(entityId && { entityId }),
+          ...(entityType ? { entityType } : {}),
+          ...(entityId ? { entityId } : {}),
           limit: options?.limit ?? 50,
           offset: options?.offset ?? 0,
         },
-      }),
+      });
+      if (result == null) throw new Error('Attachments list returned no data');
+      return result;
+    },
     enabled: true,
   });
 }
@@ -141,8 +144,11 @@ export function useDownloadUrl(
 ): UseQueryResult<PresignedDownloadResponse, Error> {
   return useQuery({
     queryKey: queryKeys.files.download(attachmentId ?? ""),
-    queryFn: () =>
-      getPresignedDownloadUrl({ data: { attachmentId: attachmentId! } }),
+    queryFn: async () => {
+      const result = await getPresignedDownloadUrl({ data: { attachmentId: attachmentId! } });
+      if (result == null) throw new Error('Download URL returned no data');
+      return result;
+    },
     enabled: !!attachmentId,
     staleTime: 50 * 60 * 1000, // 50 minutes - refresh before 1 hour expiry
   });
@@ -163,7 +169,11 @@ export function useDownloadUrls(
 ): UseQueryResult<Record<string, string>, Error> {
   return useQuery({
     queryKey: queryKeys.files.downloads(attachmentIds),
-    queryFn: () => getPresignedDownloadUrls({ data: { attachmentIds } }),
+    queryFn: async () => {
+      const result = await getPresignedDownloadUrls({ data: { attachmentIds } });
+      if (result == null) throw new Error('Download URLs returned no data');
+      return result;
+    },
     enabled: attachmentIds.length > 0,
     staleTime: 50 * 60 * 1000, // 50 minutes
   });
@@ -185,12 +195,35 @@ export function useTransformedImageUrl(
 ): UseQueryResult<{ url: string; expiresAt: string }, Error> {
   return useQuery({
     queryKey: queryKeys.files.transform(attachmentId ?? "", transform),
-    queryFn: () =>
-      getTransformedImageUrl({
+    queryFn: async () => {
+      const result = await getTransformedImageUrl({
         data: { attachmentId: attachmentId!, ...transform },
-      }),
+      });
+      if (result == null) throw new Error('Transformed image URL returned no data');
+      return result;
+    },
     enabled: !!attachmentId,
     staleTime: 50 * 60 * 1000, // 50 minutes
+  });
+}
+
+/**
+ * Imperatively fetch a download URL for an attachment.
+ * Use when you need the URL on-demand (e.g. after upload) rather than via a query.
+ *
+ * @source getPresignedDownloadUrl in src/server/functions/files/files-supabase.ts
+ */
+export function useFetchDownloadUrl(): UseMutationResult<
+  PresignedDownloadResponse,
+  Error,
+  string
+> {
+  return useMutation({
+    mutationFn: async (attachmentId: string) => {
+      const result = await getPresignedDownloadUrl({ data: { attachmentId } });
+      if (result == null) throw new Error('Download URL returned no data');
+      return result;
+    },
   });
 }
 

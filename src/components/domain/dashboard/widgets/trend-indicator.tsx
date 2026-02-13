@@ -38,14 +38,11 @@ export interface TrendIndicatorProps {
 // HELPERS
 // ============================================================================
 
-/**
- * Get the appropriate icon component based on value.
- */
-function getTrendIcon(value: number) {
-  if (value > 0) return ArrowUp;
-  if (value < 0) return ArrowDown;
-  return Minus;
-}
+const TREND_ICONS = {
+  up: ArrowUp,
+  down: ArrowDown,
+  neutral: Minus,
+} as const;
 
 /**
  * Format the percentage value for display.
@@ -120,7 +117,8 @@ export const TrendIndicator = memo(function TrendIndicator({
   invertColors = false,
   className,
 }: TrendIndicatorProps) {
-  const Icon = getTrendIcon(value);
+  const IconComponent =
+    value > 0 ? TREND_ICONS.up : value < 0 ? TREND_ICONS.down : TREND_ICONS.neutral;
   const colorClasses = getTrendColorClasses(value, invertColors);
   const formattedValue = formatPercentage(value);
   const ariaLabel = getAriaLabel(value, period, invertColors);
@@ -135,7 +133,7 @@ export const TrendIndicator = memo(function TrendIndicator({
         className
       )}
     >
-      <Icon className="h-4 w-4" aria-hidden="true" />
+      <IconComponent className="h-4 w-4" aria-hidden="true" />
       <span>
         {formattedValue} vs {period}
       </span>

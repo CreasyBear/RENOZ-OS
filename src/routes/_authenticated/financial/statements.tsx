@@ -16,7 +16,7 @@
  * @see _Initiation/_prd/sprints/sprint-01-route-cleanup.prd.json (SPRINT-01-007)
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, startTransition } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
@@ -119,17 +119,14 @@ function CustomerStatementsPage() {
   const generateMutation = useGenerateStatement();
   const emailMutation = useMarkStatementSent();
 
-  // ---------------------------------------------------------------------------
-  // Sync URL params with local state when customer is selected via URL
-  // ---------------------------------------------------------------------------
+  // Sync URL with local state when URL changes externally (e.g. back/forward).
+  // Defer via startTransition to avoid synchronous setState in effect.
   useEffect(() => {
-    // If we have a URL customerId but no selectedCustomer, we keep the URL ID
-    // The CustomerSelectorContainer will handle displaying the selection
-    // When user selects a different customer, handleSelectCustomer updates both state and URL
     if (urlCustomerId && selectedCustomer && selectedCustomer.id !== urlCustomerId) {
-      // URL changed externally, clear local selection to match URL
-      setSelectedCustomer(null);
-      setSelectedStatementId(null);
+      startTransition(() => {
+        setSelectedCustomer(null);
+        setSelectedStatementId(null);
+      });
     }
   }, [urlCustomerId, selectedCustomer]);
 
@@ -148,10 +145,22 @@ function CustomerStatementsPage() {
     });
   }, [navigate]);
 
-  const handleGenerate = useCallback((dateFrom: string, dateTo: string) => {
-    if (!customerId) return;
-    generateMutation.mutate({ customerId, dateFrom, dateTo });
-  }, [customerId, generateMutation]);
+  const handleGenerate = useCallback(
+    (dateFrom: string, dateTo: string) => {
+      if (!customerId) return;
+      generateMutation.mutate(
+        { customerId, dateFrom, dateTo },
+        {
+          onSuccess: (result) => {
+            if (result?.historyId) {
+              setSelectedStatementId(result.historyId);
+            }
+          },
+        }
+      );
+    },
+    [customerId, generateMutation]
+  );
 
   const handleEmail = useCallback((statementId: string) => {
     if (!customerId) return;

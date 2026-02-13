@@ -22,6 +22,7 @@ import {
   AlertCircle,
   X,
 } from 'lucide-react';
+import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -562,7 +563,7 @@ export const ArtifactCanvas = memo(function ArtifactCanvas({
 }: ArtifactCanvasProps) {
   const [{ artifacts, isStreaming }] = useAllArtifacts({
     onData: (type, data) => {
-      console.log('[ArtifactCanvas] New artifact:', type, data.status);
+      logger.debug('[ArtifactCanvas] New artifact', { type, status: data.status });
     },
   });
 

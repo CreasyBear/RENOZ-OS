@@ -98,6 +98,10 @@ export const LocationDetail = memo(function LocationDetail({
   className,
   onItemClick,
 }: LocationDetailProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
+
   // Loading state
   if (isLoading) {
     return (
@@ -138,10 +142,6 @@ export const LocationDetail = memo(function LocationDetail({
     location.capacity && location.utilization !== undefined
       ? location.utilization
       : null;
-
-  const { formatCurrency } = useOrgFormat();
-  const formatCurrencyDisplay = (value: number) =>
-    formatCurrency(value, { cents: false, showCents: true });
 
   return (
     <Card className={className}>

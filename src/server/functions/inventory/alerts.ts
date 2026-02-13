@@ -6,12 +6,16 @@
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json for specification
  */
 
+'use server';
+
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, or, sql, desc, asc, gt } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { inventoryAlerts, inventory, products, warehouseLocations } from 'drizzle/schema';
+import type { AlertThreshold } from '@/lib/schemas/inventory';
 import { withAuth } from '@/lib/server/protected';
+import { inventoryLogger } from '@/lib/logger';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
 import {
@@ -19,6 +23,9 @@ import {
   updateAlertSchema,
   alertListQuerySchema,
   DEFAULT_LOW_STOCK_THRESHOLD,
+  type AlertWithDetails,
+  type TriggeredAlert,
+  type ListAlertsResult,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -26,36 +33,6 @@ import {
 // ============================================================================
 
 type AlertRecord = typeof inventoryAlerts.$inferSelect;
-
-interface AlertWithDetails extends AlertRecord {
-  product?: typeof products.$inferSelect | null;
-  location?: typeof warehouseLocations.$inferSelect | null;
-}
-
-interface TriggeredAlert {
-  alert: AlertRecord;
-  product?: Pick<typeof products.$inferSelect, 'id' | 'name' | 'sku'> | null;
-  location?: Pick<typeof warehouseLocations.$inferSelect, 'id' | 'name' | 'locationCode'> | null;
-  currentValue: number;
-  thresholdValue: number;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  message: string;
-  affectedItems: Array<{
-    inventoryId: string;
-    productName: string;
-    quantity: number;
-  }>;
-  isFallback?: boolean; // Flag to distinguish fallback alerts from real alert rules
-}
-
-interface ListAlertsResult {
-  alerts: AlertRecord[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-  activeCount: number;
-}
 
 // ============================================================================
 // ALERT CRUD
@@ -136,8 +113,12 @@ export const listAlerts = createServerFn({ method: 'GET' })
       .limit(limit)
       .offset(offset);
 
+    // Map alerts - threshold type flows from schema (AlertThreshold = { [x: string]: {}; })
     return {
-      alerts,
+      alerts: alerts.map((alert) => ({
+        ...alert,
+        threshold: alert.threshold as AlertThreshold,
+      })),
       total,
       page,
       limit,
@@ -188,6 +169,7 @@ export const getAlert = createServerFn({ method: 'GET' })
 
     return {
       ...alert,
+      threshold: alert.threshold as AlertThreshold,
       product,
       location,
     };
@@ -486,7 +468,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
                 alertType: 'low_stock' as const,
                 productId: group.productId,
                 locationId: group.locationId,
-                threshold: { minQuantity: thresholdValue },
+                threshold: { minQuantity: thresholdValue } as AlertThreshold,
                 isActive: true,
                 notificationChannels: [],
                 escalationUsers: [],
@@ -524,7 +506,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
       } catch (error) {
         // Log error but don't fail the entire function
         // Fallback alerts are optional - if they fail, return empty array
-        console.error('Failed to fetch fallback low stock alerts:', error);
+        inventoryLogger.error('Failed to fetch fallback low stock alerts', error as Error, {});
         // Continue with empty triggeredAlerts array
       }
     }
@@ -746,7 +728,9 @@ async function checkAlertTriggered(
   organizationId: string,
   alert: AlertRecord
 ): Promise<TriggeredAlert | null> {
-  const threshold = alert.threshold as {
+  // Threshold type flows from schema (AlertThreshold = { [x: string]: {}; })
+  // Access properties with type assertion for runtime access
+  const threshold = alert.threshold as AlertThreshold & {
     minQuantity?: number;
     maxQuantity?: number;
     daysBeforeExpiry?: number;
@@ -1039,7 +1023,10 @@ async function checkAlertTriggered(
   ]);
 
   return {
-    alert,
+    alert: {
+      ...alert,
+      threshold: alert.threshold as AlertThreshold,
+    },
     product,
     location,
     currentValue,

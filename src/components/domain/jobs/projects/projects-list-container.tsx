@@ -21,10 +21,14 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useProjects, useDeleteProject } from "@/hooks/jobs";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
-import type { ProjectListQuery, ProjectStatus, ProjectPriority } from "@/lib/schemas/jobs/projects";
+import type {
+  ProjectListQuery,
+  ProjectStatus,
+  ProjectPriority,
+  ProjectListItem,
+} from "@/lib/schemas/jobs/projects";
 import { ProjectsListPresenter } from "./projects-list-presenter";
 import type { ProjectTableItem } from "./project-columns";
 
@@ -47,28 +51,15 @@ export interface ProjectsListContainerProps {
 type SortField = "title" | "status" | "priority" | "createdAt" | "targetCompletionDate";
 type SortDirection = "asc" | "desc";
 
-/**
- * Server response type for project items
- * Note: Drizzle returns raw date types as strings, which differ from Zod schema
- */
-type ServerProjectItem = {
-  id: string;
-  projectNumber: string;
-  title: string;
-  description: string | null;
-  projectType: string;
-  status: ProjectStatus;
-  priority: ProjectPriority;
-  customerId: string;
-  targetCompletionDate: string | null;
-  progressPercent: number;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-  customer?: {
-    id: string;
-    name: string;
-  } | null;
-};
+function isSortField(s: string): s is SortField {
+  return (
+    s === "title" ||
+    s === "status" ||
+    s === "priority" ||
+    s === "createdAt" ||
+    s === "targetCompletionDate"
+  );
+}
 
 function buildProjectQuery(
   filters: ProjectsListFilters | undefined,
@@ -89,10 +80,10 @@ function buildProjectQuery(
 }
 
 /**
- * Convert server project item to ProjectTableItem
+ * Convert ProjectListItem from API to ProjectTableItem
  * Handles date string → Date conversion from Drizzle response
  */
-function toTableItem(project: ServerProjectItem): ProjectTableItem {
+function toTableItem(project: ProjectListItem): ProjectTableItem {
   return {
     id: project.id,
     projectNumber: project.projectNumber,
@@ -138,18 +129,12 @@ export function ProjectsListContainer({
     error: projectsError,
   } = useProjects(queryFilters);
 
-  // Cast the data to expected shape (server returns this structure)
-  const typedData = projectsData as {
-    items?: ServerProjectItem[];
-    pagination?: { totalItems?: number };
-  } | undefined;
-
-  // Convert projects to table items
+  // Convert projects to table items (ProjectListResponse typed from hook)
   const projects = useMemo<ProjectTableItem[]>(
-    () => (typedData?.items ?? []).map(item => toTableItem(item)),
-    [typedData]
+    () => (projectsData?.items ?? []).map((item) => toTableItem(item)),
+    [projectsData?.items]
   );
-  const total = typedData?.pagination?.totalItems ?? 0;
+  const total = projectsData?.pagination?.totalItems ?? 0;
 
   // Selection state using shared hook
   const {
@@ -180,7 +165,7 @@ export function ProjectsListContainer({
       setSortDirection(
         ["createdAt", "targetCompletionDate"].includes(field) ? "desc" : "asc"
       );
-      return field as SortField;
+      return isSortField(field) ? field : currentField;
     });
     setPage(1); // Reset to first page on sort change
   }, []);
@@ -271,7 +256,6 @@ export function ProjectsListContainer({
 
   return (
     <>
-      <ConfirmationDialog />
       <div className="space-y-4">
         {/* Bulk Actions Bar */}
         <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
@@ -284,7 +268,7 @@ export function ProjectsListContainer({
         <ProjectsListPresenter
           projects={projects}
           isLoading={isProjectsLoading}
-          error={projectsError as Error | null}
+          error={projectsError instanceof Error ? projectsError : projectsError ? new Error(String(projectsError)) : null}
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
           isPartiallySelected={isPartiallySelected}

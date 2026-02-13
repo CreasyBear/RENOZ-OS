@@ -9,14 +9,13 @@
 
 import {
   pgTable,
-  pgPolicy,
   uuid,
   text,
   boolean,
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import { taxTypeEnum } from "../_shared/enums";
 import {
   timestampColumns,
@@ -25,6 +24,7 @@ import {
   currencyColumn,
   quantityColumn,
   percentageColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { products } from "../products/products";
 import { customers } from "../customers/customers";
@@ -88,42 +88,22 @@ export const orderTemplates = pgTable(
     ...auditColumns,
     ...softDeleteColumn,
   },
-  (table) => [
+  (table) => ({
     // Performance indexes
-    index("order_templates_org_idx").on(table.organizationId),
-    index("order_templates_org_active_idx").on(
+    orgIdx: index("order_templates_org_idx").on(table.organizationId),
+    orgActiveIdx: index("order_templates_org_active_idx").on(
       table.organizationId,
       table.isActive
     ),
-    index("order_templates_org_created_idx").on(
+    orgCreatedIdx: index("order_templates_org_created_idx").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
-    index("order_templates_name_idx").on(table.name),
+    nameIdx: index("order_templates_name_idx").on(table.name),
     // RLS Policies
-    pgPolicy("order_templates_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_templates_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_templates_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_templates_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("order_templates"),
+  })
 );
 
 // ============================================================================
@@ -176,37 +156,17 @@ export const orderTemplateItems = pgTable(
     // Timestamps
     ...timestampColumns,
   },
-  (table) => [
-    index("order_template_items_template_idx").on(table.templateId),
-    index("order_template_items_product_idx").on(table.productId),
-    index("order_template_items_org_created_idx").on(
+  (table) => ({
+    templateIdx: index("order_template_items_template_idx").on(table.templateId),
+    productIdx: index("order_template_items_product_idx").on(table.productId),
+    orgCreatedIdx: index("order_template_items_org_created_idx").on(
       table.organizationId,
       table.createdAt.desc(),
       table.id.desc()
     ),
     // RLS Policies
-    pgPolicy("order_template_items_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_template_items_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_template_items_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("order_template_items_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("order_template_items"),
+  })
 );
 
 // ============================================================================

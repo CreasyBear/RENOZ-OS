@@ -15,12 +15,12 @@ import {
   integer,
   timestamp,
   index,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { issues } from "./issues";
@@ -83,37 +83,17 @@ export const csatResponses = pgTable(
     ...timestampColumns,
     ...auditColumns,
   },
-  (table) => [
-    index("csat_responses_organization_idx").on(table.organizationId),
-    index("csat_responses_issue_idx").on(table.issueId),
-    index("csat_responses_rating_idx").on(table.rating),
-    index("csat_responses_source_idx").on(table.source),
-    index("csat_responses_submitted_at_idx").on(table.submittedAt),
-    index("csat_responses_token_idx").on(table.token),
+  (table) => ({
+    organizationIdx: index("csat_responses_organization_idx").on(table.organizationId),
+    issueIdx: index("csat_responses_issue_idx").on(table.issueId),
+    ratingIdx: index("csat_responses_rating_idx").on(table.rating),
+    sourceIdx: index("csat_responses_source_idx").on(table.source),
+    submittedAtIdx: index("csat_responses_submitted_at_idx").on(table.submittedAt),
+    tokenIdx: index("csat_responses_token_idx").on(table.token),
 
     // Standard CRUD RLS policies for org isolation
-    pgPolicy("csat_responses_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("csat_responses_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("csat_responses_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    pgPolicy("csat_responses_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-  ]
+    ...standardRlsPolicies("csat_responses"),
+  })
 );
 
 // ============================================================================

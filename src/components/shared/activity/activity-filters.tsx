@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Component exports component + filter config */
 /**
  * Activity Filters Component
  *
@@ -8,10 +9,12 @@
  */
 
 import * as React from "react";
-import { X, CalendarIcon } from "lucide-react";
+import { X, CalendarIcon, AlertCircle, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { FilterPresets } from "@/components/shared/filters/filter-presets";
+import type { FilterPreset } from "@/components/shared/filters/types";
 import {
   Select,
   SelectContent,
@@ -57,7 +60,56 @@ export interface ActivityFiltersProps {
   onChange: (value: ActivityFiltersValue) => void;
   /** Available users for user filter (optional) */
   users?: Array<{ id: string; name: string | null; email: string }>;
+  /** Current user ID for "My activities" preset */
+  currentUserId?: string;
+  /** Show filter presets (default: true) */
+  showPresets?: boolean;
   className?: string;
+}
+
+// ============================================================================
+// FILTER PRESETS
+// ============================================================================
+
+/**
+ * Common activity filter presets for quick access.
+ */
+export function getActivityFilterPresets(
+  currentUserId?: string
+): FilterPreset<ActivityFiltersValue>[] {
+  const presets: FilterPreset<ActivityFiltersValue>[] = [
+    {
+      id: "recent",
+      label: "Recent",
+      icon: Clock,
+      filters: {
+        dateFrom: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+      },
+    },
+  ];
+
+  if (currentUserId) {
+    presets.push({
+      id: "my-activities",
+      label: "My activities",
+      icon: User,
+      filters: {
+        userId: currentUserId,
+      },
+    });
+  }
+
+  presets.push({
+    id: "requires-attention",
+    label: "Requires attention",
+    icon: AlertCircle,
+    filters: {
+      action: "created", // New items that might need review
+      dateFrom: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+    },
+  });
+
+  return presets;
 }
 
 // ============================================================================
@@ -84,6 +136,8 @@ export function ActivityFilters({
   value,
   onChange,
   users,
+  currentUserId,
+  showPresets = true,
   className,
 }: ActivityFiltersProps) {
   const handleChange = (newValue: Partial<ActivityFiltersValue>) => {
@@ -101,8 +155,16 @@ export function ActivityFilters({
     onChange({});
   };
 
+  const handlePresetApply = (presetFilters: Partial<ActivityFiltersValue>) => {
+    onChange({ ...value, ...presetFilters });
+  };
+
   const activeFilterCount = Object.values(value).filter(Boolean).length;
   const hasDateRange = value.dateFrom || value.dateTo;
+  const presets = React.useMemo(
+    () => getActivityFilterPresets(currentUserId),
+    [currentUserId]
+  );
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -211,6 +273,15 @@ export function ActivityFilters({
           </Button>
         )}
       </div>
+
+      {/* Filter presets */}
+      {showPresets && presets.length > 0 && (
+        <FilterPresets
+          presets={presets}
+          currentFilters={value}
+          onApply={handlePresetApply}
+        />
+      )}
 
       {/* Active filters badges */}
       {activeFilterCount > 0 && (

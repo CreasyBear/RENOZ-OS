@@ -15,6 +15,7 @@ import { eq, and, isNotNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { attachments } from "drizzle/schema";
 import { deleteFile } from "@/lib/storage";
+import { cleanupExpiredExports } from "@/server/functions/settings/data-exports";
 
 // ============================================================================
 // TYPES
@@ -79,7 +80,7 @@ export const cleanupPendingUploadsTask = schedules.task({
         try {
           await deleteFile({ path: upload.storageKey });
           logger.debug(`Deleted storage object: ${upload.storageKey}`);
-        } catch (error) {
+        } catch {
           // Ignore - file may not exist in storage
           logger.debug(
             `Storage delete skipped (may not exist): ${upload.storageKey}`
@@ -166,7 +167,7 @@ export const cleanupSoftDeletedFilesTask = schedules.task({
         try {
           await deleteFile({ path: file.storageKey });
           logger.debug(`Deleted storage object: ${file.storageKey}`);
-        } catch (error) {
+        } catch {
           // Ignore - file may already be deleted
           logger.debug(
             `Storage delete skipped (may not exist): ${file.storageKey}`
@@ -192,6 +193,33 @@ export const cleanupSoftDeletedFilesTask = schedules.task({
     });
 
     return { purged, errors, total: deletedFiles.length };
+  },
+});
+
+
+// ============================================================================
+// CLEANUP EXPIRED DATA EXPORTS
+// ============================================================================
+
+/**
+ * Clean up expired data export files.
+ *
+ * Marks completed exports past their expiresAt as expired and deletes
+ * the associated files from storage.
+ *
+ * Runs daily at 4 AM UTC.
+ */
+export const cleanupExpiredExportsTask = schedules.task({
+  id: "cleanup-expired-exports",
+  cron: "0 4 * * *",
+  run: async (): Promise<{ expired: number }> => {
+    logger.info("Starting expired data exports cleanup");
+
+    const expired = await cleanupExpiredExports();
+
+    logger.info("Expired data exports cleanup complete", { expired });
+
+    return { expired };
   },
 });
 

@@ -17,6 +17,7 @@ import {
   createOpportunity,
   updateOpportunity,
   updateOpportunityStage,
+  bulkUpdateOpportunityStage,
   deleteOpportunity,
   convertToOrder,
   listOpportunities,
@@ -106,6 +107,7 @@ export function useDeleteOpportunity() {
 export interface StageChangeInput {
   opportunityId: string;
   stage: OpportunityStage;
+  version?: number; // Required for optimistic locking
   reason?: {
     winLossReasonId?: string;
     lostNotes?: string;
@@ -120,11 +122,12 @@ export function useUpdateOpportunityStage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ opportunityId, stage, reason }: StageChangeInput) =>
+    mutationFn: ({ opportunityId, stage, version, reason }: StageChangeInput) =>
       updateOpportunityStage({
         data: {
           id: opportunityId,
           stage,
+          version, // Required for optimistic locking
           ...(reason ?? {}),
         },
       }),
@@ -164,6 +167,47 @@ export function useUpdateOpportunityStage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+    },
+  });
+}
+
+// ============================================================================
+// BULK STAGE CHANGE MUTATION
+// ============================================================================
+
+export interface BulkStageChangeInput {
+  opportunityIds: string[];
+  stage: OpportunityStage;
+  probability?: number;
+  winLossReasonId?: string;
+  lostNotes?: string;
+  competitorName?: string;
+}
+
+/**
+ * Bulk update opportunity stages
+ */
+export function useBulkUpdateOpportunityStage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: BulkStageChangeInput) =>
+      bulkUpdateOpportunityStage({
+        data: {
+          opportunityIds: input.opportunityIds,
+          stage: input.stage,
+          probability: input.probability,
+          winLossReasonId: input.winLossReasonId,
+          lostNotes: input.lostNotes,
+          competitorName: input.competitorName,
+        },
+      }),
+    onSuccess: () => {
+      // Invalidate all opportunity lists and metrics
+      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      // Invalidate all opportunity details (they may have been updated)
+      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
     },
   });
 }

@@ -40,7 +40,8 @@
  * ```
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import { logger } from '@/lib/logger';
 import type { TanStackFormApi } from './use-tanstack-form';
 
 // ============================================================================
@@ -131,7 +132,7 @@ function writeDraft<T>(key: string, version: number, values: T): void {
     };
     localStorage.setItem(getDraftKey(key), JSON.stringify(data));
   } catch (error) {
-    console.warn('Failed to save form draft:', error);
+    logger.warn('Failed to save form draft', { error: String(error) });
   }
 }
 
@@ -162,15 +163,17 @@ export function useFormDraft<TFormData>({
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isRestoringRef = useRef(false);
 
-  // Check for existing draft on mount
+  // Check for existing draft on mount. Defer setState to avoid sync setState in effect.
   useEffect(() => {
     if (!enabled) return;
 
     const draft = readDraft<TFormData>(key, version);
     if (draft) {
-      setHasDraft(true);
-      setSavedAt(new Date(draft.savedAt));
-      setDraftValues(draft.values);
+      startTransition(() => {
+        setHasDraft(true);
+        setSavedAt(new Date(draft.savedAt));
+        setDraftValues(draft.values);
+      });
     }
   }, [key, version, enabled]);
 
@@ -217,11 +220,10 @@ export function useFormDraft<TFormData>({
     const defaultValues = JSON.stringify(form.options.defaultValues);
 
     if (currentValues === defaultValues) {
-      // Form is at default state - no need to save draft
       return;
     }
 
-    setIsSaving(true);
+    startTransition(() => setIsSaving(true));
 
     // Debounce the save
     debounceTimerRef.current = setTimeout(() => {

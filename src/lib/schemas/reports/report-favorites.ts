@@ -7,16 +7,44 @@
  */
 
 import { z } from 'zod';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS
 // ============================================================================
 
-export const reportTypeValues = ['scheduled', 'custom', 'dashboard'] as const;
+export const reportTypeValues = [
+  'scheduled',
+  'custom',
+  'dashboard',
+  // Pre-built report types (for favorites without reportId)
+  'customer',
+  'pipeline-forecast',
+  'job-costing',
+  'procurement',
+  'warranty',
+  'expiring-warranties',
+  'win-loss',
+  'financial',
+] as const;
 
 export const reportTypeSchema = z.enum(reportTypeValues);
 
 export type ReportType = z.infer<typeof reportTypeSchema>;
+
+/** Pre-built report types that can be favorited (no reportId) */
+export const prebuiltReportTypeValues = [
+  'customer',
+  'pipeline-forecast',
+  'job-costing',
+  'procurement',
+  'warranty',
+  'expiring-warranties',
+  'win-loss',
+  'financial',
+] as const;
+
+export type PrebuiltReportType = (typeof prebuiltReportTypeValues)[number];
 
 // ============================================================================
 // CREATE REPORT FAVORITE
@@ -40,6 +68,11 @@ export const listReportFavoritesSchema = z.object({
 });
 
 export type ListReportFavoritesInput = z.infer<typeof listReportFavoritesSchema>;
+
+export const listReportFavoritesCursorSchema = cursorPaginationSchema.merge(
+  z.object({ reportType: reportTypeSchema.optional() })
+);
+export type ListReportFavoritesCursorInput = z.infer<typeof listReportFavoritesCursorSchema>;
 
 // ============================================================================
 // DELETE REPORT FAVORITE

@@ -23,6 +23,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   orderStatusEnum,
   paymentStatusEnum,
+  invoiceStatusEnum,
   taxTypeEnum,
   xeroSyncStatusEnum,
   orderLineItemPickStatusEnum,
@@ -34,6 +35,7 @@ import {
   currencyColumn,
   quantityColumn,
   percentageColumn,
+  standardRlsPolicies,
 } from "../_shared/patterns";
 import { customers } from "../customers/customers";
 import { products } from "../products/products";
@@ -120,6 +122,15 @@ export const orders = pgTable(
     // Payment tracking
     paidAmount: currencyColumn("paid_amount"),
     balanceDue: currencyColumn("balance_due"),
+    paidAt: timestamp("paid_at", { withTimezone: true }), // When full payment received
+
+    // Invoice tracking
+    invoiceStatus: invoiceStatusEnum("invoice_status").default("draft"),
+    invoiceDueDate: date("invoice_due_date"),
+    invoiceSentAt: timestamp("invoice_sent_at", { withTimezone: true }),
+    invoiceViewedAt: timestamp("invoice_viewed_at", { withTimezone: true }),
+    invoiceReminderSentAt: timestamp("invoice_reminder_sent_at", { withTimezone: true }),
+    invoiceNumber: text("invoice_number"), // Separate invoice numbering if needed
 
     // Metadata
     metadata: jsonb("metadata").$type<OrderMetadata>().default({}),
@@ -158,6 +169,10 @@ export const orders = pgTable(
       table.organizationId,
       table.paymentStatus
     ),
+    orgInvoiceStatusIdx: index("idx_orders_org_invoice_status").on(
+      table.organizationId,
+      table.invoiceStatus
+    ),
     orgCustomerIdx: index("idx_orders_org_customer").on(
       table.organizationId,
       table.customerId
@@ -182,27 +197,7 @@ export const orders = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("orders_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("orders_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("orders_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("orders_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("orders"),
 
     // Portal RLS (customer + subcontractor scope)
     portalSelectPolicy: pgPolicy("orders_portal_select_policy", {
@@ -275,6 +270,7 @@ export const orderLineItems = pgTable(
     qtyPicked: quantityColumn("qty_picked"),
     qtyShipped: quantityColumn("qty_shipped"),
     qtyDelivered: quantityColumn("qty_delivered"),
+    allocatedSerialNumbers: jsonb("allocated_serial_numbers").$type<string[]>(),
 
     // Notes
     notes: text("notes"),
@@ -303,27 +299,7 @@ export const orderLineItems = pgTable(
     ),
 
     // Standard CRUD RLS policies for org isolation
-    selectPolicy: pgPolicy("order_line_items_select_policy", {
-      for: "select",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    insertPolicy: pgPolicy("order_line_items_insert_policy", {
-      for: "insert",
-      to: "authenticated",
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    updatePolicy: pgPolicy("order_line_items_update_policy", {
-      for: "update",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
-    deletePolicy: pgPolicy("order_line_items_delete_policy", {
-      for: "delete",
-      to: "authenticated",
-      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
-    }),
+    ...standardRlsPolicies("order_line_items"),
 
     // Portal RLS (customer + subcontractor scope)
     portalSelectPolicy: pgPolicy("order_line_items_portal_select_policy", {

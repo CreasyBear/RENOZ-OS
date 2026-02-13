@@ -65,6 +65,7 @@ export {
   TagsCell,
   SourceCell,
   SOURCE_CONFIG,
+  ContactCell,
   type PriceCellProps,
   type StatusCellProps,
   type StatusConfigItem,
@@ -86,6 +87,7 @@ export {
   type TagItem,
   type SourceCellProps,
   type SourceType,
+  type ContactCellProps,
 } from "./cells"
 
 // Toolbar components

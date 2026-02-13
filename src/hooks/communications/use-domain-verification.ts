@@ -8,6 +8,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { QUERY_CONFIG } from "@/lib/constants";
 import { getDomainVerificationStatus } from "@/server/functions/communications/email-domain";
 
 // ============================================================================
@@ -38,8 +39,12 @@ export function useDomainVerification(
 
   return useQuery({
     queryKey: queryKeys.communications.domainVerification.status(),
-    queryFn: () => getDomainVerificationStatus(),
+    queryFn: async () => {
+      const result = await getDomainVerificationStatus();
+      if (result == null) throw new Error('Domain verification status returned no data');
+      return result;
+    },
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes - domain status changes infrequently
+    staleTime: QUERY_CONFIG.STALE_TIME_LONG,
   });
 }

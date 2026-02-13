@@ -34,10 +34,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { EmptyState } from '@/components/shared/empty-state';
 import { cn } from '@/lib/utils';
-import type { ProjectNote } from 'drizzle/schema/jobs/workstreams-notes';
-// NoteType values from schema
-const NOTE_TYPES = ['general', 'meeting', 'audio', 'site_visit', 'client_feedback'] as const;
-type NoteTypeValue = typeof NOTE_TYPES[number];
+import type { ProjectNote } from '@/lib/schemas/jobs';
+// NoteType values from schema (used for NOTE_TYPE_CONFIG keys)
+type NoteTypeValue = 'general' | 'meeting' | 'audio' | 'site_visit' | 'client_feedback';
 
 // ============================================================================
 // TYPES

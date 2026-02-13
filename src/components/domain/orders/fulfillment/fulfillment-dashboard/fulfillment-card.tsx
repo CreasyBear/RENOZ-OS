@@ -26,11 +26,12 @@
  * @see src/components/domain/jobs/jobs-card.tsx for reference implementation
  * @see _reference/.square-ui-reference/templates/tasks/components/tasks/board/task-card.tsx
  */
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo, startTransition } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { format } from 'date-fns';
+import { Link } from '@tanstack/react-router';
 import { GripVertical, Calendar, Package, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,25 +48,7 @@ import { OrderCardContextMenu } from '../../cards/order-card-context-menu';
 // TYPES
 // ============================================================================
 
-export interface FulfillmentOrder {
-  id: string;
-  orderNumber: string;
-  customerName: string;
-  itemCount: number;
-  total: number; // Currency in cents
-  requiredDate: string | null;
-  priority: 'normal' | 'high' | 'urgent';
-  status: 'confirmed' | 'picking' | 'picked' | 'shipped' | 'delivered' | 'cancelled';
-  assignedTo?: { id: string; name: string; avatar?: string };
-  progress?: { completed: number; total: number };
-  metadata?: {
-    comments: number;
-    attachments: number;
-    links: number;
-    labels: Array<{ id: string; name: string; color: string }>;
-  };
-  createdAt: Date;
-}
+import type { FulfillmentOrder } from '@/lib/schemas/orders';
 
 export interface FulfillmentCardProps {
   order: FulfillmentOrder;
@@ -162,11 +145,16 @@ const FulfillmentCardComponent = ({
 
   useEffect(() => {
     const mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mediaQuery?.matches ?? false);
+    if (!mediaQuery) return;
+
+    startTransition(() => setPrefersReducedMotion(mediaQuery.matches));
 
     const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-    mediaQuery?.addEventListener('change', handleChange);
-    return () => mediaQuery?.removeEventListener('change', handleChange);
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
   }, []);
 
   const priority = PRIORITY_CONFIG[order.priority];
@@ -287,7 +275,15 @@ const FulfillmentCardComponent = ({
         <h3 className="mb-2 line-clamp-2 text-sm font-medium">{order.orderNumber}</h3>
         <div className="text-muted-foreground flex items-center gap-1.5">
           <Package className="size-4" />
-          <span className="text-xs">{order.customerName}</span>
+          <Link
+            to="/customers/$customerId"
+            params={{ customerId: order.customerId }}
+            search={{}}
+            className="text-xs text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {order.customerName}
+          </Link>
           <span className="text-xs">•</span>
           <span className="text-xs">{order.itemCount} items</span>
         </div>

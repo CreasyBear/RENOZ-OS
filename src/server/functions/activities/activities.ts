@@ -10,9 +10,9 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, or, desc, asc, sql, gte, lte, inArray, count } from 'drizzle-orm';
+import { eq, and, or, desc, gte, lte, inArray, count, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { activities, users, customers, orders, opportunities, products, contacts, suppliers } from 'drizzle/schema';
+import { activities, customers, opportunities, orders, users } from 'drizzle/schema';
 import {
   activityFeedQuerySchema,
   entityActivitiesQuerySchema,
@@ -20,114 +20,29 @@ import {
   activityStatsQuerySchema,
   activityExportRequestSchema,
   activityParamsSchema,
+  logEntityActivitySchema,
   type ActivityStatsResult,
   type ActivityLeaderboardItem,
   type ActivityWithUser,
   type ActivityMetadata,
+  type Activity,
 } from '@/lib/schemas/activities';
 import {
   decodeCursor,
   buildCursorCondition,
   buildStandardCursorResponse,
+  type CursorPaginatedResponse,
 } from '@/lib/db/pagination';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
+import {
+  verifyCustomerExists,
+  verifyOrderExists,
+  verifyOpportunityExists,
+} from '@/server/functions/_shared/entity-verification';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-
-// ============================================================================
-// METADATA RESOLUTION HELPER
-// ============================================================================
-
-/**
- * Resolve UUIDs in metadata to readable names.
- * Transforms metadata fields like customerId, orderId, opportunityId to include names.
- */
-async function resolveMetadataUuids(
-  metadata: ActivityMetadata | null,
-  organizationId: string
-): Promise<ActivityMetadata | null> {
-  if (!metadata || typeof metadata !== 'object') return metadata;
-
-  const resolved = { ...metadata };
-  const customerIds = new Set<string>();
-  const orderIds = new Set<string>();
-  const opportunityIds = new Set<string>();
-
-  // Collect UUIDs from metadata
-  if (metadata.customerId && typeof metadata.customerId === 'string') {
-    customerIds.add(metadata.customerId);
-  }
-  if (metadata.orderId && typeof metadata.orderId === 'string') {
-    orderIds.add(metadata.orderId);
-  }
-  if (metadata.opportunityId && typeof metadata.opportunityId === 'string') {
-    opportunityIds.add(metadata.opportunityId);
-  }
-
-  // Batch fetch names
-  const [customerNames, orderNumbers, opportunityTitles] = await Promise.all([
-    customerIds.size > 0
-      ? db
-          .select({ id: customers.id, name: customers.name })
-          .from(customers)
-          .where(
-            and(
-              inArray(customers.id, Array.from(customerIds)),
-              eq(customers.organizationId, organizationId)
-            )
-          )
-      : [],
-    orderIds.size > 0
-      ? db
-          .select({ id: orders.id, orderNumber: orders.orderNumber })
-          .from(orders)
-          .where(
-            and(
-              inArray(orders.id, Array.from(orderIds)),
-              eq(orders.organizationId, organizationId)
-            )
-          )
-      : [],
-    opportunityIds.size > 0
-      ? db
-          .select({ id: opportunities.id, title: opportunities.title })
-          .from(opportunities)
-          .where(
-            and(
-              inArray(opportunities.id, Array.from(opportunityIds)),
-              eq(opportunities.organizationId, organizationId)
-            )
-          )
-      : [],
-  ]);
-
-  // Create lookup maps
-  const customerMap = new Map(customerNames.map((c) => [c.id, c.name]));
-  const orderMap = new Map(orderNumbers.map((o) => [o.id, o.orderNumber]));
-  const opportunityMap = new Map(opportunityTitles.map((o) => [o.id, o.title]));
-
-  // Add resolved names to metadata (keep original UUIDs for reference)
-  if (metadata.customerId && typeof metadata.customerId === 'string') {
-    const customerName = customerMap.get(metadata.customerId);
-    if (customerName) {
-      resolved.customerName = customerName;
-    }
-  }
-  if (metadata.orderId && typeof metadata.orderId === 'string') {
-    const orderNumber = orderMap.get(metadata.orderId);
-    if (orderNumber) {
-      resolved.orderNumber = orderNumber;
-    }
-  }
-  if (metadata.opportunityId && typeof metadata.opportunityId === 'string') {
-    const opportunityTitle = opportunityMap.get(metadata.opportunityId);
-    if (opportunityTitle) {
-      resolved.opportunityTitle = opportunityTitle;
-    }
-  }
-
-  return resolved;
-}
+import { logger } from '@/lib/logger';
+import { resolveMetadataUuids } from '@/lib/activities/activity-metadata';
 
 // ============================================================================
 // ACTIVITY FEED
@@ -138,9 +53,8 @@ async function resolveMetadataUuids(
  */
 export const getActivityFeed = createServerFn({ method: 'GET' })
   .inputValidator(activityFeedQuerySchema)
-  .handler(async ({ data }): Promise<ReturnType<typeof buildStandardCursorResponse>> => {
-    try {
-      const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+  .handler(async ({ data }): Promise<CursorPaginatedResponse<ActivityWithUser>> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { cursor, pageSize, entityType, entityId, action, userId, source, dateFrom, dateTo } =
       data;
@@ -184,7 +98,8 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
 
     const whereClause = and(...conditions);
 
-    // Query with user join and entity joins for names
+    // Query with user join - use denormalized entity_name column instead of multiple LEFT JOINs
+    // Per SCHEMA-TRACE.md: Use db.select() with typed columns, avoid unnecessary joins
     const results = await db
       .select({
         activity: activities,
@@ -193,46 +108,9 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
           name: users.name,
           email: users.email,
         },
-        // Entity names from different tables
-        customerName: customers.name,
-        orderNumber: orders.orderNumber,
-        opportunityTitle: opportunities.title,
-        productName: products.name,
-        contactName: sql<string | null>`CASE WHEN ${contacts.firstName} IS NOT NULL AND ${contacts.lastName} IS NOT NULL THEN CONCAT(${contacts.firstName}, ' ', ${contacts.lastName}) ELSE NULL END`,
-        supplierName: suppliers.name,
       })
       .from(activities)
       .leftJoin(users, eq(activities.userId, users.id))
-      .leftJoin(customers, and(
-        eq(activities.entityType, 'customer'),
-        eq(activities.entityId, customers.id),
-        eq(customers.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(orders, and(
-        eq(activities.entityType, 'order'),
-        eq(activities.entityId, orders.id),
-        eq(orders.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(opportunities, and(
-        eq(activities.entityType, 'opportunity'),
-        eq(activities.entityId, opportunities.id),
-        eq(opportunities.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(products, and(
-        eq(activities.entityType, 'product'),
-        eq(activities.entityId, products.id),
-        eq(products.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(contacts, and(
-        eq(activities.entityType, 'contact'),
-        eq(activities.entityId, contacts.id),
-        eq(contacts.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(suppliers, and(
-        eq(activities.entityType, 'supplier'),
-        eq(activities.entityId, suppliers.id),
-        eq(suppliers.organizationId, ctx.organizationId)
-      ))
       .where(whereClause)
       .orderBy(desc(activities.createdAt), desc(activities.id))
       .limit(pageSize + 1);
@@ -300,31 +178,10 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
     const opportunityMap = new Map(opportunityTitles.map((o) => [o.id, o.title]));
 
     // Transform results to include user data, entity name, and resolved metadata
+    // Use denormalized entity_name column (populated at write time) instead of joins
     const items = results.map((r) => {
-      // Determine entity name based on entityType
-      let entityName: string | null = null;
-      switch (r.activity.entityType) {
-        case 'customer':
-          entityName = r.customerName ?? null;
-          break;
-        case 'order':
-          entityName = r.orderNumber ?? null;
-          break;
-        case 'opportunity':
-          entityName = r.opportunityTitle ?? null;
-          break;
-        case 'product':
-          entityName = r.productName ?? null;
-          break;
-        case 'contact':
-          entityName = r.contactName ?? null;
-          break;
-        case 'supplier':
-          entityName = r.supplierName ?? null;
-          break;
-        default:
-          entityName = null;
-      }
+      // Use denormalized entity_name column - avoids 6 unnecessary LEFT JOINs
+      const entityName = r.activity.entityName ?? null;
 
       // Resolve UUIDs in metadata using the batch-fetched maps
       let resolvedMetadata = r.activity.metadata;
@@ -358,11 +215,7 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
       };
     });
 
-    return buildStandardCursorResponse(items, pageSize);
-    } catch (error) {
-      console.error('[getActivityFeed] Error:', error);
-      throw error;
-    }
+    return buildStandardCursorResponse<ActivityWithUser>(items, pageSize);
   });
 
 // ============================================================================
@@ -375,7 +228,7 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
  */
 export const getEntityActivities = createServerFn({ method: 'GET' })
   .inputValidator(entityActivitiesQuerySchema)
-  .handler(async ({ data }): Promise<ReturnType<typeof buildStandardCursorResponse>> => {
+  .handler(async ({ data }): Promise<CursorPaginatedResponse<ActivityWithUser>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { entityType, entityId, cursor, pageSize } = data;
@@ -394,9 +247,10 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
             eq(activities.entityId, entityId)
           ),
           // Order activities where metadata.customerId matches
+          // Use computed column instead of JSONB extraction for better performance
           and(
             eq(activities.entityType, 'order'),
-            sql`${activities.metadata}->>'customerId' = ${entityId}`
+            eq(activities.customerIdFromMetadata, entityId)
           )
         )!
       );
@@ -418,7 +272,8 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
 
     const whereClause = and(...conditions);
 
-    // Query with user join and entity joins for names
+    // Query with user join - use denormalized entity_name column instead of multiple LEFT JOINs
+    // Per SCHEMA-TRACE.md: Use db.select() with typed columns, avoid unnecessary joins
     const results = await db
       .select({
         activity: activities,
@@ -427,46 +282,9 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
           name: users.name,
           email: users.email,
         },
-        // Entity names from different tables
-        customerName: customers.name,
-        orderNumber: orders.orderNumber,
-        opportunityTitle: opportunities.title,
-        productName: products.name,
-        contactName: sql<string | null>`CASE WHEN ${contacts.firstName} IS NOT NULL AND ${contacts.lastName} IS NOT NULL THEN CONCAT(${contacts.firstName}, ' ', ${contacts.lastName}) ELSE NULL END`,
-        supplierName: suppliers.name,
       })
       .from(activities)
       .leftJoin(users, eq(activities.userId, users.id))
-      .leftJoin(customers, and(
-        eq(activities.entityType, 'customer'),
-        eq(activities.entityId, customers.id),
-        eq(customers.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(orders, and(
-        eq(activities.entityType, 'order'),
-        eq(activities.entityId, orders.id),
-        eq(orders.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(opportunities, and(
-        eq(activities.entityType, 'opportunity'),
-        eq(activities.entityId, opportunities.id),
-        eq(opportunities.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(products, and(
-        eq(activities.entityType, 'product'),
-        eq(activities.entityId, products.id),
-        eq(products.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(contacts, and(
-        eq(activities.entityType, 'contact'),
-        eq(activities.entityId, contacts.id),
-        eq(contacts.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(suppliers, and(
-        eq(activities.entityType, 'supplier'),
-        eq(activities.entityId, suppliers.id),
-        eq(suppliers.organizationId, ctx.organizationId)
-      ))
       .where(whereClause)
       .orderBy(desc(activities.createdAt), desc(activities.id))
       .limit(pageSize + 1);
@@ -534,31 +352,10 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
     const opportunityMap = new Map(opportunityTitles.map((o) => [o.id, o.title]));
 
     // Transform results to include user data, entity name, and resolved metadata
+    // Use denormalized entity_name column (populated at write time) instead of joins
     const items = results.map((r) => {
-      // Determine entity name based on entityType
-      let entityName: string | null = null;
-      switch (r.activity.entityType) {
-        case 'customer':
-          entityName = r.customerName ?? null;
-          break;
-        case 'order':
-          entityName = r.orderNumber ?? null;
-          break;
-        case 'opportunity':
-          entityName = r.opportunityTitle ?? null;
-          break;
-        case 'product':
-          entityName = r.productName ?? null;
-          break;
-        case 'contact':
-          entityName = r.contactName ?? null;
-          break;
-        case 'supplier':
-          entityName = r.supplierName ?? null;
-          break;
-        default:
-          entityName = null;
-      }
+      // Use denormalized entity_name column - avoids 6 unnecessary LEFT JOINs
+      const entityName = r.activity.entityName ?? null;
 
       // Resolve UUIDs in metadata using the batch-fetched maps
       let resolvedMetadata = r.activity.metadata;
@@ -592,7 +389,7 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
       };
     });
 
-    return buildStandardCursorResponse(items, pageSize);
+    return buildStandardCursorResponse<ActivityWithUser>(items, pageSize);
   });
 
 // ============================================================================
@@ -604,7 +401,7 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
  */
 export const getUserActivities = createServerFn({ method: 'GET' })
   .inputValidator(userActivitiesQuerySchema)
-  .handler(async ({ data }): Promise<ReturnType<typeof buildStandardCursorResponse>> => {
+  .handler(async ({ data }): Promise<CursorPaginatedResponse<Activity>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { userId, cursor, pageSize } = data;
@@ -635,7 +432,7 @@ export const getUserActivities = createServerFn({ method: 'GET' })
       .orderBy(desc(activities.createdAt), desc(activities.id))
       .limit(pageSize + 1);
 
-    return buildStandardCursorResponse(results, pageSize);
+    return buildStandardCursorResponse<Activity>(results, pageSize);
   });
 
 // ============================================================================
@@ -647,11 +444,13 @@ export const getUserActivities = createServerFn({ method: 'GET' })
  */
 export const getActivity = createServerFn({ method: 'GET' })
   .inputValidator(activityParamsSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ActivityWithUser> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { id } = data;
 
+    // Use denormalized entity_name column instead of multiple LEFT JOINs
+    // Per SCHEMA-TRACE.md: Use db.select() with typed columns, avoid unnecessary joins
     const result = await db
       .select({
         activity: activities,
@@ -660,46 +459,9 @@ export const getActivity = createServerFn({ method: 'GET' })
           name: users.name,
           email: users.email,
         },
-        // Entity names from different tables
-        customerName: customers.name,
-        orderNumber: orders.orderNumber,
-        opportunityTitle: opportunities.title,
-        productName: products.name,
-        contactName: sql<string | null>`CASE WHEN ${contacts.firstName} IS NOT NULL AND ${contacts.lastName} IS NOT NULL THEN CONCAT(${contacts.firstName}, ' ', ${contacts.lastName}) ELSE NULL END`,
-        supplierName: suppliers.name,
       })
       .from(activities)
       .leftJoin(users, eq(activities.userId, users.id))
-      .leftJoin(customers, and(
-        eq(activities.entityType, 'customer'),
-        eq(activities.entityId, customers.id),
-        eq(customers.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(orders, and(
-        eq(activities.entityType, 'order'),
-        eq(activities.entityId, orders.id),
-        eq(orders.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(opportunities, and(
-        eq(activities.entityType, 'opportunity'),
-        eq(activities.entityId, opportunities.id),
-        eq(opportunities.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(products, and(
-        eq(activities.entityType, 'product'),
-        eq(activities.entityId, products.id),
-        eq(products.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(contacts, and(
-        eq(activities.entityType, 'contact'),
-        eq(activities.entityId, contacts.id),
-        eq(contacts.organizationId, ctx.organizationId)
-      ))
-      .leftJoin(suppliers, and(
-        eq(activities.entityType, 'supplier'),
-        eq(activities.entityId, suppliers.id),
-        eq(suppliers.organizationId, ctx.organizationId)
-      ))
       .where(and(eq(activities.id, id), eq(activities.organizationId, ctx.organizationId)))
       .limit(1);
 
@@ -711,30 +473,8 @@ export const getActivity = createServerFn({ method: 'GET' })
     const activity = r.activity;
     const user = r.user?.id ? r.user : null;
 
-    // Determine entity name based on entityType
-    let entityName: string | null = null;
-    switch (activity.entityType) {
-      case 'customer':
-        entityName = r.customerName ?? null;
-        break;
-      case 'order':
-        entityName = r.orderNumber ?? null;
-        break;
-      case 'opportunity':
-        entityName = r.opportunityTitle ?? null;
-        break;
-      case 'product':
-        entityName = r.productName ?? null;
-        break;
-      case 'contact':
-        entityName = r.contactName ?? null;
-        break;
-      case 'supplier':
-        entityName = r.supplierName ?? null;
-        break;
-      default:
-        entityName = null;
-    }
+    // Use denormalized entity_name column - avoids 6 unnecessary LEFT JOINs
+    const entityName = activity.entityName ?? null;
 
     // Resolve UUIDs in metadata to readable names
     const resolvedMetadata = await resolveMetadataUuids(
@@ -742,12 +482,13 @@ export const getActivity = createServerFn({ method: 'GET' })
       ctx.organizationId
     );
 
-    return {
+    const activityWithUser: ActivityWithUser = {
       ...activity,
       metadata: resolvedMetadata,
       user,
       entityName,
-    } as ActivityWithUser;
+    };
+    return activityWithUser;
   });
 
 // ============================================================================
@@ -764,14 +505,19 @@ export const getActivityStats = createServerFn({ method: 'GET' })
 
     const { dateFrom, dateTo, groupBy } = data;
 
+    const requiresBoundedRange = groupBy === 'day' || groupBy === 'hour';
+    const effectiveDateFrom =
+      dateFrom ?? (requiresBoundedRange ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) : undefined);
+    const effectiveDateTo = dateTo ?? (requiresBoundedRange ? new Date() : undefined);
+
     // Build where conditions
     const conditions = [eq(activities.organizationId, ctx.organizationId)];
 
-    if (dateFrom) {
-      conditions.push(gte(activities.createdAt, dateFrom));
+    if (effectiveDateFrom) {
+      conditions.push(gte(activities.createdAt, effectiveDateFrom));
     }
-    if (dateTo) {
-      conditions.push(lte(activities.createdAt, dateTo));
+    if (effectiveDateTo) {
+      conditions.push(lte(activities.createdAt, effectiveDateTo));
     }
 
     const whereClause = and(...conditions);
@@ -784,7 +530,7 @@ export const getActivityStats = createServerFn({ method: 'GET' })
     let stats: { key: string; count: number }[] = [];
 
     switch (groupBy) {
-      case 'action':
+      case 'action': {
         const actionStats = await db
           .select({
             key: activities.action,
@@ -796,8 +542,9 @@ export const getActivityStats = createServerFn({ method: 'GET' })
           .orderBy(desc(count()));
         stats = actionStats.map((s) => ({ key: s.key, count: s.count }));
         break;
+      }
 
-      case 'entityType':
+      case 'entityType': {
         const entityStats = await db
           .select({
             key: activities.entityType,
@@ -809,9 +556,10 @@ export const getActivityStats = createServerFn({ method: 'GET' })
           .orderBy(desc(count()));
         stats = entityStats.map((s) => ({ key: s.key, count: s.count }));
         break;
+      }
 
       // COMMS-AUTO-002: Group by source for auto-capture analytics
-      case 'source':
+      case 'source': {
         const sourceStats = await db
           .select({
             key: activities.source,
@@ -823,15 +571,16 @@ export const getActivityStats = createServerFn({ method: 'GET' })
           .orderBy(desc(count()));
         stats = sourceStats.map((s) => ({ key: s.key, count: s.count }));
         break;
+      }
 
-      case 'userId':
+      case 'userId': {
         const userStats = await db
           .select({
             key: activities.userId,
             count: count(),
           })
           .from(activities)
-          .where(and(whereClause, sql`${activities.userId} IS NOT NULL`))
+          .where(and(whereClause, isNotNull(activities.userId)))
           .groupBy(activities.userId)
           .orderBy(desc(count()))
           .limit(20); // Limit to top 20 users
@@ -840,32 +589,48 @@ export const getActivityStats = createServerFn({ method: 'GET' })
           count: s.count,
         }));
         break;
+      }
 
-      case 'day':
+      case 'day': {
+        const dayKeyExpr = sql<Date>`date_trunc('day', ${activities.createdAt})`;
         const dayStats = await db
           .select({
-            key: sql<string>`to_char(${activities.createdAt}, 'YYYY-MM-DD')`,
+            key: dayKeyExpr,
             count: count(),
           })
           .from(activities)
           .where(whereClause)
-          .groupBy(sql`to_char(${activities.createdAt}, 'YYYY-MM-DD')`)
-          .orderBy(asc(sql`to_char(${activities.createdAt}, 'YYYY-MM-DD')`));
-        stats = dayStats.map((s) => ({ key: s.key, count: s.count }));
-        break;
+          .groupBy(dayKeyExpr)
+          .orderBy(dayKeyExpr);
 
-      case 'hour':
+        stats = dayStats.map((s) => {
+          const date = new Date(s.key);
+          const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+            date.getDate()
+          ).padStart(2, '0')}`;
+          return { key: dayKey, count: s.count };
+        });
+        break;
+      }
+
+      case 'hour': {
+        const hourKeyExpr = sql<number>`extract(hour from ${activities.createdAt})`;
         const hourStats = await db
           .select({
-            key: sql<string>`to_char(${activities.createdAt}, 'HH24')`,
+            key: hourKeyExpr,
             count: count(),
           })
           .from(activities)
           .where(whereClause)
-          .groupBy(sql`to_char(${activities.createdAt}, 'HH24')`)
-          .orderBy(asc(sql`to_char(${activities.createdAt}, 'HH24')`));
-        stats = hourStats.map((s) => ({ key: s.key, count: s.count }));
+          .groupBy(hourKeyExpr)
+          .orderBy(hourKeyExpr);
+
+        stats = hourStats.map((s) => ({
+          key: String(s.key).padStart(2, '0'),
+          count: s.count,
+        }));
         break;
+      }
     }
 
     // Calculate percentages
@@ -878,8 +643,8 @@ export const getActivityStats = createServerFn({ method: 'GET' })
       stats: statsWithPercentage,
       total,
       dateRange: {
-        from: dateFrom ?? null,
-        to: dateTo ?? null,
+        from: effectiveDateFrom ?? null,
+        to: effectiveDateTo ?? null,
       },
     };
   });
@@ -901,7 +666,7 @@ export const getActivityLeaderboard = createServerFn({ method: 'GET' })
     // Build where conditions
     const conditions = [
       eq(activities.organizationId, ctx.organizationId),
-      sql`${activities.userId} IS NOT NULL`,
+      isNotNull(activities.userId),
     ];
 
     if (dateFrom) {
@@ -937,7 +702,7 @@ export const getActivityLeaderboard = createServerFn({ method: 'GET' })
               email: users.email,
             })
             .from(users)
-            .where(inArray(users.id, userIds))
+            .where(and(inArray(users.id, userIds), eq(users.organizationId, ctx.organizationId)))
         : [];
 
     // Build leaderboard with user details
@@ -982,7 +747,7 @@ export const requestActivityExport = createServerFn({ method: 'POST' })
     // 4. Upload to S3/R2 and return signed URL
     // 5. Add job status polling endpoint
 
-    console.warn('[Activity Export] STUB: Export not implemented', {
+    logger.warn('[Activity Export] STUB: Export not implemented', {
       format,
       organizationId: ctx.organizationId,
       requestedBy: ctx.user.id,
@@ -1029,3 +794,68 @@ export const getRecentActivityCount = createServerFn({ method: 'GET' })
       dateRange: { from: dateFrom, to: dateTo },
     };
   });
+
+// ============================================================================
+// LOG ENTITY ACTIVITY
+// ============================================================================
+
+/**
+ * Log a manual activity for any entity type.
+ * Creates an activity record with 'note_added' or 'call_logged' action based on type.
+ */
+export const logEntityActivity = createServerFn({ method: 'POST' })
+  .inputValidator(logEntityActivitySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read }); // Basic permission
+
+    const { entityType, entityId, activityType, description, outcome, scheduledAt, isFollowUp } = data;
+
+    // Verify entity exists and belongs to org
+    if (entityType === 'customer') {
+      await verifyCustomerExists(entityId, ctx.organizationId);
+    } else if (entityType === 'order') {
+      await verifyOrderExists(entityId, ctx.organizationId);
+    } else if (entityType === 'opportunity') {
+      await verifyOpportunityExists(entityId, ctx.organizationId);
+    }
+    // Other entity types: no verification (legacy/unsupported)
+
+    // Determine action based on activity type
+    const action = activityType === 'call' ? 'call_logged' : 'note_added';
+
+    // Build metadata object (follows pattern from quick-log.ts)
+    const metadata: ActivityMetadata = {
+      logType: activityType,
+      fullNotes: description,
+    };
+
+    // Add optional fields
+    if (outcome) {
+      metadata.notes = outcome; // Use notes field for outcome
+    }
+    if (scheduledAt) {
+      metadata.scheduledDate = scheduledAt.toISOString();
+    }
+    if (isFollowUp) {
+      metadata.reason = 'follow_up'; // Mark as follow-up in reason field
+    }
+
+    // Create the activity
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        organizationId: ctx.organizationId,
+        userId: ctx.user.id,
+        entityType,
+        entityId,
+        action,
+        description: `${activityType.charAt(0).toUpperCase() + activityType.slice(1).replace('_', ' ')}: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
+        metadata,
+        source: 'manual',
+        createdBy: ctx.user.id,
+      })
+      .returning();
+
+    return { activity };
+  });
+

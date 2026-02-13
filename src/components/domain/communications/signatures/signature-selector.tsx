@@ -10,6 +10,7 @@
 "use client";
 
 import * as React from "react";
+import { useCallback } from "react";
 import { Check, ChevronDown, FileSignature, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,28 +27,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn, sanitizeHtml } from "@/lib/utils";
 
 import { useSignatures } from "@/hooks/communications/use-signatures";
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface Signature {
-  id: string;
-  name: string;
-  content: string;
-  isDefault: boolean;
-  isCompanyWide: boolean;
-}
-
-interface SignatureSelectorProps {
-  value?: string;
-  onChange: (signatureId: string | null, content: string) => void;
-  onCreateNew?: () => void;
-  className?: string;
-}
+import type {
+  Signature,
+  SignatureSelectorProps,
+} from "@/lib/schemas/communications";
 
 // ============================================================================
 // COMPONENT
@@ -63,7 +49,7 @@ export function SignatureSelector({
     includeCompanyWide: true,
   });
 
-  const signatures = (signaturesData as Signature[] | undefined) ?? [];
+  const signatures = React.useMemo(() => signaturesData ?? [], [signaturesData]);
   const selectedSignature = signatures.find((s) => s.id === value);
 
   // Auto-select default signature if no value provided
@@ -76,13 +62,16 @@ export function SignatureSelector({
     }
   }, [value, signatures, onChange]);
 
-  const handleSelect = (signature: Signature | null) => {
-    if (signature) {
-      onChange(signature.id, signature.content);
-    } else {
-      onChange(null, "");
-    }
-  };
+  const handleSelect = useCallback(
+    (signature: Signature | null) => {
+      if (signature) {
+        onChange(signature.id, signature.content);
+      } else {
+        onChange(null, "");
+      }
+    },
+    [onChange]
+  );
 
   return (
     <DropdownMenu>
@@ -209,7 +198,7 @@ function SignatureMenuItem({
         <div className="text-sm font-medium mb-1">{signature.name}</div>
         <div
           className="prose prose-sm max-w-none text-xs"
-          dangerouslySetInnerHTML={{ __html: signature.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature.content) }}
         />
       </TooltipContent>
     </Tooltip>

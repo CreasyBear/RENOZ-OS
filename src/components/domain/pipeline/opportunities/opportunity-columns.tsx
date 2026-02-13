@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Column file exports column factory with JSX cell renderers */
 /**
  * Opportunity Column Definitions
  *
@@ -17,31 +18,12 @@ import {
 import type { ActionItem } from "@/components/shared/data-table/cells/actions-cell";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import { cn } from "@/lib/utils";
-import type { OpportunityStage } from "@/lib/schemas/pipeline";
+import type { OpportunityStage, OpportunityTableItem } from "@/lib/schemas/pipeline";
+export type { OpportunityTableItem };
 import {
   STAGE_COLORS,
   formatExpectedCloseDateRelative,
 } from "./opportunity-status-config";
-
-/**
- * Opportunity table item type - matches server function response
- */
-export interface OpportunityTableItem {
-  id: string;
-  title: string;
-  customerId: string;
-  stage: OpportunityStage;
-  value: number;
-  probability: number | null;
-  expectedCloseDate: Date | null;
-  daysInStage: number;
-  createdAt: Date;
-  updatedAt: Date;
-  customer?: {
-    id: string;
-    name: string;
-  } | null;
-}
 
 export interface CreateOpportunityColumnsOptions {
   /** Handle single item selection */
@@ -174,7 +156,15 @@ export function createOpportunityColumns(
           </Link>
           <p className="text-xs text-muted-foreground">
             {row.original.customer?.name ? (
-              <TruncateTooltip text={row.original.customer.name} maxLength={25} />
+              <Link
+                to="/customers/$customerId"
+                params={{ customerId: row.original.customerId }}
+                search={{}}
+                className="hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <TruncateTooltip text={row.original.customer.name} maxLength={25} />
+              </Link>
             ) : (
               <TruncateTooltip text={row.original.customerId} maxLength={18} />
             )}

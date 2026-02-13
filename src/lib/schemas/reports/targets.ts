@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { currencySchema, idParamSchema, paginationSchema } from '../_shared/patterns';
+import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
 // ENUMS (match Drizzle schema enums)
@@ -95,6 +96,17 @@ export const listTargetsSchema = paginationSchema.extend({
 });
 
 export type ListTargetsInput = z.infer<typeof listTargetsSchema>;
+
+export const listTargetsCursorSchema = cursorPaginationSchema.merge(
+  z.object({
+    metric: targetMetricSchema.optional(),
+    period: targetPeriodSchema.optional(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    search: z.string().max(255).optional(),
+  })
+);
+export type ListTargetsCursorInput = z.infer<typeof listTargetsCursorSchema>;
 
 // ============================================================================
 // GET TARGET

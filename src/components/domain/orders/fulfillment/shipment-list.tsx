@@ -7,8 +7,6 @@
  */
 
 import { memo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Package,
   Truck,
@@ -43,7 +41,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { getOrderShipments } from "@/server/functions/orders/order-shipments";
+import { useOrderShipments } from "@/hooks/orders";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -109,11 +107,8 @@ export const ShipmentList = memo(function ShipmentList({
   onConfirmDelivery,
   className,
 }: ShipmentListProps) {
-  // Fetch shipments
-  const { data: shipments, isLoading, error } = useQuery({
-    queryKey: queryKeys.orders.shipments({ orderId }),
-    queryFn: () => getOrderShipments({ data: { orderId } }),
-  });
+  // Fetch shipments using hook
+  const { data: shipments, isLoading, error } = useOrderShipments(orderId);
 
   if (isLoading) {
     return (
