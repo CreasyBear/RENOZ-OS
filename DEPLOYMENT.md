@@ -126,11 +126,29 @@ The `vercel.json` in this directory adds:
 
 ## Troubleshooting
 
-### Build fails with OOM
-The build uses 8GB Node memory. If it still fails, increase in `vercel.json`:
-```json
-"buildCommand": "NODE_OPTIONS=--max-old-space-size=12288 npm run build"
-```
+### 500: Missing VITE_SUPABASE_URL environment variable
+The app throws this at runtime when Supabase env vars are not set in Vercel.
+
+**Fix:** Add these in Vercel → Project → Settings → Environment Variables:
+- `VITE_SUPABASE_URL` – Supabase project URL (e.g. `https://xxx.supabase.co`)
+- `VITE_SUPABASE_ANON_KEY` – Supabase anon/public key
+
+Apply to **Production**, **Preview**, and **Development**. Then **redeploy** — Vite inlines these at build time, so a new build is required.
+
+### Build fails with OOM (heap limit)
+The build uses 12GB Node memory. If it still fails:
+
+1. **Enable Enhanced Builds** (Pro/Enterprise): Project Settings → General → Build & Development Settings → enable "On-Demand Enhanced Builds" (16GB memory). Then increase in `vercel.json`:
+   ```json
+   "buildCommand": "NODE_OPTIONS=--max-old-space-size=14336 npm run build:vercel"
+   ```
+
+2. **Build locally and deploy prebuilt** (works on any plan):
+   ```bash
+   NODE_OPTIONS=--max-old-space-size=12288 npm run build:vercel
+   vercel deploy --prebuilt --prod
+   ```
+   Your machine's RAM is used instead of Vercel's 8GB limit.
 
 ### Auth redirects to localhost
 - Ensure `APP_URL` and `VITE_APP_URL` are set in Vercel

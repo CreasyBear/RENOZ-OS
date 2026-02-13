@@ -189,8 +189,8 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // Reduce parallelism to lower peak memory (mitigates OOM with Nitro + TanStack Start)
-      maxParallelFileOps: 2,
+      // Minimal parallelism to reduce peak memory (OOM on Vercel 8GB)
+      maxParallelFileOps: 1,
       onwarn(warning, warn) {
         // Suppress "use client" directive warnings from node_modules (framer-motion, radix, etc.)
         // - harmless: Rollup strips them during SSR bundle; apps work correctly
@@ -199,16 +199,8 @@ export default defineConfig({
         }
         warn(warning)
       },
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('recharts')) return 'recharts';
-            if (id.includes('@tanstack')) return 'tanstack';
-            if (id.includes('@radix-ui')) return 'radix';
-            if (id.includes('framer-motion')) return 'framer-motion';
-          }
-        },
-      },
+      // Disable manualChunks - reduces peak memory during build (chunk splitting increases it)
+      output: {},
     },
   },
 })
