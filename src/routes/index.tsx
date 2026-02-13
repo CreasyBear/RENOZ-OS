@@ -9,6 +9,11 @@ import { withAuthRetry } from '~/lib/auth/route-auth'
 
 export const Route = createFileRoute('/')({
   beforeLoad: async ({ location }) => {
+    // Prevent redirect loops - only run root redirect logic for the exact "/" route.
+    if (location.pathname !== '/') {
+      return
+    }
+
     if (typeof window === 'undefined') {
       const { getRequest } = await import('@tanstack/react-start/server')
       const { createServerSupabase } = await import('~/lib/supabase/server')
@@ -21,11 +26,6 @@ export const Route = createFileRoute('/')({
         throw redirect({ to: '/dashboard', search: { tab: 'overview' } })
       }
       throw redirect({ to: '/login', search: { redirect: undefined } })
-    }
-
-    // Prevent redirect loops - don't redirect if already navigating to auth pages
-    if (location.pathname !== '/') {
-      return
     }
 
     const { supabase } = await import('~/lib/supabase/client')

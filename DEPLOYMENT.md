@@ -119,6 +119,7 @@ For auth (OAuth, magic links, password reset) to work in production:
 - **Output**: Handled by TanStack Start / Nitro (`.output`)
 
 The `vercel.json` in this directory adds:
+- `trailingSlash: false` – prevents `/login` ↔ `/login/` redirect loops (307)
 - Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
 - Increased Node memory for large builds
 
@@ -150,8 +151,10 @@ The build uses 12GB Node memory. If it still fails:
    ```
    Your machine's RAM is used instead of Vercel's 8GB limit.
 
-### ERR_TOO_MANY_REDIRECTS (redirect loop)
+### ERR_TOO_MANY_REDIRECTS / 307 login redirect loop
 Usually caused by URL or auth config mismatch.
+
+**0. Trailing slash** – `vercel.json` sets `trailingSlash: false` to prevent `/login` ↔ `/login/` redirect loops. If you see repeated 307 redirects from login to login, ensure this is set.
 
 **1. Vercel env vars** – Must match your actual domain exactly:
 - `APP_URL` = `https://renoz-os.vercel.app` (no trailing slash)

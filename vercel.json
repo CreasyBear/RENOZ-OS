@@ -3,6 +3,7 @@
   "framework": "tanstack-start",
   "buildCommand": "NODE_OPTIONS=--max-old-space-size=12288 npm run build:vercel",
   "installCommand": "npm install",
+  "trailingSlash": false,
   "headers": [
     {
       "source": "/(.*)",
