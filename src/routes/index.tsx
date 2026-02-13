@@ -9,15 +9,19 @@ import { withAuthRetry } from '~/lib/auth/route-auth'
 
 export const Route = createFileRoute('/')({
   beforeLoad: async ({ location }) => {
-    // Prevent redirect loops - only run root redirect logic for the exact "/" route.
-    if (location.pathname !== '/') {
-      return
-    }
-
     if (typeof window === 'undefined') {
       const { getRequest } = await import('@tanstack/react-start/server')
+      const request = getRequest()
+      const requestPath = new URL(request.url).pathname
+
+      // In production SSR, router location can be normalized for client-only routes.
+      // Gate by actual HTTP request path to avoid redirecting /login -> /login loops.
+      if (requestPath !== '/') {
+        return
+      }
+
       const { createServerSupabase } = await import('~/lib/supabase/server')
-      const supabase = createServerSupabase(getRequest())
+      const supabase = createServerSupabase(request)
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -26,6 +30,11 @@ export const Route = createFileRoute('/')({
         throw redirect({ to: '/dashboard', search: { tab: 'overview' } })
       }
       throw redirect({ to: '/login', search: { redirect: undefined } })
+    }
+
+    // Prevent redirect loops - only run root redirect logic for the exact "/" route.
+    if (location.pathname !== '/') {
+      return
     }
 
     const { supabase } = await import('~/lib/supabase/client')
