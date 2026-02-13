@@ -3,7 +3,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
-import { nitro } from 'nitro/vite'
 import { fileURLToPath, URL } from 'node:url'
 
 const VIRTUAL_ID = '\0tanstack-start-injected-head-scripts:v'
@@ -157,7 +156,6 @@ export default defineConfig({
   plugins: [
     serverOnlyModulesStub(),
     tanstackStart(),
-    nitro(),
     react(),
     virtualTanstackHeadScripts(),
     tailwindcss(),
