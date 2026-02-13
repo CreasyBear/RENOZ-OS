@@ -15,7 +15,9 @@ export const Route = createFileRoute('/login')({
     reason: typeof search.reason === 'string' ? search.reason : undefined,
   }),
   beforeLoad: async ({ search }) => {
-    if (search.reason === 'invalid_user') {
+    // Auth failure sent us here - force signOut and show login (breaks redirect loop)
+    if (search.reason === 'invalid_user' || search.reason === 'session_expired') {
+      await supabase.auth.signOut()
       return
     }
 

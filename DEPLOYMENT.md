@@ -150,6 +150,21 @@ The build uses 12GB Node memory. If it still fails:
    ```
    Your machine's RAM is used instead of Vercel's 8GB limit.
 
+### ERR_TOO_MANY_REDIRECTS (redirect loop)
+Usually caused by URL or auth config mismatch.
+
+**1. Vercel env vars** – Must match your actual domain exactly:
+- `APP_URL` = `https://renoz-os.vercel.app` (no trailing slash)
+- `VITE_APP_URL` = same as `APP_URL`
+
+**2. Supabase URL Configuration** – Authentication → URL Configuration:
+- **Site URL** = `https://renoz-os.vercel.app`
+- **Redirect URLs** = `https://renoz-os.vercel.app/**`
+
+**3. Clear cookies** – Delete cookies for `renoz-os.vercel.app` and try again, or use an incognito window.
+
+**4. No www vs non-www mismatch** – If you use a custom domain, ensure `APP_URL` matches the exact URL (www or non-www) users visit.
+
 ### Auth redirects to localhost
 - Ensure `APP_URL` and `VITE_APP_URL` are set in Vercel
 - For previews, consider: `APP_URL=https://${VERCEL_URL}` (Vercel injects `VERCEL_URL`)

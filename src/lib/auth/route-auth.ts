@@ -243,7 +243,8 @@ export async function getAuthContext(location?: RouteLocation): Promise<AuthRout
         throw error
       }
 
-      throw toLoginRedirect(location)
+      // Pass session_expired so login page forces signOut and doesn't redirect (breaks loop)
+      throw toLoginRedirect(location, 'session_expired')
     })
     .finally(() => {
       authPromise = null
