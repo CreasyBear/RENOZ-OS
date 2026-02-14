@@ -14,6 +14,7 @@ export type { OrderEditDialogProps } from './order-edit-dialog';
 // Schemas
 export { inlineEditSchema } from './order-card-inline-edit.schema';
 export type { InlineEditFormData } from './order-card-inline-edit.schema';
+/** @deprecated For deprecated OrderCreateDialog. Canonical: @/lib/schemas/orders/orders createOrderSchema */
 export { createOrderSchema } from './order-create-dialog.schema';
 export type { CreateOrderFormData } from './order-create-dialog.schema';
 export { editOrderSchema } from './order-edit-dialog.schema';

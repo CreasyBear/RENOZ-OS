@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite --port 3000",
     "build": "NODE_OPTIONS=--max-old-space-size=12288 vite build && tsc",
-    "build:vercel": "NODE_OPTIONS=--max-old-space-size=12288 vite build",
+    "build:vercel": "NODE_ENV=production NODE_OPTIONS=--max-old-space-size=12288 vite build",
     "predeploy": "npm run typecheck && npm run lint && npm run test:unit && npm run build",
     "preview": "vite preview",
     "test": "bun test",
@@ -18,7 +18,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "build:analyze": "vite-bundle-visualizer",
-    "fonts:download": "node scripts/download-pdf-fonts.mjs"
+    "fonts:download": "node scripts/download-pdf-fonts.mjs",
+    "deploy:prod": "node scripts/deploy-with-guards.mjs",
+    "deploy:probe": "node scripts/probe-production.mjs"
   },
   "dependencies": {
     "@ai-sdk-tools/artifacts": "^1.2.0",

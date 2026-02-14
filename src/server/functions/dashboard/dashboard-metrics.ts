@@ -298,9 +298,6 @@ async function queryMetricsFromMV(
       openClaims: Number(claimMetrics?.open_count ?? 0),
     };
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/781e85a8-61df-46d9-aac3-a2992cae977d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'dashboard-metrics.ts:queryMetricsFromMV:catch',message:'MV query failed, fallback to live',data:{dateFrom,dateTo,error:error instanceof Error?error.message:'unknown_error'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     // MVs don't exist yet - fall back to live queries
     logger.warn('Materialized views not available, falling back to live queries', { error });
     return queryMetricsLive(organizationId, dateFrom, dateTo);
@@ -573,10 +570,6 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
     const dateToStr = to.toISOString().split('T')[0];
     const needsFreshData = includesToday(to);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/781e85a8-61df-46d9-aac3-a2992cae977d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H1',location:'dashboard-metrics.ts:getDashboardMetrics:date-range',message:'Dashboard metrics date range resolved',data:{inputDateFrom:data.dateFrom??null,inputDateTo:data.dateTo??null,preset:preset??null,resolvedDateFrom:dateFromStr,resolvedDateTo:dateToStr,needsFreshData},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-
     // Try cache first (skip for ranges that include today - need fresh data)
     const cacheKey = {
       orgId: ctx.organizationId,
@@ -639,10 +632,6 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
         .orderBy(desc(activities.createdAt))
         .limit(10),
     ]);
-
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/781e85a8-61df-46d9-aac3-a2992cae977d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H3',location:'dashboard-metrics.ts:getDashboardMetrics:computed-metrics',message:'Computed current and previous dashboard metrics',data:{currentMetrics,previousMetrics,targetCount:currentTargets.length,recentActivityCount:recentActivityData.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const targetMap = new Map(currentTargets.map((t) => [t.metric, Number(t.targetValue)]));
 

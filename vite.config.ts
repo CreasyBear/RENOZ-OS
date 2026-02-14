@@ -7,6 +7,12 @@ import { nitro } from 'nitro/vite'
 import { fileURLToPath, URL } from 'node:url'
 
 const VIRTUAL_ID = '\0tanstack-start-injected-head-scripts:v'
+const REACT_DOM_SERVER_NODE_SHIM = fileURLToPath(
+  new URL('./src/lib/shims/react-dom-server.node.ts', import.meta.url)
+)
+const REACT_DOM_SERVER_BROWSER_SHIM = fileURLToPath(
+  new URL('./src/lib/shims/react-dom-server.browser.ts', import.meta.url)
+)
 
 /**
  * Provides the tanstack-start-injected-head-scripts virtual module.
@@ -44,6 +50,17 @@ function virtualTanstackHeadScripts() {
             : 'undefined'
         return `export const injectedHeadScripts = ${value};`
       }
+    },
+  }
+}
+
+function reactDomServerRuntimeShim() {
+  return {
+    name: 'react-dom-server-runtime-shim',
+    enforce: 'pre' as const,
+    resolveId(id: string, _importer: string | undefined, options: { ssr?: boolean }) {
+      if (id !== 'react-dom/server') return null
+      return options?.ssr ? REACT_DOM_SERVER_NODE_SHIM : REACT_DOM_SERVER_BROWSER_SHIM
     },
   }
 }
@@ -152,9 +169,12 @@ export default { hash: () => throwServerOnly(), compare: () => throwServerOnly()
 }
 
 export default defineConfig({
+  base: '/',
   logLevel: 'warn',
   server: { port: 3000 },
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   plugins: [
+    reactDomServerRuntimeShim(),
     serverOnlyModulesStub(),
     tanstackStart({
       prerender: { enabled: false },
@@ -172,9 +192,6 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      'react-dom/server': fileURLToPath(
-        new URL('./src/lib/shims/react-dom-server.ts', import.meta.url)
-      ),
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '~': fileURLToPath(new URL('./src', import.meta.url)),
       drizzle: fileURLToPath(new URL('./drizzle', import.meta.url)),
@@ -200,7 +217,10 @@ export default defineConfig({
         warn(warning)
       },
       // Disable manualChunks - reduces peak memory during build (chunk splitting increases it)
-      output: {},
+      // Avoid output: {} which can override Rollup asset path defaults and cause chunk 404s
+      output: {
+        manualChunks: undefined,
+      },
     },
   },
 })

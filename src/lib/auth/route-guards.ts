@@ -17,6 +17,7 @@
 
 import { redirect } from '@tanstack/react-router'
 import type { Role } from './permissions'
+import { getLoginRedirectSearch } from './route-policy'
 
 // ============================================================================
 // TYPES
@@ -62,7 +63,7 @@ export async function requireRoles(
   const appUser = opts?.context?.appUser
 
   if (!authUser || !appUser) {
-    throw redirect({ to: '/login', search: { redirect: undefined } })
+    throw redirect({ to: '/login', search: getLoginRedirectSearch() })
   }
 
   // Check if user role is in allowed list

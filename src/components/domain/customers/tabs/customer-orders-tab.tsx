@@ -33,6 +33,8 @@ import type { CustomerDetailData } from '@/lib/schemas/customers';
 export interface CustomerOrdersTabProps {
   orderSummary: CustomerDetailData['orderSummary'];
   totalOrders: number;
+  /** Customer ID for "Create Order" links to pre-select customer */
+  customerId?: string;
 }
 
 // ============================================================================
@@ -63,7 +65,7 @@ const getStatusColor = (status: string): string => {
 // EMPTY STATE
 // ============================================================================
 
-function EmptyState() {
+function EmptyState({ customerId }: { customerId?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -75,6 +77,7 @@ function EmptyState() {
       </p>
       <Link
         to="/orders/create"
+        search={customerId ? { customerId } : undefined}
         className={cn(buttonVariants({ variant: 'default' }))}
       >
         Create First Order
@@ -90,13 +93,14 @@ function EmptyState() {
 export const CustomerOrdersTab = memo(function CustomerOrdersTab({
   orderSummary,
   totalOrders,
+  customerId,
 }: CustomerOrdersTabProps) {
   const orders = orderSummary?.recentOrders ?? [];
 
   if (orders.length === 0) {
     return (
       <div className="pt-6">
-        <EmptyState />
+        <EmptyState customerId={customerId} />
       </div>
     );
   }
@@ -109,6 +113,7 @@ export const CustomerOrdersTab = memo(function CustomerOrdersTab({
         </h3>
         <Link
           to="/orders/create"
+          search={customerId ? { customerId } : undefined}
           className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
         >
           New Order

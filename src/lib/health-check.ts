@@ -272,7 +272,7 @@ export const runSuppliersHealthCheck = () => suppliersHealthChecker.runAllChecks
 export { HealthChecker };
 
 // Periodic health check (every 5 minutes in production)
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+if (typeof window !== 'undefined' && import.meta.env.PROD) {
   setInterval(
     async () => {
       try {

@@ -25,7 +25,7 @@ import { Progress } from '@/components/ui/progress';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { TextField, TextareaField, SelectField } from '@/components/shared/forms';
 import { useCreateFile, type CreateFileInput } from '@/hooks/jobs';
-import { uploadFile } from '@/lib/storage';
+import { uploadProjectFile } from '@/server/functions/files/upload-project-file';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -111,7 +111,7 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
           });
         }, 100);
 
-        const uploadResult = await uploadFile({
+        const uploadResult = await uploadProjectFile({
           path: storagePath,
           fileBody: selectedFile,
           contentType: selectedFile.type || 'application/octet-stream',

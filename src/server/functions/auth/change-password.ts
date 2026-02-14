@@ -5,6 +5,7 @@ import { authLogger } from '@/lib/logger'
 import { getRequest } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { createServerSupabase } from '@/lib/supabase/server'
+import { checkLoginRateLimit, RateLimitError } from '@/lib/auth/rate-limit'
 
 const changePasswordInputSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
@@ -35,6 +36,9 @@ export const changePassword = createServerFn({ method: 'POST' })
         }
       }
 
+      // Reuse login limiter semantics to throttle password-change attempts per user.
+      await checkLoginRateLimit(`change-password:${user.id}`)
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: data.currentPassword,
@@ -60,6 +64,13 @@ export const changePassword = createServerFn({ method: 'POST' })
 
       return { success: true }
     } catch (error) {
+      if (error instanceof RateLimitError) {
+        return {
+          success: false,
+          error: error.message,
+        }
+      }
+
       authLogger.error('[changePassword] Unexpected error', error)
       return {
         success: false,

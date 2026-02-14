@@ -47,6 +47,11 @@ export interface TextFieldProps {
   disabled?: boolean
   /** Optional additional blur handler (called after field.handleBlur) */
   onBlur?: () => void
+  /**
+   * When true, show errors when field has errors (ignore isTouched).
+   * Use for auth forms so submit-time validation errors are visible.
+   */
+  showErrorsAfterSubmit?: boolean
 }
 
 export function TextField({
@@ -62,10 +67,11 @@ export function TextField({
   className,
   disabled,
   onBlur,
+  showErrorsAfterSubmit,
 }: TextFieldProps) {
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
+  const hasErrors = field.state.meta.errors.length > 0
+  const shouldShowError = showErrorsAfterSubmit ? hasErrors : (field.state.meta.isTouched && hasErrors)
+  const rawError = shouldShowError ? field.state.meta.errors[0] : undefined
 
   const error = typeof rawError === 'string'
     ? rawError

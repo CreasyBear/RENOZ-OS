@@ -11,7 +11,7 @@
 import { task, logger } from "@trigger.dev/sdk/v3";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminSupabase } from "@/lib/supabase/server";
 import {
   orders,
   orderLineItems,
@@ -378,7 +378,7 @@ export const generateInvoicePdf = task({
     });
 
     // Upload to Supabase Storage
-    const { error: uploadError } = await createAdminClient()
+    const { error: uploadError } = await createAdminSupabase()
       .storage.from(STORAGE_BUCKET)
       .upload(storagePath, pdfResult.buffer, {
         contentType: "application/pdf",
@@ -391,7 +391,7 @@ export const generateInvoicePdf = task({
 
     // Generate signed URL (valid for 1 year)
     const { data: signedUrlData, error: signedUrlError } =
-      await createAdminClient()
+      await createAdminSupabase()
         .storage.from(STORAGE_BUCKET)
         .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1 year
 

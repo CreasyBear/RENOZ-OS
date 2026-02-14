@@ -2,7 +2,17 @@ import React, { Component } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RefreshCw, Home, LogOut } from 'lucide-react';
+import {
+  RefreshCw,
+  Home,
+  LogOut,
+  WifiOff,
+  FileWarning,
+  ShieldAlert,
+  ServerCrash,
+  Repeat,
+  AlertTriangle,
+} from 'lucide-react';
 import { logger } from '@/lib/logger';
 
 interface AuthErrorBoundaryProps {
@@ -16,7 +26,7 @@ interface AuthErrorBoundaryState {
   errorId?: string;
 }
 
-type ErrorCategory = 'network' | 'validation' | 'auth' | 'server' | 'unknown';
+type ErrorCategory = 'network' | 'validation' | 'auth' | 'server' | 'redirect' | 'unknown';
 
 function categorizeError(error: Error): ErrorCategory {
   const message = error.message.toLowerCase();
@@ -37,6 +47,9 @@ function categorizeError(error: Error): ErrorCategory {
   if (message.includes('500') || message.includes('server')) {
     return 'server';
   }
+  if (message.includes('redirect') || message.includes('too_many_redirects')) {
+    return 'redirect';
+  }
   return 'unknown';
 }
 
@@ -46,35 +59,44 @@ function getErrorDisplay(errorCategory: ErrorCategory, _error: Error) {
       return {
         title: 'Connection Error',
         message: 'Please check your internet connection and try again.',
-        icon: '🌐',
+        icon: WifiOff,
         actions: ['retry'],
       };
     case 'validation':
       return {
         title: 'Invalid Input',
         message: 'Please check your input and try again.',
-        icon: '📝',
+        icon: FileWarning,
         actions: ['retry'],
       };
     case 'auth':
       return {
         title: 'Authentication Error',
-        message: 'Your session may have expired. Please sign in again.',
-        icon: '🔐',
+        message:
+          'Your session may have expired. Please sign in again. If login continues to fail, try clearing cookies or contact support.',
+        icon: ShieldAlert,
         actions: ['login', 'home'],
       };
     case 'server':
       return {
         title: 'Server Error',
         message: 'Something went wrong on our end. Please try again later.',
-        icon: '⚠️',
+        icon: ServerCrash,
         actions: ['retry', 'home'],
+      };
+    case 'redirect':
+      return {
+        title: 'Redirect Issue',
+        message:
+          'Login is having trouble. Try clearing cookies for this site or use an incognito window. If it continues, contact support.',
+        icon: Repeat,
+        actions: ['login', 'home'],
       };
     default:
       return {
         title: 'Unexpected Error',
         message: 'We encountered an unexpected error. Please try again.',
-        icon: '❌',
+        icon: AlertTriangle,
         actions: ['retry', 'home'],
       };
   }
@@ -91,7 +113,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
     logger.error(`[${errorId}] Auth error`, error);
 
     // Report to error tracking service in production
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       // reportError(error, { errorId, component: 'AuthErrorBoundary' })
     }
 
@@ -114,14 +136,15 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
 
       const errorCategory = categorizeError(this.state.error);
       const errorDisplay = getErrorDisplay(errorCategory, this.state.error);
+      const ErrorIcon = errorDisplay.icon;
 
       return (
-        <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
+        <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-12 sm:px-6 lg:px-8">
           <div className="w-full max-w-md">
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="text-3xl">{errorDisplay.icon}</div>
+                  <ErrorIcon className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
                   <div>
                     <CardTitle className="text-2xl">{errorDisplay.title}</CardTitle>
                   </div>
@@ -130,7 +153,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
               <CardContent className="space-y-4">
                 <p className="text-muted-foreground text-sm">{errorDisplay.message}</p>
 
-                {process.env.NODE_ENV === 'development' && (
+                {import.meta.env.DEV && (
                   <details className="rounded bg-muted p-2 text-xs">
                     <summary className="cursor-pointer font-medium">
                       Error Details (Dev Only)

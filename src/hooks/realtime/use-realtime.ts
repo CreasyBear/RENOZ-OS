@@ -21,6 +21,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
 // ============================================================================
@@ -218,13 +219,13 @@ export function useRealtimeBroadcast<T = unknown>(
           break
         case 'CHANNEL_ERROR':
         case 'TIMED_OUT':
-          console.error(`Realtime channel error for ${channelName}:`, err)
+          logger.error(`Realtime channel error for ${channelName}`, err)
           setStatus('error')
 
           // Schedule reconnection with exponential backoff
           if (autoReconnect && reconnectAttempts < maxReconnectAttempts) {
             const delay = getReconnectDelay(reconnectAttempts)
-            console.log(`Reconnecting to ${channelName} in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`)
+            logger.debug(`Reconnecting to ${channelName} in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`)
 
             reconnectTimeoutRef.current = setTimeout(() => {
               setReconnectAttempts((prev) => prev + 1)

@@ -11,22 +11,12 @@ import { containsPattern, escapeLike } from '@/lib/db/utils';
 import { products, categories, productAttributes, productAttributeValues } from 'drizzle/schema';
 import { eq, and, or, isNull, ilike, sql, desc, asc, inArray, gte, lte } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
-
-// ============================================================================
-// SEARCH ANALYTICS TABLE (would normally be in schema, but keeping inline for simplicity)
-// ============================================================================
-
-// For tracking search terms - in production this would be a proper table
-interface SearchAnalyticsEntry {
-  term: string;
-  count: number;
-  lastSearched: Date;
-}
-
-// In-memory analytics for demo (production would use database table)
-// LRU cache with max size to prevent unbounded memory growth
-const MAX_SEARCH_ANALYTICS_SIZE = 1000;
-const searchAnalytics = new Map<string, SearchAnalyticsEntry>();
+import {
+  trackSearchTerm,
+  getPopularTerms,
+  getMatchingPopularTerms,
+  getAnalyticsSummary,
+} from '@/lib/server/search-analytics';
 
 // ============================================================================
 // FULL-TEXT SEARCH
@@ -63,8 +53,8 @@ export const searchProducts = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Track search analytics
-    trackSearchTerm(data.query);
+    // Track search analytics (Redis-backed, in-memory fallback)
+    await trackSearchTerm(data.query);
 
     // Build search vector query
     // PostgreSQL full-text search using to_tsquery
@@ -364,7 +354,7 @@ export const getSearchSuggestions = createServerFn({ method: 'GET' })
       .limit(5);
 
     // Get popular search terms matching the query
-    const popularTerms = getMatchingPopularTerms(searchTerm, 5);
+    const popularTerms = await getMatchingPopularTerms(searchTerm, 5);
 
     // Combine and format suggestions
     const suggestions = [
@@ -401,61 +391,9 @@ export const getPopularSearchTerms = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     await withAuth();
 
-    // Get most searched terms (sorted by count)
-    const terms = Array.from(searchAnalytics.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, data.limit)
-      .map((entry) => ({
-        term: entry.term,
-        count: entry.count,
-      }));
-
+    const terms = await getPopularTerms(data.limit);
     return { terms };
   });
-
-/**
- * Track a search term for analytics.
- * Implements LRU eviction to prevent unbounded memory growth.
- */
-function trackSearchTerm(term: string): void {
-  const normalizedTerm = term.toLowerCase().trim();
-  if (normalizedTerm.length < 2) return;
-
-  const existing = searchAnalytics.get(normalizedTerm);
-  if (existing) {
-    // Move to end (most recently used) by deleting and re-inserting
-    searchAnalytics.delete(normalizedTerm);
-    existing.count++;
-    existing.lastSearched = new Date();
-    searchAnalytics.set(normalizedTerm, existing);
-  } else {
-    // Evict oldest entry if at capacity (LRU eviction)
-    if (searchAnalytics.size >= MAX_SEARCH_ANALYTICS_SIZE) {
-      const firstKey = searchAnalytics.keys().next().value;
-      if (firstKey) {
-        searchAnalytics.delete(firstKey);
-      }
-    }
-
-    searchAnalytics.set(normalizedTerm, {
-      term: normalizedTerm,
-      count: 1,
-      lastSearched: new Date(),
-    });
-  }
-}
-
-/**
- * Get popular terms matching a prefix (internal helper).
- */
-function getMatchingPopularTerms(prefix: string, limit: number): string[] {
-  const normalizedPrefix = prefix.toLowerCase().trim();
-  return Array.from(searchAnalytics.values())
-    .filter((entry) => entry.term.startsWith(normalizedPrefix))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit)
-    .map((entry) => entry.term);
-}
 
 // ============================================================================
 // FACETED SEARCH
@@ -591,10 +529,10 @@ export const recordSearchEvent = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await withAuth();
 
-    // Track the search term
-    trackSearchTerm(data.query);
+    // Track the search term (Redis-backed, in-memory fallback)
+    await trackSearchTerm(data.query);
 
-    // In production, this would write to a search_events table
+    // In production, could also write to search_events table for detailed analytics
     // for detailed analytics (queries, results, clicks, conversions)
 
     return { success: true };
@@ -612,29 +550,12 @@ export const getSearchAnalytics = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     await withAuth();
 
-    // Get all search terms
-    const allTerms = Array.from(searchAnalytics.values());
-    const totalSearches = allTerms.reduce((sum, t) => sum + t.count, 0);
-
-    // Top terms
-    const topTerms = allTerms
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
-      .map((t) => ({
-        term: t.term,
-        count: t.count,
-        percentage: totalSearches > 0 ? (t.count / totalSearches) * 100 : 0,
-      }));
-
-    // Zero result terms (would need tracking in production)
-    const zeroResultTerms: string[] = [];
+    const summary = await getAnalyticsSummary(data.period);
 
     return {
       analytics: {
-        totalSearches,
-        uniqueTerms: allTerms.length,
-        topTerms,
-        zeroResultTerms,
+        ...summary,
+        zeroResultTerms: [] as string[], // Would need separate tracking in production
         period: data.period,
       },
     };

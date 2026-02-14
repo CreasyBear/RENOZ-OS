@@ -6,8 +6,8 @@
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-FULFILLMENT-DASHBOARD)
  */
 
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
+import { useState, useCallback, useMemo } from "react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import { FulfillmentDashboardContainer } from "@/components/domain/orders";
@@ -41,6 +41,12 @@ export const Route = createFileRoute("/_authenticated/orders/fulfillment")({
 
 function FulfillmentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const highlightOrderIds = useMemo(() => {
+    const state = location.state as { highlightOrderIds?: string[] } | undefined;
+    return state?.highlightOrderIds ?? undefined;
+  }, [location.state]);
 
   // Dialog state
   const [shipDialogOpen, setShipDialogOpen] = useState(false);
@@ -90,6 +96,7 @@ function FulfillmentPage() {
           onViewOrder={handleViewOrder}
           onShipOrder={handleShipOrder}
           onConfirmDelivery={handleConfirmDelivery}
+          highlightOrderIds={highlightOrderIds}
         />
       </PageLayout.Content>
 

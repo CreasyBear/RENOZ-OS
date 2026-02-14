@@ -7,6 +7,7 @@ This document establishes authoritative patterns for the Renoz v3 codebase. It i
 **Related:**
 - [CLAUDE.md](./CLAUDE.md) - Project overview and commands
 - [SCHEMA-TRACE.md](./SCHEMA-TRACE.md) - Schema & query trace-through framework
+- [docs/WORKFLOW-AUDIT-REMEDIATION-PROCESS.md](./docs/WORKFLOW-AUDIT-REMEDIATION-PROCESS.md) - Workflow audit and hardening process
 - [.claude/rules/hook-architecture.md](./.claude/rules/hook-architecture.md) - Detailed hook rules
 
 ---
@@ -903,6 +904,11 @@ These rules align Supabase Auth with TanStack Start server functions in this cod
 ### Environment Variables
 - **Client:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 - **Server:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+
+### Auth Flow (TanStack Start, Not Next.js)
+- **Session refresh:** Happens on first auth call in a request (`createServerSupabase` + `getUser` in `beforeLoad` or `withAuth`). No global middleware; TanStack Start differs from Next.js.
+- **Supabase Redirect URLs:** Required in dashboard: `{APP_URL}/auth/confirm`, `{APP_URL}/update-password`.
+- **When to add request middleware:** If you see "Invalid refresh token" or "Auth session missing" after idle, add `app/start.ts` with `requestMiddleware` that calls `getUser()` before routes.
 
 ---
 

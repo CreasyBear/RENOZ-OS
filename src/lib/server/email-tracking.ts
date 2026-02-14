@@ -18,6 +18,7 @@ import {
   createEmailClickedActivity,
 } from "@/lib/server/activity-bridge";
 import { logger } from "@/lib/logger";
+import { getAppUrl } from "./app-url";
 
 // ============================================================================
 // CONSTANTS
@@ -36,14 +37,23 @@ export const TRACKING_PIXEL = Buffer.from(
  * Base URL for tracking endpoints
  * In production, this should be the deployed app URL
  */
-export const TRACKING_BASE_URL =
-  process.env.TRACKING_BASE_URL || process.env.VITE_APP_URL || "http://localhost:3000";
+export const TRACKING_BASE_URL = process.env.TRACKING_BASE_URL || getAppUrl();
 
 /**
- * Secret for HMAC signature generation
- * MUST be changed in production via environment variable
+ * Secret for HMAC signature generation.
+ * MUST be set in production via TRACKING_HMAC_SECRET environment variable.
  */
-const TRACKING_SECRET = process.env.TRACKING_HMAC_SECRET || 'dev-tracking-secret-change-in-prod';
+function getTrackingSecret(): string {
+  const secret = process.env.TRACKING_HMAC_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'TRACKING_HMAC_SECRET environment variable is required in production. ' +
+        'Generate a random 32+ character string for production use.'
+    );
+  }
+  return 'dev-tracking-secret-change-in-prod';
+}
 
 // ============================================================================
 // HMAC SIGNATURE SECURITY
@@ -58,7 +68,7 @@ const TRACKING_SECRET = process.env.TRACKING_HMAC_SECRET || 'dev-tracking-secret
  */
 export function generateTrackingSignature(emailId: string, linkId?: string): string {
   const data = linkId ? `${emailId}:${linkId}` : emailId;
-  return createHmac('sha256', TRACKING_SECRET)
+  return createHmac('sha256', getTrackingSecret())
     .update(data)
     .digest('hex')
     .slice(0, 16);

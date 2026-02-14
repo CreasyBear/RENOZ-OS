@@ -194,7 +194,13 @@ export function useCreateWarrantyClaim() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
       });
-      toast.success(`Claim ${result.claimNumber} submitted successfully`);
+      if (result.notificationQueued === false) {
+        toast.warning(
+          `Claim ${result.claimNumber} submitted but we couldn't send the notification email. The customer will not be notified.`
+        );
+      } else {
+        toast.success(`Claim ${result.claimNumber} submitted successfully`);
+      }
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to submit claim');
@@ -312,7 +318,13 @@ export function useResolveClaim() {
       // Also invalidate warranty queries since resolution may extend warranty
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(result.warrantyId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
-      toast.success(`Claim ${result.claimNumber} resolved`);
+      if (result.notificationQueued === false) {
+        toast.warning(
+          `Claim ${result.claimNumber} resolved but we couldn't send the notification email. The customer will not be notified.`
+        );
+      } else {
+        toast.success(`Claim ${result.claimNumber} resolved`);
+      }
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to resolve claim');

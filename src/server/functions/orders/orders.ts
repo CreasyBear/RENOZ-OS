@@ -1884,6 +1884,10 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
 // CREATE ORDER FOR KANBAN BOARD
 // ============================================================================
 
+/**
+ * @deprecated Unused — OrderCreateDialog is not wired up. Use createOrder + /orders/create instead.
+ * Safe to remove in future cleanup. See PREMORTEM_ORDERS_CREATION.md.
+ */
 export const createOrderForKanban = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({

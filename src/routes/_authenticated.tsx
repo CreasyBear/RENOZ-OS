@@ -32,23 +32,22 @@ import { OpenQuickLogProvider } from '../contexts/open-quick-log-provider'
 import { OrganizationSettingsProvider } from '../contexts/organization-settings-context'
 import { useOrganizationSettingsQuery } from '../hooks/organizations/use-organization'
 import { getAuthContext } from '../lib/auth/route-auth'
+import { getLoginRedirectSearch } from '../lib/auth/route-policy'
 import { authLogger } from '@/lib/logger'
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ location }) => {
     if (typeof window === 'undefined') {
       const { getRequest } = await import('@tanstack/react-start/server')
-      const { createServerSupabase } = await import('~/lib/supabase/server')
+      const { createServerSupabase } = await import('@/lib/supabase/server')
       const supabase = createServerSupabase(getRequest())
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
       if (!user) {
-        throw redirect({
-          to: '/login',
-          search: { redirect: location.pathname },
-        })
+        const search = getLoginRedirectSearch(location.pathname)
+        throw redirect({ to: '/login', search })
       }
       return
     }

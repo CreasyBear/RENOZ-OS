@@ -25,7 +25,8 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 | `APP_URL` | ✅ | Production URL (e.g. `https://your-app.vercel.app`) |
 | `VITE_APP_URL` | ✅ | Same as `APP_URL` |
 | `RESEND_API_KEY` | Optional | For email (invites, password reset, etc.) |
-| `UPSTASH_REDIS_*` | Optional | For rate limiting |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | ✅ Required for auth | Login, password reset, and invitation rate limiting. Without Redis, in-memory fallback is not shared across Vercel instances. |
+| `AUTH_RATE_LIMIT_FAIL_OPEN` | Do **not** set in prod | If set to `true`, bypasses rate limit when Redis errors. Default (unset) = fail-closed. |
 | `TRIGGER_API_KEY`, `TRIGGER_PROJECT_ID` | Optional | For background jobs (invoices, reports, etc.) |
 
 ---
@@ -43,6 +44,8 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 - [ ] **Site URL** set to production URL (Supabase Dashboard → Auth → URL Configuration)
 - [ ] **Redirect URLs** include:
   - `https://your-app.vercel.app/**`
+  - `https://your-app.vercel.app/auth/confirm` (email confirmation)
+  - `https://your-app.vercel.app/update-password` (password reset)
   - `https://*-your-team.vercel.app/**` (for Vercel preview deployments)
 - [ ] Email templates use correct `{{ .SiteURL }}` or `{{ .RedirectTo }}`
 
@@ -53,7 +56,7 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 | Integration | Env Vars | Status |
 |-------------|----------|--------|
 | Resend (email) | `RESEND_API_KEY`, `EMAIL_FROM` | [ ] |
-| Upstash Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | [ ] |
+| Upstash Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — **required for auth rate limiting** | [ ] |
 | Trigger.dev | `TRIGGER_API_KEY`, `TRIGGER_PROJECT_ID` | [ ] |
 | Google OAuth | `GOOGLE_WORKSPACE_*` | [ ] |
 | Microsoft 365 | `MICROSOFT365_*` | [ ] |

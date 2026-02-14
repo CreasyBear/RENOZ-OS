@@ -5,6 +5,10 @@
  * Used by PickItemsDialog (options from useAvailableSerials) and ShipOrderDialog
  * (options from allocatedSerialNumbers).
  *
+ * Variants:
+ * - popover (default): Button opens a floating popover with the serial list.
+ * - inline: Serial list renders in document flow below the badges (no popover).
+ *
  * WMS-optimized: FIFO ordering, location prominence, scan mode, touch targets.
  *
  * @see pick-items-dialog.tsx - Pick flow
@@ -53,11 +57,155 @@ export interface SerialPickerProps {
   onOpenChange?: (open: boolean) => void;
   /** When true: auto-focus search on open; scan-friendly input for barcode scanners */
   scanMode?: boolean;
+  /** popover: button opens floating popover. inline: list renders in document flow (no popover) */
+  variant?: 'popover' | 'inline';
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
+
+const SerialListContent = memo(function SerialListContent({
+  options,
+  selectedSerials,
+  remainingSlots,
+  maxSelections,
+  hasLocation,
+  hasReceivedAt,
+  isLoading,
+  toggleSerial,
+  setOpen,
+  listMaxHeight,
+  contentRef,
+}: {
+  options: SerialOption[];
+  selectedSerials: string[];
+  remainingSlots: number;
+  maxSelections: number;
+  hasLocation: boolean;
+  hasReceivedAt: boolean;
+  isLoading: boolean;
+  toggleSerial: (serial: string) => void;
+  setOpen?: (open: boolean) => void;
+  listMaxHeight: string;
+  contentRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const handleScanKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== 'Enter') return;
+      const value = (e.target as HTMLInputElement)?.value?.trim();
+      if (!value) return;
+      const match = options.find(
+        (o) => o.serialNumber.toLowerCase() === value.toLowerCase()
+      );
+      if (
+        match &&
+        (selectedSerials.includes(match.serialNumber) || remainingSlots > 0)
+      ) {
+        toggleSerial(match.serialNumber);
+        (e.target as HTMLInputElement).value = '';
+        e.preventDefault();
+      }
+    },
+    [options, selectedSerials, remainingSlots, toggleSerial]
+  );
+
+  return (
+    <div ref={contentRef}>
+      <Command className="[&_[cmdk-input]]:h-11" shouldFilter={true}>
+        <CommandInput
+          placeholder="Search or scan serial..."
+          inputMode="search"
+          autoComplete="off"
+          onKeyDown={handleScanKeyDown}
+        />
+        <CommandList
+          className={listMaxHeight}
+          aria-label="Available serial numbers"
+        >
+          {isLoading ? (
+            <div className="p-2 space-y-2">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-11 w-full rounded-sm" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <CommandEmpty>
+                No serials found. Check location filter or stock levels.
+              </CommandEmpty>
+              <CommandGroup
+                heading={hasLocation ? 'Serial Numbers · Location' : 'Serial Numbers'}
+              >
+                {options.map((opt, index) => {
+                  const isSelected = selectedSerials.includes(opt.serialNumber);
+                  const canSelect = isSelected || remainingSlots > 0;
+                  const isPickFirst =
+                    hasReceivedAt && index < maxSelections && opt.receivedAt;
+
+                  return (
+                    <CommandItem
+                      key={opt.serialNumber}
+                      onSelect={() => {
+                        if (canSelect) {
+                          toggleSerial(opt.serialNumber);
+                          if (remainingSlots === 1 && !isSelected) {
+                            setOpen?.(false);
+                          }
+                        }
+                      }}
+                      disabled={!canSelect}
+                      className={cn(
+                        'flex items-center justify-between min-h-[44px] gap-2',
+                        !canSelect && !isSelected && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div
+                          className={cn(
+                            'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                            isSelected
+                              ? 'bg-primary border-primary'
+                              : 'border-input'
+                          )}
+                        >
+                          {isSelected && (
+                            <Check className="h-3 w-3 text-primary-foreground" />
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm">
+                              {opt.serialNumber}
+                            </span>
+                            {isPickFirst && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 shrink-0"
+                              >
+                                Pick first
+                              </Badge>
+                            )}
+                          </div>
+                          {opt.locationName && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              {opt.locationName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </>
+          )}
+        </CommandList>
+      </Command>
+    </div>
+  );
+});
 
 export const SerialPicker = memo(function SerialPicker({
   options,
@@ -69,6 +217,7 @@ export const SerialPicker = memo(function SerialPicker({
   ariaLabel = 'Select serial numbers',
   onOpenChange: onOpenChangeProp,
   scanMode = false,
+  variant = 'popover',
 }: SerialPickerProps) {
   const [open, setOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -100,9 +249,10 @@ export const SerialPicker = memo(function SerialPicker({
     [selectedSerials, onChange]
   );
 
-  // Scan mode: auto-focus input when popover opens (defer to next tick for Radix lazy-rendered content)
+  // Scan mode: auto-focus input when popover opens, or on mount when inline
   useEffect(() => {
-    if (!scanMode || !open) return;
+    if (!scanMode) return;
+    if (variant === 'popover' && !open) return;
     const id = setTimeout(() => {
       const input = contentRef.current?.querySelector<HTMLInputElement>(
         '[data-slot="command-input"]'
@@ -110,10 +260,26 @@ export const SerialPicker = memo(function SerialPicker({
       input?.focus();
     }, 0);
     return () => clearTimeout(id);
-  }, [scanMode, open]);
+  }, [scanMode, open, variant]);
 
   const hasLocation = options.some((o) => o.locationName);
   const hasReceivedAt = options.some((o) => o.receivedAt);
+
+  const serialListContent = (
+    <SerialListContent
+      options={options}
+      selectedSerials={selectedSerials}
+      remainingSlots={remainingSlots}
+      maxSelections={maxSelections}
+      hasLocation={hasLocation}
+      hasReceivedAt={hasReceivedAt}
+      isLoading={isLoading}
+      toggleSerial={toggleSerial}
+      setOpen={variant === 'popover' ? setOpen : undefined}
+      listMaxHeight={variant === 'inline' ? 'max-h-[280px] overflow-y-auto' : 'max-h-[400px]'}
+      contentRef={contentRef}
+    />
+  );
 
   if (disabled) {
     return (
@@ -149,124 +315,37 @@ export const SerialPicker = memo(function SerialPicker({
         </div>
       )}
 
-      {/* Selector Popover */}
-      <Popover open={open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-between min-h-[44px]"
-            disabled={remainingSlots <= 0 || isLoading}
-            aria-label={ariaLabel}
-            aria-expanded={open}
-          >
-            <span className="truncate">
-              {isLoading
-                ? 'Loading serials...'
-                : remainingSlots <= 0
-                  ? 'All serials selected'
-                  : `Select ${remainingSlots} more serial${remainingSlots !== 1 ? 's' : ''}`}
-            </span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-0" align="start">
-          <div ref={contentRef}>
-          <Command
-            className="[&_[cmdk-input]]:h-11"
-            shouldFilter={true}
-          >
-            <CommandInput
-              placeholder="Search or scan serial..."
-              inputMode="search"
-              autoComplete="off"
-            />
-            <CommandList
-              className="max-h-[280px]"
-              aria-label="Available serial numbers"
+      {variant === 'inline' ? (
+        /* Inline: render list directly in document flow */
+        <div className="rounded-md border bg-popover p-2">
+          {serialListContent}
+        </div>
+      ) : (
+        /* Popover: button opens floating popover */
+        <Popover open={open} onOpenChange={handleOpenChange}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-between min-h-[44px]"
+              disabled={remainingSlots <= 0 || isLoading}
+              aria-label={ariaLabel}
+              aria-expanded={open}
             >
-              {isLoading ? (
-                <div className="p-2 space-y-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-11 w-full rounded-sm" />
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <CommandEmpty>
-                    No serials found. Check location filter or stock levels.
-                  </CommandEmpty>
-                  <CommandGroup
-                    heading={hasLocation ? 'Serial Numbers · Location' : 'Serial Numbers'}
-                  >
-                    {options.map((opt, index) => {
-                      const isSelected = selectedSerials.includes(opt.serialNumber);
-                      const canSelect = isSelected || remainingSlots > 0;
-                      const isPickFirst =
-                        hasReceivedAt && index < maxSelections && opt.receivedAt;
-
-                      return (
-                        <CommandItem
-                          key={opt.serialNumber}
-                          onSelect={() => {
-                            if (canSelect) {
-                              toggleSerial(opt.serialNumber);
-                              if (remainingSlots === 1 && !isSelected) {
-                                setOpen(false);
-                              }
-                            }
-                          }}
-                          disabled={!canSelect}
-                          className={cn(
-                            'flex items-center justify-between min-h-[44px] gap-2',
-                            !canSelect && !isSelected && 'opacity-50 cursor-not-allowed'
-                          )}
-                        >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div
-                              className={cn(
-                                'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                                isSelected
-                                  ? 'bg-primary border-primary'
-                                  : 'border-input'
-                              )}
-                            >
-                              {isSelected && (
-                                <Check className="h-3 w-3 text-primary-foreground" />
-                              )}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm">
-                                  {opt.serialNumber}
-                                </span>
-                                {isPickFirst && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] px-1.5 py-0 shrink-0"
-                                  >
-                                    Pick first
-                                  </Badge>
-                                )}
-                              </div>
-                              {opt.locationName && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                                  <MapPin className="h-3 w-3 shrink-0" />
-                                  {opt.locationName}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </>
-              )}
-            </CommandList>
-          </Command>
-          </div>
-        </PopoverContent>
-      </Popover>
+              <span className="truncate">
+                {isLoading
+                  ? 'Loading serials...'
+                  : remainingSlots <= 0
+                    ? 'All serials selected'
+                    : `Select ${remainingSlots} more serial${remainingSlots !== 1 ? 's' : ''}`}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[420px] p-0" align="start">
+            {serialListContent}
+          </PopoverContent>
+        </Popover>
+      )}
 
       {/* Validation Message */}
       {selectedSerials.length < maxSelections && (

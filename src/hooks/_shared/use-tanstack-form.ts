@@ -83,6 +83,11 @@ export interface UseTanStackFormOptions<TFormData> {
    * @default false
    */
   validateOnBlur?: boolean
+  /**
+   * Called when validation fails on submit.
+   * Use to set form-level error feedback (e.g. "Please fix the errors below").
+   */
+  onSubmitInvalid?: (props: { value: TFormData }) => void
 }
 
 /**
@@ -128,6 +133,7 @@ export function useTanStackForm<TFormData>({
   defaultValues,
   onSubmit,
   onValidationError,
+  onSubmitInvalid,
   transform,
   validateOnChange = false,
   validateOnBlur = false,
@@ -145,18 +151,43 @@ export function useTanStackForm<TFormData>({
     },
   })
 
+  // Maps Zod errors to TanStack Form's { fields: { fieldName: string } } format
+  // so field-level errors propagate to TextField and show under each input
+  const mapZodErrorsToFieldErrors = (
+    error: z.ZodError
+  ): { fields: Record<string, string> } | string | undefined => {
+    const flattened = error.flatten()
+    const fields: Record<string, string> = {}
+    for (const [key, messages] of Object.entries(flattened.fieldErrors)) {
+      if (messages && Array.isArray(messages) && messages.length > 0) {
+        fields[key] = messages[0]
+      }
+    }
+    if (Object.keys(fields).length > 0) {
+      return { fields }
+    }
+    return flattened.formErrors[0] ?? 'Validation failed'
+  }
+
   const form = useForm({
     defaultValues,
+    onSubmitInvalid,
     validators: {
+      // onSubmit validator: runs before async handler, propagates field errors to UI
+      onSubmit: ({ value }) => {
+        const result = schema.safeParse(value)
+        if (result.success) return undefined
+        onValidationError?.(result.error)
+        return mapZodErrorsToFieldErrors(result.error)
+      },
       // Optional onChange validation
       ...(validateOnChange && { onChange: createValidator().validate }),
       // Optional onBlur validation
       ...(validateOnBlur && { onBlur: createValidator().validate }),
     },
     onSubmit: async ({ value }) => {
-      // Always validate with Zod schema on submit
+      // Validator already passed; parse again for transformed output
       const result = schema.safeParse(value)
-
       if (!result.success) {
         onValidationError?.(result.error)
         throw result.error

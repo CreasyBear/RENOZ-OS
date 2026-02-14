@@ -94,7 +94,8 @@ export interface UseFormDraftReturn<TFormData> {
 // STORAGE HELPERS
 // ============================================================================
 
-const DRAFT_PREFIX = 'form-draft:';
+/** Shared prefix for all form drafts. Used by clearAllFormDrafts and order-create-draft. */
+export const DRAFT_PREFIX = 'form-draft:';
 
 function getDraftKey(key: string): string {
   return `${DRAFT_PREFIX}${key}`;

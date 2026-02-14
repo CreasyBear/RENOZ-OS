@@ -16,7 +16,7 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { projects, customers, generatedDocuments, jobMaterials, products } from 'drizzle/schema';
 import { createActivityLogger } from '@/lib/activity-logger';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -184,7 +184,7 @@ async function uploadPdf(
   const filename = generateFilename(documentType, projectNumber);
   const storagePath = generateStoragePath(organizationId, documentType, filename);
 
-  const supabase = createAdminClient();
+  const supabase = createAdminSupabase();
 
   const { error: uploadError } = await supabase
     .storage.from(STORAGE_BUCKET)

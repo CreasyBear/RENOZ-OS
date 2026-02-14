@@ -8,7 +8,7 @@
  * @see STANDARDS.md - Container/Presenter pattern
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo, useEffect, useReducer } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   Edit,
@@ -80,6 +80,53 @@ import { useCreateRma } from '@/hooks/support';
 // TYPES
 // ============================================================================
 
+type DialogType = 'pick' | 'edit' | 'ship' | 'confirmDelivery' | 'rma' | 'amendment' | 'payment' | null;
+
+interface DialogState {
+  open: DialogType;
+  confirmDeliveryShipmentId: string | null;
+}
+
+type DialogAction =
+  | { type: 'OPEN_PICK' }
+  | { type: 'OPEN_EDIT' }
+  | { type: 'OPEN_SHIP' }
+  | { type: 'OPEN_CONFIRM_DELIVERY'; payload: { shipmentId: string } }
+  | { type: 'OPEN_RMA' }
+  | { type: 'OPEN_AMENDMENT' }
+  | { type: 'OPEN_PAYMENT' }
+  | { type: 'CLOSE' };
+
+function dialogReducer(state: DialogState, action: DialogAction): DialogState {
+  switch (action.type) {
+    case 'OPEN_PICK':
+      return { ...state, open: 'pick', confirmDeliveryShipmentId: null };
+    case 'OPEN_EDIT':
+      return { ...state, open: 'edit', confirmDeliveryShipmentId: null };
+    case 'OPEN_SHIP':
+      return { ...state, open: 'ship', confirmDeliveryShipmentId: null };
+    case 'OPEN_CONFIRM_DELIVERY':
+      return { ...state, open: 'confirmDelivery', confirmDeliveryShipmentId: action.payload.shipmentId };
+    case 'OPEN_RMA':
+      return { ...state, open: 'rma', confirmDeliveryShipmentId: null };
+    case 'OPEN_AMENDMENT':
+      return { ...state, open: 'amendment', confirmDeliveryShipmentId: null };
+    case 'OPEN_PAYMENT':
+      return { ...state, open: 'payment', confirmDeliveryShipmentId: null };
+    case 'CLOSE':
+      return { ...state, open: null, confirmDeliveryShipmentId: null };
+    default:
+      return state;
+  }
+}
+
+function getInitialDialogState(pickFromSearch: boolean, editFromSearch: boolean): DialogState {
+  return {
+    open: pickFromSearch ? 'pick' : editFromSearch ? 'edit' : null,
+    confirmDeliveryShipmentId: null,
+  };
+}
+
 export interface OrderDetailContainerRenderProps {
   /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
   headerActions?: React.ReactNode;
@@ -96,6 +143,10 @@ export interface OrderDetailContainerProps {
   fromIssueId?: string;
   /** When true, open the Edit Order dialog (e.g. from ?edit=true in URL) */
   edit?: boolean;
+  /** When true, open the Pick Items dialog (e.g. from ?pick=1 in URL) */
+  pick?: boolean;
+  /** When true, open the Ship Order dialog (e.g. from ?ship=1 in URL) — only when order is picked/partially_shipped */
+  ship?: boolean;
   /** Render props pattern for layout composition */
   children?: (props: OrderDetailContainerRenderProps) => React.ReactNode;
   /** Additional CSS classes */
@@ -310,22 +361,20 @@ export function OrderDetailContainer({
   orderId,
   fromIssueId,
   edit: editFromSearch = false,
+  pick: pickFromSearch = false,
+  ship: shipFromSearch = false,
   children,
   className,
 }: OrderDetailContainerProps) {
   const navigate = useNavigate();
-  // Fulfillment dialog state (needed before hook for onOpenShipDialog callback)
-  const [pickDialogOpen, setPickDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(editFromSearch);
-  const [shipDialogOpen, setShipDialogOpen] = useState(false);
-  const [confirmDeliveryDialogOpen, setConfirmDeliveryDialogOpen] = useState(false);
-  const [confirmDeliveryShipmentId, setConfirmDeliveryShipmentId] = useState<string | null>(null);
-  const [rmaDialogOpen, setRmaDialogOpen] = useState(false);
-
+  const [dialogState, dispatch] = useReducer(
+    dialogReducer,
+    getInitialDialogState(pickFromSearch, editFromSearch)
+  );
   const createRmaMutation = useCreateRma();
 
   const detail = useOrderDetailComposite(orderId, {
-    onOpenShipDialog: () => setShipDialogOpen(true),
+    onOpenShipDialog: () => dispatch({ type: 'OPEN_SHIP' }),
   });
   const { onLogActivity, onScheduleFollowUp, loggerProps: activityLoggerProps } =
     useEntityActivityLogging({
@@ -339,9 +388,6 @@ export function OrderDetailContainer({
     detail.order ? (detail.order.orderNumber ?? detail.order.customer?.name ?? orderId) : undefined,
     !!detail.order
   );
-  const [amendmentDialogOpen, setAmendmentDialogOpen] = useState(false);
-  // Payment dialog state
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   // Document generation hooks
   const generateQuote = useGenerateOrderQuote();
@@ -369,11 +415,35 @@ export function OrderDetailContainer({
   const updateOrderMutation = useUpdateOrder();
 
   const handleEditDialogClose = (open: boolean) => {
-    setEditDialogOpen(open);
     if (!open) {
+      dispatch({ type: 'CLOSE' });
       navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
+    } else {
+      dispatch({ type: 'OPEN_EDIT' });
     }
   };
+
+  const handlePickDialogClose = (open: boolean) => {
+    if (!open) {
+      dispatch({ type: 'CLOSE' });
+      if (pickFromSearch) {
+        navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
+      }
+    } else {
+      dispatch({ type: 'OPEN_PICK' });
+    }
+  };
+
+  // Open Ship dialog when ?ship=1 and order is picked/partially_shipped
+  useEffect(() => {
+    if (
+      shipFromSearch &&
+      detail.order &&
+      (detail.order.status === 'picked' || detail.order.status === 'partially_shipped')
+    ) {
+      dispatch({ type: 'OPEN_SHIP' });
+    }
+  }, [shipFromSearch, detail.order?.id, detail.order?.status]);
 
   const handleEditSubmit = async (data: EditOrderFormData) => {
     if (!detail.order) return;
@@ -487,7 +557,7 @@ export function OrderDetailContainer({
       <Package className="h-4 w-4" />
       <AlertDescription className="flex items-center justify-between gap-4">
         <span>Creating RMA from issue — select items below and create the return authorization.</span>
-        <Button size="sm" onClick={() => setRmaDialogOpen(true)}>
+        <Button size="sm" onClick={() => dispatch({ type: 'OPEN_RMA' })}>
           <Package className="h-4 w-4 mr-2" />
           Create RMA
         </Button>
@@ -513,8 +583,8 @@ export function OrderDetailContainer({
       onDuplicate={() => detail.actions.onDuplicate()}
       onPrint={detail.actions.onPrint}
       onDeleteClick={() => detail.setDeleteDialogOpen(true)}
-      onRequestAmendment={() => setAmendmentDialogOpen(true)}
-      onRecordPayment={() => setPaymentDialogOpen(true)}
+      onRequestAmendment={() => dispatch({ type: 'OPEN_AMENDMENT' })}
+      onRecordPayment={() => dispatch({ type: 'OPEN_PAYMENT' })}
       backLinkSearch={
         fromIssueId && detail.order?.customerId
           ? { customerId: detail.order.customerId, fromIssueId }
@@ -541,12 +611,10 @@ export function OrderDetailContainer({
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onScheduleFollowUp}
         fulfillmentActions={{
-          onPickItems: () => setPickDialogOpen(true),
-          onShipOrder: () => setShipDialogOpen(true),
-          onConfirmDelivery: (shipmentId) => {
-            setConfirmDeliveryShipmentId(shipmentId);
-            setConfirmDeliveryDialogOpen(true);
-          },
+          onPickItems: () => dispatch({ type: 'OPEN_PICK' }),
+          onShipOrder: () => dispatch({ type: 'OPEN_SHIP' }),
+          onConfirmDelivery: (shipmentId) =>
+            dispatch({ type: 'OPEN_CONFIRM_DELIVERY', payload: { shipmentId } }),
         }}
         paymentActions={{
           payments: payments.map(p => ({
@@ -566,7 +634,7 @@ export function OrderDetailContainer({
             totalRefunds: 0,
             netAmount: 0,
           },
-          onRecordPayment: () => setPaymentDialogOpen(true),
+          onRecordPayment: () => dispatch({ type: 'OPEN_PAYMENT' }),
         }}
         headerActions={children ? null : headerActionsEl}
         className={className}
@@ -603,36 +671,53 @@ export function OrderDetailContainer({
 
       {/* Fulfillment Dialogs */}
       <PickItemsDialog
-        open={pickDialogOpen}
-        onOpenChange={setPickDialogOpen}
+        open={dialogState.open === 'pick'}
+        onOpenChange={handlePickDialogClose}
         orderId={orderId}
+        onSuccess={() => detail.refetch()}
+        onShipOrder={() => dispatch({ type: 'OPEN_SHIP' })}
       />
       <ShipOrderDialog
-        open={shipDialogOpen}
-        onOpenChange={setShipDialogOpen}
+        open={dialogState.open === 'ship'}
+        onOpenChange={(open) => {
+          if (!open) {
+            dispatch({ type: 'CLOSE' });
+            if (shipFromSearch) {
+              navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
+            }
+          } else {
+            dispatch({ type: 'OPEN_SHIP' });
+          }
+        }}
         orderId={orderId}
+        onSuccess={() => detail.refetch()}
+        onViewShipments={() => {
+          dispatch({ type: 'CLOSE' });
+          detail.onTabChange('fulfillment');
+        }}
       />
 
-      {confirmDeliveryShipmentId && (
+      {dialogState.confirmDeliveryShipmentId && (
         <ConfirmDeliveryDialog
-          open={confirmDeliveryDialogOpen}
+          open={dialogState.open === 'confirmDelivery'}
           onOpenChange={(open) => {
-            setConfirmDeliveryDialogOpen(open);
-            if (!open) setConfirmDeliveryShipmentId(null);
+            if (!open) dispatch({ type: 'CLOSE' });
           }}
-          shipmentId={confirmDeliveryShipmentId}
+          shipmentId={dialogState.confirmDeliveryShipmentId}
           onSuccess={() => {
             detail.refetch();
-            setConfirmDeliveryDialogOpen(false);
-            setConfirmDeliveryShipmentId(null);
+            dispatch({ type: 'CLOSE' });
           }}
         />
       )}
 
       {/* Amendment Request Dialog */}
       <AmendmentRequestDialog
-        open={amendmentDialogOpen}
-        onOpenChange={setAmendmentDialogOpen}
+        open={dialogState.open === 'amendment'}
+        onOpenChange={(open) => {
+          if (!open) dispatch({ type: 'CLOSE' });
+          else dispatch({ type: 'OPEN_AMENDMENT' });
+        }}
         orderId={orderId}
         onSuccess={() => {
           detail.refetch();
@@ -641,8 +726,11 @@ export function OrderDetailContainer({
 
       {/* Record Payment Dialog */}
       <RecordPaymentDialog
-        open={paymentDialogOpen}
-        onOpenChange={setPaymentDialogOpen}
+        open={dialogState.open === 'payment'}
+        onOpenChange={(open) => {
+          if (!open) dispatch({ type: 'CLOSE' });
+          else dispatch({ type: 'OPEN_PAYMENT' });
+        }}
         orderId={orderId}
         orderNumber={detail.order.orderNumber}
         balanceDue={Number(detail.order.balanceDue || 0)}
@@ -658,7 +746,7 @@ export function OrderDetailContainer({
       {/* Edit Order Dialog (from ?edit=true in URL) */}
       {detail.order.status === 'draft' && (
         <OrderEditDialog
-          open={editDialogOpen}
+          open={dialogState.open === 'edit'}
           onOpenChange={handleEditDialogClose}
           order={{
             id: detail.order.id,
@@ -681,14 +769,17 @@ export function OrderDetailContainer({
       {/* RMA Create Dialog (from issue flow) */}
       {fromIssueId && (
         <RmaCreateDialog
-          open={rmaDialogOpen}
-          onOpenChange={setRmaDialogOpen}
+          open={dialogState.open === 'rma'}
+          onOpenChange={(open) => {
+            if (!open) dispatch({ type: 'CLOSE' });
+            else dispatch({ type: 'OPEN_RMA' });
+          }}
           orderId={orderId}
           orderLineItems={rmaOrderLineItems}
           issueId={fromIssueId}
           customerId={detail.order.customerId ?? undefined}
           onSuccess={(rmaId) => {
-            setRmaDialogOpen(false);
+            dispatch({ type: 'CLOSE' });
             toastSuccess('RMA created successfully', {
               action: {
                 label: 'View RMA',

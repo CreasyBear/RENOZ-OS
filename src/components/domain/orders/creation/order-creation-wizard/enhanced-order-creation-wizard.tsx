@@ -1,6 +1,10 @@
 /**
  * Enhanced Order Creation Wizard
  *
+ * @deprecated Not used by /orders/create route. Canonical: OrderCreationWizard (order-creation-wizard.tsx).
+ * This was an alternative implementation; the create route uses the step-based wizard.
+ * Safe to remove in future cleanup. See PREMORTEM_ORDERS_CREATION.md.
+ *
  * Enterprise-grade order creation using the new form architecture.
  * Replaces the multi-step wizard with a comprehensive form system.
  *

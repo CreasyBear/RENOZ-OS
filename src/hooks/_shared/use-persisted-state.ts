@@ -5,6 +5,7 @@
  * Used for offline queue data that needs to survive page refreshes.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from '@/lib/logger';
 
 /**
  * Hook for state that persists to localStorage.
@@ -33,7 +34,7 @@ export function usePersistedState<T>(
         return JSON.parse(stored) as T;
       }
     } catch (error) {
-      console.warn(`Failed to read ${key} from localStorage:`, error);
+      logger.warn(`Failed to read ${key} from localStorage`, { error });
     }
     return initialValue;
   });
@@ -44,7 +45,7 @@ export function usePersistedState<T>(
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
-      console.warn(`Failed to write ${key} to localStorage:`, error);
+      logger.warn(`Failed to write ${key} to localStorage`, { error });
     }
   }, [key, value]);
 

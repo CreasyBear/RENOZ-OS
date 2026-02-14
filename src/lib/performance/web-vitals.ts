@@ -61,7 +61,7 @@ function getRatingEmoji(rating: MetricRating): string {
  * Report metric to console in development
  */
 function reportToConsole(metric: Metric) {
-  if (process.env.NODE_ENV !== 'development') return;
+  if (!import.meta.env.DEV) return;
 
   const rating = getMetricRating(metric.name as keyof typeof THRESHOLDS, metric.value);
 
@@ -116,7 +116,7 @@ export function initWebVitals() {
   onFCP(handleMetric);  // First Contentful Paint
   onTTFB(handleMetric); // Time to First Byte
 
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     logger.debug('[Web Vitals] Monitoring initialized');
   }
 }
@@ -140,7 +140,7 @@ export function markPerformance(markName: string) {
   
   performance.mark(markName);
   
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     logger.debug('[Performance] Mark', { markName });
   }
 }
@@ -154,7 +154,7 @@ export function measurePerformance(measureName: string, startMark: string, endMa
   try {
     const measure = performance.measure(measureName, startMark, endMark);
     
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       logger.debug('[Performance] Measure', { measureName, durationMs: Math.round(measure.duration) });
     }
     

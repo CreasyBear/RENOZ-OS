@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getLoginRedirectSearch } from '@/lib/auth/route-policy'
 import { useSignOut } from '@/lib/auth/hooks'
 import { useCurrentUser } from '@/hooks/auth/use-current-user'
 import { toast } from '@/hooks'
@@ -49,7 +50,7 @@ export function UserMenu() {
     try {
       await signOut.mutateAsync()
       toast.success('Signed out successfully')
-      navigate({ to: '/login', search: { redirect: undefined } })
+      navigate({ to: '/login', search: getLoginRedirectSearch() })
     } catch {
       toast.error('Failed to sign out')
     }

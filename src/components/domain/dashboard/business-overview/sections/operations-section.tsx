@@ -84,19 +84,21 @@ export function OperationsSection({ metrics, isLoading }: OperationsSectionProps
       <CardContent>
         {/* KPI Grid - Using shared MetricCard with contextual subtitles and popovers */}
         <div className="grid gap-4 sm:grid-cols-3">
+          {/* "Orders to Fulfill" uses getRecentOrdersToShip (confirmed orders awaiting pick).
+              Future: getRecentOrdersPicked for "Ready to Ship" metric if product wants it. */}
           <MetricCardPopover
             items={metrics?.recentOrdersToShip}
-            viewAllHref="/orders?status=confirmed"
-            viewAllLabel="View all orders to ship"
-            emptyMessage="All orders shipped"
+            viewAllHref="/orders/fulfillment"
+            viewAllLabel="View fulfillment dashboard"
+            emptyMessage="All orders fulfilled"
             disabled={isLoading}
           >
             <MetricCard
-              title="Orders to Ship"
+              title="Orders to Fulfill"
               value={formatNumber(metrics?.ordersToShip ?? 0)}
               subtitle={ordersSubtitle}
               icon={Package}
-              onClick={() => navigate({ to: '/orders', search: { status: 'confirmed' } })}
+              onClick={() => navigate({ to: '/orders/fulfillment' })}
               isLoading={isLoading}
             />
           </MetricCardPopover>

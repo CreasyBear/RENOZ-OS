@@ -150,6 +150,7 @@ import { Route as AuthenticatedSupportClaimsClaimIdRouteImport } from './routes/
 import { Route as AuthenticatedSuppliersSupplierIdEditRouteImport } from './routes/_authenticated/suppliers/$supplierId.edit'
 import { Route as AuthenticatedProductsProductIdEditRouteImport } from './routes/_authenticated/products/$productId/edit'
 import { Route as AuthenticatedPipelineQuotesQuoteIdRouteImport } from './routes/_authenticated/pipeline/quotes/$quoteId'
+import { Route as AuthenticatedMobilePickingOrderIdRouteImport } from './routes/_authenticated/mobile/picking.$orderId'
 import { Route as AuthenticatedJobsAssignmentsAssignmentIdRouteImport } from './routes/_authenticated/jobs/assignments/$assignmentId'
 import { Route as AuthenticatedFinancialInvoicesInvoiceIdRouteImport } from './routes/_authenticated/financial/invoices/$invoiceId'
 import { Route as AuthenticatedFinancialCreditNotesCreditNoteIdRouteImport } from './routes/_authenticated/financial/credit-notes/$creditNoteId'
@@ -994,6 +995,12 @@ const AuthenticatedPipelineQuotesQuoteIdRoute =
     path: '/pipeline/quotes/$quoteId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedMobilePickingOrderIdRoute =
+  AuthenticatedMobilePickingOrderIdRouteImport.update({
+    id: '/$orderId',
+    path: '/$orderId',
+    getParentRoute: () => AuthenticatedMobilePickingRoute,
+  } as any)
 const AuthenticatedJobsAssignmentsAssignmentIdRoute =
   AuthenticatedJobsAssignmentsAssignmentIdRouteImport.update({
     id: '/jobs/assignments/$assignmentId',
@@ -1156,7 +1163,7 @@ export interface FileRoutesByFullPath {
   '/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
   '/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
   '/mobile/counting': typeof AuthenticatedMobileCountingRoute
-  '/mobile/picking': typeof AuthenticatedMobilePickingRoute
+  '/mobile/picking': typeof AuthenticatedMobilePickingRouteWithChildren
   '/mobile/receiving': typeof AuthenticatedMobileReceivingRoute
   '/orders/$orderId': typeof AuthenticatedOrdersOrderIdRoute
   '/orders/create': typeof AuthenticatedOrdersCreateRoute
@@ -1238,6 +1245,7 @@ export interface FileRoutesByFullPath {
   '/financial/credit-notes/$creditNoteId': typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
   '/financial/invoices/$invoiceId': typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  '/mobile/picking/$orderId': typeof AuthenticatedMobilePickingOrderIdRoute
   '/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
   '/suppliers/$supplierId/edit': typeof AuthenticatedSuppliersSupplierIdEditRoute
@@ -1317,7 +1325,7 @@ export interface FileRoutesByTo {
   '/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
   '/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
   '/mobile/counting': typeof AuthenticatedMobileCountingRoute
-  '/mobile/picking': typeof AuthenticatedMobilePickingRoute
+  '/mobile/picking': typeof AuthenticatedMobilePickingRouteWithChildren
   '/mobile/receiving': typeof AuthenticatedMobileReceivingRoute
   '/orders/$orderId': typeof AuthenticatedOrdersOrderIdRoute
   '/orders/create': typeof AuthenticatedOrdersCreateRoute
@@ -1399,6 +1407,7 @@ export interface FileRoutesByTo {
   '/financial/credit-notes/$creditNoteId': typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
   '/financial/invoices/$invoiceId': typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  '/mobile/picking/$orderId': typeof AuthenticatedMobilePickingOrderIdRoute
   '/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
   '/suppliers/$supplierId/edit': typeof AuthenticatedSuppliersSupplierIdEditRoute
@@ -1481,7 +1490,7 @@ export interface FileRoutesById {
   '/_authenticated/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
   '/_authenticated/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
   '/_authenticated/mobile/counting': typeof AuthenticatedMobileCountingRoute
-  '/_authenticated/mobile/picking': typeof AuthenticatedMobilePickingRoute
+  '/_authenticated/mobile/picking': typeof AuthenticatedMobilePickingRouteWithChildren
   '/_authenticated/mobile/receiving': typeof AuthenticatedMobileReceivingRoute
   '/_authenticated/orders/$orderId': typeof AuthenticatedOrdersOrderIdRoute
   '/_authenticated/orders/create': typeof AuthenticatedOrdersCreateRoute
@@ -1563,6 +1572,7 @@ export interface FileRoutesById {
   '/_authenticated/financial/credit-notes/$creditNoteId': typeof AuthenticatedFinancialCreditNotesCreditNoteIdRoute
   '/_authenticated/financial/invoices/$invoiceId': typeof AuthenticatedFinancialInvoicesInvoiceIdRoute
   '/_authenticated/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  '/_authenticated/mobile/picking/$orderId': typeof AuthenticatedMobilePickingOrderIdRoute
   '/_authenticated/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/_authenticated/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
   '/_authenticated/suppliers/$supplierId/edit': typeof AuthenticatedSuppliersSupplierIdEditRoute
@@ -1727,6 +1737,7 @@ export interface FileRouteTypes {
     | '/financial/credit-notes/$creditNoteId'
     | '/financial/invoices/$invoiceId'
     | '/jobs/assignments/$assignmentId'
+    | '/mobile/picking/$orderId'
     | '/pipeline/quotes/$quoteId'
     | '/products/$productId/edit'
     | '/suppliers/$supplierId/edit'
@@ -1888,6 +1899,7 @@ export interface FileRouteTypes {
     | '/financial/credit-notes/$creditNoteId'
     | '/financial/invoices/$invoiceId'
     | '/jobs/assignments/$assignmentId'
+    | '/mobile/picking/$orderId'
     | '/pipeline/quotes/$quoteId'
     | '/products/$productId/edit'
     | '/suppliers/$supplierId/edit'
@@ -2051,6 +2063,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financial/credit-notes/$creditNoteId'
     | '/_authenticated/financial/invoices/$invoiceId'
     | '/_authenticated/jobs/assignments/$assignmentId'
+    | '/_authenticated/mobile/picking/$orderId'
     | '/_authenticated/pipeline/quotes/$quoteId'
     | '/_authenticated/products/$productId/edit'
     | '/_authenticated/suppliers/$supplierId/edit'
@@ -3102,6 +3115,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPipelineQuotesQuoteIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/mobile/picking/$orderId': {
+      id: '/_authenticated/mobile/picking/$orderId'
+      path: '/$orderId'
+      fullPath: '/mobile/picking/$orderId'
+      preLoaderRoute: typeof AuthenticatedMobilePickingOrderIdRouteImport
+      parentRoute: typeof AuthenticatedMobilePickingRoute
+    }
     '/_authenticated/jobs/assignments/$assignmentId': {
       id: '/_authenticated/jobs/assignments/$assignmentId'
       path: '/jobs/assignments/$assignmentId'
@@ -3296,6 +3316,21 @@ const AuthenticatedSettingsRouteWithChildren =
     AuthenticatedSettingsRouteChildren,
   )
 
+interface AuthenticatedMobilePickingRouteChildren {
+  AuthenticatedMobilePickingOrderIdRoute: typeof AuthenticatedMobilePickingOrderIdRoute
+}
+
+const AuthenticatedMobilePickingRouteChildren: AuthenticatedMobilePickingRouteChildren =
+  {
+    AuthenticatedMobilePickingOrderIdRoute:
+      AuthenticatedMobilePickingOrderIdRoute,
+  }
+
+const AuthenticatedMobilePickingRouteWithChildren =
+  AuthenticatedMobilePickingRoute._addFileChildren(
+    AuthenticatedMobilePickingRouteChildren,
+  )
+
 interface AuthenticatedProductsProductIdRouteChildren {
   AuthenticatedProductsProductIdEditRoute: typeof AuthenticatedProductsProductIdEditRoute
 }
@@ -3399,7 +3434,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedJobsKanbanRoute: typeof AuthenticatedJobsKanbanRoute
   AuthenticatedJobsTimelineRoute: typeof AuthenticatedJobsTimelineRoute
   AuthenticatedMobileCountingRoute: typeof AuthenticatedMobileCountingRoute
-  AuthenticatedMobilePickingRoute: typeof AuthenticatedMobilePickingRoute
+  AuthenticatedMobilePickingRoute: typeof AuthenticatedMobilePickingRouteWithChildren
   AuthenticatedMobileReceivingRoute: typeof AuthenticatedMobileReceivingRoute
   AuthenticatedOrdersOrderIdRoute: typeof AuthenticatedOrdersOrderIdRoute
   AuthenticatedOrdersCreateRoute: typeof AuthenticatedOrdersCreateRoute
@@ -3526,7 +3561,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedJobsKanbanRoute: AuthenticatedJobsKanbanRoute,
   AuthenticatedJobsTimelineRoute: AuthenticatedJobsTimelineRoute,
   AuthenticatedMobileCountingRoute: AuthenticatedMobileCountingRoute,
-  AuthenticatedMobilePickingRoute: AuthenticatedMobilePickingRoute,
+  AuthenticatedMobilePickingRoute: AuthenticatedMobilePickingRouteWithChildren,
   AuthenticatedMobileReceivingRoute: AuthenticatedMobileReceivingRoute,
   AuthenticatedOrdersOrderIdRoute: AuthenticatedOrdersOrderIdRoute,
   AuthenticatedOrdersCreateRoute: AuthenticatedOrdersCreateRoute,

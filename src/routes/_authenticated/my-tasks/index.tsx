@@ -10,6 +10,7 @@
  */
 
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { getLoginRedirectSearch } from '@/lib/auth/route-policy'
 import { lazy, Suspense } from 'react'
 import { z } from 'zod'
 import { RouteErrorFallback, PageLayout } from '@/components/layout'
@@ -29,7 +30,7 @@ export const Route = createFileRoute('/_authenticated/my-tasks/')({
     // Reuse parent _authenticated context to avoid extra auth/db calls.
     const role = 'appUser' in context ? context.appUser?.role : undefined
     if (!role) {
-      throw redirect({ to: '/login', search: { redirect: undefined } })
+      throw redirect({ to: '/login', search: getLoginRedirectSearch() })
     }
     if (!hasPermission(role as Role, PERMISSIONS.job.read)) {
       throw redirect({ to: '/dashboard', search: { tab: 'overview' } })

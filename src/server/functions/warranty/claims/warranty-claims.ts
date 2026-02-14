@@ -69,6 +69,7 @@ import {
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges, excludeFieldsForActivity } from '@/lib/activity-logger';
+import { warrantyLogger } from '@/lib/logger';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -373,10 +374,19 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       submittedAt: now.toISOString(),
     };
 
-    await client.sendEvent({
-      name: warrantyEvents.claimSubmitted,
-      payload,
-    });
+    let notificationQueued = true;
+    try {
+      await client.sendEvent({
+        name: warrantyEvents.claimSubmitted,
+        payload,
+      });
+    } catch (error) {
+      warrantyLogger.error('Failed to queue warranty claim notification', error, {
+        claimId: claim.id,
+        claimNumber: claim.claimNumber,
+      });
+      notificationQueued = false;
+    }
 
     // Log claim creation
     logger.logAsync({
@@ -403,7 +413,7 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       },
     });
 
-    return claim;
+    return { ...claim, notificationQueued };
   });
 
 // ============================================================================
@@ -829,10 +839,19 @@ export const resolveClaim = createServerFn({ method: 'POST' })
       resolutionNotes: data.resolutionNotes,
     };
 
-    await client.sendEvent({
-      name: warrantyEvents.claimResolved,
-      payload,
-    });
+    let notificationQueued = true;
+    try {
+      await client.sendEvent({
+        name: warrantyEvents.claimResolved,
+        payload,
+      });
+    } catch (error) {
+      warrantyLogger.error('Failed to queue warranty claim resolution notification', error, {
+        claimId: claim.id,
+        claimNumber: claim.claimNumber,
+      });
+      notificationQueued = false;
+    }
 
     // Log claim resolution
     logger.logAsync({
@@ -865,7 +884,7 @@ export const resolveClaim = createServerFn({ method: 'POST' })
       },
     });
 
-    return claim;
+    return { ...claim, notificationQueued };
   });
 
 // ============================================================================

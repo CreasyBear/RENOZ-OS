@@ -6,10 +6,11 @@ import { db } from '@/lib/db';
 import { portalIdentities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import { getServerUser } from '@/lib/supabase/server';
 import { getRequest } from '@tanstack/react-start/server';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
+import { getAppUrl } from '@/lib/server/app-url';
 import {
   getPortalIdentitySchema,
   requestPortalLinkSchema,
@@ -31,10 +32,10 @@ export const requestPortalLink = createServerFn({ method: 'POST' })
     const clientId = getClientIdentifier(request);
     checkRateLimit('portal-link-request', clientId, RATE_LIMITS.publicAction);
 
-    const admin = createAdminClient();
+    const admin = createAdminSupabase();
 
     const email = data.email.toLowerCase();
-    const appUrl = process.env.VITE_APP_URL || 'http://localhost:3000';
+    const appUrl = getAppUrl();
     const redirectTo = data.redirectTo ?? `${appUrl}/portal/confirm?next=/portal`;
 
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({

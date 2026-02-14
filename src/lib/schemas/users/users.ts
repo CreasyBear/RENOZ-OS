@@ -336,6 +336,8 @@ export const invitationSchema = z.object({
       name: z.string().nullable(),
     })
     .optional(),
+  /** Present when returned from sendInvitation: true if email was queued, false if queue failed */
+  emailQueued: z.boolean().optional(),
 });
 
 export type Invitation = z.infer<typeof invitationSchema>;

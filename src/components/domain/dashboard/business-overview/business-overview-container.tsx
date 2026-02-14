@@ -291,7 +291,7 @@ export function BusinessOverviewContainer({ className }: BusinessOverviewContain
   };
 
   // Log errors in development to help diagnose loading issues
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     const errors = [
       financialQuery.error && `Financial: ${financialQuery.error.message}`,
       revenueQuery.error && `Revenue: ${revenueQuery.error.message}`,

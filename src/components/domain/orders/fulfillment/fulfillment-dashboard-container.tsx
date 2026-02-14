@@ -37,6 +37,7 @@ export function FulfillmentDashboardContainer({
   onShipOrder,
   onViewOrder,
   onConfirmDelivery,
+  highlightOrderIds,
   className,
 }: FulfillmentDashboardContainerProps) {
   // ===========================================================================
@@ -113,6 +114,7 @@ export function FulfillmentDashboardContainer({
       onShipOrder={onShipOrder}
       onViewOrder={onViewOrder}
       onConfirmDelivery={onConfirmDelivery}
+      highlightOrderIds={highlightOrderIds}
       className={className}
     />
   );

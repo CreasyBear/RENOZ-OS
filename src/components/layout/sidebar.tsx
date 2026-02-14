@@ -26,6 +26,7 @@ import {
   LayoutDashboard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getLoginRedirectSearch } from '@/lib/auth/route-policy'
 import { SidebarNavItem } from './sidebar-nav-item'
 import { SidebarRail } from './sidebar-rail'
 import { OrgSwitcher } from './org-switcher'
@@ -189,7 +190,7 @@ export function Sidebar({
     try {
       await signOut.mutateAsync()
       toast.success('Signed out successfully')
-      navigate({ to: '/login', search: { redirect: undefined } })
+      navigate({ to: '/login', search: getLoginRedirectSearch() })
     } catch {
       toast.error('Failed to sign out')
     }

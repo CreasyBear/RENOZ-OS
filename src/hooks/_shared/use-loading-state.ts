@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -296,7 +297,7 @@ export function useBulkOperationLoading() {
             return results;
           }
 
-          console.warn(`Failed to process ${itemName} ${index + 1}:`, error);
+          logger.warn(`Failed to process ${itemName} ${index + 1}`, { error });
           if (onError) {
             onError(error as Error, item);
           }

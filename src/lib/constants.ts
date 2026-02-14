@@ -155,25 +155,25 @@ export const LIMITS = {
 
 export const FEATURE_FLAGS = {
   // Development
-  DEBUG_MODE: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
-  ANALYTICS_ENABLED: process.env.NEXT_PUBLIC_ANALYTICS_ENABLED !== 'false',
+  DEBUG_MODE: import.meta.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
+  ANALYTICS_ENABLED: import.meta.env.NEXT_PUBLIC_ANALYTICS_ENABLED !== 'false',
 
   // Features
-  SUPPLIERS_REAL_API: process.env.NEXT_PUBLIC_SUPPLIERS_REAL_API === 'true',
-  SUPPLIERS_PRICING_REAL_API: process.env.NEXT_PUBLIC_SUPPLIERS_PRICING_REAL_API === 'true',
-  CUSTOMERS_REAL_API: process.env.NEXT_PUBLIC_CUSTOMERS_REAL_API === 'true',
-  ORDERS_REAL_API: process.env.NEXT_PUBLIC_ORDERS_REAL_API === 'true',
-  JOBS_REAL_API: process.env.NEXT_PUBLIC_JOBS_REAL_API === 'true',
+  SUPPLIERS_REAL_API: import.meta.env.NEXT_PUBLIC_SUPPLIERS_REAL_API === 'true',
+  SUPPLIERS_PRICING_REAL_API: import.meta.env.NEXT_PUBLIC_SUPPLIERS_PRICING_REAL_API === 'true',
+  CUSTOMERS_REAL_API: import.meta.env.NEXT_PUBLIC_CUSTOMERS_REAL_API === 'true',
+  ORDERS_REAL_API: import.meta.env.NEXT_PUBLIC_ORDERS_REAL_API === 'true',
+  JOBS_REAL_API: import.meta.env.NEXT_PUBLIC_JOBS_REAL_API === 'true',
 
   // UI Features
-  ERROR_BOUNDARIES: process.env.NEXT_PUBLIC_ERROR_BOUNDARIES !== 'false',
-  DYNAMIC_IMPORTS: process.env.NEXT_PUBLIC_DYNAMIC_IMPORTS !== 'false',
-  OFFLINE_MODE: process.env.NEXT_PUBLIC_OFFLINE_MODE === 'true',
-  BULK_OPERATIONS: process.env.NEXT_PUBLIC_BULK_OPERATIONS !== 'false',
+  ERROR_BOUNDARIES: import.meta.env.NEXT_PUBLIC_ERROR_BOUNDARIES !== 'false',
+  DYNAMIC_IMPORTS: import.meta.env.NEXT_PUBLIC_DYNAMIC_IMPORTS !== 'false',
+  OFFLINE_MODE: import.meta.env.NEXT_PUBLIC_OFFLINE_MODE === 'true',
+  BULK_OPERATIONS: import.meta.env.NEXT_PUBLIC_BULK_OPERATIONS !== 'false',
 
   // Experimental
-  AI_ASSISTANT: process.env.NEXT_PUBLIC_AI_ASSISTANT === 'true',
-  REAL_TIME_UPDATES: process.env.NEXT_PUBLIC_REAL_TIME_UPDATES === 'true',
+  AI_ASSISTANT: import.meta.env.NEXT_PUBLIC_AI_ASSISTANT === 'true',
+  REAL_TIME_UPDATES: import.meta.env.NEXT_PUBLIC_REAL_TIME_UPDATES === 'true',
 } as const;
 
 // ============================================================================
@@ -181,7 +181,7 @@ export const FEATURE_FLAGS = {
 // ============================================================================
 
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || '/api',
+  BASE_URL: import.meta.env.NEXT_PUBLIC_API_URL || '/api',
   TIMEOUT: LIMITS.API_TIMEOUT,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000,

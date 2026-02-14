@@ -15,9 +15,16 @@ vi.mock('~/lib/supabase/server', () => ({
   }),
 }));
 
+vi.mock('@/lib/supabase/server', () => ({
+  createServerSupabase: () => ({
+    auth: {
+      getUser: (...args: unknown[]) => mockGetUser(...args),
+    },
+  }),
+}));
+
 describe('root index route server redirect behavior', () => {
   beforeEach(() => {
-    vi.resetModules();
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
       data: {
@@ -60,7 +67,42 @@ describe('root index route server redirect behavior', () => {
     }
   });
 
-  it('redirects unauthenticated "/" request to /login on server', async () => {
+  it('does not redirect when router path is not "/" even if request path is normalized to "/"', async () => {
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+
+    try {
+      // Simulate production normalization where server request appears as "/"
+      // while the router location still points to the actual route.
+      mockGetRequest.mockReturnValue(new Request('http://localhost:3000/'));
+      const { Route } = await import('@/routes/index');
+      const beforeLoad = Route.options.beforeLoad;
+
+      if (!beforeLoad) {
+        throw new Error('Expected index route to define beforeLoad');
+      }
+
+      await expect(
+        beforeLoad({
+          location: {
+            pathname: '/login',
+          },
+        } as never)
+      ).resolves.toBeUndefined();
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        value: originalWindow,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
+  it('does not redirect unauthenticated "/" request on server', async () => {
     const originalWindow = globalThis.window;
     Object.defineProperty(globalThis, 'window', {
       value: undefined,
@@ -83,11 +125,7 @@ describe('root index route server redirect behavior', () => {
             pathname: '/',
           },
         } as never)
-      ).rejects.toMatchObject({
-        options: {
-          to: '/login',
-        },
-      });
+      ).resolves.toBeUndefined();
     } finally {
       Object.defineProperty(globalThis, 'window', {
         value: originalWindow,

@@ -33,7 +33,7 @@ export function RootErrorBoundary({ error }: RootErrorBoundaryProps) {
           An unexpected error occurred. Please try again or contact support if
           the problem persists.
         </p>
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <pre className="text-left bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-800 overflow-auto max-h-48">
             {error.message}
             {error.stack && (

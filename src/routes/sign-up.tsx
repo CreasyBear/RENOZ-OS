@@ -1,4 +1,4 @@
-import { SignUpForm } from '~/components/sign-up-form';
+import { SignUpForm } from '@/components/auth/sign-up-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
 import { createFileRoute } from '@tanstack/react-router';

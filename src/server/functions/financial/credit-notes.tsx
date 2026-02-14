@@ -30,7 +30,7 @@ import {
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 import { calculateGst } from '@/lib/utils/financial';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -946,7 +946,7 @@ export const generateCreditNotePdf = createServerFn({ method: 'POST' })
     const filename = generateFilename('credit-note', creditNoteData.creditNoteNumber);
     const storagePath = generateStoragePath(ctx.organizationId, 'credit-note', filename);
 
-    const supabase = createAdminClient();
+    const supabase = createAdminSupabase();
     const { error: uploadError } = await supabase
       .storage.from(STORAGE_BUCKET)
       .upload(storagePath, buffer, {

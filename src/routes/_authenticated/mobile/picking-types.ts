@@ -12,6 +12,8 @@ export interface PickItem {
   quantityRequired: number;
   quantityPicked: number;
   status: "pending" | "in_progress" | "completed" | "short";
+  /** When true, user must scan/select serial numbers instead of entering quantity */
+  isSerialized?: boolean;
 }
 
 export interface PickList {
@@ -26,8 +28,11 @@ export interface PickList {
 
 export interface PendingPick {
   id?: string;
-  pickItemId: string;
+  orderId: string;
+  pickItemId: string; // lineItemId
   quantityPicked: number;
-  verifiedBarcode: string;
+  /** Required for serialized products when picking online/offline */
+  serialNumbers?: string[];
+  verifiedBarcode?: string;
   timestamp: Date;
 }

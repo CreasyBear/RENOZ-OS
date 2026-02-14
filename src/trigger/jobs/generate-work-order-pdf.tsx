@@ -13,7 +13,7 @@
  * @see https://trigger.dev/docs/v3/tasks
  */
 import { task, logger } from "@trigger.dev/sdk/v3";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminSupabase } from "@/lib/supabase/server";
 import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
@@ -202,7 +202,7 @@ export const generateWorkOrderPdf = task({
       fileSize: size,
     });
 
-    const { error: uploadError } = await createAdminClient()
+    const { error: uploadError } = await createAdminSupabase()
       .storage.from(STORAGE_BUCKET)
       .upload(storagePath, buffer, {
         contentType: "application/pdf",
@@ -215,7 +215,7 @@ export const generateWorkOrderPdf = task({
 
     // Generate signed URL (valid for 1 year)
     const { data: signedUrlData, error: signedUrlError } =
-      await createAdminClient()
+      await createAdminSupabase()
         .storage.from(STORAGE_BUCKET)
         .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
 

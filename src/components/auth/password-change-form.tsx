@@ -2,7 +2,7 @@
  * Password Change Form
  *
  * Form for changing user password when already authenticated.
- * This is distinct from password reset (update-password-form.tsx) which is used
+ * This is distinct from password reset (`reset-password-form.tsx`) which is used
  * when clicking a reset link from email.
  *
  * ARCHITECTURE: Container/Presenter Pattern
@@ -86,7 +86,7 @@ export function PasswordChangeFormPresenter({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmitCapture={onSubmit} onSubmit={onSubmit} noValidate className="space-y-4">
           {/* Current Password */}
           <div className="space-y-2">
             <Label htmlFor="current-password">Current Password</Label>

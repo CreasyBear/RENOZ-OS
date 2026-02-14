@@ -28,10 +28,11 @@ import {
   type BatchInvitationResult,
 } from '@/lib/schemas/users';
 import { idParamSchema } from '@/lib/schemas';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import { randomBytes } from 'crypto';
 import { getRequest } from '@tanstack/react-start/server';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
+import { getAppUrl } from '@/lib/server/app-url';
 import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { client, userEvents, type InvitationSentPayload, type BatchInvitationSentPayload } from '@/trigger/client';
@@ -65,29 +66,6 @@ function isAuthUserAlreadyExists(error: { message?: string; code?: string } | nu
 }
 
 // ============================================================================
-// HELPER: Get server-side Supabase client
-// ============================================================================
-
-function getServerSupabase() {
-  const url = process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceKey) {
-    throw new ServerError('Supabase environment variables not configured');
-  }
-
-  return createClient(url, serviceKey);
-}
-
-// ============================================================================
-// HELPER: Get app URL
-// ============================================================================
-
-function getAppUrl(): string {
-  return process.env.VITE_APP_URL || process.env.APP_URL || 'http://localhost:3000';
-}
-
-// ============================================================================
 // HELPER: Generate invitation accept URL
 // ============================================================================
 
@@ -96,7 +74,8 @@ function generateAcceptUrl(token: string): string {
 }
 
 // ============================================================================
-// HELPER: Send invitation email via Trigger.dev (fire-and-forget)
+// HELPER: Send invitation email via Trigger.dev
+// Returns true if event was queued, false if queue failed (caller should surface to user)
 // ============================================================================
 
 async function sendInvitationEmail(params: {
@@ -110,7 +89,7 @@ async function sendInvitationEmail(params: {
   personalMessage?: string | null;
   token: string;
   expiresAt: Date;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     await client.sendEvent({
       name: userEvents.invitationSent,
@@ -127,9 +106,10 @@ async function sendInvitationEmail(params: {
         expiresAt: params.expiresAt.toISOString(),
       } satisfies InvitationSentPayload,
     });
+    return true;
   } catch (error) {
-    // Log error but don't throw - email sending should not block invitation creation
     authLogger.error('Failed to queue invitation email', error);
+    return false;
   }
 }
 
@@ -191,7 +171,7 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .where(eq(organizations.id, ctx.organizationId))
       .limit(1);
 
-    const supabase = getServerSupabase();
+    const supabase = createAdminSupabase();
 
     if (!existingUser) {
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -253,8 +233,8 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    // Send invitation email via Trigger.dev (fire-and-forget)
-    void sendInvitationEmail({
+    // Send invitation email via Trigger.dev (await so we can surface queue failures)
+    const emailQueued = await sendInvitationEmail({
       invitationId: invitation.id,
       email: invitation.email,
       organizationId: ctx.organizationId,
@@ -293,6 +273,7 @@ export const sendInvitation = createServerFn({ method: 'POST' })
         email: ctx.user.email,
         name: ctx.user.name,
       },
+      emailQueued,
     };
   });
 
@@ -561,7 +542,7 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
-    const supabase = getServerSupabase();
+    const supabase = createAdminSupabase();
 
     // Backward compatibility: older invitations may exist without pre-provisioned users.
     const provisionedUser =
@@ -800,8 +781,8 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       })
       .where(eq(userInvitations.id, data.id));
 
-    // Send invitation email via Trigger.dev (fire-and-forget)
-    void sendInvitationEmail({
+    // Send invitation email via Trigger.dev (await so we can surface queue failures)
+    const emailQueued = await sendInvitationEmail({
       invitationId: invitation.id,
       email: invitation.email,
       organizationId: ctx.organizationId,
@@ -824,7 +805,7 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       metadata: { email: invitation.email, newExpiresAt: newExpiresAt.toISOString() },
     });
 
-    return { success: true };
+    return { success: true, emailQueued };
   });
 
 // ============================================================================
@@ -874,11 +855,11 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
       data,
     }): Promise<{
       results: BatchInvitationResult[];
-      summary: { total: number; success: number; failed: number };
+      summary: { total: number; success: number; failed: number; emailQueued: boolean };
     }> => {
       const ctx = await withAuth({ permission: PERMISSIONS.user.invite });
 
-      const supabase = getServerSupabase();
+      const supabase = createAdminSupabase();
 
       // Check for existing users and pending invitations in bulk
       const [existingUsers, existingInvitations] = await Promise.all([
@@ -1100,7 +1081,8 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         }
       }
 
-      // Send batch invitation emails via Trigger.dev (fire-and-forget)
+      // Send batch invitation emails via Trigger.dev (await so we can surface queue failures)
+      let emailQueued = true;
       if (emailInvitations.length > 0) {
         try {
           await client.sendEvent({
@@ -1121,8 +1103,8 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
             } satisfies BatchInvitationSentPayload,
           });
         } catch (error) {
-          // Log error but don't throw - email sending should not block
           authLogger.error('Failed to queue batch invitation emails', error);
+          emailQueued = false;
         }
       }
 
@@ -1152,6 +1134,7 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
           total: data.invitations.length,
           success: successCount,
           failed: data.invitations.length - successCount,
+          emailQueued,
         },
       };
     }

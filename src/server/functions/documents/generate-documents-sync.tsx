@@ -16,7 +16,7 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { orders, orderLineItems, customers, addresses, generatedDocuments } from 'drizzle/schema';
 import { createActivityLogger } from '@/lib/activity-logger';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -250,7 +250,7 @@ async function uploadPdf(
   const storagePath = generateStoragePath(organizationId, documentType, filename);
 
   // Use admin client for storage (service role bypasses RLS)
-  const supabase = createAdminClient();
+  const supabase = createAdminSupabase();
 
   // Upload to Supabase Storage
   const { error: uploadError } = await supabase

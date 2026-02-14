@@ -67,7 +67,7 @@ function RootComponent() {
           <Outlet />
         </div>
         <ToastProvider />
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <TanStackDevtools
             config={{
               position: 'bottom-right',

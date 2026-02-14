@@ -19,6 +19,7 @@ import { users } from 'drizzle/schema/users';
 import { customers } from 'drizzle/schema/customers';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ConflictError, ValidationError, RateLimitError, ServerError } from '@/lib/server/errors';
+import { checkCsatFeedbackRateLimit, RateLimitError as AuthRateLimitError } from '@/lib/auth/rate-limit';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { nanoid } from 'nanoid';
 import {
@@ -658,36 +659,19 @@ export const validateFeedbackToken = createServerFn({ method: 'GET' })
 // SUBMIT PUBLIC FEEDBACK (Token-Based, No Auth)
 // ============================================================================
 
-// Simple in-memory rate limiting (in production, use Redis)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
-
-function checkRateLimit(identifier: string): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(identifier);
-
-  if (!record || now > record.resetAt) {
-    rateLimitMap.set(identifier, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-
-  if (record.count >= RATE_LIMIT_MAX) {
-    return false;
-  }
-
-  record.count++;
-  return true;
-}
-
 export const submitPublicFeedback = createServerFn({ method: 'POST' })
   .inputValidator(submitPublicFeedbackSchema)
   .handler(async ({ data }): Promise<SubmitPublicFeedbackResponse> => {
     // No auth required - public endpoint
 
-    // Rate limit by token
-    if (!checkRateLimit(data.token)) {
-      throw new RateLimitError('Too many requests. Please try again later.');
+    // Rate limit by token (Redis-backed, in-memory fallback when Redis unavailable)
+    try {
+      await checkCsatFeedbackRateLimit(data.token);
+    } catch (e) {
+      if (e instanceof AuthRateLimitError) {
+        throw new RateLimitError(e.message, e.retryAfter);
+      }
+      throw e;
     }
 
     // Find the token

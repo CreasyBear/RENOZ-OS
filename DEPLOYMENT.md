@@ -125,6 +125,39 @@ The `vercel.json` in this directory adds:
 
 ---
 
+## Rollout Guardrails and Rollback
+
+### Release Gates
+- **Gate A (pre-deploy):** `bun test tests/unit/routes tests/unit/auth` and `npm run build:vercel` must pass.
+- **Gate B (post-deploy):** `npm run deploy:probe` runs 20 login probes and asset URL checks. Fails if any 307 loop or chunk 404 is detected.
+
+### Deploy with Guards
+```bash
+npm run deploy:prod
+```
+Runs tests, build, deploy, then post-deploy probe. Use `--skip-probe` to skip Gate B:
+```bash
+node scripts/deploy-with-guards.mjs --skip-probe
+```
+
+### Probe Only (after manual deploy)
+```bash
+APP_URL=https://renoz-os.vercel.app npm run deploy:probe
+```
+
+### Rollback
+If Gate B fails or users report redirect/chunk issues:
+1. Identify last known-good deployment (Vercel dashboard or `vercel list`).
+2. Redeploy that commit:
+   ```bash
+   git checkout <last-good-commit>
+   npm run build:vercel
+   npx vercel deploy --prebuilt --prod
+   ```
+3. Or use Vercel dashboard: Deployments → select prior deployment → Promote to Production.
+
+---
+
 ## Troubleshooting
 
 ### 500: Missing VITE_SUPABASE_URL environment variable
@@ -175,3 +208,18 @@ Usually caused by URL or auth config mismatch.
 ### Database connection errors
 - Use Supabase connection pooler URL for serverless: `?pgbouncer=true` or the pooler connection string
 - Ensure `DATABASE_URL` uses `sslmode=require`
+
+---
+
+## Production Considerations
+
+### Redis-backed features
+
+The following use Redis (Upstash) when `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, with in-memory fallback when Redis is unavailable:
+
+| Location | What |
+|----------|------|
+| `src/server/functions/products/product-search.ts` | Search analytics (term counts) – uses `@/lib/server/search-analytics` |
+| `src/server/functions/customers/csat-responses.ts` | Rate limiting for public feedback – uses `checkCsatFeedbackRateLimit` from `@/lib/auth/rate-limit` |
+
+For production scale across multiple serverless instances, ensure Redis is configured.

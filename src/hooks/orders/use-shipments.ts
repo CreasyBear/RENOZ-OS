@@ -229,6 +229,7 @@ export function useCreateShipment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(variables.orderId) });
     },
   });
 }

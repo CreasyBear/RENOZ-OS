@@ -13,7 +13,7 @@ import { eq, and, desc, asc, ilike, or, isNull, count, inArray } from 'drizzle-o
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { users, userGroupMembers, userGroups, userSessions } from 'drizzle/schema';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { userListQuerySchema, userListCursorSchema, updateUserSchema } from '@/lib/schemas/auth';
@@ -31,26 +31,10 @@ import {
   NotFoundError,
   ValidationError,
   AuthError,
-  ServerError,
 } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { completeOnboardingStep } from './onboarding';
 import { authLogger } from '@/lib/logger';
-
-// ============================================================================
-// HELPER: Get server-side Supabase admin client
-// ============================================================================
-
-function getServerSupabaseAdmin() {
-  const url = process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceKey) {
-    throw new ServerError('Supabase environment variables not configured');
-  }
-
-  return createClient(url, serviceKey);
-}
 
 /**
  * Invalidate all sessions for a user.
@@ -62,7 +46,7 @@ async function invalidateUserSessions(userId: string, authId: string): Promise<v
 
   // Terminate Supabase auth sessions
   try {
-    const supabase = getServerSupabaseAdmin();
+    const supabase = createAdminSupabase();
     // Sign out user from all devices
     await supabase.auth.admin.signOut(authId, 'global');
   } catch (error) {

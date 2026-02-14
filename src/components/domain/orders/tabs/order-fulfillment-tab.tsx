@@ -114,10 +114,24 @@ function FulfillmentActionBar({
               : 'Picking in progress. Continue picking remaining items.'}
           </span>
         </div>
-        <Button size="sm" onClick={onPickItems}>
-          <PackageCheck className="h-4 w-4 mr-2" />
-          Pick Items
-        </Button>
+        <div className="flex items-center gap-2">
+          {orderId && (
+            <Link
+              to="/mobile/picking/$orderId"
+              params={{ orderId }}
+              className={cn(
+                'inline-flex items-center justify-center rounded-md text-sm font-medium',
+                'h-9 px-4 border border-input bg-background hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              Pick on device
+            </Link>
+          )}
+          <Button size="sm" onClick={onPickItems}>
+            <PackageCheck className="h-4 w-4 mr-2" />
+            Pick Items
+          </Button>
+        </div>
       </div>
     );
   }

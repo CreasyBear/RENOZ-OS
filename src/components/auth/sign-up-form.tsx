@@ -1,18 +1,43 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { cn } from '~/lib/utils';
-import { supabase } from '~/lib/supabase/client';
-import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useTanStackForm } from '~/hooks/_shared/use-tanstack-form';
-import { registerSchema } from '@/lib/schemas/auth';
-import { TextField } from '@/components/shared/forms';
 import { Loader2 } from 'lucide-react';
+import { TextField } from '@/components/shared/forms';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { registerSchema } from '@/lib/schemas/auth';
+import { supabase } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
 
 export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const runSignUp = async (values: {
+    name: string;
+    organizationName: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+  }) => {
+    setAuthError(null);
+    const { error } = await supabase.auth.signUp({
+      email: values.email,
+      password: values.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        data: {
+          name: values.name || values.email.split('@')[0],
+          organization_name:
+            values.organizationName ||
+            `${values.name || values.email.split('@')[0]}'s Organization`,
+        },
+      },
+    });
+    if (error) throw error;
+    await navigate({ to: '/sign-up-success', search: { email: values.email } });
+  };
 
   const form = useTanStackForm({
     schema: registerSchema,
@@ -23,29 +48,12 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
       password: '',
       confirmPassword: '',
     },
-    onSubmit: async (values) => {
-      setAuthError(null);
-      const { error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
-          data: {
-            name: values.name || values.email.split('@')[0],
-            organization_name:
-              values.organizationName ||
-              `${values.name || values.email.split('@')[0]}'s Organization`,
-          },
-        },
-      });
-      if (error) throw error;
-      await navigate({ to: '/sign-up-success', search: { email: values.email } });
-    },
+    onSubmit: runSignUp,
+    onSubmitInvalid: () => setAuthError('Please check your input and try again.'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     setAuthError(null);
     void form.handleSubmit().catch((err) => {
       setAuthError(err instanceof Error ? err.message : 'An error occurred');
@@ -71,6 +79,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     label="Full Name"
                     placeholder="John Doe"
                     required
+                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -81,6 +90,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     label="Organization Name"
                     placeholder="Acme Inc"
                     required
+                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -93,6 +103,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     placeholder="m@example.com"
                     required
                     autocomplete="email"
+                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -104,6 +115,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     type="password"
                     required
                     autocomplete="new-password"
+                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -115,17 +127,20 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     type="password"
                     required
                     autocomplete="new-password"
+                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
-              {authError && (
-                <p className="text-sm text-destructive" role="alert">
-                  {authError}
-                </p>
-              )}
+              <div className="min-h-5">
+                {authError && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {authError}
+                  </p>
+                )}
+              </div>
               <Button
                 type="submit"
-                className="w-full h-11 font-medium transition-colors duration-200"
+                className="h-11 w-full font-medium transition-colors duration-200"
                 disabled={form.state.isSubmitting}
               >
                 {form.state.isSubmitting ? (
@@ -143,7 +158,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
               <Link
                 to="/login"
                 search={{ redirect: undefined }}
-                className="font-medium text-foreground underline-offset-4 hover:underline transition-colors duration-200 cursor-pointer"
+                className="cursor-pointer font-medium text-foreground underline-offset-4 transition-colors duration-200 hover:underline"
               >
                 Sign in
               </Link>

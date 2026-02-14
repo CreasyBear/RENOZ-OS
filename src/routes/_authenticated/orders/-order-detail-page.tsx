@@ -8,12 +8,12 @@ import { OrderDetailContainer } from "@/components/domain/orders";
 
 interface OrderDetailPageProps {
   orderId: string;
-  search: { fromIssueId?: string; edit?: boolean };
+  search: { fromIssueId?: string; edit?: boolean; pick?: boolean; ship?: boolean };
 }
 
 export default function OrderDetailPage({ orderId, search }: OrderDetailPageProps) {
   return (
-    <OrderDetailContainer orderId={orderId} fromIssueId={search.fromIssueId} edit={search.edit}>
+    <OrderDetailContainer orderId={orderId} fromIssueId={search.fromIssueId} edit={search.edit} pick={search.pick} ship={search.ship}>
       {({ headerActions, backLinkSearch, content }) => (
         <PageLayout variant="full-width">
           <PageLayout.Header

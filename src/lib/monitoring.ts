@@ -43,8 +43,8 @@ type LogContext = Record<string, unknown>;
 // ============================================================================
 
 class Logger {
-  private isProduction = process.env.NODE_ENV === 'production';
-  private logLevel = process.env.LOG_LEVEL || 'info';
+  private isProduction = import.meta.env.PROD;
+  private logLevel = (import.meta.env.VITE_LOG_LEVEL as string) || 'info';
 
   private levels = {
     error: 0,
@@ -124,7 +124,7 @@ class Logger {
 
 class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
-  private isEnabled = process.env.NEXT_PUBLIC_PERFORMANCE_MONITORING !== 'false';
+  private isEnabled = import.meta.env.NEXT_PUBLIC_PERFORMANCE_MONITORING !== 'false';
 
   trackMetric(
     name: string,
@@ -150,7 +150,7 @@ class PerformanceMonitor {
     }
 
     // In production, send to analytics service
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       this.reportMetric(metric);
     }
 
@@ -221,7 +221,7 @@ class PerformanceMonitor {
 // ============================================================================
 
 class UserAnalytics {
-  private isEnabled = process.env.NEXT_PUBLIC_ANALYTICS !== 'false';
+  private isEnabled = import.meta.env.NEXT_PUBLIC_ANALYTICS !== 'false';
 
   trackEvent(
     event: string,
@@ -240,7 +240,7 @@ class UserAnalytics {
     };
 
     // In production, send to analytics service
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       this.reportEvent(userEvent);
     }
 

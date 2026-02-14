@@ -169,10 +169,11 @@ export function useCustomerDetail(
         search: { stage: 'proposal' },
       });
     },
-    // Navigate to order creation
+    // Navigate to order creation with customer pre-selected
     onCreateOrder: () => {
       navigate({
         to: '/orders/create',
+        search: customerId ? { customerId } : undefined,
       });
     },
     onAddNote: () => {

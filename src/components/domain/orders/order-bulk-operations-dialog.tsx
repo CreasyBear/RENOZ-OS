@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Link } from '@tanstack/react-router';
-import { CheckCircle, AlertTriangle, Package, Truck, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Package, Loader2 } from 'lucide-react';
 import { FormatAmount } from '@/components/shared/format';
 import { StatusBadge, type StatusConfigItem } from '@/components/shared/status-badge';
 import { toastError } from '@/hooks';
@@ -53,7 +53,7 @@ export interface OrderBulkOperation {
 }
 
 export interface BulkOperationConfig {
-  type: 'allocate' | 'ship' | 'status_update';
+  type: 'allocate' | 'status_update';
   title: string;
   description: string;
   confirmText: string;
@@ -81,14 +81,6 @@ export const OPERATION_CONFIGS: Record<string, BulkOperationConfig> = {
     description: 'Move selected orders to the picking stage for fulfillment.',
     confirmText: 'Allocate Orders',
     icon: Package,
-    variant: 'default',
-  },
-  ship: {
-    type: 'ship',
-    title: 'Bulk Ship Orders',
-    description: 'Mark selected orders as shipped and update their status.',
-    confirmText: 'Ship Orders',
-    icon: Truck,
     variant: 'default',
   },
   status_update: {

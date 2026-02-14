@@ -98,7 +98,7 @@ export class FulfillmentErrorBoundary extends Component<Props, State> {
                 team.
               </p>
 
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <details className="mt-4">
                   <summary className="cursor-pointer text-sm font-medium">
                     Error Details (Development)

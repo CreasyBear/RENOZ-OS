@@ -95,8 +95,23 @@ const resendConfirmationRateLimiter = redis
     })
   : null;
 
+/**
+ * CSAT public feedback rate limiter.
+ * 5 submissions per hour per feedback token.
+ */
+const csatFeedbackRateLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(5, "1 h"),
+      analytics: true,
+      prefix: "ratelimit:csat-feedback:",
+    })
+  : null;
+
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
+const CSAT_FEEDBACK_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const CSAT_FEEDBACK_MAX_ATTEMPTS = 5;
 const FALLBACK_KEY_PREFIX = 'ratelimit-fallback';
 
 function applyInMemoryFallbackLimit(
@@ -278,6 +293,32 @@ export async function checkResendConfirmationRateLimit(
   }
 
   return { success, remaining, reset };
+}
+
+/**
+ * Check CSAT public feedback rate limit.
+ * 5 submissions per hour per feedback token.
+ *
+ * @param token - Feedback token
+ * @throws RateLimitError if limit exceeded
+ */
+export async function checkCsatFeedbackRateLimit(token: string): Promise<void> {
+  if (!csatFeedbackRateLimiter) {
+    applyInMemoryFallbackLimit(
+      'csat-feedback',
+      token,
+      CSAT_FEEDBACK_MAX_ATTEMPTS,
+      CSAT_FEEDBACK_WINDOW_MS
+    );
+    return;
+  }
+
+  const { success, reset } = await csatFeedbackRateLimiter.limit(token);
+
+  if (!success) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+    throw new RateLimitError('Too many requests. Please try again later.', retryAfter);
+  }
 }
 
 // ============================================================================

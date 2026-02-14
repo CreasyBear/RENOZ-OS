@@ -31,7 +31,7 @@ export function RouteErrorFallback({
 
   // Log error - in production, send to monitoring service
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       logger.error('[Route Error]', error, { message: error.message });
     } else {
       logger.error('[Route Error]', error, { stack: error.stack });
@@ -63,7 +63,7 @@ export function RouteErrorFallback({
           </p>
 
           {/* Only show error details in development */}
-          {process.env.NODE_ENV !== 'production' && (
+          {!import.meta.env.PROD && (
             <div className="rounded bg-destructive/10 p-3 font-mono text-xs text-destructive space-y-2">
               <div className="font-semibold">{error.message}</div>
               <pre className="whitespace-pre-wrap text-[10px] max-h-40 overflow-auto">

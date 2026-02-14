@@ -22,8 +22,8 @@ interface LogContext {
   [key: string]: unknown;
 }
 
-const isProduction = process.env.NODE_ENV === 'production';
-const logLevel = (process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug')) as LogLevel;
+const isProduction = import.meta.env.PROD;
+const logLevel = ((import.meta.env.VITE_LOG_LEVEL as string) || (isProduction ? 'info' : 'debug')) as LogLevel;
 
 const levels: Record<LogLevel, number> = {
   debug: 0,

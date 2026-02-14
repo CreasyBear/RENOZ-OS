@@ -1,5 +1,5 @@
-import { redirect } from '@tanstack/react-router'
 import type { User, Session } from '@supabase/supabase-js'
+import { toLoginRedirect as policyToLoginRedirect } from './route-policy'
 
 type RouteLocation = {
   href?: string
@@ -40,15 +40,7 @@ function isRouterRedirect(error: unknown) {
 }
 
 function toLoginRedirect(location?: RouteLocation, reason?: string) {
-  // Only keep app-internal paths in redirect targets.
-  const redirectTarget = location?.pathname
-  return redirect({
-    to: '/login',
-    search: {
-      redirect: reason ? undefined : redirectTarget,
-      reason,
-    },
-  })
+  return policyToLoginRedirect(location?.pathname, reason)
 }
 
 function delay(ms: number) {
@@ -65,7 +57,8 @@ function getStatusCode(error: unknown): number | undefined {
 
 export function isRetryableAuthError(error: unknown): boolean {
   const status = getStatusCode(error)
-  if (status === 401 || status === 403) return false
+  // During post-login bootstrap, Supabase can briefly return 401/403 before tokens settle.
+  if (status === 401 || status === 403) return true
   if (status && status >= 500) return true
 
   const message =
@@ -79,8 +72,6 @@ export function isRetryableAuthError(error: unknown): boolean {
     message.includes('jwt') ||
     message.includes('unauthorized') ||
     message.includes('forbidden') ||
-    message.includes('auth_user_missing') ||
-    message.includes('app_user_missing') ||
     message.includes('user not active')
   ) {
     return false
@@ -144,9 +135,13 @@ function isCacheFresh(validatedAt: number, ttlMs: number) {
 
 async function ensureAuthStateListener() {
   if (listenerRegistered || typeof window === 'undefined') return
-  const { onAuthStateChange } = await import('~/lib/supabase/client')
+  const { onAuthStateChange } = await import('@/lib/supabase/client')
   onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+    if (
+      event === 'SIGNED_OUT' ||
+      event === 'TOKEN_REFRESHED' ||
+      event === 'PASSWORD_RECOVERY'
+    ) {
       invalidateAuthCache()
     }
   })
@@ -154,7 +149,7 @@ async function ensureAuthStateListener() {
 }
 
 async function resolveAuthContext(location?: RouteLocation): Promise<AuthRouteContext> {
-  const { supabase } = await import('~/lib/supabase/client')
+  const { supabase } = await import('@/lib/supabase/client')
   const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine
 
   if (!isOnline) {
@@ -234,17 +229,42 @@ export async function getAuthContext(location?: RouteLocation): Promise<AuthRout
       return ctx
     })
     .catch(async (error) => {
-      if (!isRetryableAuthError(error)) {
-        const { supabase } = await import('~/lib/supabase/client')
-        await supabase.auth.signOut()
-      }
-
       if (isRouterRedirect(error)) {
         throw error
       }
 
-      // Pass session_expired so login page forces signOut and doesn't redirect (breaks loop)
-      throw toLoginRedirect(location, 'session_expired')
+      const message =
+        error instanceof Error
+          ? error.message.toLowerCase()
+          : String((error as { message?: unknown })?.message ?? '').toLowerCase()
+
+      // User exists in Supabase but not in app users table, or not active.
+      // Sign out to clear stale session and break redirect loops.
+      if (
+        message.includes('app_user_missing') ||
+        message.includes('user_not_active')
+      ) {
+        const { supabase } = await import('@/lib/supabase/client')
+        await supabase.auth.signOut()
+        invalidateAuthCache()
+        throw toLoginRedirect(location, 'invalid_user')
+      }
+
+      if (
+        message.includes('invalid refresh token') ||
+        message.includes('jwt') ||
+        message.includes('unauthorized') ||
+        message.includes('forbidden')
+      ) {
+        // Clear stale session to avoid JWT/session confusion on next load
+        const { supabase } = await import('@/lib/supabase/client')
+        await supabase.auth.signOut()
+        invalidateAuthCache()
+        throw toLoginRedirect(location, 'session_expired')
+      }
+
+      // Keep users on login with a clear prompt for transient auth-check failures.
+      throw toLoginRedirect(location, 'auth_check_failed')
     })
     .finally(() => {
       authPromise = null

@@ -1,9 +1,10 @@
 /**
  * Mobile Picking Page
  *
- * Extracted for code-splitting - see picking.tsx for route definition.
+ * Extracted for code-splitting - see picking.tsx and picking.$orderId.tsx for route definitions.
+ * When orderId is provided, fetches real order data and calls pickOrderItems API.
  */
-import { useState, useCallback, useEffect, memo } from "react";
+import { useState, useCallback, useEffect, memo, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Package, MapPin, Check, AlertTriangle, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,7 +31,10 @@ import {
   OfflineIndicator,
   MobilePageHeader,
 } from "@/components/mobile/inventory-actions";
-import { MOCK_PICK_LIST } from "./__fixtures__";
+import { useOrderWithCustomer } from "@/hooks/orders/use-order-detail";
+import { usePickOrderItems } from "@/hooks/orders/use-picking";
+import { useAvailableSerials } from "@/hooks/inventory";
+import { SerialPicker } from "@/components/domain/orders/fulfillment/serial-picker";
 import type { PickItem, PickList, PendingPick } from "./picking-types";
 
 interface PickItemRowProps {
@@ -38,6 +42,7 @@ interface PickItemRowProps {
   index: number;
   isActive: boolean;
   onSelect: (index: number) => void;
+  isShort?: boolean;
 }
 
 const PickItemRow = memo(function PickItemRow({
@@ -45,36 +50,38 @@ const PickItemRow = memo(function PickItemRow({
   index,
   isActive,
   onSelect,
+  isShort = false,
 }: PickItemRowProps) {
+  const effectiveStatus = isShort ? "short" : item.status;
   return (
     <button
-      onClick={() => item.status !== "completed" && onSelect(index)}
-      disabled={item.status === "completed"}
+      onClick={() => effectiveStatus !== "completed" && effectiveStatus !== "short" && onSelect(index)}
+      disabled={effectiveStatus === "completed" || effectiveStatus === "short"}
       className={cn(
         "w-full flex items-center justify-between p-3 rounded-lg transition-colors",
         "touch-action-manipulation",
         isActive
           ? "bg-primary/10 border-2 border-primary"
-          : item.status === "completed"
+          : effectiveStatus === "completed"
             ? "bg-green-50 opacity-60"
-            : item.status === "short"
+            : effectiveStatus === "short"
               ? "bg-orange-50"
               : "bg-background border",
-        item.status === "completed" && "cursor-default"
+        effectiveStatus === "completed" && "cursor-default"
       )}
     >
       <div className="flex items-center gap-3">
         <div
           className={cn(
             "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold",
-            item.status === "completed"
+            effectiveStatus === "completed"
               ? "bg-green-500 text-white"
-              : item.status === "short"
+              : effectiveStatus === "short"
                 ? "bg-orange-500 text-white"
                 : "bg-muted"
           )}
         >
-          {item.status === "completed" ? (
+          {effectiveStatus === "completed" ? (
             <Check className="h-4 w-4" />
           ) : (
             index + 1
@@ -84,24 +91,85 @@ const PickItemRow = memo(function PickItemRow({
           <div className="font-medium truncate max-w-[200px]">
             {item.productName}
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
             {item.locationCode} - Qty: {item.quantityRequired}
+            {item.isSerialized && (
+              <Badge variant="outline" className="text-[10px] font-normal">
+                Serialized
+              </Badge>
+            )}
           </div>
         </div>
       </div>
-      {item.status !== "completed" && (
+      {effectiveStatus !== "completed" && effectiveStatus !== "short" && (
         <ChevronRight className="h-5 w-5 text-muted-foreground" />
       )}
     </button>
   );
 });
 
-export default function MobilePickingPage() {
+interface OrderLineItemForPick {
+  id: string;
+  productId: string | null;
+  quantity: number;
+  qtyPicked: number | null;
+  description: string;
+  product?: { name: string; sku: string | null; isSerialized?: boolean } | null;
+  sku?: string | null;
+}
+
+function mapOrderToPickList(
+  orderId: string,
+  order: { orderNumber: string; customer?: { name: string } | null },
+  lineItems: OrderLineItemForPick[]
+): PickList {
+  const items: PickItem[] = lineItems.map((li) => {
+    const ordered = Number(li.quantity);
+    const picked = Number(li.qtyPicked) || 0;
+    const remaining = ordered - picked;
+    const isSerialized = !!li.product?.isSerialized;
+    return {
+      id: li.id,
+      productId: li.productId ?? "",
+      productName: li.product?.name ?? li.description,
+      productSku: li.product?.sku ?? li.sku ?? "—",
+      locationId: "",
+      locationCode: "—",
+      locationName: "—",
+      quantityRequired: ordered,
+      quantityPicked: picked,
+      status: remaining <= 0 ? "completed" : picked > 0 ? "in_progress" : "pending",
+      isSerialized,
+    };
+  });
+  return {
+    id: `pick-${orderId}`,
+    orderId,
+    orderNumber: order.orderNumber,
+    customerName: order.customer?.name ?? "—",
+    status: items.every((i) => i.status === "completed") ? "completed" : items.some((i) => i.status !== "pending") ? "in_progress" : "pending",
+    createdAt: new Date(),
+    items,
+  };
+}
+
+export default function MobilePickingPage({ orderId }: { orderId?: string }) {
   const navigate = useNavigate();
-  const [pickList, setPickList] = useState<PickList>(MOCK_PICK_LIST);
+  const { data: orderData, isLoading: orderLoading } = useOrderWithCustomer({
+    orderId: orderId ?? "",
+    enabled: !!orderId,
+  });
+  const pickMutation = usePickOrderItems();
+
+  const pickList = useMemo(() => {
+    if (!orderId || !orderData) return null;
+    return mapOrderToPickList(orderId, orderData, orderData.lineItems as OrderLineItemForPick[]);
+  }, [orderId, orderData]);
+
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [quantityToPick, setQuantityToPick] = useState(0);
+  const [selectedSerials, setSelectedSerials] = useState<string[]>([]);
   const [isVerified, setIsVerified] = useState(false);
   const {
     addToQueue,
@@ -113,17 +181,23 @@ export default function MobilePickingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  const currentItem = pickList.items[currentItemIndex];
-  const completedCount = pickList.items.filter((i) => i.status === "completed").length;
-  const progress = (completedCount / pickList.items.length) * 100;
+  const currentItem = pickList?.items[currentItemIndex];
+  const completedCount = pickList ? pickList.items.filter((i) => i.status === "completed").length : 0;
+  const progress = pickList && pickList.items.length > 0 ? (completedCount / pickList.items.length) * 100 : 0;
 
   useEffect(() => {
     if (currentItem) {
       setQuantityToPick(currentItem.quantityRequired - currentItem.quantityPicked);
+      setSelectedSerials([]);
       setScannedBarcode(null);
       setIsVerified(false);
     }
   }, [currentItemIndex, currentItem]);
+
+  const { data: availableSerialsData, isLoading: serialsLoading } = useAvailableSerials({
+    productId: currentItem?.productId ?? "",
+    enabled: !!currentItem?.isSerialized && !!currentItem?.productId,
+  });
 
   const handleScan = useCallback(
     (barcode: string) => {
@@ -146,34 +220,52 @@ export default function MobilePickingPage() {
 
   const handleConfirmPickClick = useCallback(() => {
     if (!currentItem || !isVerified) return;
+    if (currentItem.isSerialized) {
+      if (selectedSerials.length !== quantityToPick) return;
+    }
     setShowConfirmDialog(true);
-  }, [currentItem, isVerified]);
+  }, [currentItem, isVerified, selectedSerials.length, quantityToPick]);
 
   const handleConfirmedPick = useCallback(async () => {
     setShowConfirmDialog(false);
-    if (!currentItem || !isVerified) return;
+    if (!currentItem || !isVerified || !pickList || !orderId) return;
+    const serialsToUse = currentItem.isSerialized ? selectedSerials : undefined;
+    if (currentItem.isSerialized && (!serialsToUse || serialsToUse.length !== quantityToPick)) return;
     try {
       setIsSubmitting(true);
-      const newItems = [...pickList.items];
-      const item = newItems[currentItemIndex];
-      item.quantityPicked += quantityToPick;
-      item.status =
-        item.quantityPicked >= item.quantityRequired ? "completed" : "in_progress";
-      setPickList({
-        ...pickList,
-        items: newItems,
-        status: newItems.every((i) => i.status === "completed")
-          ? "completed"
-          : "in_progress",
-      });
-      if (!isOnline) {
+      if (isOnline) {
+        await pickMutation.mutateAsync({
+          orderId,
+          items: [
+            {
+              lineItemId: currentItem.id,
+              qtyPicked: quantityToPick,
+              serialNumbers: serialsToUse,
+            },
+          ],
+        });
+      } else {
         addToQueue({
+          orderId,
           pickItemId: currentItem.id,
           quantityPicked: quantityToPick,
-          verifiedBarcode: scannedBarcode!,
+          serialNumbers: serialsToUse,
+          verifiedBarcode: scannedBarcode ?? undefined,
           timestamp: new Date(),
         });
       }
+      const newItems = pickList.items.map((it, idx) =>
+        idx === currentItemIndex
+          ? {
+              ...it,
+              quantityPicked: it.quantityPicked + quantityToPick,
+              status:
+                it.quantityPicked + quantityToPick >= it.quantityRequired
+                  ? ("completed" as const)
+                  : ("in_progress" as const),
+            }
+          : it
+      );
       toast.success(`Picked ${quantityToPick} units`, {
         description: currentItem.productName,
       });
@@ -196,41 +288,164 @@ export default function MobilePickingPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentItem, isVerified, quantityToPick, scannedBarcode, pickList, currentItemIndex, isOnline, addToQueue]);
+  }, [currentItem, isVerified, quantityToPick, selectedSerials, scannedBarcode, pickList, currentItemIndex, isOnline, addToQueue, orderId, pickMutation]);
+
+  const [shortItemIds, setShortItemIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    setShortItemIds(new Set());
+  }, [orderId]);
 
   const handleMarkShort = useCallback(() => {
-    if (!currentItem) return;
-    const newItems = [...pickList.items];
-    newItems[currentItemIndex].status = "short";
-    setPickList({
-      ...pickList,
-      items: newItems,
-    });
+    if (!currentItem || !pickList) return;
+    const updatedShortIds = new Set(shortItemIds).add(currentItem.id);
+    setShortItemIds(updatedShortIds);
     toast.warning("Item marked as short", {
       description: `${currentItem.quantityRequired - currentItem.quantityPicked} units short`,
     });
-    const nextPending = newItems.findIndex(
-      (i, idx) => idx > currentItemIndex && i.status === "pending"
+    const isShort = (item: PickItem) => updatedShortIds.has(item.id);
+    const nextPending = pickList.items.findIndex(
+      (i, idx) => idx > currentItemIndex && i.status !== "completed" && !isShort(i)
     );
     if (nextPending !== -1) {
       setCurrentItemIndex(nextPending);
+    } else {
+      const firstPending = pickList.items.findIndex(
+        (i) => i.status !== "completed" && !isShort(i)
+      );
+      if (firstPending !== -1) setCurrentItemIndex(firstPending);
     }
-  }, [currentItem, pickList, currentItemIndex]);
+  }, [currentItem, pickList, currentItemIndex, shortItemIds]);
 
   const handleSync = useCallback(async () => {
-    const result = await syncQueue(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    const result = await syncQueue(async (item: PendingPick) => {
+      if (!item.orderId) {
+        throw new Error("Legacy queue item missing orderId - cannot sync");
+      }
+      if (
+        item.serialNumbers &&
+        item.serialNumbers.length !== item.quantityPicked
+      ) {
+        throw new Error(
+          "Serialized pick has mismatched serial count - open order on desktop to complete"
+        );
+      }
+      try {
+        await pickMutation.mutateAsync({
+          orderId: item.orderId,
+          items: [
+            {
+              lineItemId: item.pickItemId,
+              qtyPicked: item.quantityPicked,
+              serialNumbers: item.serialNumbers,
+            },
+          ],
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          /serial|Serial/.test(msg) &&
+          (!item.serialNumbers || item.serialNumbers.length === 0)
+        ) {
+          throw new Error(
+            "Serialized pick could not sync - open order on desktop to complete"
+          );
+        }
+        throw err;
+      }
     });
     if (result.failed === 0) {
       toast.success(`Synced ${result.success} picks`);
     } else {
       toast.warning(`Synced ${result.success} picks, ${result.failed} failed`);
     }
-  }, [syncQueue]);
+  }, [syncQueue, pickMutation]);
 
-  const allCompleted = pickList.items.every(
-    (i) => i.status === "completed" || i.status === "short"
-  );
+  const allCompleted = pickList
+    ? pickList.items.every(
+        (i) => i.status === "completed" || shortItemIds.has(i.id)
+      )
+    : false;
+
+  if (!orderId) {
+    return (
+      <div className="min-h-dvh bg-muted/30">
+        <MobilePageHeader
+          title="Pick Order"
+          subtitle="No order selected"
+          onBack={() => navigate({ to: "/mobile" })}
+        />
+        <div className="p-4">
+          <Card>
+            <CardContent className="pt-6 pb-6 text-center">
+              <p className="text-muted-foreground">
+                Open an order from the fulfillment dashboard and tap &quot;Pick on device&quot; to start picking.
+              </p>
+              <Button
+                className="mt-4"
+                onClick={() => navigate({ to: "/mobile" })}
+              >
+                Return to Menu
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (orderLoading || !pickList) {
+    return (
+      <div className="min-h-dvh bg-muted/30">
+        <MobilePageHeader
+          title="Pick Order"
+          subtitle="Loading..."
+          onBack={() => navigate({ to: "/mobile" })}
+        />
+        <div className="p-4 flex justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  if (pickList.items.length === 0) {
+    return (
+      <div className="min-h-dvh bg-muted/30">
+        <MobilePageHeader
+          title="Pick Order"
+          subtitle={`${pickList.orderNumber} - ${pickList.customerName}`}
+          onBack={() => navigate({ to: "/mobile" })}
+        />
+        <div className="p-4">
+          <Card>
+            <CardContent className="pt-6 pb-6 text-center">
+              <p className="text-muted-foreground">
+                No pickable items. This order may only have serialized products (pick from desktop).
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    navigate({
+                      to: "/orders/$orderId",
+                      params: { orderId: pickList.orderId },
+                      search: { pick: true },
+                    })
+                  }
+                >
+                  Open order to pick
+                </Button>
+                <Button onClick={() => navigate({ to: "/mobile" })}>
+                  Return to Menu
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh bg-muted/30">
@@ -328,18 +543,63 @@ export default function MobilePickingPage() {
                     </div>
                   )}
                 </div>
-                {isVerified && (
-                  <div className="space-y-2">
-                    <label htmlFor="qty-to-pick" className="text-sm font-medium">Quantity to Pick</label>
-                    <QuantityInput
-                      id="qty-to-pick"
-                      value={quantityToPick}
-                      onChange={setQuantityToPick}
-                      min={1}
-                      max={currentItem.quantityRequired - currentItem.quantityPicked}
-                    />
-                  </div>
-                )}
+                {isVerified &&
+                  (currentItem.isSerialized ? (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Scan or select {quantityToPick} serial{quantityToPick !== 1 ? "s" : ""}
+                      </label>
+                      {!serialsLoading &&
+                        (availableSerialsData?.availableSerials ?? []).length === 0 ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                          <p className="font-medium">No serials available in inventory</p>
+                          <p className="mt-1 text-amber-700">
+                            This product requires serial numbers but none are in stock or unallocated.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3"
+                            onClick={() =>
+                              navigate({
+                                to: "/orders/$orderId",
+                                params: { orderId: pickList.orderId },
+                                search: { pick: true },
+                              })
+                            }
+                          >
+                            Open on desktop to pick
+                          </Button>
+                        </div>
+                      ) : (
+                        <SerialPicker
+                          options={(availableSerialsData?.availableSerials ?? []).map((s) => ({
+                            serialNumber: s.serialNumber,
+                            locationName: s.locationName ?? undefined,
+                            receivedAt: s.receivedAt ?? undefined,
+                          }))}
+                          selectedSerials={selectedSerials}
+                          onChange={setSelectedSerials}
+                          maxSelections={quantityToPick}
+                          isLoading={serialsLoading}
+                          ariaLabel="Select serial numbers"
+                          variant="inline"
+                          scanMode
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label htmlFor="qty-to-pick" className="text-sm font-medium">Quantity to Pick</label>
+                      <QuantityInput
+                        id="qty-to-pick"
+                        value={quantityToPick}
+                        onChange={setQuantityToPick}
+                        min={1}
+                        max={currentItem.quantityRequired - currentItem.quantityPicked}
+                      />
+                    </div>
+                  ))}
                 <div className="flex gap-3 pt-2">
                   <Button
                     variant="outline"
@@ -351,7 +611,14 @@ export default function MobilePickingPage() {
                   </Button>
                   <Button
                     onClick={handleConfirmPickClick}
-                    disabled={!isVerified || isSubmitting}
+                    disabled={
+                      !isVerified ||
+                      isSubmitting ||
+                      (currentItem.isSerialized
+                        ? selectedSerials.length !== quantityToPick ||
+                          (availableSerialsData?.availableSerials ?? []).length === 0
+                        : false)
+                    }
                     className="flex-1 h-14 text-lg"
                   >
                     {isSubmitting ? (
@@ -380,6 +647,7 @@ export default function MobilePickingPage() {
                   index={idx}
                   isActive={idx === currentItemIndex}
                   onSelect={setCurrentItemIndex}
+                  isShort={shortItemIds.has(item.id)}
                 />
               ))}
             </div>
@@ -391,7 +659,9 @@ export default function MobilePickingPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Pick</AlertDialogTitle>
             <AlertDialogDescription>
-              Pick {quantityToPick} x {currentItem?.productName}?
+              {currentItem?.isSerialized
+                ? `Pick ${selectedSerials.length} serial(s) for ${currentItem?.productName}?`
+                : `Pick ${quantityToPick} x ${currentItem?.productName}?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -41,6 +41,7 @@ import {
   type BulkOperationConfig,
   type OrderBulkOperation,
 } from "./order-bulk-operations-dialog";
+import { ArrowRightFromLine } from "lucide-react";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -235,7 +236,7 @@ export function OrdersListContainer({
 
   // Bulk operation handlers
   const openBulkDialog = useCallback(
-    (operationType: "allocate" | "ship" | "status_update") => {
+    (operationType: "allocate" | "status_update") => {
       const config = OPERATION_CONFIGS[operationType];
       if (config) {
         setBulkOperation(config);
@@ -244,6 +245,19 @@ export function OrdersListContainer({
     },
     []
   );
+
+  const handleGoToFulfillment = useCallback(() => {
+    const orderIds = selectedItems.map((order) => order.id);
+    if (orderIds.length === 0) {
+      toastError("No orders selected");
+      return;
+    }
+    navigate({
+      to: "/orders/fulfillment",
+      state: { highlightOrderIds: orderIds } as Record<string, unknown>,
+    });
+    clearSelection();
+  }, [selectedItems, navigate, clearSelection]);
 
   const handleBulkConfirm = useCallback(
     async (statusOverride?: OrderStatus) => {
@@ -255,9 +269,8 @@ export function OrdersListContainer({
         return;
       }
 
-      const statusMap: Record<BulkOperationConfig["type"], OrderStatus | null> = {
+      const statusMap: Record<string, OrderStatus | null> = {
         allocate: "picking",
-        ship: "shipped",
         status_update: statusOverride ?? null,
       };
 
@@ -325,7 +338,6 @@ export function OrdersListContainer({
 
   // Extract icons from config for bulk action buttons
   const AllocateIcon = OPERATION_CONFIGS.allocate.icon;
-  const ShipIcon = OPERATION_CONFIGS.ship.icon;
   const StatusIcon = OPERATION_CONFIGS.status_update.icon;
 
   return (
@@ -344,9 +356,9 @@ export function OrdersListContainer({
             <AllocateIcon className="h-4 w-4 mr-1" />
             Allocate
           </Button>
-          <Button size="sm" variant="outline" onClick={() => openBulkDialog("ship")}>
-            <ShipIcon className="h-4 w-4 mr-1" />
-            Ship
+          <Button size="sm" variant="outline" onClick={handleGoToFulfillment}>
+            <ArrowRightFromLine className="h-4 w-4 mr-1" />
+            Go to Fulfillment
           </Button>
           <Button size="sm" variant="outline" onClick={() => openBulkDialog("status_update")}>
             <StatusIcon className="h-4 w-4 mr-1" />

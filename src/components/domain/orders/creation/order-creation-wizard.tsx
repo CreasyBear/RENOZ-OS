@@ -7,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-CREATION-UI)
  */
 
-import { memo, useState, useCallback, useMemo } from "react";
+import { memo, useState, useCallback, useMemo, useEffect } from "react";
 import {
   User,
   Package,
@@ -53,6 +53,7 @@ import { useOrgFormat } from "@/hooks/use-org-format";
 import { CustomerSelectorContainer } from "./customer-selector-container";
 import type { SelectedCustomer } from "./customer-selector";
 import { ProductSelector, type OrderLineItemDraft } from "./product-selector";
+import { useOrderCreateDraft } from "./order-creation-wizard/use-order-create-draft";
 
 // ============================================================================
 // TYPES
@@ -100,6 +101,8 @@ export interface OrderSubmitData {
 }
 
 export interface OrderCreationWizardProps {
+  /** Pre-select customer when coming from customer context (e.g. ?customerId= in URL) */
+  initialCustomerId?: string;
   /** @source callback in container route */
   onComplete: (orderId: string, orderNumber: string) => void;
   /** @source callback in container route */
@@ -108,6 +111,8 @@ export interface OrderCreationWizardProps {
   onSubmit: (data: OrderSubmitData) => Promise<{ id: string; orderNumber: string }>;
   /** @source useMutation.isPending in container route */
   isSubmitting?: boolean;
+  /** Called with draft API so parent can clear on cancel. Enables draft persistence. */
+  onDraftReady?: (api: { clear: () => void }) => void;
   className?: string;
 }
 
@@ -179,7 +184,11 @@ interface StepProps {
   setState: React.Dispatch<React.SetStateAction<WizardState>>;
 }
 
-const StepCustomer = memo(function StepCustomer({ state, setState }: StepProps) {
+interface StepCustomerProps extends StepProps {
+  initialCustomerId?: string;
+}
+
+const StepCustomer = memo(function StepCustomer({ state, setState, initialCustomerId }: StepCustomerProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -191,12 +200,14 @@ const StepCustomer = memo(function StepCustomer({ state, setState }: StepProps) 
       <CustomerSelectorContainer
         selectedCustomerId={state.customer?.id ?? null}
         onSelect={(customer) => setState((s) => ({ ...s, customer }))}
+        initialCustomerId={initialCustomerId}
       />
     </div>
   );
 });
 
 const StepProducts = memo(function StepProducts({ state, setState }: StepProps) {
+  const hasNoItems = state.lineItems.length === 0;
   return (
     <div className="space-y-4">
       <div>
@@ -204,6 +215,11 @@ const StepProducts = memo(function StepProducts({ state, setState }: StepProps) 
         <p className="text-sm text-muted-foreground">
           Select products and quantities for this order
         </p>
+        {hasNoItems && (
+          <p className="text-sm text-amber-600 dark:text-amber-500 mt-1">
+            Add at least one product to continue.
+          </p>
+        )}
       </div>
       <ProductSelector
         selectedProducts={state.lineItems}
@@ -830,14 +846,28 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
 // ============================================================================
 
 export const OrderCreationWizard = memo(function OrderCreationWizard({
+  initialCustomerId,
   onComplete,
   onCancel,
   onSubmit,
   isSubmitting = false,
+  onDraftReady,
   className,
 }: OrderCreationWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [state, setState] = useState<WizardState>(initialState);
+
+  const draft = useOrderCreateDraft({
+    state,
+    setState,
+    currentStep,
+    setCurrentStep,
+    skipDraft: !!initialCustomerId,
+  });
+
+  useEffect(() => {
+    onDraftReady?.({ clear: draft.clear });
+  }, [onDraftReady, draft.clear]);
 
   // Build submit data from wizard state
   const buildSubmitData = useCallback((): OrderSubmitData => {
@@ -924,17 +954,18 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
     try {
       const data = buildSubmitData();
       const result = await onSubmit(data);
+      draft.clear();
       onComplete(result.id, result.orderNumber);
     } catch {
       // Error handling is done by the container
     }
-  }, [buildSubmitData, onSubmit, onComplete]);
+  }, [buildSubmitData, onSubmit, onComplete, draft]);
 
   // Render current step
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return <StepCustomer state={state} setState={setState} />;
+        return <StepCustomer state={state} setState={setState} initialCustomerId={initialCustomerId} />;
       case 2:
         return <StepProducts state={state} setState={setState} />;
       case 3:
@@ -950,6 +981,25 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
 
   return (
     <div className={cn("space-y-6", className)}>
+      {/* Draft restore banner */}
+      {draft.hasDraft && (
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+          <CardContent className="flex items-center justify-between py-3">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              You have unsaved changes from {draft.savedAt ? format(draft.savedAt, 'PPp') : 'a previous session'}.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={draft.clear}>
+                Discard
+              </Button>
+              <Button variant="default" size="sm" onClick={draft.restore}>
+                Restore
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Progress Indicator */}
       <nav aria-label="Progress">
         <ol className="flex items-center">

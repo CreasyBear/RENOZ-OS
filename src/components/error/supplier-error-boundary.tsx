@@ -87,7 +87,7 @@ export class SupplierErrorBoundary extends Component<Props, State> {
               We encountered an error loading supplier data. This has been reported to our team.
             </p>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <div className="max-h-32 overflow-y-auto rounded bg-red-50 p-3 font-mono text-sm text-red-800">
                 <strong>Error:</strong> {this.state.error.message}
                 {this.state.errorInfo && (

@@ -433,6 +433,7 @@ export const CustomerDetailView = memo(function CustomerDetailView({
                   <CustomerOrdersTab
                     orderSummary={customer.orderSummary}
                     totalOrders={customer.totalOrders}
+                    customerId={customer.id}
                   />
                 </Suspense>
               )}

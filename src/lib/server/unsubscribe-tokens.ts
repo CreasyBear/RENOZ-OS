@@ -17,6 +17,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { getAppUrl } from "./app-url";
 
 // ============================================================================
 // CONFIGURATION
@@ -240,6 +241,6 @@ export function verifyUnsubscribeToken(token: string): UnsubscribePayload | null
  */
 export function generateUnsubscribeUrl(input: UnsubscribeTokenInput): string {
   const token = generateUnsubscribeToken(input);
-  const baseUrl = process.env.VITE_APP_URL || process.env.APP_URL || "http://localhost:3000";
+  const baseUrl = getAppUrl();
   return `${baseUrl}/api/unsubscribe/${token}`;
 }

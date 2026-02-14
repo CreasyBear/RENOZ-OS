@@ -197,7 +197,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
 export function ActivityTimeline({ activities }: ActivityTimelineProps) {
   // Deprecation warning
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       logger.warn(
         '[DEPRECATED] ActivityTimeline from @/components/domain/customers/activity-timeline is deprecated. ' +
         'Use CustomerActivityTimelineContainer from @/components/domain/customers or ' +

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { confirmEmailFn } from '~/server/functions/auth/confirm';
+import { confirmEmailFn } from '@/server/functions/auth/confirm';
 
 export const Route = createFileRoute('/auth/confirm')({
   preload: false,

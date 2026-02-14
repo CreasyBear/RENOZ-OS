@@ -30,6 +30,31 @@ export const authKeys = {
   user: () => [...authKeys.all, 'user'] as const,
 }
 
+let authSyncRegistered = false
+
+function ensureAuthQuerySync(queryClient: ReturnType<typeof useQueryClient>) {
+  if (authSyncRegistered) return
+
+  onAuthStateChange((event, session) => {
+    queryClient.setQueryData(authKeys.session(), session)
+    queryClient.setQueryData(authKeys.user(), session?.user ?? null)
+
+    if (
+      event === 'SIGNED_OUT' ||
+      event === 'TOKEN_REFRESHED' ||
+      event === 'PASSWORD_RECOVERY'
+    ) {
+      invalidateAuthCache()
+    }
+
+    if (event === 'SIGNED_OUT') {
+      queryClient.clear()
+    }
+  })
+
+  authSyncRegistered = true
+}
+
 /**
  * Hook to get the current auth session.
  * Automatically syncs with Supabase auth state changes.
@@ -37,21 +62,9 @@ export const authKeys = {
 export function useSession() {
   const queryClient = useQueryClient()
 
-  // Subscribe to auth state changes and update query cache
+  // Register a single global auth sync listener.
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((event, session) => {
-      // Update both session and user queries when auth state changes
-      queryClient.setQueryData(authKeys.session(), session)
-      queryClient.setQueryData(authKeys.user(), session?.user ?? null)
-
-      // Invalidate other queries that might depend on auth state
-      if (event === 'SIGNED_OUT') {
-        invalidateAuthCache()
-        queryClient.clear()
-      }
-    })
-
-    return unsubscribe
+    ensureAuthQuerySync(queryClient)
   }, [queryClient])
 
   return useQuery({
@@ -76,13 +89,9 @@ export function useSession() {
 export function useUser() {
   const queryClient = useQueryClient()
 
-  // Subscribe to auth state changes
+  // Ensure auth sync exists even when only useUser() is mounted.
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((_event, session) => {
-      queryClient.setQueryData(authKeys.user(), session?.user ?? null)
-    })
-
-    return unsubscribe
+    ensureAuthQuerySync(queryClient)
   }, [queryClient])
 
   return useQuery({

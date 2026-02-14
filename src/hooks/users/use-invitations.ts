@@ -154,10 +154,16 @@ export function useSendInvitation() {
 
   return useMutation({
     mutationFn: (data: SendInvitation) => sendInvitation({ data }),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
-      toast.success('Invitation sent. The invitee will receive an email shortly.');
+      if (result.emailQueued === false) {
+        toast.warning(
+          'Invitation created but we couldn\'t queue the email. Use "Resend invitation" to try again.'
+        );
+      } else {
+        toast.success('Invitation sent. The invitee will receive an email shortly.');
+      }
       trackInviteSent({ email: variables.email, role: variables.role });
     },
     onError: (error) => {
@@ -194,10 +200,14 @@ export function useResendInvitation() {
 
   return useMutation({
     mutationFn: (data: { id: string }) => resendInvitation({ data }),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
-      toast.success('Invitation resent');
+      if (result.emailQueued === false) {
+        toast.warning('Invitation updated but we couldn\'t queue the email. Please try again.');
+      } else {
+        toast.success('Invitation resent');
+      }
       trackInviteResend({ id: variables.id });
     },
     onError: (error) => {
@@ -214,10 +224,16 @@ export function useBatchSendInvitations() {
 
   return useMutation({
     mutationFn: (data: BatchSendInvitationsInput) => batchSendInvitations({ data }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
-      toast.success('Invitations sent successfully');
+      if (result.summary.emailQueued === false) {
+        toast.warning(
+          'Invitations created but we couldn\'t queue the emails. Use "Resend invitation" for each to try again.'
+        );
+      } else {
+        toast.success('Invitations sent successfully');
+      }
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to send invitations');

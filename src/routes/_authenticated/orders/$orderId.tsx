@@ -18,6 +18,16 @@ const OrderDetailPage = lazy(() => import('./-order-detail-page'));
 const orderDetailSearchSchema = z.object({
   fromIssueId: z.string().uuid().optional(),
   edit: z.boolean().optional(),
+  pick: z.preprocess(
+    (v) =>
+      v === true || v === "1" || String(v).toLowerCase() === "true" ? true : false,
+    z.boolean()
+  ).default(false),
+  ship: z.preprocess(
+    (v) =>
+      v === true || v === "1" || String(v).toLowerCase() === "true" ? true : false,
+    z.boolean()
+  ).default(false),
 });
 
 export const Route = createFileRoute('/_authenticated/orders/$orderId')({

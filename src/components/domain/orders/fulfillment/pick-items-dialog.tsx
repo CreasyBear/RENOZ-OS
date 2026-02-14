@@ -9,7 +9,7 @@
  * @source pickMutation from usePickOrderItems hook
  */
 
-import { memo, useState, useEffect, startTransition } from 'react';
+import { memo, useState, useEffect, useRef, startTransition } from 'react';
 import { PackageCheck, Loader2, Check, X } from 'lucide-react';
 import {
   Dialog,
@@ -29,14 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { toastSuccess, toastError } from '@/hooks';
 import { useOrderWithCustomer } from '@/hooks/orders/use-order-detail';
@@ -53,6 +46,8 @@ export interface PickItemsDialogProps {
   onOpenChange: (open: boolean) => void;
   orderId: string;
   onSuccess?: () => void;
+  /** When provided and order becomes picked, opens ShipOrderDialog (auto-open + toast action) */
+  onShipOrder?: () => void;
 }
 
 interface OrderLineItem {
@@ -97,11 +92,11 @@ const PickSerialSelector = memo(function PickSerialSelector({
   maxSelections: number;
   disabled?: boolean;
 }) {
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  // Inline variant: always fetch when rendered (parent only renders when pickQty > 0)
   const { data, isLoading } = useAvailableSerials({
     productId,
     locationId,
-    enabled: popoverOpen || selectedSerials.length > 0,
+    enabled: true,
   });
 
   const options = (data?.availableSerials ?? []).map((s) => ({
@@ -119,7 +114,7 @@ const PickSerialSelector = memo(function PickSerialSelector({
       disabled={disabled}
       isLoading={isLoading}
       ariaLabel="Select serial numbers from inventory"
-      onOpenChange={setPopoverOpen}
+      variant="inline"
       scanMode
     />
   );
@@ -134,11 +129,18 @@ export const PickItemsDialog = memo(function PickItemsDialog({
   onOpenChange,
   orderId,
   onSuccess,
+  onShipOrder,
 }: PickItemsDialogProps) {
   const [pickLines, setPickLines] = useState<PickLineState[]>([]);
   const [locationFilterId, setLocationFilterId] = useState<string | undefined>();
+  const hasInitialized = useRef(false);
 
-  const { data: orderData, isLoading: orderLoading } = useOrderWithCustomer({
+  const {
+    data: orderData,
+    isLoading: orderLoading,
+    isRefetching,
+    refetch,
+  } = useOrderWithCustomer({
     orderId,
     enabled: open,
   });
@@ -149,17 +151,25 @@ export const PickItemsDialog = memo(function PickItemsDialog({
 
   const pickMutation = usePickOrderItems();
 
-  // Initialize pick lines when order loads
+  // Reset hasInitialized when dialog closes
   useEffect(() => {
-    if (orderData?.lineItems) {
-      startTransition(() => setPickLines(
+    if (!open) {
+      hasInitialized.current = false;
+    }
+  }, [open]);
+
+  // Initialize pick lines only when dialog first opens with order data (avoid wiping on refetch)
+  useEffect(() => {
+    if (!open || hasInitialized.current || !orderData?.lineItems) return;
+    hasInitialized.current = true;
+    startTransition(() =>
+      setPickLines(
         (orderData.lineItems as OrderLineItem[]).map((item) => {
           const ordered = Number(item.quantity);
           const alreadyPicked = Number(item.qtyPicked) || 0;
           const remaining = ordered - alreadyPicked;
           const isSerialized = item.product?.isSerialized ?? false;
           const productId = item.productId;
-          // Serialized lines without product cannot be picked
           const canPick = remaining > 0 && (!isSerialized || productId != null);
           return {
             lineItemId: item.id,
@@ -174,9 +184,9 @@ export const PickItemsDialog = memo(function PickItemsDialog({
             selectedSerials: [],
           };
         })
-      ));
-    }
-  }, [orderData]);
+      )
+    );
+  }, [open, orderData]);
 
   const handlePickQtyChange = (lineItemId: string, value: string) => {
     const num = parseInt(value, 10);
@@ -242,18 +252,31 @@ export const PickItemsDialog = memo(function PickItemsDialog({
       });
 
       if (result.orderStatus === 'picked') {
-        toastSuccess('All items picked. Ready to ship.', {
-          description: 'Proceed to create a shipment.',
-          action: {
-            label: 'Go to Fulfillment',
-            onClick: () => onSuccess?.(),
-          },
-        });
+        onOpenChange(false);
+        onSuccess?.();
+        if (onShipOrder) {
+          onShipOrder();
+          toastSuccess('All items picked. Ready to ship.', {
+            description: 'Ship Order dialog opened. Create a shipment with carrier and tracking.',
+            action: {
+              label: 'Ship Order',
+              onClick: () => onShipOrder(),
+            },
+          });
+        } else {
+          toastSuccess('All items picked. Ready to ship.', {
+            description: 'Proceed to create a shipment.',
+            action: {
+              label: 'Go to Fulfillment',
+              onClick: () => onSuccess?.(),
+            },
+          });
+        }
       } else {
-        toastSuccess('Items picked. Continue picking remaining items.');
+        toastSuccess('Items picked. Refreshing remaining items…');
+        hasInitialized.current = false;
+        await refetch();
       }
-      onOpenChange(false);
-      onSuccess?.();
     } catch (error) {
       toastError(
         error instanceof Error ? error.message : 'Failed to pick items'
@@ -266,11 +289,14 @@ export const PickItemsDialog = memo(function PickItemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] min-h-[70vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PackageCheck className="h-5 w-5" />
             Pick Items
+            {isRefetching && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
           </DialogTitle>
           <DialogDescription>
             Enter quantities to pick. Serialized products require serial number selection from inventory.
@@ -282,13 +308,16 @@ export const PickItemsDialog = memo(function PickItemsDialog({
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : !hasPickableItems ? (
-          <div className="py-8 text-center text-muted-foreground">
-            All items have been fully picked.
+          <div className="py-8 text-center space-y-4">
+            <p className="text-muted-foreground">
+              All items have been fully picked.
+            </p>
+            <Button onClick={() => onOpenChange(false)}>Close</Button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 min-h-0 flex-1">
             {/* Location filter */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <Select
                 value={locationFilterId ?? 'all'}
                 onValueChange={(v) =>
@@ -331,26 +360,17 @@ export const PickItemsDialog = memo(function PickItemsDialog({
               )}
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-center w-16">Ordered</TableHead>
-                    <TableHead className="text-center w-16">Picked</TableHead>
-                    <TableHead className="text-center w-16">Remaining</TableHead>
-                    <TableHead className="text-center w-20">Pick Qty</TableHead>
-                    <TableHead className="w-72">Serial Numbers</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pickLines.map((line) => (
-                    <TableRow
-                      key={line.lineItemId}
-                      className={cn(line.remaining === 0 && 'opacity-50')}
-                    >
-                      <TableCell>
-                        <div>
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+              {pickLines.map((line) => (
+                <Card
+                  key={line.lineItemId}
+                  className={cn(line.remaining === 0 && 'opacity-50')}
+                >
+                  <CardContent className="pt-4 pb-4">
+                    <div className="space-y-4">
+                      {/* Product meta + qty row */}
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex-1 min-w-0">
                           <p className="font-medium">{line.productName}</p>
                           {line.sku && (
                             <p className="text-xs text-muted-foreground">
@@ -363,83 +383,93 @@ export const PickItemsDialog = memo(function PickItemsDialog({
                             </Badge>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-center tabular-nums">
-                        {line.ordered}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          'text-center tabular-nums',
-                          line.alreadyPicked >= line.ordered
-                            ? 'text-green-600'
-                            : line.alreadyPicked > 0
-                              ? 'text-amber-600'
-                              : ''
-                        )}
-                      >
-                        {line.alreadyPicked}
-                      </TableCell>
-                      <TableCell className="text-center tabular-nums">
-                        {line.remaining}
-                      </TableCell>
-                      <TableCell>
-                        {line.remaining > 0 ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={line.remaining}
-                            value={line.pickQty}
-                            onChange={(e) =>
-                              handlePickQtyChange(line.lineItemId, e.target.value)
-                            }
-                            className="w-16 text-center h-8"
-                            disabled={
-                              line.isSerialized &&
-                              line.remaining > 0 &&
-                              line.productId == null
-                            }
-                          />
-                        ) : (
-                          <span className="text-xs text-green-600 font-medium">
-                            Done
+                        <div className="flex items-center gap-4 tabular-nums text-sm">
+                          <span>Ordered: {line.ordered}</span>
+                          <span
+                            className={cn(
+                              line.alreadyPicked >= line.ordered
+                                ? 'text-green-600'
+                                : line.alreadyPicked > 0
+                                  ? 'text-amber-600'
+                                  : ''
+                            )}
+                          >
+                            Picked: {line.alreadyPicked}
                           </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {line.isSerialized && line.remaining > 0 ? (
-                          line.productId == null ? (
+                          <span>Remaining: {line.remaining}</span>
+                          {line.remaining > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">
+                                Pick Qty:
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={line.remaining}
+                                value={line.pickQty}
+                                onChange={(e) =>
+                                  handlePickQtyChange(
+                                    line.lineItemId,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-16 text-center h-8"
+                                disabled={
+                                  line.isSerialized &&
+                                  line.remaining > 0 &&
+                                  line.productId == null
+                                }
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-xs text-green-600 font-medium">
+                              Done
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Serial selector below each item */}
+                      {line.isSerialized && line.remaining > 0 && (
+                        <div className="border-t pt-4">
+                          {line.productId == null ? (
                             <span className="text-sm text-amber-600">
                               Product link required for serial selection
                             </span>
                           ) : line.pickQty > 0 ? (
-                            <PickSerialSelector
-                              productId={line.productId}
-                              locationId={locationFilterId}
-                              selectedSerials={line.selectedSerials}
-                              onChange={(serials) =>
-                                handleSerialsChange(line.lineItemId, serials)
-                              }
-                              maxSelections={line.pickQty}
-                            />
+                            <div>
+                              <p className="text-sm font-medium mb-2">
+                                Serial Numbers
+                              </p>
+                              <PickSerialSelector
+                                productId={line.productId}
+                                locationId={locationFilterId}
+                                selectedSerials={line.selectedSerials}
+                                onChange={(serials) =>
+                                  handleSerialsChange(line.lineItemId, serials)
+                                }
+                                maxSelections={line.pickQty}
+                              />
+                            </div>
                           ) : (
                             <span className="text-sm text-muted-foreground">
                               Enter quantity first
                             </span>
-                          )
-                        ) : line.pickQty > 0 ? (
-                          <span className="text-sm text-muted-foreground">
-                            No serials required
-                          </span>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                          )}
+                        </div>
+                      )}
+                      {!line.isSerialized && line.pickQty > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No serials required
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             {totalToPick > 0 && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between shrink-0">
                 <p className="text-sm text-muted-foreground">
                   {totalToPick} unit{totalToPick !== 1 ? 's' : ''} to pick
                 </p>

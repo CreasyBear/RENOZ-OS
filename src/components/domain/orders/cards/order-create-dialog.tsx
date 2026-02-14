@@ -1,6 +1,10 @@
 /**
  * OrderCreateDialog Component
  *
+ * @deprecated Unused — not imported anywhere. Fulfillment kanban does not use this.
+ * Use /orders/create (OrderCreationWizard) instead.
+ * Safe to remove in future cleanup. See PREMORTEM_ORDERS_CREATION.md.
+ *
  * Dialog for creating new orders within fulfillment kanban columns.
  * Provides quick order creation with status pre-set based on column.
  * Requires customer selection and basic order details.

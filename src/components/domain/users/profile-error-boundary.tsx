@@ -87,7 +87,7 @@ export class ProfileErrorBoundary extends Component<
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">{description}</p>
 
-            {process.env.NODE_ENV === "development" && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <div className="max-h-32 overflow-y-auto rounded bg-destructive/10 p-3 font-mono text-sm text-destructive">
                 <strong>Error:</strong> {this.state.error.message}
                 {this.state.errorInfo && (

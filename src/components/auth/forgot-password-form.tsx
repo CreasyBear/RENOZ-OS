@@ -1,16 +1,45 @@
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { TextField } from '@/components/shared/forms';
 import { useRequestPasswordReset } from '@/hooks/auth';
+import { forgotPasswordSchema, type ForgotPassword } from '@/lib/schemas/auth';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 
 export function ForgotPasswordForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
-  const [email, setEmail] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const forgotPasswordMutation = useRequestPasswordReset();
+  const form = useTanStackForm<ForgotPassword>({
+    schema: forgotPasswordSchema,
+    defaultValues: {
+      email: '',
+    },
+    onSubmitInvalid: () => {
+      setSubmitError('Please enter a valid email address.');
+    },
+    onSubmit: async (values) => {
+      setSubmitError(null);
+      const result = await forgotPasswordMutation.mutateAsync({ email: values.email.trim() });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to send password reset email.');
+      }
+    },
+  });
+
+  const isSubmitting = forgotPasswordMutation.status === 'pending' || form.state.isSubmitting;
+  const showErrorsAfterSubmit = form.state.submissionAttempts > 0;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    void form.handleSubmit().catch((error: unknown) => {
+      setSubmitError(error instanceof Error ? error.message : 'An unexpected error occurred.');
+    });
+  };
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
@@ -45,37 +74,42 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                forgotPasswordMutation.mutate({ email });
-              }}
-            >
+            <form onSubmit={handleSubmit} noValidate>
               <div className="flex flex-col gap-5">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@company.com"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-11"
-                  />
+                <form.Field name="email">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Email"
+                      type="email"
+                      placeholder="name@company.com"
+                      required
+                      showErrorsAfterSubmit={showErrorsAfterSubmit}
+                    />
+                  )}
+                </form.Field>
+
+                <div className="min-h-5">
+                  {submitError && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {submitError}
+                    </p>
+                  )}
                 </div>
-                {forgotPasswordMutation.data && !forgotPasswordMutation.data.success && (
-                  <p className="text-sm text-destructive" role="alert">
-                    {forgotPasswordMutation.data.error}
-                  </p>
-                )}
+
                 <Button
                   type="submit"
                   className="w-full h-11 font-medium transition-colors duration-200"
-                  disabled={forgotPasswordMutation.status === 'pending'}
+                  disabled={isSubmitting}
                 >
-                  {forgotPasswordMutation.status === 'pending' ? 'Sending...' : 'Send reset email'}
+                  {isSubmitting ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </span>
+                  ) : (
+                    'Send reset email'
+                  )}
                 </Button>
               </div>
               <p className="mt-6 text-center text-sm text-muted-foreground">

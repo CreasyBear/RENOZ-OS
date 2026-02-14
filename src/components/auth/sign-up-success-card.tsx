@@ -9,10 +9,10 @@
  */
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Link } from '@tanstack/react-router';
 import { useResendConfirmationEmail } from '@/hooks/auth/use-resend-confirmation';
 import { useCooldown } from '@/hooks/_shared/use-cooldown';
@@ -93,7 +93,7 @@ function SignUpSuccessFormCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <form onSubmit={onResend} className="flex flex-col gap-5">
+        <form onSubmitCapture={onResend} onSubmit={onResend} noValidate className="flex flex-col gap-5">
           {!emailProp && (
             <div className="grid gap-2">
               <Label htmlFor="resend-email">Email</Label>
@@ -119,7 +119,8 @@ function SignUpSuccessFormCard({
             </p>
           )}
           <Button
-            type="submit"
+            type="button"
+            onClick={() => onResend()}
             disabled={isResendDisabled}
             className="w-full h-11 font-medium transition-colors duration-200"
             aria-label={

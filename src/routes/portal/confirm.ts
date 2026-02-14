@@ -17,7 +17,7 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
   })
   .handler(async (ctx) => {
     const { getRequest } = await import('@tanstack/react-start/server');
-    const { createServerSupabase } = await import('~/lib/supabase/server');
+    const { createServerSupabase } = await import('@/lib/supabase/server');
 
     const request = getRequest();
     if (!request) {

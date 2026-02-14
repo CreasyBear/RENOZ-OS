@@ -138,13 +138,16 @@ export interface FulfillmentDashboardContainerProps {
   onShipOrder?: (orderId: string) => void;
   onViewOrder?: (orderId: string) => void;
   onConfirmDelivery?: (shipmentId: string) => void;
+  /** Order IDs to highlight when navigated from orders list "Go to Fulfillment" */
+  highlightOrderIds?: string[];
   className?: string;
 }
 
 /**
  * Presenter props - what the container passes to the presenter
  */
-export interface FulfillmentDashboardPresenterProps extends FulfillmentDashboardContainerProps {
+export interface FulfillmentDashboardPresenterProps
+  extends FulfillmentDashboardContainerProps {
   /** @source useOrders({ status: 'confirmed' }) hook */
   confirmedOrders: OrderListResult | null;
   /** @source useOrders({ status: 'picked' }) hook */
@@ -704,6 +707,7 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
   onShipOrder,
   onViewOrder,
   onConfirmDelivery,
+  highlightOrderIds,
   className,
 }: FulfillmentDashboardPresenterProps) {
   const queryClient = useQueryClient();
@@ -752,6 +756,19 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
 
   return (
     <div className={cn("space-y-6", className)}>
+      {/* Banner when navigated from orders list with selected orders */}
+      {highlightOrderIds && highlightOrderIds.length > 0 && (
+        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+          <Truck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertTitle>Orders selected from list</AlertTitle>
+          <AlertDescription>
+            {highlightOrderIds.length} order{highlightOrderIds.length !== 1 ? "s" : ""} selected.
+            Use the Ship button per order in the shipping queue to create shipments with carrier and
+            tracking details.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header with Refresh */}
       <div className="flex items-center justify-between">
         <div>
@@ -1040,8 +1057,9 @@ function PickingQueueTable({
                     size="sm"
                     variant="ghost"
                     onClick={() => onViewOrder?.(order.id)}
+                    aria-label={`View order ${order.orderNumber}`}
                   >
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4" aria-hidden />
                   </Button>
                 </div>
               </TableCell>
@@ -1161,8 +1179,9 @@ function ShippingQueueTable({
                     size="sm"
                     variant="ghost"
                     onClick={() => onViewOrder?.(order.id)}
+                    aria-label={`View order ${order.orderNumber}`}
                   >
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4" aria-hidden />
                   </Button>
                 </div>
               </TableCell>

@@ -2115,7 +2115,7 @@ export const getAvailableSerials = createServerFn({ method: 'GET' })
             WHERE ${orderLineItems.organizationId} = ${ctx.organizationId}
               AND ${orderLineItems.productId} = ${data.productId}
               AND ${orderLineItems.allocatedSerialNumbers} IS NOT NULL
-              AND ${inventory.serialNumber} = ANY(${orderLineItems.allocatedSerialNumbers})
+              AND ${orderLineItems.allocatedSerialNumbers} @> to_jsonb(${inventory.serialNumber}::text)
           )`
         )
       )

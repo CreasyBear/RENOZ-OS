@@ -18,6 +18,7 @@
  * ```
  */
 import { cn } from "~/lib/utils"
+import { logger } from "@/lib/logger"
 
 // ============================================================================
 // TYPES
@@ -504,7 +505,7 @@ export function EmptyStateIllustration({
   const dimensions = SIZES[size]
 
   if (!IllustrationComponent) {
-    console.warn(`Unknown illustration variant: ${variant}`)
+    logger.warn(`Unknown illustration variant: ${variant}`)
     return null
   }
 

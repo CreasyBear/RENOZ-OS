@@ -147,9 +147,15 @@ export function useExtendWarranty() {
       });
 
       const newExpiry = new Date(result.warranty.newExpiryDate);
-      toast.success(
-        `Warranty extended by ${variables.extensionMonths} month${variables.extensionMonths > 1 ? 's' : ''}. New expiry: ${newExpiry.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`
-      );
+      if (result.notificationQueued === false) {
+        toast.warning(
+          `Warranty extended but we couldn't send the email notification. The customer will not be notified.`
+        );
+      } else {
+        toast.success(
+          `Warranty extended by ${variables.extensionMonths} month${variables.extensionMonths > 1 ? 's' : ''}. New expiry: ${newExpiry.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        );
+      }
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to extend warranty');

@@ -450,7 +450,7 @@ export const setDefaultQuoteExpiration = createServerFn({ method: 'POST' })
 // ============================================================================
 
 import { Resend } from 'resend';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
   generateQRCode,
@@ -695,7 +695,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
     const checksum = calculateChecksum(buffer);
 
     // Use admin client for storage (service role bypasses RLS)
-    const supabase = createAdminClient();
+    const supabase = createAdminSupabase();
 
     const { error: uploadError } = await supabase
       .storage.from(STORAGE_BUCKET)

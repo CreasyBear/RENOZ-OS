@@ -25,6 +25,7 @@ import { AcceptInvitationInvalidView } from '@/components/auth/accept-invitation
 import { AcceptInvitationSuccessView } from '@/components/auth/accept-invitation-success';
 import { AcceptInvitationForm } from '@/components/auth/accept-invitation-form';
 import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
+import { AuthLayout } from '@/components/auth/auth-layout';
 
 // Search params for the token (optional – missing/invalid shows recovery UI)
 const acceptInvitationSearchSchema = z.object({
@@ -58,6 +59,7 @@ function AcceptInvitationPage() {
 
   const [redirectTarget, setRedirectTarget] = useState<'dashboard' | 'login'>('login');
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const invitation = useMemo<InvitationDetails | null>(() => {
     if (!invitationData) return null;
@@ -79,6 +81,7 @@ function AcceptInvitationPage() {
       password: '',
       confirmPassword: '',
     },
+    onSubmitInvalid: () => setValidationError('Please check your input and try again.'),
     onSubmit: async (values) => {
       setSubmitState('submitting');
       try {
@@ -138,18 +141,26 @@ function AcceptInvitationPage() {
 
   return (
     <AuthErrorBoundary>
-      {pageState === 'loading' && <AcceptInvitationLoadingView />}
-      {pageState === 'invalid' && (
-        <AcceptInvitationInvalidView
-          errorMessage={errorMessage || 'This invitation link is invalid or has expired.'}
-        />
-      )}
-      {pageState === 'success' && (
-        <AcceptInvitationSuccessView redirectTarget={redirectTarget} />
-      )}
-      {(pageState === 'ready' || pageState === 'submitting' || pageState === 'error') && (
-        <AcceptInvitationForm invitation={invitation} form={form} token={token} />
-      )}
+      <AuthLayout maxWidth="max-w-md">
+        {pageState === 'loading' && <AcceptInvitationLoadingView />}
+        {pageState === 'invalid' && (
+          <AcceptInvitationInvalidView
+            errorMessage={errorMessage || 'This invitation link is invalid or has expired.'}
+          />
+        )}
+        {pageState === 'success' && (
+          <AcceptInvitationSuccessView redirectTarget={redirectTarget} />
+        )}
+        {(pageState === 'ready' || pageState === 'submitting' || pageState === 'error') && (
+          <AcceptInvitationForm
+            invitation={invitation}
+            form={form}
+            token={token}
+            validationError={validationError}
+            onClearValidationError={() => setValidationError(null)}
+          />
+        )}
+      </AuthLayout>
     </AuthErrorBoundary>
   );
 }

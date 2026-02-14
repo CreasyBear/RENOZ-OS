@@ -174,7 +174,7 @@ export const extendWarranty = createServerFn({ method: 'POST' })
       .where(eq(warranties.id, data.warrantyId));
 
     // 5. Trigger notification event
-    await triggerWarrantyExtendedNotification({
+    const notificationQueued = await triggerWarrantyExtendedNotification({
       warrantyId: warranty.id,
       warrantyNumber: warranty.warrantyNumber,
       extensionId: extension.id,
@@ -225,6 +225,7 @@ export const extendWarranty = createServerFn({ method: 'POST' })
         newExpiryDate: newExpiryDate.toISOString(),
         status: newStatus,
       },
+      notificationQueued,
     };
   });
 
@@ -536,7 +537,7 @@ export const getExtensionById = createServerFn({ method: 'GET' })
  * Trigger warranty extension notification event.
  *
  * Sends WarrantyExtendedPayload to trigger background notification job.
- * Fetches customer and product details for the notification content.
+ * Returns true if queued, false if queue failed (caller should surface to user).
  */
 async function triggerWarrantyExtendedNotification(params: {
   warrantyId: string;
@@ -550,7 +551,7 @@ async function triggerWarrantyExtendedNotification(params: {
   previousExpiryDate: Date;
   newExpiryDate: Date;
   price?: number;
-}): Promise<void> {
+}): Promise<boolean> {
   // Fetch customer details
   const [customer] = await db
     .select({
@@ -567,7 +568,7 @@ async function triggerWarrantyExtendedNotification(params: {
     warrantyLogger.info('Skipping extension notification - no customer email', {
       warrantyNumber: params.warrantyNumber,
     });
-    return;
+    return true; // Nothing to queue
   }
 
   // Note: Product details are passed via params.productId, no additional fetch needed
@@ -585,14 +586,18 @@ async function triggerWarrantyExtendedNotification(params: {
     reason: params.extensionType,
   };
 
-  // Send event to trigger.dev
-  await client.sendEvent({
-    name: warrantyEvents.extended,
-    payload,
-  });
-
-  warrantyLogger.info('Extension notification triggered', {
-    warrantyNumber: params.warrantyNumber,
-    extensionMonths: params.extensionMonths,
-  });
+  try {
+    await client.sendEvent({
+      name: warrantyEvents.extended,
+      payload,
+    });
+    warrantyLogger.info('Extension notification triggered', {
+      warrantyNumber: params.warrantyNumber,
+      extensionMonths: params.extensionMonths,
+    });
+    return true;
+  } catch (error) {
+    warrantyLogger.error('Failed to queue warranty extension notification', error);
+    return false;
+  }
 }
