@@ -3,8 +3,8 @@
 /**
  * User Invitation Server Functions
  *
- * Server functions for user invitation management.
- * Supports sending, accepting, cancelling, and resending invitations.
+ * Uses Supabase Auth inviteUserByEmail - Supabase sends the invite email directly.
+ * No Resend or custom email needed. Configure SMTP in Supabase Dashboard → Auth → SMTP.
  *
  * @see drizzle/schema/user-invitations.ts for database schema
  * @see src/lib/schemas/users.ts for validation schemas
@@ -35,13 +35,6 @@ import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/r
 import { getAppUrl } from '@/lib/server/app-url';
 import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
-import {
-  client,
-  isTriggerConfigured,
-  userEvents,
-  type InvitationSentPayload,
-  type BatchInvitationSentPayload,
-} from '@/trigger/client';
 import { NotFoundError, ConflictError, ValidationError, ServerError } from '@/lib/server/errors';
 import { getDefaultPreferences } from './user-preferences';
 import { authLogger } from '@/lib/logger';
@@ -55,7 +48,6 @@ function generateInvitationToken(): string {
 }
 
 function generateTemporaryPassword(): string {
-  // Strong random temporary password; user sets their own password on acceptance.
   return `${randomBytes(24).toString('base64url')}Aa1!`;
 }
 
@@ -69,60 +61,6 @@ function isAuthUserAlreadyExists(error: { message?: string; code?: string } | nu
     message.includes('already registered') ||
     message.includes('duplicate')
   );
-}
-
-// ============================================================================
-// HELPER: Generate invitation accept URL
-// ============================================================================
-
-function generateAcceptUrl(token: string): string {
-  return `${getAppUrl()}/accept-invitation?token=${token}`;
-}
-
-// ============================================================================
-// HELPER: Send invitation email via Trigger.dev
-// Returns true if event was queued, false if queue failed (caller should surface to user)
-// ============================================================================
-
-async function sendInvitationEmail(params: {
-  invitationId: string;
-  email: string;
-  organizationId: string;
-  organizationName: string;
-  inviterName: string;
-  inviterEmail: string;
-  role: string;
-  personalMessage?: string | null;
-  token: string;
-  expiresAt: Date;
-}): Promise<boolean> {
-  if (!isTriggerConfigured()) {
-    authLogger.warn(
-      'Trigger.dev not configured (missing TRIGGER_SECRET_KEY). Invitation email will not be sent.'
-    );
-    return false;
-  }
-  try {
-    await client.sendEvent({
-      name: userEvents.invitationSent,
-      payload: {
-        invitationId: params.invitationId,
-        email: params.email,
-        organizationId: params.organizationId,
-        organizationName: params.organizationName,
-        inviterName: params.inviterName,
-        inviterEmail: params.inviterEmail,
-        role: params.role,
-        personalMessage: params.personalMessage || undefined,
-        acceptUrl: generateAcceptUrl(params.token),
-        expiresAt: params.expiresAt.toISOString(),
-      } satisfies InvitationSentPayload,
-    });
-    return true;
-  } catch (error) {
-    authLogger.error('Failed to queue invitation email', error);
-    return false;
-  }
 }
 
 // ============================================================================
@@ -169,14 +107,10 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       throw new ConflictError('A pending invitation already exists for this email');
     }
 
-    // Generate secure token
     const token = generateInvitationToken();
-
-    // Calculate expiry (7 days from now)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Fetch organization name for the email
     const [org] = await db
       .select({ name: organizations.name })
       .from(organizations)
@@ -184,53 +118,9 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .limit(1);
 
     const supabase = createAdminSupabase();
+    const redirectTo = `${getAppUrl()}/accept-invitation?token=${token}`;
 
-    if (!existingUser) {
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: normalizedEmail,
-        password: generateTemporaryPassword(),
-        email_confirm: false,
-      });
-
-      if (authError || !authData.user?.id) {
-        if (isAuthUserAlreadyExists(authError)) {
-          throw new ConflictError('This email is already registered. Ask the user to sign in instead.');
-        }
-        throw new ServerError(`Failed to provision invited user: ${authError?.message ?? 'Unknown error'}`);
-      }
-
-      try {
-        await db
-          .insert(users)
-          .values({
-            authId: authData.user.id,
-            organizationId: ctx.organizationId,
-            email: normalizedEmail,
-            role: data.role,
-            status: 'invited',
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          });
-      } catch (error) {
-        // Compensating action: if app row fails, remove the pre-provisioned auth user.
-        try {
-          await supabase.auth.admin.deleteUser(authData.user.id);
-        } catch (deleteError) {
-          authLogger.error('[sendInvitation] Failed to rollback auth user after DB failure', deleteError);
-        }
-        throw error;
-      }
-    } else if (existingUser.status === 'invited') {
-      await db
-        .update(users)
-        .set({
-          role: data.role,
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(users.id, existingUser.id));
-    }
-
-    // Create invitation
+    // Create invitation first (needed for redirectTo token)
     const [invitation] = await db
       .insert(userInvitations)
       .values({
@@ -245,19 +135,57 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    // Send invitation email via Trigger.dev (await so we can surface queue failures)
-    const emailQueued = await sendInvitationEmail({
-      invitationId: invitation.id,
-      email: invitation.email,
-      organizationId: ctx.organizationId,
-      organizationName: org?.name || 'Your Organization',
-      inviterName: ctx.user.name || 'A team member',
-      inviterEmail: ctx.user.email,
-      role: invitation.role,
-      personalMessage: data.personalMessage,
-      token,
-      expiresAt,
-    });
+    // Supabase sends the invite email; creates auth user if new
+    const { data: authData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      {
+        redirectTo,
+        data: {
+          organizationId: ctx.organizationId,
+          role: data.role,
+          organizationName: org?.name || 'Your Organization',
+        },
+      }
+    );
+
+    if (inviteError) {
+      await db.delete(userInvitations).where(eq(userInvitations.id, invitation.id));
+      if (isAuthUserAlreadyExists(inviteError)) {
+        throw new ConflictError('This email is already registered. Ask the user to sign in instead.');
+      }
+      throw new ServerError(`Failed to send invitation: ${inviteError.message}`);
+    }
+
+    if (!existingUser) {
+      if (!authData.user?.id) {
+        await db.delete(userInvitations).where(eq(userInvitations.id, invitation.id));
+        throw new ServerError('Invitation sent but failed to create user record');
+      }
+      try {
+        await db.insert(users).values({
+          authId: authData.user.id,
+          organizationId: ctx.organizationId,
+          email: normalizedEmail,
+          role: data.role,
+          status: 'invited',
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        });
+      } catch (error) {
+        await db.delete(userInvitations).where(eq(userInvitations.id, invitation.id));
+        try {
+          await supabase.auth.admin.deleteUser(authData.user.id);
+        } catch (deleteError) {
+          authLogger.error('[sendInvitation] Failed to rollback auth user after DB failure', deleteError);
+        }
+        throw error;
+      }
+    } else if (existingUser.status === 'invited') {
+      await db
+        .update(users)
+        .set({ role: data.role, updatedBy: ctx.user.id })
+        .where(eq(users.id, existingUser.id));
+    }
 
     // Log audit event
     await logAuditEvent({
@@ -285,7 +213,7 @@ export const sendInvitation = createServerFn({ method: 'POST' })
         email: ctx.user.email,
         name: ctx.user.name,
       },
-      emailQueued,
+      emailQueued: true, // Supabase sends invite email
     };
   });
 
@@ -596,6 +524,8 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
     if (provisionedUser.status !== 'invited') {
       throw new ConflictError(`Invitation cannot be accepted because user is ${provisionedUser.status}.`);
     }
+
+    // Set password and confirm email; client may also call updateUser when session exists (from hash)
     const { error: updateAuthError } = await supabase.auth.admin.updateUserById(provisionedUser.authId, {
       password: data.password,
       email_confirm: true,
@@ -769,45 +699,31 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       throw new ValidationError('Cannot resend accepted invitation');
     }
 
-    // Generate new token and extend expiry
     const newToken = generateInvitationToken();
     const newExpiresAt = new Date();
     newExpiresAt.setDate(newExpiresAt.getDate() + 7);
 
-    // Fetch organization name for the email
-    const [org] = await db
-      .select({ name: organizations.name })
-      .from(organizations)
-      .where(eq(organizations.id, ctx.organizationId))
-      .limit(1);
-
-    // Update invitation
     await db
       .update(userInvitations)
       .set({
         token: newToken,
         expiresAt: newExpiresAt,
-        status: 'pending', // Reset to pending if was expired
+        status: 'pending',
         updatedBy: ctx.user.id,
         version: sql<number>`${userInvitations.version} + 1`,
       })
       .where(eq(userInvitations.id, data.id));
 
-    // Send invitation email via Trigger.dev (await so we can surface queue failures)
-    const emailQueued = await sendInvitationEmail({
-      invitationId: invitation.id,
-      email: invitation.email,
-      organizationId: ctx.organizationId,
-      organizationName: org?.name || 'Your Organization',
-      inviterName: ctx.user.name || 'A team member',
-      inviterEmail: ctx.user.email,
-      role: invitation.role,
-      personalMessage: invitation.personalMessage,
-      token: newToken,
-      expiresAt: newExpiresAt,
-    });
+    const redirectTo = `${getAppUrl()}/accept-invitation?token=${newToken}`;
+    const { error: inviteError } = await createAdminSupabase().auth.admin.inviteUserByEmail(
+      invitation.email,
+      { redirectTo, data: { organizationId: ctx.organizationId, role: invitation.role } }
+    );
 
-    // Log audit event
+    if (inviteError) {
+      authLogger.error('Failed to resend invitation', inviteError);
+    }
+
     await logAuditEvent({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
@@ -817,7 +733,7 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       metadata: { email: invitation.email, newExpiresAt: newExpiresAt.toISOString() },
     });
 
-    return { success: true, emailQueued };
+    return { success: true, emailQueued: !inviteError };
   });
 
 // ============================================================================
@@ -978,64 +894,19 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         expiresAt: Date;
       }> = [];
 
-      // Ensure each invited email has a pre-provisioned org user before invitation is sent.
       for (const item of toInsert) {
         if (item.existingInvitedUserId) {
           await db
             .update(users)
-            .set({
-              role: item.role,
-              updatedBy: ctx.user.id,
-            })
+            .set({ role: item.role, updatedBy: ctx.user.id })
             .where(eq(users.id, item.existingInvitedUserId));
           readyInvitations.push(item);
-          continue;
-        }
-
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: item.email,
-          password: generateTemporaryPassword(),
-          email_confirm: false,
-        });
-
-        if (authError || !authData.user?.id) {
-          results.push({
-            email: item.email,
-            success: false,
-            error: isAuthUserAlreadyExists(authError)
-              ? 'Email already registered'
-              : authError?.message || 'Failed to provision invited user',
-          });
-          continue;
-        }
-
-        try {
-          await db.insert(users).values({
-            authId: authData.user.id,
-            organizationId: ctx.organizationId,
-            email: item.email,
-            role: item.role,
-            status: 'invited',
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          });
+        } else {
           readyInvitations.push(item);
-        } catch (error) {
-          try {
-            await supabase.auth.admin.deleteUser(authData.user.id);
-          } catch (deleteError) {
-            authLogger.error('[batchSendInvitations] Failed to rollback auth user after DB failure', deleteError);
-          }
-
-          results.push({
-            email: item.email,
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to provision invited user',
-          });
         }
       }
 
-      // Batch insert valid invitations
+      // Batch insert invitations (Supabase invite creates auth user when sending)
       if (readyInvitations.length > 0) {
         const BATCH_SIZE = 10;
 
@@ -1093,30 +964,49 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         }
       }
 
-      // Send batch invitation emails via Trigger.dev (await so we can surface queue failures)
       let emailQueued = true;
       if (emailInvitations.length > 0) {
-        try {
-          await client.sendEvent({
-            name: 'user.batch_invitation_sent',
-            payload: {
-              organizationId: ctx.organizationId,
-              organizationName,
-              inviterName: ctx.user.name || 'A team member',
-              inviterEmail: ctx.user.email,
-              invitations: emailInvitations.map((inv) => ({
-                invitationId: inv.invitationId,
-                email: inv.email,
-                role: inv.role,
-                personalMessage: inv.personalMessage,
-                acceptUrl: generateAcceptUrl(inv.token),
-                expiresAt: inv.expiresAt.toISOString(),
-              })),
-            } satisfies BatchInvitationSentPayload,
+        const redirectBase = getAppUrl();
+        for (const inv of emailInvitations) {
+          const redirectTo = `${redirectBase}/accept-invitation?token=${inv.token}`;
+          const { data: authData, error } = await supabase.auth.admin.inviteUserByEmail(inv.email, {
+            redirectTo,
+            data: { organizationId: ctx.organizationId, role: inv.role, organizationName },
           });
-        } catch (error) {
-          authLogger.error('Failed to queue batch invitation emails', error);
-          emailQueued = false;
+          if (error) {
+            authLogger.error('Failed to send batch invitation', { email: inv.email, error });
+            emailQueued = false;
+          } else if (authData?.user?.id) {
+            const [existing] = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(
+                and(
+                  eq(users.organizationId, ctx.organizationId),
+                  eq(users.email, inv.email)
+                )
+              )
+              .limit(1);
+            if (!existing) {
+              try {
+                const role = inv.role as 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer';
+                await db.insert(users).values({
+                  authId: authData.user.id,
+                  organizationId: ctx.organizationId,
+                  email: inv.email,
+                  role,
+                  status: 'invited',
+                  createdBy: ctx.user.id,
+                  updatedBy: ctx.user.id,
+                });
+              } catch (err) {
+                authLogger.error('[batchSendInvitations] Failed to create users row after invite', {
+                  email: inv.email,
+                  err,
+                });
+              }
+            }
+          }
         }
       }
 

@@ -5,16 +5,16 @@
  * invitation link from their email.
  *
  * Flow:
- * 1. Extract token from URL
+ * 1. Extract token from URL; exchange Supabase hash (access_token, refresh_token) for session
  * 2. Fetch invitation details (public endpoint)
  * 3. User enters name and password
- * 4. Create account via acceptInvitation server function
- * 5. Auto-login via signInWithPassword, then redirect to dashboard
+ * 4. Server: acceptInvitation (sets password via admin API, marks accepted)
+ * 5. Client: signInWithPassword, then redirect to dashboard
  *
  * @see src/server/functions/invitations.ts for server functions
  */
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useInvitationByToken, useAcceptInvitation } from '@/hooks/users/use-invitations';
 import { supabase } from '@/lib/supabase/client';
 import { acceptInvitationSchema } from '@/lib/schemas/auth';
@@ -48,8 +48,38 @@ interface InvitationDetails {
   expiresAt: Date;
 }
 
+/**
+ * Exchange Supabase redirect hash (access_token, refresh_token) for a session.
+ * Required for invite flow: user lands with session in URL fragment.
+ */
+function useExchangeHashForSession() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    const params = new URLSearchParams(hash.slice(1));
+    const access_token = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+    if (access_token && refresh_token) {
+      void supabase.auth
+        .setSession({ access_token, refresh_token })
+        .then(() => {
+          // Remove hash from URL without triggering navigation
+          const url = new URL(window.location.href);
+          url.hash = '';
+          window.history.replaceState(null, '', url.toString());
+        })
+        .catch(() => {
+          // Ignore - user may have already established session
+        });
+    }
+  }, []);
+}
+
 function AcceptInvitationPage() {
   const { token } = Route.useSearch();
+
+  useExchangeHashForSession();
 
   const { data: invitationData, isLoading: isLoadingInvitation, error: invitationError } =
     useInvitationByToken(token ?? '');

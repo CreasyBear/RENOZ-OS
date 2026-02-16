@@ -159,7 +159,7 @@ export function useSendInvitation() {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
       if (result.emailQueued === false) {
         toast.warning(
-          'Invitation created but we couldn\'t queue the email. Use "Resend invitation" to try again.'
+          'Invitation created but we couldn\'t send the email. Use "Resend invitation" to try again.'
         );
       } else {
         toast.success('Invitation sent. The invitee will receive an email shortly.');
@@ -204,7 +204,7 @@ export function useResendInvitation() {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
       if (result.emailQueued === false) {
-        toast.warning('Invitation updated but we couldn\'t queue the email. Please try again.');
+        toast.warning('Invitation updated but we couldn\'t send the email. Please try again.');
       } else {
         toast.success('Invitation resent');
       }
@@ -229,7 +229,7 @@ export function useBatchSendInvitations() {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.invitations.stats() });
       if (result.summary.emailQueued === false) {
         toast.warning(
-          'Invitations created but we couldn\'t queue the emails. Use "Resend invitation" for each to try again.'
+          'Invitations created but we couldn\'t send the emails. Use "Resend invitation" for each to try again.'
         );
       } else {
         toast.success('Invitations sent successfully');
