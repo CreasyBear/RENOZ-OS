@@ -1033,7 +1033,7 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
   if (asDialog) {
     return (
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-h-[80vh] max-w-3xl sm:max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Import {entityNamePlural}</DialogTitle>
             <DialogDescription>

@@ -197,6 +197,7 @@ export default defineConfig({
       drizzle: fileURLToPath(new URL('./drizzle', import.meta.url)),
     },
   },
+  assetsInclude: ['**/*.ttf'],
   optimizeDeps: {
     include: ['lucide-react'],
     exclude: ['postgres', '@trigger.dev/sdk', '@trigger.dev/sdk/v3'],

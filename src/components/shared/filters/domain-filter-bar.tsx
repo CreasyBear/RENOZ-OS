@@ -272,7 +272,7 @@ export const DomainFilterBar = memo(function DomainFilterBar<
                 )}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl sm:max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Advanced Filters</DialogTitle>
               </DialogHeader>

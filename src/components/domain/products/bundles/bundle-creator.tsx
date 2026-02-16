@@ -245,7 +245,7 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />

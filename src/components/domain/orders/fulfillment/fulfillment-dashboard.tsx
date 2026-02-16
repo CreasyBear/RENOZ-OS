@@ -501,7 +501,7 @@ function FulfillmentImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[80vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[80vh] max-w-4xl sm:max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import Fulfillment Shipments</DialogTitle>
           <DialogDescription>

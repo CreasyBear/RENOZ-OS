@@ -231,7 +231,7 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Quick Add Opportunity" : "Edit Opportunity"}

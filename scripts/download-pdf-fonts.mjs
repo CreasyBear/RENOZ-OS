@@ -9,13 +9,14 @@
  * Or: npm run fonts:download (if script is added to package.json)
  */
 
-import { createWriteStream, mkdirSync, existsSync } from "fs";
+import { createWriteStream, mkdirSync, existsSync, copyFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, "..");
-const FONTS_DIR = join(PROJECT_ROOT, "public", "fonts", "inter");
+const FONTS_DIR_PUBLIC = join(PROJECT_ROOT, "public", "fonts", "inter");
+const FONTS_DIR_SRC = join(PROJECT_ROOT, "src", "lib", "documents", "fonts");
 
 const FONTS = [
   {
@@ -66,12 +67,14 @@ async function download(url, destPath) {
 }
 
 async function main() {
-  if (!existsSync(FONTS_DIR)) {
-    mkdirSync(FONTS_DIR, { recursive: true });
+  for (const dir of [FONTS_DIR_PUBLIC, FONTS_DIR_SRC]) {
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
   }
 
   for (const { url, file } of FONTS) {
-    const destPath = join(FONTS_DIR, file);
+    const destPath = join(FONTS_DIR_PUBLIC, file);
     process.stdout.write(`Downloading ${file}... `);
     try {
       await download(url, destPath);
@@ -82,7 +85,12 @@ async function main() {
     }
   }
 
-  console.log("\nFonts downloaded to public/fonts/inter/");
+  // Copy to src for bundling (Vercel serverless)
+  for (const { file } of FONTS) {
+    copyFileSync(join(FONTS_DIR_PUBLIC, file), join(FONTS_DIR_SRC, file));
+  }
+
+  console.log("\nFonts downloaded to public/fonts/inter/ and src/lib/documents/fonts/");
 }
 
 main();

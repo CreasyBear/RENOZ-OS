@@ -57,7 +57,7 @@ export const QuickQuoteDialog = memo(function QuickQuoteDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <QuickQuoteFormContainer
           opportunityId={opportunityId}
           customerId={customerId}

@@ -143,6 +143,8 @@ export const PickItemsDialog = memo(function PickItemsDialog({
   } = useOrderWithCustomer({
     orderId,
     enabled: open,
+    // Disable polling while dialog is open to avoid flashing when user fills the form
+    refetchInterval: false,
   });
 
   const { locations, isLoading: locationsLoading } = useLocations({
@@ -289,7 +291,7 @@ export const PickItemsDialog = memo(function PickItemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] min-h-[70vh] flex flex-col">
+      <DialogContent className="max-w-7xl sm:max-w-7xl max-h-[90vh] min-h-[70vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PackageCheck className="h-5 w-5" />

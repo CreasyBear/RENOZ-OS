@@ -8,8 +8,6 @@
  * @see _reference/.midday-reference/apps/api/src/ai/agents/config/shared.ts
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { anthropic } from '@ai-sdk/anthropic';
 import { streamText } from 'ai';
 import type { ModelMessage, ToolSet } from 'ai';
@@ -23,26 +21,22 @@ import { formatMemoryContext, buildMemoryContext } from '@/server/functions/ai/m
 import type { AgentConfig, AgentConfigOptions, ModelId } from './config';
 import { createAgentConfig as createBaseAgentConfig, SPECIALIST_DEFAULTS } from './config';
 
+// Import template so it's bundled — works on Vercel (no process.cwd() path)
+import memoryTemplateRaw from './config/memory-template.md?raw';
+
 // ============================================================================
 // MEMORY TEMPLATE
 // ============================================================================
 
 /**
- * Load the working memory template.
+ * Get the working memory template.
  * Template is used for agent working memory scope.
  */
-let _memoryTemplate: string | null = null;
-
 export function getMemoryTemplate(): string {
-  if (_memoryTemplate === null) {
-    try {
-      _memoryTemplate = readFileSync(
-        join(process.cwd(), 'src/lib/ai/agents/config/memory-template.md'),
-        'utf-8'
-      );
-    } catch {
-      // Fallback template if file not found
-      _memoryTemplate = `<user_profile>
+  return memoryTemplateRaw || FALLBACK_MEMORY_TEMPLATE;
+}
+
+const FALLBACK_MEMORY_TEMPLATE = `<user_profile>
 Name: [Learn from conversation]
 Role: [Unknown]
 </user_profile>
@@ -50,10 +44,6 @@ Role: [Unknown]
 <business_context>
 Organization: [Current organization]
 </business_context>`;
-    }
-  }
-  return _memoryTemplate;
-}
 
 // ============================================================================
 // AGENT MEMORY CONFIGURATION
