@@ -168,19 +168,23 @@ ForgotPasswordForm --> requestPasswordReset (server function)
 **Architecture notes:**
 - Password reset is rate-limited server-side per email
 - Always returns success to prevent email enumeration
-- The reset link uses PKCE -- `@supabase/ssr` exchanges the code when the user lands on `/update-password`
+- The reset link uses PKCE (code in query) or implicit flow (hash). `beforeLoad` exchanges code; `useExchangeHashForSession` exchanges hash
 - After password update, the user has an active session and navigates directly to dashboard
 
 ### Invitation
 
 ```
-/accept-invitation?token=... --> validate token server-side
-                             --> User sets password
-                             --> signInWithPassword --> redirect to /dashboard
+Supabase invite email --> User clicks link --> Supabase verify
+  --> redirect to /accept-invitation?token=...#access_token=...&refresh_token=...
+  --> useExchangeHashForSession (setSession from hash, remove hash from URL)
+  --> User sets name + password
+  --> acceptInvitation server fn (updateUserById sets password, marks accepted)
+  --> signInWithPassword --> redirect to /dashboard
 ```
 
 **Key files:**
-- `src/routes/accept-invitation.tsx` -- route with token validation
+- `src/routes/accept-invitation.tsx` -- route with token validation, useExchangeHashForSession
+- `src/lib/auth/use-exchange-hash-for-session.ts` -- shared hook for hash exchange
 - `src/components/auth/accept-invitation-form.tsx` -- form UI
 
 ---
@@ -193,7 +197,7 @@ ForgotPasswordForm --> requestPasswordReset (server function)
 | `/login` | No redirect | `getUser()` bounce if authenticated | Fast; full check is in `runLogin` |
 | `/_authenticated/*` | `getUser()` gate | `getAuthContext()` full check | Intentional asymmetry (see above) |
 | `/auth/confirm` | `verifyOtp` + `completeSignup` | N/A (server loader) | |
-| `/update-password` | None | Fallback `exchangeCodeForSession(code)` | User lands via reset link and can update password |
+| `/update-password` | None | `exchangeCodeForSession(code)` + `useExchangeHashForSession` | PKCE code or implicit hash; user updates password |
 | `/forgot-password` | None | None | Public page |
 | `/sign-up` | None | None | Public page |
 | `/accept-invitation` | Token validation | None | |
@@ -234,6 +238,7 @@ src/lib/
     route-auth.ts      -- getAuthContext, auth cache, retry logic, auth state listener
     route-policy.ts    -- redirect targets, loop prevention, DISALLOW_REDIRECT_PATHS
     hooks.ts           -- useSession, useUser, useAuth, useSignIn, useSignUp, useSignOut
+    use-exchange-hash-for-session.ts -- setSession from URL hash (invite, password reset)
     error-codes.ts     -- auth error code mapping
     redirects.ts       -- sanitizeInternalRedirect
     rate-limit.ts      -- password reset rate limiting
@@ -249,7 +254,7 @@ src/routes/
     sign-up.tsx        -- signup form
     forgot-password.tsx
     reset-password.tsx -- redirects to update-password
-    update-password.tsx
+    update-password.tsx -- ResetPasswordForm, useExchangeHashForSession
     accept-invitation.tsx
     _authenticated.tsx -- protected layout (server: getUser, client: getAuthContext)
     auth/

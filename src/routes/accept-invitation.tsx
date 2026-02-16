@@ -13,10 +13,11 @@
  *
  * @see src/server/functions/invitations.ts for server functions
  */
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo, useEffect } from 'react';
 import { useInvitationByToken, useAcceptInvitation } from '@/hooks/users/use-invitations';
 import { supabase } from '@/lib/supabase/client';
+import { useExchangeHashForSession } from '@/lib/auth/use-exchange-hash-for-session';
 import { acceptInvitationSchema } from '@/lib/schemas/auth';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { z } from 'zod';
@@ -48,38 +49,10 @@ interface InvitationDetails {
   expiresAt: Date;
 }
 
-/**
- * Exchange Supabase redirect hash (access_token, refresh_token) for a session.
- * Required for invite flow: user lands with session in URL fragment.
- */
-function useExchangeHashForSession() {
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const hash = window.location.hash;
-    if (!hash) return;
-    const params = new URLSearchParams(hash.slice(1));
-    const access_token = params.get('access_token');
-    const refresh_token = params.get('refresh_token');
-    if (access_token && refresh_token) {
-      void supabase.auth
-        .setSession({ access_token, refresh_token })
-        .then(() => {
-          // Remove hash from URL without triggering navigation
-          const url = new URL(window.location.href);
-          url.hash = '';
-          window.history.replaceState(null, '', url.toString());
-        })
-        .catch(() => {
-          // Ignore - user may have already established session
-        });
-    }
-  }, []);
-}
-
 function AcceptInvitationPage() {
   const { token } = Route.useSearch();
-
-  useExchangeHashForSession();
+  const navigate = useNavigate();
+  const { authError } = useExchangeHashForSession();
 
   const { data: invitationData, isLoading: isLoadingInvitation, error: invitationError } =
     useInvitationByToken(token ?? '');
@@ -90,6 +63,15 @@ function AcceptInvitationPage() {
   const [redirectTarget, setRedirectTarget] = useState<'dashboard' | 'login'>('login');
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authError) {
+      void navigate({
+        to: '/auth/error',
+        search: { error: authError.code, error_description: authError.description },
+      });
+    }
+  }, [authError, navigate]);
 
   const invitation = useMemo<InvitationDetails | null>(() => {
     if (!invitationData) return null;
@@ -168,6 +150,10 @@ function AcceptInvitationPage() {
       : invitationError instanceof Error
         ? invitationError.message
         : 'Invalid or expired invitation';
+
+  if (authError) {
+    return <AcceptInvitationLoadingView />;
+  }
 
   return (
     <AuthErrorBoundary>

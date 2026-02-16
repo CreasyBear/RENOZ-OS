@@ -46,7 +46,7 @@ In Vercel Project Settings → Environment Variables, add all variables from `.e
 **Optional (add as needed):**
 - `RESEND_API_KEY`, `EMAIL_FROM`, etc. for email
 - `UPSTASH_REDIS_*` for rate limiting
-- `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` for background jobs (invitation emails, PDFs, etc.)
+- `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` for background jobs (PDFs, reports, campaigns, etc.)
 
 ### 3. Deploy
 

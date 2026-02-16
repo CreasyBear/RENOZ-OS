@@ -37,6 +37,7 @@
 | **C5** | **Orphan auth user on users insert failure** | Low | Medium | inviteUserByEmail creates auth user. We insert users row. If insert fails (constraint, etc.), we delete invitation + auth user. But batch: if one invite succeeds and users insert fails, we have orphan auth user. | Batch: we create users row in same loop after each invite. If it fails, we log but don't rollback auth user (can't easily). Consider: background job to reconcile orphans. |
 | **C6** | **Token in redirectTo vs Supabase token** | Low | High | We pass `redirectTo=/accept-invitation?token=OUR_TOKEN`. Supabase appends this after verify. Our token is for our invitation lookup. If Supabase modifies or strips query params, we lose token. | Doc: Supabase passes redirectTo as-is. Verify in testing: click invite link, confirm URL has our token. |
 | **C7** | **"Can't set password" on accept** | Medium | High | User lands with `#access_token=...&refresh_token=...` in URL. If hash is not exchanged for a session, downstream auth may fail. | Fixed: `useExchangeHashForSession` on accept-invitation page calls `setSession` with tokens from hash, then removes hash from URL. Server still sets password via `updateUserById`; client calls `signInWithPassword` after. |
+| **C8** | **Auth error in hash not surfaced** | Medium | Medium | Supabase redirects with `#error=...&error_description=...` on failure. Silent catch hid these. | Fixed: `useExchangeHashForSession` parses error params first, logs via authLogger, redirects to `/auth/error` with code and description. No silent catch. |
 
 ---
 
@@ -58,7 +59,7 @@
 | **D1** | **No invite template customization** | Default subject "You have been invited". Customize in Dashboard for org name, branding. |
 | **D2** | **user_metadata in invite** | We pass `data: { organizationId, role, organizationName }`. Available in template as `{{ .Data.* }}`? Check Supabase template vars. |
 | **D3** | **Batch: inviteUserByEmail for existing invited user** | When existingUser.status === 'invited', we update role and call invite. Supabase may send again. Confirm behavior. |
-| **D4** | **send-invitation-email Trigger job** | Now dead code. Remove or keep for reference. |
+| **D4** | **send-invitation-email Trigger job** | Resolved: removed. Invitations use Supabase inviteUserByEmail. |
 
 ---
 
@@ -69,6 +70,16 @@
 - [ ] Set `VITE_APP_URL` / `APP_URL` in Vercel per environment
 - [ ] Customize invite email template (optional)
 - [ ] Test: new user invite, existing user resend, batch with mixed success/fail
+
+---
+
+## Token Parsing (Production)
+
+Per Supabase docs, redirect hash may contain:
+- **Success:** `access_token`, `refresh_token` (implicit flow)
+- **Failure:** `error`, `error_description`, `error_code`
+
+`useExchangeHashForSession` parses error params first; if present, does not attempt `setSession`, logs, clears hash, redirects to `/auth/error`. On `setSession` failure, logs and surfaces error (no silent catch).
 
 ---
 

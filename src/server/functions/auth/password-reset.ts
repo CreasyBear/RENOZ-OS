@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { checkPasswordResetRateLimit, RateLimitError } from '@/lib/auth/rate-limit';
 import { authLogger } from '@/lib/logger';
+import { getAppUrl } from '@/lib/server/app-url';
 
 const passwordResetInputSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -31,7 +32,7 @@ export const requestPasswordReset = createServerFn({ method: 'POST' })
       const request = getRequest();
       const supabase = createServerSupabase(request);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${process.env.VITE_APP_URL}/update-password`,
+        redirectTo: `${getAppUrl()}/update-password`,
       });
 
       if (error) {

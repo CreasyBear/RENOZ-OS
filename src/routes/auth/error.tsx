@@ -7,8 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 export const Route = createFileRoute('/auth/error')({
   component: AuthError,
   validateSearch: (params) => {
-    if (params.error && typeof params.error === 'string') {
-      return { error: params.error };
+    const error = params.error && typeof params.error === 'string' ? params.error : undefined;
+    const errorDescription =
+      params.error_description && typeof params.error_description === 'string'
+        ? params.error_description
+        : undefined;
+    if (error || errorDescription) {
+      return { error, error_description: errorDescription };
     }
     return null;
   },
@@ -17,6 +22,7 @@ export const Route = createFileRoute('/auth/error')({
 function AuthError() {
   const params = Route.useSearch();
   const errorCode = toAuthErrorCode(params?.error);
+  const displayMessage = params?.error_description ?? authErrorMessage(errorCode);
 
   return (
     <AuthErrorBoundary>
@@ -26,7 +32,7 @@ function AuthError() {
             <CardTitle className="text-2xl">Sorry, something went wrong.</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground text-sm">{authErrorMessage(errorCode)}</p>
+            <p className="text-muted-foreground text-sm">{displayMessage}</p>
           </CardContent>
         </Card>
       </AuthLayout>

@@ -6,91 +6,25 @@
  * Sets up the Trigger.dev client for background job processing.
  * Jobs are triggered from Edge Functions via the Trigger.dev API.
  *
- * Uses lazy initialization so env vars are read at runtime (not build time).
- * This ensures TRIGGER_SECRET_KEY works in Vercel serverless where process.env
- * may not be available at module load.
- *
- * SDK: @trigger.dev/sdk ^3.0.0 (tested with 3.3.17)
  * @see https://trigger.dev/docs
- * @see https://trigger.dev/docs/apikeys
  */
 import { TriggerClient } from '@trigger.dev/sdk'
 
 // ============================================================================
-// CONSTANTS
+// CLIENT CONFIGURATION
 // ============================================================================
-
-const TRIGGER_DASHBOARD_URL = 'https://cloud.trigger.dev'
-const VALID_API_KEY_PREFIXES = ['tr_dev_', 'tr_prod_', 'tr_stg_'] as const
-
-function isValidTriggerKey(key: string): boolean {
-  const trimmed = key.trim()
-  return trimmed.length > 0 && VALID_API_KEY_PREFIXES.some((p) => trimmed.startsWith(p))
-}
-
-// ============================================================================
-// CLIENT CONFIGURATION (lazy init for runtime env access)
-// ============================================================================
-
-let _client: TriggerClient | null = null
-
-function getEnv(key: string): string | undefined {
-  if (typeof process === 'undefined') return undefined
-  const val = process.env[key]
-  return typeof val === 'string' ? val.trim() || undefined : undefined
-}
-
-function getTriggerClient(): TriggerClient {
-  if (_client) return _client
-
-  const apiKey = getEnv('TRIGGER_SECRET_KEY') ?? getEnv('TRIGGER_API_KEY')
-  if (!apiKey) {
-    throw new Error(
-      `[Trigger.dev] Missing TRIGGER_SECRET_KEY or TRIGGER_API_KEY. ` +
-        `Add to Vercel Project Settings → Environment Variables. ` +
-        `Get your key at ${TRIGGER_DASHBOARD_URL} → Project → API Keys`
-    )
-  }
-  if (!isValidTriggerKey(apiKey)) {
-    throw new Error(
-      `[Trigger.dev] Invalid API key format. Expected tr_dev_*, tr_prod_*, or tr_stg_*. ` +
-        `Get the correct key at ${TRIGGER_DASHBOARD_URL} → Project → API Keys`
-    )
-  }
-
-  const apiUrl = getEnv('TRIGGER_API_URL')
-
-  _client = new TriggerClient({
-    id: 'renoz-crm',
-    apiKey,
-    apiUrl: apiUrl || undefined,
-  })
-  return _client
-}
 
 /**
- * Check if Trigger.dev is configured (without initializing the client).
- * Use for graceful degradation when background jobs are optional.
- */
-export function isTriggerConfigured(): boolean {
-  const apiKey = getEnv('TRIGGER_SECRET_KEY') ?? getEnv('TRIGGER_API_KEY')
-  return Boolean(apiKey && isValidTriggerKey(apiKey))
-}
-
-/**
- * Trigger.dev client instance (lazy-initialized).
+ * Trigger.dev client instance
  *
- * Environment variables:
- * - TRIGGER_SECRET_KEY or TRIGGER_API_KEY: Secret key (tr_dev_*, tr_prod_*, tr_stg_*)
- * - TRIGGER_API_URL: Optional, for self-hosted (default: https://api.trigger.dev)
- * - TRIGGER_PREVIEW_BRANCH: For Vercel preview deployments (see Trigger.dev docs)
- *
- * @see https://trigger.dev/docs/apikeys
+ * Environment variables required:
+ * - TRIGGER_API_KEY: Your Trigger.dev API key
+ * - TRIGGER_API_URL: Trigger.dev API URL (optional, defaults to cloud)
  */
-export const client = new Proxy({} as TriggerClient, {
-  get(_, prop) {
-    return (getTriggerClient() as unknown as Record<string | symbol, unknown>)[prop]
-  },
+export const client = new TriggerClient({
+  id: 'renoz-crm',
+  apiKey: process.env.TRIGGER_API_KEY,
+  apiUrl: process.env.TRIGGER_API_URL,
 })
 
 // ============================================================================
@@ -389,53 +323,6 @@ export interface WarrantyClaimResolvedPayload {
   resolutionType: string
   resolvedAt: string
   resolutionNotes?: string
-}
-
-// ============================================================================
-// USER EVENTS
-// ============================================================================
-
-/**
- * User events triggered from Edge Functions
- */
-export const userEvents = {
-  invitationSent: 'user.invitation_sent',
-  invitationAccepted: 'user.invitation_accepted',
-  invitationExpired: 'user.invitation_expired',
-} as const
-
-/**
- * User invitation sent event payload
- */
-export interface InvitationSentPayload {
-  invitationId: string
-  email: string
-  organizationId: string
-  organizationName: string
-  inviterName: string
-  inviterEmail: string
-  role: string
-  personalMessage?: string
-  acceptUrl: string
-  expiresAt: string
-}
-
-/**
- * Batch invitation sent event payload
- */
-export interface BatchInvitationSentPayload {
-  organizationId: string
-  organizationName: string
-  inviterName: string
-  inviterEmail: string
-  invitations: Array<{
-    invitationId: string
-    email: string
-    role: string
-    personalMessage?: string
-    acceptUrl: string
-    expiresAt: string
-  }>
 }
 
 // ============================================================================

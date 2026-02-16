@@ -24,10 +24,10 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Server-side only |
 | `APP_URL` | ✅ | Production URL (e.g. `https://your-app.vercel.app`) |
 | `VITE_APP_URL` | ✅ | Same as `APP_URL` |
-| `RESEND_API_KEY` | Optional | For email (invites, password reset, etc.) |
+| `RESEND_API_KEY` | Optional | For quote emails, campaigns, etc. Invitation and password reset use Supabase SMTP. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | ✅ Required for auth | Login, password reset, and invitation rate limiting. Without Redis, in-memory fallback is not shared across Vercel instances. |
 | `AUTH_RATE_LIMIT_FAIL_OPEN` | Do **not** set in prod | If set to `true`, bypasses rate limit when Redis errors. Default (unset) = fail-closed. |
-| `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` | Optional | For background jobs (invitation emails, PDFs, reports, etc.) |
+| `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` | Optional | For background jobs (PDFs, reports, campaigns, etc.) |
 
 ---
 
@@ -46,6 +46,7 @@ Ensure all required variables are set in Vercel (see `.env.example`):
   - `https://your-app.vercel.app/**`
   - `https://your-app.vercel.app/auth/confirm` (email confirmation)
   - `https://your-app.vercel.app/update-password` (password reset)
+  - `https://your-app.vercel.app/accept-invitation` (invite flow)
   - `https://*-your-team.vercel.app/**` (for Vercel preview deployments)
 - [ ] Email templates use correct `{{ .SiteURL }}` or `{{ .RedirectTo }}`
 

@@ -41,16 +41,10 @@ export interface BaseEmailProps {
  * @example
  * ```ts
  * import { renderEmail } from '@/lib/email/render';
- * import { InvitationEmail } from '@/lib/email/templates/users';
+ * import { WelcomeEmail } from '@/lib/email';
  *
  * const { html, text } = await renderEmail(
- *   <InvitationEmail
- *     email="user@example.com"
- *     organizationName="Acme Corp"
- *     role="admin"
- *     acceptUrl="https://example.com/accept?token=abc"
- *     expiresAt={new Date()}
- *   />
+ *   <WelcomeEmail customerName="John" />
  * );
  * ```
  */
