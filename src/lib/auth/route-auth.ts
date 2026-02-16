@@ -35,7 +35,7 @@ let authCache: CachedAuthContext | null = null
 let authPromise: Promise<AuthRouteContext> | null = null
 let listenerRegistered = false
 
-function isRouterRedirect(error: unknown) {
+export function isRouterRedirect(error: unknown) {
   return !!error && typeof error === 'object' && 'to' in error
 }
 
