@@ -232,9 +232,9 @@ export function DocumentHeader({
     <View style={styles.container}>
       {/* Logo Section - prefer logoDataUrl (pre-fetched) over logoUrl */}
       <View style={styles.logoSection}>
-        {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+        {organization.branding?.logoDataUrl ? (
           <Image
-            src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+            src={organization.branding.logoDataUrl}
             style={styles.logo}
           />
         ) : (

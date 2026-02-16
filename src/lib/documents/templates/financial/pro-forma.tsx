@@ -6,7 +6,7 @@
  * Same structure as invoice but clearly marked as non-binding estimate.
  */
 
-import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   DocumentHeader,
   FixedDocumentHeader,
@@ -15,8 +15,6 @@ import {
   Summary,
   DocumentFooter,
   PageNumber,
-  QRCode,
-  ExternalLinkIcon,
   pageMargins,
   fixedHeaderClearance,
   colors,
@@ -176,10 +174,6 @@ export interface ProFormaDocumentData {
 export interface ProFormaPdfTemplateProps {
   /** Pro forma invoice document data */
   data: ProFormaDocumentData;
-  /** Optional QR code data URL (pre-generated) */
-  qrCodeDataUrl?: string;
-  /** Optional URL for viewing document online */
-  viewOnlineUrl?: string;
 }
 
 export interface ProFormaPdfDocumentProps extends ProFormaPdfTemplateProps {
@@ -191,7 +185,7 @@ export interface ProFormaPdfDocumentProps extends ProFormaPdfTemplateProps {
 // INTERNAL COMPONENT (uses context)
 // ============================================================================
 
-function ProFormaContent({ data, qrCodeDataUrl, viewOnlineUrl }: ProFormaPdfTemplateProps) {
+function ProFormaContent({ data }: ProFormaPdfTemplateProps) {
   const { organization } = useOrgDocument();
 
   const { order } = data;
@@ -303,20 +297,6 @@ function ProFormaContent({ data, qrCodeDataUrl, viewOnlineUrl }: ProFormaPdfTemp
         />
         </View>
 
-        {/* QR Code and View online link */}
-        {(qrCodeDataUrl || viewOnlineUrl) && (
-          <View style={styles.qrSection}>
-            {qrCodeDataUrl && <QRCode dataUrl={qrCodeDataUrl} size={80} />}
-            {viewOnlineUrl && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                <ExternalLinkIcon size={10} color={colors.status.info} />
-                <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
-                  <Text>View online</Text>
-                </Link>
-              </View>
-            )}
-          </View>
-        )}
       </View>
 
       {/* Page numbers */}
@@ -336,16 +316,13 @@ function ProFormaContent({ data, qrCodeDataUrl, viewOnlineUrl }: ProFormaPdfTemp
  * Clearly marked as "NOT A TAX INVOICE" for customs, banking, or informational use.
  *
  * @example
- * const qrCode = await generateQRCode(`https://app.example.com/orders/${orderId}`);
  * const { buffer } = await renderPdfToBuffer(
- *   <ProFormaPdfDocument organization={org} data={proFormaData} qrCodeDataUrl={qrCode} />
+ *   <ProFormaPdfDocument organization={org} data={proFormaData} />
  * );
  */
 export function ProFormaPdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
 }: ProFormaPdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -357,7 +334,7 @@ export function ProFormaPdfDocument({
         language="en-AU"
         keywords={`pro forma, ${data.documentNumber}, ${data.order.customer.name}`}
       >
-        <ProFormaContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
+        <ProFormaContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
@@ -369,10 +346,6 @@ export function ProFormaPdfDocument({
  * Use this when you need to control the Document wrapper yourself,
  * or when rendering multiple documents in a single PDF.
  */
-export function ProFormaPdfTemplate({
-  data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
-}: ProFormaPdfTemplateProps) {
-  return <ProFormaContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />;
+export function ProFormaPdfTemplate({ data }: ProFormaPdfTemplateProps) {
+  return <ProFormaContent data={data} />;
 }

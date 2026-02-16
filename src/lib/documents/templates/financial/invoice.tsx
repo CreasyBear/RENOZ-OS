@@ -6,12 +6,10 @@
  */
 
 import { useMemo } from "react";
-import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   PaidWatermark,
-  QRCode,
-  ExternalLinkIcon,
   FixedDocumentHeader,
   pageMargins,
   fixedHeaderClearance,
@@ -341,8 +339,6 @@ const styles = StyleSheet.create({
 
 export interface InvoicePdfTemplateProps {
   data: InvoiceDocumentData;
-  qrCodeDataUrl?: string;
-  viewOnlineUrl?: string;
 }
 
 export interface InvoicePdfDocumentProps extends InvoicePdfTemplateProps {
@@ -353,7 +349,7 @@ export interface InvoicePdfDocumentProps extends InvoicePdfTemplateProps {
 // COMPONENT
 // ============================================================================
 
-function InvoiceContent({ data, qrCodeDataUrl, viewOnlineUrl }: InvoicePdfTemplateProps) {
+function InvoiceContent({ data }: InvoicePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const { order } = data;
 
@@ -575,20 +571,6 @@ function InvoiceContent({ data, qrCodeDataUrl, viewOnlineUrl }: InvoicePdfTempla
           </View>
         )}
 
-        {/* QR Code and View online link */}
-        {(qrCodeDataUrl || viewOnlineUrl) && (
-          <View style={styles.qrSection}>
-            {qrCodeDataUrl && <QRCode dataUrl={qrCodeDataUrl} size={80} />}
-            {viewOnlineUrl && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                <ExternalLinkIcon size={10} color={colors.status.info} />
-                <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
-                  <Text>View online</Text>
-                </Link>
-              </View>
-            )}
-          </View>
-        )}
       </View>
 
       {/* Paid Badge */}
@@ -607,8 +589,6 @@ function InvoiceContent({ data, qrCodeDataUrl, viewOnlineUrl }: InvoicePdfTempla
 export function InvoicePdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
 }: InvoicePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -620,16 +600,12 @@ export function InvoicePdfDocument({
         language="en-AU"
         keywords={`invoice, ${data.documentNumber}, ${data.order.customer.name}`}
       >
-        <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
+        <InvoiceContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
 }
 
-export function InvoicePdfTemplate({
-  data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
-}: InvoicePdfTemplateProps) {
-  return <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />;
+export function InvoicePdfTemplate({ data }: InvoicePdfTemplateProps) {
+  return <InvoiceContent data={data} />;
 }

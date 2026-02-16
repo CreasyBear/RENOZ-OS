@@ -5,12 +5,10 @@
  * Shows credit amount, reason, and related order/invoice reference.
  */
 
-import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
-  QRCode,
   FixedDocumentHeader,
-  ExternalLinkIcon,
   pageMargins,
   fixedHeaderClearance,
   colors,
@@ -275,8 +273,6 @@ export interface CreditNoteDocumentData {
 
 export interface CreditNotePdfTemplateProps {
   data: CreditNoteDocumentData;
-  qrCodeDataUrl?: string;
-  viewOnlineUrl?: string;
 }
 
 export interface CreditNotePdfDocumentProps extends CreditNotePdfTemplateProps {
@@ -287,7 +283,7 @@ export interface CreditNotePdfDocumentProps extends CreditNotePdfTemplateProps {
 // COMPONENT
 // ============================================================================
 
-function CreditNoteContent({ data, qrCodeDataUrl, viewOnlineUrl }: CreditNotePdfTemplateProps) {
+function CreditNoteContent({ data }: CreditNotePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const isApplied = data.status === "applied";
   const isIssued = data.status === "issued";
@@ -411,20 +407,6 @@ function CreditNoteContent({ data, qrCodeDataUrl, viewOnlineUrl }: CreditNotePdf
           <Text style={styles.reasonText} orphans={2} widows={2}>{data.reason}</Text>
         </View>
 
-        {/* QR Code and View online link */}
-        {(qrCodeDataUrl || viewOnlineUrl) && (
-          <View style={styles.qrSection}>
-            {qrCodeDataUrl && <QRCode dataUrl={qrCodeDataUrl} size={80} />}
-            {viewOnlineUrl && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                <ExternalLinkIcon size={10} color={colors.status.info} />
-                <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
-                  <Text>View online</Text>
-                </Link>
-              </View>
-            )}
-          </View>
-        )}
       </View>
 
       {/* Page Number */}
@@ -440,8 +422,6 @@ function CreditNoteContent({ data, qrCodeDataUrl, viewOnlineUrl }: CreditNotePdf
 export function CreditNotePdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
 }: CreditNotePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -453,16 +433,12 @@ export function CreditNotePdfDocument({
         language="en-AU"
         keywords={`credit note, ${data.documentNumber}, ${data.customer.name}`}
       >
-        <CreditNoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
+        <CreditNoteContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
 }
 
-export function CreditNotePdfTemplate({
-  data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
-}: CreditNotePdfTemplateProps) {
-  return <CreditNoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />;
+export function CreditNotePdfTemplate({ data }: CreditNotePdfTemplateProps) {
+  return <CreditNoteContent data={data} />;
 }

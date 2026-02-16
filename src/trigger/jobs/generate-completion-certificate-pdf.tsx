@@ -22,7 +22,6 @@ import {
 import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
-  generateQRCode,
   CompletionCertificatePdfDocument,
   generateFilename,
   generateStoragePath,
@@ -52,7 +51,7 @@ export interface GenerateCompletionCertificatePdfPayload {
 
 const STORAGE_BUCKET = "documents";
 
-import { buildDocumentViewUrl } from "@/lib/documents/urls";
+import { fetchImageAsDataUrl } from "@/lib/documents/fetch-image-as-data-url";
 
 /**
  * Format address as single string
@@ -213,13 +212,10 @@ export const generateCompletionCertificatePdf = task({
     // Step 6: Fetch organization details (with logo pre-fetched for PDF)
     const orgData = await fetchOrganizationForDocument(organizationId);
 
-    // Step 7: Generate QR code for verification
-    const jobUrl = buildDocumentViewUrl("job", jobAssignmentId);
-    const qrCodeDataUrl = await generateQRCode(jobUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: "M",
-    });
+    // Step 7: Pre-fetch customer signature to data URL (avoids remote URL fetch at render)
+    const customerSignatureDataUrl = job.signatureUrl
+      ? await fetchImageAsDataUrl(job.signatureUrl)
+      : null;
 
     // Step 8: Build certificate data and render PDF
     const scheduledDate = new Date(job.scheduledDate);
@@ -235,7 +231,7 @@ export const generateCompletionCertificatePdf = task({
       completedAt,
       technicianName: installer.name || "Technician",
       workPerformed: workPerformed || undefined,
-      customerSignatureUrl: job.signatureUrl,
+      customerSignatureDataUrl,
       signedByName: job.signedByName,
       orderNumber,
       jobType: job.jobType,
@@ -246,7 +242,6 @@ export const generateCompletionCertificatePdf = task({
       <CompletionCertificatePdfDocument
         organization={orgData}
         data={certificateData}
-        qrCodeDataUrl={qrCodeDataUrl}
       />
     );
 

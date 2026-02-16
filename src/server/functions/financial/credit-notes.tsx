@@ -33,13 +33,11 @@ import { calculateGst } from '@/lib/utils/financial';
 import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
-  generateQRCode,
   CreditNotePdfDocument,
   generateFilename,
   generateStoragePath,
   type CreditNoteDocumentData,
 } from '@/lib/documents';
-import { buildDocumentViewUrl } from '@/lib/documents/urls';
 
 // Excluded fields for activity logging (system-managed fields)
 const CREDIT_NOTE_EXCLUDED_FIELDS: string[] = [
@@ -884,14 +882,6 @@ export const generateCreditNotePdf = createServerFn({ method: 'POST' })
       fetchCustomerAddressForPdf(creditNoteData.customerId, ctx.organizationId),
     ]);
 
-    // Generate QR code
-    const documentUrl = buildDocumentViewUrl('credit_note', data.id);
-    const qrCodeDataUrl = await generateQRCode(documentUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: 'M',
-    });
-
     // Validate credit note number (required for PDF)
     if (!creditNoteData.creditNoteNumber) {
       throw new ValidationError('Credit note number is required for PDF generation', {
@@ -939,7 +929,7 @@ export const generateCreditNotePdf = createServerFn({ method: 'POST' })
 
     // Render PDF to buffer
     const { buffer } = await renderPdfToBuffer(
-      <CreditNotePdfDocument organization={orgData} data={creditNoteDocumentData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
+      <CreditNotePdfDocument organization={orgData} data={creditNoteDocumentData} />
     );
 
     // Upload to storage

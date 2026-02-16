@@ -35,7 +35,13 @@ import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/r
 import { getAppUrl } from '@/lib/server/app-url';
 import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
-import { client, userEvents, type InvitationSentPayload, type BatchInvitationSentPayload } from '@/trigger/client';
+import {
+  client,
+  isTriggerConfigured,
+  userEvents,
+  type InvitationSentPayload,
+  type BatchInvitationSentPayload,
+} from '@/trigger/client';
 import { NotFoundError, ConflictError, ValidationError, ServerError } from '@/lib/server/errors';
 import { getDefaultPreferences } from './user-preferences';
 import { authLogger } from '@/lib/logger';
@@ -90,6 +96,12 @@ async function sendInvitationEmail(params: {
   token: string;
   expiresAt: Date;
 }): Promise<boolean> {
+  if (!isTriggerConfigured()) {
+    authLogger.warn(
+      'Trigger.dev not configured (missing TRIGGER_SECRET_KEY). Invitation email will not be sent.'
+    );
+    return false;
+  }
   try {
     await client.sendEvent({
       name: userEvents.invitationSent,

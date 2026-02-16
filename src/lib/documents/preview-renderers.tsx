@@ -88,8 +88,6 @@ export interface PreviewRenderContext {
   orderDate: Date;
   dueDate: Date;
   validUntil: Date;
-  qrCodeDataUrl?: string;
-  viewUrl?: string;
 }
 
 type PreviewRenderer = (ctx: PreviewRenderContext) => ReactElement;
@@ -119,8 +117,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
         generatedAt: new Date(),
         order: ctx.baseOrder,
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
-      viewOnlineUrl={ctx.viewUrl}
     />
   ),
   invoice: (ctx) => (
@@ -137,8 +133,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
         isPaid: false,
         paidAt: undefined,
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
-      viewOnlineUrl={ctx.viewUrl}
     />
   ),
   pro_forma: (ctx) => (
@@ -153,8 +147,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
         generatedAt: new Date(),
         order: ctx.baseOrder,
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
-      viewOnlineUrl={ctx.viewUrl}
     />
   ),
   delivery_note: (ctx) => (
@@ -181,7 +173,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
           notes: li.notes,
         })),
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
     />
   ),
   packing_slip: (ctx) => (
@@ -207,7 +198,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
           notes: li.notes,
         })),
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
     />
   ),
   work_order: (ctx) => (
@@ -265,7 +255,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
           terms: ctx.documentData.warranty.terms,
           status: 'active',
         }}
-        qrCodeDataUrl={ctx.qrCodeDataUrl}
       />
     );
   },
@@ -282,7 +271,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
         technicianName: 'Sample Technician',
         jobType: 'installation',
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
     />
   ),
   handover_pack: (ctx) => (
@@ -299,7 +287,6 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
         completionDate: ctx.orderDate,
         warrantyInfo: ctx.documentData.warranty.terms,
       }}
-      qrCodeDataUrl={ctx.qrCodeDataUrl}
     />
   ),
   report_summary: (ctx) => (

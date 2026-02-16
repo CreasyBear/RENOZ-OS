@@ -2,8 +2,8 @@
  * PDF Font Registration
  *
  * Registers fonts for @react-pdf/renderer to use in PDF generation.
- * Uses ESM imports so fonts are bundled and work on Vercel (process.cwd()
- * does not resolve to project root in serverless).
+ * Uses ?arraybuffer imports so fonts are inlined as data URLs — avoids
+ * ENOENT on Vercel where Vite's /assets/ URLs don't exist on the server FS.
  *
  * Fonts live in ./fonts/ (copied from public/fonts/inter via fonts:download).
  *
@@ -11,15 +11,30 @@
  */
 import { Font } from "@react-pdf/renderer";
 
-// Import fonts so they're bundled — works on Vercel (no process.cwd() path)
-import InterRegular from "./fonts/Inter-Regular.ttf";
-import InterItalic from "./fonts/Inter-Italic.ttf";
-import InterMedium from "./fonts/Inter-Medium.ttf";
-import InterMediumItalic from "./fonts/Inter-MediumItalic.ttf";
-import InterSemiBold from "./fonts/Inter-SemiBold.ttf";
-import InterSemiBoldItalic from "./fonts/Inter-SemiBoldItalic.ttf";
-import InterBold from "./fonts/Inter-Bold.ttf";
-import InterBoldItalic from "./fonts/Inter-BoldItalic.ttf";
+// Import as ArrayBuffer and convert to data URL — react-pdf accepts data URLs
+// and reads font data in-memory (no filesystem path needed on Vercel)
+import InterRegularBuf from "./fonts/Inter-Regular.ttf?arraybuffer";
+import InterItalicBuf from "./fonts/Inter-Italic.ttf?arraybuffer";
+import InterMediumBuf from "./fonts/Inter-Medium.ttf?arraybuffer";
+import InterMediumItalicBuf from "./fonts/Inter-MediumItalic.ttf?arraybuffer";
+import InterSemiBoldBuf from "./fonts/Inter-SemiBold.ttf?arraybuffer";
+import InterSemiBoldItalicBuf from "./fonts/Inter-SemiBoldItalic.ttf?arraybuffer";
+import InterBoldBuf from "./fonts/Inter-Bold.ttf?arraybuffer";
+import InterBoldItalicBuf from "./fonts/Inter-BoldItalic.ttf?arraybuffer";
+
+function toDataUrl(buf: ArrayBuffer): string {
+  const base64 = Buffer.from(buf).toString("base64");
+  return `data:font/ttf;base64,${base64}`;
+}
+
+const InterRegular = toDataUrl(InterRegularBuf);
+const InterItalic = toDataUrl(InterItalicBuf);
+const InterMedium = toDataUrl(InterMediumBuf);
+const InterMediumItalic = toDataUrl(InterMediumItalicBuf);
+const InterSemiBold = toDataUrl(InterSemiBoldBuf);
+const InterSemiBoldItalic = toDataUrl(InterSemiBoldItalicBuf);
+const InterBold = toDataUrl(InterBoldBuf);
+const InterBoldItalic = toDataUrl(InterBoldItalicBuf);
 
 /**
  * Register Inter font family

@@ -25,7 +25,6 @@ import {
   generateFilename,
   generateStoragePath,
   calculateChecksum,
-  generateQRCode,
 } from "@/lib/documents";
 import {
   PackingSlipPdfDocument,
@@ -65,8 +64,6 @@ export interface GeneratePackingSlipPdfPayload {
 // ============================================================================
 
 const STORAGE_BUCKET = "documents";
-
-import { buildDocumentViewUrl } from "@/lib/documents/urls";
 
 // ============================================================================
 // TASK DEFINITION
@@ -236,15 +233,7 @@ export const generatePackingSlipPdf = task({
       customerShippingAddress = primaryAddress;
     }
 
-    // Step 4: Generate QR code for order lookup
-    const orderLookupUrl = buildDocumentViewUrl("order", orderId);
-    const qrCodeDataUrl = await generateQRCode(orderLookupUrl, {
-      width: 280, // Higher res for 70pt display
-      margin: 0,
-      errorCorrectionLevel: "M",
-    });
-
-    // Step 5: Build document data
+    // Step 4: Build document data
     const documentNumber = `PS-${order.orderNumber}`;
     const issueDate = new Date();
 
@@ -279,13 +268,11 @@ export const generatePackingSlipPdf = task({
       totalWeight: totalWeight || null,
     };
 
-    // Step 6: Render PDF to buffer
-    // Note: showLocation is not a prop - location column is always rendered in the template
+    // Step 5: Render PDF to buffer
     const { buffer, size } = await renderPdfToBuffer(
       <PackingSlipPdfDocument
         organization={orgData}
         data={packingSlipData}
-        qrCodeDataUrl={qrCodeDataUrl}
       />
     );
 

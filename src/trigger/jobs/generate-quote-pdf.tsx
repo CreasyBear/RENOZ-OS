@@ -21,14 +21,12 @@ import {
 import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
-  generateQRCode,
   QuotePdfDocument,
   generateFilename,
   generateStoragePath,
   calculateChecksum,
   type QuoteDocumentData,
 } from "@/lib/documents";
-import { buildDocumentViewUrl } from "@/lib/documents/urls";
 import { buildDocumentOrderFromDb } from "@/lib/documents/builders";
 
 // ============================================================================
@@ -237,15 +235,7 @@ export const generateQuotePdf = task({
         : undefined,
     };
 
-    // Step 4: Generate QR code for quick access
-    const viewOnlineUrl = buildDocumentViewUrl("order", orderId);
-    const qrCodeDataUrl = await generateQRCode(viewOnlineUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: "M",
-    });
-
-    // Step 5: Build document data and render PDF
+    // Step 4: Build document data and render PDF
     // Calculate valid until date
     const orderDate = orderData.orderDate
       ? new Date(orderData.orderDate)
@@ -270,8 +260,6 @@ export const generateQuotePdf = task({
       <QuotePdfDocument
         organization={orgData}
         data={quoteData}
-        qrCodeDataUrl={qrCodeDataUrl}
-        viewOnlineUrl={viewOnlineUrl}
       />
     );
 

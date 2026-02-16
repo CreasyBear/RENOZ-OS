@@ -8,7 +8,6 @@
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
-  QRCode,
   FixedDocumentHeader,
   pageMargins,
   fixedHeaderClearance,
@@ -69,7 +68,6 @@ export interface DeliveryNoteDocumentData {
 
 export interface DeliveryNotePdfTemplateProps {
   data: DeliveryNoteDocumentData;
-  qrCodeDataUrl?: string;
 }
 
 export interface DeliveryNotePdfDocumentProps extends DeliveryNotePdfTemplateProps {
@@ -331,7 +329,7 @@ const styles = StyleSheet.create({
 // COMPONENT
 // ============================================================================
 
-function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplateProps) {
+function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
 
   return (
@@ -342,13 +340,6 @@ function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplatePro
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* QR Code */}
-        {qrCodeDataUrl && (
-          <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={80} />
-          </View>
-        )}
-
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={styles.companySection}>
@@ -499,7 +490,6 @@ function DeliveryNoteContent({ data, qrCodeDataUrl }: DeliveryNotePdfTemplatePro
 export function DeliveryNotePdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
 }: DeliveryNotePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -511,15 +501,12 @@ export function DeliveryNotePdfDocument({
         keywords={`delivery note, ${data.documentNumber}, ${data.orderNumber}`}
         creator="Renoz"
       >
-        <DeliveryNoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <DeliveryNoteContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
 }
 
-export function DeliveryNotePdfTemplate({
-  data,
-  qrCodeDataUrl,
-}: DeliveryNotePdfTemplateProps) {
-  return <DeliveryNoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+export function DeliveryNotePdfTemplate({ data }: DeliveryNotePdfTemplateProps) {
+  return <DeliveryNoteContent data={data} />;
 }

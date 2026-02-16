@@ -19,7 +19,6 @@ import { createActivityLogger } from '@/lib/activity-logger';
 import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
-  generateQRCode,
   WorkOrderPdfDocument,
   CompletionCertificatePdfDocument,
   HandoverPackPdfDocument,
@@ -27,7 +26,6 @@ import {
   generateStoragePath,
   calculateChecksum,
 } from '@/lib/documents';
-import { buildDocumentViewUrl } from '@/lib/documents/urls';
 import type { WorkOrderDocumentData, WorkOrderMaterial } from '@/lib/documents/templates/operational/work-order';
 import type { CompletionCertificateData } from '@/lib/documents/templates/certificates/completion';
 import type { HandoverPackData } from '@/lib/documents/templates/certificates/handover-pack';
@@ -234,14 +232,6 @@ export const generateProjectDocument = createServerFn({ method: 'POST' })
     const customerData = await fetchCustomerData(projectData.customerId, ctx.organizationId);
     const materials = await fetchProjectMaterials(projectId);
 
-    // Generate QR code
-    const documentUrl = buildDocumentViewUrl('project', projectId);
-    const qrCodeDataUrl = await generateQRCode(documentUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: 'M',
-    });
-
     // Parse site address
     const siteAddress = projectData.siteAddress as {
       street?: string;
@@ -322,7 +312,6 @@ export const generateProjectDocument = createServerFn({ method: 'POST' })
           <CompletionCertificatePdfDocument
             organization={orgData}
             data={completionData}
-            qrCodeDataUrl={qrCodeDataUrl}
           />
         );
         buffer = result.buffer;
@@ -363,7 +352,6 @@ export const generateProjectDocument = createServerFn({ method: 'POST' })
           <HandoverPackPdfDocument
             organization={orgData}
             data={handoverData}
-            qrCodeDataUrl={qrCodeDataUrl}
           />
         );
         buffer = result.buffer;

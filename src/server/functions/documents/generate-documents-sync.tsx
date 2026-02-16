@@ -19,7 +19,6 @@ import { createActivityLogger } from '@/lib/activity-logger';
 import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
-  generateQRCode,
   QuotePdfDocument,
   InvoicePdfDocument,
   ProFormaPdfDocument,
@@ -32,7 +31,6 @@ import {
   type InvoiceDocumentData,
 } from '@/lib/documents';
 import type { ProFormaDocumentData } from '@/lib/documents/templates/financial/pro-forma';
-import { buildDocumentViewUrl } from '@/lib/documents/urls';
 import { buildDocumentOrderFromDb } from '@/lib/documents/builders';
 import type {
   PackingSlipDocumentData,
@@ -331,14 +329,6 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       }
     }
 
-    // Generate QR code
-    const documentUrl = buildDocumentViewUrl('order', orderId);
-    const qrCodeDataUrl = await generateQRCode(documentUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: 'M',
-    });
-
     // Build common order data
     const orderDate = orderData.orderDate ? new Date(orderData.orderDate) : new Date();
     const dueDate = data.dueDate
@@ -371,7 +361,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <QuotePdfDocument organization={orgData} data={quoteData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
+          <QuotePdfDocument organization={orgData} data={quoteData} />
         );
         buffer = result.buffer;
         filename = generateFilename('quote', orderData.orderNumber);
@@ -393,7 +383,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <InvoicePdfDocument organization={orgData} data={invoiceData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
+          <InvoicePdfDocument organization={orgData} data={invoiceData} />
         );
         buffer = result.buffer;
         filename = generateFilename('invoice', orderData.orderNumber);
@@ -415,7 +405,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <ProFormaPdfDocument organization={orgData} data={proFormaData} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={documentUrl} />
+          <ProFormaPdfDocument organization={orgData} data={proFormaData} />
         );
         buffer = result.buffer;
         filename = generateFilename('pro-forma', orderData.orderNumber);
@@ -475,7 +465,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <PackingSlipPdfDocument organization={orgData} data={packingSlipData} qrCodeDataUrl={qrCodeDataUrl} />
+          <PackingSlipPdfDocument organization={orgData} data={packingSlipData} />
         );
         buffer = result.buffer;
         filename = generateFilename('packing-slip', orderData.orderNumber);
@@ -535,7 +525,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         };
 
         const result = await renderPdfToBuffer(
-          <DeliveryNotePdfDocument organization={orgData} data={deliveryNoteData} qrCodeDataUrl={qrCodeDataUrl} />
+          <DeliveryNotePdfDocument organization={orgData} data={deliveryNoteData} />
         );
         buffer = result.buffer;
         filename = generateFilename('delivery-note', orderData.orderNumber);

@@ -14,7 +14,6 @@ import {
   CertificateDivider,
   CertificateSeal,
 } from "../../components/certificate-border";
-import { QRCode } from "../../components/qr-code";
 import { PageNumber } from "../../components/footer";
 import {
   colors,
@@ -263,7 +262,6 @@ export interface HandoverPackData {
 
 export interface HandoverPackPdfTemplateProps {
   data: HandoverPackData;
-  qrCodeDataUrl?: string;
 }
 
 export interface HandoverPackPdfDocumentProps extends HandoverPackPdfTemplateProps {
@@ -274,7 +272,7 @@ export interface HandoverPackPdfDocumentProps extends HandoverPackPdfTemplatePro
 // INTERNAL COMPONENT
 // ============================================================================
 
-function HandoverPackContent({ data, qrCodeDataUrl }: HandoverPackPdfTemplateProps) {
+function HandoverPackContent({ data }: HandoverPackPdfTemplateProps) {
   const { organization, primaryColor, locale } = useOrgDocument();
 
   const formatProjectType = (type: string) =>
@@ -289,9 +287,9 @@ function HandoverPackContent({ data, qrCodeDataUrl }: HandoverPackPdfTemplatePro
       <CertificateBorder primaryColor={primaryColor} variant="classic">
         <View style={styles.content}>
           <View style={styles.logoContainer}>
-            {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+            {organization.branding?.logoDataUrl ? (
               <Image
-                src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+                src={organization.branding.logoDataUrl}
                 style={styles.logo}
               />
             ) : (
@@ -414,13 +412,6 @@ function HandoverPackContent({ data, qrCodeDataUrl }: HandoverPackPdfTemplatePro
             </View>
           </View>
 
-          {qrCodeDataUrl && (
-            <View style={styles.qrSection}>
-              <QRCode dataUrl={qrCodeDataUrl} size={50} />
-              <Text style={styles.qrLabel}>Scan to view project details</Text>
-            </View>
-          )}
-
           <CertificateSeal primaryColor={primaryColor} />
 
           <View style={styles.footer}>
@@ -444,7 +435,6 @@ function HandoverPackContent({ data, qrCodeDataUrl }: HandoverPackPdfTemplatePro
 export function HandoverPackPdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
 }: HandoverPackPdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -456,15 +446,12 @@ export function HandoverPackPdfDocument({
         language="en-AU"
         keywords={`handover pack, ${data.projectNumber}, ${data.customerName}`}
       >
-        <HandoverPackContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <HandoverPackContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
 }
 
-export function HandoverPackPdfTemplate({
-  data,
-  qrCodeDataUrl,
-}: HandoverPackPdfTemplateProps) {
-  return <HandoverPackContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+export function HandoverPackPdfTemplate({ data }: HandoverPackPdfTemplateProps) {
+  return <HandoverPackContent data={data} />;
 }

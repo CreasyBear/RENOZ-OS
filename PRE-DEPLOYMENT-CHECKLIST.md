@@ -27,7 +27,7 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 | `RESEND_API_KEY` | Optional | For email (invites, password reset, etc.) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | ✅ Required for auth | Login, password reset, and invitation rate limiting. Without Redis, in-memory fallback is not shared across Vercel instances. |
 | `AUTH_RATE_LIMIT_FAIL_OPEN` | Do **not** set in prod | If set to `true`, bypasses rate limit when Redis errors. Default (unset) = fail-closed. |
-| `TRIGGER_API_KEY`, `TRIGGER_PROJECT_ID` | Optional | For background jobs (invoices, reports, etc.) |
+| `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` | Optional | For background jobs (invitation emails, PDFs, reports, etc.) |
 
 ---
 
@@ -57,7 +57,7 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 |-------------|----------|--------|
 | Resend (email) | `RESEND_API_KEY`, `EMAIL_FROM` | [ ] |
 | Upstash Redis | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — **required for auth rate limiting** | [ ] |
-| Trigger.dev | `TRIGGER_API_KEY`, `TRIGGER_PROJECT_ID` | [ ] |
+| Trigger.dev | `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` | [ ] |
 | Google OAuth | `GOOGLE_WORKSPACE_*` | [ ] |
 | Microsoft 365 | `MICROSOFT365_*` | [ ] |
 

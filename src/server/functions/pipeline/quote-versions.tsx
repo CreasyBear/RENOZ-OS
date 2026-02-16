@@ -453,14 +453,12 @@ import { Resend } from 'resend';
 import { createAdminSupabase } from '@/lib/supabase/server';
 import {
   renderPdfToBuffer,
-  generateQRCode,
   QuotePdfDocument,
   generateFilename,
   generateStoragePath,
   calculateChecksum,
   type QuoteDocumentData,
 } from '@/lib/documents';
-import { buildDocumentViewUrl } from '@/lib/documents/urls';
 import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
 import { customers, addresses, organizations } from 'drizzle/schema';
 
@@ -596,14 +594,6 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       customerAddress = anyPrimary;
     }
 
-    // Generate QR code and view-online URL (matches /pipeline/quotes/$quoteId route)
-    const quoteUrl = buildDocumentViewUrl('quote_version', quoteVersion.id);
-    const qrCodeDataUrl = await generateQRCode(quoteUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: 'M',
-    });
-
     // Calculate dates
     const issueDate = new Date(quoteVersion.createdAt);
     const validUntil = opp.quoteExpiresAt
@@ -681,12 +671,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     // Render PDF
     const { buffer } = await renderPdfToBuffer(
-      <QuotePdfDocument
-        organization={orgData}
-        data={quoteData}
-        qrCodeDataUrl={qrCodeDataUrl}
-        viewOnlineUrl={quoteUrl}
-      />
+      <QuotePdfDocument organization={orgData} data={quoteData} />
     );
 
     // Upload to storage

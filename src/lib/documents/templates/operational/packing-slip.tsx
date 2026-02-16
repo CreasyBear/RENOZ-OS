@@ -8,7 +8,6 @@
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
-  QRCode,
   FixedDocumentHeader,
   pageMargins,
   fixedHeaderClearance,
@@ -71,7 +70,6 @@ export interface PackingSlipDocumentData {
 
 export interface PackingSlipPdfTemplateProps {
   data: PackingSlipDocumentData;
-  qrCodeDataUrl?: string;
 }
 
 export interface PackingSlipPdfDocumentProps extends PackingSlipPdfTemplateProps {
@@ -337,7 +335,7 @@ const styles = StyleSheet.create({
 // COMPONENT
 // ============================================================================
 
-function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps) {
+function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
 
   return (
@@ -348,13 +346,6 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* QR Code */}
-        {qrCodeDataUrl && (
-          <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={80} />
-          </View>
-        )}
-
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={styles.companySection}>
@@ -522,7 +513,6 @@ function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps
 export function PackingSlipPdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
 }: PackingSlipPdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -534,15 +524,12 @@ export function PackingSlipPdfDocument({
         keywords={`packing slip, ${data.documentNumber}, ${data.orderNumber}`}
         creator="Renoz"
       >
-        <PackingSlipContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <PackingSlipContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
 }
 
-export function PackingSlipPdfTemplate({
-  data,
-  qrCodeDataUrl,
-}: PackingSlipPdfTemplateProps) {
-  return <PackingSlipContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+export function PackingSlipPdfTemplate({ data }: PackingSlipPdfTemplateProps) {
+  return <PackingSlipContent data={data} />;
 }

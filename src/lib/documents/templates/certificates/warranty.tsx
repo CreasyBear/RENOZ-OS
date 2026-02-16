@@ -14,7 +14,6 @@ import {
   CertificateDivider,
   CertificateSeal,
 } from "../../components/certificate-border";
-import { QRCode } from "../../components/qr-code";
 import { PageNumber } from "../../components/footer";
 import {
   colors,
@@ -283,8 +282,6 @@ export interface WarrantyCertificateData {
 export interface WarrantyCertificatePdfTemplateProps {
   /** Warranty certificate data */
   data: WarrantyCertificateData;
-  /** Optional QR code data URL (pre-generated) */
-  qrCodeDataUrl?: string;
 }
 
 export interface WarrantyCertificatePdfDocumentProps
@@ -297,10 +294,7 @@ export interface WarrantyCertificatePdfDocumentProps
 // INTERNAL COMPONENT (uses context)
 // ============================================================================
 
-function WarrantyCertificateContent({
-  data,
-  qrCodeDataUrl,
-}: WarrantyCertificatePdfTemplateProps) {
+function WarrantyCertificateContent({ data }: WarrantyCertificatePdfTemplateProps) {
   const { organization, primaryColor, locale } = useOrgDocument();
 
   // Determine status display
@@ -321,9 +315,9 @@ function WarrantyCertificateContent({
         <View style={styles.content}>
           {/* Logo/Organization */}
           <View style={styles.logoContainer}>
-            {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+            {organization.branding?.logoDataUrl ? (
               <Image
-                src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+                src={organization.branding.logoDataUrl}
                 style={styles.logo}
               />
             ) : (
@@ -438,12 +432,6 @@ function WarrantyCertificateContent({
           )}
 
           {/* QR Code */}
-          {qrCodeDataUrl && (
-            <View style={styles.qrSection}>
-              <QRCode dataUrl={qrCodeDataUrl} size={60} />
-              <Text style={styles.qrLabel}>Scan to verify warranty</Text>
-            </View>
-          )}
 
           {/* Seal */}
           <CertificateSeal primaryColor={primaryColor} />
@@ -486,7 +474,6 @@ function WarrantyCertificateContent({
 export function WarrantyCertificatePdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
 }: WarrantyCertificatePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -498,7 +485,7 @@ export function WarrantyCertificatePdfDocument({
         language="en-AU"
         keywords={`warranty, ${data.warrantyNumber}, ${data.customerName}`}
       >
-        <WarrantyCertificateContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <WarrantyCertificateContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
@@ -510,9 +497,6 @@ export function WarrantyCertificatePdfDocument({
  * Use this when you need to control the Document wrapper yourself,
  * or when rendering multiple certificates in a single PDF.
  */
-export function WarrantyCertificatePdfTemplate({
-  data,
-  qrCodeDataUrl,
-}: WarrantyCertificatePdfTemplateProps) {
-  return <WarrantyCertificateContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+export function WarrantyCertificatePdfTemplate({ data }: WarrantyCertificatePdfTemplateProps) {
+  return <WarrantyCertificateContent data={data} />;
 }

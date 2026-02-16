@@ -121,13 +121,17 @@ export function useOrderCreateDraft<T extends object>({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRestoringRef = useRef(false);
 
-  // Check for existing draft on mount
+  // Check for existing draft on mount (defer setState to avoid sync setState in effect)
   useEffect(() => {
     if (skipDraft) return;
     const draft = readDraft<T>(DRAFT_VERSION);
     if (draft) {
-      setHasDraft(true);
-      setSavedAt(new Date(draft.savedAt));
+      const savedAt = new Date(draft.savedAt);
+      const id = setTimeout(() => {
+        setHasDraft(true);
+        setSavedAt(savedAt);
+      }, 0);
+      return () => clearTimeout(id);
     }
   }, [skipDraft]);
 

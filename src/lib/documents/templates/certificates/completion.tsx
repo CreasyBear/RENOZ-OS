@@ -14,7 +14,6 @@ import {
   CertificateDivider,
   CertificateSeal,
 } from "../../components/certificate-border";
-import { QRCode } from "../../components/qr-code";
 import { PageNumber } from "../../components/footer";
 import {
   colors,
@@ -335,8 +334,8 @@ export interface CompletionCertificateData {
   technicianName: string;
   /** Work performed items */
   workPerformed?: string[];
-  /** Customer signature URL (if available) */
-  customerSignatureUrl?: string | null;
+  /** Customer signature as data URL (pre-fetched; avoids remote URL fetch at render) */
+  customerSignatureDataUrl?: string | null;
   /** Name of person who signed off */
   signedByName?: string | null;
   /** Related order number (if applicable) */
@@ -348,8 +347,6 @@ export interface CompletionCertificateData {
 export interface CompletionCertificatePdfTemplateProps {
   /** Completion certificate data */
   data: CompletionCertificateData;
-  /** Optional QR code data URL (pre-generated) */
-  qrCodeDataUrl?: string;
 }
 
 export interface CompletionCertificatePdfDocumentProps
@@ -362,10 +359,7 @@ export interface CompletionCertificatePdfDocumentProps
 // INTERNAL COMPONENT (uses context)
 // ============================================================================
 
-function CompletionCertificateContent({
-  data,
-  qrCodeDataUrl,
-}: CompletionCertificatePdfTemplateProps) {
+function CompletionCertificateContent({ data }: CompletionCertificatePdfTemplateProps) {
   const { organization, primaryColor, locale } = useOrgDocument();
 
   // Format job type for display
@@ -386,9 +380,9 @@ function CompletionCertificateContent({
         <View style={styles.content}>
           {/* Logo/Organization */}
           <View style={styles.logoContainer}>
-            {(organization.branding?.logoDataUrl ?? organization.branding?.logoUrl) ? (
+            {organization.branding?.logoDataUrl ? (
               <Image
-                src={organization.branding.logoDataUrl ?? organization.branding.logoUrl!}
+                src={organization.branding.logoDataUrl}
                 style={styles.logo}
               />
             ) : (
@@ -478,10 +472,10 @@ function CompletionCertificateContent({
           {/* Signature Section */}
           <View style={styles.signatureSection}>
             <View style={styles.signatureBlock}>
-              {data.customerSignatureUrl ? (
+              {data.customerSignatureDataUrl ? (
                 <View style={styles.signatureWithImage}>
                   <Image
-                    src={data.customerSignatureUrl}
+                    src={data.customerSignatureDataUrl}
                     style={styles.signatureImage}
                   />
                 </View>
@@ -506,12 +500,6 @@ function CompletionCertificateContent({
           </View>
 
           {/* QR Code */}
-          {qrCodeDataUrl && (
-            <View style={styles.qrSection}>
-              <QRCode dataUrl={qrCodeDataUrl} size={50} />
-              <Text style={styles.qrLabel}>Scan to verify completion</Text>
-            </View>
-          )}
 
           {/* Seal */}
           <CertificateSeal primaryColor={primaryColor} />
@@ -554,7 +542,6 @@ function CompletionCertificateContent({
 export function CompletionCertificatePdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
 }: CompletionCertificatePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -566,7 +553,7 @@ export function CompletionCertificatePdfDocument({
         language="en-AU"
         keywords={`completion certificate, ${data.jobNumber}, ${data.customerName}`}
       >
-        <CompletionCertificateContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
+        <CompletionCertificateContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );
@@ -578,9 +565,6 @@ export function CompletionCertificatePdfDocument({
  * Use this when you need to control the Document wrapper yourself,
  * or when rendering multiple certificates in a single PDF.
  */
-export function CompletionCertificatePdfTemplate({
-  data,
-  qrCodeDataUrl,
-}: CompletionCertificatePdfTemplateProps) {
-  return <CompletionCertificateContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+export function CompletionCertificatePdfTemplate({ data }: CompletionCertificatePdfTemplateProps) {
+  return <CompletionCertificateContent data={data} />;
 }

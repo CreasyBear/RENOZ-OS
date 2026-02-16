@@ -6,11 +6,10 @@
  */
 
 import { useMemo } from "react";
-import { Document, Page, StyleSheet, View, Text, Link } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   FixedDocumentHeader,
-  ExternalLinkIcon,
   pageMargins,
   fixedHeaderClearance,
   fontSize,
@@ -308,9 +307,6 @@ const styles = StyleSheet.create({
 
 export interface QuotePdfTemplateProps {
   data: QuoteDocumentData;
-  qrCodeDataUrl?: string;
-  /** URL for "View online" link (e.g. from getQuoteViewUrl) */
-  viewOnlineUrl?: string;
 }
 
 export interface QuotePdfDocumentProps extends QuotePdfTemplateProps {
@@ -321,7 +317,7 @@ export interface QuotePdfDocumentProps extends QuotePdfTemplateProps {
 // COMPONENT
 // ============================================================================
 
-function QuoteContent({ data, viewOnlineUrl }: QuotePdfTemplateProps) {
+function QuoteContent({ data }: QuotePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const { order } = data;
 
@@ -507,14 +503,6 @@ function QuoteContent({ data, viewOnlineUrl }: QuotePdfTemplateProps) {
           </View>
         </View>
 
-        {viewOnlineUrl && (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg }}>
-            <ExternalLinkIcon size={10} color={colors.status.info} />
-            <Link src={viewOnlineUrl} style={{ fontSize: fontSize.sm, color: colors.status.info }}>
-              <Text>View online</Text>
-            </Link>
-          </View>
-        )}
       </View>
 
       <PageNumber documentNumber={data.documentNumber} />
@@ -529,8 +517,6 @@ function QuoteContent({ data, viewOnlineUrl }: QuotePdfTemplateProps) {
 export function QuotePdfDocument({
   organization,
   data,
-  qrCodeDataUrl,
-  viewOnlineUrl,
 }: QuotePdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -542,7 +528,7 @@ export function QuotePdfDocument({
         language="en-AU"
         keywords={`quote, ${data.documentNumber}, ${data.order.customer.name}`}
       >
-        <QuoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} viewOnlineUrl={viewOnlineUrl} />
+        <QuoteContent data={data} />
       </Document>
     </OrgDocumentProvider>
   );

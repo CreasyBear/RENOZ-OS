@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import { nitro } from 'nitro/vite'
 import { fileURLToPath, URL } from 'node:url'
+import arraybuffer from 'vite-plugin-arraybuffer'
 
 const VIRTUAL_ID = '\0tanstack-start-injected-head-scripts:v'
 const REACT_DOM_SERVER_NODE_SHIM = fileURLToPath(
@@ -174,6 +175,7 @@ export default defineConfig({
   server: { port: 3000 },
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   plugins: [
+    arraybuffer(),
     reactDomServerRuntimeShim(),
     serverOnlyModulesStub(),
     tanstackStart({

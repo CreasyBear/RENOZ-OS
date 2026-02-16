@@ -17,9 +17,8 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { orders, customers, orderLineItems, addresses } from 'drizzle/schema';
 import { NotFoundError } from '@/lib/server/errors';
-import { renderPdfToBuffer, generateQRCode } from '@/lib/documents';
+import { renderPdfToBuffer } from '@/lib/documents';
 import { fetchOrganizationForDocument } from './organization-for-pdf';
-import { buildDocumentViewUrl } from '@/lib/documents/urls';
 import { buildDocumentOrderFromPreviewData } from '@/lib/documents/builders';
 import { renderPreviewDocument } from '@/lib/documents/preview-renderers';
 
@@ -435,14 +434,6 @@ export const previewDocument = createServerFn({ method: 'POST' })
     const validUntil = new Date(documentData.order.validUntil);
     const baseLineItems = baseOrder.lineItems;
 
-    // Build view URL only when we have real entity data (not sample)
-    const viewUrl = !useSampleData && 'entityType' in data && 'entityId' in data
-      ? buildDocumentViewUrl(data.entityType, data.entityId, documentType)
-      : undefined;
-    const qrCodeDataUrl = viewUrl
-      ? await generateQRCode(viewUrl, { width: 240, margin: 0, errorCorrectionLevel: 'M' })
-      : undefined;
-
     const pdfElement = renderPreviewDocument({
       documentType,
       documentData,
@@ -452,8 +443,6 @@ export const previewDocument = createServerFn({ method: 'POST' })
       orderDate,
       dueDate,
       validUntil,
-      qrCodeDataUrl,
-      viewUrl,
     });
 
     const { buffer } = await renderPdfToBuffer(pdfElement);

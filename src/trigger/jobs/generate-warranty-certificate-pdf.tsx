@@ -21,7 +21,6 @@ import {
 import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
-  generateQRCode,
   WarrantyCertificatePdfDocument,
   generateFilename,
   generateStoragePath,
@@ -50,7 +49,6 @@ export interface GenerateWarrantyCertificatePdfPayload {
 
 const STORAGE_BUCKET = "documents";
 
-import { buildDocumentViewUrl } from "@/lib/documents/urls";
 
 /**
  * Calculate warranty duration from dates
@@ -192,15 +190,7 @@ export const generateWarrantyCertificatePdf = task({
     // Step 4: Fetch organization details (with logo pre-fetched for PDF)
     const orgData = await fetchOrganizationForDocument(organizationId);
 
-    // Step 5: Generate QR code for verification
-    const warrantyUrl = buildDocumentViewUrl("warranty", warrantyId);
-    const qrCodeDataUrl = await generateQRCode(warrantyUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: "M",
-    });
-
-    // Step 6: Build certificate data and render PDF
+    // Step 5: Build certificate data and render PDF
     const registrationDate = new Date(warranty.registrationDate);
     const expiryDate = new Date(warranty.expiryDate);
 
@@ -254,7 +244,6 @@ export const generateWarrantyCertificatePdf = task({
       <WarrantyCertificatePdfDocument
         organization={orgData}
         data={certificateData}
-        qrCodeDataUrl={qrCodeDataUrl}
       />
     );
 

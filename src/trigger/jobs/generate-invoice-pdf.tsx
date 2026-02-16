@@ -21,7 +21,6 @@ import {
 import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
 import {
   renderPdfToBuffer,
-  generateQRCode,
   InvoicePdfDocument,
   generateFilename,
   generateStoragePath,
@@ -29,7 +28,6 @@ import {
   type InvoiceDocumentData,
   type DocumentPaymentDetails,
 } from "@/lib/documents";
-import { buildInvoicePaymentUrl } from "@/lib/documents/urls";
 
 // ============================================================================
 // TYPES
@@ -245,15 +243,7 @@ export const generateInvoicePdf = task({
         : undefined,
     };
 
-    // Step 4: Generate QR code for payment
-    const paymentUrl = buildInvoicePaymentUrl(orderId);
-    const qrCodeDataUrl = await generateQRCode(paymentUrl, {
-      width: 240,
-      margin: 0,
-      errorCorrectionLevel: "M",
-    });
-
-    // Step 5: Build document data and render PDF
+    // Step 4: Build document data and render PDF
     // Calculate issue date and due date
     const orderDate = orderData.orderDate
       ? new Date(orderData.orderDate)
@@ -353,7 +343,6 @@ export const generateInvoicePdf = task({
       <InvoicePdfDocument
         organization={orgData}
         data={invoiceData}
-        qrCodeDataUrl={qrCodeDataUrl}
       />
     );
 
