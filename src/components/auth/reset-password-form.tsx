@@ -36,9 +36,10 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
     },
   });
 
+  const password = form.useWatch('password');
   const passwordStrength = useMemo(
-    () => getPasswordStrength(form.useWatch('password') ?? ''),
-    [form]
+    () => getPasswordStrength(password ?? ''),
+    [password]
   );
 
   const handleSubmit = (e: React.FormEvent) => {
