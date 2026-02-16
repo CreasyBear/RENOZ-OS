@@ -39,6 +39,7 @@ export function AcceptInvitationInvalidView({ errorMessage }: AcceptInvitationIn
             </Link>
             <Link
               to="/"
+              search={{ code: undefined }}
               className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}
             >
               <Mail className="mr-2 h-4 w-4" />

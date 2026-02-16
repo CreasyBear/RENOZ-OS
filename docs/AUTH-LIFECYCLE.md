@@ -193,14 +193,14 @@ Supabase invite email --> User clicks link --> Supabase verify
 
 | Route | Server `beforeLoad` | Client `beforeLoad` | Notes |
 |-------|--------------------|--------------------|-------|
-| `/` (index) | No redirect | `getAuthContext()` --> dashboard | Avoids SSR redirect loops |
-| `/login` | No redirect | `getUser()` bounce if authenticated | Fast; full check is in `runLogin` |
+| `/` (index) | No redirect | `?code=` → /update-password; else `getAuthContext()` → dashboard | `?code=` redirect client-only (307 loop prevention) |
+| `/login` | No redirect | `getUser()` bounce if authenticated | `ssr: false` |
 | `/_authenticated/*` | `getUser()` gate | `getAuthContext()` full check | Intentional asymmetry (see above) |
 | `/auth/confirm` | `verifyOtp` + `completeSignup` | N/A (server loader) | |
-| `/update-password` | None | `exchangeCodeForSession(code)` + `useExchangeHashForSession` | PKCE code or implicit hash; user updates password |
+| `/update-password` | N/A (`ssr: false`) | `exchangeCodeForSession(code)` + `useExchangeHashForSession` | Auth callback route; client-only |
 | `/forgot-password` | None | None | Public page |
-| `/sign-up` | None | None | Public page |
-| `/accept-invitation` | Token validation | None | |
+| `/sign-up` | None | None | `ssr: false` |
+| `/accept-invitation` | N/A (`ssr: false`) | Token validation, useExchangeHashForSession | Auth callback route; client-only |
 | `/logout` | None | `signOut` | Standalone logout |
 
 ---
@@ -227,6 +227,16 @@ When `getAuthContext` fails, it redirects to `/login` with a `reason` param:
 - `route-policy.ts` defines `DISALLOW_REDIRECT_PATHS` -- login, sign-up, forgot-password, etc. are never set as `redirect=` targets
 - Server-side `beforeLoad` on `/` and `/login` never issues redirects (prevents SSR normalization loops)
 - `getAuthContext` signs out before redirecting on terminal errors (breaks auth/users table mismatch loops)
+
+### Auth Callback Redirect Pattern (307 Loop Prevention)
+
+When Supabase redirects after verify (password reset, signup, invite), the user may land on `/?code=` or `/update-password?code=` or `/accept-invitation?token=...#hash`. SSR path normalization can make `/update-password` requests appear as `/` to the router, causing the index route to run and redirect to `/update-password` → 307 loop.
+
+**Rules:**
+1. **Index `/?code=` redirect**: Client-only (`typeof window !== 'undefined'`). Never redirect on server.
+2. **Auth callback routes** (`/update-password`, `/accept-invitation`): Use `ssr: false` so beforeLoad and component never run on server. Client has correct URL; avoids path normalization issues.
+3. **Login**: Already `ssr: false`; beforeLoad returns early on server.
+4. **getAppUrl()**: Strip trailing slash so `redirectTo` matches Supabase allow list (avoids fallback to Site URL).
 
 ---
 

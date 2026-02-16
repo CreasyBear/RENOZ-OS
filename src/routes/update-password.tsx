@@ -6,6 +6,7 @@ import { ResetPasswordForm } from '@/components/auth/reset-password-form';
 import { useExchangeHashForSession } from '@/lib/auth/use-exchange-hash-for-session';
 
 export const Route = createFileRoute('/update-password')({
+  ssr: false, // Auth callback route: avoid 307 loops from SSR path normalization
   validateSearch: (search: Record<string, unknown>) => ({
     code: typeof search.code === 'string' ? search.code : undefined,
   }),

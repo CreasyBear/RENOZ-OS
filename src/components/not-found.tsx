@@ -17,6 +17,7 @@ export function NotFound() {
         <div className="flex gap-3 justify-center">
           <Link
             to="/"
+            search={{ code: undefined }}
             className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             Go Home

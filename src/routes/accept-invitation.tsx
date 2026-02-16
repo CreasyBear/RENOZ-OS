@@ -34,6 +34,7 @@ const acceptInvitationSearchSchema = z.object({
 });
 
 export const Route = createFileRoute('/accept-invitation')({
+  ssr: false, // Auth callback route: avoid 307 loops from SSR path normalization
   validateSearch: acceptInvitationSearchSchema,
   component: AcceptInvitationPage,
 });

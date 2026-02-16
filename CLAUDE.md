@@ -37,6 +37,8 @@ npm run test:vitest      # Vitest run mode
 npm run predeploy
 ```
 
+**Deployment**: Run `npm run predeploy` before pushing to catch typecheck/lint/test/build failures locally and avoid wasted CI build time.
+
 ## React Grab (UI to Code)
 
 React Grab is installed for local dev and is loaded only in `import.meta.env.DEV`.
@@ -295,6 +297,7 @@ Key commands:
 
 ## Corrections Log
 
+- **Predeploy before push**: To minimize build time, run `npm run predeploy` before committing/pushing. This catches typecheck, lint, test, and build failures locally so CI does not waste time on broken builds.
 - When a user selection list is empty, provide an "Invite user" action that links to `/admin/users/invite`.
 - Financial amounts are stored in AUD dollars (numeric 12,2); do not treat them as cents or scale payment/Xero values.
 - **No temporary shortcuts**: Always implement the proper solution. Eliminate technical debt immediately rather than deferring it. Never create TODO comments or temporary workarounds that will need to be fixed later.

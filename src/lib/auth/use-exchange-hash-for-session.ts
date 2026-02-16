@@ -88,7 +88,9 @@ export function useExchangeHashForSession(): { authError: AuthHashError | null }
         description: parsed.description,
       });
       clearHashFromUrl();
-      setAuthError({ code: parsed.code, description: parsed.description });
+      setTimeout(() => {
+        setAuthError({ code: parsed.code, description: parsed.description });
+      }, 0);
       return;
     }
 

@@ -102,6 +102,40 @@ describe('root index route server redirect behavior', () => {
     }
   });
 
+  it('does not redirect for ?code= on server (avoids 307 loop when path normalized)', async () => {
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+
+    try {
+      mockGetRequest.mockReturnValue(new Request('http://localhost:3000/?code=abc123'));
+      const { Route } = await import('@/routes/index');
+      const beforeLoad = Route.options.beforeLoad;
+
+      if (!beforeLoad) {
+        throw new Error('Expected index route to define beforeLoad');
+      }
+
+      // Server must NOT redirect ?code= to /update-password - causes 307 loop when
+      // SSR path normalization makes /update-password requests look like /
+      await expect(
+        beforeLoad({
+          location: { pathname: '/' },
+          search: { code: 'abc123' },
+        } as never)
+      ).resolves.toBeUndefined();
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        value: originalWindow,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
   it('does not redirect unauthenticated "/" request on server', async () => {
     const originalWindow = globalThis.window;
     Object.defineProperty(globalThis, 'window', {

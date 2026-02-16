@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm';
 import { AuthError, ValidationError } from '@/lib/server/errors';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
 import { sanitizeInternalRedirect } from '@/lib/auth/redirects';
-import { toAuthErrorCode } from '@/lib/auth/error-codes';
+import { authErrorMessage, toAuthErrorCode } from '@/lib/auth/error-codes';
 import { authLogger } from '@/lib/logger';
 
 // ============================================================================
@@ -111,7 +111,10 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
     const request = getRequest();
 
     if (!request) {
-      throw redirect({ to: `/auth/error`, search: { error: 'invalid_request' } });
+      throw redirect({
+        to: `/auth/error`,
+        search: { error: 'invalid_request', error_description: authErrorMessage('invalid_request') },
+      });
     }
 
     const searchParams = data;
@@ -150,22 +153,26 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
           authLogger.error('Signup completion error', signupError);
           throw redirect({
             to: `/auth/error`,
-            search: { error: 'account_creation_failed' },
+            search: {
+              error: 'account_creation_failed',
+              error_description: authErrorMessage('account_creation_failed'),
+            },
           });
         }
 
         // Redirect to specified URL or root
         throw redirect({ href: next });
       } else {
+        const code = toAuthErrorCode(error?.message);
         throw redirect({
           to: `/auth/error`,
-          search: { error: toAuthErrorCode(error?.message) },
+          search: { error: code, error_description: authErrorMessage(code) },
         });
       }
     }
 
     throw redirect({
       to: `/auth/error`,
-      search: { error: 'invalid_request' },
+      search: { error: 'invalid_request', error_description: authErrorMessage('invalid_request') },
     });
   });

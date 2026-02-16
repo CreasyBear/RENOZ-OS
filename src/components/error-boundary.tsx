@@ -52,7 +52,7 @@ export function RootErrorBoundary({ error }: RootErrorBoundaryProps) {
             Try Again
           </button>
           <button
-            onClick={() => router.navigate({ to: '/' })}
+            onClick={() => router.navigate({ to: '/', search: { code: undefined } })}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Go Home

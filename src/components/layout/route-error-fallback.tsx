@@ -86,6 +86,7 @@ export function RouteErrorFallback({
             </Link>
             <Link
               to="/"
+              search={{ code: undefined }}
               className={cn(buttonVariants({ variant: 'ghost' }))}
             >
               <Home className="mr-2 h-4 w-4" />

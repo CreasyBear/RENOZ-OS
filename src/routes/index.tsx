@@ -20,7 +20,8 @@ export const Route = createFileRoute('/')({
   }),
   beforeLoad: async ({ location, search }) => {
     // Defensive: Supabase may redirect to /?code= when redirectTo doesn't match allow list.
-    if (search.code) {
+    // Client-only: avoid 307 loop when SSR path normalization makes /update-password look like /.
+    if (typeof window !== 'undefined' && search.code) {
       throw redirect({ to: '/update-password', search: { code: search.code }, replace: true })
     }
 

@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
 import { sanitizeInternalRedirect } from '@/lib/auth/redirects';
-import { toAuthErrorCode } from '@/lib/auth/error-codes';
+import { authErrorMessage, toAuthErrorCode } from '@/lib/auth/error-codes';
 
 const confirmPortalFn = createServerFn({ method: 'GET' })
   .inputValidator((searchParams: unknown) => {
@@ -21,7 +21,10 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
 
     const request = getRequest();
     if (!request) {
-      throw redirect({ to: `/auth/error`, search: { error: 'invalid_request' } });
+      throw redirect({
+        to: `/auth/error`,
+        search: { error: 'invalid_request', error_description: authErrorMessage('invalid_request') },
+      });
     }
 
     const searchParams = ctx.data;
@@ -44,15 +47,16 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
         throw redirect({ href: next });
       }
 
+      const code = toAuthErrorCode(error?.message);
       throw redirect({
         to: `/auth/error`,
-        search: { error: toAuthErrorCode(error?.message) },
+        search: { error: code, error_description: authErrorMessage(code) },
       });
     }
 
     throw redirect({
       to: `/auth/error`,
-      search: { error: 'invalid_request' },
+      search: { error: 'invalid_request', error_description: authErrorMessage('invalid_request') },
     });
   });
 
