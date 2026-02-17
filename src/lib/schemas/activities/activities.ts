@@ -367,11 +367,22 @@ export type ActivityParams = z.infer<typeof activityParamsSchema>;
 export const entityActivitiesQuerySchema = z.object({
   entityType: activityEntityTypeSchema,
   entityId: z.string().uuid(),
+  /** When entityType is 'order', include customer activities for this customer (Quick Log, etc.) */
+  relatedCustomerId: z.string().uuid().optional(),
   cursor: z.string().optional(),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type EntityActivitiesQuery = z.infer<typeof entityActivitiesQuerySchema>;
+
+/**
+ * Hook options for useUnifiedActivities.
+ * Extends entity activities query params with client-side enabled flag.
+ */
+export interface UseUnifiedActivitiesOptions
+  extends Pick<EntityActivitiesQuery, 'entityType' | 'entityId' | 'relatedCustomerId' | 'pageSize'> {
+  enabled?: boolean;
+}
 
 // ============================================================================
 // USER ACTIVITIES QUERY

@@ -51,9 +51,6 @@ export {
   type OrderFiltersState,
 } from './order-filter-config';
 
-// --- Detail (Legacy - to be deprecated) ---
-export { OrderDetail, type OrderDetailProps } from './order-detail';
-
 // --- Detail View (Container/Presenter Pattern) ---
 export {
   OrderDetailContainer,

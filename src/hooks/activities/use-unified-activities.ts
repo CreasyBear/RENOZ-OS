@@ -14,18 +14,11 @@ import { getEntityActivities } from '@/server/functions/activities/activities';
 import { getCustomerActivities } from '@/server/customers';
 import { getCustomerEmailActivities } from '@/server/functions/communications/customer-communications';
 import { queryKeys } from '@/lib/query-keys';
-import { isActivityEntityType } from '@/lib/schemas/activities';
+import { isActivityEntityType, type UseUnifiedActivitiesOptions } from '@/lib/schemas/activities';
 
 // ============================================================================
 // HOOK
 // ============================================================================
-
-export interface UseUnifiedActivitiesOptions {
-  entityType: string;
-  entityId: string;
-  enabled?: boolean;
-  pageSize?: number;
-}
 
 /**
  * Hook to fetch unified activities for an entity.
@@ -34,6 +27,7 @@ export interface UseUnifiedActivitiesOptions {
 export function useUnifiedActivities({
   entityType,
   entityId,
+  relatedCustomerId,
   enabled = true,
   pageSize = 50,
 }: UseUnifiedActivitiesOptions) {
@@ -42,8 +36,12 @@ export function useUnifiedActivities({
     data: auditData,
     isLoading: isLoadingAudit,
     error: auditError,
-  } = useQuery({
-    queryKey: queryKeys.unifiedActivities.entityAudit(entityType, entityId),
+  } =   useQuery({
+    queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+      entityType,
+      entityId,
+      relatedCustomerId ?? null
+    ),
     queryFn: async () => {
       // Validate entityType before use
       if (!isActivityEntityType(entityType)) {
@@ -54,6 +52,7 @@ export function useUnifiedActivities({
         data: {
           entityType,
           entityId,
+          relatedCustomerId,
           pageSize,
         },
       });
@@ -129,7 +128,11 @@ export function useUnifiedActivities({
 // ============================================================================
 
 export function useMockUnifiedActivities(
-  options: UseUnifiedActivitiesOptions & { mockData?: UnifiedActivity[] } = { entityType: '', entityId: '' }
+  options: UseUnifiedActivitiesOptions & { mockData?: UnifiedActivity[] } = {
+    entityType: 'customer',
+    entityId: '00000000-0000-0000-0000-000000000000',
+    pageSize: 50,
+  }
 ) {
   if (!import.meta.env.DEV) {
     throw new Error('useMockUnifiedActivities is only available in development');

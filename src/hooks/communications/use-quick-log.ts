@@ -47,6 +47,10 @@ export function useCreateQuickLog() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.communications.customerCommunications(variables.customerId),
         });
+        // Invalidate order tabs (they show customer activities via relatedCustomerId)
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.unifiedActivities.entityPrefix('order'),
+        });
       }
 
       // Invalidate opportunity-specific activities if opportunityId provided

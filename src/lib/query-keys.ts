@@ -1567,8 +1567,20 @@ export const queryKeys = {
     all: ['unifiedActivities'] as const,
     entity: (entityType: string, entityId: string) =>
       [...queryKeys.unifiedActivities.all, entityType, entityId] as const,
+    /** Prefix for invalidating all queries of an entity type (e.g. all order tabs) */
+    entityPrefix: (entityType: string) =>
+      [...queryKeys.unifiedActivities.all, entityType] as const,
     entityAudit: (entityType: string, entityId: string) =>
       [...queryKeys.unifiedActivities.entity(entityType, entityId), 'audit'] as const,
+    entityAuditWithRelated: (
+      entityType: string,
+      entityId: string,
+      relatedCustomerId?: string | null
+    ) =>
+      [
+        ...queryKeys.unifiedActivities.entityAudit(entityType, entityId),
+        relatedCustomerId ?? null,
+      ] as const,
     entityPlanned: (entityType: string, entityId: string) =>
       [...queryKeys.unifiedActivities.entity(entityType, entityId), 'planned'] as const,
     entityEmails: (customerId: string) =>
