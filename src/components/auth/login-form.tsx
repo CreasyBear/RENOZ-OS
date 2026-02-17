@@ -20,6 +20,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
   const safeRedirect = getPostLoginTarget(redirect);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || 'support@renoz.energy';
+
   React.useEffect(() => {
     if (reason === 'invalid_user') {
       setAuthError('Your account is not fully set up. Please contact support.');
@@ -162,6 +164,17 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                 {authError && (
                   <p className="text-sm text-destructive" role="alert">
                     {authError}
+                    {reason === 'invalid_user' && (
+                      <>
+                        {' '}
+                        <a
+                          href={`mailto:${supportEmail}?subject=Account setup incomplete`}
+                          className="font-medium underline underline-offset-2 hover:no-underline"
+                        >
+                          Contact support
+                        </a>
+                      </>
+                    )}
                   </p>
                 )}
               </div>

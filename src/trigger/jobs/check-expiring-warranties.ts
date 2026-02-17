@@ -15,6 +15,7 @@ import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { warranties, warrantyPolicies, customers, notifications } from 'drizzle/schema';
 import { client, warrantyEvents, type WarrantyExpiringSoonPayload } from '../client';
+import { getAppUrl } from '@/lib/server/app-url';
 
 // ============================================================================
 // CONFIGURATION
@@ -25,12 +26,6 @@ import { client, warrantyEvents, type WarrantyExpiringSoonPayload } from '../cli
  * Customers receive alerts at these thresholds before warranty expiry.
  */
 const DEFAULT_ALERT_INTERVALS = [90, 60, 30] as const;
-
-/**
- * Base URL for generating renewal/extension links
- * In production, this would come from environment variables
- */
-const APP_BASE_URL = process.env.APP_BASE_URL || 'https://app.renoz.energy';
 
 // ============================================================================
 // HELPER TYPES
@@ -83,7 +78,7 @@ function getAlertInterval(
  * Generate renewal URL for battery warranties
  */
 function getRenewalUrl(warrantyId: string): string {
-  return `${APP_BASE_URL}/support/warranties/${warrantyId}?action=extend`;
+  return `${getAppUrl()}/support/warranties/${warrantyId}?action=extend`;
 }
 
 /**

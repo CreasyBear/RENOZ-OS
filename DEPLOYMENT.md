@@ -102,13 +102,24 @@ Use the Supabase connection pooler URL for serverless (recommended for Vercel).
 
 ## Supabase Redirect URLs
 
-For auth (OAuth, magic links, password reset) to work in production:
+For auth (OAuth, magic links, password reset, invitations) to work in production:
 
 1. Supabase Dashboard → Authentication → URL Configuration
-2. Set **Site URL** to your production URL (e.g. `https://your-app.vercel.app`)
-3. Add **Redirect URLs**:
-   - `https://your-app.vercel.app/**`
-   - `https://*-your-team.vercel.app/**` (for preview deployments)
+2. Set **Site URL** to your production URL (e.g. `https://your-app.vercel.app`) — no trailing slash
+3. Add **Redirect URLs** (must include all callback paths used by the app):
+
+| Path | Used by |
+|------|---------|
+| `https://your-app.vercel.app/` | Root fallback when Supabase redirects with `?code=` |
+| `https://your-app.vercel.app/update-password` | Password reset (PKCE flow) |
+| `https://your-app.vercel.app/accept-invitation` | Invitation acceptance (query params added by app) |
+| `https://your-app.vercel.app/auth/error` | Auth error page (error params added by app) |
+
+**Recommended pattern** (covers all paths and query params):
+- `https://your-app.vercel.app/**`
+- `https://*-your-team.vercel.app/**` (for Vercel preview deployments)
+
+**Verification**: After deploy, test: forgot password → email link → update password. If you land on `/` with `?code=`, the root redirect to `/update-password` is a fallback; prefer adding `/update-password` explicitly to Supabase Redirect URLs.
 
 ---
 

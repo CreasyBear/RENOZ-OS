@@ -39,6 +39,21 @@ function getRedisClient(): Redis | null {
 const redis = getRedisClient();
 const inMemoryFallback = new Map<string, { count: number; windowStart: number }>();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+/**
+ * In production, Redis is required for rate limiting. When Redis is unavailable,
+ * fail closed (reject) instead of allowing requests.
+ */
+function requireRedisForAuthRateLimit(): void {
+  if (isProduction && !redis) {
+    throw new RateLimitError(
+      'Rate limiting is temporarily unavailable. Please try again later.',
+      60
+    );
+  }
+}
+
 // ============================================================================
 // RATE LIMITERS
 // ============================================================================
@@ -179,6 +194,7 @@ export interface RateLimitResult {
 export async function checkLoginRateLimit(
   identifier: string
 ): Promise<RateLimitResult> {
+  requireRedisForAuthRateLimit();
   if (!loginRateLimiter) {
     return applyInMemoryFallbackLimit('login', identifier, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
   }
@@ -222,6 +238,7 @@ export async function resetLoginRateLimit(identifier: string): Promise<void> {
 export async function checkApiRateLimit(
   tokenId: string
 ): Promise<RateLimitResult> {
+  requireRedisForAuthRateLimit();
   if (!apiRateLimiter) {
     return { success: true, remaining: 999, reset: 0 };
   }
@@ -249,6 +266,7 @@ export async function checkApiRateLimit(
 export async function checkPasswordResetRateLimit(
   email: string
 ): Promise<RateLimitResult> {
+  requireRedisForAuthRateLimit();
   if (!passwordResetRateLimiter) {
     return { success: true, remaining: 999, reset: 0 };
   }
@@ -277,6 +295,7 @@ export async function checkPasswordResetRateLimit(
 export async function checkResendConfirmationRateLimit(
   email: string
 ): Promise<RateLimitResult> {
+  requireRedisForAuthRateLimit();
   if (!resendConfirmationRateLimiter) {
     return { success: true, remaining: 999, reset: 0 };
   }
@@ -303,6 +322,7 @@ export async function checkResendConfirmationRateLimit(
  * @throws RateLimitError if limit exceeded
  */
 export async function checkCsatFeedbackRateLimit(token: string): Promise<void> {
+  requireRedisForAuthRateLimit();
   if (!csatFeedbackRateLimiter) {
     applyInMemoryFallbackLimit(
       'csat-feedback',

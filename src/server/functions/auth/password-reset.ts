@@ -1,12 +1,9 @@
 'use server'
 
 import { createServerFn } from '@tanstack/react-start';
-import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { createServerSupabase } from '@/lib/supabase/server';
 import { checkPasswordResetRateLimit, RateLimitError } from '@/lib/auth/rate-limit';
 import { authLogger } from '@/lib/logger';
-import { getAppUrl } from '@/lib/server/app-url';
 
 const passwordResetInputSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -18,32 +15,19 @@ export interface PasswordResetResult {
   retryAfter?: number;
 }
 
-// Server-side password reset with rate limiting
-export const requestPasswordReset = createServerFn({ method: 'POST' })
+/**
+ * Check if password reset is allowed (rate limit only).
+ * Returns { allowed: true } if OK. Client must then call supabase.auth.resetPasswordForEmail
+ * from the browser so PKCE code verifier is stored for exchangeCodeForSession.
+ */
+export const checkPasswordResetAllowed = createServerFn({ method: 'POST' })
   .inputValidator(passwordResetInputSchema)
   .handler(async ({ data }): Promise<PasswordResetResult> => {
     const email = data.email.toLowerCase();
 
     try {
-      // Check rate limit
       await checkPasswordResetRateLimit(email);
-
-      // Send password reset email
-      const request = getRequest();
-      const supabase = createServerSupabase(request);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${getAppUrl()}/update-password`,
-      });
-
-      if (error) {
-        authLogger.error('[requestPasswordReset] Error', new Error(error.message), {});
-        // Don't reveal if email exists or not
-      }
-
-      // Always return success to prevent email enumeration
-      return {
-        success: true,
-      };
+      return { success: true };
     } catch (err) {
       if (err instanceof RateLimitError) {
         return {
@@ -52,8 +36,7 @@ export const requestPasswordReset = createServerFn({ method: 'POST' })
           retryAfter: err.retryAfter,
         };
       }
-
-      authLogger.error('[requestPasswordReset] Unexpected error', err as Error, {});
+      authLogger.error('[checkPasswordResetAllowed] Unexpected error', err as Error, {});
       return {
         success: false,
         error: 'An unexpected error occurred. Please try again.',

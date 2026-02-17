@@ -35,6 +35,7 @@ import {
   type GenerateFeedbackTokenResponse,
 } from '@/lib/schemas/support/csat-responses';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { getAppUrl } from '@/lib/server/app-url';
 import { customersLogger } from '@/lib/logger';
 
 // ============================================================================
@@ -576,9 +577,7 @@ export const generateFeedbackToken = createServerFn({ method: 'POST' })
       updatedBy: ctx.user.id,
     });
 
-    // Build feedback URL (will be configured per environment)
-    const baseUrl = process.env.PUBLIC_URL || 'https://app.renoz.com.au';
-    const feedbackUrl = `${baseUrl}/feedback/${token}`;
+    const feedbackUrl = `${getAppUrl()}/feedback/${token}`;
 
     return {
       token,

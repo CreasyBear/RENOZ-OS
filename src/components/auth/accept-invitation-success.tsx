@@ -35,10 +35,22 @@ export function AcceptInvitationSuccessView({ redirectTarget }: AcceptInvitation
       action={
         <div className="space-y-2">
           {redirectTarget === 'dashboard' ? (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Redirecting...
-            </div>
+            <>
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Redirecting...
+              </div>
+              <p className="text-center text-xs text-muted-foreground">
+                Not redirecting?{' '}
+                <Link
+                  to="/login"
+                  search={{ redirect: undefined }}
+                  className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                >
+                  Sign in now
+                </Link>
+              </p>
+            </>
           ) : (
             <Link to="/login" search={{ redirect: undefined }} className={cn(buttonVariants(), 'w-full')}>
               Sign in now

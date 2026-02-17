@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
 import { AuthLayout } from '@/components/auth/auth-layout';
@@ -12,11 +12,29 @@ export const Route = createFileRoute('/update-password')({
   }),
   beforeLoad: async ({ search }) => {
     if (typeof window === 'undefined') return;
-    if (!search.code) return;
-
-    const { supabase } = await import('@/lib/supabase/client');
-    // PKCE flow: exchange code for session. Server-initiated reset uses implicit (hash).
-    await supabase.auth.exchangeCodeForSession(search.code).catch(() => undefined);
+    if (search.code) {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { error } = await supabase.auth.exchangeCodeForSession(search.code);
+      if (error) {
+        throw redirect({
+          to: '/auth/error',
+          search: {
+            error: 'invalid_request',
+            error_description:
+              'This reset link is invalid or expired. Please request a new one from the forgot password page.',
+          },
+        });
+      }
+      return;
+    }
+    // No code: implicit flow uses hash. If no auth params in hash, send to forgot-password.
+    const hash = window.location.hash;
+    const hasAuthParams =
+      hash &&
+      (hash.includes('access_token') || hash.includes('refresh_token') || hash.includes('error='));
+    if (!hasAuthParams) {
+      throw redirect({ to: '/forgot-password' });
+    }
   },
   component: UpdatePassword,
 });

@@ -148,6 +148,16 @@ async function ensureAuthStateListener() {
   listenerRegistered = true
 }
 
+/**
+ * Bootstrap auth state listener at app root.
+ * Call once when the app mounts (e.g. in __root.tsx) so the listener
+ * runs before any route's getAuthContext, reducing stale token issues.
+ */
+export function bootstrapAuthListener(): void {
+  if (typeof window === 'undefined') return
+  void ensureAuthStateListener()
+}
+
 async function resolveAuthContext(location?: RouteLocation): Promise<AuthRouteContext> {
   const { supabase } = await import('@/lib/supabase/client')
   const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine

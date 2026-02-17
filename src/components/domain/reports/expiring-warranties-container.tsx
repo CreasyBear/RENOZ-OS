@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
+import { toast } from '@/lib/toast';
 import {
   useExpiringWarrantiesReport,
   useExpiringWarrantiesFilterOptions,
@@ -158,7 +159,9 @@ export function ExpiringWarrantiesReportContainer({
         .then((result) => {
           window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
         })
-        .catch(() => {});
+        .catch(() => {
+          toast.error('Failed to generate report. Please try again.');
+        });
     },
     [data, search.range, generateReport]
   );

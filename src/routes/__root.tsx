@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import { RootErrorBoundary } from '../components/error-boundary'
 import { NotFound } from '../components/not-found'
 import { ToastProvider } from '../components/providers'
+import { bootstrapAuthListener } from '../lib/auth/route-auth'
 import { initWebVitals } from '../lib/performance/web-vitals'
 import '../styles.css'
 
@@ -55,6 +56,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  // Bootstrap auth listener before any route runs (reduces stale token issues)
+  useEffect(() => {
+    bootstrapAuthListener();
+  }, []);
+
   // Initialize Web Vitals monitoring
   useEffect(() => {
     initWebVitals();

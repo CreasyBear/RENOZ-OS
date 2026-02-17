@@ -23,6 +23,7 @@ import { orders, customers, organizations, emailHistory, type NewEmailHistory } 
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { getAppUrl } from '@/lib/server/app-url';
 import { idParamSchema } from '@/lib/schemas/_shared/patterns';
 import { Resend } from 'resend';
 import { render } from '@react-email/render';
@@ -120,7 +121,7 @@ export const sendInvoiceReminder = createServerFn({ method: 'POST' })
     const orgName = org?.name || 'Renoz';
 
     // Generate email content
-    const invoiceUrl = `${process.env.PUBLIC_APP_URL || 'https://app.renoz.energy'}/invoices/${invoiceId}`;
+    const invoiceUrl = `${getAppUrl()}/invoices/${invoiceId}`;
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@renoz.energy';
     const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev';
     const fromName = process.env.EMAIL_FROM_NAME || orgName;

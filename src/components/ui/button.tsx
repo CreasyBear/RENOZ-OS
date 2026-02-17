@@ -53,7 +53,13 @@ function Button({
     /** Show loading spinner and disable button */
     loading?: boolean
   }) {
-  const Comp = asChild ? Slot : "button"
+  const childCount = React.Children.count(children)
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const useSlot = asChild && isSingleElement
+  const Comp = useSlot ? Slot : "button"
   const isDisabled = disabled || loading
 
   // When asChild is true, we can't add the Loader2 as a sibling because
