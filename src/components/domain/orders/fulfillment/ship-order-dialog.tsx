@@ -357,15 +357,12 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         const carrierLabel =
           CARRIERS.find((c) => c.value === values.carrier)?.label ?? values.carrier;
 
-        // Ship-and-continue: init effect re-syncs from orderData on refetch.
-        // Custom address for first shipment would be overwritten. Split-address not supported.
+        // Always close and show toast on success.
         if (remainingUnfulfilled > 0) {
-          setInitialized(false);
-          setStep("form");
           toastSuccess(
             values.shipNow ? "Shipment shipped" : "Shipment created (pending)",
             {
-              description: `${totalShipped} unit${totalShipped !== 1 ? "s" : ""} ${values.shipNow ? "shipped" : "created"}. ${remainingUnfulfilled} unit${remainingUnfulfilled !== 1 ? "s" : ""} remaining — adjust and ship again.`,
+              description: `${totalShipped} unit${totalShipped !== 1 ? "s" : ""} ${values.shipNow ? "shipped" : "created"}. ${remainingUnfulfilled} unit${remainingUnfulfilled !== 1 ? "s" : ""} remaining — reopen to ship again.`,
             }
           );
         } else {
@@ -378,9 +375,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               description: `${totalShipped} unit${totalShipped !== 1 ? "s" : ""} ready to ship. Mark as shipped from the Fulfillment tab.`,
             });
           }
-          handleOpenChange(false);
-          onSuccess?.();
         }
+        handleOpenChange(false);
+        onSuccess?.();
       } catch (error) {
         // Server ValidationError.errors keys are orderLineItemId (order-shipments.ts).
         // Values are string[]; we use messages[0] per line item.

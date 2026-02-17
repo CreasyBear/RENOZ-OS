@@ -10,8 +10,10 @@
 
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
+import { format } from 'date-fns';
 import { PackageCheck, Truck, Info } from 'lucide-react';
 import { ShipmentList } from '../fulfillment/shipment-list';
+import { OrderLineItemSerialsCell } from '../components/order-line-item-serials-cell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +31,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useUserLookup } from '@/hooks/users';
 import type { OrderWithCustomer } from '@/hooks/orders/use-order-detail';
 
 // ============================================================================
@@ -202,6 +205,10 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
   orderStatus,
   fulfillmentActions,
 }: OrderFulfillmentTabProps) {
+  const { getUser } = useUserLookup({
+    enabled: lineItems.some((i) => i.pickedBy),
+  });
+
   if (!lineItems?.length) {
     return (
       <div className="pt-6">
@@ -211,6 +218,7 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
   }
 
   return (
+    <TooltipProvider>
     <div className="pt-6">
       <FulfillmentActionBar
         orderStatus={orderStatus}
@@ -235,7 +243,21 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
           {lineItems.map((item) => {
             const pickStatus = item.pickStatus || 'not_picked';
             const pickConfig = PICK_STATUS_CONFIG[pickStatus] || PICK_STATUS_CONFIG.not_picked;
-            const serials = (item.allocatedSerialNumbers as string[] | null) ?? [];
+            const hasPickedInfo = item.pickedAt || item.pickedBy;
+            const pickedTooltipContent = hasPickedInfo
+              ? [
+                  item.pickedAt && `Picked on ${format(new Date(item.pickedAt), 'PPp')}`,
+                  item.pickedBy && `by ${getUser(item.pickedBy)?.name ?? 'Unknown'}`,
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              : null;
+
+            const statusBadge = (
+              <Badge className={cn('text-[10px]', pickConfig.color)}>
+                {pickConfig.label}
+              </Badge>
+            );
 
             return (
               <TableRow key={item.id}>
@@ -253,9 +275,18 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
                   )}
                 </TableCell>
                 <TableCell>
-                  <Badge className={cn('text-[10px]', pickConfig.color)}>
-                    {pickConfig.label}
-                  </Badge>
+                  {pickedTooltipContent ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help inline-block">{statusBadge}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-xs">
+                        <p className="text-xs">{pickedTooltipContent}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    statusBadge
+                  )}
                 </TableCell>
                 <TableCell className="text-center tabular-nums">{item.quantity}</TableCell>
                 <TableCell
@@ -295,25 +326,7 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
                   {item.qtyDelivered || 0}
                 </TableCell>
                 <TableCell className="text-center">
-                  {serials.length > 0 ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant="outline" className="cursor-help text-[10px]">
-                            {serials.length}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent side="left" className="max-w-xs">
-                          <p className="text-xs font-medium mb-1">Serial Numbers:</p>
-                          <p className="text-xs text-muted-foreground">
-                            {serials.join(', ')}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
+                  <OrderLineItemSerialsCell allocatedSerialNumbers={item.allocatedSerialNumbers} />
                 </TableCell>
               </TableRow>
             );
@@ -321,6 +334,7 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
         </TableBody>
       </Table>
     </div>
+    </TooltipProvider>
   );
 });
 

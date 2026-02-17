@@ -139,7 +139,6 @@ export const PickItemsDialog = memo(function PickItemsDialog({
     data: orderData,
     isLoading: orderLoading,
     isRefetching,
-    refetch,
   } = useOrderWithCustomer({
     orderId,
     enabled: open,
@@ -253,9 +252,10 @@ export const PickItemsDialog = memo(function PickItemsDialog({
         })),
       });
 
+      onOpenChange(false);
+      onSuccess?.();
+
       if (result.orderStatus === 'picked') {
-        onOpenChange(false);
-        onSuccess?.();
         if (onShipOrder) {
           onShipOrder();
           toastSuccess('All items picked. Ready to ship.', {
@@ -275,9 +275,10 @@ export const PickItemsDialog = memo(function PickItemsDialog({
           });
         }
       } else {
-        toastSuccess('Items picked. Refreshing remaining items…');
+        toastSuccess('Items picked successfully.', {
+          description: 'Remaining items refreshed. Reopen to pick more.',
+        });
         hasInitialized.current = false;
-        await refetch();
       }
     } catch (error) {
       toastError(

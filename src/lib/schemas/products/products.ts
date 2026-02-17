@@ -28,6 +28,18 @@ export const productStatusValues = ['active', 'inactive', 'discontinued'] as con
 
 export const taxTypeValues = ['gst', 'gst_free', 'input_taxed', 'export'] as const;
 
+export const TAX_TYPE_LABELS: Record<(typeof taxTypeValues)[number], string> = {
+  gst: 'GST',
+  gst_free: 'GST Free',
+  input_taxed: 'Input Taxed',
+  export: 'Export',
+} as const;
+
+export function getTaxTypeLabel(taxType: string | null | undefined): string {
+  if (!taxType) return 'GST';
+  return TAX_TYPE_LABELS[taxType as (typeof taxTypeValues)[number]] ?? taxType;
+}
+
 export const attributeTypeValues = [
   'text',
   'number',
