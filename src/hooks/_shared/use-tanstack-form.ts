@@ -86,8 +86,18 @@ export interface UseTanStackFormOptions<TFormData> {
   /**
    * Called when validation fails on submit.
    * Use to set form-level error feedback (e.g. "Please fix the errors below").
+   * focusFirstInvalidField() is always called after this when validation fails.
    */
   onSubmitInvalid?: (props: { value: TFormData }) => void
+}
+
+/**
+ * Focus the first invalid field (aria-invalid="true") for accessibility.
+ * Called automatically after onSubmitInvalid when validation fails.
+ */
+export function focusFirstInvalidField(): void {
+  const el = document.querySelector<HTMLElement>('[aria-invalid="true"]')
+  el?.focus()
 }
 
 /**
@@ -171,7 +181,10 @@ export function useTanStackForm<TFormData>({
 
   const form = useForm({
     defaultValues,
-    onSubmitInvalid,
+    onSubmitInvalid: (props) => {
+      onSubmitInvalid?.(props)
+      focusFirstInvalidField()
+    },
     validators: {
       // onSubmit validator: runs before async handler, propagates field errors to UI
       onSubmit: ({ value }) => {
@@ -201,6 +214,10 @@ export function useTanStackForm<TFormData>({
     },
   })
 
+  // Preserve original TanStack setter before augmenting/merging utilities.
+  // Without this, our utility method can overwrite form.setFieldValue and recurse.
+  const baseSetFieldValue = form.setFieldValue.bind(form)
+
   // useWatch hook - must be a function that returns useStore result (called at top level)
   const useWatch = <K extends keyof TFormData>(field: K): TFormData[K] => {
     return useStore(form.store, (s) => s.values[field]) as TFormData[K]
@@ -213,7 +230,7 @@ export function useTanStackForm<TFormData>({
       fieldName: TField,
       value: TFormData[TField]
     ) => {
-      form.setFieldValue(fieldName as string, value as DeepValue<TFormData, string>)
+      baseSetFieldValue(fieldName as string, value as DeepValue<TFormData, string>)
     },
 
     isDirty: () => {

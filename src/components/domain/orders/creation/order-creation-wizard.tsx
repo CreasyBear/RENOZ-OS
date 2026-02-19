@@ -806,6 +806,35 @@ function getStepFromError(error: unknown): number {
   return 4; // Default to Review so user can use Back
 }
 
+/** Fast local guard so final submit can jump back to the first blocking step. */
+function getBlockingStep(values: OrderCreationFormValues): number | null {
+  if (!values.customerId) return 0;
+  if ((values.lineItems?.length ?? 0) < 1) return 1;
+
+  const orderPct = values.discountPercent ?? 0;
+  const orderAmt = values.discountAmount ?? 0;
+  if (orderPct > 0 && orderAmt > 0) return 2;
+
+  const subtotal = (values.lineItems ?? []).reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice,
+    0
+  );
+  const discountFromPercent = Math.round(subtotal * (orderPct / 100));
+  const totalDiscount = discountFromPercent + orderAmt;
+  if (totalDiscount > subtotal) return 2;
+
+  for (const item of values.lineItems ?? []) {
+    const pct = item.discountPercent ?? 0;
+    const amt = item.discountAmount ?? 0;
+    if (pct > 0 && amt > 0) return 2;
+    const lineTotal = item.quantity * item.unitPrice;
+    const lineDiscount = amt + (lineTotal * pct) / 100;
+    if (lineDiscount > lineTotal) return 2;
+  }
+
+  return null;
+}
+
 const DRAFT_VERSION = 2;
 
 export const OrderCreationWizard = memo(function OrderCreationWizard({
@@ -893,6 +922,17 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
   );
 
   const handleComplete = useCallback(async () => {
+    const blockingStep = getBlockingStep(form.state.values);
+    if (blockingStep != null) {
+      toast.error("Please fix the errors below and try again.");
+      form.setFieldValue("currentStep", blockingStep);
+      setTimeout(
+        () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        50
+      );
+      return;
+    }
+
     try {
       await form.handleSubmit();
     } catch (error) {

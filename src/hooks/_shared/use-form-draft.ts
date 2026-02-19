@@ -163,6 +163,8 @@ export function useFormDraft<TFormData>({
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isRestoringRef = useRef(false);
+  const suppressAutosaveUntilChangeRef = useRef(false);
+  const suppressedValuesSnapshotRef = useRef<string | null>(null);
 
   // Check for existing draft on mount. Defer setState to avoid sync setState in effect.
   useEffect(() => {
@@ -194,7 +196,10 @@ export function useFormDraft<TFormData>({
 
   // Save draft
   const save = useCallback(() => {
-    if (!enabled || isRestoringRef.current) return;
+    if (!enabled || isRestoringRef.current) {
+      setIsSaving(false);
+      return;
+    }
 
     const values = filterValues(form.state.values);
     writeDraft(key, version, values);
@@ -206,21 +211,45 @@ export function useFormDraft<TFormData>({
 
   // Debounced auto-save on form changes
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setIsSaving(false);
+      return;
+    }
 
     // Clear existing timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
 
     // Don't save while restoring
-    if (isRestoringRef.current) return;
+    if (isRestoringRef.current) {
+      setIsSaving(false);
+      return;
+    }
 
     // Check if form has been modified
     const currentValues = JSON.stringify(form.state.values);
     const defaultValues = JSON.stringify(form.options.defaultValues);
 
     if (currentValues === defaultValues) {
+      setIsSaving(false);
+      return;
+    }
+
+    // After explicit clear/restore, avoid immediately re-saving identical state.
+    if (suppressAutosaveUntilChangeRef.current) {
+      if (suppressedValuesSnapshotRef.current === currentValues) {
+        setIsSaving(false);
+        return;
+      }
+      suppressAutosaveUntilChangeRef.current = false;
+      suppressedValuesSnapshotRef.current = null;
+    }
+
+    // Avoid flipping to "Saving..." while no draft writes can occur.
+    if (!enabled || isRestoringRef.current) {
+      setIsSaving(false);
       return;
     }
 
@@ -229,11 +258,13 @@ export function useFormDraft<TFormData>({
     // Debounce the save
     debounceTimerRef.current = setTimeout(() => {
       save();
+      debounceTimerRef.current = null;
     }, debounceMs);
 
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
   }, [enabled, form.state.values, form.options.defaultValues, debounceMs, save]);
@@ -243,6 +274,11 @@ export function useFormDraft<TFormData>({
     const draft = readDraft<TFormData>(key, version);
     if (!draft) return;
 
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    setIsSaving(false);
     isRestoringRef.current = true;
 
     // Reset form with draft values
@@ -251,7 +287,10 @@ export function useFormDraft<TFormData>({
     // Clear the draft after restoring
     clearDraft(key);
     setHasDraft(false);
+    setSavedAt(null);
     setDraftValues(null);
+    suppressAutosaveUntilChangeRef.current = true;
+    suppressedValuesSnapshotRef.current = JSON.stringify(draft.values);
 
     onRestore?.(draft.values);
 
@@ -263,12 +302,19 @@ export function useFormDraft<TFormData>({
 
   // Clear draft without restoring
   const clear = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    setIsSaving(false);
     clearDraft(key);
     setHasDraft(false);
     setSavedAt(null);
     setDraftValues(null);
+    suppressAutosaveUntilChangeRef.current = true;
+    suppressedValuesSnapshotRef.current = JSON.stringify(form.state.values);
     onClear?.();
-  }, [key, onClear]);
+  }, [key, onClear, form.state.values]);
 
   return {
     hasDraft,
