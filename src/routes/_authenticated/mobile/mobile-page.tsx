@@ -17,7 +17,6 @@ import {
   Package,
   PackagePlus,
   ClipboardList,
-  Truck,
   BarChart3,
   Settings,
   User,
@@ -53,9 +52,9 @@ export default function MobileHomePage() {
       href: "/mobile/counting",
     },
     {
-      icon: <Truck />,
-      label: "Transfer",
-      href: "/mobile/transfer",
+      icon: <BarChart3 />,
+      label: "Inventory",
+      href: "/inventory",
     },
   ];
 
@@ -184,6 +183,7 @@ export default function MobileHomePage() {
           <span className="text-xs">Reports</span>
         </button>
         <button
+          onClick={() => navigate({ to: "/settings" })}
           aria-label="Settings"
           className={cn(
             "flex flex-col items-center gap-1 p-2 rounded-lg min-w-[64px]",

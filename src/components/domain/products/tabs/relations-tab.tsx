@@ -45,6 +45,10 @@ interface ProductRelationsTabProps {
   relations: ProductRelation[];
   productType: string;
   bundleComponents?: BundleComponent[];
+  onAddComponent?: () => void;
+  onRemoveComponent?: (componentId: string) => void;
+  onAddRelation?: () => void;
+  onRemoveRelation?: (relationId: string) => void;
 }
 
 // Relation type labels and colors
@@ -61,6 +65,10 @@ export function ProductRelationsTab({
   relations,
   productType,
   bundleComponents = [],
+  onAddComponent,
+  onRemoveComponent,
+  onAddRelation,
+  onRemoveRelation,
 }: ProductRelationsTabProps) {
   const isBundle = productType === "bundle";
 
@@ -79,7 +87,12 @@ export function ProductRelationsTab({
                 Products included when this bundle is purchased
               </CardDescription>
             </div>
-            <Button size="sm">
+            <Button
+              size="sm"
+              disabled={!onAddComponent}
+              title={!onAddComponent ? "Bundle component management is not available yet" : undefined}
+              onClick={() => onAddComponent?.()}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Component
             </Button>
@@ -89,10 +102,14 @@ export function ProductRelationsTab({
               <EmptyState
                 title="No bundle components"
                 message="Add products to include in this bundle"
-                primaryAction={{
-                  label: "Add Component",
-                  onClick: () => {},
-                }}
+                primaryAction={
+                  onAddComponent
+                    ? {
+                        label: "Add Component",
+                        onClick: onAddComponent,
+                      }
+                    : undefined
+                }
               />
             ) : (
               <Table>
@@ -125,7 +142,14 @@ export function ProductRelationsTab({
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          disabled={!onRemoveComponent}
+                          title={!onRemoveComponent ? "Bundle component removal is not available yet" : undefined}
+                          onClick={() => onRemoveComponent?.(component.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -150,21 +174,31 @@ export function ProductRelationsTab({
               Products that are related to this product
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!onAddRelation}
+            title={!onAddRelation ? "Product relation management is not available yet" : undefined}
+            onClick={() => onAddRelation?.()}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Relation
           </Button>
         </CardHeader>
         <CardContent>
           {relations.length === 0 ? (
-            <EmptyState
-              title="No related products"
-              message="Link related products to improve cross-selling and product discovery"
-              primaryAction={{
-                label: "Add Relation",
-                onClick: () => {},
-              }}
-            />
+              <EmptyState
+                title="No related products"
+                message="Link related products to improve cross-selling and product discovery"
+                primaryAction={
+                  onAddRelation
+                    ? {
+                        label: "Add Relation",
+                        onClick: onAddRelation,
+                      }
+                    : undefined
+                }
+              />
           ) : (
             <Table>
               <TableHeader>
@@ -197,7 +231,14 @@ export function ProductRelationsTab({
                         {relation.relatedProduct?.sku ?? "-"}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          disabled={!onRemoveRelation}
+                          title={!onRemoveRelation ? "Relation removal is not available yet" : undefined}
+                          onClick={() => onRemoveRelation?.(relation.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>

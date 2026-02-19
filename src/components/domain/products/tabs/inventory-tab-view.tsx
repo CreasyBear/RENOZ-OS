@@ -122,6 +122,8 @@ export interface ProductInventoryTabViewProps {
   onShowAdjustmentChange: (open: boolean) => void;
   onAddStock: (locationId?: string) => void;
   onRefresh: () => void;
+  onEnableTracking?: () => void;
+  onAddSerial?: () => void;
 }
 
 // ============================================================================
@@ -142,6 +144,8 @@ export function ProductInventoryTabView({
   onShowAdjustmentChange,
   onAddStock,
   onRefresh,
+  onEnableTracking,
+  onAddSerial,
 }: ProductInventoryTabViewProps) {
   // Format currency
   const formatCurrency = (value: number) =>
@@ -154,10 +158,14 @@ export function ProductInventoryTabView({
           <EmptyState
             title="Inventory tracking disabled"
             message="This product does not track inventory levels. Enable inventory tracking in product settings to manage stock."
-            primaryAction={{
-              label: "Enable Tracking",
-              onClick: () => {},
-            }}
+            primaryAction={
+              onEnableTracking
+                ? {
+                    label: "Enable Tracking",
+                    onClick: onEnableTracking,
+                  }
+                : undefined
+            }
           />
         </CardContent>
       </Card>
@@ -326,7 +334,13 @@ export function ProductInventoryTabView({
                 Track individual items by serial number
               </CardDescription>
             </div>
-            <Button size="sm" variant="outline">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!onAddSerial}
+              title={!onAddSerial ? "Serial management is not available yet" : undefined}
+              onClick={() => onAddSerial?.()}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Serial
             </Button>
@@ -335,10 +349,14 @@ export function ProductInventoryTabView({
             <EmptyState
               title="No serial numbers"
               message="This product is serialized. Add serial numbers to track individual items."
-              primaryAction={{
-                label: "Add Serial Number",
-                onClick: () => {},
-              }}
+              primaryAction={
+                onAddSerial
+                  ? {
+                      label: "Add Serial Number",
+                      onClick: onAddSerial,
+                    }
+                  : undefined
+              }
             />
           </CardContent>
         </Card>

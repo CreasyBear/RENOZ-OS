@@ -86,7 +86,7 @@ function ClaimsListPage() {
           onSearchChange={updateSearch}
           onRowClick={(claimId) =>
             navigate({
-              to: '/support/claims/$claimId' as string,
+              to: '/support/claims/$claimId',
               params: { claimId },
             })
           }

@@ -13,6 +13,7 @@
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json
  */
 import { memo, useState, useCallback } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Barcode,
   Camera,
@@ -53,6 +54,14 @@ export interface OfflineAction {
   createdAt: Date;
   synced: boolean;
 }
+
+type MobileQuickActionTo =
+  | "/mobile/receiving"
+  | "/mobile/picking"
+  | "/mobile/counting"
+  | "/inventory"
+  | "/settings"
+  | "/mobile";
 
 interface MobileActionButtonProps {
   icon: React.ReactNode;
@@ -478,16 +487,16 @@ export const MobileQuickActions = memo(function MobileQuickActions({
   actions: Array<{
     icon: React.ReactNode;
     label: string;
-    href: string;
+    href: MobileQuickActionTo;
     badge?: number;
   }>;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {actions.map((action, i) => (
-        <a
+        <Link
           key={i}
-          href={action.href}
+          to={action.href}
           className={cn(
             "flex flex-col items-center justify-center gap-2 p-6 rounded-xl",
             "bg-muted/50 hover:bg-muted transition-colors",
@@ -506,7 +515,7 @@ export const MobileQuickActions = memo(function MobileQuickActions({
             )}
           </div>
           <span className="font-medium text-center">{action.label}</span>
-        </a>
+        </Link>
       ))}
     </div>
   );

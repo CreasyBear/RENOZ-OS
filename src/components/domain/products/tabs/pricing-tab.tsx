@@ -31,6 +31,10 @@ interface ProductPricingTabProps {
   productId: string;
   basePrice: number;
   priceTiers: PriceTier[];
+  onAddTier?: () => void;
+  onEditTier?: (tierId: string) => void;
+  onDeleteTier?: (tierId: string) => void;
+  onAddCustomerPrice?: () => void;
 }
 
 // Format price as currency
@@ -45,8 +49,13 @@ export function ProductPricingTab({
   productId: _productId,
   basePrice,
   priceTiers,
+  onAddTier,
+  onEditTier,
+  onDeleteTier,
+  onAddCustomerPrice,
 }: ProductPricingTabProps) {
   const [_isAddingTier, setIsAddingTier] = useState(false);
+  const handleAddTier = onAddTier ?? (() => setIsAddingTier(true));
 
   // Sort tiers by min quantity
   const sortedTiers = [...priceTiers].sort((a, b) => a.minQuantity - b.minQuantity);
@@ -62,7 +71,7 @@ export function ProductPricingTab({
               Set different prices based on order quantity
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setIsAddingTier(true)}>
+          <Button size="sm" onClick={handleAddTier}>
             <Plus className="mr-2 h-4 w-4" />
             Add Tier
           </Button>
@@ -74,7 +83,7 @@ export function ProductPricingTab({
               message="Add volume-based pricing tiers to offer discounts for bulk purchases"
               primaryAction={{
                 label: "Add Price Tier",
-                onClick: () => setIsAddingTier(true),
+                onClick: handleAddTier,
               }}
             />
           ) : (
@@ -130,10 +139,24 @@ export function ProductPricingTab({
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!onEditTier}
+                            title={!onEditTier ? "Price tier editing is not available yet" : undefined}
+                            onClick={() => onEditTier?.(tier.id)}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            disabled={!onDeleteTier}
+                            title={!onDeleteTier ? "Price tier deletion is not available yet" : undefined}
+                            onClick={() => onDeleteTier?.(tier.id)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -156,7 +179,13 @@ export function ProductPricingTab({
               Set special prices for specific customers
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!onAddCustomerPrice}
+            title={!onAddCustomerPrice ? "Customer-specific pricing is not available yet" : undefined}
+            onClick={() => onAddCustomerPrice?.()}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add Customer Price
           </Button>
@@ -165,10 +194,14 @@ export function ProductPricingTab({
           <EmptyState
             title="No customer-specific prices"
             message="Add special pricing for individual customers"
-            primaryAction={{
-              label: "Add Customer Price",
-              onClick: () => {},
-            }}
+            primaryAction={
+              onAddCustomerPrice
+                ? {
+                    label: "Add Customer Price",
+                    onClick: onAddCustomerPrice,
+                  }
+                : undefined
+            }
           />
         </CardContent>
       </Card>

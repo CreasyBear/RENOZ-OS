@@ -89,6 +89,11 @@ export interface UseInvoiceDetailReturn {
 export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
   // Data fetching
   const { data: invoice, isLoading, error, refetch } = useInvoice(invoiceId);
+  const currentInvoiceStatus = useMemo<InvoiceStatus | null>(() => {
+    if (!invoice) return null;
+    // Legacy rows may have null invoiceStatus; treat as draft for transitions/actions.
+    return invoice.invoiceStatus ?? 'draft';
+  }, [invoice]);
 
   // Activities (for timeline - invoice is an order)
   const {
@@ -110,13 +115,11 @@ export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
   const [showSidebar, setShowSidebar] = useState(true);
 
   // Calculate valid next status transitions
-  // Note: invoiceStatus can be null (draft invoices), so we handle null explicitly
+  // Note: invoiceStatus can be null in persisted rows; normalize to draft above.
   const nextStatusActions = useMemo<InvoiceStatus[]>(() => {
-    if (!invoice?.invoiceStatus) return [];
-    // TypeScript narrows invoiceStatus to non-null after the check above
-    const currentStatus: InvoiceStatus = invoice.invoiceStatus;
-    return INVOICE_STATUS_TRANSITIONS[currentStatus] || [];
-  }, [invoice?.invoiceStatus]);
+    if (!currentInvoiceStatus) return [];
+    return INVOICE_STATUS_TRANSITIONS[currentInvoiceStatus] || [];
+  }, [currentInvoiceStatus]);
 
   // Callback for send reminder (needs to be stable for useMemo dependency)
   const handleSendReminder = useCallback(() => {
@@ -134,7 +137,7 @@ export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
     const result: InvoiceAlert[] = [];
 
     // Overdue alert
-    if (invoice.invoiceStatus === 'overdue') {
+    if (currentInvoiceStatus === 'overdue') {
       const daysOverdue = invoice.invoiceDueDate
         ? Math.floor((now - new Date(invoice.invoiceDueDate).getTime()) / (1000 * 60 * 60 * 24))
         : 0;
@@ -154,7 +157,7 @@ export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
 
     // Large balance warning (for unpaid invoices)
     if (
-      invoice.invoiceStatus === 'unpaid' &&
+      currentInvoiceStatus === 'unpaid' &&
       Number(invoice.balanceDue || 0) > INVOICE_ALERT_THRESHOLDS.LARGE_BALANCE_THRESHOLD
     ) {
       result.push({
@@ -167,16 +170,15 @@ export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
     }
 
     return result;
-  }, [invoice, invoiceId, handleSendReminder, now]);
+  }, [invoice, invoiceId, handleSendReminder, now, currentInvoiceStatus]);
 
   // Actions
   const actions = useMemo<InvoiceDetailActions>(() => ({
     onUpdateStatus: (status: InvoiceStatus, note?: string) => {
       // Early return if invoice or status is missing
-      if (!invoice || !invoice.invoiceStatus) return;
+      if (!invoice || !currentInvoiceStatus) return;
 
-      // TypeScript narrows invoiceStatus to non-null after the check above
-      const currentStatus: InvoiceStatus = invoice.invoiceStatus;
+      const currentStatus: InvoiceStatus = currentInvoiceStatus;
       if (!isValidInvoiceStatusTransition(currentStatus, status)) {
         const currentLabel = INVOICE_STATUS_CONFIG[currentStatus]?.label || currentStatus;
         const newLabel = INVOICE_STATUS_CONFIG[status]?.label || status;
@@ -264,7 +266,7 @@ export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
       if (!invoice?.invoicePdfUrl) return;
       window.open(invoice.invoicePdfUrl, '_blank');
     },
-  }), [invoice, invoiceId, updateStatus, sendReminder]);
+  }), [invoice, invoiceId, updateStatus, sendReminder, currentInvoiceStatus]);
 
   return {
     invoice,

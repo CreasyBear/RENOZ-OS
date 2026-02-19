@@ -20,7 +20,13 @@ import { cn } from "@/lib/utils";
 import { useConfirmation, toastError } from "@/hooks";
 import { logger } from "@/lib/logger";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { useBulkDeleteProducts, useExportProducts, type ProductFilters } from "@/hooks/products";
+import {
+  useBulkDeleteProducts,
+  useDeleteProduct,
+  useDuplicateProduct,
+  useExportProducts,
+  type ProductFilters,
+} from "@/hooks/products";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchEmptyState } from "@/components/shared/search-empty-state";
@@ -92,6 +98,8 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
   const { formatCurrency } = useOrgFormat();
   const confirm = useConfirmation();
   const bulkDeleteProducts = useBulkDeleteProducts();
+  const deleteProduct = useDeleteProduct();
+  const duplicateProduct = useDuplicateProduct();
   const productsResult = useMemo(
     () => loaderData?.productsResult ?? { products: [], total: 0, page: 1, limit: 20, hasMore: false },
     [loaderData]
@@ -206,7 +214,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
             </Link>
             <ExportButton search={search} />
             <Button
-              onClick={() => navigate({ to: "/products/new" as string })}
+              onClick={() => navigate({ to: "/products/new" })}
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Product
@@ -273,11 +281,21 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                 </Button>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title="Bulk status update is not available yet"
+                >
                   <Tag className="mr-2 h-4 w-4" />
                   Update Status
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title="Bulk category update is not available yet"
+                >
                   <Upload className="mr-2 h-4 w-4" />
                   Update Category
                 </Button>
@@ -325,7 +343,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                 message="Get started by adding your first product to the catalog"
                 primaryAction={{
                   label: "Add Product",
-                  onClick: () => navigate({ to: "/products/new" as string }),
+                  onClick: () => navigate({ to: "/products/new" }),
                 }}
               />
             )
@@ -345,8 +363,22 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                 updateSearch({ sortBy, sortOrder })
               }
               onRowClick={(product) =>
-                navigate({ to: `/products/${product.id}` as string })
+                navigate({ to: "/products/$productId", params: { productId: product.id } })
               }
+              onEditProduct={(productId) =>
+                navigate({ to: "/products/$productId/edit", params: { productId } })
+              }
+              onDuplicateProduct={(productId) => {
+                duplicateProduct.mutate(productId);
+              }}
+              onDeleteProduct={async (productId) => {
+                const product = productsResult.products.find((p) => p.id === productId);
+                const { confirmed } = await confirm.confirm({
+                  ...confirmations.delete(product?.name ?? "this product", "product"),
+                });
+                if (!confirmed) return;
+                deleteProduct.mutate(productId);
+              }}
             />
           )}
         </div>

@@ -75,11 +75,11 @@ function NewProductPage() {
       warrantyPolicyId: data.warrantyPolicyId ?? undefined,
       specifications: (data.specifications ?? undefined) as Record<string, string> | undefined,
     });
-    navigate({ to: "/products" as string });
+    navigate({ to: "/products" });
   };
 
   const handleCancel = () => {
-    navigate({ to: "/products" as string });
+    navigate({ to: "/products" });
   };
 
   return (
@@ -90,7 +90,7 @@ function NewProductPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate({ to: "/products" as string })}
+              onClick={() => navigate({ to: "/products" })}
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>

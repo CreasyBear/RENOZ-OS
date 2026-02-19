@@ -247,11 +247,21 @@ export default function LocationsPage() {
               <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              title="Location export is not available yet"
+            >
               <Download className="h-4 w-4 mr-2" aria-hidden="true" />
               Export
             </Button>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              title="Location import is not available yet"
+            >
               <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
               Import
             </Button>
