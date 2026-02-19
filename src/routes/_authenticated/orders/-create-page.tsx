@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageLayout } from "@/components/layout";
 import { OrderCreationWizard } from "@/components/domain/orders";
-import type { OrderSubmitData } from "@/components/domain/orders/creation/order-creation-wizard";
+import type { OrderSubmitData } from "@/lib/schemas/orders";
 import { useCreateOrder } from "@/hooks/orders/use-orders";
 
 export interface OrderCreatePageProps {
@@ -73,11 +73,9 @@ export default function OrderCreatePage({ initialCustomerId }: OrderCreatePagePr
         shippingAmount: data.shippingAmount,
         internalNotes: data.internalNotes,
         customerNotes: data.customerNotes,
-        lineItems: data.lineItems.map(item => ({
+        lineItems: data.lineItems.map((item) => ({
           ...item,
-          taxType: item.taxType === 'gst' ? 'gst' :
-                   item.taxType === 'export' ? 'export' :
-                   item.taxType === 'exempt' ? 'gst_free' : 'gst' as const,
+          taxType: item.taxType,
         })),
         metadata: {},
       });

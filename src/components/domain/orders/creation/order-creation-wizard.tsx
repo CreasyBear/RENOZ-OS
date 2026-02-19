@@ -4,27 +4,17 @@
  * Multi-step wizard for creating new orders.
  * Steps: Customer > Products > Pricing > Shipping > Review
  *
+ * Uses TanStack Form, useFormDraft, FormWizard, and shared field components per FORM-STANDARDS.
+ *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-CREATION-UI)
+ * @see FORM-STANDARDS.md
  */
 
-import { memo, useState, useCallback, useMemo, useEffect } from "react";
-import {
-  User,
-  Package,
-  DollarSign,
-  Truck,
-  FileCheck,
-  ChevronRight,
-  ChevronLeft,
-  Check,
-  Loader2,
-} from "lucide-react";
-import { format, addDays } from "date-fns";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { User, Package, DollarSign, Truck, FileCheck, Loader2 } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -32,13 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -48,57 +31,46 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 import { GST_RATE } from "@/lib/order-calculations";
 import { useOrgFormat } from "@/hooks/use-org-format";
+import { useCustomer } from "@/hooks/customers";
 import { CustomerSelectorContainer } from "./customer-selector-container";
-import type { SelectedCustomer } from "./customer-selector";
-import { ProductSelector, type OrderLineItemDraft } from "./product-selector";
-import { useOrderCreateDraft } from "./order-creation-wizard/use-order-create-draft";
+import { ProductSelector } from "./product-selector";
+import {
+  DraftRestorePrompt,
+  DraftSavingIndicator,
+  FormWizard,
+  FormField,
+  NumberField,
+  TextField,
+  TextareaField,
+  SelectField,
+  DateField,
+  FormFieldDisplayProvider,
+  extractFieldError,
+} from "@/components/shared/forms";
+import { useOrderCreationForm } from "@/hooks/orders/use-order-creation-form";
+import {
+  useFormDraft,
+  getCreateDraftKey,
+} from "@/hooks/_shared/use-form-draft";
+import {
+  buildOrderSubmitData,
+  getCustomerAddressesFromApi,
+  validateOrderCreationForm,
+} from "@/hooks/orders/use-order-creation-form";
+import type {
+  OrderCreationFormValues,
+  OrderSubmitData,
+} from "@/lib/schemas/orders/order-creation-form";
+
+// Re-export for consumers (e.g. -create-page, use-order-creation-form)
+export type { OrderSubmitData };
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-/** Order data to be submitted */
-export interface OrderSubmitData {
-  customerId: string;
-  status: 'draft' | 'confirmed';
-  paymentStatus: 'pending';
-  orderDate: Date;
-  dueDate?: Date | null;
-  shippingAddress?: {
-    street1: string;
-    street2?: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  billingAddress?: {
-    street1: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  discountPercent?: number;
-  discountAmount?: number;
-  shippingAmount: number;
-  internalNotes?: string;
-  customerNotes?: string;
-  lineItems: Array<{
-    productId: string;
-    lineNumber: string;
-    sku?: string;
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    discountPercent?: number;
-    discountAmount?: number;
-    taxType: string;
-    notes?: string;
-  }>;
-}
 
 export interface OrderCreationWizardProps {
   /** Pre-select customer when coming from customer context (e.g. ?customerId= in URL) */
@@ -116,79 +88,32 @@ export interface OrderCreationWizardProps {
   className?: string;
 }
 
-interface WizardState {
-  // Step 1: Customer
-  customer: SelectedCustomer | null;
-  // Step 2: Products
-  lineItems: OrderLineItemDraft[];
-  // Step 3: Pricing
-  discountPercent: number;
-  discountAmount: number;
-  // Step 4: Shipping
-  shippingAmount: number;
-  useBillingAsShipping: boolean;
-  shippingAddress: {
-    street1: string;
-    street2?: string;
-    city: string;
-    state: string;
-    postcode: string;
-    country: string;
-  };
-  dueDate: Date | null;
-  // Step 5: Notes
-  internalNotes: string;
-  customerNotes: string;
-}
+// ============================================================================
+// WIZARD STEPS (for FormWizard)
+// ============================================================================
 
-type Step = {
-  id: number;
-  name: string;
-  description: string;
-  icon: typeof User;
-};
-
-const STEPS: Step[] = [
-  { id: 1, name: "Customer", description: "Select a customer", icon: User },
-  { id: 2, name: "Products", description: "Add products", icon: Package },
-  { id: 3, name: "Pricing", description: "Configure pricing", icon: DollarSign },
-  { id: 4, name: "Shipping", description: "Shipping details", icon: Truck },
-  { id: 5, name: "Review", description: "Review and confirm", icon: FileCheck },
+const WIZARD_STEPS = [
+  { id: "customer", label: "Customer", description: "Select a customer", icon: <User className="h-5 w-5" /> },
+  { id: "products", label: "Products", description: "Add products", icon: <Package className="h-5 w-5" /> },
+  { id: "pricing", label: "Pricing", description: "Configure pricing", icon: <DollarSign className="h-5 w-5" /> },
+  { id: "shipping", label: "Shipping", description: "Shipping details", icon: <Truck className="h-5 w-5" /> },
+  { id: "review", label: "Review", description: "Review and confirm", icon: <FileCheck className="h-5 w-5" /> },
 ];
 
-const initialState: WizardState = {
-  customer: null,
-  lineItems: [],
-  discountPercent: 0,
-  discountAmount: 0,
-  shippingAmount: 0,
-  useBillingAsShipping: true,
-  shippingAddress: {
-    street1: "",
-    city: "",
-    state: "",
-    postcode: "",
-    country: "AU",
-  },
-  dueDate: addDays(new Date(), 14), // Default 14 day payment terms
-  internalNotes: "",
-  customerNotes: "",
-};
-
 // ============================================================================
-// STEP COMPONENTS
+// STEP COMPONENTS (form-driven)
 // ============================================================================
 
-interface StepProps {
-  state: WizardState;
-  setState: React.Dispatch<React.SetStateAction<WizardState>>;
-}
-
-interface StepCustomerProps extends StepProps {
+/**
+ * Step 1: Customer selection.
+ * @source customer from useCustomer hook (via form.useWatch customerId)
+ */
+interface StepCustomerProps {
+  form: ReturnType<typeof useOrderCreationForm>;
   initialCustomerId?: string;
 }
 
-const StepCustomer = memo(function StepCustomer({ state, setState, initialCustomerId }: StepCustomerProps) {
+const StepCustomer = memo(function StepCustomer({ form, initialCustomerId }: StepCustomerProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -197,17 +122,42 @@ const StepCustomer = memo(function StepCustomer({ state, setState, initialCustom
           Choose the customer for this order
         </p>
       </div>
-      <CustomerSelectorContainer
-        selectedCustomerId={state.customer?.id ?? null}
-        onSelect={(customer) => setState((s) => ({ ...s, customer }))}
-        initialCustomerId={initialCustomerId}
-      />
+      <form.Field name="customerId">
+        {(field) => {
+          const error = extractFieldError(field);
+          const currentId = (field.state.value ?? "") as string;
+          return (
+            <FormField
+              label="Customer"
+              name={field.name}
+              error={error}
+              required
+            >
+              <CustomerSelectorContainer
+                selectedCustomerId={currentId || null}
+                initialCustomerId={initialCustomerId}
+                onSelect={(c) => {
+                  const newId = c?.id ?? "";
+                  if (currentId !== newId) {
+                    field.handleChange(newId);
+                  }
+                }}
+              />
+            </FormField>
+          );
+        }}
+      </form.Field>
     </div>
   );
 });
 
-const StepProducts = memo(function StepProducts({ state, setState }: StepProps) {
-  const hasNoItems = state.lineItems.length === 0;
+interface StepProductsProps {
+  form: ReturnType<typeof useOrderCreationForm>;
+}
+
+const StepProducts = memo(function StepProducts({ form }: StepProductsProps) {
+  const lineItems = form.useWatch("lineItems") ?? [];
+  const hasNoItems = lineItems.length === 0;
   return (
     <div className="space-y-4">
       <div>
@@ -221,27 +171,36 @@ const StepProducts = memo(function StepProducts({ state, setState }: StepProps) 
           </p>
         )}
       </div>
-      <ProductSelector
-        selectedProducts={state.lineItems}
-        onProductsChange={(lineItems) => setState((s) => ({ ...s, lineItems }))}
-      />
+      <form.Field name="lineItems">
+        {(field) => (
+          <ProductSelector
+            selectedProducts={field.state.value}
+            onProductsChange={field.handleChange}
+          />
+        )}
+      </form.Field>
     </div>
   );
 });
 
-const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
+interface StepPricingProps {
+  form: ReturnType<typeof useOrderCreationForm>;
+}
+
+const StepPricing = memo(function StepPricing({ form }: StepPricingProps) {
   const { formatCurrency } = useOrgFormat();
   const formatPrice = (amount: number) => formatCurrency(amount, { cents: false, showCents: true });
 
-  // Calculate subtotal before discounts
-  const subtotal = state.lineItems.reduce(
+  const lineItems = form.useWatch("lineItems") ?? [];
+  const discountPercent = form.useWatch("discountPercent") ?? 0;
+  const discountAmount = form.useWatch("discountAmount") ?? 0;
+
+  const subtotal = lineItems.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
     0
   );
-
-  // Calculate discount
-  const discountFromPercent = Math.round(subtotal * (state.discountPercent / 100));
-  const totalDiscount = discountFromPercent + state.discountAmount;
+  const discountFromPercent = Math.round(subtotal * (discountPercent / 100));
+  const totalDiscount = discountFromPercent + discountAmount;
   const afterDiscount = subtotal - totalDiscount;
 
   return (
@@ -253,7 +212,7 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
         </p>
       </div>
 
-      {/* Line Items Summary - editable qty and unit price */}
+      {/* Line Items - editable qty and unit price */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Line Items</CardTitle>
@@ -272,57 +231,53 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {state.lineItems.map((item, index) => (
+              {lineItems.map((item, index) => (
                 <TableRow key={item.productId}>
                   <TableCell>
                     <div>
                       <p className="font-medium">{item.description}</p>
                       {item.sku && (
-                        <p className="text-xs text-muted-foreground">
-                          SKU: {item.sku}
-                        </p>
+                        <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
                       )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      min={0.01}
-                      step={0.01}
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const qty = parseFloat(e.target.value) || 0;
-                        setState((s) => ({
-                          ...s,
-                          lineItems: s.lineItems.map((li, i) =>
-                            i === index ? { ...li, quantity: qty } : li
-                          ),
-                        }));
-                      }}
-                      onWheel={(e) => e.currentTarget.blur()}
-                      className="h-8 w-20 text-right font-mono"
-                      inputMode="decimal"
-                    />
+                    <form.Field name={`lineItems[${index}].quantity`}>
+                      {(field) => (
+                        <Input
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          value={field.state.value ?? ""}
+                          onChange={(e) => {
+                            const qty = parseFloat(e.target.value) || 0;
+                            field.handleChange(qty);
+                          }}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="h-8 w-20 text-right font-mono"
+                          inputMode="decimal"
+                        />
+                      )}
+                    </form.Field>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={item.unitPrice}
-                      onChange={(e) => {
-                        const price = parseFloat(e.target.value) || 0;
-                        setState((s) => ({
-                          ...s,
-                          lineItems: s.lineItems.map((li, i) =>
-                            i === index ? { ...li, unitPrice: price } : li
-                          ),
-                        }));
-                      }}
-                      onWheel={(e) => e.currentTarget.blur()}
-                      className="h-8 w-24 text-right font-mono"
-                      inputMode="decimal"
-                    />
+                    <form.Field name={`lineItems[${index}].unitPrice`}>
+                      {(field) => (
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={field.state.value ?? ""}
+                          onChange={(e) => {
+                            const price = parseFloat(e.target.value) || 0;
+                            field.handleChange(price);
+                          }}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="h-8 w-24 text-right font-mono"
+                          inputMode="decimal"
+                        />
+                      )}
+                    </form.Field>
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {formatPrice(item.quantity * item.unitPrice)}
@@ -343,61 +298,39 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="discount-percent">Discount %</Label>
-              <div className="relative">
-                <Input
-                  id="discount-percent"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={state.discountPercent || ""}
-                  onChange={(e) =>
-                    setState((s) => ({
-                      ...s,
-                      discountPercent: Number(e.target.value) || 0,
-                    }))
-                  }
-                  className="pr-8"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  %
-                </span>
-              </div>
-              {state.discountPercent > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Saves {formatPrice(discountFromPercent)}
-                </p>
-              )}
+              <form.Field name="discountPercent">
+                {(field) => (
+                  <NumberField
+                    field={field}
+                    label="Discount %"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                  />
+                )}
+              </form.Field>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="discount-amount">Fixed Discount ($)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  id="discount-amount"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={state.discountAmount || ""}
-                  onChange={(e) =>
-                    setState((s) => ({
-                      ...s,
-                      discountAmount: Number(e.target.value) || 0,
-                    }))
-                  }
-                  className="pl-8"
-                />
-              </div>
+              <form.Field name="discountAmount">
+                {(field) => (
+                  <NumberField
+                    field={field}
+                    label="Fixed Discount ($)"
+                    min={0}
+                    step={1}
+                  />
+                )}
+              </form.Field>
             </div>
           </div>
-
-          <Separator />
+          {discountPercent > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Saves {formatPrice(discountFromPercent)}
+            </p>
+          )}
 
           {/* Summary */}
-          <div className="space-y-2">
+          <div className="space-y-2 pt-4">
             <div className="flex justify-between text-sm">
               <span>Subtotal</span>
               <span>{formatPrice(subtotal)}</span>
@@ -419,8 +352,94 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
   );
 });
 
-const StepShipping = memo(function StepShipping({ state, setState }: StepProps) {
-  const customerAddress = state.customer?.shippingAddress || state.customer?.billingAddress;
+function getAddressSourceLabel(customer: { shippingAddress?: { street1?: string }; billingAddress?: { street1?: string } } | null): string | null {
+  if (!customer) return null;
+  const hasShipping = !!customer.shippingAddress?.street1;
+  const hasBilling = !!customer.billingAddress?.street1;
+  if (hasShipping) return "Using shipping address";
+  if (hasBilling) return "Using billing address (no shipping address on file)";
+  return null;
+}
+
+const STATE_OPTIONS = [
+  { value: "NSW", label: "NSW" },
+  { value: "VIC", label: "VIC" },
+  { value: "QLD", label: "QLD" },
+  { value: "WA", label: "WA" },
+  { value: "SA", label: "SA" },
+  { value: "TAS", label: "TAS" },
+  { value: "ACT", label: "ACT" },
+  { value: "NT", label: "NT" },
+];
+
+interface StepShippingProps {
+  form: ReturnType<typeof useOrderCreationForm>;
+}
+
+const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
+  const customerId = form.useWatch("customerId") ?? "";
+  const useBillingAsShipping = form.useWatch("useBillingAsShipping") ?? true;
+
+  const { data: customerData, isFetching: isEnriching } = useCustomer({
+    id: customerId,
+    enabled: !!customerId,
+  });
+
+  const customerAddr = useMemo(() => {
+    const addr =
+      customerData?.addresses?.find((a) => a.type === "shipping") ||
+      customerData?.addresses?.find((a) => a.type === "billing");
+    return addr
+      ? {
+          street1: addr.street1 ?? "",
+          street2: addr.street2 ?? undefined,
+          city: addr.city ?? "",
+          state: addr.state ?? "",
+          postcode: addr.postcode ?? "",
+          country: addr.country ?? "AU",
+        }
+      : null;
+  }, [customerData?.addresses]);
+  const shippingAddr = customerData?.addresses?.find((a) => a.type === "shipping");
+  const billingAddr = customerData?.addresses?.find((a) => a.type === "billing");
+  const addressSourceLabel = customerData
+    ? getAddressSourceLabel({
+        shippingAddress: shippingAddr ? { street1: shippingAddr.street1 ?? undefined } : undefined,
+        billingAddress: billingAddr ? { street1: billingAddr.street1 ?? undefined } : undefined,
+      })
+    : null;
+
+  const needsEnrichment =
+    !!customerId &&
+    !customerAddr?.street1;
+  const isLoadingAddress = needsEnrichment && isEnriching;
+
+  const applyCustomerAddress = useCallback(() => {
+    if (!customerAddr?.street1) return;
+    form.setFieldValue("useBillingAsShipping", true);
+    form.setFieldValue("shippingAddress", {
+      street1: customerAddr.street1,
+      street2: customerAddr.street2 ?? "",
+      city: customerAddr.city,
+      state: customerAddr.state,
+      postcode: customerAddr.postcode,
+      country: customerAddr.country,
+    });
+  }, [customerAddr, form]);
+
+  const switchToManualAddress = useCallback(() => {
+    form.setFieldValue("useBillingAsShipping", false);
+    if (customerAddr?.street1) {
+      form.setFieldValue("shippingAddress", {
+        street1: customerAddr.street1,
+        street2: customerAddr.street2 ?? "",
+        city: customerAddr.city,
+        state: customerAddr.state,
+        postcode: customerAddr.postcode,
+        country: customerAddr.country,
+      });
+    }
+  }, [customerAddr, form]);
 
   return (
     <div className="space-y-6">
@@ -437,28 +456,16 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
           <CardTitle className="text-base">Shipping Cost</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="shipping-amount">Shipping Amount</Label>
-            <div className="relative w-48">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                $
-              </span>
-              <Input
-                id="shipping-amount"
-                type="number"
+          <form.Field name="shippingAmount">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Shipping Amount"
                 min={0}
                 step={1}
-                value={state.shippingAmount || ""}
-                onChange={(e) =>
-                  setState((s) => ({
-                    ...s,
-                    shippingAmount: Number(e.target.value) || 0,
-                  }))
-                }
-                className="pl-8"
               />
-            </div>
-          </div>
+            )}
+          </form.Field>
         </CardContent>
       </Card>
 
@@ -466,157 +473,107 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Shipping Address</CardTitle>
-          <CardDescription>
-            {customerAddress
-              ? "Use customer&apos;s address or enter a different one"
-              : "Enter the shipping address"}
-          </CardDescription>
+          {customerData && (
+            <CardDescription>
+              Shipping for <strong>{customerData.name}</strong>
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
-          {customerAddress && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="use-customer-address"
-                checked={state.useBillingAsShipping}
-                onChange={(e) =>
-                  setState((s) => ({
-                    ...s,
-                    useBillingAsShipping: e.target.checked,
-                    shippingAddress: e.target.checked
-                      ? {
-                          street1: customerAddress.street1 || "",
-                          city: customerAddress.city || "",
-                          state: customerAddress.state || "",
-                          postcode: customerAddress.postcode || "",
-                          country: customerAddress.country || "AU",
-                        }
-                      : s.shippingAddress,
-                  }))
-                }
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="use-customer-address" className="font-normal">
-                Use customer&apos;s address
-              </Label>
+          {isLoadingAddress ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading customer address…
             </div>
-          )}
-
-          {state.useBillingAsShipping && customerAddress ? (
-            <div className="p-3 bg-muted rounded-lg text-sm">
-              <p>{customerAddress.street1}</p>
-              <p>
-                {customerAddress.city}, {customerAddress.state}{" "}
-                {customerAddress.postcode}
-              </p>
-              <p>{customerAddress.country}</p>
-            </div>
+          ) : useBillingAsShipping && customerAddr ? (
+            <>
+              <div className="space-y-1">
+                <div className="p-3 bg-muted rounded-lg text-sm">
+                  <p>{customerAddr.street1}</p>
+                  {customerAddr.street2 && <p>{customerAddr.street2}</p>}
+                  <p>
+                    {customerAddr.city}, {customerAddr.state} {customerAddr.postcode}
+                  </p>
+                  <p>{customerAddr.country}</p>
+                </div>
+                {addressSourceLabel && (
+                  <p className="text-xs text-muted-foreground">{addressSourceLabel}</p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto p-0 text-sm"
+                onClick={switchToManualAddress}
+                aria-label="Edit shipping address"
+              >
+                Edit address
+              </Button>
+            </>
           ) : (
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="street1">Street Address</Label>
-                <Input
-                  id="street1"
-                  value={state.shippingAddress.street1}
-                  onChange={(e) =>
-                    setState((s) => ({
-                      ...s,
-                      shippingAddress: {
-                        ...s.shippingAddress,
-                        street1: e.target.value,
-                      },
-                    }))
-                  }
-                  placeholder="123 Main St"
-                />
-              </div>
+            <>
+              {customerAddr && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={applyCustomerAddress}
+                  aria-label="Use customer's address"
+                >
+                  Use customer&apos;s address
+                </Button>
+              )}
+              {customerAddr && (
+                <p className="text-sm text-muted-foreground">
+                  — or enter a different address —
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={state.shippingAddress.city}
-                    onChange={(e) =>
-                      setState((s) => ({
-                        ...s,
-                        shippingAddress: {
-                          ...s.shippingAddress,
-                          city: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="Sydney"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Select
-                    value={state.shippingAddress.state}
-                    onValueChange={(value) =>
-                      setState((s) => ({
-                        ...s,
-                        shippingAddress: {
-                          ...s.shippingAddress,
-                          state: value,
-                        },
-                      }))
-                    }
-                  >
-                    <SelectTrigger id="state">
-                      <SelectValue placeholder="Select state" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NSW">NSW</SelectItem>
-                      <SelectItem value="VIC">VIC</SelectItem>
-                      <SelectItem value="QLD">QLD</SelectItem>
-                      <SelectItem value="WA">WA</SelectItem>
-                      <SelectItem value="SA">SA</SelectItem>
-                      <SelectItem value="TAS">TAS</SelectItem>
-                      <SelectItem value="ACT">ACT</SelectItem>
-                      <SelectItem value="NT">NT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <form.Field name="shippingAddress.street1">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Street Address"
+                      placeholder="123 Main St"
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="shippingAddress.street2">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Unit / Suite"
+                      placeholder="Unit, suite, etc."
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="shippingAddress.city">
+                  {(field) => (
+                    <TextField field={field} label="City" placeholder="Sydney" />
+                  )}
+                </form.Field>
+                <form.Field name="shippingAddress.state">
+                  {(field) => (
+                    <SelectField
+                      field={field}
+                      label="State"
+                      options={STATE_OPTIONS}
+                      placeholder="Select state"
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="shippingAddress.postcode">
+                  {(field) => (
+                    <TextField field={field} label="Postcode" placeholder="2000" />
+                  )}
+                </form.Field>
+                <form.Field name="shippingAddress.country">
+                  {(field) => (
+                    <TextField field={field} label="Country" placeholder="AU" disabled />
+                  )}
+                </form.Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="postcode">Postcode</Label>
-                  <Input
-                    id="postcode"
-                    value={state.shippingAddress.postcode}
-                    onChange={(e) =>
-                      setState((s) => ({
-                        ...s,
-                        shippingAddress: {
-                          ...s.shippingAddress,
-                          postcode: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="2000"
-                    maxLength={4}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    value={state.shippingAddress.country}
-                    onChange={(e) =>
-                      setState((s) => ({
-                        ...s,
-                        shippingAddress: {
-                          ...s.shippingAddress,
-                          country: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="AU"
-                    disabled
-                  />
-                </div>
-              </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -627,41 +584,67 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
           <CardTitle className="text-base">Payment Terms</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="due-date">Due Date</Label>
-            <Input
-              id="due-date"
-              type="date"
-              value={state.dueDate ? format(state.dueDate, "yyyy-MM-dd") : ""}
-              onChange={(e) =>
-                setState((s) => ({
-                  ...s,
-                  dueDate: e.target.value ? new Date(e.target.value) : null,
-                }))
-              }
-              className="w-48"
-            />
-          </div>
+          <form.Field name="dueDate">
+            {(field) => (
+              <DateField field={field} label="Due Date" />
+            )}
+          </form.Field>
         </CardContent>
       </Card>
     </div>
   );
 });
 
-const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
+interface StepReviewProps {
+  form: ReturnType<typeof useOrderCreationForm>;
+}
+
+const StepReview = memo(function StepReview({ form }: StepReviewProps) {
   const { formatCurrency } = useOrgFormat();
   const formatPrice = (amount: number) => formatCurrency(amount, { cents: false, showCents: true });
 
-  // Calculate totals
-  const subtotal = state.lineItems.reduce(
+  const customerId = form.useWatch("customerId") ?? "";
+  const lineItems = form.useWatch("lineItems") ?? [];
+  const discountPercent = form.useWatch("discountPercent") ?? 0;
+  const discountAmount = form.useWatch("discountAmount") ?? 0;
+  const shippingAmount = form.useWatch("shippingAmount") ?? 0;
+  const useBillingAsShipping = form.useWatch("useBillingAsShipping") ?? true;
+  const shippingAddress = form.useWatch("shippingAddress") ?? {};
+  const dueDate = form.useWatch("dueDate");
+
+  const { data: customerData } = useCustomer({ id: customerId, enabled: !!customerId });
+  const customerAddr = customerData?.addresses
+    ? (customerData.addresses.find((a) => a.type === "shipping") ||
+        customerData.addresses.find((a) => a.type === "billing"))
+    : null;
+  const displayShipping =
+    useBillingAsShipping && customerAddr?.street1
+      ? {
+          street1: customerAddr.street1 || "",
+          street2: customerAddr.street2,
+          city: customerAddr.city || "",
+          state: customerAddr.state || "",
+          postcode: customerAddr.postcode || "",
+          country: customerAddr.country || "AU",
+        }
+      : {
+          street1: shippingAddress.street1 ?? "",
+          street2: shippingAddress.street2,
+          city: shippingAddress.city ?? "",
+          state: shippingAddress.state ?? "",
+          postcode: shippingAddress.postcode ?? "",
+          country: shippingAddress.country ?? "AU",
+        };
+
+  const subtotal = lineItems.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
     0
   );
-  const discountFromPercent = Math.round(subtotal * (state.discountPercent / 100));
-  const totalDiscount = discountFromPercent + state.discountAmount;
+  const discountFromPercent = Math.round(subtotal * (discountPercent / 100));
+  const totalDiscount = discountFromPercent + discountAmount;
   const afterDiscount = subtotal - totalDiscount;
   const gstAmount = Math.round(afterDiscount * GST_RATE);
-  const total = afterDiscount + gstAmount + state.shippingAmount;
+  const total = afterDiscount + gstAmount + shippingAmount;
 
   return (
     <div className="space-y-6">
@@ -678,15 +661,15 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
           <CardTitle className="text-base">Customer</CardTitle>
         </CardHeader>
         <CardContent>
-          {state.customer && (
+          {customerData && (
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                 <User className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-medium">{state.customer.name}</p>
+                <p className="font-medium">{customerData.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  {state.customer.email || state.customer.phone}
+                  {customerData.email || customerData.phone}
                 </p>
               </div>
             </div>
@@ -697,9 +680,7 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
       {/* Line Items */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            Items ({state.lineItems.length})
-          </CardTitle>
+          <CardTitle className="text-base">Items ({lineItems.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -711,7 +692,7 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {state.lineItems.map((item) => (
+              {lineItems.map((item) => (
                 <TableRow key={item.productId}>
                   <TableCell>{item.description}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
@@ -732,11 +713,12 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
         </CardHeader>
         <CardContent>
           <div className="text-sm">
-            <p>{state.shippingAddress.street1}</p>
+            <p>{displayShipping.street1}</p>
+            {displayShipping.street2 && <p>{displayShipping.street2}</p>}
             <p>
-              {state.shippingAddress.city}, {state.shippingAddress.state}{" "}
-              {state.shippingAddress.postcode}
+              {displayShipping.city}, {displayShipping.state} {displayShipping.postcode}
             </p>
+            <p>{displayShipping.country}</p>
           </div>
         </CardContent>
       </Card>
@@ -761,80 +743,50 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
             <span>GST (10%)</span>
             <span>{formatPrice(gstAmount)}</span>
           </div>
-          {state.shippingAmount > 0 && (
+          {shippingAmount > 0 && (
             <div className="flex justify-between text-sm">
               <span>Shipping</span>
-              <span>{formatPrice(state.shippingAmount)}</span>
+              <span>{formatPrice(shippingAmount)}</span>
             </div>
           )}
-          <Separator />
-          <div className="flex justify-between font-semibold text-lg">
+          <div className="flex justify-between font-semibold text-lg pt-2">
             <span>Total</span>
             <span>{formatPrice(total)}</span>
           </div>
-          {state.dueDate && (
+          {dueDate && (
             <p className="text-xs text-muted-foreground pt-2">
-              Due: {format(state.dueDate, "dd/MM/yyyy")}
+              Due: {format(dueDate, "dd/MM/yyyy")}
             </p>
           )}
         </CardContent>
       </Card>
 
-      {/* Notes */}
-      {(state.internalNotes || state.customerNotes) && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Notes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {state.internalNotes && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">
-                  Internal Notes
-                </p>
-                <p className="text-sm">{state.internalNotes}</p>
-              </div>
-            )}
-            {state.customerNotes && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">
-                  Customer Notes
-                </p>
-                <p className="text-sm">{state.customerNotes}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Notes Input */}
+      {/* Notes - editable */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Add Notes (Optional)</CardTitle>
+          <CardTitle className="text-base">Notes (Optional)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="internal-notes">Internal Notes</Label>
-            <Textarea
-              id="internal-notes"
-              placeholder="Notes visible only to staff..."
-              value={state.internalNotes}
-              onChange={() => {}}
-              disabled
-              rows={2}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="customer-notes">Customer Notes</Label>
-            <Textarea
-              id="customer-notes"
-              placeholder="Notes visible to customer..."
-              value={state.customerNotes}
-              onChange={() => {}}
-              disabled
-              rows={2}
-            />
-          </div>
+          <form.Field name="internalNotes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Internal Notes"
+                placeholder="Notes visible only to staff..."
+                rows={2}
+              />
+            )}
+          </form.Field>
+          <form.Field name="customerNotes">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Customer Notes"
+                placeholder="Notes visible to customer..."
+                rows={2}
+              />
+            )}
+          </form.Field>
         </CardContent>
       </Card>
     </div>
@@ -845,6 +797,17 @@ const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
 // MAIN COMPONENT
 // ============================================================================
 
+/** Map validation error messages to the step index (0-based) that needs fixing */
+function getStepFromError(error: unknown): number {
+  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  if (msg.includes("customer") && (msg.includes("required") || msg.includes("invalid"))) return 0;
+  if (msg.includes("item") || msg.includes("lineitem") || msg.includes("line item")) return 1;
+  if (msg.includes("address") || msg.includes("shipping") || msg.includes("billing")) return 3;
+  return 4; // Default to Review so user can use Back
+}
+
+const DRAFT_VERSION = 2;
+
 export const OrderCreationWizard = memo(function OrderCreationWizard({
   initialCustomerId,
   onComplete,
@@ -854,261 +817,170 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
   onDraftReady,
   className,
 }: OrderCreationWizardProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [state, setState] = useState<WizardState>(initialState);
+  const stepContentRef = useRef<HTMLDivElement>(null);
+  const customerForSubmitRef = useRef<Awaited<ReturnType<typeof useCustomer>>["data"]>(null);
+  const draftClearRef = useRef<(() => void) | null>(null);
 
-  const draft = useOrderCreateDraft({
-    state,
-    setState,
-    currentStep,
-    setCurrentStep,
-    skipDraft: !!initialCustomerId,
+  const form = useOrderCreationForm({
+    initialCustomerId,
+    onSubmit: useCallback(
+      async (values: OrderCreationFormValues) => {
+        validateOrderCreationForm(values);
+        const customerAddr = getCustomerAddressesFromApi(customerForSubmitRef.current);
+        const data = buildOrderSubmitData(values, customerAddr);
+        const result = await onSubmit(data);
+        draftClearRef.current?.();
+        onComplete(result.id, result.orderNumber);
+        return result;
+      },
+      [onSubmit, onComplete]
+    ),
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
   });
+
+  const customerId = form.useWatch("customerId") ?? "";
+  const { data: customerForSubmit } = useCustomer({
+    id: customerId,
+    enabled: !!customerId,
+  });
+
+  const draft = useFormDraft({
+    key: getCreateDraftKey("order"),
+    version: DRAFT_VERSION,
+    form,
+    enabled: !initialCustomerId,
+    debounceMs: 1500,
+  });
+
+  useEffect(() => {
+    customerForSubmitRef.current = customerForSubmit;
+    draftClearRef.current = draft.clear;
+  }, [customerForSubmit, draft.clear]);
 
   useEffect(() => {
     onDraftReady?.({ clear: draft.clear });
   }, [onDraftReady, draft.clear]);
 
-  // Build submit data from wizard state
-  const buildSubmitData = useCallback((): OrderSubmitData => {
-    if (!state.customer) throw new Error("Customer is required");
-    if (state.lineItems.length === 0) throw new Error("At least one item is required");
+  const currentStep = form.useWatch("currentStep") ?? 0;
 
-    return {
-      customerId: state.customer.id,
-      status: "draft",
-      paymentStatus: "pending",
-      orderDate: new Date(),
-      dueDate: state.dueDate || undefined,
-      shippingAddress: state.shippingAddress.street1
-        ? {
-            street1: state.shippingAddress.street1,
-            street2: state.shippingAddress.street2,
-            city: state.shippingAddress.city,
-            state: state.shippingAddress.state,
-            postalCode: state.shippingAddress.postcode,
-            country: state.shippingAddress.country,
-          }
-        : undefined,
-      billingAddress: state.customer.billingAddress
-        ? {
-            street1: state.customer.billingAddress.street1 || "",
-            city: state.customer.billingAddress.city || "",
-            state: state.customer.billingAddress.state || "",
-            postalCode: state.customer.billingAddress.postcode || "",
-            country: state.customer.billingAddress.country || "AU",
-          }
-        : undefined,
-      discountPercent: state.discountPercent || undefined,
-      discountAmount: state.discountAmount || undefined,
-      shippingAmount: state.shippingAmount,
-      internalNotes: state.internalNotes || undefined,
-      customerNotes: state.customerNotes || undefined,
-      lineItems: state.lineItems.map((item) => ({
-        productId: item.productId,
-        lineNumber: item.lineNumber,
-        sku: item.sku || undefined,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        discountAmount: item.discountAmount,
-        taxType: item.taxType,
-        notes: item.notes,
-      })),
-    };
-  }, [state]);
+  const validateStep = useCallback(
+    (step: number): boolean => {
+      const values = form.state.values;
+      if (step === 0) {
+        const isValid = !!values.customerId;
+        if (!isValid) {
+          toast.error("Select a customer to continue.");
+        }
+        return isValid;
+      }
+      if (step === 1) {
+        const isValid = (values.lineItems?.length ?? 0) >= 1;
+        if (!isValid) {
+          toast.error("Add at least one product to continue.");
+        }
+        return isValid;
+      }
+      return true;
+    },
+    [form.state.values]
+  );
 
-  // Step validation
-  const canProceed = useMemo(() => {
-    switch (currentStep) {
-      case 1:
-        return state.customer !== null;
-      case 2:
-        return state.lineItems.length > 0;
-      case 3:
-        return true; // Pricing is optional
-      case 4:
-        return true; // Shipping is optional
-      case 5:
-        return true;
-      default:
-        return false;
-    }
-  }, [currentStep, state]);
+  const canNavigateToStep = useCallback(
+    (stepIndex: number) => stepIndex <= (currentStep ?? 0) + 1,
+    [currentStep]
+  );
 
-  // Navigation
-  const goNext = useCallback(() => {
-    if (currentStep < STEPS.length) {
-      setCurrentStep((s) => s + 1);
-    }
-  }, [currentStep]);
-
-  const goBack = useCallback(() => {
-    if (currentStep > 1) {
-      setCurrentStep((s) => s - 1);
-    }
-  }, [currentStep]);
-
-  const handleSubmit = useCallback(async () => {
+  const handleComplete = useCallback(async () => {
     try {
-      const data = buildSubmitData();
-      const result = await onSubmit(data);
-      draft.clear();
-      onComplete(result.id, result.orderNumber);
-    } catch {
-      // Error handling is done by the container
+      await form.handleSubmit();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create order";
+      toast.error(message);
+      const targetStep = getStepFromError(error);
+      form.setFieldValue("currentStep", targetStep);
+      setTimeout(
+        () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        50
+      );
     }
-  }, [buildSubmitData, onSubmit, onComplete, draft]);
+  }, [form]);
 
-  // Render current step
-  const renderStep = () => {
+  const handleStepChange = useCallback(
+    (step: number) => {
+      form.setFieldValue("currentStep", step);
+    },
+    [form]
+  );
+
+  const renderStepContent = () => {
     switch (currentStep) {
+      case 0:
+        return <StepCustomer form={form} initialCustomerId={initialCustomerId} />;
       case 1:
-        return <StepCustomer state={state} setState={setState} initialCustomerId={initialCustomerId} />;
+        return <StepProducts form={form} />;
       case 2:
-        return <StepProducts state={state} setState={setState} />;
+        return <StepPricing form={form} />;
       case 3:
-        return <StepPricing state={state} setState={setState} />;
+        return <StepShipping form={form} />;
       case 4:
-        return <StepShipping state={state} setState={setState} />;
-      case 5:
-        return <StepReview state={state} />;
+        return <StepReview form={form} />;
       default:
         return null;
     }
   };
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* Draft restore banner */}
-      {draft.hasDraft && (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
-          <CardContent className="flex items-center justify-between py-3">
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              You have unsaved changes from {draft.savedAt ? format(draft.savedAt, 'PPp') : 'a previous session'}.
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={draft.clear}>
-                Discard
-              </Button>
-              <Button variant="default" size="sm" onClick={draft.restore}>
-                Restore
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+    <form
+      className={cn("space-y-6", className)}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (currentStep === WIZARD_STEPS.length - 1) {
+          void handleComplete();
+        }
+      }}
+    >
+      <FormFieldDisplayProvider form={form}>
+        <DraftRestorePrompt
+          hasDraft={draft.hasDraft}
+          savedAt={draft.savedAt}
+          onRestore={draft.restore}
+          onDiscard={draft.clear}
+          variant="banner"
+        />
+        <DraftSavingIndicator isSaving={draft.isSaving} savedAt={draft.savedAt} />
 
-      {/* Progress Indicator */}
-      <nav aria-label="Progress">
-        <ol className="flex items-center">
-          {STEPS.map((step, stepIdx) => (
-            <li
-              key={step.id}
-              className={cn(
-                "relative",
-                stepIdx !== STEPS.length - 1 ? "flex-1 pr-8" : ""
-              )}
-            >
-              <div className="flex items-center">
-                <div
-                  className={cn(
-                    "relative flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors",
-                    currentStep > step.id
-                      ? "border-primary bg-primary"
-                      : currentStep === step.id
-                        ? "border-primary bg-background"
-                        : "border-muted bg-background"
-                  )}
-                >
-                  {currentStep > step.id ? (
-                    <Check className="h-5 w-5 text-primary-foreground" />
-                  ) : (
-                    <step.icon
-                      className={cn(
-                        "h-5 w-5",
-                        currentStep === step.id
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      )}
-                    />
-                  )}
-                </div>
-                {stepIdx !== STEPS.length - 1 && (
-                  <div
-                    className={cn(
-                      "absolute left-10 right-0 top-5 h-0.5",
-                      currentStep > step.id ? "bg-primary" : "bg-muted"
-                    )}
-                  />
-                )}
-              </div>
-              <div className="mt-2">
-                <p
-                  className={cn(
-                    "text-xs font-medium",
-                    currentStep >= step.id
-                      ? "text-foreground"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {step.name}
-                </p>
-                <p className="text-xs text-muted-foreground hidden sm:block">
-                  {step.description}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </nav>
-
-      <Separator />
-
-      {/* Step Content */}
-      <div className="min-h-[400px]">{renderStep()}</div>
-
-      <Separator />
-
-      {/* Navigation Buttons */}
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <div className="flex items-center gap-2">
-          {currentStep > 1 && (
-            <Button variant="outline" onClick={goBack}>
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-          )}
-          {currentStep < STEPS.length ? (
-            <Button onClick={goNext} disabled={!canProceed}>
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          ) : (
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Create Order
-                </>
-              )}
-            </Button>
-          )}
+        <div className="flex items-start gap-4">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
         </div>
-      </div>
-    </div>
+
+        <FormWizard
+          steps={WIZARD_STEPS}
+          currentStep={currentStep}
+          onStepChange={handleStepChange}
+          onComplete={handleComplete}
+          validateStep={validateStep}
+          canNavigateToStep={canNavigateToStep}
+          isSubmitting={isSubmitting}
+          submitOnLastStep
+          labels={{
+            previous: "Back",
+            next: "Next",
+            complete: "Create Order",
+            completing: "Creating...",
+          }}
+          showStepNumbers={true}
+          allowStepClick={true}
+        >
+          <div ref={stepContentRef} className="min-h-[400px] scroll-mt-4">
+            {renderStepContent()}
+          </div>
+        </FormWizard>
+      </FormFieldDisplayProvider>
+    </form>
   );
 });
 

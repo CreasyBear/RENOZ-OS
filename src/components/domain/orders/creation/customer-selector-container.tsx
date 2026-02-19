@@ -41,6 +41,7 @@ function mapToSelectedCustomer(c: {
   addresses?: Array<{
     type: string;
     street1?: string | null;
+    street2?: string | null;
     city?: string | null;
     state?: string | null;
     postcode?: string | null;
@@ -59,6 +60,7 @@ function mapToSelectedCustomer(c: {
     billingAddress: billing
       ? {
           street1: billing.street1 ?? undefined,
+          street2: billing.street2 ?? undefined,
           city: billing.city ?? undefined,
           state: billing.state ?? undefined,
           postcode: billing.postcode ?? undefined,
@@ -68,6 +70,7 @@ function mapToSelectedCustomer(c: {
     shippingAddress: shipping
       ? {
           street1: shipping.street1 ?? undefined,
+          street2: shipping.street2 ?? undefined,
           city: shipping.city ?? undefined,
           state: shipping.state ?? undefined,
           postcode: shipping.postcode ?? undefined,
@@ -97,6 +100,42 @@ export const CustomerSelectorContainer = memo(function CustomerSelectorContainer
     enabled: !!initialCustomerId && !selectedCustomerId,
   });
 
+  // Fetch full customer (with addresses) when selected from search list
+  const { data: selectedCustomerData } = useCustomer({
+    id: selectedCustomerId ?? '',
+    enabled: !!selectedCustomerId,
+  });
+
+  const lastEnrichedCustomerIdRef = useRef<string | null>(null);
+  const lastSelectionFingerprintRef = useRef<string>('__none__');
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  const getSelectionFingerprint = useCallback((customer: SelectedCustomer | null) => {
+    if (!customer) return '__none__';
+    const billing = customer.billingAddress;
+    const shipping = customer.shippingAddress;
+    return [
+      customer.id,
+      customer.name,
+      customer.email ?? '',
+      customer.phone ?? '',
+      billing?.street1 ?? '',
+      billing?.postcode ?? '',
+      shipping?.street1 ?? '',
+      shipping?.postcode ?? '',
+    ].join('|');
+  }, []);
+
+  const emitSelection = useCallback((customer: SelectedCustomer | null) => {
+    const fingerprint = getSelectionFingerprint(customer);
+    if (lastSelectionFingerprintRef.current === fingerprint) return;
+    lastSelectionFingerprintRef.current = fingerprint;
+    onSelectRef.current(customer);
+  }, [getSelectionFingerprint]);
+
   // Pre-select customer when initialCustomerId is provided and customer loads
   useEffect(() => {
     if (
@@ -106,9 +145,25 @@ export const CustomerSelectorContainer = memo(function CustomerSelectorContainer
       !selectedCustomerId
     ) {
       initialSelectDone.current = true;
-      onSelect(mapToSelectedCustomer(initialCustomer));
+      emitSelection(mapToSelectedCustomer(initialCustomer));
     }
-  }, [initialCustomerId, initialCustomer, selectedCustomerId, onSelect]);
+  }, [initialCustomerId, initialCustomer, selectedCustomerId, emitSelection]);
+
+  // Enrich selection with addresses when user selects from search (useCustomers returns no addresses)
+  useEffect(() => {
+    if (!selectedCustomerId || !selectedCustomerData) return;
+    if (lastEnrichedCustomerIdRef.current === selectedCustomerId) return;
+    lastEnrichedCustomerIdRef.current = selectedCustomerId;
+    emitSelection(mapToSelectedCustomer(selectedCustomerData));
+  }, [selectedCustomerId, selectedCustomerData, emitSelection]);
+
+  // Reset refs when selection is cleared
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      lastEnrichedCustomerIdRef.current = null;
+      lastSelectionFingerprintRef.current = '__none__';
+    }
+  }, [selectedCustomerId]);
 
   // Reset ref when initialCustomerId changes (e.g. user navigated with different customer)
   useEffect(() => {
@@ -142,10 +197,14 @@ export const CustomerSelectorContainer = memo(function CustomerSelectorContainer
     setSearch(value);
   }, []);
 
+  const handleSelect = useCallback((customer: SelectedCustomer | null) => {
+    emitSelection(customer);
+  }, [emitSelection]);
+
   return (
     <CustomerSelector
       selectedCustomerId={selectedCustomerId}
-      onSelect={onSelect}
+      onSelect={handleSelect}
       search={search}
       onSearchChange={handleSearchChange}
       customers={customers}

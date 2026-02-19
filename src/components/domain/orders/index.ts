@@ -87,7 +87,7 @@ export * from './cards';
 
 // --- Creation ---
 export * from './creation';
-export type { OrderCreationWizardProps } from './creation/order-creation-wizard';
+export type { OrderCreationWizardProps, OrderSubmitData } from './creation/order-creation-wizard.tsx';
 export type { CustomerSelectorProps, SelectedCustomer } from './creation/customer-selector';
 export type { ProductSelectorProps, OrderLineItemDraft } from './creation/product-selector';
 

@@ -77,6 +77,12 @@ export interface FormWizardProps {
   showStepNumbers?: boolean
   /** Allow clicking on steps to navigate */
   allowStepClick?: boolean
+  /**
+   * When true, the Complete button on the last step uses type="submit" so the
+   * parent form's onSubmit handles submit (per FORM-STANDARDS). handleNext will
+   * not call onComplete when on last step—the form submit does.
+   */
+  submitOnLastStep?: boolean
 }
 
 // ============================================================================
@@ -232,6 +238,7 @@ export function FormWizard({
   indicatorPosition = "top",
   showStepNumbers = true,
   allowStepClick = true,
+  submitOnLastStep = false,
 }: FormWizardProps) {
   const [isValidating, setIsValidating] = React.useState(false)
 
@@ -244,6 +251,7 @@ export function FormWizard({
 
   const isFirstStep = currentStep === 0
   const isLastStep = currentStep === steps.length - 1
+  const isSubmitButton = submitOnLastStep && isLastStep
 
   const handlePrevious = () => {
     if (!isFirstStep && !isSubmitting) {
@@ -268,6 +276,7 @@ export function FormWizard({
     }
 
     if (isLastStep) {
+      if (submitOnLastStep) return // form's onSubmit handles submit
       await onComplete()
     } else {
       onStepChange(currentStep + 1)
@@ -331,8 +340,8 @@ export function FormWizard({
           </div>
 
           <Button
-            type="button"
-            onClick={handleNext}
+            type={isSubmitButton ? "submit" : "button"}
+            onClick={isSubmitButton ? undefined : handleNext}
             disabled={isProcessing}
           >
             {isProcessing ? (
