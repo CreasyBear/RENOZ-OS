@@ -18,6 +18,16 @@ import {
 } from "@/components/shared/permission-guard";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
   useApiTokens,
   useCreateApiToken,
   useRevokeApiToken,
@@ -201,38 +211,32 @@ function NewTokenDisplay({
   };
 
   return (
-    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+    <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-medium text-green-800">
+          <h3 className="text-lg font-medium text-foreground">
             Token Created Successfully
           </h3>
-          <p className="text-sm text-green-700 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             <strong>Important:</strong> Copy your token now. You won&apos;t be able
             to see it again!
           </p>
         </div>
-        <button
-          onClick={onDismiss}
-          className="text-green-600 hover:text-green-800"
-        >
+        <Button type="button" variant="ghost" size="icon" onClick={onDismiss} aria-label="Dismiss">
           ✕
-        </button>
+        </Button>
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        <code className="flex-1 p-2 bg-white border border-green-300 rounded font-mono text-sm break-all">
+        <code className="flex-1 p-2 bg-background border border-border rounded font-mono text-sm break-all">
           {token.token}
         </code>
-        <button
-          onClick={copyToClipboard}
-          className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-        >
+        <Button onClick={copyToClipboard} variant="default">
           {copied ? "Copied!" : "Copy"}
-        </button>
+        </Button>
       </div>
 
-      <div className="mt-2 text-sm text-green-700">
+      <div className="mt-2 text-sm text-muted-foreground">
         <span className="font-medium">Name:</span> {token.name} |{" "}
         <span className="font-medium">Scopes:</span> {token.scopes.join(", ")}
         {token.expiresAt && (
@@ -312,12 +316,15 @@ function TokenList({
               </td>
               <td className="px-4 py-3 text-sm text-right">
                 {!token.isRevoked && canRevoke && (
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => onRevoke(token)}
-                    className="text-red-600 hover:text-red-800"
+                    className="text-destructive hover:text-destructive"
                   >
                     Revoke
-                  </button>
+                  </Button>
                 )}
               </td>
             </tr>
@@ -389,23 +396,23 @@ function CreateTokenDialog({
             <h2 className="text-xl font-semibold text-gray-900">
               Create API Token
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close">
               ✕
-            </button>
+            </Button>
           </div>
 
           <form onSubmit={handleSubmit}>
             {/* Name */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Label htmlFor="token-name" className="block mb-1">
                 Token Name
-              </label>
-              <input
+              </Label>
+              <Input
+                id="token-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., CI/CD Pipeline, Zapier Integration"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 maxLength={100}
               />
@@ -413,25 +420,21 @@ function CreateTokenDialog({
 
             {/* Scopes */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Scopes
-              </label>
+              <Label className="block mb-2">Scopes</Label>
               <div className="space-y-2">
                 {(["read", "write", "admin"] as const).map((scope) => (
                   <label
                     key={scope}
                     className="flex items-center gap-2 cursor-pointer"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={scopes.includes(scope)}
-                      onChange={() => toggleScope(scope)}
-                      className="rounded border-gray-300"
+                      onCheckedChange={() => toggleScope(scope)}
                     />
-                    <span className="text-sm text-gray-700 capitalize">
+                    <span className="text-sm text-foreground capitalize">
                       {scope}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {scope === "read" && "- Read-only access"}
                       {scope === "write" && "- Create and update resources"}
                       {scope === "admin" && "- Full administrative access"}
@@ -440,7 +443,7 @@ function CreateTokenDialog({
                 ))}
               </div>
               {scopes.length === 0 && (
-                <p className="text-sm text-red-600 mt-1">
+                <p className="text-sm text-destructive mt-1">
                   At least one scope is required
                 </p>
               )}
@@ -448,46 +451,44 @@ function CreateTokenDialog({
 
             {/* Expiration */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Expiration
-              </label>
-              <select
-                value={expiresIn}
-                onChange={(e) => setExpiresIn(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="never">Never expires</option>
-                <option value="30">30 days</option>
-                <option value="60">60 days</option>
-                <option value="90">90 days</option>
-                <option value="365">1 year</option>
-              </select>
+              <Label className="block mb-1">Expiration</Label>
+              <Select value={expiresIn} onValueChange={setExpiresIn}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select expiration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="never">Never expires</SelectItem>
+                  <SelectItem value="30">30 days</SelectItem>
+                  <SelectItem value="60">60 days</SelectItem>
+                  <SelectItem value="90">90 days</SelectItem>
+                  <SelectItem value="365">1 year</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Error */}
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded text-destructive text-sm">
                 {error}
               </div>
             )}
 
             {/* Actions */}
             <div className="flex justify-end gap-3">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                 disabled={isLoading}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isLoading || scopes.length === 0 || !name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? "Creating..." : "Create Token"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -522,34 +523,36 @@ function RevokeConfirmDialog({
           </p>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <Label htmlFor="revoke-reason" className="block mb-1">
               Reason (optional)
-            </label>
-            <input
+            </Label>
+            <Input
+              id="revoke-reason"
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g., Security concern, no longer needed"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
               maxLength={500}
             />
           </div>
 
           <div className="flex justify-end gap-3">
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
               disabled={isLoading}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
               onClick={() => onConfirm(reason || undefined)}
               disabled={isLoading}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
             >
               {isLoading ? "Revoking..." : "Revoke Token"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

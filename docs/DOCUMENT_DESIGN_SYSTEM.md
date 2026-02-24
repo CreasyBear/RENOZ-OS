@@ -30,9 +30,9 @@ Design system for Renoz PDF documents. **Level 100** = each document is best-in-
 
 | Family | Documents | Shared Traits |
 |--------|-----------|---------------|
-| **Financial** | Quote, Invoice, Credit Note, Pro Forma | Line items table, summary box, payment/terms. Fixed header on multi-page. |
-| **Operational** | Delivery Note, Packing Slip, Work Order | Item lists, checkboxes, shipping/carrier info. Field-usable. |
-| **Certificate** | Warranty, Completion, Handover Pack | Border, seal, formal tone. Centred layouts. |
+| **Financial** | Quote, Invoice, Credit Note, Pro Forma | Line items table, summary box, payment/terms. Fixed header on multi-page. Use DOCUMENT_* constants (20pt margins, 9pt labels, 10pt body, 21pt total). |
+| **Operational** | Delivery Note, Packing Slip, Work Order | Item lists, checkboxes, shipping/carrier info. Field-usable. Delivery Note and Packing Slip use DOCUMENT_* constants. |
+| **Certificate** | Warranty, Completion, Handover Pack | Border, seal, formal tone. Centred layouts. Distinct design. |
 | **Report** | Report Summary | Metric cards, data tables. Executive-ready. |
 
 ---
@@ -47,7 +47,13 @@ Design system for Renoz PDF documents. **Level 100** = each document is best-in-
 
 ## Page Margins
 
-Canonical values from `theme.ts` — use these exclusively:
+**Financial and Operational documents** (Quote, Invoice, Credit Note, Pro Forma, Delivery Note, Packing Slip) use `DOCUMENT_PAGE_MARGINS` from `document-constants.ts`:
+
+| Token | Value (pt) |
+|-------|------------|
+| `DOCUMENT_PAGE_MARGINS` | 20 all sides |
+
+**Other documents** (Certificates, Reports, Work Order) use `pageMargins` from `theme.ts`:
 
 | Token | Value (pt) |
 |-------|------------|
@@ -56,7 +62,7 @@ Canonical values from `theme.ts` — use these exclusively:
 | `pageMargins.left` | 48 |
 | `pageMargins.right` | 48 |
 
-**Fixed header clearance**: When fixed header is present, add `marginTop: fixedHeaderClearance` to main content (from theme; value 56).
+**Fixed header clearance**: Financial/Operational use `DOCUMENT_FIXED_HEADER_CLEARANCE` (28pt). Others use `fixedHeaderClearance` (56pt).
 **Fixed footer clearance**: Reserve `paddingBottom: 40` for PageNumber area.
 
 ---
@@ -118,6 +124,10 @@ Canonical values from `theme.ts` — use these exclusively:
 
 ## Table Styling
 
+**Financial & Operational** (Quote, Invoice, Credit Note, Pro Forma, Delivery Note, Packing Slip): Use `DOCUMENT_TABLE_ROW_PADDING` (5pt), `DOCUMENT_BORDER_COLOR`, `DOCUMENT_FONT_SIZE` (9pt headers), `DOCUMENT_BODY_FONT_SIZE` (10pt body).
+
+**Other documents** (Certificates, Reports):
+
 - **Header row**: `paddingVertical: spacing.sm`, `paddingHorizontal: spacing.md`, `fontWeight: semibold`, `color: text.muted`
 - **Body rows**: `paddingVertical: spacing.md`, `borderBottomWidth: 0.5`, `borderBottomColor: border.light`
 - **Column alignment**: Numbers (qty, price, amount) right-aligned. Description left-aligned.
@@ -133,6 +143,66 @@ All Documents must include:
 - `subject`: Brief description
 - `creator`: "Renoz" or "Renoz CRM"
 - `language`: "en-AU"
+
+---
+
+## Document Layout Constants (Financial & Operational)
+
+Use `document-constants.ts` for Quote, Invoice, Credit Note, Pro Forma, Delivery Note, Packing Slip:
+
+| Constant | Value | Use |
+|----------|-------|-----|
+| `DOCUMENT_PAGE_MARGINS` | 20pt all sides | Page padding |
+| `DOCUMENT_FONT_SIZE` | 9pt | Labels, meta, table headers |
+| `DOCUMENT_BODY_FONT_SIZE` | 10pt | Descriptions, addresses, line items |
+| `DOCUMENT_TOTAL_FONT_SIZE` | 21pt | Total amount |
+| `DOCUMENT_TABLE_ROW_PADDING` | 5pt | Table row padding |
+| `DOCUMENT_BORDER_COLOR` | #1C1C1E | Soft black borders |
+| `DOCUMENT_LINE_HEIGHT` | 1.4 | Body text readability |
+| `DOCUMENT_SUMMARY_WIDTH` | 250pt | Summary box width |
+| `DOCUMENT_SUMMARY_MARGIN_TOP` | 60pt | Space before summary |
+| `DOCUMENT_LOGO_HEIGHT` | 72pt | Logo height |
+| `DOCUMENT_LOGO_MAX_WIDTH` | 300pt | Logo max width |
+| `DOCUMENT_FIXED_HEADER_CLEARANCE` | 28pt | Content margin below fixed header |
+
+**Components**: `DocumentFixedHeader` (org + doc # on all pages), `formatAddressLines` for addresses.
+
+---
+
+## PDF Consistency Rules (React-PDF)
+
+- **StyleSheet.create()**: Define all styles at module level. No inline style objects.
+- **Single source of truth**: Use `document-constants.ts` and `theme.ts`. No magic numbers.
+- **Document metadata**: Set `title`, `author`, `subject`, `creator`, `language`, `keywords` on every `<Document>`.
+- **fixed**: Use `fixed` on headers and footers only. Renders on every page.
+- **wrap**: Use `wrap={false}` on summary blocks, payment/notes row, and blocks that must not split across pages.
+- **Typography**: Use `FONT_FAMILY` and `FONT_WEIGHTS`. Tabular nums for qty, price, amount columns.
+- **Currency**: Always use `formatCurrencyForPdf(amount, currency, locale)`.
+- **Dates**: Always use `formatDateForPdf(date, locale, format)`.
+- **Addresses**: Use `formatAddressLines(address)` — never render "undefined".
+
+---
+
+## Refinement (Financial & Operational)
+
+- **Typography hierarchy**: Labels/meta = 9pt. Body = 10pt. Total = 21pt.
+- **Border colour**: Use `DOCUMENT_BORDER_COLOR` (#1C1C1E) for table and summary borders. Less harsh than pure black.
+- **Line-height**: 1.4 for body text (addresses, descriptions, notes).
+- **Spacing rhythm**: Section breaks = 20pt. Summary margin = 60pt.
+- **Logo**: Height 72pt, max width 300pt.
+- **Status**: Plain text (Paid, Overdue, Applied, Issued). No coloured badges.
+
+---
+
+## ATO Compliance (Australian Tax Invoices)
+
+For invoices and tax invoices (en-AU):
+
+- **Under $1,000**: Must show: document is tax invoice, seller identity, ABN, issue date, item description (qty, price), GST amount, extent of taxable sale.
+- **$1,000+**: Also include buyer identity or ABN.
+- **GST registered**: Use "Tax Invoice" as document title.
+- **Not GST registered**: Use "Invoice" (not "Tax Invoice").
+- **ABN**: Display in From block (org) and optionally in Bill To when applicable.
 
 ---
 

@@ -64,6 +64,7 @@ export function WarrantyClaimDetailView({
   secondaryActions = [],
   responseSla,
   resolutionSla,
+  requestInfoEvents = [],
 }: WarrantyClaimDetailViewProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -143,6 +144,56 @@ export function WarrantyClaimDetailView({
   }, [claim.id, resolutionSla, responseSla]);
 
   const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
+  const actionTimeline = useMemo(() => {
+    const events: Array<{ label: string; detail?: string; at?: string | Date | null }> = [
+      { label: 'Claim submitted', at: claim.submittedAt },
+    ];
+    requestInfoEvents.forEach((e) => {
+      events.push({
+        label: 'Requested more info',
+        detail: e.actorName,
+        at: e.at,
+      });
+    });
+    if (claim.status === 'under_review') {
+      events.push({ label: 'Moved to under review', at: claim.updatedAt ?? claim.submittedAt });
+    }
+    if (claim.approvedAt) {
+      events.push({
+        label: 'Claim approved',
+        detail: claim.approvedByUser?.name ?? claim.approvedByUser?.email ?? undefined,
+        at: claim.approvedAt,
+      });
+    }
+    if (claim.denialReason) {
+      events.push({ label: 'Claim denied', detail: claim.denialReason, at: claim.updatedAt });
+    }
+    if (claim.status === 'cancelled') {
+      events.push({ label: 'Claim cancelled', at: claim.updatedAt });
+    }
+    if (claim.resolutionType || claim.resolutionNotes || claim.resolvedAt) {
+      events.push({
+        label: 'Claim resolved',
+        detail: claim.resolutionType ?? claim.resolutionNotes ?? undefined,
+        at: claim.resolvedAt ?? claim.updatedAt,
+      });
+    }
+    const filtered = events.filter((event) => !!event.at);
+    filtered.sort((a, b) => new Date(a.at!).getTime() - new Date(b.at!).getTime());
+    return filtered;
+  }, [
+    claim.submittedAt,
+    claim.status,
+    claim.updatedAt,
+    claim.approvedAt,
+    claim.approvedByUser?.name,
+    claim.approvedByUser?.email,
+    claim.denialReason,
+    claim.resolutionType,
+    claim.resolutionNotes,
+    claim.resolvedAt,
+    requestInfoEvents,
+  ]);
 
   const stages = [
     { id: 'submitted', label: 'Submitted' },
@@ -480,28 +531,49 @@ export function WarrantyClaimDetailView({
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Claim Links</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <Link
-                      to="/support/warranties/$warrantyId"
-                      params={{ warrantyId: claim.warrantyId }}
-                      className="text-primary hover:underline"
-                    >
-                      View warranty
-                    </Link>
-                    <Link
-                      to="/customers/$customerId"
-                      params={{ customerId: claim.customerId }}
-                      search={{}}
-                      className="text-primary hover:underline"
-                    >
-                      View customer
-                    </Link>
-                  </CardContent>
-                </Card>
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Claim Links</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <Link
+                        to="/support/warranties/$warrantyId"
+                        params={{ warrantyId: claim.warrantyId }}
+                        className="text-primary hover:underline"
+                      >
+                        View warranty
+                      </Link>
+                      <Link
+                        to="/customers/$customerId"
+                        params={{ customerId: claim.customerId }}
+                        search={{}}
+                        className="text-primary hover:underline"
+                      >
+                        View customer
+                      </Link>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Action Timeline</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      {actionTimeline.map((event, index) => (
+                        <div key={`${event.label}-${index}`} className="space-y-1">
+                          <div className="font-medium">{event.label}</div>
+                          {event.detail && (
+                            <div className="text-muted-foreground text-xs">{event.detail}</div>
+                          )}
+                          <div className="text-muted-foreground text-xs">
+                            {formatClaimDateTime(event.at as Date | string)}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </TabsContent>
           )}

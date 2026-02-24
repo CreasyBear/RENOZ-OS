@@ -116,10 +116,10 @@ export interface UseOpportunityDetailReturn {
   wonLostDialogStage: 'won' | 'lost' | null;
   openWonLostDialog: (stage: 'won' | 'lost') => void;
   closeWonLostDialog: () => void;
-  isEditing: boolean;
-  setIsEditing: (editing: boolean) => void;
   activityDialogOpen: boolean;
   setActivityDialogOpen: (open: boolean) => void;
+  editDialogOpen: boolean;
+  setEditDialogOpen: (open: boolean) => void;
   extendQuoteDialogOpen: boolean;
   setExtendQuoteDialogOpen: (open: boolean) => void;
 
@@ -183,8 +183,8 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [wonLostDialogOpen, setWonLostDialogOpen] = useState(false);
   const [wonLostDialogStage, setWonLostDialogStage] = useState<'won' | 'lost' | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [extendQuoteDialogOpen, setExtendQuoteDialogOpen] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
   // ─────────────────────────────────────────────────────────────────────────
   const actions = useMemo<OpportunityDetailActions>(() => ({
     onEdit: () => {
-      setIsEditing(true);
+      setEditDialogOpen(true);
     },
 
     onDelete: async () => {
@@ -326,7 +326,6 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
           ...updates,
         });
         toast.success('Opportunity updated');
-        setIsEditing(false);
       } catch {
         toastError('Failed to update opportunity');
       }
@@ -459,10 +458,10 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
       setWonLostDialogOpen(false);
       setWonLostDialogStage(null);
     },
-    isEditing,
-    setIsEditing,
     activityDialogOpen,
     setActivityDialogOpen,
+    editDialogOpen,
+    setEditDialogOpen,
     extendQuoteDialogOpen,
     setExtendQuoteDialogOpen,
 

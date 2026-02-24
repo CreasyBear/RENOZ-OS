@@ -17,7 +17,7 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import type { AuditEntityType } from '@/lib/schemas/settings';
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 

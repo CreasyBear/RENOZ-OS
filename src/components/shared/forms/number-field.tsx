@@ -41,6 +41,7 @@ import { useState, useEffect, useCallback, startTransition } from "react"
 import { Minus, Plus } from "lucide-react"
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { cn } from "~/lib/utils"
 import { extractFieldError, type FormFieldWithType } from "./types"
 
@@ -94,7 +95,8 @@ export function NumberField({
   stepperSize = "default",
   hideLabel = false,
 }: NumberFieldProps) {
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
   // Track internal string representation for proper empty state handling
   const [internalValue, setInternalValue] = useState<string>(() => {

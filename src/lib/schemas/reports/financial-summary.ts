@@ -38,6 +38,7 @@ export const financialSummaryTrendPointSchema = z.object({
   period: z.string(),
   periodLabel: z.string(),
   totalRevenue: z.number(),
+  cashRevenue: z.number().optional(),
   residentialRevenue: z.number(),
   commercialRevenue: z.number(),
   invoiceCount: z.number(),

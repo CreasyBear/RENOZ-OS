@@ -130,8 +130,8 @@ export function BusinessOverviewContainer({ className }: BusinessOverviewContain
     }));
 
     return {
-      revenueMtd: data.revenueMTD?.value ?? 0,
-      revenueMtdChange: data.revenueMTD?.changePercent,
+      revenueMtd: data.revenueInvoicedMTD?.value ?? 0,
+      revenueMtdChange: data.revenueInvoicedMTD?.changePercent,
       arBalance: data.arBalance?.value ?? 0,
       cashReceived: data.cashReceivedMTD?.value ?? 0,
       overdueAr,

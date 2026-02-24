@@ -246,6 +246,61 @@ export function transformAuditActivity(
 }
 
 /**
+ * Raw opportunity activity from getActivityTimeline (opportunity_activities table)
+ */
+export interface OpportunityActivityRaw {
+  id: string;
+  type: 'call' | 'email' | 'meeting' | 'note' | 'follow_up';
+  description: string;
+  outcome: string | null;
+  scheduledAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  createdBy: string;
+}
+
+/**
+ * Transform an opportunity activity to unified format
+ */
+export function transformOpportunityActivity(
+  activity: OpportunityActivityRaw,
+  opportunityId: string
+): UnifiedActivity {
+  const isCompleted = !!activity.completedAt;
+  const isOverdue =
+    !isCompleted &&
+    !!activity.scheduledAt &&
+    new Date(activity.scheduledAt) < new Date();
+
+  return {
+    id: activity.id,
+    source: 'planned',
+    entityType: 'opportunity',
+    entityId: opportunityId,
+    type: activity.type,
+    description: activity.description,
+    userId: activity.createdBy,
+    createdAt:
+      activity.createdAt instanceof Date
+        ? activity.createdAt.toISOString()
+        : String(activity.createdAt),
+    scheduledAt: activity.scheduledAt
+      ? activity.scheduledAt instanceof Date
+        ? activity.scheduledAt.toISOString()
+        : String(activity.scheduledAt)
+      : undefined,
+    completedAt: activity.completedAt
+      ? activity.completedAt instanceof Date
+        ? activity.completedAt.toISOString()
+        : String(activity.completedAt)
+      : undefined,
+    outcome: activity.outcome ?? undefined,
+    isCompleted,
+    isOverdue: isOverdue || undefined,
+  };
+}
+
+/**
  * Transform a planned customer activity to unified format
  */
 export function transformPlannedActivity(

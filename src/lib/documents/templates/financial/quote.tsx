@@ -1,177 +1,162 @@
 /**
- * Quote PDF Template - Accounting Style
+ * Quote PDF Template
  *
- * Practical, dense layout that fits on one page.
- * Clear, professional quote presentation.
+ * 20pt margins, two-column From/Quote To, 9pt typography,
+ * black borders, 21pt total. Fixed header on all pages.
  */
 
-import { useMemo } from "react";
-import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
 import {
   PageNumber,
-  FixedDocumentHeader,
-  pageMargins,
-  fixedHeaderClearance,
-  fontSize,
-  spacing,
+  DocumentFixedHeader,
+  formatAddressLines,
   colors,
+  tabularNums,
   FONT_FAMILY,
   FONT_WEIGHTS,
   formatCurrencyForPdf,
   formatDateForPdf,
+  DOCUMENT_PAGE_MARGINS,
+  DOCUMENT_FIXED_HEADER_CLEARANCE,
+  DOCUMENT_BORDER_COLOR,
+  DOCUMENT_LOGO_HEIGHT,
+  DOCUMENT_LOGO_MAX_WIDTH,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { QuoteDocumentData, DocumentOrganization } from "../../types";
 
 // ============================================================================
-// STYLES - Dense, Practical
+// STYLES
 // ============================================================================
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: pageMargins.top,
-    paddingBottom: pageMargins.bottom,
-    paddingLeft: pageMargins.left,
-    paddingRight: pageMargins.right,
+    paddingTop: DOCUMENT_PAGE_MARGINS.top,
+    paddingBottom: DOCUMENT_PAGE_MARGINS.bottom,
+    paddingLeft: DOCUMENT_PAGE_MARGINS.left,
+    paddingRight: DOCUMENT_PAGE_MARGINS.right,
     backgroundColor: colors.background.white,
+    color: colors.text.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
   },
   content: {
     flex: 1,
-    marginTop: fixedHeaderClearance,
+    marginTop: DOCUMENT_FIXED_HEADER_CLEARANCE,
   },
 
-  // Header
+  // Header: Meta left, Logo right
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.lg,
+    marginBottom: 20,
   },
-  companySection: {
+  metaSection: {
     flex: 1,
   },
-  companyName: {
-    fontSize: fontSize.lg,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  companyDetail: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
-    lineHeight: 1.4,
-  },
-  quoteInfo: {
-    alignItems: "flex-end",
-  },
-  quoteTitle: {
-    fontSize: fontSize["2xl"],
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.primary,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  infoRow: {
-    flexDirection: "row",
-    marginBottom: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+  metaTitle: {
+    fontSize: 21,
     fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    width: 80,
-    textAlign: "right",
-    marginRight: spacing.sm,
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
-    width: 100,
+    marginBottom: 8,
   },
-  expiryBadge: {
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: "#FFF3E0",
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    gap: 2,
   },
-  expiryText: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: "#E65100",
+  metaLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+  },
+  metaValue: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+  },
+  validityText: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+    marginTop: 4,
+  },
+  logoWrapper: {
+    maxWidth: DOCUMENT_LOGO_MAX_WIDTH,
+  },
+  logo: {
+    height: DOCUMENT_LOGO_HEIGHT,
+    objectFit: "contain",
   },
 
-  // Quote To
-  quoteToSection: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+  // From/Quote To two-column
+  fromToRow: {
+    flexDirection: "row",
+    marginTop: 20,
   },
-  quoteToLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
+  fromColumn: {
+    flex: 1,
+    marginRight: 10,
   },
-  quoteToName: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
+  toColumn: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  sectionLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
-  quoteToDetail: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+  sectionName: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  sectionDetail: {
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
   },
 
-  // Table
+  // Table - 9pt, 5pt row padding, black borders
   table: {
-    marginTop: spacing.md,
+    marginTop: 20,
   },
   tableHeader: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.medium,
-    paddingBottom: spacing.xs,
-    marginBottom: spacing.xs,
+    borderBottomWidth: 0.5,
+    borderBottomColor: DOCUMENT_BORDER_COLOR,
+    paddingBottom: 5,
+    marginBottom: 5,
   },
   tableHeaderCell: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.secondary,
-    textTransform: "uppercase",
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
   },
   tableRow: {
     flexDirection: "row",
-    paddingVertical: spacing.xs,
+    paddingVertical: 5,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: DOCUMENT_BORDER_COLOR,
+    alignItems: "flex-start",
   },
   tableCell: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 10,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
+    lineHeight: 1.4,
+  },
+  tableCellNumeric: {
+    ...tabularNums,
   },
   tableCellMuted: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
   },
@@ -180,76 +165,87 @@ const styles = StyleSheet.create({
   colPrice: { flex: 1.2, textAlign: "right" },
   colTax: { flex: 0.8, textAlign: "right" },
   colTotal: { flex: 1.2, textAlign: "right" },
-  // When tax column is shown, adjust description width
   colDescriptionWithTax: { flex: 3.5 },
 
-  // Summary
+  // Summary - marginTop 60, width 250, total 21pt
   summarySection: {
-    marginTop: spacing.lg,
+    marginTop: 60,
+    marginBottom: 40,
     flexDirection: "row",
     justifyContent: "flex-end",
   },
   summaryBox: {
-    width: 240,
+    width: 250,
   },
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: spacing.xs,
+    marginBottom: 5,
   },
   summaryLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
   summaryValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
     textAlign: "right",
+    ...tabularNums,
   },
   summaryTotal: {
     flexDirection: "row",
     justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: colors.border.medium,
-    paddingTop: spacing.sm,
-    marginTop: spacing.sm,
+    alignItems: "center",
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
+    paddingTop: 5,
+    marginTop: 5,
   },
   summaryTotalLabel: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
   },
   summaryTotalValue: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: 21,
+    fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
     textAlign: "right",
+    ...tabularNums,
+  },
+
+  // Validity - plain text
+  validitySection: {
+    marginTop: 8,
+  },
+  validityLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+  },
+  validityValue: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
   },
 
   // Terms
   termsSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
   },
   termsLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    marginBottom: spacing.xs,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+    marginBottom: 4,
   },
   termsText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
@@ -257,42 +253,39 @@ const styles = StyleSheet.create({
 
   // Acceptance
   acceptanceSection: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
   },
   acceptanceTitle: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    marginBottom: 4,
   },
   acceptanceText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
   signatureRow: {
     flexDirection: "row",
-    gap: spacing.xl,
+    gap: 20,
   },
   signatureBlock: {
     flex: 1,
   },
   signatureLine: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.dark,
-    height: 40,
-    marginBottom: spacing.xs,
+    borderBottomWidth: 0.5,
+    borderBottomColor: DOCUMENT_BORDER_COLOR,
+    height: 32,
+    marginBottom: 4,
   },
   signatureLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
   },
@@ -321,91 +314,81 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const { order } = data;
 
-  // eslint-disable-next-line react-hooks/purity -- cached "now" for PDF render is intentional
-  const now = useMemo(() => Date.now(), []);
-  const daysUntilExpiry = Math.ceil(
-    (new Date(data.validUntil).getTime() - now) / (1000 * 60 * 60 * 24)
-  );
+  const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
+  const fromAddressLines = formatAddressLines(organization.address);
+  const toAddressLines = formatAddressLines(order.billingAddress);
 
-  // Check if any line items have per-item tax rates
   const hasPerItemTax = order.lineItems.some(item => item.taxRate != null);
 
   return (
     <Page size="A4" style={styles.page}>
-      <FixedDocumentHeader
+      <DocumentFixedHeader
         orgName={organization.name}
         documentType="Quote"
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header */}
+        {/* Header: Meta left, Logo right */}
         <View style={styles.headerRow}>
-          <View style={styles.companySection}>
-            <Text style={styles.companyName}>{organization.name}</Text>
-            {organization.address && (
-              <>
-                <Text style={styles.companyDetail}>
-                  {organization.address.addressLine1}
-                  {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
-                </Text>
-                <Text style={styles.companyDetail}>
-                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
-                </Text>
-                {organization.phone && (
-                  <Text style={styles.companyDetail}>{organization.phone}</Text>
-                )}
-              </>
-            )}
-          </View>
-
-          <View style={styles.quoteInfo}>
-            <Text style={styles.quoteTitle}>Quote</Text>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Number</Text>
-              <Text style={styles.infoValue}>{data.documentNumber}</Text>
+          <View style={styles.metaSection}>
+            <Text style={styles.metaTitle}>Quote</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Quote: </Text>
+              <Text style={styles.metaValue}>{data.documentNumber}</Text>
             </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Date</Text>
-              <Text style={styles.infoValue}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Date: </Text>
+              <Text style={styles.metaValue}>
                 {formatDateForPdf(data.issueDate, locale, "short")}
               </Text>
             </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Valid Until</Text>
-              <Text style={styles.infoValue}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Valid Until: </Text>
+              <Text style={styles.metaValue}>
                 {formatDateForPdf(data.validUntil, locale, "short")}
               </Text>
             </View>
+            <Text style={styles.validityText}>
+              Valid until {formatDateForPdf(data.validUntil, locale, "short")}
+            </Text>
+          </View>
 
-            {daysUntilExpiry <= 7 && daysUntilExpiry >= 0 && (
-              <View style={styles.expiryBadge}>
-                <Text style={styles.expiryText}>{`Expires in ${daysUntilExpiry} days`}</Text>
-              </View>
+          {logoUrl && (
+            <View style={styles.logoWrapper}>
+              <Image src={logoUrl} style={styles.logo} />
+            </View>
+          )}
+        </View>
+
+        {/* From / Quote To two-column */}
+        <View style={styles.fromToRow}>
+          <View style={styles.fromColumn}>
+            <Text style={styles.sectionLabel}>From</Text>
+            <Text style={styles.sectionName}>{organization.name}</Text>
+            {organization.taxId && (
+              <Text style={styles.sectionDetail}>ABN: {organization.taxId}</Text>
+            )}
+            {fromAddressLines.map((line) => (
+              <Text key={line} style={styles.sectionDetail}>{line}</Text>
+            ))}
+            {organization.phone && (
+              <Text style={styles.sectionDetail}>{organization.phone}</Text>
+            )}
+          </View>
+          <View style={styles.toColumn}>
+            <Text style={styles.sectionLabel}>Quote To</Text>
+            <Text style={styles.sectionName}>{order.customer.name}</Text>
+            {toAddressLines.length > 0 ? (
+              toAddressLines.map((line) => (
+                <Text key={line} style={styles.sectionDetail}>{line}</Text>
+              ))
+            ) : (
+              <Text style={styles.sectionDetail}>—</Text>
             )}
           </View>
         </View>
 
-        {/* Quote To */}
-        <View style={styles.quoteToSection}>
-          <Text style={styles.quoteToLabel}>Quote To</Text>
-          <Text style={styles.quoteToName}>{order.customer.name}</Text>
-          {order.billingAddress && (
-            <>
-              <Text style={styles.quoteToDetail}>
-                {order.billingAddress.addressLine1}
-                {order.billingAddress.addressLine2 ? `, ${order.billingAddress.addressLine2}` : ""}
-              </Text>
-              <Text style={styles.quoteToDetail}>
-                {`${order.billingAddress.city}, ${order.billingAddress.state} ${order.billingAddress.postalCode}`}
-              </Text>
-            </>
-          )}
-        </View>
-
-        {/* Line Items */}
+        {/* Line Items Table */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription]}>Description</Text>
@@ -417,26 +400,38 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
             <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount</Text>
           </View>
 
-          {order.lineItems.map((item) => (
+          {order.lineItems.length === 0 ? (
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableCell, styles.colDescription]}>—</Text>
+              <Text style={[styles.tableCell, styles.colQty]}>—</Text>
+              <Text style={[styles.tableCell, styles.colPrice]}>—</Text>
+              {hasPerItemTax && (
+                <Text style={[styles.tableCell, styles.colTax]}>—</Text>
+              )}
+              <Text style={[styles.tableCell, styles.colTotal]}>—</Text>
+            </View>
+          ) : (
+            order.lineItems.map((item) => (
             <View key={item.id} style={styles.tableRow} wrap={true}>
               <View style={hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription}>
-                <Text style={styles.tableCell}>{item.description}</Text>
+                <Text style={styles.tableCell}>{item.description || "—"}</Text>
                 {item.sku && <Text style={styles.tableCellMuted}>{item.sku}</Text>}
               </View>
-              <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
-              <Text style={[styles.tableCell, styles.colPrice]}>
+              <Text style={[styles.tableCell, styles.tableCellNumeric, styles.colQty]}>{String(item.quantity)}</Text>
+              <Text style={[styles.tableCell, styles.tableCellNumeric, styles.colPrice]}>
                 {formatCurrencyForPdf(item.unitPrice, organization.currency, locale)}
               </Text>
               {hasPerItemTax && (
-                <Text style={[styles.tableCell, styles.colTax]}>
+                <Text style={[styles.tableCell, styles.tableCellNumeric, styles.colTax]}>
                   {item.taxRate != null ? `${item.taxRate}%` : "-"}
                 </Text>
               )}
-              <Text style={[styles.tableCell, styles.colTotal]}>
+              <Text style={[styles.tableCell, styles.tableCellNumeric, styles.colTotal]}>
                 {formatCurrencyForPdf(item.total, organization.currency, locale)}
               </Text>
             </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Summary */}
@@ -448,7 +443,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
                 {formatCurrencyForPdf(order.subtotal, organization.currency, locale)}
               </Text>
             </View>
-            
+
             {order.discount && order.discount > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Discount</Text>
@@ -457,7 +452,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
                 </Text>
               </View>
             )}
-            
+
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
               <Text style={styles.summaryValue}>
@@ -488,13 +483,12 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
         <View style={styles.acceptanceSection} wrap={false}>
           <Text style={styles.acceptanceTitle}>Acceptance</Text>
           <Text style={styles.acceptanceText}>
-            Please sign below to accept this quote. By accepting, you agree to the terms and conditions outlined above. 
-            Work will commence upon receipt of signed acceptance and any required deposit.
+            By signing below, the customer agrees to the terms above. Work will commence upon receipt of signed acceptance and any required deposit.
           </Text>
           <View style={styles.signatureRow}>
             <View style={styles.signatureBlock}>
               <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Authorized Signature</Text>
+              <Text style={styles.signatureLabel}>Authorised signature</Text>
             </View>
             <View style={styles.dateBlock}>
               <View style={styles.signatureLine} />
@@ -502,7 +496,6 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
             </View>
           </View>
         </View>
-
       </View>
 
       <PageNumber documentNumber={data.documentNumber} />

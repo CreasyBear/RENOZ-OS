@@ -7,20 +7,15 @@
  * @see _misc/docs/design-system/FORM-STANDARDS.md
  */
 
+import { useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
+  FormDialog,
   TextField,
   TextareaField,
   SelectField,
-  FormActions,
+  DateStringField,
 } from '@/components/shared/forms';
+import { toast } from 'sonner';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { editOrderSchema, type EditOrderFormData } from './order-edit-dialog.schema';
 
@@ -44,6 +39,8 @@ export interface OrderEditDialogProps {
   onSubmit?: (data: EditOrderFormData) => Promise<void>;
   /** From route container (submit state). */
   isSubmitting?: boolean;
+  /** From route container (server/mutation error). */
+  submitError?: string | null;
 }
 
 const STATUS_OPTIONS = [
@@ -71,41 +68,18 @@ function getDefaultValues(order: NonNullable<OrderEditDialogProps['order']>): Ed
 }
 
 function OrderEditFormContent({
-  order,
+  form,
   customers,
   isLoadingCustomers,
-  onSubmit,
-  onOpenChange,
-  isSubmitting,
 }: {
-  order: NonNullable<OrderEditDialogProps['order']>;
+  form: ReturnType<typeof useTanStackForm<EditOrderFormData>>;
   customers: Array<{ id: string; name: string }>;
   isLoadingCustomers: boolean;
-  onSubmit: (data: EditOrderFormData) => Promise<void>;
-  onOpenChange: (open: boolean) => void;
-  isSubmitting: boolean;
 }) {
-  const defaultValues = getDefaultValues(order);
-
-  const form = useTanStackForm<EditOrderFormData>({
-    schema: editOrderSchema,
-    defaultValues,
-    onSubmit: async (values) => {
-      await onSubmit(values);
-      onOpenChange(false);
-    },
-  });
-
   const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }));
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        form.handleSubmit();
-      }}
-      className="space-y-4"
-    >
+    <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <form.Field name="customerId">
@@ -142,10 +116,9 @@ function OrderEditFormContent({
 
       <form.Field name="dueDate">
         {(field) => (
-          <TextField
+          <DateStringField
             field={field}
             label="Due Date"
-            type="date"
             placeholder="Select date"
           />
         )}
@@ -172,52 +145,79 @@ function OrderEditFormContent({
           />
         )}
       </form.Field>
-
-      <DialogFooter className="pt-4">
-        <FormActions
-          form={form}
-          submitLabel="Save Changes"
-          loadingLabel="Saving..."
-          onCancel={() => onOpenChange(false)}
-          showCancel={true}
-          submitDisabled={isSubmitting}
-        />
-      </DialogFooter>
-    </form>
+    </>
   );
 }
 
-export function OrderEditDialog({
-  open,
-  onOpenChange,
-  order,
-  customers = [],
-  isLoadingCustomers = false,
-  onSubmit = async () => {},
-  isSubmitting = false,
-}: OrderEditDialogProps) {
+const EMPTY_ORDER_DEFAULTS: EditOrderFormData = {
+  customerId: '',
+  orderNumber: '',
+  status: 'draft',
+  dueDate: '',
+  internalNotes: '',
+  customerNotes: '',
+};
+
+export function OrderEditDialog(props: OrderEditDialogProps) {
+  const {
+    open,
+    onOpenChange,
+    order,
+    customers = [],
+    isLoadingCustomers = false,
+    onSubmit = async () => {},
+    isSubmitting = false,
+    submitError,
+  } = props;
+
+  const defaultValues = order ? getDefaultValues(order) : EMPTY_ORDER_DEFAULTS;
+
+  const form = useTanStackForm<EditOrderFormData>({
+    schema: editOrderSchema,
+    defaultValues,
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
+    onSubmit: async (values) => {
+      await onSubmit(values);
+      onOpenChange(false);
+    },
+  });
+
+  useEffect(() => {
+    if (order && open) {
+      form.reset(getDefaultValues(order));
+    }
+  }, [order, open, form]);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && isSubmitting) return;
+    onOpenChange(newOpen);
+  };
+
   if (!order) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent key={order.id} className="max-h-[80vh] overflow-y-auto sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Edit Order</DialogTitle>
-          <DialogDescription>
-            Make changes to order #{order.orderNumber}. Changes will be reflected in the fulfillment
-            kanban.
-          </DialogDescription>
-        </DialogHeader>
-
-        <OrderEditFormContent
-          order={order}
-          customers={customers}
-          isLoadingCustomers={isLoadingCustomers}
-          onSubmit={onSubmit}
-          onOpenChange={onOpenChange}
-          isSubmitting={isSubmitting}
-        />
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      key={order.id}
+      title="Edit Order"
+      description={`Make changes to order #${order.orderNumber}. Changes will be reflected in the fulfillment kanban.`}
+      form={form}
+      submitLabel="Save Changes"
+      loadingLabel="Saving..."
+      submitError={submitError}
+      submitDisabled={isSubmitting}
+      size="lg"
+      className="max-h-[80vh] overflow-y-auto sm:max-w-[600px]"
+      resetOnClose={false}
+    >
+      <OrderEditFormContent
+        form={form}
+        customers={customers}
+        isLoadingCustomers={isLoadingCustomers}
+      />
+    </FormDialog>
   );
 }

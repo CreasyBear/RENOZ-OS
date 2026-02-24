@@ -122,9 +122,9 @@ export function PODirectory({
           sortDirection={sortDirection}
           onSort={onSortChange}
           onViewPO={onView ?? (() => {})}
-          onEditPO={onEdit ?? (() => {})}
-          onDeletePO={onDelete ?? (() => {})}
-          onReceivePO={onReceive ?? (() => {})}
+          onEditPO={onEdit}
+          onDeletePO={onDelete}
+          onReceivePO={onReceive}
           page={pagination.page}
           pageSize={pagination.pageSize}
           total={pagination.totalItems}

@@ -13,9 +13,11 @@
  * @see src/hooks/pipeline/use-quote-mutations.ts (mutations)
  */
 
-import { useCustomers } from '@/hooks/customers';
+import { useCustomer } from '@/hooks/customers';
 import { useProducts } from '@/hooks/products';
 import { useCreateQuoteVersion } from '@/hooks/pipeline';
+import { customerSchema } from '@/lib/schemas/customers';
+import type { Customer } from '@/lib/schemas/customers';
 import { QuickQuoteFormPresenter } from './quick-quote-form';
 import type { QuickQuoteFormContainerProps } from './quick-quote-form';
 
@@ -30,10 +32,10 @@ export function QuickQuoteFormContainer({
   // DATA FETCHING (Container responsibility via centralized hooks)
   // ===========================================================================
 
-  const {
-    data: customersData,
-    isLoading: customersLoading,
-  } = useCustomers({ pageSize: 100 });
+  const { data: customerData } = useCustomer({
+    id: customerId ?? '',
+    enabled: !!customerId,
+  });
 
   const {
     data: productsData,
@@ -46,20 +48,21 @@ export function QuickQuoteFormContainer({
 
   const createMutation = useCreateQuoteVersion();
 
-  // Combined loading state
-  const isLoading = customersLoading || productsLoading;
+  // Resolve selectedCustomer for entity linking prefill
+  const selectedCustomer: Customer | null =
+    customerId && customerData && customerSchema.safeParse(customerData).success
+      ? (customerSchema.parse(customerData) as Customer)
+      : null;
 
-  // Extract data
-  const customers = customersData?.items ?? [];
   const products = productsData?.products ?? [];
 
   return (
     <QuickQuoteFormPresenter
       opportunityId={opportunityId}
       customerId={customerId}
-      customers={customers}
+      initialSelectedCustomer={selectedCustomer}
       products={products}
-      isLoading={isLoading}
+      isLoading={productsLoading}
       createMutation={createMutation}
       onSuccess={onSuccess}
       onCancel={onCancel}

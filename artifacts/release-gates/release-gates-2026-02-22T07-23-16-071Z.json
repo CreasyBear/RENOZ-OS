@@ -1,0 +1,40 @@
+{
+  "gateName": "release-gates-summary",
+  "status": "fail",
+  "generatedAt": "2026-02-22T07:23:16.071Z",
+  "metrics": {
+    "totalGates": 3,
+    "passed": 1,
+    "failed": 2
+  },
+  "failingRules": [
+    "serialized-lineage",
+    "finance-integrity"
+  ],
+  "checks": [
+    {
+      "gateName": "serialized-lineage",
+      "status": "fail",
+      "generatedAt": "2026-02-22T07:23:16.071Z",
+      "metrics": {},
+      "failingRules": [],
+      "exitCode": 1
+    },
+    {
+      "gateName": "finance-integrity",
+      "status": "fail",
+      "generatedAt": "2026-02-22T07:23:16.071Z",
+      "metrics": {},
+      "failingRules": [],
+      "exitCode": 1
+    },
+    {
+      "gateName": "route-intent-smoke",
+      "status": "pass",
+      "generatedAt": "2026-02-22T07:23:16.071Z",
+      "metrics": {},
+      "failingRules": [],
+      "exitCode": 0
+    }
+  ]
+}

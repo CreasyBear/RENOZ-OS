@@ -12,7 +12,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
-import { WarrantyImportSettingsContainer } from '@/components/domain/warranty';
+import { WarrantyImportSettingsContainer } from '@/components/domain/warranty/containers/warranty-import-settings-container';
 
 export const Route = createFileRoute('/_authenticated/settings/warranty-import')({
   component: WarrantyImportSettingsPage,

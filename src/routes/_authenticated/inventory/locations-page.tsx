@@ -8,7 +8,7 @@
  *
  * @see src/routes/_authenticated/inventory/locations.tsx - Route definition
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useRef, type ChangeEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, Upload, Download, RefreshCw } from "lucide-react";
 import { PageLayout } from "@/components/layout";
@@ -24,19 +24,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  LocationTree,
-  LocationForm,
-  LocationDetail,
-  type WarehouseLocation,
-  type LocationContents,
-} from "@/components/domain/inventory";
+import { LocationTree, type WarehouseLocation } from "@/components/domain/inventory/locations/location-tree";
+import { LocationForm } from "@/components/domain/inventory/locations/location-form";
+import { LocationDetail, type LocationContents } from "@/components/domain/inventory/locations/location-detail";
 import type {
   WarehouseLocationWithChildren,
   LocationDetailApiResult,
   CreateWarehouseLocationInput,
   UpdateWarehouseLocationInput,
 } from "@/lib/schemas/inventory/inventory";
+import { locationTypeSchema } from "@/lib/schemas/inventory/inventory";
 import {
   useLocationHierarchy,
   useLocationDetail,
@@ -44,6 +41,7 @@ import {
   useUpdateWarehouseLocation,
   useDeleteWarehouseLocation,
 } from "@/hooks/inventory";
+import { bulkCreateLocations } from "@/server/functions/inventory/locations";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -51,6 +49,7 @@ import {
 
 export default function LocationsPage() {
   const navigate = useNavigate();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   // State
   const [selectedLocation, setSelectedLocation] = useState<WarehouseLocation | null>(null);
@@ -62,6 +61,7 @@ export default function LocationsPage() {
   const [editingLocation, setEditingLocation] = useState<WarehouseLocation | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingLocation, setDeletingLocation] = useState<WarehouseLocation | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Data hooks - using TanStack Query via hooks
   const {
@@ -162,6 +162,7 @@ export default function LocationsPage() {
     .sort((a, b) => b.totalValue - a.totalValue); // Sort by total value descending
 
   const locationMetrics = locationDetailData?.metrics ?? null;
+  const flatLocations = useMemo(() => flattenLocations(locations), [locations]);
 
   // Handlers
   const handleSelect = useCallback((location: WarehouseLocation) => {
@@ -195,15 +196,19 @@ export default function LocationsPage() {
 
   const handleFormSubmit = useCallback(
     async (data: CreateWarehouseLocationInput | UpdateWarehouseLocationInput) => {
-      if (formMode === "edit" && editingLocation) {
-        await updateMutation.mutateAsync({
-          id: editingLocation.id,
-          data,
-        });
-      } else {
-        await createMutation.mutateAsync(data as CreateWarehouseLocationInput);
+      try {
+        if (formMode === "edit" && editingLocation) {
+          await updateMutation.mutateAsync({
+            id: editingLocation.id,
+            data,
+          });
+        } else {
+          await createMutation.mutateAsync(data as CreateWarehouseLocationInput);
+        }
+        setShowFormDialog(false);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to save location");
       }
-      setShowFormDialog(false);
     },
     [formMode, editingLocation, createMutation, updateMutation]
   );
@@ -234,7 +239,201 @@ export default function LocationsPage() {
     toast.success("Refreshed");
   }, [refetchHierarchy]);
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const handleExport = useCallback(() => {
+    const headers = [
+      "locationCode",
+      "name",
+      "locationType",
+      "parentCode",
+      "capacity",
+      "isActive",
+      "isPickable",
+      "isReceivable",
+    ];
+    const lines = [headers.join(",")];
+
+    for (const location of flatLocations) {
+      const row = [
+        location.locationCode,
+        location.name,
+        location.locationType,
+        location.parentCode ?? "",
+        location.capacity != null ? String(location.capacity) : "",
+        String(location.isActive ?? true),
+        String(location.isPickable ?? true),
+        String(location.isReceivable ?? true),
+      ].map(escapeCsvValue);
+      lines.push(row.join(","));
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `warehouse-locations-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${flatLocations.length} location${flatLocations.length === 1 ? "" : "s"}`);
+  }, [flatLocations]);
+
+  const handleImportClick = useCallback(() => {
+    importInputRef.current?.click();
+  }, []);
+
+  const handleImportFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        setIsImporting(true);
+        const text = await file.text();
+        const rows = parseCsvRows(text);
+        if (rows.length === 0) {
+          toast.error("CSV is empty");
+          return;
+        }
+
+        const headers = rows[0].map((h) => h.trim().toLowerCase());
+        const getColumn = (name: string) => headers.indexOf(name.toLowerCase());
+        const idxCode = getColumn("locationcode");
+        const idxName = getColumn("name");
+        const idxType = getColumn("locationtype");
+        const idxParentCode = getColumn("parentcode");
+        const idxCapacity = getColumn("capacity");
+        const idxActive = getColumn("isactive");
+        const idxPickable = getColumn("ispickable");
+        const idxReceivable = getColumn("isreceivable");
+
+        if (idxCode === -1 || idxName === -1 || idxType === -1) {
+          toast.error("CSV must include headers: locationCode, name, locationType");
+          return;
+        }
+
+        const parsedRows: Array<{
+          locationCode: string;
+          name: string;
+          locationType: CreateWarehouseLocationInput["locationType"];
+          parentCode: string | null;
+          capacity: number | null;
+          isActive: boolean;
+          isPickable: boolean;
+          isReceivable: boolean;
+        }> = [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length === 0 || row.every((cell) => cell.trim() === "")) continue;
+
+          const locationCode = (row[idxCode] ?? "").trim();
+          const name = (row[idxName] ?? "").trim();
+          const locationTypeRaw = (row[idxType] ?? "").trim();
+          const parentCodeRaw = idxParentCode >= 0 ? (row[idxParentCode] ?? "").trim() : "";
+          const capacityRaw = idxCapacity >= 0 ? (row[idxCapacity] ?? "").trim() : "";
+          const isActiveRaw = idxActive >= 0 ? (row[idxActive] ?? "").trim() : "true";
+          const isPickableRaw = idxPickable >= 0 ? (row[idxPickable] ?? "").trim() : "true";
+          const isReceivableRaw = idxReceivable >= 0 ? (row[idxReceivable] ?? "").trim() : "true";
+
+          if (!locationCode || !name || !locationTypeRaw) {
+            throw new Error(`Row ${i + 1}: locationCode, name, and locationType are required`);
+          }
+
+          const typeParse = locationTypeSchema.safeParse(locationTypeRaw);
+          if (!typeParse.success) {
+            throw new Error(`Row ${i + 1}: invalid locationType "${locationTypeRaw}"`);
+          }
+
+          const capacity =
+            capacityRaw === "" ? null : Number.isFinite(Number(capacityRaw)) ? Number(capacityRaw) : NaN;
+          if (Number.isNaN(capacity)) {
+            throw new Error(`Row ${i + 1}: invalid capacity "${capacityRaw}"`);
+          }
+
+          parsedRows.push({
+            locationCode,
+            name,
+            locationType: typeParse.data,
+            parentCode: parentCodeRaw || null,
+            capacity,
+            isActive: parseBooleanCsv(isActiveRaw, true),
+            isPickable: parseBooleanCsv(isPickableRaw, true),
+            isReceivable: parseBooleanCsv(isReceivableRaw, true),
+          });
+        }
+
+        if (parsedRows.length === 0) {
+          toast.error("No import rows found");
+          return;
+        }
+
+        const fileCodeSet = new Set<string>();
+        for (const row of parsedRows) {
+          const normalized = row.locationCode.toLowerCase();
+          if (fileCodeSet.has(normalized)) {
+            throw new Error(`Duplicate locationCode in file: ${row.locationCode}`);
+          }
+          fileCodeSet.add(normalized);
+        }
+
+        const knownByCode = new Map(
+          flatLocations.map((loc) => [loc.locationCode.toLowerCase(), loc.id])
+        );
+        const pending = [...parsedRows];
+        let createdCount = 0;
+
+        while (pending.length > 0) {
+          const creatable = pending.filter(
+            (row) => !row.parentCode || knownByCode.has(row.parentCode.toLowerCase())
+          );
+
+          if (creatable.length === 0) {
+            const unresolved = pending.map((row) => `${row.locationCode} -> ${row.parentCode}`).slice(0, 10);
+            throw new Error(`Unresolved parentCode references: ${unresolved.join(", ")}`);
+          }
+
+          const payload: CreateWarehouseLocationInput[] = creatable.map((row) => ({
+            locationCode: row.locationCode,
+            name: row.name,
+            locationType: row.locationType,
+            parentId: row.parentCode ? knownByCode.get(row.parentCode.toLowerCase()) ?? null : null,
+            capacity: row.capacity,
+            isActive: row.isActive,
+            isPickable: row.isPickable,
+            isReceivable: row.isReceivable,
+          }));
+
+          const result = await bulkCreateLocations({ data: { locations: payload } });
+          createdCount += result.createdCount;
+          for (const loc of result.locations) {
+            knownByCode.set(loc.locationCode.toLowerCase(), loc.id);
+          }
+
+          const createdCodeSet = new Set(creatable.map((row) => row.locationCode.toLowerCase()));
+          for (let i = pending.length - 1; i >= 0; i--) {
+            if (createdCodeSet.has(pending[i].locationCode.toLowerCase())) {
+              pending.splice(i, 1);
+            }
+          }
+        }
+
+        await refetchHierarchy();
+        toast.success(`Imported ${createdCount} location${createdCount === 1 ? "" : "s"}`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to import locations");
+      } finally {
+        setIsImporting(false);
+        event.target.value = "";
+      }
+    },
+    [flatLocations, refetchHierarchy]
+  );
+
+  const isSubmitting =
+    createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || isImporting;
 
   return (
     <PageLayout variant="full-width">
@@ -250,8 +449,7 @@ export default function LocationsPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled
-              title="Location export is not available yet"
+              onClick={handleExport}
             >
               <Download className="h-4 w-4 mr-2" aria-hidden="true" />
               Export
@@ -259,12 +457,19 @@ export default function LocationsPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled
-              title="Location import is not available yet"
+              onClick={handleImportClick}
+              disabled={isImporting}
             >
               <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
-              Import
+              {isImporting ? "Importing..." : "Import"}
             </Button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImportFileChange}
+            />
             <Button onClick={() => handleAdd(null)}>
               <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
               Add Warehouse
@@ -308,6 +513,7 @@ export default function LocationsPage() {
         parentLocation={formParent}
         onSubmit={handleFormSubmit}
         isSubmitting={isSubmitting}
+        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
       />
 
       {/* Delete Confirmation */}
@@ -349,4 +555,95 @@ function findLocation(
     }
   }
   return null;
+}
+
+function flattenLocations(
+  locations: WarehouseLocation[],
+  parentCode: string | null = null
+): Array<{
+  id: string;
+  locationCode: string;
+  name: string;
+  locationType: string;
+  parentCode: string | null;
+  capacity: number | null | undefined;
+  isActive: boolean | undefined;
+  isPickable: boolean | undefined;
+  isReceivable: boolean | undefined;
+}> {
+  return locations.flatMap((loc) => [
+    {
+      id: loc.id,
+      locationCode: loc.locationCode,
+      name: loc.name,
+      locationType: loc.locationType,
+      parentCode,
+      capacity: loc.capacity,
+      isActive: loc.isActive,
+      isPickable: loc.isPickable,
+      isReceivable: loc.isReceivable,
+    },
+    ...flattenLocations(loc.children ?? [], loc.locationCode),
+  ]);
+}
+
+function escapeCsvValue(value: string): string {
+  if (value.includes(",") || value.includes("\"") || value.includes("\n")) {
+    return `"${value.replaceAll("\"", "\"\"")}"`;
+  }
+  return value;
+}
+
+function parseCsvRows(content: string): string[][] {
+  const rows: string[][] = [];
+  let currentCell = "";
+  let currentRow: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    const next = content[i + 1];
+
+    if (char === "\"") {
+      if (inQuotes && next === "\"") {
+        currentCell += "\"";
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      currentRow.push(currentCell);
+      currentCell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i++;
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+      currentRow = [];
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell);
+    rows.push(currentRow);
+  }
+
+  return rows;
+}
+
+function parseBooleanCsv(value: string, defaultValue: boolean): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return defaultValue;
+  if (["true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  return defaultValue;
 }

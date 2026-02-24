@@ -46,6 +46,7 @@ import {
   useDeleteWorkstream,
   useReorderWorkstreams,
 } from '@/hooks/jobs';
+import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 
 
 
@@ -234,14 +235,15 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
     setCreateDialogOpen(true);
   };
 
+  const confirmation = useConfirmation();
   const handleDeleteWorkstream = async (workstream: { id: string; name: string }) => {
-    if (confirm(`Delete workstream "${workstream.name}"?`)) {
-      try {
-        await deleteWorkstream.mutateAsync(workstream.id);
-        toast.success('Workstream deleted');
-      } catch {
-        toast.error('Failed to delete workstream');
-      }
+    const { confirmed } = await confirmation.confirm(confirmations.delete(workstream.name, 'workstream'));
+    if (!confirmed) return;
+    try {
+      await deleteWorkstream.mutateAsync(workstream.id);
+      toast.success('Workstream deleted');
+    } catch {
+      toast.error('Failed to delete workstream');
     }
   };
 

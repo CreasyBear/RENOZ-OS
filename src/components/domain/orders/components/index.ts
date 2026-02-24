@@ -9,3 +9,7 @@ export {
   OrderLineItemSerialsCell,
   type OrderLineItemSerialsCellProps,
 } from './order-line-item-serials-cell';
+export {
+  SerialNumbersList,
+  type SerialNumbersListProps,
+} from './serial-numbers-list';

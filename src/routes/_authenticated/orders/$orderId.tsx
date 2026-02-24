@@ -17,13 +17,27 @@ const OrderDetailPage = lazy(() => import('./-order-detail-page'));
 
 const orderDetailSearchSchema = z.object({
   fromIssueId: z.string().uuid().optional(),
-  edit: z.boolean().optional(),
+  action: z.string().optional(),
+  edit: z
+    .preprocess(
+      (v) =>
+        v === undefined || v === null || v === ''
+          ? undefined
+          : v === true || v === '1' || String(v).toLowerCase() === 'true',
+      z.boolean().optional()
+    )
+    .optional(),
   pick: z.preprocess(
     (v) =>
       v === true || v === "1" || String(v).toLowerCase() === "true" ? true : false,
     z.boolean()
   ).default(false),
   ship: z.preprocess(
+    (v) =>
+      v === true || v === "1" || String(v).toLowerCase() === "true" ? true : false,
+    z.boolean()
+  ).default(false),
+  payment: z.preprocess(
     (v) =>
       v === true || v === "1" || String(v).toLowerCase() === "true" ? true : false,
     z.boolean()

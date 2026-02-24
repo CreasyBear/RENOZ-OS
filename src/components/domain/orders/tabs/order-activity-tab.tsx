@@ -12,6 +12,7 @@ import { memo } from 'react';
 import { Plus, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 
 // ============================================================================
@@ -67,6 +68,7 @@ export const OrderActivityTab = memo(function OrderActivityTab({
         title="Activity Timeline"
         description="Order history and changes"
         showFilters={true}
+        viewAllSearch={getActivitiesFeedSearch('order')}
         emptyMessage="No activity yet"
         emptyDescription="Order activities will appear here when changes occur."
       />

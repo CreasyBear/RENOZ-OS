@@ -25,9 +25,14 @@ export interface BulkReceiveGoodsInput {
 }
 
 export interface BulkReceiveGoodsResult {
+  success: true;
+  message: string;
   processed: number;
   failed: number;
   errors: Array<{ poId: string; error: string }>;
+  errorsById?: Record<string, string>;
+  partialFailure?: { code: string; message: string };
+  affectedIds?: string[];
 }
 
 // ============================================================================
@@ -77,10 +82,9 @@ export function useBulkReceiveGoods() {
       // Invalidate inventory queries
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
 
-      if (data.failed === 0) {
-        toastSuccess(`Successfully received goods for ${data.processed} purchase order${data.processed !== 1 ? 's' : ''}`);
-      } else {
-        toastError(`${data.processed} processed, ${data.failed} failed. Check individual purchase orders for details.`);
+      toastSuccess(data.message);
+      if (data.partialFailure?.message) {
+        toastError(data.partialFailure.message);
       }
     },
     onError: (error) => {

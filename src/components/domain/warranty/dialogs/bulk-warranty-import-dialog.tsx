@@ -48,6 +48,10 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatDateAustralian } from '@/lib/warranty';
 import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
+import {
   Upload,
   FileText,
   CheckCircle2,
@@ -528,20 +532,37 @@ interface ImportCompleteProps {
 }
 
 function ImportComplete({ result, skippedCount, onViewWarranties, onClose }: ImportCompleteProps) {
+  const failedCount = result.failed?.length ?? 0;
+  const hasFailures = failedCount > 0;
+
   return (
     <div className="flex flex-col items-center justify-center gap-6 py-4">
-      <div className="flex size-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-        <CheckCircle2 className="size-8 text-green-600 dark:text-green-400" />
+      <div
+        className={cn(
+          'flex size-16 items-center justify-center rounded-full',
+          hasFailures ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'
+        )}
+      >
+        <CheckCircle2
+          className={cn('size-8', hasFailures ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400')}
+        />
       </div>
       <div className="text-center">
         <h3 className="text-lg font-semibold">Import Complete</h3>
         <p className="text-muted-foreground">
-          Successfully registered {result.summary.totalCreated} warranties
+          {hasFailures
+            ? `Registered ${result.summary.totalCreated} warranties; ${failedCount} failed`
+            : `Successfully registered ${result.summary.totalCreated} warranties`}
         </p>
       </div>
 
       <div className="w-full max-w-sm space-y-3">
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div
+          className={cn(
+            'grid gap-4 text-center',
+            hasFailures ? 'grid-cols-4' : 'grid-cols-3'
+          )}
+        >
           <div className="rounded-lg border p-3">
             <p className="text-2xl font-bold text-green-600">{result.summary.totalCreated}</p>
             <p className="text-muted-foreground text-xs">Imported</p>
@@ -550,11 +571,40 @@ function ImportComplete({ result, skippedCount, onViewWarranties, onClose }: Imp
             <p className="text-2xl font-bold text-yellow-600">{skippedCount}</p>
             <p className="text-muted-foreground text-xs">Skipped</p>
           </div>
+          {hasFailures && (
+            <div className="rounded-lg border p-3">
+              <p className="text-2xl font-bold text-red-600">{failedCount}</p>
+              <p className="text-muted-foreground text-xs">Failed</p>
+            </div>
+          )}
           <div className="rounded-lg border p-3">
-            <p className="text-2xl font-bold">{result.summary.totalCreated + skippedCount}</p>
+            <p className="text-2xl font-bold">
+              {result.summary.totalCreated + skippedCount + failedCount}
+            </p>
             <p className="text-muted-foreground text-xs">Total</p>
           </div>
         </div>
+
+        {hasFailures && result.failed && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Some rows could not be imported</AlertTitle>
+            <AlertDescription>
+              <ScrollArea className="max-h-24">
+                <ul className="list-disc pl-4 text-sm">
+                  {result.failed.slice(0, 8).map((f) => (
+                    <li key={f.rowIndex}>
+                      Row {f.rowIndex}: {f.error}
+                    </li>
+                  ))}
+                  {result.failed.length > 8 && (
+                    <li className="text-muted-foreground">…and {result.failed.length - 8} more</li>
+                  )}
+                </ul>
+              </ScrollArea>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="space-y-2 rounded-lg border p-4">
           <h4 className="text-sm font-medium">By Policy Type</h4>
@@ -625,14 +675,21 @@ export function BulkWarrantyImportDialog({
     onResetRegister?.();
   }, [onResetPreview, onResetRegister]);
 
-  // Handle dialog close
+  const isPending = (isPreviewing ?? false) || (isRegistering ?? false);
+  const pendingGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, (newOpen: boolean) => {
+    if (!newOpen) {
+      if (step === 'importing') return;
+      resetState();
+    }
+    onOpenChange(newOpen);
+  });
+
+  // Handle dialog close (for Cancel button - bypasses escape/outside)
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
       if (!newOpen) {
-        // Prevent closing during import
-        if (step === 'importing') {
-          return;
-        }
+        if (step === 'importing') return;
         resetState();
       }
       onOpenChange(newOpen);
@@ -730,7 +787,7 @@ export function BulkWarrantyImportDialog({
   // Handle view warranties
   const handleViewWarranties = useCallback(() => {
     handleOpenChange(false);
-    navigate({ to: '/support/warranties', params: {} as never });
+    navigate({ to: '/support/warranties' });
   }, [handleOpenChange, navigate]);
 
   // Computed values
@@ -738,8 +795,10 @@ export function BulkWarrantyImportDialog({
   const canImport = previewResult && previewResult.validRows.length > 0 && !isRegistering;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
+        onEscapeKeyDown={pendingGuards.onEscapeKeyDown}
+        onInteractOutside={pendingGuards.onInteractOutside}
         className={cn(
           'max-h-[90vh] max-w-3xl overflow-y-auto',
           step === 'importing' && 'pointer-events-none'

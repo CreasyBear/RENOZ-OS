@@ -77,11 +77,24 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId')({
 
 function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/_authenticated/projects/$projectId' });
+  const search = Route.useSearch();
   const navigate = useNavigate();
 
   return (
     <ProjectDetailContainer
       projectId={projectId}
+      initialTab={search.tab}
+      openEditOnMount={search.edit === true}
+      onEditDialogOpenChange={(open) => {
+        if (!open && search.edit) {
+          navigate({
+            to: '/projects/$projectId',
+            params: { projectId },
+            search: { ...search, edit: undefined },
+            replace: true,
+          });
+        }
+      }}
       onBack={() => navigate({ to: '/projects' })}
     >
       {({ headerActions, content }) => (

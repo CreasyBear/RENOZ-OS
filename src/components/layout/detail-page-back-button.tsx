@@ -19,6 +19,8 @@ export interface DetailPageBackButtonProps {
   to: string
   /** Accessible label for icon-only button (e.g. "Back to customers") */
   'aria-label': string
+  /** Optional path params for dynamic routes (e.g. { poId: "123" }) */
+  params?: Record<string, string>
   /** Optional search params for the link */
   search?: Record<string, unknown>
   /** Optional additional class names */
@@ -28,12 +30,14 @@ export interface DetailPageBackButtonProps {
 export function DetailPageBackButton({
   to,
   'aria-label': ariaLabel,
+  params,
   search,
   className,
 }: DetailPageBackButtonProps) {
   return (
     <Link
       to={to}
+      params={params}
       search={search}
       preload="intent"
       className={cn(

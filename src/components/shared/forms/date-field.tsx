@@ -20,6 +20,7 @@
  */
 import { DatePicker } from "~/components/ui/date-picker"
 import { FormField } from "./form-field"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { extractFieldError, type AnyFieldApi } from "./types"
 
 export interface DateFieldProps {
@@ -54,7 +55,8 @@ export function DateField({
   minDate,
   maxDate,
 }: DateFieldProps) {
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
   const handleDateChange = (date: Date | undefined) => {
     field.handleChange(date ?? null)

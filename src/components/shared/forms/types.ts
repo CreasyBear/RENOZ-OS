@@ -100,19 +100,31 @@ export type StringArrayFieldApi = FormFieldApi<string[]>
 // HELPER UTILITIES
 // ============================================================================
 
+export interface ExtractFieldErrorOptions {
+  /** When true, return error even if field is not touched (e.g. after submit attempt) */
+  showErrorsAfterSubmit?: boolean
+}
+
 /**
  * Extract the first error message from a field's error state.
- * Returns undefined if no errors or field is not touched.
+ * Returns undefined if no errors, or if field is not touched (unless showErrorsAfterSubmit).
  *
  * @example
  * ```tsx
  * const error = extractFieldError(field);
+ * const error = extractFieldError(field, { showErrorsAfterSubmit: true });
  * ```
  */
-export function extractFieldError<T>(field: AnyFieldApi<T> | FormFieldApi<T>): string | undefined {
-  if (!field.state.meta.isTouched || field.state.meta.errors.length === 0) {
-    return undefined
-  }
+export function extractFieldError<T>(
+  field: AnyFieldApi<T> | FormFieldApi<T>,
+  options?: ExtractFieldErrorOptions
+): string | undefined {
+  const { showErrorsAfterSubmit = false } = options ?? {}
+  const hasErrors = field.state.meta.errors.length > 0
+  const isTouched = field.state.meta.isTouched
+
+  if (!hasErrors) return undefined
+  if (!showErrorsAfterSubmit && !isTouched) return undefined
 
   const rawError = field.state.meta.errors[0]
   return typeof rawError === 'string' ? rawError : rawError?.message

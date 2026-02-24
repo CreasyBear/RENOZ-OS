@@ -5,7 +5,7 @@
  */
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { PageLayout, DetailPageBackButton } from "@/components/layout";
-import { InventoryDetailContainer } from "@/components/domain/inventory";
+import { InventoryDetailContainer } from "@/components/domain/inventory/containers/inventory-detail-container";
 
 export default function InventoryItemPage() {
   const navigate = useNavigate();

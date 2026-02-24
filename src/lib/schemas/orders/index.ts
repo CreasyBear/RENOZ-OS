@@ -7,6 +7,10 @@
 // --- Core Order Types ---
 export * from './orders';
 
+// --- Order Creation Form ---
+export * from './order-creation-form';
+export type { OrderCreationFormValues, OrderSubmitData } from './order-creation-form';
+
 // --- Order Operations ---
 export * from './order-amendments';
 export * from './order-payments';

@@ -153,19 +153,21 @@ const ClaimTableRow = memo(function ClaimTableRow({
 export function WarrantyClaimsListView({
   status,
   type,
+  quickFilter,
   claims,
   pagination,
   isLoading,
   error,
   onStatusChange,
   onTypeChange,
+  onQuickFilterChange,
   onClearFilters,
   onPageChange,
   onRowClick,
   onRetry,
 }: WarrantyClaimsListViewProps) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const hasActiveFilters = Boolean(status || type);
+  const hasActiveFilters = Boolean(status || type || quickFilter);
 
   return (
     <div className="space-y-4">
@@ -231,6 +233,41 @@ export function WarrantyClaimsListView({
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={quickFilter === 'submitted' ? 'default' : 'outline'}
+              onClick={() =>
+                onQuickFilterChange(quickFilter === 'submitted' ? undefined : 'submitted')
+              }
+            >
+              Submitted
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={quickFilter === 'at_risk_sla' ? 'default' : 'outline'}
+              onClick={() =>
+                onQuickFilterChange(quickFilter === 'at_risk_sla' ? undefined : 'at_risk_sla')
+              }
+            >
+              At Risk SLA
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={quickFilter === 'awaiting_decision' ? 'default' : 'outline'}
+              onClick={() =>
+                onQuickFilterChange(
+                  quickFilter === 'awaiting_decision' ? undefined : 'awaiting_decision'
+                )
+              }
+            >
+              Awaiting Decision
+            </Button>
+          </div>
+
           <div className="flex items-center justify-between md:hidden">
             <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
               <SheetTrigger asChild>
@@ -239,7 +276,7 @@ export function WarrantyClaimsListView({
                   Filters
                   {hasActiveFilters && (
                     <Badge variant="secondary" className="ml-2">
-                      {(status ? 1 : 0) + (type ? 1 : 0)}
+                      {(status ? 1 : 0) + (type ? 1 : 0) + (quickFilter ? 1 : 0)}
                     </Badge>
                   )}
                 </Button>

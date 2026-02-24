@@ -11,8 +11,15 @@
 'use client';
 
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
+import { useHasPermission } from '@/hooks';
+import { PERMISSIONS } from '@/lib/auth/permissions';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { toastError } from '@/hooks';
 import type { RmaResponse, RmaResolution } from '@/lib/schemas/support/rma';
 import { CheckCircle, XCircle, Package, PackageCheck, Loader2 } from 'lucide-react';
 
@@ -79,16 +86,19 @@ export function RmaWorkflowActions({
   isPending = false,
 }: RmaWorkflowActionsProps) {
   const { confirm } = useConfirmation();
+  const canReceive = useHasPermission(PERMISSIONS.inventory.receive);
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
+
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleReceiveDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, setReceiveDialogOpen);
+  const handleProcessDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, setProcessDialogOpen);
 
   const [inspectionCondition, setInspectionCondition] = useState('good');
   const [inspectionNotes, setInspectionNotes] = useState('');
   const [resolution, setResolution] = useState<RmaResolution>('refund');
   const [refundAmount, setRefundAmount] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
-
-  const isLoading = isPending;
 
   // Handle approve (useConfirmation)
   const handleApprove = async () => {
@@ -98,7 +108,7 @@ export function RmaWorkflowActions({
       await onApprove();
       onSuccess?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to approve RMA');
+      toastError(error instanceof Error ? error.message : 'Failed to approve RMA');
     }
   };
 
@@ -110,7 +120,7 @@ export function RmaWorkflowActions({
       await onReject(reason.trim());
       onSuccess?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to reject RMA');
+      toastError(error instanceof Error ? error.message : 'Failed to reject RMA');
     }
   };
 
@@ -126,7 +136,7 @@ export function RmaWorkflowActions({
       setInspectionNotes('');
       onSuccess?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to mark received');
+      toastError(error instanceof Error ? error.message : 'Failed to mark received');
     }
   };
 
@@ -136,7 +146,7 @@ export function RmaWorkflowActions({
     if (resolution === 'refund' && refundAmount) {
       const parsed = parseFloat(refundAmount);
       if (isNaN(parsed) || parsed <= 0) {
-        toast.error('Please enter a valid refund amount greater than 0');
+        toastError('Please enter a valid refund amount greater than 0');
         return;
       }
     }
@@ -152,14 +162,14 @@ export function RmaWorkflowActions({
       setResolutionNotes('');
       onSuccess?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to process RMA');
+      toastError(error instanceof Error ? error.message : 'Failed to process RMA');
     }
   };
 
-  // Determine available actions based on status
+  // Determine available actions based on status and permissions
   const showApprove = rma.status === 'requested';
   const showReject = rma.status === 'requested';
-  const showReceive = rma.status === 'approved';
+  const showReceive = rma.status === 'approved' && canReceive;
   const showProcess = rma.status === 'received';
 
   if (!showApprove && !showReject && !showReceive && !showProcess) {
@@ -171,8 +181,8 @@ export function RmaWorkflowActions({
       <div className="flex flex-wrap gap-2">
         {/* Approve button */}
         {showApprove && (
-          <Button variant="default" size="sm" onClick={handleApprove} disabled={isLoading}>
-            {isLoading ? (
+          <Button variant="default" size="sm" onClick={handleApprove} disabled={isPending}>
+            {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <CheckCircle className="mr-2 h-4 w-4" />
@@ -187,9 +197,9 @@ export function RmaWorkflowActions({
             variant="destructive"
             size="sm"
             onClick={handleReject}
-            disabled={isLoading}
+            disabled={isPending}
           >
-            {isLoading ? (
+            {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <XCircle className="mr-2 h-4 w-4" />
@@ -204,9 +214,9 @@ export function RmaWorkflowActions({
             variant="default"
             size="sm"
             onClick={() => setReceiveDialogOpen(true)}
-            disabled={isLoading}
+            disabled={isPending}
           >
-            {isLoading ? (
+            {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Package className="mr-2 h-4 w-4" />
@@ -221,9 +231,9 @@ export function RmaWorkflowActions({
             variant="default"
             size="sm"
             onClick={() => setProcessDialogOpen(true)}
-            disabled={isLoading}
+            disabled={isPending}
           >
-            {isLoading ? (
+            {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <PackageCheck className="mr-2 h-4 w-4" />
@@ -234,13 +244,43 @@ export function RmaWorkflowActions({
       </div>
 
       {/* Receive dialog with inspection */}
-      <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
-        <DialogContent>
+      <Dialog open={receiveDialogOpen} onOpenChange={handleReceiveDialogOpenChange}>
+        <DialogContent
+          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+          onInteractOutside={pendingInteractionGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Receive Items</DialogTitle>
             <DialogDescription>Log the receipt and inspection of returned items.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {rma.lineItems && rma.lineItems.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Items to receive</Label>
+                <ul className="rounded-md border p-3 text-sm">
+                  {rma.lineItems.map((item) => (
+                    <li key={item.id} className="flex justify-between py-1">
+                      <span>{item.orderLineItem?.productName ?? 'Unknown Product'}</span>
+                      <span className="text-muted-foreground">
+                        {item.quantityReturned}
+                        {item.serialNumber ? (
+                          <>
+                            {' · S/N: '}
+                            <Link
+                              to="/inventory/browser"
+                              search={{ view: 'serialized', serializedSearch: item.serialNumber, page: 1 }}
+                              className="font-mono text-primary hover:underline"
+                            >
+                              {item.serialNumber}
+                            </Link>
+                          </>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="condition">Item Condition</Label>
               <Select value={inspectionCondition} onValueChange={setInspectionCondition}>
@@ -270,20 +310,23 @@ export function RmaWorkflowActions({
             <Button
               variant="outline"
               onClick={() => setReceiveDialogOpen(false)}
-              disabled={isLoading}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button onClick={handleReceive} disabled={isLoading}>
-              {isLoading ? 'Processing...' : 'Mark Received'}
+            <Button onClick={handleReceive} disabled={isPending}>
+              {isPending ? 'Processing...' : 'Mark Received'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Process dialog with resolution */}
-      <Dialog open={processDialogOpen} onOpenChange={setProcessDialogOpen}>
-        <DialogContent>
+      <Dialog open={processDialogOpen} onOpenChange={handleProcessDialogOpenChange}>
+        <DialogContent
+          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+          onInteractOutside={pendingInteractionGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Process RMA</DialogTitle>
             <DialogDescription>Select the resolution for this RMA.</DialogDescription>
@@ -291,13 +334,7 @@ export function RmaWorkflowActions({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="resolution">Resolution</Label>
-              <Select
-                value={resolution}
-                onValueChange={(v) => {
-                  const opt = RESOLUTION_OPTIONS.find((o) => o.value === v);
-                  if (opt) setResolution(opt.value);
-                }}
-              >
+              <Select value={resolution} onValueChange={(v) => setResolution(v as RmaResolution)}>
                 <SelectTrigger id="resolution">
                   <SelectValue placeholder="Select resolution" />
                 </SelectTrigger>
@@ -340,12 +377,12 @@ export function RmaWorkflowActions({
             <Button
               variant="outline"
               onClick={() => setProcessDialogOpen(false)}
-              disabled={isLoading}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button onClick={handleProcess} disabled={isLoading}>
-              {isLoading ? 'Processing...' : 'Complete'}
+            <Button onClick={handleProcess} disabled={isPending}>
+              {isPending ? 'Processing...' : 'Complete'}
             </Button>
           </DialogFooter>
         </DialogContent>

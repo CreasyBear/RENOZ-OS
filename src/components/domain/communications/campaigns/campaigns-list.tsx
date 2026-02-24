@@ -59,6 +59,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { calculatePercentage } from "@/lib/communications/campaign-utils";
 import { useTableSelection } from "@/components/shared/data-table/hooks/use-table-selection";
@@ -228,9 +238,10 @@ export function CampaignsList({
 }: CampaignsListProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [, setTestSendDialogOpen] = useState(false);
-  const [, setBulkDeleteDialogOpen] = useState(false);
+  const [testSendDialogOpen, setTestSendDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [testEmail, setTestEmail] = useState("");
 
   // Bulk selection
   const selection = useTableSelection({
@@ -292,6 +303,32 @@ export function CampaignsList({
       // Error handled by parent
     }
   }, [onBulkResume, resumableIds, selection]);
+
+  const handleTestSend = useCallback(async () => {
+    if (!onTestSend || !selectedCampaignId) return;
+    const email = testEmail.trim();
+    if (!email) return;
+
+    try {
+      await onTestSend(selectedCampaignId, email);
+      setTestSendDialogOpen(false);
+      setSelectedCampaignId(null);
+      setTestEmail("");
+    } catch {
+      // Error handled by parent
+    }
+  }, [onTestSend, selectedCampaignId, testEmail]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (!onBulkDelete || selection.selectedIds.size === 0) return;
+    try {
+      await onBulkDelete(Array.from(selection.selectedIds));
+      setBulkDeleteDialogOpen(false);
+      selection.clearSelection();
+    } catch {
+      // Error handled by parent
+    }
+  }, [onBulkDelete, selection]);
 
   const canBulkPause = useMemo(
     () => selectedCampaigns.some((c) => c.status === "sending"),
@@ -512,6 +549,7 @@ export function CampaignsList({
                         <DropdownMenuItem
                           onClick={() => {
                             setSelectedCampaignId(campaign.id);
+                            setTestEmail("");
                             setTestSendDialogOpen(true);
                           }}
                           disabled={isTestSending}
@@ -532,9 +570,16 @@ export function CampaignsList({
                         </DropdownMenuItem>
                       )}
                       {campaign.status === "paused" && (
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (onBulkResume) {
+                              void onBulkResume([campaign.id]);
+                            }
+                          }}
+                          disabled={!onBulkResume || isBulkResuming}
+                        >
                           <Play className="h-4 w-4 mr-2" />
-                          Resume Campaign
+                          {isBulkResuming ? "Resuming..." : "Resume Campaign"}
                         </DropdownMenuItem>
                       )}
                       {(campaign.status === "draft" || campaign.status === "scheduled") && (
@@ -608,6 +653,75 @@ export function CampaignsList({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete Campaign
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Test Send Dialog */}
+      <Dialog open={testSendDialogOpen} onOpenChange={setTestSendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Test Email</DialogTitle>
+            <DialogDescription>
+              Enter an email address to send a test campaign.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="campaign-test-email">Test Email Address</Label>
+            <Input
+              id="campaign-test-email"
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="you@example.com"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && testEmail.trim() && !isTestSending) {
+                  e.preventDefault();
+                  void handleTestSend();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTestSendDialogOpen(false);
+                setTestEmail("");
+                setSelectedCampaignId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleTestSend()}
+              disabled={!testEmail.trim() || isTestSending}
+            >
+              {isTestSending ? "Sending..." : "Send Test Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Campaigns?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete{" "}
+              {selection.selectedIds.size} campaign
+              {selection.selectedIds.size === 1 ? "" : "s"}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleBulkDelete()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isBulkDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

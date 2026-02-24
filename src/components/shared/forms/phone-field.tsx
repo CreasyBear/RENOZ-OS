@@ -21,6 +21,7 @@
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
 import { cn } from "~/lib/utils"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { extractFieldError, type AnyFieldApi } from "./types"
 
 export interface PhoneFieldProps {
@@ -97,7 +98,8 @@ export function PhoneField({
   disabled,
   countryPrefix,
 }: PhoneFieldProps) {
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const cleaned = cleanPhoneNumber(e.target.value)

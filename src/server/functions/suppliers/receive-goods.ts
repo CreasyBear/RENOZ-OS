@@ -30,8 +30,23 @@ import { products } from 'drizzle/schema/products/products';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { normalizeSerial, hasDuplicateSerials } from '@/lib/serials';
 import { allocateCosts, type AllocationItem } from './cost-allocation';
 import { unitPriceToOrgCurrency } from './receive-goods-utils';
+import {
+  addSerializedItemEvent,
+  upsertSerializedItemForInventory,
+} from '@/server/functions/_shared/serialized-lineage';
+import {
+  createSerializedMutationError,
+  serializedMutationSuccess,
+  type SerializedMutationEnvelope,
+} from '@/lib/server/serialized-mutation-contract';
+import {
+  assertSerializedInventoryCostIntegrity,
+  createReceiptLayersWithCostComponents,
+  recomputeInventoryValueFromLayers,
+} from '@/server/functions/_shared/inventory-finance';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -68,6 +83,12 @@ const listReceiptsSchema = z.object({
   purchaseOrderId: z.string().uuid(),
 });
 
+interface ReceiveGoodsMutationPayload {
+  receipt: typeof purchaseOrderReceipts.$inferSelect;
+  movementIds: string[];
+  newPOStatus: (typeof purchaseOrders.$inferSelect)['status'];
+}
+
 // ============================================================================
 // RECEIVE GOODS (Transactional)
 // ============================================================================
@@ -88,10 +109,13 @@ const listReceiptsSchema = z.object({
  */
 export const receiveGoods = createServerFn({ method: 'POST' })
   .inputValidator(receiveGoodsSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<ReceiveGoodsMutationPayload>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // -----------------------------------------------------------------------
       // 1. Validate PO exists and is in a receivable status
       // -----------------------------------------------------------------------
@@ -112,8 +136,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
       }
 
       if (!['ordered', 'partial_received'].includes(po.status)) {
-        throw new ValidationError(
-          `Cannot receive goods for a purchase order with status "${po.status}". Must be "ordered" or "partial_received".`
+        throw createSerializedMutationError(
+          `Cannot receive goods for a purchase order with status "${po.status}". Must be "ordered" or "partial_received".`,
+          'transition_blocked'
         );
       }
 
@@ -146,6 +171,26 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         .orderBy(asc(purchaseOrderItems.lineNumber));
 
       const poItemMap = new Map(poItems.map((item) => [item.id, item]));
+      const serialsSeenInRequest = new Set<string>();
+      const productIds = poItems
+        .map((item) => item.productId)
+        .filter((id): id is string => id !== null);
+      const productSerializationMap = new Map<string, boolean>();
+      if (productIds.length > 0) {
+        const productRows = await tx
+          .select({ id: products.id, isSerialized: products.isSerialized })
+          .from(products)
+          .where(
+            and(
+              eq(products.organizationId, ctx.organizationId),
+              inArray(products.id, productIds),
+              isNull(products.deletedAt)
+            )
+          );
+        productRows.forEach((p) => {
+          productSerializationMap.set(p.id, p.isSerialized);
+        });
+      }
 
       // Validate all receipt items reference valid PO items
       for (const receiptItem of data.items) {
@@ -167,6 +212,42 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           throw new ValidationError(
             `Rejection reason required for "${poItem.productName}" (${receiptItem.quantityRejected} rejected)`
           );
+        }
+
+        const quantityAccepted = receiptItem.quantityReceived - receiptItem.quantityRejected;
+        const isSerialized = poItem.productId
+          ? (productSerializationMap.get(poItem.productId) ?? false)
+          : false;
+        if (isSerialized && quantityAccepted > 0) {
+          const normalizedSerials = (receiptItem.serialNumbers ?? []).map((sn) => normalizeSerial(sn));
+          if (normalizedSerials.length !== quantityAccepted) {
+            throw createSerializedMutationError(
+              `Serialized product "${poItem.productName}" requires ${quantityAccepted} serial number${quantityAccepted === 1 ? '' : 's'}`,
+              'invalid_serial_state'
+            );
+          }
+          if (normalizedSerials.some((sn) => sn.length === 0)) {
+            throw createSerializedMutationError(
+              `Serialized product "${poItem.productName}" includes an empty serial number`,
+              'invalid_serial_state'
+            );
+          }
+          if (hasDuplicateSerials(normalizedSerials)) {
+            throw createSerializedMutationError(
+              `Serialized product "${poItem.productName}" has duplicate serial numbers`,
+              'invalid_serial_state'
+            );
+          }
+          for (const serial of normalizedSerials) {
+            const key = `${poItem.productId}:${serial}`;
+            if (serialsSeenInRequest.has(key)) {
+              throw createSerializedMutationError(
+                `Serial "${serial}" appears multiple times in this receipt request`,
+                'invalid_serial_state'
+              );
+            }
+            serialsSeenInRequest.add(key);
+          }
         }
       }
 
@@ -248,14 +329,30 @@ export const receiveGoods = createServerFn({ method: 'POST' })
       // -----------------------------------------------------------------------
       const createdMovements: string[] = [];
       const productsToUpdate = new Set<string>();
+      const [defaultLocation] = await tx
+        .select({ id: warehouseLocations.id })
+        .from(warehouseLocations)
+        .where(eq(warehouseLocations.organizationId, ctx.organizationId))
+        .limit(1);
+      const defaultLocationId = defaultLocation?.id;
+      if (!defaultLocationId) {
+        throw createSerializedMutationError(
+          'No warehouse location found. Create a warehouse location before receiving goods.',
+          'transition_blocked'
+        );
+      }
 
       for (let i = 0; i < data.items.length; i++) {
         const receiptItem = data.items[i];
         const poItem = poItemMap.get(receiptItem.poItemId)!;
         const quantityAccepted = receiptItem.quantityReceived - receiptItem.quantityRejected;
+        const isSerialized = poItem.productId
+          ? (productSerializationMap.get(poItem.productId) ?? false)
+          : false;
+        const normalizedSerials = (receiptItem.serialNumbers ?? []).map((sn) => normalizeSerial(sn));
 
         // Create receipt line item
-        await tx.insert(purchaseOrderReceiptItems).values({
+        const [createdReceiptItem] = await tx.insert(purchaseOrderReceiptItems).values({
           organizationId: ctx.organizationId,
           receiptId: receipt.id,
           purchaseOrderItemId: receiptItem.poItemId,
@@ -267,9 +364,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           condition: receiptItem.condition,
           rejectionReason: receiptItem.rejectionReason,
           lotNumber: receiptItem.lotNumber,
-          serialNumbers: receiptItem.serialNumbers,
+          serialNumbers: normalizedSerials,
           qualityNotes: receiptItem.notes,
-        });
+        }).returning({ id: purchaseOrderReceiptItems.id });
 
         // Update PO item quantities
         const newReceived = poItem.quantityReceived + receiptItem.quantityReceived;
@@ -302,15 +399,163 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           poItem.quantity > 0 ? (costAllocations.get(poItem.id) ?? 0) / poItem.quantity : 0;
         const landedUnitCost = unitPriceInOrgCurrency + allocatedCostPerUnit;
 
-        // Find or create inventory record for this product at default location
-        // Use the first warehouse location available
+        if (isSerialized) {
+          for (const serialNumber of normalizedSerials) {
+            const [existingInventory] = await tx
+              .select()
+              .from(inventory)
+              .where(
+                and(
+                  eq(inventory.organizationId, ctx.organizationId),
+                  eq(inventory.productId, poItem.productId),
+                  eq(inventory.serialNumber, serialNumber)
+                )
+              )
+              .limit(1);
+
+            let inventoryId: string;
+            let previousQty = 0;
+            if (existingInventory) {
+              inventoryId = existingInventory.id;
+              previousQty = Number(existingInventory.quantityOnHand ?? 0);
+              if (previousQty >= 1) {
+                throw createSerializedMutationError(
+                  `Serialized serial ${serialNumber} already exists in stock and cannot be received twice.`,
+                  'invalid_serial_state'
+                );
+              }
+              await tx
+                .update(inventory)
+                .set({
+                  quantityOnHand: sql`${inventory.quantityOnHand} + 1`,
+                  unitCost: landedUnitCost,
+                  updatedBy: ctx.user.id,
+                })
+                .where(eq(inventory.id, inventoryId));
+            } else {
+              const [newInv] = await tx
+                .insert(inventory)
+                .values({
+                  organizationId: ctx.organizationId,
+                  productId: poItem.productId,
+                  locationId: defaultLocationId,
+                  status: 'available',
+                  quantityOnHand: 1,
+                  quantityAllocated: 0,
+                  unitCost: landedUnitCost,
+                  totalValue: landedUnitCost,
+                  lotNumber: receiptItem.lotNumber,
+                  serialNumber,
+                  createdBy: ctx.user.id,
+                  updatedBy: ctx.user.id,
+                })
+                .returning();
+              inventoryId = newInv.id;
+            }
+
+            const [movement] = await tx
+              .insert(inventoryMovements)
+              .values({
+                organizationId: ctx.organizationId,
+                inventoryId,
+                productId: poItem.productId,
+                locationId: defaultLocationId,
+                movementType: 'receive',
+                quantity: 1,
+                previousQuantity: previousQty,
+                newQuantity: previousQty + 1,
+                unitCost: landedUnitCost,
+                totalCost: landedUnitCost,
+                referenceType: 'purchase_order',
+                referenceId: data.purchaseOrderId,
+                metadata: {
+                  purchaseOrderId: data.purchaseOrderId,
+                  receiptId: receipt.id,
+                  poNumber: po.poNumber ?? undefined,
+                  unitCost: landedUnitCost,
+                  batchNumber: receiptItem.lotNumber,
+                  serialNumbers: [serialNumber],
+                },
+                notes: `Received via ${receipt.receiptNumber}`,
+                createdBy: ctx.user.id,
+              })
+              .returning();
+            createdMovements.push(movement.id);
+            await createReceiptLayersWithCostComponents(tx, {
+              organizationId: ctx.organizationId,
+              inventoryId,
+              quantity: 1,
+              receivedAt: new Date(),
+              unitCost: landedUnitCost,
+              referenceType: 'purchase_order',
+              referenceId: data.purchaseOrderId,
+              purchaseOrderReceiptItemId: createdReceiptItem.id,
+              currency: orgCurrency,
+              exchangeRate: po.exchangeRate != null ? Number(po.exchangeRate) : null,
+              createdBy: ctx.user.id,
+              costComponents: [
+                {
+                  componentType: 'base_unit_cost',
+                  costType: 'base',
+                  amountTotal: unitPriceInOrgCurrency,
+                  amountPerUnit: unitPriceInOrgCurrency,
+                  quantityBasis: 1,
+                  metadata: { source: 'purchase_order_item' },
+                },
+                {
+                  componentType: 'allocated_additional_cost',
+                  costType: 'additional_costs',
+                  amountTotal: allocatedCostPerUnit,
+                  amountPerUnit: allocatedCostPerUnit,
+                  quantityBasis: 1,
+                  metadata: { source: 'purchase_order_cost_allocation' },
+                },
+              ],
+            });
+            await recomputeInventoryValueFromLayers(tx, {
+              organizationId: ctx.organizationId,
+              inventoryId,
+              userId: ctx.user.id,
+            });
+            await assertSerializedInventoryCostIntegrity(tx, {
+              organizationId: ctx.organizationId,
+              inventoryId,
+              serialNumber,
+              expectedQuantityOnHand: 1,
+            });
+
+            const serializedItemId = await upsertSerializedItemForInventory(tx, {
+              organizationId: ctx.organizationId,
+              productId: poItem.productId,
+              serialNumber,
+              inventoryId,
+              sourceReceiptItemId: createdReceiptItem.id,
+              userId: ctx.user.id,
+            });
+            if (serializedItemId) {
+              await addSerializedItemEvent(tx, {
+                organizationId: ctx.organizationId,
+                serializedItemId,
+                eventType: 'received',
+                entityType: 'purchase_order_receipt_item',
+                entityId: createdReceiptItem.id,
+                notes: `Received via ${receipt.receiptNumber}`,
+                userId: ctx.user.id,
+              });
+            }
+          }
+          continue;
+        }
+
+        // Non-serialized path: aggregate inventory row by product
         const [existingInventory] = await tx
           .select()
           .from(inventory)
           .where(
             and(
               eq(inventory.organizationId, ctx.organizationId),
-              eq(inventory.productId, poItem.productId)
+              eq(inventory.productId, poItem.productId),
+              isNull(inventory.serialNumber)
             )
           )
           .limit(1);
@@ -336,30 +581,16 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             .set({
               quantityOnHand: sql`${inventory.quantityOnHand} + ${quantityAccepted}`,
               unitCost: newWeightedAvgCost,
-              totalValue: sql`(${inventory.quantityOnHand} + ${quantityAccepted}) * ${newWeightedAvgCost}`,
               updatedBy: ctx.user.id,
             })
             .where(eq(inventory.id, inventoryId));
         } else {
-          // Create new inventory record - use first location for the org
-          const [firstLocation] = await tx
-            .select({ id: warehouseLocations.id })
-            .from(warehouseLocations)
-            .where(eq(warehouseLocations.organizationId, ctx.organizationId))
-            .limit(1);
-          const locationId = firstLocation?.id;
-          if (!locationId) {
-            throw new ValidationError(
-              'No warehouse location found. Create a warehouse location before receiving goods.'
-            );
-          }
-
           const [newInv] = await tx
             .insert(inventory)
             .values({
               organizationId: ctx.organizationId,
               productId: poItem.productId,
-              locationId,
+              locationId: defaultLocationId,
               status: 'available',
               quantityOnHand: quantityAccepted,
               quantityAllocated: 0,
@@ -375,14 +606,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         }
 
         // Get the location for this inventory record
-        const invLocationId = existingInventory
-          ? existingInventory.locationId
-          : (await tx
-              .select({ locationId: inventory.locationId })
-              .from(inventory)
-              .where(eq(inventory.id, inventoryId))
-              .limit(1)
-              .then((rows) => rows[0]?.locationId ?? ''));
+        const invLocationId = existingInventory?.locationId ?? defaultLocationId;
 
         // Create inventory movement
         const previousQty = existingInventory ? Number(existingInventory.quantityOnHand ?? 0) : 0;
@@ -415,17 +639,41 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           .returning();
 
         createdMovements.push(movement.id);
-
-        // Create cost layer (FIFO)
-        await tx.insert(inventoryCostLayers).values({
+        await createReceiptLayersWithCostComponents(tx, {
           organizationId: ctx.organizationId,
           inventoryId,
+          quantity: quantityAccepted,
           receivedAt: new Date(),
-          quantityReceived: quantityAccepted,
-          quantityRemaining: quantityAccepted,
-          unitCost: String(landedUnitCost),
+          unitCost: landedUnitCost,
           referenceType: 'purchase_order',
           referenceId: data.purchaseOrderId,
+          purchaseOrderReceiptItemId: createdReceiptItem.id,
+          currency: orgCurrency,
+          exchangeRate: po.exchangeRate != null ? Number(po.exchangeRate) : null,
+          createdBy: ctx.user.id,
+          costComponents: [
+            {
+              componentType: 'base_unit_cost',
+              costType: 'base',
+              amountTotal: unitPriceInOrgCurrency * quantityAccepted,
+              amountPerUnit: unitPriceInOrgCurrency,
+              quantityBasis: quantityAccepted,
+              metadata: { source: 'purchase_order_item' },
+            },
+            {
+              componentType: 'allocated_additional_cost',
+              costType: 'additional_costs',
+              amountTotal: allocatedCostPerUnit * quantityAccepted,
+              amountPerUnit: allocatedCostPerUnit,
+              quantityBasis: quantityAccepted,
+              metadata: { source: 'purchase_order_cost_allocation' },
+            },
+          ],
+        });
+        await recomputeInventoryValueFromLayers(tx, {
+          organizationId: ctx.organizationId,
+          inventoryId,
+          userId: ctx.user.id,
         });
       }
 
@@ -465,11 +713,17 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         await updateProductCostPrice(tx, ctx.organizationId, productId);
       }
 
-      return {
-        receipt,
-        movementIds: createdMovements,
-        newPOStatus: newStatus,
-      };
+      return serializedMutationSuccess(
+        {
+          receipt,
+          movementIds: createdMovements,
+          newPOStatus: newStatus,
+        },
+        `Received goods for ${po.poNumber ?? data.purchaseOrderId}.`,
+        {
+          affectedIds: [data.purchaseOrderId, receipt.id],
+        }
+      );
     });
   });
 
@@ -512,6 +766,7 @@ export const listPurchaseOrderReceipts = createServerFn({ method: 'GET' })
             condition: purchaseOrderReceiptItems.condition,
             rejectionReason: purchaseOrderReceiptItems.rejectionReason,
             lotNumber: purchaseOrderReceiptItems.lotNumber,
+            serialNumbers: purchaseOrderReceiptItems.serialNumbers,
             qualityNotes: purchaseOrderReceiptItems.qualityNotes,
             productId: purchaseOrderItems.productId,
             productName: purchaseOrderItems.productName,

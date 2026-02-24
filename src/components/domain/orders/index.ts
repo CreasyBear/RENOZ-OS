@@ -79,7 +79,7 @@ export {
 // --- Amendments ---
 export * from './amendments';
 export type { AmendmentListProps } from './amendments/amendment-list';
-export type { AmendmentRequestDialogProps } from './amendments/amendment-request-dialog';
+export type { AmendmentRequestDialogContainerProps } from './amendments/amendment-request-dialog-container';
 export type { AmendmentReviewDialogProps } from './amendments/amendment-review-dialog';
 
 // --- Cards ---

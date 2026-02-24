@@ -1,8 +1,6 @@
 import { Outlet, createRootRoute, HeadContent, Scripts } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
-import { TanStackDevtools } from '@tanstack/react-devtools'
-import { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { RootErrorBoundary } from '../components/error-boundary'
 import { NotFound } from '../components/not-found'
@@ -55,6 +53,42 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   )
 }
 
+/**
+ * Lazy-loaded devtools. TanStack devtools use @tanstack/devtools-ui (Solid.js) which
+ * calls client-only APIs. Must not be imported during SSR - dynamic import in
+ * useEffect ensures they only load in the browser.
+ */
+function ClientDevtools() {
+  const [devtoolsNode, setDevtoolsNode] = useState<React.ReactNode>(null)
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    void Promise.all([
+      import('@tanstack/react-devtools'),
+      import('@tanstack/react-router-devtools'),
+      import('@tanstack/react-form-devtools'),
+    ]).then(([devtools, routerDevtools, formDevtools]) => {
+      setDevtoolsNode(
+        React.createElement(devtools.TanStackDevtools, {
+          config: { position: 'bottom-right' },
+          plugins: [
+            {
+              name: 'Tanstack Router',
+              render: React.createElement(
+                routerDevtools.TanStackRouterDevtoolsPanel,
+              ),
+            },
+            formDevtools.formDevtoolsPlugin(),
+          ],
+        }),
+      )
+    })
+  }, [])
+
+  if (!devtoolsNode) return null
+  return <>{devtoolsNode}</>
+}
+
 function RootComponent() {
   // Bootstrap auth listener before any route runs (reduces stale token issues)
   useEffect(() => {
@@ -73,19 +107,7 @@ function RootComponent() {
           <Outlet />
         </div>
         <ToastProvider />
-        {import.meta.env.DEV && (
-          <TanStackDevtools
-            config={{
-              position: 'bottom-right',
-            }}
-            plugins={[
-              {
-                name: 'Tanstack Router',
-                render: <TanStackRouterDevtoolsPanel />,
-              },
-            ]}
-          />
-        )}
+        {!import.meta.env.SSR && import.meta.env.DEV && <ClientDevtools />}
       </QueryClientProvider>
     </RootDocument>
   )

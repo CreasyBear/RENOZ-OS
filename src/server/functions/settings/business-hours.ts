@@ -18,7 +18,7 @@ import { businessHoursConfig, type WeeklySchedule, type DaySchedule } from 'driz
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 
 // ============================================================================

@@ -7,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-007b
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import {
   Dialog,
@@ -24,8 +24,12 @@ import {
   NumberField,
   SelectField,
   SwitchField,
+  FormFieldDisplayProvider,
+  FormErrorSummary,
 } from '@/components/shared/forms';
 import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
+import { toast } from 'sonner';
+import { useConfirmation } from '@/hooks';
 
 // ============================================================================
 // FORM SCHEMA
@@ -60,6 +64,8 @@ interface KbCategoryFormDialogProps {
   isSubmitting?: boolean;
   /** From route container (useCreateKbCategory/useUpdateKbCategory). */
   onSubmit: (values: CategoryFormValues) => Promise<void>;
+  /** From route container (mutation error). */
+  submitError?: string | null;
 }
 
 export function KbCategoryFormDialog({
@@ -69,8 +75,11 @@ export function KbCategoryFormDialog({
   categories,
   isSubmitting,
   onSubmit,
+  submitError,
 }: KbCategoryFormDialogProps) {
+  const confirm = useConfirmation();
   const isEditing = !!category;
+  const [slugConflictError, setSlugConflictError] = useState<string | null>(null);
 
   const form = useTanStackForm({
     schema: categoryFormSchema,
@@ -84,18 +93,27 @@ export function KbCategoryFormDialog({
     },
     onSubmit: async (values) => {
       try {
+        setSlugConflictError(null);
         await onSubmit(values);
         onOpenChange(false);
         form.reset();
-      } catch {
-        // errors handled by container
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to save category';
+        if (message.toLowerCase().includes('slug') && message.toLowerCase().includes('exist')) {
+          setSlugConflictError(message);
+        }
+        throw error;
       }
+    },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
     },
   });
 
   // Reset form when category changes or dialog opens
   useEffect(() => {
     if (open) {
+      globalThis.queueMicrotask(() => setSlugConflictError(null));
       form.reset({
         name: category?.name ?? '',
         slug: category?.slug ?? '',
@@ -121,6 +139,26 @@ export function KbCategoryFormDialog({
   };
 
   const isPending = isSubmitting ?? form.state.isSubmitting;
+  const isDirty = form.state.isDirty;
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isPending) return;
+    if (!nextOpen && isDirty) {
+      void (async () => {
+        const result = await confirm.confirm({
+          title: 'Discard Unsaved Changes?',
+          description: 'You have unsaved changes in this category form. Discard changes and close?',
+          confirmLabel: 'Discard',
+          variant: 'destructive',
+        });
+        if (result.confirmed) {
+          onOpenChange(false);
+        }
+      })();
+      return;
+    }
+    onOpenChange(nextOpen);
+  };
 
   // Filter out the current category and its children from parent options
   const availableParents = (categories ?? []).filter((c) => {
@@ -141,8 +179,16 @@ export function KbCategoryFormDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-[500px]"
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Category' : 'Create Category'}</DialogTitle>
         </DialogHeader>
@@ -154,6 +200,8 @@ export function KbCategoryFormDialog({
           }}
           className="space-y-4"
         >
+          <FormFieldDisplayProvider form={form}>
+          <FormErrorSummary submitError={submitError} />
           <form.Field name="name">
             {(field) => (
               <TextField
@@ -174,9 +222,13 @@ export function KbCategoryFormDialog({
                 placeholder="getting-started"
                 description="URL-friendly identifier (auto-generated from name)"
                 required
+                onChange={() => setSlugConflictError(null)}
               />
             )}
           </form.Field>
+          {slugConflictError && (
+            <p className="text-destructive text-xs">{slugConflictError}</p>
+          )}
 
           <form.Field name="description">
             {(field) => (
@@ -222,11 +274,13 @@ export function KbCategoryFormDialog({
             </form.Field>
           </div>
 
+          </FormFieldDisplayProvider>
+
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleDialogOpenChange(false)}
               disabled={isPending}
             >
               Cancel

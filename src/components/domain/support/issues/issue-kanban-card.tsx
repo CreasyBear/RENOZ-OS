@@ -10,7 +10,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Link } from '@tanstack/react-router';
-import { AlertTriangle, User, Calendar, GripVertical } from 'lucide-react';
+import { AlertTriangle, User, Calendar, GripVertical, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +49,7 @@ interface IssueKanbanCardProps {
   onSelect?: (id: string, selected: boolean) => void;
   onClick?: (issue: IssueKanbanItem) => void;
   isDragging?: boolean;
+  isPending?: boolean;
 }
 
 export function IssueKanbanCard({
@@ -57,6 +58,7 @@ export function IssueKanbanCard({
   onSelect,
   onClick,
   isDragging = false,
+  isPending = false,
 }: IssueKanbanCardProps) {
   const {
     attributes,
@@ -84,7 +86,8 @@ export function IssueKanbanCard({
         'cursor-pointer transition-all',
         (isDragging || isSortableDragging) && 'rotate-2 opacity-50 shadow-lg',
         isSelected && 'ring-primary ring-2',
-        isAtRisk && 'border-orange-500'
+        isAtRisk && 'border-orange-500',
+        isPending && 'ring-primary/40 bg-muted/50 pointer-events-none opacity-80'
       )}
     >
       <CardHeader className="p-3 pb-2">
@@ -127,6 +130,12 @@ export function IssueKanbanCard({
                     SLA {issue.slaStatus === 'breached' ? 'Breached' : 'At Risk'}
                   </TooltipContent>
                 </Tooltip>
+              )}
+              {isPending && (
+                <Badge variant="outline" className="h-5 gap-1 text-[10px]">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Updating
+                </Badge>
               )}
             </div>
             <p className="line-clamp-2 text-sm font-medium">{issue.title}</p>

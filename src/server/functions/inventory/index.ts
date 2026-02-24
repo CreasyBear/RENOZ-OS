@@ -6,3 +6,4 @@ export * from './locations';
 export * from './quality';
 export * from './stock-counts';
 export * from './valuation';
+export * from './serialized-items';

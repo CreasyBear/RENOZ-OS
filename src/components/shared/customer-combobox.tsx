@@ -62,8 +62,14 @@ export function CustomerCombobox({
       onSelect={onSelect}
       searchFn={searchCustomers}
       getDisplayValue={(customer) => customer.name ?? customer.email ?? 'Unknown'}
+      getDescription={(customer) => {
+        const c = customer as { email?: string | null; customerCode?: string };
+        const parts = [c.email, c.customerCode].filter(Boolean);
+        return parts.length > 0 ? parts.join(' · ') : '';
+      }}
       getKey={(customer) => customer.id}
       placeholder={placeholder}
+      searchPlaceholder="Search by name or email..."
       emptyMessage="No customers found."
       disabled={disabled}
       className={className}

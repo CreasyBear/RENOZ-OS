@@ -22,6 +22,8 @@ import {
   receiveRma,
   processRma,
   cancelRma,
+  bulkApproveRma,
+  bulkReceiveRma,
 } from '@/server/functions/orders/rma';
 import type {
   ListRmasInput,
@@ -31,6 +33,8 @@ import type {
   RejectRmaInput,
   ReceiveRmaInput,
   ProcessRmaInput,
+  BulkApproveRmaInput,
+  BulkReceiveRmaInput,
 } from '@/lib/schemas/support/rma';
 
 // ============================================================================
@@ -225,6 +229,7 @@ export function useRejectRma() {
 
 /**
  * Mark RMA as received (approved -> received).
+ * Restores inventory; invalidates inventory queries so views refresh.
  */
 export function useReceiveRma() {
   const queryClient = useQueryClient();
@@ -234,6 +239,40 @@ export function useReceiveRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      // Inventory restored; invalidate so lists, details, movements, dashboard refresh
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+    },
+  });
+}
+
+/**
+ * Bulk approve RMAs (requested -> approved).
+ */
+export function useBulkApproveRma() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: BulkApproveRmaInput) => bulkApproveRma({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.rmaDetails() });
+    },
+  });
+}
+
+/**
+ * Bulk receive RMAs (approved -> received).
+ * Restores inventory; invalidates inventory queries.
+ */
+export function useBulkReceiveRma() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: BulkReceiveRmaInput) => bulkReceiveRma({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.rmaDetails() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
     },
   });
 }

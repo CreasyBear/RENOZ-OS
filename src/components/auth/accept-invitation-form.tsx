@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { TextField } from '@/components/shared/forms';
+import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { getPasswordStrength } from '@/lib/auth/password-utils';
 import { cn } from '@/lib/utils';
 import type { TanStackFormApi } from '@/hooks/_shared/use-tanstack-form';
@@ -102,6 +102,7 @@ export function AcceptInvitationForm({
               </div>
             )}
 
+            <FormFieldDisplayProvider form={form}>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email address</Label>
@@ -123,7 +124,6 @@ export function AcceptInvitationForm({
                     required
                     autocomplete="given-name"
                     disabled={form.state.isSubmitting}
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -137,7 +137,6 @@ export function AcceptInvitationForm({
                     required
                     autocomplete="family-name"
                     disabled={form.state.isSubmitting}
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -155,7 +154,6 @@ export function AcceptInvitationForm({
                         required
                         autocomplete="new-password"
                         disabled={form.state.isSubmitting}
-                        showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                       />
                       {passwordValue && (
                         <div className="flex items-center gap-2">
@@ -187,7 +185,6 @@ export function AcceptInvitationForm({
                     required
                     autocomplete="new-password"
                     disabled={form.state.isSubmitting}
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -227,6 +224,7 @@ export function AcceptInvitationForm({
                 Sign in
               </Link>
             </p>
+            </FormFieldDisplayProvider>
           </form>
         </CardContent>
       </Card>

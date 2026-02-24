@@ -14,7 +14,7 @@ import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { eq, and, desc, asc, sql, count, like } from 'drizzle-orm';
+import { eq, and, or, desc, asc, sql, count, like } from 'drizzle-orm';
 import {
   decodeCursor,
   buildCursorCondition,
@@ -66,10 +66,18 @@ import {
   getWarrantyClaimSchema,
   assignClaimSchema,
 } from '@/lib/schemas/warranty/claims';
+import { buildClaimAtRiskOrBreachedCondition } from '@/lib/warranty/claim-sla-filters';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { serializedMutationSuccess, type SerializedMutationEnvelope } from '@/lib/server/serialized-mutation-contract';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges, excludeFieldsForActivity } from '@/lib/activity-logger';
 import { warrantyLogger } from '@/lib/logger';
+import { normalizeSerial } from '@/lib/serials';
+import {
+  addSerializedItemEvent,
+  findSerializedItemBySerial,
+} from '@/server/functions/_shared/serialized-lineage';
+import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -261,6 +269,24 @@ async function startSlaTrackingForClaim(
   return tracking;
 }
 
+function buildQuickFilterCondition(
+  quickFilter: 'submitted' | 'at_risk_sla' | 'awaiting_decision' | undefined
+) {
+  if (quickFilter === 'submitted') {
+    return eq(warrantyClaims.status, 'submitted');
+  }
+  if (quickFilter === 'awaiting_decision') {
+    return or(
+      eq(warrantyClaims.status, 'submitted'),
+      eq(warrantyClaims.status, 'under_review')
+    );
+  }
+  if (quickFilter === 'at_risk_sla') {
+    return buildClaimAtRiskOrBreachedCondition();
+  }
+  return undefined;
+}
+
 // ============================================================================
 // CREATE WARRANTY CLAIM
 // ============================================================================
@@ -273,7 +299,7 @@ async function startSlaTrackingForClaim(
  */
 export const createWarrantyClaim = createServerFn({ method: 'POST' })
   .inputValidator(createWarrantyClaimSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<WarrantyClaim & { notificationQueued: boolean }>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.create });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -316,6 +342,9 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
 
     // Create claim and SLA tracking atomically
     const [claim] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       const [inserted] = await tx
         .insert(warrantyClaims)
         .values({
@@ -356,6 +385,30 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
 
     // Get customer email for notification
     const customerEmail = warranty.customer.email ?? undefined;
+
+    if (warranty.warranty.productSerial) {
+      const serializedItem = await findSerializedItemBySerial(
+        db,
+        ctx.organizationId,
+        normalizeSerial(warranty.warranty.productSerial),
+        {
+          userId: ctx.user.id,
+          productId: warranty.warranty.productId,
+          source: 'warranty_claim_submit',
+        }
+      );
+      if (serializedItem) {
+        await addSerializedItemEvent(db, {
+          organizationId: ctx.organizationId,
+          serializedItemId: serializedItem.id,
+          eventType: 'warranty_claimed',
+          entityType: 'warranty_claim',
+          entityId: claim.id,
+          notes: `Warranty claim submitted: ${claim.claimNumber}`,
+          userId: ctx.user.id,
+        });
+      }
+    }
 
     // Trigger notification event
     const payload: WarrantyClaimSubmittedPayload = {
@@ -413,7 +466,21 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       },
     });
 
-    return { ...claim, notificationQueued };
+    return serializedMutationSuccess(
+      { ...claim, notificationQueued },
+      notificationQueued
+        ? `Warranty claim ${claim.claimNumber} submitted.`
+        : `Warranty claim ${claim.claimNumber} submitted, but notification failed.`,
+      {
+        affectedIds: [claim.id],
+        partialFailure: notificationQueued
+          ? undefined
+          : {
+              code: 'notification_failed',
+              message: 'Claim was created successfully, but notification dispatch failed.',
+            },
+      }
+    );
   });
 
 // ============================================================================
@@ -425,9 +492,11 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
  */
 export const updateClaimStatus = createServerFn({ method: 'POST' })
   .inputValidator(updateClaimStatusSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<WarrantyClaim>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
     const logger = createActivityLoggerWithContext(ctx);
+    const transitionName = 'warranty_claim_status_update';
+    const idempotencyKey = data.idempotencyKey?.trim();
 
     const [existingClaim] = await db
       .select()
@@ -444,6 +513,31 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
       throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
+    if (idempotencyKey) {
+      const replayed = await hasProcessedIdempotencyKey(db, {
+        organizationId: ctx.organizationId,
+        entityType: 'warranty_claim',
+        entityId: existingClaim.id,
+        action: 'updated',
+        idempotencyKey,
+      });
+      if (replayed) {
+        return serializedMutationSuccess(
+          existingClaim,
+          `Idempotent replay ignored. Claim remains in ${existingClaim.status} status.`,
+          {
+            affectedIds: [existingClaim.id],
+            transition: {
+              transition: transitionName,
+              fromStatus: existingClaim.status,
+              toStatus: existingClaim.status,
+              blockedBy: 'idempotency_key_replay',
+            },
+          }
+        );
+      }
+    }
+
     // Validate status transition
     const validTransitions: Record<string, string[]> = {
       submitted: ['under_review', 'approved', 'denied'],
@@ -456,7 +550,9 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
 
     const currentStatus = existingClaim.status;
     if (!validTransitions[currentStatus]?.includes(data.status)) {
-      throw new ValidationError(`Invalid status transition from '${currentStatus}' to '${data.status}'`);
+      throw new ValidationError(`Invalid status transition from '${currentStatus}' to '${data.status}'`, {
+        code: ['transition_blocked'],
+      });
     }
 
     // Update SLA tracking if status implies waiting (pause) or resuming
@@ -490,12 +586,15 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
       .where(eq(warrantyClaims.id, data.claimId))
       .returning();
 
-    // Log status update
+    // Log status update (request_info when under_review + notes from approval dialog)
+    const isRequestInfo = data.status === 'under_review' && !!data.notes?.trim();
     logger.logAsync({
       entityType: 'warranty_claim',
       entityId: claim.id,
       action: 'updated',
-      description: `Updated warranty claim status: ${claim.claimNumber}`,
+      description: isRequestInfo
+        ? `Requested more info: ${claim.claimNumber}`
+        : `Updated warranty claim status: ${claim.claimNumber}`,
       changes: {
         before: { status: currentStatus },
         after: { status: data.status },
@@ -509,10 +608,22 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
         previousStatus: currentStatus,
         newStatus: data.status,
         claimStatus: data.status,
+        idempotencyKey: data.idempotencyKey ?? undefined,
+        requestInfoRequest: isRequestInfo,
       },
     });
 
-    return claim;
+    const message = isRequestInfo
+      ? `Requested more info for claim ${claim.claimNumber}.`
+      : `Claim status updated to ${claim.status}.`;
+    return serializedMutationSuccess(claim, message, {
+      affectedIds: [claim.id],
+      transition: {
+        transition: transitionName,
+        fromStatus: currentStatus,
+        toStatus: data.status,
+      },
+    });
   });
 
 // ============================================================================
@@ -525,7 +636,7 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
  */
 export const approveClaim = createServerFn({ method: 'POST' })
   .inputValidator(approveClaimSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<WarrantyClaim>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.approve });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -605,7 +716,9 @@ export const approveClaim = createServerFn({ method: 'POST' })
       },
     });
 
-    return claim;
+    return serializedMutationSuccess(claim, `Claim ${claim.claimNumber} approved.`, {
+      affectedIds: [claim.id],
+    });
   });
 
 // ============================================================================
@@ -618,7 +731,7 @@ export const approveClaim = createServerFn({ method: 'POST' })
  */
 export const denyClaim = createServerFn({ method: 'POST' })
   .inputValidator(denyClaimSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<WarrantyClaim>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.approve });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -651,6 +764,9 @@ export const denyClaim = createServerFn({ method: 'POST' })
         : `[${new Date().toISOString()}] Denied by ${ctx.user.name || ctx.user.email}: ${data.denialReason}`;
 
     const [claim] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       if (existingClaim.slaTrackingId) {
         const [currentTracking] = await tx
           .select()
@@ -710,7 +826,9 @@ export const denyClaim = createServerFn({ method: 'POST' })
       },
     });
 
-    return claim;
+    return serializedMutationSuccess(claim, `Claim ${claim.claimNumber} denied.`, {
+      affectedIds: [claim.id],
+    });
   });
 
 // ============================================================================
@@ -724,7 +842,7 @@ export const denyClaim = createServerFn({ method: 'POST' })
  */
 export const resolveClaim = createServerFn({ method: 'POST' })
   .inputValidator(resolveClaimSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<WarrantyClaim & { notificationQueued: boolean }>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.resolve });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -765,6 +883,9 @@ export const resolveClaim = createServerFn({ method: 'POST' })
       : existingClaim.claim.notes;
 
     const [claim] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       if (existingClaim.claim.slaTrackingId) {
         const [currentTracking] = await tx
           .select()
@@ -884,7 +1005,21 @@ export const resolveClaim = createServerFn({ method: 'POST' })
       },
     });
 
-    return { ...claim, notificationQueued };
+    return serializedMutationSuccess(
+      { ...claim, notificationQueued },
+      notificationQueued
+        ? `Claim ${claim.claimNumber} resolved.`
+        : `Claim ${claim.claimNumber} resolved, but notification failed.`,
+      {
+        affectedIds: [claim.id],
+        partialFailure: notificationQueued
+          ? undefined
+          : {
+              code: 'notification_failed',
+              message: 'Claim resolution succeeded, but notification dispatch failed.',
+            },
+      }
+    );
   });
 
 // ============================================================================
@@ -922,10 +1057,16 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
       conditions.push(eq(warrantyClaims.assignedUserId, data.assignedUserId));
     }
 
+    const quickFilterCondition = buildQuickFilterCondition(data.quickFilter);
+    if (quickFilterCondition) {
+      conditions.push(quickFilterCondition);
+    }
+
     // Get total count
     const [countResult] = await db
       .select({ total: count() })
       .from(warrantyClaims)
+      .leftJoin(slaTracking, eq(warrantyClaims.slaTrackingId, slaTracking.id))
       .where(and(...conditions));
 
     const total = countResult?.total ?? 0;
@@ -964,12 +1105,14 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
           name: users.name,
           email: users.email,
         },
+        sla: slaTracking,
       })
       .from(warrantyClaims)
       .innerJoin(warranties, eq(warrantyClaims.warrantyId, warranties.id))
       .innerJoin(customers, eq(warrantyClaims.customerId, customers.id))
       .innerJoin(products, eq(warranties.productId, products.id))
       .leftJoin(users, eq(warrantyClaims.assignedUserId, users.id))
+      .leftJoin(slaTracking, eq(warrantyClaims.slaTrackingId, slaTracking.id))
       .where(and(...conditions))
       .orderBy(orderDirection(orderColumn))
       .limit(data.pageSize)
@@ -983,6 +1126,7 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
         customer: row.customer,
         product: row.product,
         assignedUser: row.assignedUser?.id ? row.assignedUser : null,
+        slaTracking: row.sla,
       })),
       pagination: {
         page: data.page,
@@ -1001,6 +1145,7 @@ const listWarrantyClaimsCursorSchema = cursorPaginationSchema.extend({
   customerId: z.string().uuid().optional(),
   status: listWarrantyClaimsSchema.shape.status.optional(),
   claimType: listWarrantyClaimsSchema.shape.claimType.optional(),
+  quickFilter: listWarrantyClaimsSchema.shape.quickFilter.optional(),
   assignedUserId: z.string().uuid().optional(),
 });
 
@@ -1015,6 +1160,8 @@ export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
     if (data.status) conditions.push(eq(warrantyClaims.status, data.status));
     if (data.claimType) conditions.push(eq(warrantyClaims.claimType, data.claimType));
     if (data.assignedUserId) conditions.push(eq(warrantyClaims.assignedUserId, data.assignedUserId));
+    const quickFilterCondition = buildQuickFilterCondition(data.quickFilter);
+    if (quickFilterCondition) conditions.push(quickFilterCondition);
 
     if (data.cursor) {
       const cursorPosition = decodeCursor(data.cursor);
@@ -1054,6 +1201,7 @@ export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
       .innerJoin(customers, eq(warrantyClaims.customerId, customers.id))
       .innerJoin(products, eq(warranties.productId, products.id))
       .leftJoin(users, eq(warrantyClaims.assignedUserId, users.id))
+      .leftJoin(slaTracking, eq(warrantyClaims.slaTrackingId, slaTracking.id))
       .where(and(...conditions))
       .orderBy(orderDirection(warrantyClaims.createdAt), orderDirection(warrantyClaims.id))
       .limit(pageSize + 1);

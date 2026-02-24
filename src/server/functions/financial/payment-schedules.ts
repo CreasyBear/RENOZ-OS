@@ -8,12 +8,13 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, asc, isNull, lte, inArray, count } from 'drizzle-orm';
+import { eq, and, asc, isNull, lte, inArray, count, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { paymentSchedules, orders, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { formatAmount } from '@/lib/currency';
+import { safeNumber } from '@/lib/numeric';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import { calculateGst } from '@/lib/utils/financial';
 import {
@@ -224,7 +225,7 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
       throw new NotFoundError('Order not found', 'order');
     }
 
-    const totalAmount = order[0].total || 0;
+    const totalAmount = safeNumber(order[0].total);
     const orderDate = order[0].orderDate ? new Date(order[0].orderDate) : new Date();
 
     // Generate installments based on plan type (outside transaction - pure computation)
@@ -264,6 +265,9 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
 
     // Wrap check-and-insert in transaction for atomicity
     const insertedInstallments = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Check if plan already exists INSIDE transaction to prevent race conditions
       const existingPlan = await tx
         .select()
@@ -319,7 +323,7 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
         orderNumber: order[0].orderNumber ?? undefined,
         customerId: order[0].customerId, // Include for customer timeline visibility
         planType: data.planType,
-        total: Number(totalAmount),
+        total: totalAmount,
         installmentCount: insertedInstallments.length,
       },
     });
@@ -346,8 +350,8 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
         installmentNo: inst.installmentNo,
         description: inst.description,
         dueDate: new Date(inst.dueDate), // Convert string to Date
-        amount: Number(inst.amount),
-        gstAmount: Number(inst.gstAmount),
+        amount: safeNumber(inst.amount),
+        gstAmount: safeNumber(inst.gstAmount),
         status: inst.status,
         paidAmount: inst.paidAmount,
         paidAt: inst.paidAt ? new Date(inst.paidAt) : null,
@@ -442,10 +446,10 @@ export const getPaymentSchedule = createServerFn({ method: 'GET' })
           installmentNo: inst.installmentNo,
           description: inst.description,
           dueDate: new Date(inst.dueDate),
-          amount: Number(inst.amount),
-          gstAmount: Number(inst.gstAmount),
+          amount: safeNumber(inst.amount),
+          gstAmount: safeNumber(inst.gstAmount),
           status: validatedStatus,
-          paidAmount: inst.paidAmount ? Number(inst.paidAmount) : null,
+          paidAmount: inst.paidAmount != null ? safeNumber(inst.paidAmount) : null,
           paidAt: inst.paidAt,
           paymentReference: inst.paymentReference,
           notes: inst.notes,
@@ -507,6 +511,9 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
 
     // Wrap all updates in a transaction for atomicity
     const updated = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Update installment
       const [updatedInstallment] = await tx
         .update(paymentSchedules)
@@ -685,7 +692,7 @@ export const getOverdueInstallments = createServerFn({ method: 'GET' })
       .innerJoin(orders, eq(paymentSchedules.orderId, orders.id))
       .where(countWhereClause);
 
-    const total = Number(countResult[0]?.count ?? 0);
+    const total = Math.floor(safeNumber(countResult[0]?.count));
 
     // Calculate days overdue for each
     const items = results.map((row) => {
@@ -843,6 +850,9 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
 
     // Wrap in transaction to prevent race condition between check and delete
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Check for any paid installments
       const paidInstallments = await tx
         .select()

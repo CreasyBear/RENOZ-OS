@@ -9,45 +9,16 @@
  * - Attribute toggles (pickable, receivable)
  */
 import { memo, useCallback, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
+import { Warehouse, LayoutGrid, Rows3, Layers, Box, Package } from "lucide-react";
 import {
-  Warehouse,
-  LayoutGrid,
-  Rows3,
-  Layers,
-  Box,
-  Package,
-  Loader2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  FormDialog,
+  TextField,
+  NumberField,
+  SelectField,
+  SwitchField,
+} from "@/components/shared/forms";
 import type { LocationType, WarehouseLocation } from "./location-tree";
 
 // ============================================================================
@@ -84,6 +55,7 @@ interface LocationFormProps {
   parentLocation?: WarehouseLocation | null;
   onSubmit: (data: LocationFormValues & { parentId: string | null }) => Promise<void>;
   isSubmitting?: boolean;
+  submitError?: string | null;
 }
 
 // ============================================================================
@@ -154,6 +126,30 @@ const LOCATION_TYPE_ICONS: Record<LocationType, typeof Warehouse> = Object.fromE
 // COMPONENT
 // ============================================================================
 
+function getDefaultValues(validTypes: LocationType[]): LocationFormValues {
+  return {
+    locationCode: "",
+    name: "",
+    locationType: validTypes[0] ?? "warehouse",
+    capacity: null,
+    isActive: true,
+    isPickable: true,
+    isReceivable: true,
+  };
+}
+
+function locationToFormValues(loc: WarehouseLocation): LocationFormValues {
+  return {
+    locationCode: loc.locationCode,
+    name: loc.name,
+    locationType: loc.locationType,
+    capacity: loc.capacity,
+    isActive: loc.isActive,
+    isPickable: loc.isPickable,
+    isReceivable: loc.isReceivable,
+  };
+}
+
 export const LocationForm = memo(function LocationForm({
   open,
   onOpenChange,
@@ -161,271 +157,171 @@ export const LocationForm = memo(function LocationForm({
   parentLocation,
   onSubmit,
   isSubmitting,
+  submitError,
 }: LocationFormProps) {
   const isEditing = !!location;
   const parentType = parentLocation?.locationType ?? "root";
   const validTypes = VALID_CHILDREN[parentType];
 
-  const form = useForm({
-    resolver: zodResolver(locationFormSchema),
-    defaultValues: {
-      locationCode: "",
-      name: "",
-      locationType: validTypes[0] ?? "warehouse",
-      capacity: null as number | null,
-      isActive: true,
-      isPickable: true,
-      isReceivable: true,
-    },
-  });
-
-  // Reset form when location changes
-  useEffect(() => {
-    if (location) {
-      form.reset({
-        locationCode: location.locationCode,
-        name: location.name,
-        locationType: location.locationType,
-        capacity: location.capacity,
-        isActive: location.isActive,
-        isPickable: location.isPickable,
-        isReceivable: location.isReceivable,
-      });
-    } else {
-      form.reset({
-        locationCode: "",
-        name: "",
-        locationType: validTypes[0] ?? "warehouse",
-        capacity: null,
-        isActive: true,
-        isPickable: true,
-        isReceivable: true,
-      });
-    }
-  }, [location, form, validTypes]);
-
-  const handleSubmit = useCallback(
-    async (values: LocationFormValues) => {
+  const form = useTanStackForm<LocationFormValues>({
+    schema: locationFormSchema,
+    defaultValues: getDefaultValues(validTypes),
+    onSubmit: async (values) => {
       await onSubmit({
         ...values,
         parentId: isEditing ? (location?.parentId ?? null) : (parentLocation?.id ?? null),
       });
     },
-    [onSubmit, isEditing, location, parentLocation]
-  );
+    onSubmitInvalid: () => {},
+  });
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
-  const selectedType = form.watch("locationType");
+  const selectedType = form.useWatch("locationType");
   const typeConfig = LOCATION_TYPES.find((t) => t.value === selectedType);
   const IconComponent = LOCATION_TYPE_ICONS[selectedType] ?? Package;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <IconComponent className="h-5 w-5" aria-hidden="true" />
-            {isEditing ? "Edit Location" : "New Location"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? `Update ${location?.name}`
-              : parentLocation
-                ? `Add a new location under ${parentLocation.name}`
-                : "Create a new warehouse location"}
-          </DialogDescription>
-        </DialogHeader>
+  // Reset form when location or open changes
+  useEffect(() => {
+    if (open) {
+      form.reset(
+        location ? locationToFormValues(location) : getDefaultValues(validTypes)
+      );
+    }
+  }, [open, location, validTypes, form]);
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            {/* Location Type */}
-            <FormField
-              control={form.control}
-              name="locationType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location Type</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={isEditing}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {LOCATION_TYPES.filter((t) =>
-                        validTypes.includes(t.value)
-                      ).map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          <div className="flex items-center gap-2">
-                            <type.icon className="h-4 w-4" aria-hidden="true" />
-                            <span>{type.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>{typeConfig?.description}</FormDescription>
-                  <FormMessage />
-                </FormItem>
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen && (form.state.isSubmitting || (isSubmitting ?? false))) return;
+      onOpenChange(newOpen);
+    },
+    [onOpenChange, isSubmitting, form.state.isSubmitting]
+  );
+
+  const title = (
+    <span className="flex items-center gap-2">
+      <IconComponent className="h-5 w-5" aria-hidden="true" />
+      {isEditing ? "Edit Location" : "New Location"}
+    </span>
+  );
+  const description =
+    isEditing
+      ? `Update ${location?.name}`
+      : parentLocation
+        ? `Add a new location under ${parentLocation.name}`
+        : "Create a new warehouse location";
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={title}
+      description={description}
+      form={form}
+      submitLabel={isEditing ? "Save Changes" : "Create Location"}
+      submitError={submitError}
+      submitDisabled={isSubmitting ?? false}
+      size="md"
+      className="sm:max-w-[500px]"
+      resetOnClose={false}
+    >
+      {/* Location Type */}
+      <form.Field name="locationType">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Location Type"
+                  placeholder="Select type"
+                  description={typeConfig?.description}
+                  disabled={isEditing}
+                  options={LOCATION_TYPES.filter((t) => validTypes.includes(t.value)).map(
+                    (type) => ({
+                      value: type.value,
+                      label: type.label,
+                    })
+                  )}
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Code and Name */}
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="locationCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Code</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="A1-R01"
-                        className="font-mono uppercase"
-                        onChange={(e) =>
-                          field.onChange(e.target.value.toUpperCase())
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="locationCode">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Code"
+                    placeholder="A1-R01"
+                    required
+                    className="font-mono uppercase"
+                    onChange={(v) => field.handleChange(v?.toUpperCase() ?? "")}
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Aisle 1, Rack 01" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="name">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Name"
+                    placeholder="Aisle 1, Rack 01"
+                    required
+                  />
                 )}
-              />
+              </form.Field>
             </div>
 
             {/* Capacity */}
-            <FormField
-              control={form.control}
-              name="capacity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Capacity (optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={field.value === null ? "" : String(field.value)}
-                      onChange={(e) =>
-                        field.onChange(
-                          e.target.value ? parseInt(e.target.value) : null
-                        )
-                      }
-                      placeholder="Leave empty for unlimited"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Maximum number of items this location can hold
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="capacity">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Capacity (optional)"
+                  min={0}
+                  placeholder="Leave empty for unlimited"
+                  description="Maximum number of items this location can hold"
+                />
               )}
-            />
+            </form.Field>
 
             {/* Toggles */}
             <div className="space-y-4 pt-2">
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Active</FormLabel>
-                      <FormDescription>
-                        Inactive locations cannot receive new inventory
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
+              <form.Field name="isActive">
+                {(field) => (
+                  <div className="rounded-lg border p-3">
+                    <SwitchField
+                      field={field}
+                      label="Active"
+                      description="Inactive locations cannot receive new inventory"
+                    />
+                  </div>
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="isPickable"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Pickable</FormLabel>
-                      <FormDescription>
-                        Items can be picked from this location for orders
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
+              <form.Field name="isPickable">
+                {(field) => (
+                  <div className="rounded-lg border p-3">
+                    <SwitchField
+                      field={field}
+                      label="Pickable"
+                      description="Items can be picked from this location for orders"
+                    />
+                  </div>
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="isReceivable"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Receivable</FormLabel>
-                      <FormDescription>
-                        New inventory can be received into this location
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
+              <form.Field name="isReceivable">
+                {(field) => (
+                  <div className="rounded-lg border p-3">
+                    <SwitchField
+                      field={field}
+                      label="Receivable"
+                      description="New inventory can be received into this location"
+                    />
+                  </div>
                 )}
-              />
+              </form.Field>
             </div>
-
-            <DialogFooter className="pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                )}
-                {isEditing ? "Save Changes" : "Create Location"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 });
 

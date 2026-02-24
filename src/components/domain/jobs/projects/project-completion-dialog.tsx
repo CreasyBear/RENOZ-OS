@@ -9,9 +9,9 @@
  * @path src/components/domain/jobs/projects/project-completion-dialog.tsx
  */
 
-import { useForm, type SubmitHandler, type Resolver } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle, Star, PartyPopper, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { CheckCircle, Star, PartyPopper } from 'lucide-react';
 import {
   projectCompletionFormSchema,
   type CompletionValidation,
@@ -25,30 +25,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+  FormFieldDisplayProvider,
+  FormErrorSummary,
+  NumberField,
+  SelectField,
+  TextareaField,
+  CheckboxField,
+  DateStringField,
+} from '@/components/shared/forms';
 import { useCompleteProject } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
-import { useState } from 'react';
 import { DisabledButtonWithTooltip } from '@/components/shared/disabled-with-tooltip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -85,9 +78,10 @@ export function ProjectCompletionDialog({
   const completeProject = useCompleteProject();
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const form = useForm<ProjectCompletionFormValues>({
-    resolver: zodResolver(projectCompletionFormSchema) as Resolver<ProjectCompletionFormValues>,
+  const form = useTanStackForm<ProjectCompletionFormValues>({
+    schema: projectCompletionFormSchema,
     defaultValues: {
       status: 'completed',
       actualCompletionDate: format(new Date(), 'yyyy-MM-dd'),
@@ -97,21 +91,20 @@ export function ProjectCompletionDialog({
       generateHandoverPack: true,
       overrideReason: '',
     },
-  });
+    onSubmit: async (data) => {
+      setSubmitError(null);
+      try {
+        const updatedProject = await completeProject.mutateAsync({
+          projectId,
+          status: data.status,
+          actualCompletionDate: data.actualCompletionDate,
+          actualTotalCost: data.actualTotalCost,
+          customerSatisfactionRating: data.customerSatisfactionRating,
+          customerFeedback: data.customerFeedback,
+          generateHandoverPack: data.generateHandoverPack,
+        });
 
-  const onSubmit: SubmitHandler<ProjectCompletionFormValues> = async (data) => {
-    try {
-      const updatedProject = await completeProject.mutateAsync({
-        projectId,
-        status: data.status,
-        actualCompletionDate: data.actualCompletionDate,
-        actualTotalCost: data.actualTotalCost,
-        customerSatisfactionRating: data.customerSatisfactionRating,
-        customerFeedback: data.customerFeedback,
-        generateHandoverPack: data.generateHandoverPack,
-      });
-
-      if (data.status === 'completed') {
+        if (data.status === 'completed') {
         setShowCelebration(true);
         toast.success('Project completed successfully! 🎉', {
           description: updatedProject?.handoverPackUrl
@@ -125,23 +118,41 @@ export function ProjectCompletionDialog({
         toast.success(`Project marked as ${data.status}`);
       }
 
-      setTimeout(() => {
-        form.reset();
-        onSuccess?.();
-        onOpenChange(false);
-        setShowCelebration(false);
-      }, 1500);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(`Failed to complete project: ${message}`);
-    }
-  };
+        setTimeout(() => {
+          form.reset();
+          onSuccess?.();
+          onOpenChange(false);
+          setShowCelebration(false);
+        }, 1500);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        setSubmitError(message);
+        toast.error(`Failed to complete project: ${message}`);
+      }
+    },
+    onSubmitInvalid: () => {},
+  });
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
-  const selectedRating = form.watch('customerSatisfactionRating');
-  const actualCost = form.watch('actualTotalCost');
-  const status = form.watch('status');
-  const overrideReason = form.watch('overrideReason');
+  const selectedRating = form.useWatch('customerSatisfactionRating');
+  const actualCost = form.useWatch('actualTotalCost');
+  const status = form.useWatch('status');
+  const overrideReason = form.useWatch('overrideReason');
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setSubmitError(null);
+      form.reset({
+        status: 'completed',
+        actualCompletionDate: format(new Date(), 'yyyy-MM-dd'),
+        actualTotalCost: undefined,
+        customerSatisfactionRating: undefined,
+        customerFeedback: '',
+        generateHandoverPack: true,
+        overrideReason: '',
+      });
+    }
+  }, [open, form]);
 
   // Completion validation: block "completed" if tasks or BOM incomplete
   const isTasksIncomplete =
@@ -158,16 +169,20 @@ export function ProjectCompletionDialog({
     !isCompletionBlocked || (overrideReason?.trim().length ?? 0) >= 10;
 
   // Calculate variance
-  const variance = estimatedTotalValue && actualCost 
-    ? actualCost - estimatedTotalValue 
+  const variance = estimatedTotalValue && actualCost
+    ? actualCost - estimatedTotalValue
     : null;
   const variancePercent = estimatedTotalValue && actualCost
     ? ((actualCost - estimatedTotalValue) / estimatedTotalValue) * 100
     : null;
 
+  const isPending = completeProject.isPending;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
+
   if (showCelebration) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px] text-center">
           <div className="py-8">
             <PartyPopper className="h-16 w-16 mx-auto text-yellow-500 mb-4" />
@@ -182,8 +197,12 @@ export function ProjectCompletionDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-500" />
@@ -194,80 +213,72 @@ export function ProjectCompletionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void form.handleSubmit();
+          }}
+          className="space-y-6"
+        >
+          <FormFieldDisplayProvider form={form}>
+            <FormErrorSummary form={form} submitError={submitError ?? completeProject.error?.message ?? null} />
             {/* Status Selection */}
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Final Status *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select final status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="completed">✅ Completed</SelectItem>
-                      <SelectItem value="cancelled">❌ Cancelled</SelectItem>
-                      <SelectItem value="on_hold">⏸️ On Hold</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="status">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Final Status"
+                  placeholder="Select final status"
+                  options={[
+                    { value: 'completed', label: '✅ Completed' },
+                    { value: 'cancelled', label: '❌ Cancelled' },
+                    { value: 'on_hold', label: '⏸️ On Hold' },
+                  ]}
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Completion Date */}
-            <FormField
-              control={form.control}
-              name="actualCompletionDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Completion Date *</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="actualCompletionDate">
+              {(field) => (
+                <DateStringField
+                  field={field}
+                  label="Completion Date"
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Actual Cost */}
-            <FormField
-              control={form.control}
-              name="actualTotalCost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Actual Total Cost</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="Enter actual total cost"
-                      {...field}
-                      onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                    />
-                  </FormControl>
-                  {estimatedTotalValue && (
-                    <FormDescription>
-                      Estimated: ${estimatedTotalValue.toLocaleString()}
-                      {variance !== null && (
-                        <span className={cn(
-                          "ml-2 font-medium",
-                          variance > 0 ? 'text-red-500' : variance < 0 ? 'text-green-500' : 'text-gray-500'
-                        )}>
-                          ({variance > 0 ? '+' : ''}{variancePercent?.toFixed(1)}%)
-                        </span>
+            <form.Field name="actualTotalCost">
+              {(field) => (
+                <div className="space-y-1">
+                  <NumberField
+                    field={field}
+                    label="Actual Total Cost"
+                    step={0.01}
+                    placeholder="Enter actual total cost"
+                    description={
+                      estimatedTotalValue
+                        ? `Estimated: $${estimatedTotalValue.toLocaleString()}`
+                        : undefined
+                    }
+                  />
+                  {estimatedTotalValue && variance !== null && (
+                    <p
+                      className={cn(
+                        'text-xs font-medium',
+                        variance > 0 ? 'text-red-500' : variance < 0 ? 'text-green-500' : 'text-muted-foreground'
                       )}
-                    </FormDescription>
+                    >
+                      Variance: {variance > 0 ? '+' : ''}{variancePercent?.toFixed(1)}%
+                    </p>
                   )}
-                  <FormMessage />
-                </FormItem>
+                </div>
               )}
-            />
+            </form.Field>
 
             {status === 'completed' && isCompletionBlocked && (
               <Alert variant="destructive">
@@ -285,145 +296,123 @@ export function ProjectCompletionDialog({
             {status === 'completed' && (
               <>
                 {isCompletionBlocked && (
-                  <FormField
-                    control={form.control}
-                    name="overrideReason"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Override Reason *</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="I understand items are incomplete. Reason for override..."
-                            className="min-h-[60px]"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Minimum 10 characters required to complete with incomplete items
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="overrideReason">
+                    {(field) => (
+                      <TextareaField
+                        field={field}
+                        label="Override Reason"
+                        placeholder="I understand items are incomplete. Reason for override..."
+                        description="Minimum 10 characters required to complete with incomplete items"
+                        rows={3}
+                        required
+                      />
                     )}
-                  />
+                  </form.Field>
                 )}
 
                 {/* Customer Rating */}
-                <FormField
-                  control={form.control}
-                  name="customerSatisfactionRating"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Customer Satisfaction (Optional)</FormLabel>
-                      <FormDescription>
+                <form.Field name="customerSatisfactionRating">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Customer Satisfaction (Optional)
+                      </label>
+                      <p className="text-xs text-muted-foreground">
                         Overall customer satisfaction rating
-                      </FormDescription>
-                      <FormControl>
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map((rating) => (
-                            <button
-                              key={rating}
-                              type="button"
-                              className={cn(
-                                'p-1 transition-colors',
-                                (hoveredRating !== null 
-                                  ? rating <= hoveredRating 
-                                  : rating <= (selectedRating || 0)
-                                ) 
-                                  ? 'text-yellow-400' 
-                                  : 'text-gray-300'
-                              )}
-                              onMouseEnter={() => setHoveredRating(rating)}
-                              onMouseLeave={() => setHoveredRating(null)}
-                              onClick={() => field.onChange(rating)}
-                            >
-                              <Star className="h-8 w-8 fill-current" />
-                            </button>
-                          ))}
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                      </p>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            className={cn(
+                              'p-1 transition-colors',
+                              (hoveredRating !== null
+                                ? rating <= hoveredRating
+                                : rating <= (selectedRating || 0)
+                              )
+                                ? 'text-yellow-400'
+                                : 'text-gray-300'
+                            )}
+                            onMouseEnter={() => setHoveredRating(rating)}
+                            onMouseLeave={() => setHoveredRating(null)}
+                            onClick={() => field.handleChange(rating)}
+                          >
+                            <Star className="h-8 w-8 fill-current" />
+                          </button>
+                        ))}
+                      </div>
+                      {field.state.meta.errors.length > 0 && (
+                        <p className="text-sm text-destructive">
+                          {field.state.meta.errors[0]}
+                        </p>
+                      )}
+                    </div>
                   )}
-                />
+                </form.Field>
 
                 {/* Customer Feedback */}
-                <FormField
-                  control={form.control}
-                  name="customerFeedback"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Customer Feedback (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter overall customer feedback..."
-                          className="min-h-[100px]"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="customerFeedback">
+                  {(field) => (
+                    <TextareaField
+                      field={field}
+                      label="Customer Feedback (Optional)"
+                      placeholder="Enter overall customer feedback..."
+                      rows={4}
+                    />
                   )}
-                />
+                </form.Field>
 
                 {/* Generate Handover Pack */}
-                <FormField
-                  control={form.control}
-                  name="generateHandoverPack"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="flex items-center gap-2">
-                          <FileText className="h-4 w-4" />
-                          Generate Handover Pack
-                        </FormLabel>
-                        <FormDescription>
-                          Automatically generate a completion summary document with project details,
-                          system specifications, and warranty information.
-                        </FormDescription>
-                      </div>
-                    </FormItem>
+                <form.Field name="generateHandoverPack">
+                  {(field) => (
+                    <div className="rounded-md border p-4">
+                      <CheckboxField
+                        field={field}
+                        label="Generate Handover Pack"
+                        description="Automatically generate a completion summary document with project details, system specifications, and warranty information."
+                      />
+                    </div>
                   )}
-                />
+                </form.Field>
               </>
             )}
+          </FormFieldDisplayProvider>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={completeProject.isPending}
-              >
-                Cancel
-              </Button>
-              <DisabledButtonWithTooltip
-                type="submit"
-                disabled={completeProject.isPending || !form.formState.isValid}
-                disabledReason={
-                  status === 'completed' && isCompletionBlocked && !hasValidOverride
-                    ? isTasksIncomplete && isBomIncomplete
-                      ? 'Complete all tasks and BOM items first, or provide an override reason below (min 10 characters)'
-                      : isTasksIncomplete
-                        ? 'Complete all tasks first, or provide an override reason below'
-                        : 'Install all BOM items first, or provide an override reason below'
-                    : undefined
-                }
-              >
-                {completeProject.isPending
-                  ? 'Completing...'
-                  : status === 'completed'
-                    ? 'Complete Project'
-                    : 'Update Status'}
-              </DisabledButtonWithTooltip>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={completeProject.isPending}
+            >
+              Cancel
+            </Button>
+            <DisabledButtonWithTooltip
+              type="submit"
+              disabled={
+                completeProject.isPending ||
+                !form.state.canSubmit ||
+                (status === 'completed' && isCompletionBlocked && !hasValidOverride)
+              }
+              disabledReason={
+                status === 'completed' && isCompletionBlocked && !hasValidOverride
+                  ? isTasksIncomplete && isBomIncomplete
+                    ? 'Complete all tasks and BOM items first, or provide an override reason below (min 10 characters)'
+                    : isTasksIncomplete
+                      ? 'Complete all tasks first, or provide an override reason below'
+                      : 'Install all BOM items first, or provide an override reason below'
+                  : undefined
+              }
+            >
+              {completeProject.isPending
+                ? 'Completing...'
+                : status === 'completed'
+                  ? 'Complete Project'
+                  : 'Update Status'}
+            </DisabledButtonWithTooltip>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

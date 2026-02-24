@@ -18,6 +18,9 @@ import {
   shipmentItems,
   orders,
   orderLineItems,
+  serializedItems,
+  orderLineSerialAllocations,
+  activities,
 } from 'drizzle/schema';
 import {
   inventory,
@@ -27,6 +30,8 @@ import {
 import { products } from 'drizzle/schema/products/products';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError, NotFoundError } from '@/lib/server/errors';
+import { findDuplicateSerials, normalizeSerial } from '@/lib/serials';
+import { serializedMutationSuccess, type SerializedMutationEnvelope } from '@/lib/server/serialized-mutation-contract';
 import { fulfillmentImportSchema } from '@/lib/schemas/orders/shipments';
 import {
   createShipmentSchema,
@@ -40,6 +45,19 @@ import {
   type ShipmentStatus,
   type TrackingEvent,
 } from '@/lib/schemas';
+import {
+  addSerializedItemEvent,
+  findSerializedItemBySerial,
+  linkSerializedItemToShipmentItem,
+  releaseSerializedItemAllocation,
+  upsertSerializedItemForInventory,
+} from '@/server/functions/_shared/serialized-lineage';
+import {
+  assertSerializedInventoryCostIntegrity,
+  consumeLayersFIFO,
+  recomputeInventoryValueFromLayers,
+} from '@/server/functions/_shared/inventory-finance';
+import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
 
 // ============================================================================
 // TYPES
@@ -153,6 +171,9 @@ async function markShipmentAsShipped(
 
   // Wrap shipment update and line item updates in a transaction
   const shipment = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
     // Update shipment
     const [updatedShipment] = await tx
       .update(orderShipments)
@@ -194,6 +215,28 @@ async function markShipmentAsShipped(
           .where(inArray(orderLineItems.id, lineItemIds))
       : [];
     const lineItemMap = new Map(allLineItems.map((li) => [li.id, li]));
+    const canonicalAllocations = lineItemIds.length > 0
+      ? await tx
+          .select({
+            lineItemId: orderLineSerialAllocations.orderLineItemId,
+            serialNumber: serializedItems.serialNumberNormalized,
+          })
+          .from(orderLineSerialAllocations)
+          .innerJoin(serializedItems, eq(orderLineSerialAllocations.serializedItemId, serializedItems.id))
+          .where(
+            and(
+              eq(orderLineSerialAllocations.organizationId, ctx.organizationId),
+              eq(orderLineSerialAllocations.isActive, true),
+              inArray(orderLineSerialAllocations.orderLineItemId, lineItemIds)
+            )
+          )
+      : [];
+    const canonicalLineItemSerials = new Map<string, string[]>();
+    for (const allocation of canonicalAllocations) {
+      const existing = canonicalLineItemSerials.get(allocation.lineItemId) ?? [];
+      existing.push(normalizeSerial(allocation.serialNumber));
+      canonicalLineItemSerials.set(allocation.lineItemId, existing);
+    }
 
     // Collect (productId, serialNumber) pairs for serialized items
     const serializedPairs: { productId: string; serialNumber: string }[] = [];
@@ -201,7 +244,9 @@ async function markShipmentAsShipped(
     for (const item of sortedItems) {
       const lineItem = lineItemMap.get(item.orderLineItemId);
       if (!lineItem?.productId) continue;
-      const serials = (item.serialNumbers as string[] | null) ?? [];
+      const serials = ((item.serialNumbers as string[] | null) ?? []).map((sn) =>
+        normalizeSerial(sn)
+      );
       if (serials.length > 0) {
         for (const sn of serials) {
           serializedPairs.push({ productId: lineItem.productId, serialNumber: sn });
@@ -228,7 +273,7 @@ async function markShipmentAsShipped(
         );
       for (const inv of serializedInventory) {
         if (inv.serialNumber) {
-          inventoryBySerialKey.set(`${inv.productId}:${inv.serialNumber}`, inv);
+          inventoryBySerialKey.set(`${inv.productId}:${normalizeSerial(inv.serialNumber)}`, inv);
         }
       }
     }
@@ -266,9 +311,21 @@ async function markShipmentAsShipped(
         .where(eq(orderLineItems.id, item.orderLineItemId));
 
       // Trim allocatedSerialNumbers when shipping serials
-      const serials = (item.serialNumbers as string[] | null) ?? [];
+      const serials = ((item.serialNumbers as string[] | null) ?? []).map((sn) =>
+        normalizeSerial(sn)
+      );
+      const duplicateSerials = findDuplicateSerials(serials);
+      if (duplicateSerials.length > 0) {
+        throw new ValidationError('Duplicate serial number', {
+          serialNumbers: [
+            `Duplicate serial number "${duplicateSerials[0]}" in shipment item ${item.orderLineItemId}`,
+          ],
+        });
+      }
       if (serials.length > 0) {
-        const currentAllocated = (lineItem.allocatedSerialNumbers as string[] | null) ?? [];
+        const currentAllocated =
+          canonicalLineItemSerials.get(item.orderLineItemId) ??
+          ((lineItem.allocatedSerialNumbers as string[] | null) ?? []).map((sn) => normalizeSerial(sn));
         const remaining = currentAllocated.filter((s) => !serials.includes(s));
         await tx
           .update(orderLineItems)
@@ -287,7 +344,12 @@ async function markShipmentAsShipped(
           .sort((a, b) => a.id.localeCompare(b.id));
 
         if (invRows.length !== serials.length) {
-          const foundSerials = new Set(invRows.map((r) => r.serialNumber));
+          const foundSerials = new Set(
+            invRows
+              .map((r) => r.serialNumber)
+              .filter((sn): sn is string => typeof sn === 'string')
+              .map((sn) => normalizeSerial(sn))
+          );
           const missing = serials.find((s) => !foundSerials.has(s));
           throw new ValidationError('Serial not found in inventory', {
             serialNumbers: [
@@ -298,29 +360,20 @@ async function markShipmentAsShipped(
 
         let _totalCogs = 0;
         for (const inv of invRows) {
-          const costLayers = await tx
-            .select()
-            .from(inventoryCostLayers)
-            .where(
-              and(
-                eq(inventoryCostLayers.inventoryId, inv.id),
-                sql`${inventoryCostLayers.quantityRemaining} > 0`
-              )
-            )
-            .orderBy(asc(inventoryCostLayers.receivedAt));
-
-          let remaining = 1;
-          let unitCogs = 0;
-          for (const layer of costLayers) {
-            if (remaining <= 0) break;
-            const consume = Math.min(remaining, layer.quantityRemaining);
-            unitCogs += consume * Number(layer.unitCost);
-            remaining -= consume;
-            await tx
-              .update(inventoryCostLayers)
-              .set({ quantityRemaining: layer.quantityRemaining - consume })
-              .where(eq(inventoryCostLayers.id, layer.id));
+          const layerConsumption = await consumeLayersFIFO(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: inv.id,
+            quantity: 1,
+          });
+          if (layerConsumption.quantityUnfulfilled > 0) {
+            throw new ValidationError('Serialized shipment has missing cost layers', {
+              serialNumbers: [
+                `Serial "${inv.serialNumber ?? 'unknown'}" has no available cost layer`,
+              ],
+              code: ['insufficient_cost_layers'],
+            });
           }
+          const unitCogs = layerConsumption.totalCost;
           _totalCogs += unitCogs;
 
           await tx.insert(inventoryMovements).values({
@@ -352,6 +405,68 @@ async function markShipmentAsShipped(
               updatedBy: ctx.user.id,
             })
             .where(eq(inventory.id, inv.id));
+          await recomputeInventoryValueFromLayers(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: inv.id,
+            userId: ctx.user.id,
+          });
+          if (!inv.serialNumber) {
+            throw new ValidationError('Serialized shipment inventory row is missing serial identity', {
+              serialNumbers: ['Shipment cannot proceed for serialized rows without serial identity'],
+              code: ['serialized_unit_violation'],
+            });
+          }
+          await assertSerializedInventoryCostIntegrity(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: inv.id,
+            serialNumber: inv.serialNumber,
+            expectedQuantityOnHand: 0,
+          });
+
+          const existingSerializedItem =
+            inv.serialNumber
+              ? await findSerializedItemBySerial(tx, ctx.organizationId, inv.serialNumber, {
+                  userId: ctx.user.id,
+                  productId: lineItem.productId,
+                  inventoryId: inv.id,
+                  source: 'order_shipment_mark_shipped',
+                })
+              : null;
+          const upsertedSerializedItemId =
+            !existingSerializedItem && inv.serialNumber
+              ? await upsertSerializedItemForInventory(tx, {
+                  organizationId: ctx.organizationId,
+                  productId: lineItem.productId,
+                  serialNumber: inv.serialNumber,
+                  inventoryId: inv.id,
+                  userId: ctx.user.id,
+                })
+              : null;
+          const serializedItem = existingSerializedItem ?? (upsertedSerializedItemId
+            ? { id: upsertedSerializedItemId }
+            : null);
+          if (serializedItem) {
+            await releaseSerializedItemAllocation(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId: serializedItem.id,
+              userId: ctx.user.id,
+            });
+            await linkSerializedItemToShipmentItem(tx, {
+              organizationId: ctx.organizationId,
+              shipmentItemId: item.id,
+              serializedItemId: serializedItem.id,
+              userId: ctx.user.id,
+            });
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId: serializedItem.id,
+              eventType: 'shipped',
+              entityType: 'shipment_item',
+              entityId: item.id,
+              notes: `Shipped via ${updatedShipment.shipmentNumber}`,
+              userId: ctx.user.id,
+            });
+          }
         }
 
         if (invRows.length > 0) {
@@ -390,29 +505,20 @@ async function markShipmentAsShipped(
         const inv = inventoryByProduct.get(lineItem.productId);
         if (!inv) continue;
 
-        const costLayers = await tx
-          .select()
-          .from(inventoryCostLayers)
-          .where(
-            and(
-              eq(inventoryCostLayers.inventoryId, inv.id),
-              sql`${inventoryCostLayers.quantityRemaining} > 0`
-            )
-          )
-          .orderBy(asc(inventoryCostLayers.receivedAt));
-
-        let remaining = item.quantity;
-        let totalCogs = 0;
-        for (const layer of costLayers) {
-          if (remaining <= 0) break;
-          const consume = Math.min(remaining, layer.quantityRemaining);
-          totalCogs += consume * Number(layer.unitCost);
-          remaining -= consume;
-          await tx
-            .update(inventoryCostLayers)
-            .set({ quantityRemaining: layer.quantityRemaining - consume })
-            .where(eq(inventoryCostLayers.id, layer.id));
+        const layerConsumption = await consumeLayersFIFO(tx, {
+          organizationId: ctx.organizationId,
+          inventoryId: inv.id,
+          quantity: item.quantity,
+        });
+        if (layerConsumption.quantityUnfulfilled > 0) {
+          throw new ValidationError('Shipment has missing cost layers', {
+            quantity: [
+              `Unable to consume ${item.quantity} units from cost layers (missing ${layerConsumption.quantityUnfulfilled})`,
+            ],
+            code: ['insufficient_cost_layers'],
+          });
         }
+        const totalCogs = layerConsumption.totalCost;
 
         const cogsUnitCost = item.quantity > 0 ? totalCogs / item.quantity : 0;
 
@@ -445,6 +551,11 @@ async function markShipmentAsShipped(
             updatedBy: ctx.user.id,
           })
           .where(eq(inventory.id, inv.id));
+        await recomputeInventoryValueFromLayers(tx, {
+          organizationId: ctx.organizationId,
+          inventoryId: inv.id,
+          userId: ctx.user.id,
+        });
 
         const activeLayers = await tx
           .select({
@@ -576,6 +687,28 @@ async function validateShipmentItems(
       },
     ])
   );
+  const canonicalAllocations = lineItemIds.length > 0
+    ? await db
+        .select({
+          lineItemId: orderLineSerialAllocations.orderLineItemId,
+          serialNumber: serializedItems.serialNumberNormalized,
+        })
+        .from(orderLineSerialAllocations)
+        .innerJoin(serializedItems, eq(orderLineSerialAllocations.serializedItemId, serializedItems.id))
+        .where(
+          and(
+            eq(orderLineSerialAllocations.organizationId, organizationId),
+            eq(orderLineSerialAllocations.isActive, true),
+            inArray(orderLineSerialAllocations.orderLineItemId, lineItemIds)
+          )
+        )
+    : [];
+  const canonicalLineItemSerials = new Map<string, string[]>();
+  for (const allocation of canonicalAllocations) {
+    const existing = canonicalLineItemSerials.get(allocation.lineItemId) ?? [];
+    existing.push(normalizeSerial(allocation.serialNumber));
+    canonicalLineItemSerials.set(allocation.lineItemId, existing);
+  }
 
   for (const item of items) {
     const lineData = lineItemMap.get(item.orderLineItemId);
@@ -597,7 +730,7 @@ async function validateShipmentItems(
     // Validate serialized products: serialNumbers required, length === quantity, each in allocated
     if (lineData.isSerialized && item.quantity > 0) {
       const rawSerials = item.serialNumbers ?? [];
-      const serials = rawSerials.map((s) => s.trim());
+      const serials = rawSerials.map((s) => normalizeSerial(s));
       const emptyIndex = serials.findIndex((s) => s === '');
       if (emptyIndex >= 0) {
         throw new ValidationError('Invalid serial number', {
@@ -618,7 +751,20 @@ async function validateShipmentItems(
           ],
         });
       }
-      const allocatedSet = new Set(lineData.allocatedSerialNumbers);
+      const duplicates = findDuplicateSerials(serials);
+      if (duplicates.length > 0) {
+        throw new ValidationError('Duplicate serial number', {
+          [item.orderLineItemId]: [
+            `Duplicate serial number "${duplicates[0]}" in shipment item`,
+          ],
+        });
+      }
+      const allocatedSet = new Set(
+        (
+          canonicalLineItemSerials.get(item.orderLineItemId) ??
+          lineData.allocatedSerialNumbers.map((sn) => normalizeSerial(sn))
+        ).map((sn) => normalizeSerial(sn))
+      );
       for (const sn of serials) {
         if (!allocatedSet.has(sn)) {
           throw new ValidationError('Serial number not allocated to this line item', {
@@ -794,7 +940,7 @@ export const createShipment = createServerFn({ method: 'POST' })
     // Normalize serial numbers (trim whitespace from barcode scanners / paste)
     const normalizedItems = data.items.map((item) => ({
       ...item,
-      serialNumbers: item.serialNumbers?.map((s) => s.trim()) ?? undefined,
+      serialNumbers: item.serialNumbers?.map((s) => normalizeSerial(s)) ?? undefined,
     }));
 
     // Validate items (uses normalized serials)
@@ -810,6 +956,9 @@ export const createShipment = createServerFn({ method: 'POST' })
 
     // Wrap shipment creation and item insertion in a transaction for atomicity
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Create shipment
       const [shipment] = await tx
         .insert(orderShipments)
@@ -922,9 +1071,12 @@ export const updateShipment = createServerFn({ method: 'POST' })
 
 export const markShipped = createServerFn({ method: 'POST' })
   .inputValidator(markShippedSchema)
-  .handler(async ({ data }): Promise<OrderShipment> => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<OrderShipment>> => {
     const ctx = await withAuth();
-    return markShipmentAsShipped(ctx, data);
+    const shipment = await markShipmentAsShipped(ctx, data);
+    return serializedMutationSuccess(shipment, 'Shipment marked as shipped.', {
+      affectedIds: [shipment.id],
+    });
   });
 
 // ============================================================================
@@ -1081,8 +1233,10 @@ export const importFulfillmentShipments = createServerFn({ method: 'POST' })
 
 export const updateShipmentStatus = createServerFn({ method: 'POST' })
   .inputValidator(updateShipmentStatusSchema)
-  .handler(async ({ data }): Promise<OrderShipment> => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<OrderShipment>> => {
     const ctx = await withAuth();
+    const transitionName = 'shipment_status_update';
+    const idempotencyKey = data.idempotencyKey?.trim();
 
     // Verify shipment exists
     const [existing] = await db
@@ -1095,6 +1249,43 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
 
     if (!existing) {
       throw new NotFoundError('Shipment not found');
+    }
+
+    if (idempotencyKey) {
+      const replayed = await hasProcessedIdempotencyKey(db, {
+        organizationId: ctx.organizationId,
+        entityType: 'shipment',
+        entityId: existing.id,
+        action: 'updated',
+        idempotencyKey,
+      });
+      if (replayed) {
+        return serializedMutationSuccess(
+          existing,
+          `Idempotent replay ignored. Shipment remains in ${existing.status} status.`,
+          {
+            affectedIds: [existing.id],
+            transition: {
+              transition: transitionName,
+              fromStatus: existing.status,
+              toStatus: existing.status,
+              blockedBy: 'idempotency_key_replay',
+            },
+          }
+        );
+      }
+    }
+
+    // Idempotent retry safety: same requested status returns current shipment.
+    if (existing.status === data.status) {
+      return serializedMutationSuccess(existing, `Shipment already in ${data.status} status.`, {
+        affectedIds: [existing.id],
+        transition: {
+          transition: transitionName,
+          fromStatus: existing.status,
+          toStatus: data.status,
+        },
+      });
     }
 
     // Validate status transition
@@ -1110,6 +1301,7 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
     if (!validTransitions[existing.status].includes(data.status)) {
       throw new ValidationError('Invalid status transition', {
         status: [`Cannot transition from ${existing.status} to ${data.status}`],
+        code: ['transition_blocked'],
       });
     }
 
@@ -1140,6 +1332,9 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
       }
 
       const shipment = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+        );
         // Update line item qtyDelivered in batch
         const items = await tx
           .select()
@@ -1161,10 +1356,114 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
           .where(eq(orderShipments.id, data.id))
           .returning();
 
+        await tx.insert(activities).values({
+          organizationId: ctx.organizationId,
+          userId: ctx.user.id,
+          entityType: 'shipment',
+          entityId: updatedShipment.id,
+          action: 'updated',
+          description: `Shipment status updated: ${existing.status} -> ${data.status}`,
+          metadata: {
+            shipmentNumber: updatedShipment.shipmentNumber,
+            previousStatus: existing.status,
+            newStatus: data.status,
+            idempotencyKey: idempotencyKey ?? undefined,
+          },
+          createdBy: ctx.user.id,
+        });
+
         return updatedShipment;
       });
 
-      return shipment;
+      return serializedMutationSuccess(shipment, `Shipment status updated to ${data.status}.`, {
+        affectedIds: [shipment.id],
+        transition: {
+          transition: transitionName,
+          fromStatus: existing.status,
+          toStatus: data.status,
+        },
+      });
+    }
+
+    if (data.status === 'returned') {
+      const shipment = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+        );
+        const [updatedShipment] = await tx
+          .update(orderShipments)
+          .set(updateValues)
+          .where(eq(orderShipments.id, data.id))
+          .returning();
+
+        const items = await tx
+          .select({
+            id: shipmentItems.id,
+            serialNumbers: shipmentItems.serialNumbers,
+          })
+          .from(shipmentItems)
+          .where(eq(shipmentItems.shipmentId, data.id));
+
+        for (const item of items) {
+          const serials = ((item.serialNumbers as string[] | null) ?? [])
+            .map((serial) => normalizeSerial(serial))
+            .filter((serial) => serial.length > 0);
+          for (const serial of serials) {
+            const serializedItem = await findSerializedItemBySerial(tx, ctx.organizationId, serial, {
+              userId: ctx.user.id,
+              source: 'order_shipment_returned',
+            });
+            if (!serializedItem) continue;
+
+            await tx
+              .update(serializedItems)
+              .set({
+                status: 'returned',
+                currentInventoryId: null,
+                updatedAt: new Date(),
+                updatedBy: ctx.user.id,
+              })
+              .where(eq(serializedItems.id, serializedItem.id));
+
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId: serializedItem.id,
+              eventType: 'returned',
+              entityType: 'shipment_item',
+              entityId: item.id,
+              notes: `Shipment ${existing.shipmentNumber} marked returned`,
+              userId: ctx.user.id,
+            });
+          }
+        }
+
+        await tx.insert(activities).values({
+          organizationId: ctx.organizationId,
+          userId: ctx.user.id,
+          entityType: 'shipment',
+          entityId: updatedShipment.id,
+          action: 'updated',
+          description: `Shipment status updated: ${existing.status} -> ${data.status}`,
+          metadata: {
+            shipmentNumber: updatedShipment.shipmentNumber,
+            previousStatus: existing.status,
+            newStatus: data.status,
+            idempotencyKey: idempotencyKey ?? undefined,
+          },
+          createdBy: ctx.user.id,
+        });
+
+        return updatedShipment;
+      });
+
+      return serializedMutationSuccess(shipment, `Shipment status updated to ${data.status}.`, {
+        affectedIds: [shipment.id],
+        transition: {
+          transition: transitionName,
+          fromStatus: existing.status,
+          toStatus: data.status,
+        },
+      });
     }
 
     const [shipment] = await db
@@ -1173,7 +1472,30 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
       .where(eq(orderShipments.id, data.id))
       .returning();
 
-    return shipment;
+    await db.insert(activities).values({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      entityType: 'shipment',
+      entityId: shipment.id,
+      action: 'updated',
+      description: `Shipment status updated: ${existing.status} -> ${data.status}`,
+      metadata: {
+        shipmentNumber: shipment.shipmentNumber,
+        previousStatus: existing.status,
+        newStatus: data.status,
+        idempotencyKey: idempotencyKey ?? undefined,
+      },
+      createdBy: ctx.user.id,
+    });
+
+    return serializedMutationSuccess(shipment, `Shipment status updated to ${data.status}.`, {
+      affectedIds: [shipment.id],
+      transition: {
+        transition: transitionName,
+        fromStatus: existing.status,
+        toStatus: data.status,
+      },
+    });
   });
 
 // ============================================================================
@@ -1216,6 +1538,9 @@ export const confirmDelivery = createServerFn({ method: 'POST' })
 
     // Wrap shipment update and line item updates in a transaction
     const shipment = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Update shipment
       const [updatedShipment] = await tx
         .update(orderShipments)
@@ -1394,6 +1719,9 @@ export const deleteShipment = createServerFn({ method: 'POST' })
 
     // Wrap both deletes in a transaction for atomicity
     await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Delete items first (cascade should handle this, but be explicit)
       await tx.delete(shipmentItems).where(eq(shipmentItems.shipmentId, data.id));
 

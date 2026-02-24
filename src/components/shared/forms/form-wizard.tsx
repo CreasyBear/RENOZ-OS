@@ -261,6 +261,7 @@ export function FormWizard({
 
   const handleNext = async () => {
     if (isSubmitting || isValidating) return
+    if (submitOnLastStep && isLastStep) return
 
     // Validate current step if validator provided
     if (validateStep) {
@@ -284,6 +285,7 @@ export function FormWizard({
   }
 
   const handleStepClick = (stepIndex: number) => {
+    if (stepIndex > currentStep + 1) return
     if (stepIndex !== currentStep && canNavigateToStep?.(stepIndex) !== false) {
       onStepChange(stepIndex)
     }

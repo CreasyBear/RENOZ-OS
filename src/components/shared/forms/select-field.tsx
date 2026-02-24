@@ -2,7 +2,7 @@
  * SelectField Component
  *
  * Dropdown select field integrated with TanStack Form.
- * Uses native select for simplicity and accessibility.
+ * Uses shadcn Select for consistent styling and UX.
  *
  * @example
  * ```tsx
@@ -21,33 +21,44 @@
  * </form.Field>
  * ```
  */
-import { FormField } from "./form-field"
-import { cn } from "~/lib/utils"
-import type { FormFieldWithType } from "./types"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { FormField } from "./form-field";
+import { useFormFieldDisplay } from "./form-field-display-context";
+import { extractFieldError, type FormFieldWithType } from "./types";
+
+const PLACEHOLDER_VALUE = "__placeholder__";
 
 export interface SelectOption {
-  value: string
-  label: string
-  disabled?: boolean
+  value: string;
+  label: string;
+  disabled?: boolean;
 }
 
 export interface SelectFieldProps {
   /** TanStack Form field instance */
-  field: FormFieldWithType<string | null | undefined>
+  field: FormFieldWithType<string | null | undefined>;
   /** Field label */
-  label: string
+  label: string;
   /** Select options */
-  options: SelectOption[]
+  options: SelectOption[];
   /** Placeholder text for empty selection */
-  placeholder?: string
+  placeholder?: string;
+  /** Optional "null" option (e.g. "All Products") - when selected, stores null. Use for optional nullable fields. */
+  nullOption?: { value: string; label: string };
   /** Whether the field is required */
-  required?: boolean
+  required?: boolean;
   /** Helper text */
-  description?: string
+  description?: string;
   /** Additional class names for the wrapper */
-  className?: string
+  className?: string;
   /** Disabled state */
-  disabled?: boolean
+  disabled?: boolean;
 }
 
 export function SelectField({
@@ -55,18 +66,29 @@ export function SelectField({
   label,
   options,
   placeholder = "Select an option",
+  nullOption,
   required,
   description,
   className,
   disabled,
 }: SelectFieldProps) {
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
+  const { showErrorsAfterSubmit } = useFormFieldDisplay();
+  const error = extractFieldError(field, { showErrorsAfterSubmit });
 
-  const error = typeof rawError === 'string'
-    ? rawError
-    : rawError?.message
+  const rawValue = field.state.value;
+  const displayValue =
+    rawValue ?? (nullOption ? nullOption.value : PLACEHOLDER_VALUE);
+
+  const handleValueChange = (v: string) => {
+    if (v === PLACEHOLDER_VALUE) {
+      field.handleChange(null);
+    } else if (nullOption && v === nullOption.value) {
+      field.handleChange(null);
+    } else {
+      field.handleChange(v);
+    }
+    field.handleBlur();
+  };
 
   return (
     <FormField
@@ -77,31 +99,73 @@ export function SelectField({
       required={required}
       className={className}
     >
-      <select
-        value={field.state.value ?? ""}
-        onChange={(e) => field.handleChange(e.target.value)}
-        onBlur={field.handleBlur}
+      <SelectFieldControl
+        displayValue={displayValue}
+        onValueChange={handleValueChange}
+        placeholder={placeholder}
+        nullOption={nullOption}
+        options={options}
         disabled={disabled}
-        className={cn(
-          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-          "md:text-sm"
-        )}
+      />
+    </FormField>
+  );
+}
+
+interface SelectFieldControlProps {
+  displayValue: string;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  nullOption?: { value: string; label: string };
+  options: SelectOption[];
+  disabled?: boolean;
+  id?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+}
+
+function SelectFieldControl({
+  displayValue,
+  onValueChange,
+  placeholder,
+  nullOption,
+  options,
+  disabled,
+  id,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+}: SelectFieldControlProps) {
+  return (
+    <Select
+      value={displayValue}
+      onValueChange={onValueChange}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        id={id}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        className="w-full"
       >
-        <option value="" disabled>
-          {placeholder}
-        </option>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {nullOption ? (
+          <SelectItem value={nullOption.value}>{nullOption.label}</SelectItem>
+        ) : (
+          <SelectItem value={PLACEHOLDER_VALUE} disabled>
+            {placeholder}
+          </SelectItem>
+        )}
         {options.map((option) => (
-          <option
+          <SelectItem
             key={option.value}
             value={option.value}
             disabled={option.disabled}
           >
             {option.label}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-    </FormField>
-  )
+      </SelectContent>
+    </Select>
+  );
 }

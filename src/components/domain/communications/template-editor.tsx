@@ -10,8 +10,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
   Bold,
@@ -38,30 +37,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Form,
-  FormControl,
+  FormFieldDisplayProvider,
+  FormErrorSummary,
   FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  TextField,
+  TextareaField,
+  SelectField,
+  SwitchField,
+  useFormFieldDisplay,
+} from "@/components/shared/forms";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Switch } from "@/components/ui/switch";
 import { cn, sanitizeHtml } from "@/lib/utils";
 
 import { TemplateVariableMenu } from "./template-variable-menu";
@@ -137,8 +129,8 @@ export function TemplateEditor({
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
 
-  const form = useForm<TemplateFormValues>({
-    resolver: zodResolver(templateFormSchema),
+  const form = useTanStackForm<TemplateFormValues>({
+    schema: templateFormSchema,
     defaultValues: {
       name: template?.name ?? "",
       description: template?.description ?? "",
@@ -148,11 +140,7 @@ export function TemplateEditor({
       isActive: template?.isActive ?? true,
       createVersion: false,
     },
-  });
-
-  const isPending = createTemplate.isPending || updateTemplate.isPending;
-
-  const onSubmit = (values: TemplateFormValues) => {
+    onSubmit: (values) => {
     if (template?.id) {
       updateTemplate.mutate(
         {
@@ -200,21 +188,26 @@ export function TemplateEditor({
         }
       );
     }
-  };
+  },
+  onSubmitInvalid: () => {},
+  });
+
+  const isPending = createTemplate.isPending || updateTemplate.isPending;
+  const { showErrorsAfterSubmit } = useFormFieldDisplay();
 
   // Format command helper
   const execCommand = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     editorRef.current?.focus();
     if (editorRef.current) {
-      form.setValue("bodyHtml", editorRef.current.innerHTML);
+      form.setFieldValue("bodyHtml", editorRef.current.innerHTML);
     }
   };
 
   // Handle editor content changes
   const handleEditorInput = () => {
     if (editorRef.current) {
-      form.setValue("bodyHtml", editorRef.current.innerHTML);
+      form.setFieldValue("bodyHtml", editorRef.current.innerHTML);
     }
   };
 
@@ -224,10 +217,9 @@ export function TemplateEditor({
     if (selection && editorRef.current?.contains(selection.anchorNode)) {
       document.execCommand("insertText", false, variable);
     } else {
-      // If no selection in editor, append to end
       if (editorRef.current) {
         editorRef.current.innerHTML += variable;
-        form.setValue("bodyHtml", editorRef.current.innerHTML);
+        form.setFieldValue("bodyHtml", editorRef.current.innerHTML);
       }
     }
   };
@@ -239,10 +231,8 @@ export function TemplateEditor({
     }
   }, [template?.bodyHtml]);
 
-  // Generate preview content (extract watched values for deps)
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
-  const watchedSubject = form.watch("subject");
-  const watchedBodyHtml = form.watch("bodyHtml");
+  const watchedSubject = form.useWatch("subject");
+  const watchedBodyHtml = form.useWatch("bodyHtml");
   const previewContent = React.useMemo(() => {
     const sampleData = getSampleTemplateData();
     const subject = substituteTemplateVariables(
@@ -283,110 +273,94 @@ export function TemplateEditor({
         </div>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormFieldDisplayProvider form={form}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              form.handleSubmit();
+            }}
+            className="space-y-4"
+          >
+            <FormErrorSummary form={form} submitError={(createTemplate.error ?? updateTemplate.error)?.message ?? null} />
             {/* Name & Category Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Template Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Welcome Email"
-                        {...field}
-                        aria-label="template-name"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="name">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Template Name"
+                    placeholder="Welcome Email"
+                    required
+                    aria-label="template-name"
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger aria-label="category-tabs">
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {CATEGORY_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="category">
+                {(field) => (
+                  <SelectField
+                    field={field}
+                    label="Category"
+                    placeholder="Select category"
+                    options={CATEGORY_OPTIONS}
+                    required
+                    aria-label="category-tabs"
+                  />
                 )}
-              />
+              </form.Field>
             </div>
 
             {/* Description */}
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Brief description of when to use this template"
-                      {...field}
-                      rows={2}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="description">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Description (optional)"
+                  placeholder="Brief description of when to use this template"
+                  rows={2}
+                />
               )}
-            />
+            </form.Field>
 
             {/* Subject */}
-            <FormField
-              control={form.control}
-              name="subject"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email Subject</FormLabel>
-                  <FormControl>
+            <form.Field name="subject">
+              {(field) => {
+                const hasErrors = field.state.meta.errors.length > 0;
+                const shouldShowError = showErrorsAfterSubmit ? hasErrors : (field.state.meta.isTouched && hasErrors);
+                const rawError = shouldShowError ? field.state.meta.errors[0] : undefined;
+                const errorMsg = typeof rawError === "string" ? rawError : (rawError as unknown as { message?: string })?.message;
+                return (
+                  <FormField
+                    label="Email Subject"
+                    name={field.name}
+                    error={errorMsg}
+                    required
+                  >
                     <div className="flex gap-2">
                       <Input
                         placeholder="Your {{quote.number}} is ready"
-                        {...field}
+                        value={field.state.value ?? ""}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={() => field.handleBlur()}
                         className="flex-1"
                         aria-label="template-subject"
                       />
                       <TemplateVariableMenu
                         onInsert={(variable) =>
-                          field.onChange(field.value + variable)
+                          field.handleChange((field.state.value ?? "") + variable)
                         }
                       />
                     </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                  </FormField>
+                );
+              }}
+            </form.Field>
 
             {/* Editor with Tabs */}
-            <FormField
-              control={form.control}
-              name="bodyHtml"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Email Body</FormLabel>
+            <form.Field name="bodyHtml">
+              {() => (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email Body</label>
                   <Tabs
                     value={activeTab}
                     onValueChange={(v) => setActiveTab(v as "edit" | "preview")}
@@ -468,8 +442,7 @@ export function TemplateEditor({
                       </div>
 
                       {/* Editor Area */}
-                      <FormControl>
-                        <div
+                      <div
                           ref={editorRef}
                           contentEditable
                           onInput={handleEditorInput}
@@ -482,7 +455,6 @@ export function TemplateEditor({
                           aria-label="template-body"
                           suppressContentEditableWarning
                         />
-                      </FormControl>
                     </TabsContent>
 
                     <TabsContent value="preview" className="mt-0">
@@ -514,49 +486,34 @@ export function TemplateEditor({
                       </div>
                     </TabsContent>
                   </Tabs>
-                  <FormMessage />
-                </FormItem>
+                </div>
               )}
-            />
+            </form.Field>
 
             {/* Active Toggle & Version Option */}
             {template?.id && (
               <div className="flex flex-wrap items-center gap-6 pt-2">
-                <FormField
-                  control={form.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center gap-2 space-y-0">
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormLabel className="text-sm font-normal">
-                        Active
-                      </FormLabel>
-                    </FormItem>
+                <form.Field name="isActive">
+                  {(field) => (
+                    <div className="rounded-lg border p-3">
+                      <SwitchField
+                        field={field}
+                        label="Active"
+                      />
+                    </div>
                   )}
-                />
+                </form.Field>
 
-                <FormField
-                  control={form.control}
-                  name="createVersion"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center gap-2 space-y-0">
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormLabel className="text-sm font-normal">
-                        Save as new version (v{(template?.version ?? 0) + 1})
-                      </FormLabel>
-                    </FormItem>
+                <form.Field name="createVersion">
+                  {(field) => (
+                    <div className="rounded-lg border p-3">
+                      <SwitchField
+                        field={field}
+                        label={`Save as new version (v${(template?.version ?? 0) + 1})`}
+                      />
+                    </div>
                   )}
-                />
+                </form.Field>
               </div>
             )}
 
@@ -587,7 +544,7 @@ export function TemplateEditor({
               </Button>
             </div>
           </form>
-        </Form>
+        </FormFieldDisplayProvider>
       </CardContent>
     </Card>
   );

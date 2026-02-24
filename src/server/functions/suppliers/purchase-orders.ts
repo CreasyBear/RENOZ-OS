@@ -26,6 +26,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
+import { roundCurrency } from '@/lib/order-calculations';
 
 // Excluded fields for activity logging (system-managed fields)
 const PO_EXCLUDED_FIELDS: string[] = [
@@ -545,9 +546,9 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
 
     const itemsWithTotals = data.items.map((item, index) => {
       const discountMultiplier = 1 - item.discountPercent / 100;
-      const lineSubtotal = item.quantity * item.unitPrice * discountMultiplier;
-      const lineTax = lineSubtotal * (item.taxRate / 100);
-      const lineTotal = lineSubtotal + lineTax;
+      const lineSubtotal = roundCurrency(item.quantity * item.unitPrice * discountMultiplier);
+      const lineTax = roundCurrency(lineSubtotal * (item.taxRate / 100));
+      const lineTotal = roundCurrency(lineSubtotal + lineTax);
 
       subtotal += lineSubtotal;
       taxAmount += lineTax;
@@ -559,10 +560,34 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
       };
     });
 
-    const totalAmount = subtotal + taxAmount;
+    subtotal = roundCurrency(subtotal);
+    taxAmount = roundCurrency(taxAmount);
+    const shippingAmount = 0;
+    const discountAmount = 0;
+    // Derive total from components to satisfy purchase_orders_total_calc CHECK
+    const totalAmount = roundCurrency(subtotal + taxAmount + shippingAmount - discountAmount);
 
-    // Wrap PO + items creation in a transaction for atomicity
+    const orderDate = new Date().toISOString().split('T')[0];
+    if (data.requiredDate && data.requiredDate < orderDate) {
+      throw new ValidationError(
+        `Required date (${data.requiredDate}) cannot be before order date (${orderDate})`,
+        { requiredDate: ['Required date cannot be before order date'] }
+      );
+    }
+    if (data.expectedDeliveryDate && data.expectedDeliveryDate < orderDate) {
+      throw new ValidationError(
+        `Expected delivery date (${data.expectedDeliveryDate}) cannot be before order date (${orderDate})`,
+        { expectedDeliveryDate: ['Expected delivery date cannot be before order date'] }
+      );
+    }
+
+    // Wrap PO + items creation in a transaction for atomicity.
+    // Set RLS context inside transaction so the same connection has app.organization_id.
     const po = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+
       // Create the purchase order
       const [newPo] = await tx
         .insert(purchaseOrders)
@@ -570,15 +595,15 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
           organizationId: ctx.organizationId,
           supplierId: data.supplierId,
           status: 'draft',
-          orderDate: new Date().toISOString().split('T')[0],
+          orderDate,
           requiredDate: data.requiredDate,
           expectedDeliveryDate: data.expectedDeliveryDate,
           shipToAddress: data.shipToAddress,
           billToAddress: data.billToAddress,
           subtotal,
           taxAmount,
-          shippingAmount: 0,
-          discountAmount: 0,
+          shippingAmount,
+          discountAmount,
           totalAmount,
           currency: data.currency,
           paymentTerms: data.paymentTerms,
@@ -788,21 +813,25 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
     return { success: true, id: result[0].id };
   });
 
+/** Per-ID failure for bulk delete (PROC-001 / D5.5) */
+export type BulkDeletePOFailure = { id: string; error: string };
+
 /**
  * Bulk delete draft purchase orders.
  * Only POs with status 'draft' can be deleted.
+ * Returns per-ID failure reasons for actionable retry (PROC-001).
  */
 export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
   .inputValidator(bulkDeletePurchaseOrdersSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<{ deleted: number; failed: BulkDeletePOFailure[] }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
 
-    const results = { deleted: 0, failed: [] as string[] };
+    const results = { deleted: 0, failed: [] as BulkDeletePOFailure[] };
 
     for (const id of data.purchaseOrderIds) {
       try {
         const [existing] = await db
-          .select()
+          .select({ id: purchaseOrders.id, status: purchaseOrders.status, poNumber: purchaseOrders.poNumber })
           .from(purchaseOrders)
           .where(
             and(
@@ -814,12 +843,15 @@ export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
           .limit(1);
 
         if (!existing) {
-          results.failed.push(id);
+          results.failed.push({ id, error: 'Purchase order not found' });
           continue;
         }
 
         if (existing.status !== 'draft') {
-          results.failed.push(id);
+          results.failed.push({
+            id,
+            error: `Only draft orders can be deleted (current status: ${existing.status})`,
+          });
           continue;
         }
 
@@ -832,8 +864,9 @@ export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
           .where(eq(purchaseOrders.id, id));
 
         results.deleted += 1;
-      } catch {
-        results.failed.push(id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        results.failed.push({ id, error: msg });
       }
     }
 
@@ -1320,14 +1353,17 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
       throw new ValidationError('Can only add items to draft purchase orders');
     }
 
-    // Calculate line total
+    // Calculate line total (round to avoid floating-point drift breaking total_calc CHECK)
     const discountMultiplier = 1 - data.item.discountPercent / 100;
-    const lineSubtotal = data.item.quantity * data.item.unitPrice * discountMultiplier;
-    const lineTax = lineSubtotal * (data.item.taxRate / 100);
-    const lineTotal = lineSubtotal + lineTax;
+    const lineSubtotal = roundCurrency(data.item.quantity * data.item.unitPrice * discountMultiplier);
+    const lineTax = roundCurrency(lineSubtotal * (data.item.taxRate / 100));
+    const lineTotal = roundCurrency(lineSubtotal + lineTax);
 
     // Insert the item and update PO totals atomically
     const newItem = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get the next line number with row lock to prevent duplicate line numbers
       const lastItem = await tx
         .select({ lineNumber: purchaseOrderItems.lineNumber })
@@ -1438,6 +1474,9 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
 
     // Delete the item and recalculate totals in a transaction
     await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       const deletedItems = await tx.delete(purchaseOrderItems).where(
         and(
           eq(purchaseOrderItems.id, data.itemId),
@@ -1508,10 +1547,10 @@ async function recalculatePurchaseOrderTotals(
   await executor
     .update(purchaseOrders)
     .set({
-      subtotal: totals[0]?.subtotal ?? 0,
-      taxAmount: totals[0]?.taxAmount ?? 0,
-      // Handle null from sum() (returns null when no rows)
-      totalAmount: Number(totals[0]?.totalAmount ?? 0),
+      subtotal: roundCurrency(totals[0]?.subtotal ?? 0),
+      taxAmount: roundCurrency(totals[0]?.taxAmount ?? 0),
+      // Handle null from sum() (returns null when no rows); round to satisfy total_calc CHECK
+      totalAmount: roundCurrency(Number(totals[0]?.totalAmount ?? 0)),
       updatedBy: userId,
     })
     .where(eq(purchaseOrders.id, purchaseOrderId));

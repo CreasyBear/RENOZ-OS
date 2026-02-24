@@ -19,6 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -167,6 +171,8 @@ export function JobTemplateFormDialog({
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isLoading);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isLoading, onOpenChange);
 
   // Duration options (in minutes)
   const durationOptions = [
@@ -183,11 +189,13 @@ export function JobTemplateFormDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       {/* Key forces remount on template change, resetting all form state */}
       <DialogContent
         key={template?.id ?? 'create'}
         className="max-h-[85vh] overflow-y-auto sm:max-w-[700px]"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

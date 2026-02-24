@@ -437,9 +437,16 @@ export function useLogEntityActivity() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.activities.entity(variables.entityType, variables.entityId),
       });
-      // Invalidate unified activities for this entity
+      // Invalidate unified activities for this entity (customer detail timeline)
       queryClient.invalidateQueries({
         queryKey: queryKeys.unifiedActivities.entity(variables.entityType, variables.entityId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+          variables.entityType,
+          variables.entityId,
+          null
+        ),
       });
       // Invalidate general activity feeds
       queryClient.invalidateQueries({

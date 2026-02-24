@@ -12,7 +12,6 @@
  * - Communications (Inbox, Campaigns, Calls)
  * - Support (Warranties, Claims, RMAs, Issues)
  * - Admin (Users, Groups, Invitations, Audit, Activities, Approvals)
- * - Active Projects (contextual)
  * - Footer (Reports + Settings modal)
  *
  * @see src/lib/routing/routes.ts for navigation configuration
@@ -38,7 +37,7 @@ import {
   SIDEBAR_WIDTH_COLLAPSED,
   type SidebarCollapsible,
 } from './sidebar-provider'
-import { toast, useActiveProjects } from '@/hooks'
+import { toast } from '@/hooks'
 import { useCurrentOrg } from '@/hooks/auth/use-current-org'
 import { useCurrentUser } from '@/hooks'
 import { hasAnyPermission, hasPermission, type Role } from '@/lib/auth/permissions'
@@ -47,7 +46,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsDialog } from './settings-dialog'
 import { queryKeys } from '@/lib/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
@@ -61,44 +59,6 @@ interface SidebarProps {
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
   collapsible?: SidebarCollapsible
-}
-
-// ============================================================================
-// PROGRESS INDICATOR
-// ============================================================================
-
-function ProgressCircle({ progress, className }: { progress: number; className?: string }) {
-  const circumference = 2 * Math.PI * 6 // radius = 6
-  const strokeDashoffset = circumference - (progress / 100) * circumference
-
-  return (
-    <svg className={cn('h-4 w-4', className)} viewBox="0 0 16 16">
-      {/* Background circle */}
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="text-muted/30"
-      />
-      {/* Progress circle */}
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={strokeDashoffset}
-        className="text-primary transition-all duration-300"
-        transform="rotate(-90 8 8)"
-      />
-    </svg>
-  )
 }
 
 // ============================================================================
@@ -119,8 +79,10 @@ export function Sidebar({
   const router = useRouterState()
   const currentPath = router.location.pathname
 
-  // Fetch active projects for contextual section
-  const { data: activeProjects, isLoading: projectsLoading } = useActiveProjects(5)
+  // Use context if available, otherwise fall back to legacy props
+  const isCollapsed = sidebarContext?.isCollapsed ?? legacyCollapsed ?? false
+  const collapsible = sidebarContext?.collapsible ?? propCollapsible
+  const showCollapsedView = collapsible === 'icon' && isCollapsed
 
   // Settings dialog state (user opens via gear icon, or from OAuth callback URL)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -177,14 +139,8 @@ export function Sidebar({
     })
   }, [hasOAuthCallbackParams, settingsOpenFromUrl, oauthParam, errorParam, currentOrg?.id, navigate, queryClient, router.location.pathname])
 
-  // Use context if available, otherwise fall back to legacy props
-  const isCollapsed = sidebarContext?.isCollapsed ?? legacyCollapsed ?? false
-  const collapsible = sidebarContext?.collapsible ?? propCollapsible
   // Toggle is available from context or legacy callback (used by SidebarRail)
   void (sidebarContext?.toggle ?? (() => legacyOnCollapsedChange?.(!isCollapsed)))
-
-  // Determine if we should show collapsed view
-  const showCollapsedView = collapsible === 'icon' && isCollapsed
 
   const handleSignOut = async () => {
     try {
@@ -448,58 +404,6 @@ export function Sidebar({
                 </div>
               </div>
             )}
-
-            {/* Active Projects - Contextual Section */}
-            <div className="px-3 border-t border-border pt-4">
-              <div className="flex items-center justify-between px-3 mb-1">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Active Projects
-                </p>
-                <Link
-                  to="/projects"
-                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  View all
-                </Link>
-              </div>
-              <div className="space-y-0.5">
-                {projectsLoading ? (
-                  // Loading skeleton
-                  <>
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center gap-3 px-3 py-2">
-                        <Skeleton className="h-4 w-4 rounded-full" />
-                        <Skeleton className="h-4 flex-1" />
-                      </div>
-                    ))}
-                  </>
-                ) : activeProjects && activeProjects.length > 0 ? (
-                  activeProjects.map((project) => (
-                    <Link
-                      key={project.id}
-                      to="/projects/$projectId"
-                      params={{ projectId: project.id }}
-                      className={cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm',
-                        'text-muted-foreground hover:text-foreground hover:bg-muted',
-                        'transition-colors duration-200',
-                        currentPath.includes(project.id) && 'bg-muted text-foreground'
-                      )}
-                    >
-                      <ProgressCircle progress={project.progress} />
-                      <span className="flex-1 truncate">{project.title}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {project.progress}%
-                      </span>
-                    </Link>
-                  ))
-                ) : (
-                  <p className="px-3 py-2 text-sm text-muted-foreground">
-                    No active projects
-                  </p>
-                )}
-              </div>
-            </div>
           </div>
         )}
       </nav>

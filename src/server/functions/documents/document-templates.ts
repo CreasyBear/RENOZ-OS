@@ -22,7 +22,7 @@ import {
 } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { logAuditEvent } from "../_shared/audit-logs";
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 
 // ============================================================================
 // VALIDATION SCHEMAS

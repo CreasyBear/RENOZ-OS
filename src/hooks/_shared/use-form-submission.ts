@@ -29,6 +29,7 @@
 import { useState, useCallback } from 'react'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { getUserFriendlyMessage } from '@/lib/error-handling'
 
 // ============================================================================
 // TYPES
@@ -124,9 +125,10 @@ export function useFormSubmission<TInput, TOutput>({
         const error = err instanceof Error ? err : new Error(String(err))
         setError(error)
 
-        // Show error toast
+        // Show error toast with user-friendly message (handles HTTPError, etc.)
         if (showErrorToast) {
-          toast.error(`${errorMessagePrefix}: ${error.message}`)
+          const userMessage = getUserFriendlyMessage(err)
+          toast.error(`${errorMessagePrefix}: ${userMessage}`)
         }
 
         onError?.(error)

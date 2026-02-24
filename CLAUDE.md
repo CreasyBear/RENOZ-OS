@@ -181,6 +181,15 @@ const [item] = await db.insert(lineItems).values({...}).returning();
 await recalculateTotals(db, orderId); // if this fails, totals are stale
 ```
 
+**RLS in transactions**: Tables with `standardRlsPolicies` require `app.organization_id` for INSERT/UPDATE. `withAuth` sets it on one connection, but `db.transaction` may use a different pooled connection. Always set RLS context inside the transaction before writes:
+
+```typescript
+const result = await db.transaction(async (tx) => {
+  await tx.execute(sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`);
+  return tx.insert(myTable).values({...}).returning();
+});
+```
+
 **No N+1 queries**: Never query inside a loop. Batch-fetch with `inArray()`, then group in JS.
 
 ```typescript
@@ -230,6 +239,8 @@ const form = useForm({
   },
 });
 ```
+
+**Form error display (submit-time validation):** TanStack Form forms must use FormDialog/FormSheet (which provide FormFieldDisplayProvider) OR wrap form content with FormFieldDisplayProvider. Never add onSubmitInvalid without the provider — it creates "fix the errors below" with no visible field errors. Pass onSubmitInvalid (e.g. toast) for user feedback when validation fails.
 
 ### Real-time Updates
 Use Supabase Realtime subscriptions that invalidate TanStack Query caches:
@@ -302,3 +313,5 @@ Key commands:
 - Financial amounts are stored in AUD dollars (numeric 12,2); do not treat them as cents or scale payment/Xero values.
 - **No temporary shortcuts**: Always implement the proper solution. Eliminate technical debt immediately rather than deferring it. Never create TODO comments or temporary workarounds that will need to be fixed later.
 - **Typecheck fixes must follow SCHEMA-TRACE.md and STANDARDS.md**: When fixing TypeScript errors, do NOT use type assertions (`as X`, `as unknown as X`), `params: {} as never`, or ad-hoc `?? null`/`?? undefined` scattered in views. Fix at boundaries: (1) schema types in `lib/schemas/`, (2) server fn return types, (3) normalize at a single boundary per SCHEMA-TRACE §8. Use proper route types instead of `as never`. See [docs/remediation/typecheck-phase3-debt.md](./docs/remediation/typecheck-phase3-debt.md) for remediation patterns.
+- **No unused props**: When adding props to a component, ensure they are used. Do not add props "for future use" or as placeholders. Remove dead props during implementation.
+- **Do not name files after external products**: Use generic, descriptive names (e.g. `document-constants.ts`, `document-fixed-header.tsx`) rather than product names (e.g. `midday-constants.ts`). Same for exported identifiers: prefer `DOCUMENT_*`, `DocumentFixedHeader` over `MIDDAY_*`, `MiddayFixedHeader`.

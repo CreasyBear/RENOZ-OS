@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { Link, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
-import { TextField } from '@/components/shared/forms';
+import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
@@ -124,6 +124,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         </CardHeader>
         <CardContent>
           <form id="login-form" onSubmit={handleSubmit} noValidate>
+            <FormFieldDisplayProvider form={form}>
             <div className="flex flex-col gap-5">
               <form.Field name="email">
                 {(field) => (
@@ -134,7 +135,6 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                     placeholder="name@company.com"
                     required
                     autocomplete="email"
-                    showErrorsAfterSubmit={(form.state?.submissionAttempts ?? 0) > 0}
                   />
                 )}
               </form.Field>
@@ -147,7 +147,6 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                       type="password"
                       required
                       autocomplete="current-password"
-                      showErrorsAfterSubmit={(form.state?.submissionAttempts ?? 0) > 0}
                     />
                     <div className="flex justify-end">
                       <Link
@@ -193,6 +192,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                 )}
               </Button>
             </div>
+            </FormFieldDisplayProvider>
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
               <Link

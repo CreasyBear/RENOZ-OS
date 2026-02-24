@@ -84,6 +84,7 @@ export const updateClaimStatusSchema = z.object({
   claimId: z.string().uuid('Invalid claim ID'),
   status: warrantyClaimStatusSchema,
   notes: z.string().max(2000).optional(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 export type UpdateClaimStatusInput = z.infer<typeof updateClaimStatusSchema>;
@@ -136,6 +137,7 @@ export const listWarrantyClaimsSchema = z.object({
   customerId: z.string().uuid().optional(),
   status: warrantyClaimStatusSchema.optional(),
   claimType: warrantyClaimTypeSchema.optional(),
+  quickFilter: z.enum(['submitted', 'at_risk_sla', 'awaiting_decision']).optional(),
   assignedUserId: z.string().uuid().optional(),
   // Pagination
   page: z.coerce.number().int().positive().default(1),
@@ -200,6 +202,12 @@ export interface WarrantyClaimListItem {
     id: string;
     name: string | null;
   } | null;
+  slaTracking?: {
+    responseDueAt?: Date | string | null;
+    resolutionDueAt?: Date | string | null;
+    respondedAt?: Date | string | null;
+    resolvedAt?: Date | string | null;
+  } | null;
 }
 
 /** Pagination for warranty claims list */
@@ -223,6 +231,7 @@ export interface ListWarrantyClaimsResult {
 export interface WarrantyClaimsSearchParams {
   status?: WarrantyClaimStatusValue;
   type?: WarrantyClaimTypeValue;
+  quickFilter?: 'submitted' | 'at_risk_sla' | 'awaiting_decision';
   page: number;
   pageSize: number;
   sortBy: NonNullable<ListWarrantyClaimsInput['sortBy']>;
@@ -240,12 +249,16 @@ export interface WarrantyClaimsListContainerProps {
 export interface WarrantyClaimsListViewProps {
   status?: WarrantyClaimStatusValue;
   type?: WarrantyClaimTypeValue;
+  quickFilter?: 'submitted' | 'at_risk_sla' | 'awaiting_decision';
   claims: WarrantyClaimListItem[];
   pagination: WarrantyClaimPagination;
   isLoading: boolean;
   error: Error | null;
   onStatusChange: (value: WarrantyClaimStatusValue | undefined) => void;
   onTypeChange: (value: WarrantyClaimTypeValue | undefined) => void;
+  onQuickFilterChange: (
+    value: 'submitted' | 'at_risk_sla' | 'awaiting_decision' | undefined
+  ) => void;
   onClearFilters: () => void;
   onPageChange: (page: number) => void;
   onRowClick: (claimId: string) => void;
@@ -315,6 +328,12 @@ export interface WarrantyClaimHeaderAction {
   disabled?: boolean;
 }
 
+/** Request-info event from activity log (E2E-SKW-004) */
+export interface RequestInfoEvent {
+  at: string | Date;
+  actorName?: string;
+}
+
 /** Props for WarrantyClaimDetailView */
 export interface WarrantyClaimDetailViewProps {
   claim: WarrantyClaimDetailViewClaim;
@@ -327,4 +346,6 @@ export interface WarrantyClaimDetailViewProps {
   secondaryActions?: WarrantyClaimHeaderAction[];
   responseSla: SlaDueStatus | null;
   resolutionSla: SlaDueStatus | null;
+  /** Request-info events from activity log (E2E-SKW-004) */
+  requestInfoEvents?: RequestInfoEvent[];
 }

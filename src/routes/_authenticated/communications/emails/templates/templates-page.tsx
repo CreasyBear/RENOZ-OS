@@ -45,14 +45,13 @@ export default function TemplatesPage({ search }: TemplatesPageProps) {
   const {
     versions,
     versionsLoading,
-    handleCreate,
-    handleUpdate,
     handleDelete,
     handleClone,
     handleFetchVersions,
+    handleRestoreVersion,
     isDeleting,
     isCloning,
-    isSaving,
+    isRestoringVersion,
   } = useTemplatesPage();
 
   // ============================================================================
@@ -100,16 +99,15 @@ export default function TemplatesPage({ search }: TemplatesPageProps) {
           isLoading={isLoading}
           filters={filters}
           onFiltersChange={setFilters}
-          onCreate={handleCreate}
-          onUpdate={handleUpdate}
           onDelete={handleDelete}
           onClone={handleClone}
           versions={versions}
           versionsLoading={versionsLoading}
           onFetchVersions={handleFetchVersions}
+          onRestoreVersion={handleRestoreVersion}
           isDeleting={isDeleting}
           isCloning={isCloning}
-          isSaving={isSaving}
+          isRestoringVersion={isRestoringVersion}
         />
     </>
   );

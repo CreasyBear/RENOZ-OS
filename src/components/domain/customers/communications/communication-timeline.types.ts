@@ -37,5 +37,6 @@ export interface CommunicationTimelineProps {
   isLoading?: boolean
   onLogCommunication?: (type: CommunicationType) => void
   onReply?: (communicationId: string) => void
+  onForward?: (communicationId: string) => void
   className?: string
 }

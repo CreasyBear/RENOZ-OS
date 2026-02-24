@@ -134,10 +134,17 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
     const summary = dashboardMetricsQuery.data?.summary;
     return [
       {
-        key: 'revenue',
-        label: 'Revenue',
+        key: 'revenueInvoiced',
+        label: 'Revenue (Invoiced)',
         value: formatCurrency(summary?.revenue?.current ?? 0, { cents: false, showCents: true }),
         trend: summary?.revenue?.change,
+        icon: DollarSign,
+      },
+      {
+        key: 'revenueCash',
+        label: 'Revenue (Cash)',
+        value: formatCurrency(summary?.revenueCash?.current ?? 0, { cents: false, showCents: true }),
+        trend: summary?.revenueCash?.change,
         icon: DollarSign,
       },
       {
@@ -166,16 +173,16 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
 
 
   // Transform cash flow data from revenue periods
-  // Note: This is a simplified approximation - real cash flow would need expense data
+  // Use cashRevenue for "money in" (payments received) - aligns with cash basis
+  // Note: moneyOut is simplified - real cash flow would need expense data
   const cashFlowData: CashFlowDataPoint[] | null = useMemo(() => {
     if (!revenueQuery.data?.periods) return null;
 
     return revenueQuery.data.periods.map((period) => ({
       period: period.periodLabel ?? period.period,
-      moneyIn: period.totalRevenue ?? 0,
-      // Approximate money out as 70% of revenue (simplified for demo)
-      // In production, this would come from expense tracking
-      moneyOut: Math.round((period.totalRevenue ?? 0) * 0.7),
+      moneyIn: period.cashRevenue ?? 0,
+      // Approximate money out as 70% of cash in (simplified for demo)
+      moneyOut: Math.round((period.cashRevenue ?? 0) * 0.7),
     }));
   }, [revenueQuery.data]);
 

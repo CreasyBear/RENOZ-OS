@@ -19,7 +19,7 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -150,10 +150,11 @@ function FileUploadStep({ onFileSelected }: FileUploadStepProps) {
           className="hidden"
           id="csv-upload"
         />
-        <label htmlFor="csv-upload">
-          <Button variant="outline" asChild>
-            <span>Choose File</span>
-          </Button>
+        <label
+          htmlFor="csv-upload"
+          className={cn(buttonVariants({ variant: 'outline' }), 'cursor-pointer inline-flex items-center justify-center')}
+        >
+          Choose File
         </label>
       </div>
 

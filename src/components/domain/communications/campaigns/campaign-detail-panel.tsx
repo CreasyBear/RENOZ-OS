@@ -62,6 +62,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { createPendingDialogInteractionGuards } from "@/components/ui/dialog-pending-guards";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -887,7 +888,10 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
 
       {/* Test Send Dialog */}
       <Dialog open={testSendDialogOpen} onOpenChange={setTestSendDialogOpen}>
-        <DialogContent>
+        <DialogContent
+          onEscapeKeyDown={createPendingDialogInteractionGuards(testSendMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(testSendMutation.isPending).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Send Test Email</DialogTitle>
             <DialogDescription>

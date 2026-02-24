@@ -93,6 +93,11 @@ export interface UseProjectDetailReturn {
   totalTasks: number;
 }
 
+export interface UseProjectDetailOptions {
+  /** Initial active tab for detail view */
+  initialTab?: string;
+}
+
 // ============================================================================
 // HOOK
 // ============================================================================
@@ -113,10 +118,13 @@ export interface UseProjectDetailReturn {
  * const ui = useProjectDetailUI();
  * ```
  */
-export function useProjectDetail(projectId: string): UseProjectDetailReturn {
+export function useProjectDetail(
+  projectId: string,
+  options: UseProjectDetailOptions = {}
+): UseProjectDetailReturn {
   // Compose data and UI hooks
   const data = useProjectDetailData(projectId);
-  const ui = useProjectDetailUI();
+  const ui = useProjectDetailUI({ initialTab: options.initialTab });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Combined Actions (data actions + UI triggers)

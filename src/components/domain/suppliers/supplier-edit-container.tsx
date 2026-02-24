@@ -2,211 +2,138 @@
  * Supplier Edit Container
  *
  * Handles data fetching and mutation for editing suppliers.
- * Follows container/presenter pattern from STANDARDS.md.
+ * Uses TanStack Form with Zod validation.
  *
  * @source supplier from useSupplier hook
  * @source updateMutation from useUpdateSupplier hook
  */
 
-import { useCallback, useState, useEffect, startTransition } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { SupplierForm, type SupplierFormData, type SupplierFormErrors } from './supplier-form';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { SupplierForm } from './supplier-form';
 import { SupplierFormSkeleton } from './supplier-form-skeleton';
-import { useSupplier, useUpdateSupplier } from '@/hooks/suppliers';
-import { toast } from '@/lib/toast';
-import { logger } from '@/lib/logger';
+import { supplierFormSchema, type SupplierFormValues } from '@/lib/schemas/suppliers/supplier-form';
 import {
   supplierStatusSchema,
   supplierTypeSchema,
   paymentTermsSchema,
 } from '@/lib/schemas/suppliers';
-
-// ============================================================================
-// TYPES
-// ============================================================================
+import { useSupplier, useUpdateSupplier } from '@/hooks/suppliers';
+import { toast } from '@/lib/toast';
+import { logger } from '@/lib/logger';
 
 export interface SupplierEditContainerProps {
   supplierId: string;
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function isValidEmail(email: string): boolean {
-  if (!email) return true; // Optional field
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isValidUrl(url: string): boolean {
-  if (!url) return true; // Optional field
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ============================================================================
-// CONTAINER COMPONENT
-// ============================================================================
-
 export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps) {
   const navigate = useNavigate();
-  
-  // Data fetching
   const { data: supplierData, isLoading } = useSupplier(supplierId);
-  
-  // Mutation
   const updateMutation = useUpdateSupplier();
-  
-  // Form state
-  const [formData, setFormData] = useState<SupplierFormData>({
-    name: '',
-    legalName: '',
-    email: '',
-    phone: '',
-    website: '',
-    status: 'active',
-    supplierType: undefined,
-    taxId: '',
-    registrationNumber: '',
-    primaryContactName: '',
-    primaryContactEmail: '',
-    primaryContactPhone: '',
-    paymentTerms: undefined,
-    currency: 'AUD',
-    leadTimeDays: undefined,
-    minimumOrderValue: undefined,
-    maximumOrderValue: undefined,
-    notes: '',
+
+  const form = useTanStackForm<SupplierFormValues>({
+    schema: supplierFormSchema,
+    defaultValues: {
+      name: '',
+      legalName: '',
+      email: '',
+      phone: '',
+      website: '',
+      status: 'active',
+      supplierType: null,
+      taxId: '',
+      registrationNumber: '',
+      primaryContactName: '',
+      primaryContactEmail: '',
+      primaryContactPhone: '',
+      paymentTerms: null,
+      currency: 'AUD',
+      leadTimeDays: undefined,
+      minimumOrderValue: undefined,
+      maximumOrderValue: undefined,
+      notes: '',
+    },
+    onSubmit: async (values) => {
+      try {
+        const cleanedData = {
+          name: values.name,
+          legalName: values.legalName || undefined,
+          email: values.email || undefined,
+          phone: values.phone || undefined,
+          website: values.website || undefined,
+          status: values.status,
+          supplierType: values.supplierType ?? undefined,
+          taxId: values.taxId || undefined,
+          registrationNumber: values.registrationNumber || undefined,
+          primaryContactName: values.primaryContactName || undefined,
+          primaryContactEmail: values.primaryContactEmail || undefined,
+          primaryContactPhone: values.primaryContactPhone || undefined,
+          paymentTerms: values.paymentTerms ?? undefined,
+          currency: values.currency,
+          leadTimeDays: values.leadTimeDays,
+          minimumOrderValue: values.minimumOrderValue,
+          maximumOrderValue: values.maximumOrderValue,
+          notes: values.notes || undefined,
+        };
+
+        await updateMutation.mutateAsync({ data: { id: supplierId, ...cleanedData } });
+
+        toast.success('Supplier updated successfully');
+        navigate({ to: '/suppliers/$supplierId', params: { supplierId } });
+      } catch (error) {
+        logger.error('Failed to update supplier', error);
+        toast.error('Failed to update supplier', {
+          description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        });
+        throw error;
+      }
+    },
   });
-  
-  const [errors, setErrors] = useState<SupplierFormErrors>({});
-  
-  // Load supplier data when available (Zod safeParse for enum validation)
+
   useEffect(() => {
     if (supplierData) {
       const statusParsed = supplierStatusSchema.safeParse(supplierData.status);
       const typeParsed = supplierTypeSchema.safeParse(supplierData.supplierType);
       const termsParsed = paymentTermsSchema.safeParse(supplierData.paymentTerms);
-      startTransition(() => setFormData({
+
+      form.reset({
         name: supplierData.name ?? '',
         legalName: supplierData.legalName ?? '',
         email: supplierData.email ?? '',
         phone: supplierData.phone ?? '',
         website: supplierData.website ?? '',
         status: statusParsed.success ? statusParsed.data : 'active',
-        supplierType: typeParsed.success ? typeParsed.data : undefined,
+        supplierType: typeParsed.success ? typeParsed.data : null,
         taxId: supplierData.taxId ?? '',
         registrationNumber: supplierData.registrationNumber ?? '',
         primaryContactName: supplierData.primaryContactName ?? '',
         primaryContactEmail: supplierData.primaryContactEmail ?? '',
         primaryContactPhone: supplierData.primaryContactPhone ?? '',
-        paymentTerms: termsParsed.success ? termsParsed.data : undefined,
+        paymentTerms: termsParsed.success ? termsParsed.data : null,
         currency: supplierData.currency ?? 'AUD',
         leadTimeDays: supplierData.leadTimeDays ?? undefined,
-        minimumOrderValue: supplierData.minimumOrderValue ? Number(supplierData.minimumOrderValue) : undefined,
-        maximumOrderValue: supplierData.maximumOrderValue ? Number(supplierData.maximumOrderValue) : undefined,
+        minimumOrderValue: supplierData.minimumOrderValue
+          ? Number(supplierData.minimumOrderValue)
+          : undefined,
+        maximumOrderValue: supplierData.maximumOrderValue
+          ? Number(supplierData.maximumOrderValue)
+          : undefined,
         notes: supplierData.notes ?? '',
-      }));
-    }
-  }, [supplierData]);
-  
-  // Handlers
-  const handleChange = useCallback((field: keyof SupplierFormData, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when field is edited (type guard for error fields)
-    const hasError = (f: keyof SupplierFormData): f is keyof SupplierFormErrors =>
-      ['name', 'email', 'website', 'primaryContactEmail'].includes(f);
-    if (hasError(field) && errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
-  }, [errors]);
-  
-  const validateForm = useCallback((): boolean => {
-    const newErrors: SupplierFormErrors = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Supplier name is required';
-    }
-    
-    if (!isValidEmail(formData.email)) {
-      newErrors.email = 'Invalid email address';
-    }
-    
-    if (!isValidUrl(formData.website)) {
-      newErrors.website = 'Invalid URL';
-    }
-    
-    if (!isValidEmail(formData.primaryContactEmail)) {
-      newErrors.primaryContactEmail = 'Invalid email address';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [formData]);
-  
-  const handleSubmit = useCallback(async () => {
-    if (!validateForm()) {
-      return;
-    }
-    
-    try {
-      // Clean up empty strings to undefined
-      const cleanedData = {
-        name: formData.name,
-        legalName: formData.legalName || undefined,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
-        website: formData.website || undefined,
-        status: formData.status,
-        supplierType: formData.supplierType,
-        taxId: formData.taxId || undefined,
-        registrationNumber: formData.registrationNumber || undefined,
-        primaryContactName: formData.primaryContactName || undefined,
-        primaryContactEmail: formData.primaryContactEmail || undefined,
-        primaryContactPhone: formData.primaryContactPhone || undefined,
-        paymentTerms: formData.paymentTerms,
-        currency: formData.currency,
-        leadTimeDays: formData.leadTimeDays,
-        minimumOrderValue: formData.minimumOrderValue,
-        maximumOrderValue: formData.maximumOrderValue,
-        notes: formData.notes || undefined,
-      };
-      
-      await updateMutation.mutateAsync({ data: { id: supplierId, ...cleanedData } });
-      
-      toast.success('Supplier updated successfully');
-      navigate({ to: '/suppliers/$supplierId', params: { supplierId } });
-    } catch (error) {
-      logger.error('Failed to update supplier', error);
-      toast.error('Failed to update supplier', {
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
     }
-  }, [formData, supplierId, updateMutation, navigate, validateForm]);
-  
-  const handleCancel = useCallback(() => {
-    navigate({ to: '/suppliers/$supplierId', params: { supplierId } });
-  }, [navigate, supplierId]);
-  
-  // Loading state
+  }, [supplierData, form]);
+
   if (isLoading) {
     return <SupplierFormSkeleton />;
   }
-  
+
   return (
     <SupplierForm
-      data={formData}
-      errors={errors}
-      isSubmitting={updateMutation.isPending}
-
+      form={form}
       submitLabel="Save Changes"
-      onChange={handleChange}
-      onSubmit={handleSubmit}
-      onCancel={handleCancel}
+      onCancel={() => navigate({ to: '/suppliers/$supplierId', params: { supplierId } })}
+      isSubmitting={updateMutation.isPending}
     />
   );
 }

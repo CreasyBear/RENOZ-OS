@@ -27,6 +27,7 @@ import {
   type ListIssueTemplatesResponse,
 } from '@/lib/schemas/support/issue-templates';
 import { NotFoundError } from '@/lib/server/errors';
+import { serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
 
 // ============================================================================
 // HELPERS
@@ -337,7 +338,7 @@ export const updateIssueTemplate = createServerFn({ method: 'POST' })
 
 export const deleteIssueTemplate = createServerFn({ method: 'POST' })
   .inputValidator(deleteIssueTemplateSchema)
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const [template] = await db
@@ -360,7 +361,11 @@ export const deleteIssueTemplate = createServerFn({ method: 'POST' })
       throw new NotFoundError('Template not found', 'issueTemplate');
     }
 
-    return { success: true };
+    return serializedMutationSuccess(
+      { id: template.id },
+      'Issue template deleted.',
+      { affectedIds: [template.id] }
+    );
   });
 
 // ============================================================================
@@ -369,10 +374,10 @@ export const deleteIssueTemplate = createServerFn({ method: 'POST' })
 
 export const incrementTemplateUsage = createServerFn({ method: 'POST' })
   .inputValidator(incrementTemplateUsageSchema)
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    await db
+    const [updated] = await db
       .update(issueTemplates)
       .set({
         usageCount: sql`${issueTemplates.usageCount} + 1`,
@@ -383,9 +388,18 @@ export const incrementTemplateUsage = createServerFn({ method: 'POST' })
           eq(issueTemplates.id, data.templateId),
           eq(issueTemplates.organizationId, ctx.organizationId)
         )
-      );
+      )
+      .returning({ id: issueTemplates.id });
 
-    return { success: true };
+    if (!updated) {
+      throw new NotFoundError('Template not found', 'issueTemplate');
+    }
+
+    return serializedMutationSuccess(
+      { id: updated.id },
+      'Template usage incremented.',
+      { affectedIds: [updated.id] }
+    );
   });
 
 // ============================================================================

@@ -42,6 +42,7 @@ import {
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { PRODUCT_STATUS_CONFIG, PRODUCT_TYPE_CONFIG, calculateMargin } from '../product-status-config';
 import type { ProductStatus, ProductType } from '@/lib/schemas/products';
@@ -856,6 +857,7 @@ export const ProductDetailView = memo(function ProductDetailView({
                       title="Activity Timeline"
                       description="Complete history of product changes and updates"
                       showFilters={true}
+                      viewAllSearch={getActivitiesFeedSearch('product')}
                       emptyMessage="No activity recorded yet"
                       emptyDescription="Product activities will appear here when changes are made."
                     />

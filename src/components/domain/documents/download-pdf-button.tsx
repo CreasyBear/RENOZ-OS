@@ -24,7 +24,7 @@
  * ```
  */
 
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useRef } from 'react';
 import { Download, FileText, Loader2, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +42,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toastSuccess, toastError, toastLoading, dismissToast } from '@/hooks/_shared/use-toast';
 import {
+  type DocumentStatusResult,
   useGenerateQuote,
   useGenerateInvoice,
   useDocumentPolling,
@@ -121,37 +122,46 @@ export const DownloadPdfButton = memo(function DownloadPdfButton({
 }: DownloadPdfButtonProps) {
   const [isPolling, setIsPolling] = useState(false);
   const [toastId, setToastId] = useState<string | number | null>(null);
+  const terminalStatusHandledRef = useRef<string | null>(null);
   const supportsGeneration = documentType === 'quote' || documentType === 'invoice';
 
   // Generation mutations
   const generateQuote = useGenerateQuote();
   const generateInvoice = useGenerateInvoice();
 
+  const handleTerminalPollingStatus = useCallback(
+    (data: DocumentStatusResult) => {
+      if (data.status !== 'completed' && data.status !== 'failed') return;
+      const signature = `${data.status}:${data.url ?? ''}`;
+      if (terminalStatusHandledRef.current === signature) return;
+      terminalStatusHandledRef.current = signature;
+
+      setIsPolling(false);
+
+      if (toastId) {
+        dismissToast(toastId);
+        setToastId(null);
+      }
+
+      if (data.status === 'completed' && data.url) {
+        toastSuccess(`${getDocumentLabel(documentType)} PDF generated successfully`);
+        onGenerated?.(data.url);
+        window.open(data.url, '_blank');
+        return;
+      }
+
+      toastError(`Failed to generate ${getDocumentLabel(documentType)} PDF`);
+    },
+    [documentType, onGenerated, toastId]
+  );
+
   // Polling for status
-  const { data: pollData } = useDocumentPolling({
+  useDocumentPolling({
     orderId: entityId,
     documentType: documentType as 'quote' | 'invoice',
     enabled: supportsGeneration && isPolling,
+    onTerminalStatus: handleTerminalPollingStatus,
   });
-
-  // Handle polling completion
-  if (isPolling && pollData?.status === 'completed' && pollData?.url) {
-    setIsPolling(false);
-    if (toastId) {
-      dismissToast(toastId);
-      setToastId(null);
-    }
-    toastSuccess(`${getDocumentLabel(documentType)} PDF generated successfully`);
-    onGenerated?.(pollData.url);
-    window.open(pollData.url, '_blank');
-  } else if (isPolling && pollData?.status === 'failed') {
-    setIsPolling(false);
-    if (toastId) {
-      dismissToast(toastId);
-      setToastId(null);
-    }
-    toastError(`Failed to generate ${getDocumentLabel(documentType)} PDF`);
-  }
 
   // Determine which mutation to use
   const isGenerating = generateQuote.isPending || generateInvoice.isPending || isPolling;
@@ -162,6 +172,7 @@ export const DownloadPdfButton = memo(function DownloadPdfButton({
       // Show loading toast
       const id = toastLoading(`Generating ${getDocumentLabel(documentType)} PDF...`);
       setToastId(id);
+      terminalStatusHandledRef.current = null;
 
       try {
         if (documentType === 'quote') {

@@ -15,7 +15,6 @@ import {
   Edit,
   ArrowLeftRight,
   SlidersHorizontal,
-  Trash2,
   MoreHorizontal,
   Printer,
 } from 'lucide-react';
@@ -25,19 +24,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
@@ -82,6 +70,12 @@ export interface InventoryDetailContainerProps {
   /** Additional CSS classes */
   className?: string;
 }
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const MOVEMENT_TYPES = ['receive', 'allocate', 'deallocate', 'pick', 'ship', 'adjust', 'return', 'transfer'] as const;
 
 // ============================================================================
 // LOADING SKELETON
@@ -163,7 +157,6 @@ export function InventoryDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Transform movements for view
   // ─────────────────────────────────────────────────────────────────────────
-  const MOVEMENT_TYPES = ['receive', 'allocate', 'deallocate', 'pick', 'ship', 'adjust', 'return', 'transfer'] as const;
   const movements: MovementRecord[] = useMemo(() => {
     return (detail.movements as MovementWithRelations[]).map((m) => {
       const movementType = MOVEMENT_TYPES.includes(m.movementType as (typeof MOVEMENT_TYPES)[number])
@@ -202,6 +195,16 @@ export function InventoryDetailContainer({
       referenceType: l.referenceType ?? undefined,
       referenceId: l.referenceId ?? undefined,
       expiryDate: l.expiryDate ? new Date(l.expiryDate) : undefined,
+      costComponents:
+        l.costComponents?.map((component) => ({
+          id: component.id,
+          componentType: component.componentType,
+          costType: component.costType,
+          quantityBasis: component.quantityBasis,
+          amountTotal: component.amountTotal,
+          amountPerUnit: component.amountPerUnit,
+          currency: component.currency,
+        })) ?? [],
     }));
   }, [detail.costLayers]);
 
@@ -220,6 +223,7 @@ export function InventoryDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const handleAdjust = async (data: AdjustmentFormData) => {
     await detail.handleAdjust({
+      inventoryId: data.inventoryId,
       productId: data.productId,
       locationId: data.locationId,
       adjustmentQty: data.adjustmentQty,
@@ -230,10 +234,12 @@ export function InventoryDetailContainer({
 
   const handleTransfer = async (data: TransferFormData) => {
     await detail.handleTransfer({
+      inventoryId: data.inventoryId,
       productId: data.productId,
       fromLocationId: data.fromLocationId,
       toLocationId: data.toLocationId,
       quantity: data.quantity,
+      serialNumbers: data.serialNumbers,
       reason: data.reason,
       notes: data.reason,
     });
@@ -327,14 +333,6 @@ export function InventoryDetailContainer({
             <Printer className="h-4 w-4 mr-2" />
             Print
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={detail.actions.onDelete}
-            className="text-destructive"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -378,6 +376,8 @@ export function InventoryDetailContainer({
           productId: detail.item.productId,
           productName: detail.item.product?.name ?? 'Unknown Product',
           productSku: detail.item.product?.sku ?? 'N/A',
+          isSerialized: Boolean(detail.item.product?.isSerialized),
+          serialNumber: detail.item.serialNumber ?? null,
           locationId: detail.item.locationId,
           locationName: detail.item.location?.name ?? 'Unknown Location',
           quantityOnHand: detail.item.quantityOnHand ?? 0,
@@ -398,6 +398,8 @@ export function InventoryDetailContainer({
           productId: detail.item.productId,
           productName: detail.item.product?.name ?? 'Unknown Product',
           productSku: detail.item.product?.sku ?? 'N/A',
+          isSerialized: Boolean(detail.item.product?.isSerialized),
+          serialNumber: detail.item.serialNumber ?? null,
           locationId: detail.item.locationId,
           locationName: detail.item.location?.name ?? 'Unknown Location',
           quantityOnHand: detail.item.quantityOnHand ?? 0,
@@ -431,32 +433,6 @@ export function InventoryDetailContainer({
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={detail.deleteDialogOpen} onOpenChange={detail.setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Inventory Item</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this inventory item? This action
-              cannot be undone.
-              <br />
-              <br />
-              <strong>Note:</strong> Inventory items should generally not be
-              deleted. Consider using the Adjust feature to set quantity to zero
-              instead.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={detail.handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 

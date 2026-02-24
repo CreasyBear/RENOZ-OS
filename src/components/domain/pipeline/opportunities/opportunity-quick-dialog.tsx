@@ -8,6 +8,10 @@ import { memo, useEffect, useMemo, useState, startTransition, useCallback } from
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CustomerCombobox, DatePickerControl } from "@/components/shared";
 import { OpportunityForm } from "./opportunity-form";
-import { useCustomers } from "@/hooks/customers";
+import { useCustomer } from "@/hooks/customers";
 import {
   useCreateOpportunity,
   useUpdateOpportunity,
@@ -32,6 +37,7 @@ import {
   type OpportunityStage,
   isValidOpportunityStage,
 } from "@/lib/schemas/pipeline";
+import { customerSchema, type Customer } from "@/lib/schemas/customers";
 
 // ============================================================================
 // TYPES
@@ -43,6 +49,8 @@ export interface OpportunityQuickDialogProps {
   mode: "create" | "edit";
   stage?: OpportunityStage;
   opportunityId?: string | null;
+  /** Pre-select customer when opening from customer context */
+  initialCustomerId?: string;
   onSuccess?: (opportunityId: string) => void;
 }
 
@@ -67,6 +75,7 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
   mode,
   stage = "new",
   opportunityId,
+  initialCustomerId,
   onSuccess,
 }: OpportunityQuickDialogProps) {
   const createOpportunity = useCreateOpportunity();
@@ -77,10 +86,13 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
     isLoading: isLoadingOpportunity,
   } = useOpportunity({ id: opportunityId ?? "", enabled: mode === "edit" && !!opportunityId });
 
-  const customersQuery = useCustomers({ page: 1, pageSize: 100 });
-  const customers = customersQuery.data?.items ?? [];
+  const { data: initialCustomer } = useCustomer({
+    id: initialCustomerId ?? "",
+    enabled: !!initialCustomerId && mode === "create" && open,
+  });
 
-  const [customerId, setCustomerId] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const customerId = selectedCustomer?.id ?? "";
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [stageValue, setStageValue] = useState<OpportunityStage>(stage);
@@ -93,7 +105,12 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
   useEffect(() => {
     if (!open || mode !== "create") return;
     startTransition(() => {
-      setCustomerId("");
+      let customer: Customer | null = null;
+      if (initialCustomer && initialCustomerId) {
+        const parsed = customerSchema.safeParse(initialCustomer);
+        if (parsed.success) customer = parsed.data;
+      }
+      setSelectedCustomer(customer);
       setTitle("");
       setDescription("");
       setStageValue(stage);
@@ -101,7 +118,7 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
       setValueDollars("0");
       setExpectedCloseDate("");
     });
-  }, [open, mode, stage]);
+  }, [open, mode, stage, initialCustomerId, initialCustomer]);
 
   const handleStageChange = (nextStage: OpportunityStage) => {
     setStageValue(nextStage);
@@ -230,8 +247,12 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
   ]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(isSaving, onOpenChange)}>
+      <DialogContent
+        className="max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+        onEscapeKeyDown={createPendingDialogInteractionGuards(isSaving).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(isSaving).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Quick Add Opportunity" : "Edit Opportunity"}
@@ -243,22 +264,11 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="customer">Customer *</Label>
-                <Select
-                  value={customerId}
-                  onValueChange={setCustomerId}
-                  disabled={customersQuery.isLoading}
-                >
-                  <SelectTrigger id="customer">
-                    <SelectValue placeholder="Select customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CustomerCombobox
+                  value={selectedCustomer}
+                  onSelect={setSelectedCustomer}
+                  placeholder="Search customers..."
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="title">Title *</Label>
@@ -323,15 +333,11 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="closeDate">Expected Close Date</Label>
-              <Input
-                id="closeDate"
-                type="date"
-                value={expectedCloseDate}
-                onChange={(event) => setExpectedCloseDate(event.target.value)}
-              />
-            </div>
+            <DatePickerControl
+              label="Expected Close Date"
+              value={expectedCloseDate}
+              onChange={setExpectedCloseDate}
+            />
 
             <div className="flex items-center justify-end gap-2">
               <Button

@@ -105,7 +105,6 @@ export default function BulkUserImportPresenter({
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
 
   // Import state
-  const [, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importResults, setImportResults] = useState<{
     success: number;
@@ -271,7 +270,6 @@ export default function BulkUserImportPresenter({
       return;
     }
 
-    setImporting(true);
     setImportProgress(0);
     setStep('import');
 
@@ -321,7 +319,6 @@ export default function BulkUserImportPresenter({
       });
     }
 
-    setImporting(false);
     setStep('complete');
   }, [validationResults, parsedData, batchSendInvitationsMutation]);
 

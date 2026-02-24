@@ -4,9 +4,8 @@
  * Manage product attribute definitions (admin interface).
  * Create, edit, and delete attribute schemas.
  */
-import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState, useCallback } from "react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
   Plus,
@@ -21,11 +20,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -34,14 +30,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toastError } from "@/hooks";
 import {
   AlertDialog,
@@ -54,18 +42,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  FormDialog,
+  TextField,
+  NumberField,
+  SelectField,
+  TextareaField,
+  CheckboxField,
+} from "@/components/shared/forms";
 import {
   useProductAttributeDefinitions,
   useCreateAttributeDefinition,
@@ -147,90 +136,43 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    watch,
-    reset,
-    setValue,
-    formState: { errors },
-  } = useForm<AttributeFormValues>({
-    resolver: zodResolver(attributeFormSchema) as never,
-    defaultValues: {
-      name: "",
-      attributeType: "text",
-      description: "",
-      isRequired: false,
-      isFilterable: false,
-      isSearchable: false,
-      sortOrder: 0,
-      choices: [],
-    },
-  });
+  const getDefaultFormValues = useCallback(
+    (attr?: AttributeDefinition | null): AttributeFormValues => ({
+      name: attr?.name ?? "",
+      attributeType: (attr?.attributeType as AttributeType) ?? "text",
+      description: attr?.description ?? "",
+      isRequired: attr?.isRequired ?? false,
+      isFilterable: attr?.isFilterable ?? false,
+      isSearchable: attr?.isSearchable ?? false,
+      sortOrder: attr?.sortOrder ?? attributes.length,
+      placeholder: attr?.options?.placeholder,
+      min: attr?.options?.min,
+      max: attr?.options?.max,
+      step: attr?.options?.step,
+      choices: attr?.options?.choices ?? [],
+    }),
+    [attributes.length]
+  );
 
-  const { fields: choiceFields, append: addChoice, remove: removeChoice } = useFieldArray({
-    control,
-    name: "choices",
-  });
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
-  const watchType = watch("attributeType");
+  const form = useTanStackForm<AttributeFormValues>({
+    schema: attributeFormSchema,
+    defaultValues: getDefaultFormValues(),
+    onSubmit: async (data) => {
+      setSubmitError(null);
+      try {
+        const options: AttributeDefinition["options"] = {};
+        if (data.placeholder) options.placeholder = data.placeholder;
+        if (data.min !== undefined) options.min = data.min;
+        if (data.max !== undefined) options.max = data.max;
+        if (data.step !== undefined) options.step = data.step;
+        if (data.choices && data.choices.length > 0) {
+          options.choices = data.choices.map((c, i) => ({ ...c, sortOrder: i }));
+        }
 
-  // Open form for new attribute
-  const handleNew = () => {
-    setEditingAttribute(null);
-    reset({
-      name: "",
-      attributeType: "text",
-      description: "",
-      isRequired: false,
-      isFilterable: false,
-      isSearchable: false,
-      sortOrder: attributes.length,
-      choices: [],
-    });
-    setOptionsExpanded(false);
-    setIsFormOpen(true);
-  };
-
-  // Open form for editing
-  const handleEdit = (attr: AttributeDefinition) => {
-    setEditingAttribute(attr);
-    reset({
-      name: attr.name,
-      attributeType: attr.attributeType as AttributeType,
-      description: attr.description ?? "",
-      isRequired: attr.isRequired,
-      isFilterable: attr.isFilterable,
-      isSearchable: attr.isSearchable,
-      sortOrder: attr.sortOrder,
-      placeholder: attr.options?.placeholder,
-      min: attr.options?.min,
-      max: attr.options?.max,
-      step: attr.options?.step,
-      choices: attr.options?.choices ?? [],
-    });
-    setOptionsExpanded(true);
-    setIsFormOpen(true);
-  };
-
-  // Submit form
-  const onSubmit = async (data: AttributeFormValues) => {
-    try {
-      // Build options object
-      const options: AttributeDefinition["options"] = {};
-      if (data.placeholder) options.placeholder = data.placeholder;
-      if (data.min !== undefined) options.min = data.min;
-      if (data.max !== undefined) options.max = data.max;
-      if (data.step !== undefined) options.step = data.step;
-      if (data.choices && data.choices.length > 0) {
-        options.choices = data.choices.map((c, i) => ({ ...c, sortOrder: i }));
-      }
-
-      if (editingAttribute) {
-        // Update existing
-        await updateMutation.mutateAsync({
+        if (editingAttribute) {
+          await updateMutation.mutateAsync({
           id: editingAttribute.id,
           name: data.name,
           description: data.description,
@@ -241,7 +183,6 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
           sortOrder: data.sortOrder,
         });
       } else {
-        // Create new
         await createMutation.mutateAsync({
           name: data.name,
           attributeType: data.attributeType,
@@ -252,15 +193,48 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
           isSearchable: data.isSearchable,
           sortOrder: data.sortOrder,
         });
+        }
+        setIsFormOpen(false);
+        onAttributesChange?.();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to save attribute";
+        setSubmitError(msg);
+        toastError(msg);
       }
+    },
+    onSubmitInvalid: () => {},
+  });
 
-      setIsFormOpen(false);
-      onAttributesChange?.();
-    } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to save attribute"
-      );
-    }
+  const watchType = form.useWatch("attributeType");
+  const choices = form.useWatch("choices") ?? [];
+
+  const addChoice = () => {
+    form.setFieldValue("choices", [...choices, { value: "", label: "" }]);
+  };
+
+  const removeChoice = (index: number) => {
+    form.setFieldValue(
+      "choices",
+      choices.filter((_, i) => i !== index)
+    );
+  };
+
+  // Open form for new attribute
+  const handleNew = () => {
+    setSubmitError(null);
+    setEditingAttribute(null);
+    form.reset(getDefaultFormValues());
+    setOptionsExpanded(false);
+    setIsFormOpen(true);
+  };
+
+  // Open form for editing
+  const handleEdit = (attr: AttributeDefinition) => {
+    setSubmitError(null);
+    setEditingAttribute(attr);
+    form.reset(getDefaultFormValues(attr));
+    setOptionsExpanded(true);
+    setIsFormOpen(true);
   };
 
   // Delete attribute
@@ -413,104 +387,91 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
       </Card>
 
       {/* Create/Edit Form Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingAttribute ? "Edit Attribute" : "Create Attribute"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingAttribute
-                ? "Update the attribute definition"
-                : "Define a new custom attribute for products"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <FormDialog
+        open={isFormOpen}
+        onOpenChange={setIsFormOpen}
+        title={editingAttribute ? "Edit Attribute" : "Create Attribute"}
+        description={
+          editingAttribute
+            ? "Update the attribute definition"
+            : "Define a new custom attribute for products"
+        }
+        form={form}
+        submitLabel={editingAttribute ? "Update" : "Create"}
+        cancelLabel="Cancel"
+        loadingLabel="Saving..."
+        submitError={submitError ?? (createMutation.error ?? updateMutation.error)?.message ?? null}
+        submitDisabled={isSaving}
+        className="max-w-lg max-h-[90vh] overflow-y-auto"
+      >
             {/* Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name">Attribute Name</Label>
-              <Input
-                id="name"
-                placeholder="e.g., Battery Capacity"
-                {...register("name")}
-              />
-              {errors.name && (
-                <p className="text-sm text-destructive">{errors.name.message}</p>
+            <form.Field name="name">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Attribute Name"
+                  placeholder="e.g., Battery Capacity"
+                  required
+                />
               )}
-            </div>
+            </form.Field>
 
             {/* Type */}
-            <div className="space-y-2">
-              <Label htmlFor="attributeType">Type</Label>
-              <Select
-                value={watchType}
-                onValueChange={(val) => setValue("attributeType", val as AttributeType)}
-                disabled={!!editingAttribute}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {ATTRIBUTE_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <div>
-                        <span>{type.label}</span>
-                        <span className="text-muted-foreground ml-2 text-xs">
-                          {type.description}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {editingAttribute && (
-                <p className="text-xs text-muted-foreground">
-                  Type cannot be changed after creation
-                </p>
+            <form.Field name="attributeType">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Type"
+                  placeholder="Select type..."
+                  disabled={!!editingAttribute}
+                  description={editingAttribute ? "Type cannot be changed after creation" : undefined}
+                  options={ATTRIBUTE_TYPES.map((t) => ({
+                    value: t.value,
+                    label: `${t.label} – ${t.description}`,
+                  }))}
+                  required
+                />
               )}
-            </div>
+            </form.Field>
 
             {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description">Description (optional)</Label>
-              <Textarea
-                id="description"
-                placeholder="Describe what this attribute represents..."
-                rows={2}
-                {...register("description")}
-              />
-            </div>
+            <form.Field name="description">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Description (optional)"
+                  placeholder="Describe what this attribute represents..."
+                  rows={2}
+                />
+              )}
+            </form.Field>
 
             {/* Flags */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="isRequired"
-                  {...register("isRequired")}
-                />
-                <Label htmlFor="isRequired" className="text-sm cursor-pointer">
-                  Required
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="isFilterable"
-                  {...register("isFilterable")}
-                />
-                <Label htmlFor="isFilterable" className="text-sm cursor-pointer">
-                  Filterable
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="isSearchable"
-                  {...register("isSearchable")}
-                />
-                <Label htmlFor="isSearchable" className="text-sm cursor-pointer">
-                  Searchable
-                </Label>
-              </div>
+              <form.Field name="isRequired">
+                {(field) => (
+                  <CheckboxField
+                    field={field}
+                    label="Required"
+                  />
+                )}
+              </form.Field>
+              <form.Field name="isFilterable">
+                {(field) => (
+                  <CheckboxField
+                    field={field}
+                    label="Filterable"
+                  />
+                )}
+              </form.Field>
+              <form.Field name="isSearchable">
+                {(field) => (
+                  <CheckboxField
+                    field={field}
+                    label="Searchable"
+                  />
+                )}
+              </form.Field>
             </div>
 
             {/* Type-specific options */}
@@ -527,43 +488,44 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 pt-4">
                 {/* Placeholder */}
-                <div className="space-y-2">
-                  <Label htmlFor="placeholder">Placeholder Text</Label>
-                  <Input
-                    id="placeholder"
-                    placeholder="e.g., Enter value..."
-                    {...register("placeholder")}
-                  />
-                </div>
+                <form.Field name="placeholder">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Placeholder Text"
+                      placeholder="e.g., Enter value..."
+                    />
+                  )}
+                </form.Field>
 
                 {/* Number constraints */}
                 {watchType === "number" && (
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="min">Minimum</Label>
-                      <Input
-                        id="min"
-                        type="number"
-                        {...register("min", { valueAsNumber: true })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="max">Maximum</Label>
-                      <Input
-                        id="max"
-                        type="number"
-                        {...register("max", { valueAsNumber: true })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="step">Step</Label>
-                      <Input
-                        id="step"
-                        type="number"
-                        step="any"
-                        {...register("step", { valueAsNumber: true })}
-                      />
-                    </div>
+                    <form.Field name="min">
+                      {(field) => (
+                        <NumberField
+                          field={field}
+                          label="Minimum"
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="max">
+                      {(field) => (
+                        <NumberField
+                          field={field}
+                          label="Maximum"
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="step">
+                      {(field) => (
+                        <NumberField
+                          field={field}
+                          label="Step"
+                          step={0.01}
+                        />
+                      )}
+                    </form.Field>
                   </div>
                 )}
 
@@ -576,35 +538,45 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => addChoice({ value: "", label: "" })}
+                        onClick={addChoice}
                       >
                         <Plus className="h-3 w-3 mr-1" />
                         Add Choice
                       </Button>
                     </div>
                     <div className="space-y-2">
-                      {choiceFields.map((field, index) => (
-                        <div key={field.id} className="flex gap-2">
-                          <Input
-                            placeholder="Value"
-                            {...register(`choices.${index}.value` as const)}
-                          />
-                          <Input
-                            placeholder="Label"
-                            {...register(`choices.${index}.label` as const)}
-                          />
+                      {choices.map((_, index) => (
+                        <div key={index} className="flex gap-2">
+                          <form.Field name={`choices[${index}].value` as const}>
+                            {(field) => (
+                              <TextField
+                                field={field}
+                                label="Value"
+                                placeholder="Value"
+                              />
+                            )}
+                          </form.Field>
+                          <form.Field name={`choices[${index}].label` as const}>
+                            {(field) => (
+                              <TextField
+                                field={field}
+                                label="Label"
+                                placeholder="Label"
+                              />
+                            )}
+                          </form.Field>
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-10 w-10 text-destructive"
+                            className="h-10 w-10 text-destructive shrink-0"
                             onClick={() => removeChoice(index)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       ))}
-                      {choiceFields.length === 0 && (
+                      {choices.length === 0 && (
                         <p className="text-sm text-muted-foreground text-center py-2">
                           No choices defined. Add at least one choice.
                         </p>
@@ -614,23 +586,7 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
                 )}
               </CollapsibleContent>
             </Collapsible>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsFormOpen(false)}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : editingAttribute ? "Update" : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      </FormDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingAttribute} onOpenChange={() => setDeletingAttribute(null)}>

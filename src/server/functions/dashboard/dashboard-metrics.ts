@@ -56,6 +56,8 @@ import {
   getInventoryCountsBySkusInputSchema,
 } from '@/lib/schemas/dashboard/tracked-products';
 import { DashboardCache } from '@/lib/cache/dashboard-cache';
+import { safeNumber } from '@/lib/numeric';
+import { getCashRevenueByDateRange } from '@/server/functions/financial/financial-aggregation-helpers';
 
 // ============================================================================
 // HELPERS
@@ -155,16 +157,22 @@ function buildMetricValue(
   previous: number,
   targetValue: number | null
 ): MetricValue {
-  const change = previous === 0 ? 0 : ((current - previous) / previous) * 100;
-  const changeAbsolute = current - previous;
-  const targetProgress = targetValue ? (current / targetValue) * 100 : null;
+  const c = safeNumber(current);
+  const p = safeNumber(previous);
+  const t = targetValue != null ? safeNumber(targetValue) : null;
+  const change = p === 0 ? 0 : ((c - p) / p) * 100;
+  const changeAbsolute = c - p;
+  const targetProgress = t != null && t > 0 ? (c / t) * 100 : null;
 
   return {
-    current,
-    change: Math.round(change * 100) / 100,
-    changeAbsolute,
-    target: targetValue,
-    targetProgress: targetProgress ? Math.round(targetProgress * 100) / 100 : null,
+    current: c,
+    change: Number.isNaN(change) ? 0 : Math.round(change * 100) / 100,
+    changeAbsolute: Number.isNaN(changeAbsolute) ? 0 : changeAbsolute,
+    target: t,
+    targetProgress:
+      targetProgress != null && !Number.isNaN(targetProgress)
+        ? Math.round(targetProgress * 100) / 100
+        : null,
   };
 }
 
@@ -211,6 +219,7 @@ async function queryMetricsFromMV(
   dateTo: string
 ): Promise<{
   revenue: number;
+  revenueCash: number;
   ordersCount: number;
   customerCount: number;
   pipelineValue: number;
@@ -218,10 +227,13 @@ async function queryMetricsFromMV(
   openClaims: number;
 }> {
   try {
-    // Run all MV queries in parallel for better performance
-    // Column names match actual DB per schema-snapshot-matviews.json
-    const [orderMetricsRows, pipelineMetricsRows, jobMetricsRows, claimMetricsRows] =
-      await Promise.all([
+    // Run all MV queries + cash revenue query in parallel
+    // MV has orders_total (invoiced); cash from order_payments (returns number, not array)
+    type OrderRow = { orders_count?: string; revenue?: string; customer_count?: string };
+    type PipelineRow = { total_value?: string };
+    type JobRow = { active_count?: string };
+    type ClaimRow = { open_count?: string };
+    const results = await Promise.all([
         // Query mv_daily_metrics for orders/revenue (day, orders_total, customers_count)
         db
           .select({
@@ -238,6 +250,9 @@ async function queryMetricsFromMV(
               lte(mvDailyMetrics.day, sql`${dateTo}::date`)
             )
           ),
+
+        // Cash revenue from order_payments (MV doesn't have this) - returns number
+        getCashRevenueByDateRange(organizationId, dateFrom, dateTo),
 
         // Query mv_daily_pipeline for pipeline value (exclude won/lost)
         db
@@ -283,19 +298,25 @@ async function queryMetricsFromMV(
           ),
       ]);
 
-    // Extract first row from each result
+    const orderMetricsRows = results[0] as OrderRow[];
+    const cashRevenueRows = results[1] as number;
+    const pipelineMetricsRows = results[2] as PipelineRow[];
+    const jobMetricsRows = results[3] as JobRow[];
+    const claimMetricsRows = results[4] as ClaimRow[];
+
     const orderMetrics = orderMetricsRows[0];
     const pipelineMetrics = pipelineMetricsRows[0];
     const jobMetrics = jobMetricsRows[0];
     const claimMetrics = claimMetricsRows[0];
 
     return {
-      revenue: Number(orderMetrics?.revenue ?? 0),
-      ordersCount: Number(orderMetrics?.orders_count ?? 0),
-      customerCount: Number(orderMetrics?.customer_count ?? 0),
-      pipelineValue: Number(pipelineMetrics?.total_value ?? 0),
-      activeJobs: Number(jobMetrics?.active_count ?? 0),
-      openClaims: Number(claimMetrics?.open_count ?? 0),
+      revenue: safeNumber(orderMetrics?.revenue),
+      revenueCash: safeNumber(cashRevenueRows),
+      ordersCount: safeNumber(orderMetrics?.orders_count),
+      customerCount: safeNumber(orderMetrics?.customer_count),
+      pipelineValue: safeNumber(pipelineMetrics?.total_value),
+      activeJobs: safeNumber(jobMetrics?.active_count),
+      openClaims: safeNumber(claimMetrics?.open_count),
     };
   } catch (error) {
     // MVs don't exist yet - fall back to live queries
@@ -313,28 +334,32 @@ async function queryMetricsLive(
   dateTo: string
 ): Promise<{
   revenue: number;
+  revenueCash: number;
   ordersCount: number;
   customerCount: number;
   pipelineValue: number;
   activeJobs: number;
   openClaims: number;
 }> {
-  const [ordersResult, customersResult, pipelineResult, jobsResult, claimsResult] = await Promise.all([
-    // Orders and revenue
-    db
-      .select({
-        total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-        count: count(),
-      })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.organizationId, organizationId),
-          sql`${orders.orderDate} >= ${dateFrom}::date`,
-          sql`${orders.orderDate} <= ${dateTo}::date`,
-          isNull(orders.deletedAt)
-        )
-      ),
+  const [ordersResult, cashResult, customersResult, pipelineResult, jobsResult, claimsResult] =
+    await Promise.all([
+      // Orders and invoiced revenue
+      db
+        .select({
+          total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+          count: count(),
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.organizationId, organizationId),
+            sql`${orders.orderDate} >= ${dateFrom}::date`,
+            sql`${orders.orderDate} <= ${dateTo}::date`,
+            isNull(orders.deletedAt)
+          )
+        ),
+      // Cash revenue from order_payments
+      getCashRevenueByDateRange(organizationId, dateFrom, dateTo),
 
     // New customers
     db
@@ -384,15 +409,16 @@ async function queryMetricsLive(
           inArray(warrantyClaims.status, ['submitted', 'under_review', 'approved'])
         )
       ),
-  ]);
+    ]);
 
   return {
-    revenue: Number(ordersResult[0]?.total ?? 0),
-    ordersCount: Number(ordersResult[0]?.count ?? 0),
-    customerCount: Number(customersResult[0]?.count ?? 0),
-    pipelineValue: Number(pipelineResult[0]?.total ?? 0),
-    activeJobs: Number(jobsResult[0]?.count ?? 0),
-    openClaims: Number(claimsResult[0]?.count ?? 0),
+    revenue: safeNumber(ordersResult[0]?.total),
+    revenueCash: safeNumber(cashResult),
+    ordersCount: safeNumber(ordersResult[0]?.count),
+    customerCount: safeNumber(customersResult[0]?.count),
+    pipelineValue: safeNumber(pipelineResult[0]?.total),
+    activeJobs: safeNumber(jobsResult[0]?.count),
+    openClaims: safeNumber(claimsResult[0]?.count),
   };
 }
 
@@ -403,6 +429,7 @@ async function queryTodayMetricsLive(
   organizationId: string
 ): Promise<{
   revenue: number;
+  revenueCash: number;
   ordersCount: number;
   customerCount: number;
   pipelineValue: number;
@@ -412,22 +439,30 @@ async function queryTodayMetricsLive(
   const today = getTodayStr();
 
   // Run all live queries in parallel for better performance
-  const [todayOrdersResult, todayCustomersResult, pipelineDataResult, activeJobsResult, openClaimsResult] =
-    await Promise.all([
-      // Today's orders
-      db
-        .select({
-          total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-          orderCount: count(),
-        })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.organizationId, organizationId),
-            sql`DATE(${orders.orderDate}) = ${today}::date`,
-            isNull(orders.deletedAt)
-          )
-        ),
+  const [
+    todayOrdersResult,
+    todayCashResult,
+    todayCustomersResult,
+    pipelineDataResult,
+    activeJobsResult,
+    openClaimsResult,
+  ] = await Promise.all([
+    // Today's orders (invoiced)
+    db
+      .select({
+        total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+        orderCount: count(),
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.organizationId, organizationId),
+          sql`DATE(${orders.orderDate}) = ${today}::date`,
+          isNull(orders.deletedAt)
+        )
+      ),
+    // Today's cash (payments)
+    getCashRevenueByDateRange(organizationId, today, today),
 
       // Today's new customers
       db
@@ -478,20 +513,22 @@ async function queryTodayMetricsLive(
         ),
     ]);
 
-  // Extract first row from each result
+  // Extract first row from each result (getCashRevenueByDateRange returns number, not array)
   const todayOrders = todayOrdersResult[0];
+  const todayCash = todayCashResult;
   const todayCustomers = todayCustomersResult[0];
   const pipelineData = pipelineDataResult[0];
   const activeJobs = activeJobsResult[0];
   const openClaims = openClaimsResult[0];
 
   return {
-    revenue: Number(todayOrders?.total ?? 0),
-    ordersCount: Number(todayOrders?.orderCount ?? 0),
-    customerCount: Number(todayCustomers?.count ?? 0),
-    pipelineValue: Number(pipelineData?.total ?? 0),
-    activeJobs: Number(activeJobs?.count ?? 0),
-    openClaims: Number(openClaims?.count ?? 0),
+    revenue: safeNumber(todayOrders?.total),
+    revenueCash: safeNumber(todayCash),
+    ordersCount: safeNumber(todayOrders?.orderCount),
+    customerCount: safeNumber(todayCustomers?.count),
+    pipelineValue: safeNumber(pipelineData?.total),
+    activeJobs: safeNumber(activeJobs?.count),
+    openClaims: safeNumber(openClaims?.count),
   };
 }
 
@@ -504,6 +541,7 @@ async function getMetricsHybrid(
   dateTo: Date
 ): Promise<{
   revenue: number;
+  revenueCash: number;
   ordersCount: number;
   customerCount: number;
   pipelineValue: number;
@@ -537,6 +575,7 @@ async function getMetricsHybrid(
 
   return {
     revenue: mvMetrics.revenue + todayMetrics.revenue,
+    revenueCash: mvMetrics.revenueCash + todayMetrics.revenueCash,
     ordersCount: mvMetrics.ordersCount + todayMetrics.ordersCount,
     customerCount: mvMetrics.customerCount + todayMetrics.customerCount,
     // Pipeline and jobs/claims are current state, so use live values
@@ -635,9 +674,19 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
 
     const targetMap = new Map(currentTargets.map((t) => [t.metric, Number(t.targetValue)]));
 
-    // Build summary with hybrid metrics
+    // Build summary with hybrid metrics (revenue = invoiced; revenueCash = cash received)
     const summary: DashboardSummary = {
       revenue: buildMetricValue(
+        currentMetrics.revenue,
+        previousMetrics.revenue,
+        targetMap.get('revenue') ?? null
+      ),
+      revenueCash: buildMetricValue(
+        currentMetrics.revenueCash,
+        previousMetrics.revenueCash,
+        targetMap.get('revenue') ?? null
+      ),
+      revenueInvoiced: buildMetricValue(
         currentMetrics.revenue,
         previousMetrics.revenue,
         targetMap.get('revenue') ?? null
@@ -811,26 +860,26 @@ export const getMetricsComparison = createServerFn({ method: 'GET' })
 
     // Build summary for current period
     const current: DashboardSummary = {
-      revenue: buildMetricValue(Number(currentStats?.revenue ?? 0), 0, null),
+      revenue: buildMetricValue(safeNumber(currentStats?.revenue), 0, null),
       kwhDeployed: buildMetricValue(0, 0, null),
       quoteWinRate: buildMetricValue(0, 0, null),
       activeInstallations: buildMetricValue(0, 0, null),
       warrantyClaims: buildMetricValue(0, 0, null),
       pipelineValue: buildMetricValue(0, 0, null),
       customerCount: buildMetricValue(0, 0, null),
-      ordersCount: buildMetricValue(Number(currentStats?.ordersCount ?? 0), 0, null),
+      ordersCount: buildMetricValue(safeNumber(currentStats?.ordersCount), 0, null),
     };
 
     // Build summary for previous period
     const previousSummary: DashboardSummary = {
-      revenue: buildMetricValue(Number(previousStats?.revenue ?? 0), 0, null),
+      revenue: buildMetricValue(safeNumber(previousStats?.revenue), 0, null),
       kwhDeployed: buildMetricValue(0, 0, null),
       quoteWinRate: buildMetricValue(0, 0, null),
       activeInstallations: buildMetricValue(0, 0, null),
       warrantyClaims: buildMetricValue(0, 0, null),
       pipelineValue: buildMetricValue(0, 0, null),
       customerCount: buildMetricValue(0, 0, null),
-      ordersCount: buildMetricValue(Number(previousStats?.ordersCount ?? 0), 0, null),
+      ordersCount: buildMetricValue(safeNumber(previousStats?.ordersCount), 0, null),
     };
 
     // Calculate changes

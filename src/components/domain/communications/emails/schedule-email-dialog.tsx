@@ -22,6 +22,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -269,10 +273,16 @@ export function ScheduleEmailDialog({
 
   const isSubmitting =
     scheduleEmailMutation.isPending || updateEmailMutation.isPending;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isSubmitting);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSubmitting, onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-[600px]"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

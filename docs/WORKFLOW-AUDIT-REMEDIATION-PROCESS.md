@@ -4,7 +4,6 @@
 
 **References:**
 - Pick Dialog UX Overhaul (orders/fulfillment) — premortem → remediation → hardening
-- Shipping audit: entry-points step ([PREMORTEM_ORDERS_SHIPPING.md](./PREMORTEM_ORDERS_SHIPPING.md)); debt remediation added Integration & Consistency Gate — see [SHIPPING-WORKFLOW-DEBT-AUDIT.md](./SHIPPING-WORKFLOW-DEBT-AUDIT.md) Section 6 (Convention Fix) and Section 9 (Debt Remediation)
 
 ---
 

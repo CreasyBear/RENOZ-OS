@@ -54,23 +54,21 @@ function CustomerDetailPage() {
   const search = Route.useSearch();
 
   return (
-    <PageLayout variant="full-width">
-      <CustomerDetailContainer
-        customerId={customerId}
-        initialCustomer={loaderData?.customer}
-        initialTab={search.tab}
-      >
-        {({ headerActions, content }) => (
-          <>
-            <PageLayout.Header
-              title={null}
-              leading={<DetailPageBackButton to="/customers" aria-label="Back to customers" />}
-              actions={headerActions}
-            />
-            <PageLayout.Content>{content}</PageLayout.Content>
-          </>
-        )}
-      </CustomerDetailContainer>
-    </PageLayout>
+    <CustomerDetailContainer
+      customerId={customerId}
+      initialCustomer={loaderData?.customer}
+      initialTab={search.tab}
+    >
+      {({ headerActions, content }) => (
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title={null}
+            leading={<DetailPageBackButton to="/customers" aria-label="Back to customers" />}
+            actions={headerActions}
+          />
+          <PageLayout.Content>{content}</PageLayout.Content>
+        </PageLayout>
+      )}
+    </CustomerDetailContainer>
   );
 }

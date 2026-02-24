@@ -66,6 +66,7 @@ import { toast } from '@/lib/toast';
 
 // Hooks
 import { useFiles, useDeleteProjectFile } from '@/hooks/jobs';
+import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { useUserLookup } from '@/hooks/users';
 
 // Types
@@ -752,14 +753,15 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
     });
   }, [files, searchQuery, typeFilter]);
 
+  const confirmation = useConfirmation();
   const handleDeleteFile = async (file: FileWithUploader) => {
-    if (confirm(`Delete "${file.fileName}"?`)) {
-      try {
-        await deleteFile.mutateAsync(file.id);
-        toast.success('File deleted');
-      } catch {
-        toast.error('Failed to delete file');
-      }
+    const { confirmed } = await confirmation.confirm(confirmations.delete(file.fileName, 'file'));
+    if (!confirmed) return;
+    try {
+      await deleteFile.mutateAsync(file.id);
+      toast.success('File deleted');
+    } catch {
+      toast.error('Failed to delete file');
     }
   };
 

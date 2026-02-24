@@ -8,21 +8,27 @@
  * 4. Review - Review all information before submission
  *
  * Features:
- * - Step navigation with validation
- * - Progress indicator
- * - Data persistence across steps
- * - Summary review before submission
+ * - Step navigation with validation (FormWizard)
+ * - Draft auto-save to localStorage
+ * - TanStack Form with Zod validation
  */
-import { ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react';
-import { Form } from '@/components/ui/form';
+import { FormWizard, FormFieldDisplayProvider, DraftRestorePrompt, DraftSavingIndicator } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { ContactManager } from '../contact-manager';
 import { AddressManager } from '../address-manager';
 import { useCustomerWizard } from './hooks/use-customer-wizard';
-import { StepIndicator } from './steps/step-indicator';
+import { useCustomerWizardDraft } from './use-customer-wizard-draft';
 import { BasicInfoStep } from './steps/basic-info-step';
 import { ReviewStep } from './steps/review-step';
+import { wizardSteps } from './types';
 import type { CustomerWizardProps } from './types';
+
+const WIZARD_STEPS = [
+  { id: 'basic', label: 'Details', description: 'Basic information' },
+  { id: 'contacts', label: 'Contacts', description: 'Key contacts' },
+  { id: 'addresses', label: 'Addresses', description: 'Billing & shipping' },
+  { id: 'review', label: 'Review', description: 'Confirm details' },
+];
 
 export function CustomerWizard({
   onSubmit,
@@ -33,79 +39,100 @@ export function CustomerWizard({
   const {
     form,
     currentStep,
+    currentStepIndex,
     completedSteps,
-    isFirstStep,
-    isLastStep,
+    setCompletedSteps,
     contacts,
     setContacts,
     addresses,
     setAddresses,
-    goToNextStep,
-    goToPreviousStep,
+    setCurrentStepByIndex,
     getWizardData,
+    validateBasicStep,
   } = useCustomerWizard();
 
-  const handleSubmit = async () => {
+  const draft = useCustomerWizardDraft({
+    form,
+    contacts,
+    setContacts,
+    addresses,
+    setAddresses,
+    currentStepIndex,
+    completedSteps,
+    setCurrentStepByIndex,
+    setCompletedSteps,
+    enabled: true,
+    debounceMs: 1500,
+  });
+
+  const handleComplete = async () => {
     await onSubmit(getWizardData());
+    draft.clear();
   };
+
+  const validateStep = async (step: number): Promise<boolean> => {
+    if (step === 0) {
+      return validateBasicStep();
+    }
+    return true;
+  };
+
+  const canNavigateToStep = (stepIndex: number) => {
+    const maxCompleted = Math.max(
+      -1,
+      ...Array.from(completedSteps).map((s) => wizardSteps.indexOf(s))
+    );
+    return stepIndex <= maxCompleted + 1;
+  };
+
+  const stepContent =
+    currentStep === 'basic' ? (
+      <BasicInfoStep form={form} availableTags={availableTags} />
+    ) : currentStep === 'contacts' ? (
+      <ContactManager contacts={contacts} onChange={setContacts} />
+    ) : currentStep === 'addresses' ? (
+      <AddressManager addresses={addresses} onChange={setAddresses} />
+    ) : (
+      <ReviewStep data={getWizardData()} />
+    );
 
   return (
     <div className="mx-auto max-w-3xl">
-      <StepIndicator currentStep={currentStep} completedSteps={completedSteps} />
+      <DraftRestorePrompt
+        hasDraft={draft.hasDraft}
+        savedAt={draft.savedAt}
+        onRestore={draft.restore}
+        onDiscard={draft.clear}
+      />
+      <DraftSavingIndicator isSaving={draft.isSaving} savedAt={draft.savedAt} />
 
-      <Form {...form}>
-        <form onSubmit={(e) => e.preventDefault()}>
-          {currentStep === 'basic' && <BasicInfoStep form={form} availableTags={availableTags} />}
+      <div className="flex justify-end mb-4">
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+      </div>
 
-          {currentStep === 'contacts' && (
-            <ContactManager contacts={contacts} onChange={setContacts} />
-          )}
-
-          {currentStep === 'addresses' && (
-            <AddressManager addresses={addresses} onChange={setAddresses} />
-          )}
-
-          {currentStep === 'review' && <ReviewStep data={getWizardData()} />}
-
-          <div className="mt-8 flex justify-between border-t pt-4">
-            <div>
-              {!isFirstStep && (
-                <Button type="button" variant="outline" onClick={goToPreviousStep}>
-                  <ChevronLeft className="mr-1 h-4 w-4" />
-                  Back
-                </Button>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <Button type="button" variant="ghost" onClick={onCancel}>
-                Cancel
-              </Button>
-
-              {!isLastStep ? (
-                <Button type="button" onClick={goToNextStep}>
-                  Next
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              ) : (
-                <Button type="button" onClick={handleSubmit} disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating…
-                    </>
-                  ) : (
-                    <>
-                      <Check className="mr-1 h-4 w-4" />
-                      Create Customer
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </div>
-        </form>
-      </Form>
+      <form onSubmit={(e) => e.preventDefault()}>
+        <FormWizard
+          steps={WIZARD_STEPS}
+          currentStep={currentStepIndex}
+          onStepChange={setCurrentStepByIndex}
+          onComplete={handleComplete}
+          validateStep={validateStep}
+          canNavigateToStep={canNavigateToStep}
+          isSubmitting={isLoading}
+          labels={{
+            previous: 'Back',
+            next: 'Next',
+            complete: 'Create Customer',
+            completing: 'Creating…',
+          }}
+        >
+          <FormFieldDisplayProvider form={form}>
+            {stepContent}
+          </FormFieldDisplayProvider>
+        </FormWizard>
+      </form>
     </div>
   );
 }

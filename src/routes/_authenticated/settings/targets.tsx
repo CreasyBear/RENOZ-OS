@@ -540,6 +540,7 @@ function TargetsSettingsPage() {
         target={editingTarget}
         onSubmit={handleFormSubmit}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
+        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
       />
     </PageLayout>
   );

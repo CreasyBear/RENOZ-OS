@@ -5,7 +5,7 @@
  * Handles all data fetching, mutations, and state management.
  *
  * @source signatures from useSignatures hook
- * @source mutations from useCreateSignature, useUpdateSignature, useDeleteSignature, useSetDefaultSignature hooks
+ * @source mutations from useDeleteSignature, useSetDefaultSignature hooks
  *
  * @see src/routes/_authenticated/communications/signatures/index.tsx - Route definition
  * @see docs/plans/2026-01-24-communications-plumbing-review.md
@@ -13,13 +13,10 @@
 import { useCallback } from "react";
 import {
   useSignatures,
-  useCreateSignature,
-  useUpdateSignature,
   useDeleteSignature,
   useSetDefaultSignature,
 } from "@/hooks/communications";
 import { SignaturesList } from "@/components/domain/communications";
-import { type SignatureFormValues } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
 import { ErrorState } from "@/components/shared";
@@ -45,50 +42,8 @@ export default function SignaturesPage() {
   // ============================================================================
   // MUTATIONS
   // ============================================================================
-  const createMutation = useCreateSignature();
-  const updateMutation = useUpdateSignature();
   const deleteMutation = useDeleteSignature();
   const setDefaultMutation = useSetDefaultSignature();
-
-  // ============================================================================
-  // HANDLERS
-  // ============================================================================
-  const handleCreate = useCallback(
-    async (values: SignatureFormValues) => {
-      try {
-        const result = await createMutation.mutateAsync({
-          name: values.name,
-          content: values.content,
-          isDefault: values.isDefault,
-          isCompanyWide: false,
-        });
-        toastSuccess("Signature created");
-        return result;
-      } catch {
-        toastError("Failed to create signature");
-        throw new Error("Failed to create signature");
-      }
-    },
-    [createMutation]
-  );
-
-  const handleUpdate = useCallback(
-    async (id: string, values: SignatureFormValues) => {
-      try {
-        await updateMutation.mutateAsync({
-          id,
-          name: values.name,
-          content: values.content,
-          isDefault: values.isDefault,
-        });
-        toastSuccess("Signature updated");
-      } catch {
-        toastError("Failed to update signature");
-        throw new Error("Failed to update signature");
-      }
-    },
-    [updateMutation]
-  );
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -151,13 +106,10 @@ export default function SignaturesPage() {
           <SignaturesList
             signatures={signatures}
             isLoading={isLoading}
-            onCreate={async (values) => { await handleCreate(values); }}
-            onUpdate={handleUpdate}
             onDelete={handleDelete}
             onSetDefault={handleSetDefault}
             isDeleting={deleteMutation.isPending}
             isSettingDefault={setDefaultMutation.isPending}
-            isSaving={createMutation.isPending || updateMutation.isPending}
           />
       </div>
     </>

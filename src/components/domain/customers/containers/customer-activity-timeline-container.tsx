@@ -8,6 +8,7 @@
  */
 
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { useUnifiedActivities } from '@/hooks/activities';
 
 // ============================================================================
@@ -54,6 +55,7 @@ export function CustomerActivityTimelineContainer({
       title={title}
       description={description ?? `${activities.length} ${activities.length === 1 ? 'activity' : 'activities'}`}
       showFilters={showFilters}
+      viewAllSearch={getActivitiesFeedSearch('customer')}
       maxItems={maxItems}
       groupByDate={groupByDate}
       asCard={asCard}

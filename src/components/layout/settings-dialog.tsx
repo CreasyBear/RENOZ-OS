@@ -10,6 +10,7 @@
  * - All settings inline within the modal
  */
 import { useState, useEffect, startTransition } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Dialog,
   DialogContent,
@@ -137,8 +138,10 @@ export function SettingsDialog({ open, onOpenChange, initialPane }: SettingsDial
     }
   }, [open, initialPane])
 
-  // Fetch organization data
-  const { data: organization, isLoading: orgLoading, error: orgError } = useOrganizationQuery()
+  // Fetch organization data only when dialog is open (avoids leaking server calls on every page load)
+  const { data: organization, isLoading: orgLoading, error: orgError } = useOrganizationQuery({
+    enabled: open,
+  })
   const settings = useOrganizationSettings()
   const updateOrganization = useUpdateOrganization()
   const updateSettings = useUpdateOrganizationSettings()
@@ -270,6 +273,7 @@ function SettingsPane({
   updateOrganization,
   updateSettings,
 }: SettingsPaneProps) {
+  const navigate = useNavigate()
   const handlers = createOrganizationSectionHandlers(updateOrganization, updateSettings)
 
   // Data preparation
@@ -341,7 +345,13 @@ function SettingsPane({
 
   switch (pane) {
     case 'account':
-      return <AccountPane user={user} />
+      return (
+        <AccountPane
+          user={user}
+          onOpenProfile={() => navigate({ to: '/profile' })}
+          onOpenSecurity={() => navigate({ to: '/settings/security' })}
+        />
+      )
 
     case 'notifications':
       return <NotificationsPane />
@@ -404,10 +414,10 @@ function SettingsPane({
             toast.success('Setting saved')
           }}
           onChangePassword={() => {
-            toast.info('Password change dialog coming soon')
+            navigate({ to: '/settings/security' })
           }}
           onViewSessions={() => {
-            toast.info('Sessions view coming soon')
+            navigate({ to: '/settings/security' })
           }}
         />
       )
@@ -416,8 +426,8 @@ function SettingsPane({
       return (
         <ApiTokensSettingsSection
           tokens={[]}
-          onCreateToken={() => toast.info('Create token dialog coming soon')}
-          onRevokeToken={() => toast.info('Revoke token coming soon')}
+          onCreateToken={() => navigate({ to: '/settings/api-tokens' })}
+          onRevokeToken={() => navigate({ to: '/settings/api-tokens' })}
         />
       )
 
@@ -457,8 +467,12 @@ function SettingsPane({
 
 function AccountPane({
   user,
+  onOpenProfile,
+  onOpenSecurity,
 }: {
   user: ReturnType<typeof useCurrentUser>['user']
+  onOpenProfile: () => void
+  onOpenSecurity: () => void
 }) {
   return (
     <div className="space-y-6">
@@ -496,7 +510,7 @@ function AccountPane({
           <button
             type="button"
             className="text-sm text-primary hover:underline"
-            onClick={() => toast.info('Email change coming soon')}
+            onClick={onOpenProfile}
           >
             Change
           </button>
@@ -509,7 +523,7 @@ function AccountPane({
           <button
             type="button"
             className="text-sm text-primary hover:underline"
-            onClick={() => toast.info('Password change coming soon')}
+            onClick={onOpenSecurity}
           >
             Change
           </button>

@@ -175,6 +175,7 @@ export function SupplierDetailContainer({
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────
   const handleDelete = useCallback(async () => {
+    if (deleteMutation.isPending) return;
     try {
       await deleteMutation.mutateAsync({ data: { id: supplierId } });
       toastSuccess('Supplier deleted');
@@ -186,6 +187,14 @@ export function SupplierDetailContainer({
       );
     }
   }, [deleteMutation, supplierId, onBack]);
+
+  const handleDeleteDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && deleteMutation.isPending) return;
+      setDeleteDialogOpen(open);
+    },
+    [deleteMutation.isPending]
+  );
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -314,7 +323,7 @@ export function SupplierDetailContainer({
       <EntityActivityLogger {...loggerProps} />
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Supplier</AlertDialogTitle>
@@ -324,7 +333,7 @@ export function SupplierDetailContainer({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={deleteMutation.isPending}

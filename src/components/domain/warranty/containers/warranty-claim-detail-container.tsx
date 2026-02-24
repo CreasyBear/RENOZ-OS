@@ -39,7 +39,13 @@ import { ErrorState } from '@/components/shared/error-state';
 import { EntityHeaderActions } from '@/components/shared';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConfirmation } from '@/hooks';
+import { safeNumber } from '@/lib/numeric';
 import { useTrackView } from '@/hooks/search';
+import { useEntityActivities } from '@/hooks/activities/use-activities';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import {
   useWarrantyClaim,
   useUpdateClaimStatus,
@@ -76,6 +82,21 @@ export function WarrantyClaimDetailContainer({
 }: WarrantyClaimDetailContainerProps) {
   const { data: claim, isLoading, error, refetch } = useWarrantyClaim(claimId);
   const currentClaim = claim ?? null;
+
+  const { data: activitiesData } = useEntityActivities({
+    entityType: 'warranty_claim',
+    entityId: claimId,
+    pageSize: 50,
+    enabled: !!claimId,
+  });
+  const requestInfoEvents = (activitiesData?.pages?.flatMap((p) => p.items) ?? [])
+    .filter((a) => (a.metadata as { requestInfoRequest?: boolean })?.requestInfoRequest === true)
+    .map((a) => ({
+      at: a.createdAt,
+      actorName: a.user?.name ?? a.user?.email ?? undefined,
+    }))
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
   useTrackView(
     'warranty_claim',
     currentClaim?.id,
@@ -103,6 +124,12 @@ export function WarrantyClaimDetailContainer({
   const denyMutation = useDenyClaim();
   const resolveMutation = useResolveClaim();
   const cancelMutation = useCancelWarrantyClaim();
+  const isAnyMutationPending =
+    updateStatusMutation.isPending ||
+    approveMutation.isPending ||
+    denyMutation.isPending ||
+    resolveMutation.isPending ||
+    cancelMutation.isPending;
 
   const responseSla = currentClaim?.slaTracking?.responseDueAt
     ? getSlaDueStatus(
@@ -130,67 +157,89 @@ export function WarrantyClaimDetailContainer({
     currentClaim?.status === 'submitted' || currentClaim?.status === 'under_review';
 
   const handleStartReview = async () => {
-    if (!currentClaim) return;
-    await updateStatusMutation.mutateAsync({
-      claimId: currentClaim.id,
-      status: 'under_review',
-    });
+    if (!currentClaim || isAnyMutationPending) return;
+    try {
+      await updateStatusMutation.mutateAsync({
+        claimId: currentClaim.id,
+        status: 'under_review',
+      });
+    } catch {
+      // Error toast is handled in useUpdateClaimStatus.
+    }
   };
 
   const handleApprove = async () => {
-    if (!currentClaim) return;
-    await approveMutation.mutateAsync({
-      claimId: currentClaim.id,
-      notes: approvalNotes.trim() || undefined,
-    });
-    setApproveDialogOpen(false);
-    setApprovalNotes('');
+    if (!currentClaim || isAnyMutationPending) return;
+    try {
+      await approveMutation.mutateAsync({
+        claimId: currentClaim.id,
+        notes: approvalNotes.trim() || undefined,
+      });
+      setApproveDialogOpen(false);
+      setApprovalNotes('');
+    } catch {
+      // Error toast is handled in useApproveClaim.
+    }
   };
 
   const handleDeny = async () => {
-    if (!currentClaim || !denialReason.trim()) return;
-    await denyMutation.mutateAsync({
-      claimId: currentClaim.id,
-      denialReason: denialReason.trim(),
-      notes: denialNotes.trim() || undefined,
-    });
-    setDenyDialogOpen(false);
-    setDenialReason('');
-    setDenialNotes('');
+    if (!currentClaim || !denialReason.trim() || isAnyMutationPending) return;
+    try {
+      await denyMutation.mutateAsync({
+        claimId: currentClaim.id,
+        denialReason: denialReason.trim(),
+        notes: denialNotes.trim() || undefined,
+      });
+      setDenyDialogOpen(false);
+      setDenialReason('');
+      setDenialNotes('');
+    } catch {
+      // Error toast is handled in useDenyClaim.
+    }
   };
 
   const handleResolve = async () => {
-    if (!currentClaim) return;
-    await resolveMutation.mutateAsync({
-      claimId: currentClaim.id,
-      resolutionType,
-      resolutionNotes: resolutionNotes.trim() || undefined,
-      cost: resolutionCost ? parseFloat(resolutionCost) : undefined,
-      extensionMonths: resolutionType === 'warranty_extension' ? parseInt(extensionMonths, 10) : undefined,
-    });
-    setResolveDialogOpen(false);
-    setResolutionNotes('');
-    setResolutionCost('');
+    if (!currentClaim || isAnyMutationPending) return;
+    const costVal = resolutionCost.trim() ? safeNumber(resolutionCost) : undefined;
+    const extMonthsVal =
+      resolutionType === 'warranty_extension'
+        ? (() => {
+            const n = Math.floor(safeNumber(extensionMonths));
+            return n > 0 ? n : undefined;
+          })()
+        : undefined;
+    try {
+      await resolveMutation.mutateAsync({
+        claimId: currentClaim.id,
+        resolutionType,
+        resolutionNotes: resolutionNotes.trim() || undefined,
+        cost: costVal,
+        extensionMonths: extMonthsVal,
+      });
+      setResolveDialogOpen(false);
+      setResolutionNotes('');
+      setResolutionCost('');
+    } catch {
+      // Error toast is handled in useResolveClaim.
+    }
   };
 
   const handleCancelClick = async () => {
-    if (!currentClaim) return;
-    await confirm({
+    if (!currentClaim || cancelMutation.isPending) return;
+    const result = await confirm({
       title: 'Cancel Claim',
       description: `Are you sure you want to cancel claim ${currentClaim.claimNumber}? This action cannot be undone.`,
       confirmLabel: 'Cancel Claim',
       variant: 'destructive',
-      onConfirm: async () => {
-        try {
-          await cancelMutation.mutateAsync({ id: currentClaim.id });
-          toast.success('Claim cancelled successfully');
-          refetch();
-        } catch (err) {
-          toast.error('Failed to cancel claim');
-          throw err;
-        }
-      },
     });
+    if (!result.confirmed) return;
+    try {
+      await cancelMutation.mutateAsync({ id: currentClaim.id });
+      toast.success('Claim cancelled successfully');
+      await refetch();
+    } catch {
+      toast.error('Failed to cancel claim');
+    }
   };
 
   const primaryAction = currentClaim
@@ -199,14 +248,14 @@ export function WarrantyClaimDetailContainer({
           label: 'Approve',
           onClick: () => setApproveDialogOpen(true),
           icon: <CheckCircle2 className="h-4 w-4" />,
-          disabled: false,
+          disabled: isAnyMutationPending,
         }
       : canResolve
         ? {
             label: 'Resolve',
             onClick: () => setResolveDialogOpen(true),
             icon: <CheckCircle2 className="h-4 w-4" />,
-            disabled: false,
+            disabled: isAnyMutationPending,
           }
         : undefined
     : undefined;
@@ -217,7 +266,7 @@ export function WarrantyClaimDetailContainer({
           label: 'Start Review',
           onClick: handleStartReview,
           icon: <Clock className="h-4 w-4" />,
-          disabled: !canStartReview || updateStatusMutation.isPending,
+          disabled: !canStartReview || isAnyMutationPending,
           disabledReason: !canStartReview
             ? 'Only submitted claims can be moved to review'
             : undefined,
@@ -228,7 +277,7 @@ export function WarrantyClaimDetailContainer({
                 label: 'Approve',
                 onClick: () => setApproveDialogOpen(true),
                 icon: <CheckCircle2 className="h-4 w-4" />,
-                disabled: !canApprove,
+                disabled: !canApprove || isAnyMutationPending,
                 disabledReason: !canApprove
                   ? 'Claim must be under review before approval'
                   : undefined,
@@ -240,7 +289,7 @@ export function WarrantyClaimDetailContainer({
           onClick: () => setDenyDialogOpen(true),
           icon: <XCircle className="h-4 w-4" />,
           destructive: true,
-          disabled: !canDeny,
+          disabled: !canDeny || isAnyMutationPending,
           disabledReason: !canDeny
             ? 'Claim must be under review before denial'
             : undefined,
@@ -251,7 +300,7 @@ export function WarrantyClaimDetailContainer({
                 label: 'Resolve',
                 onClick: () => setResolveDialogOpen(true),
                 icon: <CheckCircle2 className="h-4 w-4" />,
-                disabled: !canResolve,
+                disabled: !canResolve || isAnyMutationPending,
                 disabledReason: !canResolve
                   ? 'Only approved claims can be resolved'
                   : undefined,
@@ -263,7 +312,7 @@ export function WarrantyClaimDetailContainer({
           onClick: handleCancelClick,
           icon: <Ban className="h-4 w-4" />,
           destructive: true,
-          disabled: !canCancel,
+          disabled: !canCancel || isAnyMutationPending,
           disabledReason: !canCancel
             ? 'Only submitted or under review claims can be cancelled'
             : undefined,
@@ -289,6 +338,29 @@ export function WarrantyClaimDetailContainer({
       : content;
   }
 
+  const pendingGuards = createPendingDialogInteractionGuards(isAnyMutationPending);
+  const handleApproveOpenChange = createPendingDialogOpenChangeHandler(
+    isAnyMutationPending,
+    (open) => {
+      if (!open) setApprovalNotes('');
+      setApproveDialogOpen(open);
+    }
+  );
+  const handleDenyOpenChange = createPendingDialogOpenChangeHandler(isAnyMutationPending, (open) => {
+    if (!open) {
+      setDenialReason('');
+      setDenialNotes('');
+    }
+    setDenyDialogOpen(open);
+  });
+  const handleResolveOpenChange = createPendingDialogOpenChangeHandler(isAnyMutationPending, (open) => {
+    if (!open) {
+      setResolutionNotes('');
+      setResolutionCost('');
+    }
+    setResolveDialogOpen(open);
+  });
+
   const headerActions = children ? (
     <EntityHeaderActions
       primaryAction={primaryAction}
@@ -304,10 +376,14 @@ export function WarrantyClaimDetailContainer({
         secondaryActions={children ? [] : secondaryActions}
         responseSla={responseSla}
         resolutionSla={resolutionSla}
+        requestInfoEvents={requestInfoEvents}
       />
 
-      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <DialogContent>
+      <Dialog open={approveDialogOpen} onOpenChange={handleApproveOpenChange}>
+        <DialogContent
+          onEscapeKeyDown={pendingGuards.onEscapeKeyDown}
+          onInteractOutside={pendingGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Approve Claim</DialogTitle>
             <DialogDescription>
@@ -327,7 +403,14 @@ export function WarrantyClaimDetailContainer({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setApprovalNotes('');
+                setApproveDialogOpen(false);
+              }}
+              disabled={approveMutation.isPending}
+            >
               Cancel
             </Button>
             <Button onClick={handleApprove} disabled={approveMutation.isPending}>
@@ -344,8 +427,11 @@ export function WarrantyClaimDetailContainer({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={denyDialogOpen} onOpenChange={setDenyDialogOpen}>
-        <DialogContent>
+      <Dialog open={denyDialogOpen} onOpenChange={handleDenyOpenChange}>
+        <DialogContent
+          onEscapeKeyDown={pendingGuards.onEscapeKeyDown}
+          onInteractOutside={pendingGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Deny Claim</DialogTitle>
             <DialogDescription>
@@ -381,7 +467,15 @@ export function WarrantyClaimDetailContainer({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDenyDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDenialReason('');
+                setDenialNotes('');
+                setDenyDialogOpen(false);
+              }}
+              disabled={denyMutation.isPending}
+            >
               Cancel
             </Button>
             <Button
@@ -402,8 +496,12 @@ export function WarrantyClaimDetailContainer({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={resolveDialogOpen} onOpenChange={handleResolveOpenChange}>
+        <DialogContent
+          className="sm:max-w-lg"
+          onEscapeKeyDown={pendingGuards.onEscapeKeyDown}
+          onInteractOutside={pendingGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Resolve Claim</DialogTitle>
             <DialogDescription>
@@ -478,7 +576,15 @@ export function WarrantyClaimDetailContainer({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResolveDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setResolutionNotes('');
+                setResolutionCost('');
+                setResolveDialogOpen(false);
+              }}
+              disabled={resolveMutation.isPending}
+            >
               Cancel
             </Button>
             <Button onClick={handleResolve} disabled={resolveMutation.isPending}>

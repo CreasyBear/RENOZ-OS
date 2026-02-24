@@ -52,12 +52,16 @@ export interface EntityComboboxProps<T> {
   onSelect: (entity: T | null) => void
   /** Async search function */
   searchFn: (query: string) => Promise<T[]>
-  /** Function to get display value from entity */
+  /** Function to get display value from entity (trigger + primary in dropdown) */
   getDisplayValue: (entity: T) => string
+  /** Optional secondary line per option (e.g. email, customer code, total) */
+  getDescription?: (entity: T) => string
   /** Function to get unique key from entity */
   getKey?: (entity: T) => string | number
-  /** Placeholder text */
+  /** Placeholder text when nothing selected */
   placeholder?: string
+  /** Search input placeholder */
+  searchPlaceholder?: string
   /** Empty state message */
   emptyMessage?: string
   /** Debounce delay in ms */
@@ -73,8 +77,10 @@ export function EntityCombobox<T>({
   onSelect,
   searchFn,
   getDisplayValue,
+  getDescription,
   getKey = (entity) => getDisplayValue(entity),
   placeholder = "Select...",
+  searchPlaceholder = "Search...",
   emptyMessage = "No results found.",
   debounceMs = 300,
   disabled = false,
@@ -173,7 +179,7 @@ export function EntityCombobox<T>({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={`Search...`}
+            placeholder={searchPlaceholder}
             value={query}
             onValueChange={setQuery}
           />
@@ -191,6 +197,7 @@ export function EntityCombobox<T>({
                 {options.map((option) => {
                   const key = getKey(option)
                   const displayValue = getDisplayValue(option)
+                  const description = getDescription?.(option)
                   const isSelected = value && getKey(value) === key
 
                   return (
@@ -198,14 +205,22 @@ export function EntityCombobox<T>({
                       key={String(key)}
                       value={String(key)}
                       onSelect={() => handleSelect(option)}
+                      className="cursor-pointer py-3"
                     >
                       <Check
                         className={cn(
-                          "mr-2 h-4 w-4",
+                          "mr-3 h-4 w-4 shrink-0",
                           isSelected ? "opacity-100" : "opacity-0"
                         )}
                       />
-                      {displayValue}
+                      <div className="flex flex-1 flex-col gap-0.5">
+                        <span className="font-medium">{displayValue}</span>
+                        {description && (
+                          <span className="text-xs text-muted-foreground">
+                            {description}
+                          </span>
+                        )}
+                      </div>
                     </CommandItem>
                   )
                 })}

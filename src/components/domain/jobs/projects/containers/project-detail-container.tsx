@@ -19,7 +19,7 @@
  * @see docs/design-system/PROJECTS-DOMAIN-PHILOSOPHY.md Part 6.2
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Edit, Trash2, CheckCircle, FileOutput, Award } from 'lucide-react';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityHeaderActions } from '@/components/shared';
@@ -54,6 +54,12 @@ export interface ProjectDetailContainerRenderProps {
 export interface ProjectDetailContainerProps {
   /** Project ID to display */
   projectId: string;
+  /** Initial tab from route search params */
+  initialTab?: string;
+  /** When true, auto-open edit dialog (e.g. from ?edit=true URL) */
+  openEditOnMount?: boolean;
+  /** Called when edit dialog open state changes */
+  onEditDialogOpenChange?: (open: boolean) => void;
   /** Callback when user navigates back */
   onBack?: () => void;
   /** Callback when user clicks edit */
@@ -72,6 +78,9 @@ import { ProjectDetailSkeleton } from '@/components/skeletons/projects';
 
 export function ProjectDetailContainer({
   projectId,
+  initialTab,
+  openEditOnMount = false,
+  onEditDialogOpenChange,
   onBack,
   onEdit,
   children,
@@ -80,7 +89,7 @@ export function ProjectDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Composite Hook (handles all data fetching, state, and mutations)
   // ─────────────────────────────────────────────────────────────────────────
-  const detail = useProjectDetail(projectId);
+  const detail = useProjectDetail(projectId, { initialTab });
   const { onLogActivity, onScheduleFollowUp, loggerProps: activityLoggerProps } =
     useEntityActivityLogging({
       entityType: 'project',
@@ -102,14 +111,29 @@ export function ProjectDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const [isGeneratingWorkOrder, setIsGeneratingWorkOrder] = useState(false);
   const [isGeneratingCompletionCertificate, setIsGeneratingCompletionCertificate] = useState(false);
+  const { editDialogOpen, setEditDialogOpen } = detail;
 
   const handleEdit = useCallback(() => {
     if (onEdit) {
       onEdit();
     } else {
-      detail.setEditDialogOpen(true);
+      setEditDialogOpen(true);
     }
-  }, [onEdit, detail]);
+  }, [onEdit, setEditDialogOpen]);
+
+  useEffect(() => {
+    if (openEditOnMount && !editDialogOpen) {
+      setEditDialogOpen(true);
+    }
+  }, [openEditOnMount, editDialogOpen, setEditDialogOpen]);
+
+  const handleEditDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setEditDialogOpen(open);
+      onEditDialogOpenChange?.(open);
+    },
+    [setEditDialogOpen, onEditDialogOpenChange]
+  );
 
   const handleDelete = useCallback(async () => {
     try {
@@ -372,7 +396,7 @@ export function ProjectDetailContainer({
         setCompletionDialogOpen={detail.setCompletionDialogOpen}
         completionValidation={completionValidation}
         editDialogOpen={detail.editDialogOpen}
-        setEditDialogOpen={detail.setEditDialogOpen}
+        setEditDialogOpen={handleEditDialogOpenChange}
       />
     </>
   );

@@ -70,14 +70,10 @@ export type { Signature, SignatureFormValues, SignaturesListProps };
 export function SignaturesList({
   signatures,
   isLoading,
-  onCreate: _onCreate,
-  onUpdate: _onUpdate,
   onDelete,
   onSetDefault,
   isDeleting = false,
   isSettingDefault = false,
-  // isSaving available for future use when SignatureEditor accepts isSaving prop
-  isSaving: _isSaving = false,
   className,
 }: SignaturesListProps) {
   const [editingSignature, setEditingSignature] = React.useState<Signature | null>(null);

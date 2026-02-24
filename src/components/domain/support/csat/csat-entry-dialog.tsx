@@ -25,6 +25,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from './star-rating';
 import { toast } from 'sonner';
 import { MessageSquarePlus } from 'lucide-react';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 
 interface CsatEntryDialogProps {
   open: boolean;
@@ -54,6 +58,9 @@ export function CsatEntryDialog({
   onSubmit,
   isSubmitting,
 }: CsatEntryDialogProps) {
+  const isPending = isSubmitting ?? false;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+
   // Form state
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -67,6 +74,7 @@ export function CsatEntryDialog({
     }
     onOpenChange(newOpen);
   };
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleOpenChange);
 
   // Handle submit
   const handleSubmit = async () => {
@@ -89,8 +97,12 @@ export function CsatEntryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-[425px]"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquarePlus className="h-5 w-5" />
@@ -132,12 +144,12 @@ export function CsatEntryDialog({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isSubmitting}
+            disabled={isPending}
           >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || rating === 0}>
-            {isSubmitting ? 'Saving...' : 'Save Feedback'}
+          <Button onClick={handleSubmit} disabled={isPending || rating === 0}>
+            {isPending ? 'Saving...' : 'Save Feedback'}
           </Button>
         </DialogFooter>
       </DialogContent>

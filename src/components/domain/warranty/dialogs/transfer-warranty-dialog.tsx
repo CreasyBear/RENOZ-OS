@@ -30,6 +30,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { ArrowRightLeft, User } from 'lucide-react';
 import { CustomerSelectorContainer } from '@/components/domain/orders/creation/customer-selector-container';
 import type { SelectedCustomer } from '@/components/domain/orders/creation/customer-selector';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 
 // ============================================================================
 // TYPES
@@ -72,6 +76,9 @@ export function TransferWarrantyDialog({
   onSubmit,
   isSubmitting,
 }: TransferWarrantyDialogProps) {
+  const isPending = isSubmitting ?? false;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+
   // Form state
   const [selectedCustomerId, setSelectedCustomerId] = React.useState<string | null>(null);
   const [reason, setReason] = React.useState('');
@@ -113,9 +120,15 @@ export function TransferWarrantyDialog({
 
   const isValid = selectedCustomerId !== null && selectedCustomerId !== warranty.customerId;
 
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-2xl"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft className="size-5" />
@@ -181,12 +194,12 @@ export function TransferWarrantyDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!isValid || isSubmitting}>
-              {isSubmitting ? (
+            <Button type="submit" disabled={!isValid || isPending}>
+              {isPending ? (
                 <>
                   <Spinner className="mr-2 size-4" />
                   Transferring...

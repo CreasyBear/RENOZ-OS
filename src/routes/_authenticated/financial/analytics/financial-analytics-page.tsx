@@ -32,6 +32,7 @@ export default function FinancialAnalyticsPage() {
 
   // Period type state for revenue chart
   const [periodType, setPeriodType] = useState<PeriodType>('monthly');
+  const [topCustomersBasis, setTopCustomersBasis] = useState<'invoiced' | 'cash'>('invoiced');
 
   // ===========================================================================
   // DATA FETCHING (Container responsibility via centralized hooks)
@@ -64,6 +65,7 @@ export default function FinancialAnalyticsPage() {
     dateFrom: startOfYear(new Date()),
     dateTo: new Date(),
     pageSize: 5,
+    basis: topCustomersBasis,
   });
 
   // Outstanding invoices query
@@ -96,6 +98,8 @@ export default function FinancialAnalyticsPage() {
           error={error ?? undefined}
           periodType={periodType}
           onPeriodTypeChange={setPeriodType}
+          topCustomersBasis={topCustomersBasis}
+          onTopCustomersBasisChange={setTopCustomersBasis}
         />
       </PageLayout.Content>
     </PageLayout>

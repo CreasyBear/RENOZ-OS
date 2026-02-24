@@ -57,6 +57,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Loader2, X, Clock, Users } from 'lucide-react';
 import { DataTableEmpty } from '@/components/shared/data-table';
 import { toast } from '@/hooks';
@@ -560,8 +564,11 @@ function UserDetailPresenter({
       </Tabs>
 
       {/* Add to Group Dialog */}
-      <Dialog open={isAddToGroupOpen} onOpenChange={setIsAddToGroupOpen}>
-        <DialogContent>
+      <Dialog open={isAddToGroupOpen} onOpenChange={createPendingDialogOpenChangeHandler(addGroupMemberMutation.isPending, setIsAddToGroupOpen)}>
+        <DialogContent
+          onEscapeKeyDown={createPendingDialogInteractionGuards(addGroupMemberMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(addGroupMemberMutation.isPending).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Add to Group</DialogTitle>
             <DialogDescription>

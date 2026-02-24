@@ -24,6 +24,15 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/shared';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -46,9 +55,9 @@ import {
   Link2,
   PanelRight,
 } from 'lucide-react';
-import { useInstaller, useInstallerWorkload } from '@/hooks/jobs';
+import { useInstaller, useInstallerWorkload, useUpdateInstallerProfile } from '@/hooks/jobs';
 import { useTrackView } from '@/hooks/search';
-import { toastInfo, toastSuccess } from '@/hooks';
+import { toastError, toastSuccess } from '@/hooks';
 import { useAlertDismissals, generateAlertId } from '@/hooks/_shared/use-alert-dismissals';
 import { useReducedMotion } from '@/hooks/_shared/use-reduced-motion';
 import { INSTALLER_STATUS_CONFIG } from '@/components/domain/jobs/installers';
@@ -73,6 +82,7 @@ function InstallerDetailPage({ search }: InstallerDetailPageProps) {
 
   const { data: installer, isLoading } = useInstaller(installerId);
   const { data: workload } = useInstallerWorkload(installerId);
+  const updateInstallerProfile = useUpdateInstallerProfile();
   useTrackView(
     'installer',
     installer?.id,
@@ -82,6 +92,19 @@ function InstallerDetailPage({ search }: InstallerDetailPageProps) {
   );
   const { dismiss, isAlertDismissed } = useAlertDismissals();
   const [showMetaPanel, setShowMetaPanel] = useState(true);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    status: 'active',
+    yearsExperience: '0',
+    maxJobsPerDay: '2',
+    maxTravelKm: '',
+    vehicleType: 'none',
+    vehicleReg: '',
+    notes: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
+  });
 
   const handleBack = useCallback(() => {
     navigate({ to: '/installers' });
@@ -95,6 +118,65 @@ function InstallerDetailPage({ search }: InstallerDetailPageProps) {
   const handleToggleMetaPanel = useCallback(() => {
     setShowMetaPanel((prev) => !prev);
   }, []);
+
+  const handleOpenEditDialog = useCallback(() => {
+    if (!installer) return;
+    setEditForm({
+      status: installer.status,
+      yearsExperience: String(installer.yearsExperience ?? 0),
+      maxJobsPerDay: String(installer.maxJobsPerDay ?? 2),
+      maxTravelKm: installer.maxTravelKm != null ? String(installer.maxTravelKm) : '',
+      vehicleType: installer.vehicleType ?? 'none',
+      vehicleReg: installer.vehicleReg ?? '',
+      notes: installer.notes ?? '',
+      emergencyContactName: installer.emergencyContactName ?? '',
+      emergencyContactPhone: installer.emergencyContactPhone ?? '',
+      emergencyContactRelationship: installer.emergencyContactRelationship ?? '',
+    });
+    setEditDialogOpen(true);
+  }, [installer]);
+
+  const handleSaveEditProfile = useCallback(async () => {
+    if (!installer) return;
+    const yearsExperience = Number(editForm.yearsExperience);
+    const maxJobsPerDay = Number(editForm.maxJobsPerDay);
+    const maxTravelKm = editForm.maxTravelKm.trim() ? Number(editForm.maxTravelKm) : null;
+
+    if (!Number.isFinite(yearsExperience) || yearsExperience < 0) {
+      toastError('Years of experience must be 0 or greater');
+      return;
+    }
+    if (!Number.isFinite(maxJobsPerDay) || maxJobsPerDay < 1) {
+      toastError('Max jobs per day must be at least 1');
+      return;
+    }
+    if (maxTravelKm !== null && (!Number.isFinite(maxTravelKm) || maxTravelKm < 1)) {
+      toastError('Max travel distance must be at least 1 km');
+      return;
+    }
+
+    try {
+      await updateInstallerProfile.mutateAsync({
+        data: {
+          id: installer.id,
+          status: editForm.status as 'active' | 'busy' | 'away' | 'suspended' | 'inactive',
+          yearsExperience,
+          maxJobsPerDay,
+          maxTravelKm,
+          vehicleType: editForm.vehicleType as 'none' | 'ute' | 'van' | 'truck' | 'trailer',
+          vehicleReg: emptyToUndefined(editForm.vehicleReg),
+          notes: emptyToUndefined(editForm.notes),
+          emergencyContactName: emptyToUndefined(editForm.emergencyContactName),
+          emergencyContactPhone: emptyToUndefined(editForm.emergencyContactPhone),
+          emergencyContactRelationship: emptyToUndefined(editForm.emergencyContactRelationship),
+        },
+      });
+      toastSuccess('Installer profile updated');
+      setEditDialogOpen(false);
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Failed to update installer profile');
+    }
+  }, [installer, editForm, updateInstallerProfile]);
 
   // Compute alerts
   const alerts = useMemo(() => {
@@ -404,7 +486,7 @@ function InstallerDetailPage({ search }: InstallerDetailPageProps) {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => toastInfo('Profile editing coming soon')}>
+            <Button variant="outline" onClick={handleOpenEditDialog}>
               Edit Profile
             </Button>
             {/* Utility buttons */}
@@ -573,8 +655,147 @@ function InstallerDetailPage({ search }: InstallerDetailPageProps) {
           </MobileSidebarSheet>
         )}
       </PageLayout.Content>
+
+      <Dialog open={editDialogOpen} onOpenChange={createPendingDialogOpenChangeHandler(updateInstallerProfile.isPending, setEditDialogOpen)}>
+        <DialogContent
+          className="max-w-2xl"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(updateInstallerProfile.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(updateInstallerProfile.isPending).onInteractOutside}
+        >
+          <DialogHeader>
+            <DialogTitle>Edit Installer Profile</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="busy">Busy</SelectItem>
+                    <SelectItem value="away">Away</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Vehicle Type</Label>
+                <Select
+                  value={editForm.vehicleType}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, vehicleType: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select vehicle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="ute">Ute</SelectItem>
+                    <SelectItem value="van">Van</SelectItem>
+                    <SelectItem value="truck">Truck</SelectItem>
+                    <SelectItem value="trailer">Trailer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Years Experience</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editForm.yearsExperience}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, yearsExperience: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Jobs/Day</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editForm.maxJobsPerDay}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, maxJobsPerDay: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Travel (km)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editForm.maxTravelKm}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, maxTravelKm: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Vehicle Registration</Label>
+              <Input
+                value={editForm.vehicleReg}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, vehicleReg: e.target.value }))}
+                placeholder="Optional vehicle reg"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Emergency Contact Name</Label>
+                <Input
+                  value={editForm.emergencyContactName}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, emergencyContactName: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Emergency Contact Phone</Label>
+                <Input
+                  value={editForm.emergencyContactPhone}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, emergencyContactPhone: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Relationship</Label>
+                <Input
+                  value={editForm.emergencyContactRelationship}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, emergencyContactRelationship: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={editForm.notes}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={updateInstallerProfile.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEditProfile} disabled={updateInstallerProfile.isPending}>
+              {updateInstallerProfile.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
+}
+
+function emptyToUndefined(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export default memo(InstallerDetailPage);

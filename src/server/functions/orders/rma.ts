@@ -11,11 +11,11 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
-import { eq, and, desc, asc, sql, ilike, count, isNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, ilike, count, isNull, inArray, isNotNull } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
-import { db } from '@/lib/db';
+import { db, type TransactionExecutor } from '@/lib/db';
 import {
   returnAuthorizations,
   rmaLineItems,
@@ -25,10 +25,34 @@ import {
 import { customers } from 'drizzle/schema/customers';
 import { issues } from 'drizzle/schema/support/issues';
 import { orderLineItems, orders } from 'drizzle/schema/orders';
+import { shipmentItems, orderShipments } from 'drizzle/schema/orders/order-shipments';
+import { shipmentItemSerials, serializedItems } from 'drizzle/schema';
+import {
+  inventory,
+  inventoryMovements,
+} from 'drizzle/schema/inventory/inventory';
+import { warehouseLocations } from 'drizzle/schema/inventory/warehouse-locations';
+import { products } from 'drizzle/schema/products/products';
+import { activities } from 'drizzle/schema/activities';
 import { withAuth } from '@/lib/server/protected';
+import type { SerializedMutationEnvelope } from '@/lib/server/serialized-mutation-contract';
+import {
+  createSerializedMutationError,
+  serializedMutationSuccess,
+} from '@/lib/server/serialized-mutation-contract';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { normalizeSerial } from '@/lib/serials';
+import {
+  addSerializedItemEvent,
+  findSerializedItemBySerial,
+  upsertSerializedItemForInventory,
+} from '@/server/functions/_shared/serialized-lineage';
+import {
+  createReceiptLayersWithCostComponents,
+  recomputeInventoryValueFromLayers,
+} from '@/server/functions/_shared/inventory-finance';
 import {
   createRmaSchema,
   updateRmaSchema,
@@ -39,9 +63,12 @@ import {
   rejectRmaSchema,
   receiveRmaSchema,
   processRmaSchema,
+  bulkApproveRmaSchema,
+  bulkReceiveRmaSchema,
   type RmaResponse,
   type RmaLineItemResponse,
   type ListRmasResponse,
+  type BulkRmaResult,
 } from '@/lib/schemas/support/rma';
 
 // ============================================================================
@@ -64,10 +91,11 @@ const rmaLineItemsProjection = {
 /**
  * Get next sequence number for RMA generation.
  * Must be called inside a transaction to prevent duplicate sequences.
+ * Accepts TransactionExecutor so it can run inside db.transaction(tx => ...).
  */
 async function getNextRmaSequence(
   organizationId: string,
-  executor: typeof db = db
+  executor: TransactionExecutor = db
 ): Promise<number> {
   const [result] = await executor
     .select({
@@ -88,7 +116,7 @@ async function getNextRmaSequence(
  */
 export const createRma = createServerFn({ method: 'POST' })
   .inputValidator(createRmaSchema)
-  .handler(async ({ data }): Promise<RmaResponse> => {
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<RmaResponse>> => {
     const ctx = await withAuth();
 
     // Verify order exists and belongs to organization
@@ -124,8 +152,11 @@ export const createRma = createServerFn({ method: 'POST' })
 
     // Create RMA in transaction (sequence generation inside to prevent duplicates)
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get next sequence number inside transaction to prevent duplicate sequences
-      const sequenceNumber = await getNextRmaSequence(ctx.organizationId, tx as unknown as typeof db);
+      const sequenceNumber = await getNextRmaSequence(ctx.organizationId, tx as unknown as TransactionExecutor);
       const rmaNumber = generateRmaNumber(sequenceNumber);
 
       // Insert RMA
@@ -150,11 +181,18 @@ export const createRma = createServerFn({ method: 'POST' })
 
       // Insert line items
       if (data.lineItems.length > 0) {
-        // Verify all line items belong to the order
+        // Verify all line items belong to the order and get product isSerialized
         const lineItemIds = data.lineItems.map((li) => li.orderLineItemId);
-        const existingLineItems = await tx
-          .select({ id: orderLineItems.id })
+        const lineItemsWithProduct = await tx
+          .select({
+            orderLineItemId: orderLineItems.id,
+            isSerialized: products.isSerialized,
+          })
           .from(orderLineItems)
+          .innerJoin(products, and(
+            eq(orderLineItems.productId, products.id),
+            eq(products.organizationId, ctx.organizationId)
+          ))
           .where(
             and(
               eq(orderLineItems.orderId, data.orderId),
@@ -163,7 +201,10 @@ export const createRma = createServerFn({ method: 'POST' })
             )
           );
 
-        const existingIds = new Set(existingLineItems.map((li) => li.id));
+        const lineItemProductMap = new Map(
+          lineItemsWithProduct.map((r) => [r.orderLineItemId, r.isSerialized ?? false])
+        );
+        const existingIds = new Set(lineItemsWithProduct.map((r) => r.orderLineItemId));
         const invalidIds = lineItemIds.filter((id) => !existingIds.has(id));
 
         if (invalidIds.length > 0) {
@@ -172,15 +213,80 @@ export const createRma = createServerFn({ method: 'POST' })
           );
         }
 
-        await tx.insert(rmaLineItems).values(
+        // Validate serialized products have serialNumber
+        for (const item of data.lineItems) {
+          const isSerialized = lineItemProductMap.get(item.orderLineItemId) ?? false;
+          if (isSerialized && (!item.serialNumber || !String(item.serialNumber).trim())) {
+            throw new ValidationError(
+              `Serial number is required for serialized products. Please provide a serial number for each serialized item.`
+            );
+          }
+          if (isSerialized && item.serialNumber) {
+            const normalizedSerial = normalizeSerial(item.serialNumber);
+            const shippedMatch = await tx
+              .select({ id: shipmentItemSerials.id })
+              .from(shipmentItemSerials)
+              .innerJoin(
+                shipmentItems,
+                eq(shipmentItemSerials.shipmentItemId, shipmentItems.id)
+              )
+              .innerJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
+              .innerJoin(
+                serializedItems,
+                eq(shipmentItemSerials.serializedItemId, serializedItems.id)
+              )
+              .where(
+                and(
+                  eq(orderShipments.organizationId, ctx.organizationId),
+                  eq(orderShipments.orderId, data.orderId),
+                  eq(shipmentItems.orderLineItemId, item.orderLineItemId),
+                  eq(serializedItems.serialNumberNormalized, normalizedSerial)
+                )
+              )
+              .limit(1);
+
+            if (shippedMatch.length === 0) {
+              throw createSerializedMutationError(
+                `Serial "${normalizedSerial}" is not found in shipped serials for the selected order line item.`,
+                'invalid_serial_state'
+              );
+            }
+          }
+        }
+
+        const insertedLineItems = await tx.insert(rmaLineItems).values(
           data.lineItems.map((item) => ({
             rmaId: rma.id,
             orderLineItemId: item.orderLineItemId,
             quantityReturned: item.quantityReturned,
             itemReason: item.itemReason ?? null,
-            serialNumber: item.serialNumber ?? null,
+            serialNumber: item.serialNumber ? normalizeSerial(item.serialNumber) : null,
           }))
-        );
+        ).returning({ id: rmaLineItems.id, serialNumber: rmaLineItems.serialNumber });
+
+        for (const li of insertedLineItems) {
+          if (!li.serialNumber) continue;
+          const serializedItem = await findSerializedItemBySerial(
+            tx,
+            ctx.organizationId,
+            li.serialNumber,
+            {
+              userId: ctx.user.id,
+              source: 'rma_create',
+            }
+          );
+          if (serializedItem) {
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId: serializedItem.id,
+              eventType: 'rma_requested',
+              entityType: 'rma_line_item',
+              entityId: li.id,
+              notes: `RMA requested: ${rma.rmaNumber}`,
+              userId: ctx.user.id,
+            });
+          }
+        }
       }
 
       // Fetch complete RMA with line items
@@ -192,13 +298,17 @@ export const createRma = createServerFn({ method: 'POST' })
       return { rma, lineItems };
     });
 
-    return {
+    const response = {
       ...result.rma,
       lineItems: result.lineItems.map((li) => ({
         ...li,
         itemCondition: li.itemCondition,
       })),
     } as RmaResponse;
+
+    return serializedMutationSuccess(response, `RMA ${response.rmaNumber} created.`, {
+      affectedIds: [response.id],
+    });
   });
 
 // ============================================================================
@@ -229,11 +339,41 @@ export const getRma = createServerFn({ method: 'GET' })
       throw new NotFoundError('RMA not found', 'rma');
     }
 
-    // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
+    // Get line items with product name (join order_line_items + products)
+    const lineItemsRaw = await db
+      .select({
+        ...rmaLineItemsProjection,
+        productId: orderLineItems.productId,
+        quantity: orderLineItems.quantity,
+        unitPrice: orderLineItems.unitPrice,
+        productName: products.name,
+      })
       .from(rmaLineItems)
+      .innerJoin(orderLineItems, eq(rmaLineItems.orderLineItemId, orderLineItems.id))
+      .leftJoin(products, and(
+        eq(orderLineItems.productId, products.id),
+        eq(products.organizationId, ctx.organizationId)
+      ))
       .where(eq(rmaLineItems.rmaId, rma.id));
+
+    const lineItems: RmaLineItemResponse[] = lineItemsRaw.map((row) => ({
+      id: row.id,
+      rmaId: row.rmaId,
+      orderLineItemId: row.orderLineItemId,
+      quantityReturned: row.quantityReturned,
+      itemReason: row.itemReason,
+      itemCondition: row.itemCondition,
+      serialNumber: row.serialNumber,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      orderLineItem: {
+        id: row.orderLineItemId,
+        productId: row.productId ?? '',
+        productName: row.productName ?? 'Unknown Product',
+        quantity: Number(row.quantity ?? 0),
+        unitPrice: Number(row.unitPrice ?? 0),
+      },
+    }));
 
     // Get customer if exists — include orgId for multi-tenant isolation
     let customer = null;
@@ -265,7 +405,7 @@ export const getRma = createServerFn({ method: 'GET' })
 
     return {
       ...rma,
-      lineItems: lineItems as RmaLineItemResponse[],
+      lineItems,
       customer,
       issue,
     } as RmaResponse;
@@ -533,8 +673,12 @@ export const getRmaByNumber = createServerFn({ method: 'GET' })
 // LIST RMAS FOR ISSUE
 // ============================================================================
 
+/** Max RMAs returned per issue. Issues rarely have >100 RMAs; add cursor pagination if needed. */
+const GET_RMAS_FOR_ISSUE_LIMIT = 100;
+
 /**
- * Get all RMAs linked to an issue
+ * Get all RMAs linked to an issue.
+ * Returns up to GET_RMAS_FOR_ISSUE_LIMIT RMAs (most recent first).
  */
 export const getRmasForIssue = createServerFn({ method: 'GET' })
   .inputValidator(
@@ -556,7 +700,7 @@ export const getRmasForIssue = createServerFn({ method: 'GET' })
         )
       )
       .orderBy(desc(returnAuthorizations.createdAt))
-      .limit(100);
+      .limit(GET_RMAS_FOR_ISSUE_LIMIT);
 
     // Fetch line items for all RMAs using inArray instead of raw SQL ANY()
     const rmaIds = rmas.map((r) => r.id);
@@ -707,76 +851,537 @@ export const rejectRma = createServerFn({ method: 'POST' })
   });
 
 // ============================================================================
-// WORKFLOW: RECEIVE RMA
+// WORKFLOW: BULK APPROVE RMA
 // ============================================================================
 
 /**
- * Mark RMA items as received (approved → received)
+ * Bulk approve RMAs (requested → approved).
+ * Processes only RMAs in 'requested' status; others are reported as failed.
  */
-export const receiveRma = createServerFn({ method: 'POST' })
-  .inputValidator(receiveRmaSchema)
-  .handler(async ({ data }): Promise<RmaResponse> => {
+export const bulkApproveRma = createServerFn({ method: 'POST' })
+  .inputValidator(bulkApproveRmaSchema)
+  .handler(async ({ data }): Promise<BulkRmaResult> => {
     const ctx = await withAuth();
     const now = new Date().toISOString();
 
-    // Get existing RMA
-    const [existing] = await db
+    const updated: string[] = [];
+    const failed: { rmaId: string; error: string }[] = [];
+
+    // Batch fetch all RMAs
+    const existingRmas = await db
       .select()
       .from(returnAuthorizations)
       .where(
         and(
-          eq(returnAuthorizations.id, data.rmaId),
+          inArray(returnAuthorizations.id, data.rmaIds),
           eq(returnAuthorizations.organizationId, ctx.organizationId)
         )
-      )
-      .limit(1);
-
-    if (!existing) {
-      throw new NotFoundError('RMA not found', 'rma');
-    }
-
-    // Validate transition
-    if (!isValidRmaTransition(existing.status, 'received')) {
-      throw new ValidationError(
-        `Cannot receive RMA in ${existing.status} status. Must be in 'approved' status.`
       );
+
+    const rmaMap = new Map(existingRmas.map((r) => [r.id, r]));
+
+    const validApproves: typeof existingRmas = [];
+    for (const rmaId of data.rmaIds) {
+      const rma = rmaMap.get(rmaId);
+      if (!rma) {
+        failed.push({ rmaId, error: 'RMA not found' });
+        continue;
+      }
+      if (!isValidRmaTransition(rma.status, 'approved')) {
+        failed.push({ rmaId, error: `Cannot approve: RMA is in '${rma.status}' status` });
+        continue;
+      }
+      validApproves.push(rma);
     }
 
-    // Build inspection notes
-    const inspectionNotes = data.inspectionNotes
-      ? {
-          ...data.inspectionNotes,
-          inspectedAt: now,
-          inspectedBy: ctx.user.id,
+    if (validApproves.length > 0) {
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+        );
+        for (const rma of validApproves) {
+          await tx
+            .update(returnAuthorizations)
+            .set({
+              status: 'approved',
+              approvedAt: now,
+              approvedBy: ctx.user.id,
+              internalNotes: data.notes
+                ? `${rma.internalNotes ?? ''}\n[Approval] ${data.notes}`.trim()
+                : rma.internalNotes,
+              updatedBy: ctx.user.id,
+            })
+            .where(eq(returnAuthorizations.id, rma.id));
+          updated.push(rma.id);
         }
-      : {
-          inspectedAt: now,
-          inspectedBy: ctx.user.id,
-        };
+      });
+    }
 
-    // Update RMA
-    const [updated] = await db
-      .update(returnAuthorizations)
-      .set({
-        status: 'received',
-        receivedAt: now,
-        receivedBy: ctx.user.id,
-        inspectionNotes,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(returnAuthorizations.id, data.rmaId))
-      .returning();
+    return { updated: updated.length, failed };
+  });
 
-    // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
-      .from(rmaLineItems)
-      .where(eq(rmaLineItems.rmaId, data.rmaId));
+// ============================================================================
+// WORKFLOW: RECEIVE RMA
+// ============================================================================
 
-    return {
-      ...updated,
-      lineItems: lineItems as RmaLineItemResponse[],
-    } as RmaResponse;
+/**
+ * Mark RMA items as received (approved → received).
+ * Restores inventory: creates return movements, cost layers, and activity log.
+ */
+export const receiveRma = createServerFn({ method: 'POST' })
+  .inputValidator(receiveRmaSchema)
+  .handler(async ({ data }): Promise<SerializedMutationEnvelope<RmaResponse>> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
+    const now = new Date().toISOString();
+
+    const response = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+      // Get existing RMA
+      const [existing] = await tx
+        .select()
+        .from(returnAuthorizations)
+        .where(
+          and(
+            eq(returnAuthorizations.id, data.rmaId),
+            eq(returnAuthorizations.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw new NotFoundError('RMA not found', 'rma');
+      }
+
+      // Validate transition
+      if (!isValidRmaTransition(existing.status, 'received')) {
+        throw createSerializedMutationError(
+          `Cannot receive RMA in ${existing.status} status. Must be in 'approved' status.`,
+          'transition_blocked'
+        );
+      }
+
+      // Build inspection notes
+      const inspectionNotes = data.inspectionNotes
+        ? {
+            ...data.inspectionNotes,
+            inspectedAt: now,
+            inspectedBy: ctx.user.id,
+          }
+        : {
+            inspectedAt: now,
+            inspectedBy: ctx.user.id,
+          };
+
+      // Update RMA
+      const [updated] = await tx
+        .update(returnAuthorizations)
+        .set({
+          status: 'received',
+          receivedAt: now,
+          receivedBy: ctx.user.id,
+          inspectionNotes,
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(returnAuthorizations.id, data.rmaId))
+        .returning();
+
+      // Get line items with order line and product info
+      const lineItemsWithProduct = await tx
+        .select({
+          rmaLineItem: rmaLineItems,
+          productId: orderLineItems.productId,
+          isSerialized: products.isSerialized,
+          costPrice: products.costPrice,
+        })
+        .from(rmaLineItems)
+        .innerJoin(orderLineItems, eq(rmaLineItems.orderLineItemId, orderLineItems.id))
+        .innerJoin(products, eq(orderLineItems.productId, products.id))
+        .where(
+          and(
+            eq(rmaLineItems.rmaId, data.rmaId),
+            eq(orderLineItems.organizationId, ctx.organizationId),
+            eq(products.organizationId, ctx.organizationId)
+          )
+        );
+
+      // Resolve default location (first org warehouse)
+      const [firstLocation] = await tx
+        .select({ id: warehouseLocations.id })
+        .from(warehouseLocations)
+        .where(eq(warehouseLocations.organizationId, ctx.organizationId))
+        .limit(1);
+
+      if (!firstLocation?.id && lineItemsWithProduct.length > 0) {
+        throw new ValidationError(
+          'No warehouse location found. Create a warehouse location before receiving returns.'
+        );
+      }
+
+      const inspectionCondition = data.inspectionNotes?.condition;
+      const targetStatus =
+        inspectionCondition === 'damaged' ||
+        inspectionCondition === 'defective' ||
+        inspectionCondition === 'missing_parts'
+          ? 'quarantined'
+          : 'available';
+
+      let unitsRestored = 0;
+
+      for (const row of lineItemsWithProduct) {
+        const { rmaLineItem, productId, isSerialized, costPrice } = row;
+        const qty = Number(rmaLineItem.quantityReturned ?? 1);
+        const unitCost = Number(costPrice ?? 0);
+
+        if (!productId) continue;
+
+        unitsRestored += qty;
+
+        if (isSerialized) {
+          const serialNumber = rmaLineItem.serialNumber ? normalizeSerial(rmaLineItem.serialNumber) : null;
+          if (!serialNumber?.trim()) {
+            throw new ValidationError(
+              `Serial number required for serialized product. RMA line item ${rmaLineItem.id}.`
+            );
+          }
+
+          const [invRow] = await tx
+            .select()
+            .from(inventory)
+            .where(
+              and(
+                eq(inventory.organizationId, ctx.organizationId),
+                eq(inventory.productId, productId),
+                eq(inventory.serialNumber, serialNumber)
+              )
+            )
+            .for('update')
+            .limit(1);
+
+          if (!invRow) {
+            throw new ValidationError(
+              `Serial "${serialNumber}" not found in inventory for this product. Cannot restore.`
+            );
+          }
+
+          const prevQty = Number(invRow.quantityOnHand ?? 0);
+          const newQty = prevQty + qty;
+          if (newQty > 1) {
+            throw createSerializedMutationError(
+              `Serialized serial ${serialNumber} would exceed single-unit bounds on return.`,
+              'invalid_serial_state'
+            );
+          }
+
+          await tx
+            .update(inventory)
+            .set({
+              quantityOnHand: newQty,
+              status: targetStatus,
+              unitCost,
+              updatedAt: new Date(),
+              updatedBy: ctx.user.id,
+            })
+            .where(eq(inventory.id, invRow.id));
+
+          const [movement] = await tx
+            .insert(inventoryMovements)
+            .values({
+              organizationId: ctx.organizationId,
+              inventoryId: invRow.id,
+              productId,
+              locationId: invRow.locationId,
+              movementType: 'return',
+              quantity: qty,
+              previousQuantity: prevQty,
+              newQuantity: newQty,
+              unitCost: unitCost,
+              totalCost: unitCost * qty,
+              referenceType: 'rma',
+              referenceId: data.rmaId,
+              metadata: { rmaId: data.rmaId },
+              notes: `Returned via RMA ${existing.rmaNumber}`,
+              createdBy: ctx.user.id,
+            })
+            .returning();
+
+          await createReceiptLayersWithCostComponents(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: invRow.id,
+            quantity: qty,
+            receivedAt: new Date(),
+            unitCost,
+            referenceType: 'rma',
+            referenceId: data.rmaId,
+            currency: 'AUD',
+            createdBy: ctx.user.id,
+            costComponents: [
+              {
+                componentType: 'base_unit_cost',
+                costType: 'rma_return',
+                amountTotal: unitCost * qty,
+                amountPerUnit: unitCost,
+                quantityBasis: qty,
+                metadata: { source: 'rma_receive' },
+              },
+            ],
+          });
+          await recomputeInventoryValueFromLayers(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: invRow.id,
+            userId: ctx.user.id,
+          });
+
+          const serializedStatus = targetStatus === 'quarantined' ? 'quarantined' : 'available';
+          const serializedItemId = await upsertSerializedItemForInventory(tx, {
+            organizationId: ctx.organizationId,
+            productId,
+            serialNumber,
+            inventoryId: invRow.id,
+            status: serializedStatus,
+            userId: ctx.user.id,
+          });
+
+          if (serializedItemId) {
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId,
+              eventType: 'rma_received',
+              entityType: 'rma_line_item',
+              entityId: rmaLineItem.id,
+              notes: `Returned via RMA ${existing.rmaNumber}`,
+              userId: ctx.user.id,
+            });
+          }
+
+          const [activityExists] = await tx
+            .select({ id: activities.id })
+            .from(activities)
+            .where(
+              and(
+                eq(activities.organizationId, ctx.organizationId),
+                isNotNull(activities.metadata),
+                sql`${activities.metadata}->>'movementId' = ${movement.id}`
+              )
+            )
+            .limit(1);
+
+          if (!activityExists) {
+            await tx.insert(activities).values({
+              organizationId: ctx.organizationId,
+              userId: ctx.user.id,
+              entityType: 'inventory',
+              entityId: invRow.id,
+              action: 'updated',
+              description: `Inventory returned (${qty} units) via RMA ${existing.rmaNumber}`,
+              metadata: {
+                movementId: movement.id,
+                movementType: 'return',
+                productId,
+                locationId: invRow.locationId,
+                quantity: qty,
+                unitCost: unitCost,
+                referenceType: 'rma',
+                referenceId: data.rmaId,
+              },
+              createdBy: ctx.user.id,
+            });
+          }
+        } else {
+          const locationId = firstLocation!.id;
+          const [existingInv] = await tx
+            .select()
+            .from(inventory)
+            .where(
+              and(
+                eq(inventory.organizationId, ctx.organizationId),
+                eq(inventory.productId, productId),
+                eq(inventory.locationId, locationId),
+                isNull(inventory.serialNumber)
+              )
+            )
+            .for('update')
+            .limit(1);
+
+          let invId: string;
+          let invLocationId: string;
+          let prevQty: number;
+
+          if (existingInv) {
+            invId = existingInv.id;
+            invLocationId = existingInv.locationId;
+            prevQty = Number(existingInv.quantityOnHand ?? 0);
+            const newQty = prevQty + qty;
+            const newUnitCost = unitCost > 0 ? unitCost : Number(existingInv.unitCost ?? 0);
+
+            await tx
+              .update(inventory)
+              .set({
+                quantityOnHand: newQty,
+                unitCost: newUnitCost,
+                updatedAt: new Date(),
+                updatedBy: ctx.user.id,
+              })
+              .where(eq(inventory.id, existingInv.id));
+          } else {
+            const [newInv] = await tx
+              .insert(inventory)
+              .values({
+                organizationId: ctx.organizationId,
+                productId,
+                locationId,
+                status: 'available',
+                quantityOnHand: qty,
+                quantityAllocated: 0,
+                unitCost: unitCost,
+                totalValue: 0,
+                createdBy: ctx.user.id,
+                updatedBy: ctx.user.id,
+              })
+              .returning();
+            invId = newInv.id;
+            invLocationId = locationId;
+            prevQty = 0;
+          }
+
+          const newQty = prevQty + qty;
+
+          const [movement] = await tx
+            .insert(inventoryMovements)
+            .values({
+              organizationId: ctx.organizationId,
+              inventoryId: invId,
+              productId,
+              locationId: invLocationId,
+              movementType: 'return',
+              quantity: qty,
+              previousQuantity: prevQty,
+              newQuantity: newQty,
+              unitCost: unitCost,
+              totalCost: unitCost * qty,
+              referenceType: 'rma',
+              referenceId: data.rmaId,
+              metadata: { rmaId: data.rmaId },
+              notes: `Returned via RMA ${existing.rmaNumber}`,
+              createdBy: ctx.user.id,
+            })
+            .returning();
+
+          await createReceiptLayersWithCostComponents(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: invId,
+            quantity: qty,
+            receivedAt: new Date(),
+            unitCost,
+            referenceType: 'rma',
+            referenceId: data.rmaId,
+            currency: 'AUD',
+            createdBy: ctx.user.id,
+            costComponents: [
+              {
+                componentType: 'base_unit_cost',
+                costType: 'rma_return',
+                amountTotal: unitCost * qty,
+                amountPerUnit: unitCost,
+                quantityBasis: qty,
+                metadata: { source: 'rma_receive' },
+              },
+            ],
+          });
+          await recomputeInventoryValueFromLayers(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: invId,
+            userId: ctx.user.id,
+          });
+
+          const [activityExists] = await tx
+            .select({ id: activities.id })
+            .from(activities)
+            .where(
+              and(
+                eq(activities.organizationId, ctx.organizationId),
+                isNotNull(activities.metadata),
+                sql`${activities.metadata}->>'movementId' = ${movement.id}`
+              )
+            )
+            .limit(1);
+
+          if (!activityExists) {
+            await tx.insert(activities).values({
+              organizationId: ctx.organizationId,
+              userId: ctx.user.id,
+              entityType: 'inventory',
+              entityId: invId,
+              action: prevQty === 0 ? 'created' : 'updated',
+              description: `Inventory returned (${qty} units) via RMA ${existing.rmaNumber}`,
+              metadata: {
+                movementId: movement.id,
+                movementType: 'return',
+                productId,
+                locationId: invLocationId,
+                quantity: qty,
+                unitCost: unitCost,
+                referenceType: 'rma',
+                referenceId: data.rmaId,
+              },
+              createdBy: ctx.user.id,
+            });
+          }
+        }
+      }
+
+      const lineItems = await tx
+        .select(rmaLineItemsProjection)
+        .from(rmaLineItems)
+        .where(eq(rmaLineItems.rmaId, data.rmaId));
+
+      return {
+        ...updated,
+        lineItems: lineItems as RmaLineItemResponse[],
+        unitsRestored,
+      } as RmaResponse;
+    });
+
+    return serializedMutationSuccess(response, `RMA ${response.rmaNumber} received.`, {
+      affectedIds: [response.id],
+    });
+  });
+
+// ============================================================================
+// WORKFLOW: BULK RECEIVE RMA
+// ============================================================================
+
+/**
+ * Bulk receive RMAs (approved → received).
+ * Each RMA is processed in its own transaction; failures are collected.
+ * Requires inventory.receive permission.
+ */
+export const bulkReceiveRma = createServerFn({ method: 'POST' })
+  .inputValidator(bulkReceiveRmaSchema)
+  .handler(async ({ data }): Promise<BulkRmaResult> => {
+    await withAuth({ permission: PERMISSIONS.inventory.receive });
+    const updated: string[] = [];
+    const failed: { rmaId: string; error: string }[] = [];
+
+    for (const rmaId of data.rmaIds) {
+      try {
+        await receiveRma({
+          data: {
+            rmaId,
+            inspectionNotes: data.inspectionNotes,
+          },
+        });
+        updated.push(rmaId);
+      } catch (err) {
+        failed.push({
+          rmaId,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+
+    return { updated: updated.length, failed };
   });
 
 // ============================================================================
@@ -870,12 +1475,16 @@ export const cancelRma = createServerFn({ method: 'POST' })
     const logger = createActivityLoggerWithContext(ctx);
     const { id, reason } = data;
 
-    const existing = await db.query.returnAuthorizations.findFirst({
-      where: and(
-        eq(returnAuthorizations.id, id),
-        eq(returnAuthorizations.organizationId, ctx.organizationId)
-      ),
-    });
+    const [existing] = await db
+      .select()
+      .from(returnAuthorizations)
+      .where(
+        and(
+          eq(returnAuthorizations.id, id),
+          eq(returnAuthorizations.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
 
     if (!existing) {
       throw new NotFoundError('RMA not found', 'rma');

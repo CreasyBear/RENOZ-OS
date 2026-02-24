@@ -17,6 +17,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { safeNumber } from '@/lib/numeric';
 import { customers as customersTable } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
@@ -116,24 +117,24 @@ export const getARAgingReport = createServerFn()
     const bucketRow = bucketSummaryResult[0];
     const bucketTotals: Record<AgingBucket, { amount: number; count: number }> = {
       current: {
-        amount: parseFloat(bucketRow?.current_amount ?? '0'),
-        count: parseInt(bucketRow?.current_count ?? '0', 10),
+        amount: safeNumber(bucketRow?.current_amount),
+        count: Math.floor(safeNumber(bucketRow?.current_count)),
       },
       '1-30': {
-        amount: parseFloat(bucketRow?.days_1_30_amount ?? '0'),
-        count: parseInt(bucketRow?.days_1_30_count ?? '0', 10),
+        amount: safeNumber(bucketRow?.days_1_30_amount),
+        count: Math.floor(safeNumber(bucketRow?.days_1_30_count)),
       },
       '31-60': {
-        amount: parseFloat(bucketRow?.days_31_60_amount ?? '0'),
-        count: parseInt(bucketRow?.days_31_60_count ?? '0', 10),
+        amount: safeNumber(bucketRow?.days_31_60_amount),
+        count: Math.floor(safeNumber(bucketRow?.days_31_60_count)),
       },
       '61-90': {
-        amount: parseFloat(bucketRow?.days_61_90_amount ?? '0'),
-        count: parseInt(bucketRow?.days_61_90_count ?? '0', 10),
+        amount: safeNumber(bucketRow?.days_61_90_amount),
+        count: Math.floor(safeNumber(bucketRow?.days_61_90_count)),
       },
       '90+': {
-        amount: parseFloat(bucketRow?.days_over_90_amount ?? '0'),
-        count: parseInt(bucketRow?.days_over_90_count ?? '0', 10),
+        amount: safeNumber(bucketRow?.days_over_90_amount),
+        count: Math.floor(safeNumber(bucketRow?.days_over_90_count)),
       },
     };
 
@@ -178,7 +179,7 @@ export const getARAgingReport = createServerFn()
         ${commercialFilter}
       ) counted
     `);
-    const totalItems = parseInt(countResult[0]?.total ?? '0', 10);
+    const totalItems = Math.floor(safeNumber(countResult[0]?.total));
 
     // Query 2b: Customer-level aggregation with SQL-level LIMIT/OFFSET
     const customerSummaryResult = await db.execute<{
@@ -215,20 +216,20 @@ export const getARAgingReport = createServerFn()
     `);
 
     const paginatedCustomers: CustomerAgingSummary[] = customerSummaryResult.map((row) => {
-      const totalOutstanding = parseFloat(row.total_outstanding);
+      const totalOutstanding = safeNumber(row.total_outstanding);
       return {
         customerId: row.customer_id,
         customerName: row.customer_name ?? 'Unknown',
         customerEmail: row.customer_email,
         isCommercial: totalOutstanding >= COMMERCIAL_THRESHOLD,
         totalOutstanding,
-        current: parseFloat(row.current_amount),
-        overdue1_30: parseFloat(row.days_1_30_amount),
-        overdue31_60: parseFloat(row.days_31_60_amount),
-        overdue61_90: parseFloat(row.days_61_90_amount),
-        overdue90Plus: parseFloat(row.days_over_90_amount),
+        current: safeNumber(row.current_amount),
+        overdue1_30: safeNumber(row.days_1_30_amount),
+        overdue31_60: safeNumber(row.days_31_60_amount),
+        overdue61_90: safeNumber(row.days_61_90_amount),
+        overdue90Plus: safeNumber(row.days_over_90_amount),
         oldestInvoiceDate: row.oldest_order_date ? new Date(row.oldest_order_date) : null,
-        invoiceCount: parseInt(row.invoice_count, 10),
+        invoiceCount: Math.floor(safeNumber(row.invoice_count)),
       };
     });
 
@@ -243,7 +244,7 @@ export const getARAgingReport = createServerFn()
         HAVING SUM(balance) >= ${COMMERCIAL_THRESHOLD}
       ) commercial
     `);
-    const commercialOutstanding = parseFloat(commercialResult[0]?.commercial_total ?? '0');
+    const commercialOutstanding = safeNumber(commercialResult[0]?.commercial_total);
 
     // Calculate totals from bucket summary
     const totalOutstanding = Object.values(bucketTotals).reduce((sum, b) => sum + b.amount, 0);
@@ -390,7 +391,7 @@ export const getARAgingCustomerDetail = createServerFn()
     `);
 
     const summaryRow = summaryResult[0];
-    const totalOutstanding = parseFloat(summaryRow?.total_outstanding ?? '0');
+    const totalOutstanding = safeNumber(summaryRow?.total_outstanding);
 
     const customerSummary: CustomerAgingSummary = {
       customerId: customer.id,
@@ -398,15 +399,15 @@ export const getARAgingCustomerDetail = createServerFn()
       customerEmail: customer.email,
       isCommercial: totalOutstanding >= COMMERCIAL_THRESHOLD,
       totalOutstanding,
-      current: parseFloat(summaryRow?.current_amount ?? '0'),
-      overdue1_30: parseFloat(summaryRow?.days_1_30_amount ?? '0'),
-      overdue31_60: parseFloat(summaryRow?.days_31_60_amount ?? '0'),
-      overdue61_90: parseFloat(summaryRow?.days_61_90_amount ?? '0'),
-      overdue90Plus: parseFloat(summaryRow?.days_over_90_amount ?? '0'),
+      current: safeNumber(summaryRow?.current_amount),
+      overdue1_30: safeNumber(summaryRow?.days_1_30_amount),
+      overdue31_60: safeNumber(summaryRow?.days_31_60_amount),
+      overdue61_90: safeNumber(summaryRow?.days_61_90_amount),
+      overdue90Plus: safeNumber(summaryRow?.days_over_90_amount),
       oldestInvoiceDate: summaryRow?.oldest_order_date
         ? new Date(summaryRow.oldest_order_date)
         : null,
-      invoiceCount: parseInt(summaryRow?.invoice_count ?? '0', 10),
+      invoiceCount: Math.floor(safeNumber(summaryRow?.invoice_count)),
     };
 
     // Query 2: Get paginated invoice details with bucket filtering
@@ -485,7 +486,7 @@ export const getARAgingCustomerDetail = createServerFn()
         ${bucketFilter}
     `);
 
-    const totalItems = parseInt(countResult[0]?.count ?? '0', 10);
+    const totalItems = Math.floor(safeNumber(countResult[0]?.count));
     const totalPages = Math.ceil(totalItems / pageSize);
 
     // Transform invoice results
@@ -494,10 +495,10 @@ export const getARAgingCustomerDetail = createServerFn()
       orderNumber: row.order_number,
       orderDate: new Date(row.order_date),
       dueDate: new Date(row.due_date),
-      total: parseFloat(row.total),
-      paidAmount: parseFloat(row.paid_amount),
-      balanceDue: parseFloat(row.balance_due),
-      daysOverdue: parseInt(row.days_overdue, 10),
+      total: safeNumber(row.total),
+      paidAmount: safeNumber(row.paid_amount),
+      balanceDue: safeNumber(row.balance_due),
+      daysOverdue: Math.floor(safeNumber(row.days_overdue)),
       bucket: row.bucket as AgingBucket,
     }));
 

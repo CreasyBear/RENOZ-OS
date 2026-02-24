@@ -62,6 +62,8 @@ export interface CustomersListPresenterProps {
   onEditCustomer?: (id: string) => void;
   /** Delete customer handler */
   onDeleteCustomer?: (id: string) => void;
+  /** Create customer handler (for empty-state CTA) */
+  onCreateCustomer?: () => void;
   /** Pagination */
   page: number;
   pageSize: number;
@@ -212,6 +214,7 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
   onViewCustomer,
   onEditCustomer,
   onDeleteCustomer,
+  onCreateCustomer,
   page,
   pageSize,
   total,
@@ -279,10 +282,11 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
     // First visit / no filters - use DataTableEmpty
     return (
       <DataTableEmpty
-        variant="no-results"
+        variant="empty"
         icon={Users}
         title="No customers found"
         description="Get started by adding your first customer"
+        action={onCreateCustomer ? { label: "Add Customer", onClick: onCreateCustomer } : undefined}
         className={className}
       />
     );

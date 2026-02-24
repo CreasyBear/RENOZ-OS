@@ -122,11 +122,8 @@ export const purchaseOrderItems = pgTable(
     // Unit price must be non-negative
     unitPriceCheck: nonNegativeCheck("purchase_order_items_unit_price_non_negative", table.unitPrice),
 
-    // Line total calculation validation
-    lineTotalCheck: check(
-      "purchase_order_items_line_total_calc",
-      sql`${table.lineTotal} = ${table.quantity} * ${table.unitPrice}`
-    ),
+    // Note: line_total includes discount and tax (quantity * unitPrice * (1 - discountPercent/100) * (1 + taxRate/100)).
+    // No CHECK constraint - application is source of truth; old constraint assumed line_total = quantity * unit_price.
 
     // Received quantity cannot exceed ordered quantity
     receivedCheck: check(

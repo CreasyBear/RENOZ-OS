@@ -42,6 +42,7 @@ export const ORDER_STATUS_OPTIONS: FilterOption<OrderStatus>[] = [
   { value: "confirmed", label: "Confirmed" },
   { value: "picking", label: "Picking" },
   { value: "picked", label: "Picked" },
+  { value: "partially_shipped", label: "Partially Shipped" },
   { value: "shipped", label: "Shipped" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },

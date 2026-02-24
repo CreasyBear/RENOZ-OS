@@ -16,6 +16,7 @@ import { Camera, Loader2, X, Check, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAvatarUpload, useRemoveAvatar } from "@/hooks/profile/use-avatar-upload";
+import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/hooks/_shared/use-toast";
 import {
   getInitials,
@@ -297,11 +298,18 @@ export function AvatarUpload({ name, avatarUrl, size = "lg" }: AvatarUploadProps
     uploadAvatar.reset();
   }, [uploadAvatar]);
 
-  const handleRemove = useCallback(() => {
-    if (confirm("Are you sure you want to remove your avatar?")) {
+  const confirmation = useConfirmation();
+  const handleRemove = useCallback(async () => {
+    const { confirmed } = await confirmation.confirm({
+      title: "Remove Avatar",
+      description: "Are you sure you want to remove your avatar?",
+      confirmLabel: "Remove",
+      variant: "destructive",
+    });
+    if (confirmed) {
       removeAvatarMutation.mutate();
     }
-  }, [removeAvatarMutation]);
+  }, [confirmation, removeAvatarMutation]);
 
   return (
     <AvatarUploadPresenter

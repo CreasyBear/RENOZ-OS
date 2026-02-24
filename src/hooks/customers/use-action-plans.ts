@@ -22,12 +22,6 @@ import type { CustomerActionPlan } from 'drizzle/schema/customers/customer-actio
 export type { CustomerActionPlan };
 
 // ============================================================================
-// QUERY KEYS
-// ============================================================================
-
-const ACTION_PLANS_QUERY_KEY = [...queryKeys.customers.all, 'action-plans'] as const;
-
-// ============================================================================
 // HOOKS
 // ============================================================================
 
@@ -43,7 +37,7 @@ export function useCustomerActionPlans(
   }
 ) {
   return useQuery({
-    queryKey: [...ACTION_PLANS_QUERY_KEY, customerId, filters],
+    queryKey: queryKeys.customers.actionPlans.list(customerId, filters),
     queryFn: async () => {
       if (!customerId) return { items: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };
       const result = await listActionPlans({
@@ -67,7 +61,7 @@ export function useCustomerActionPlans(
  */
 export function useActionPlan(id: string, enabled = true) {
   return useQuery({
-    queryKey: [...ACTION_PLANS_QUERY_KEY, id],
+    queryKey: queryKeys.customers.actionPlans.detail(id),
     queryFn: async () => {
       const result = await getActionPlan({ data: { id } });
       if (result == null) throw new Error('Action plan not found');
@@ -91,7 +85,7 @@ export function useCreateActionPlan() {
     onSuccess: (data) => {
       // Invalidate customer action plans queries
       queryClient.invalidateQueries({
-        queryKey: [...ACTION_PLANS_QUERY_KEY, data.customerId],
+        queryKey: queryKeys.customers.actionPlans.list(data.customerId),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.customers.health.all(),
@@ -117,10 +111,10 @@ export function useUpdateActionPlan() {
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({
-        queryKey: [...ACTION_PLANS_QUERY_KEY],
+        queryKey: queryKeys.customers.actionPlans.all(),
       });
       queryClient.invalidateQueries({
-        queryKey: [...ACTION_PLANS_QUERY_KEY, data.id],
+        queryKey: queryKeys.customers.actionPlans.detail(data.id),
       });
       toast.success('Action plan updated');
     },
@@ -143,7 +137,7 @@ export function useDeleteActionPlan() {
     onSuccess: () => {
       // Invalidate queries
       queryClient.invalidateQueries({
-        queryKey: [...ACTION_PLANS_QUERY_KEY],
+        queryKey: queryKeys.customers.actionPlans.all(),
       });
       toast.success('Action plan deleted');
     },
@@ -166,10 +160,10 @@ export function useCompleteActionPlan() {
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({
-        queryKey: [...ACTION_PLANS_QUERY_KEY],
+        queryKey: queryKeys.customers.actionPlans.all(),
       });
       queryClient.invalidateQueries({
-        queryKey: [...ACTION_PLANS_QUERY_KEY, data.id],
+        queryKey: queryKeys.customers.actionPlans.detail(data.id),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.customers.health.all(),

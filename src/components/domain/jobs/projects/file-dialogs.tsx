@@ -11,22 +11,19 @@ import { useState, useCallback, useEffect } from 'react';
 import { z } from 'zod';
 import { Upload, File, X, FileText, Image, FileCode, FileSpreadsheet } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { TextField, TextareaField, SelectField } from '@/components/shared/forms';
+import {
+  FormDialog,
+  TextField,
+  TextareaField,
+  SelectField,
+} from '@/components/shared/forms';
 import { useCreateFile, type CreateFileInput } from '@/hooks/jobs';
 import { uploadProjectFile } from '@/server/functions/files/upload-project-file';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -76,6 +73,7 @@ export interface FileUploadDialogProps {
 
 export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: FileUploadDialogProps) {
   const createFile = useCreateFile(projectId);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -87,12 +85,16 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
       description: '',
       fileType: 'other' as const,
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
       if (!selectedFile) {
         toast.error('Please select a file');
         return;
       }
 
+      setSubmitError(null);
       try {
         setIsUploading(true);
         setUploadProgress(0);
@@ -147,6 +149,7 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
         onSuccess?.();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
+        setSubmitError(message);
         toast.error(`Failed to upload file: ${message}`);
       } finally {
         setIsUploading(false);
@@ -158,6 +161,7 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         title: '',
         description: '',
@@ -214,24 +218,38 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Upload File
-          </DialogTitle>
-          <DialogDescription>Upload a file to this project</DialogDescription>
-        </DialogHeader>
+  const isPending = isUploading || createFile.isPending;
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && isPending) return;
+    if (!newOpen) {
+      setSubmitError(null);
+      setSelectedFile(null);
+      setUploadProgress(0);
+      form.reset();
+    }
+    onOpenChange(newOpen);
+  };
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Upload className="h-5 w-5" />
+          Upload File
+        </span>
+      }
+      description="Upload a file to this project"
+      form={form}
+      submitLabel="Upload"
+      submitError={submitError}
+      submitDisabled={isPending || !selectedFile}
+      size="lg"
+      className="max-w-lg"
+      resetOnClose={false}
+    >
           {/* File Dropzone */}
           {!selectedFile ? (
             <div
@@ -323,25 +341,6 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onOpenChange(false);
-                setSelectedFile(null);
-                form.reset();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isUploading || !selectedFile || createFile.isPending}>
-              {isUploading || createFile.isPending ? 'Uploading...' : 'Upload'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

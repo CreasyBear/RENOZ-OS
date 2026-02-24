@@ -20,6 +20,7 @@ import {
   useCreateWarrantyClaim,
   useApproveClaim,
   useDenyClaim,
+  useUpdateClaimStatus,
   useWarrantyCertificate,
   useGenerateWarrantyCertificate,
   useRegenerateWarrantyCertificate,
@@ -77,6 +78,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   const createClaimMutation = useCreateWarrantyClaim();
   const approveClaimMutation = useApproveClaim();
   const denyClaimMutation = useDenyClaim();
+  const updateClaimStatusMutation = useUpdateClaimStatus();
 
   const {
     data: extensionsData,
@@ -97,6 +99,10 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
+  const [pendingClaimAction, setPendingClaimAction] = useState<{
+    claimId: string;
+    action: 'review' | 'open' | 'resolve';
+  } | null>(null);
   const [selectedClaimForApproval, setSelectedClaimForApproval] =
     useState<WarrantyClaimListItem | null>(null);
 
@@ -256,6 +262,15 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     await refetchClaims();
   };
 
+  const handleRequestInfoClaim = async (payload: { claimId: string; notes: string }) => {
+    await updateClaimStatusMutation.mutateAsync({
+      claimId: payload.claimId,
+      status: 'under_review',
+      notes: payload.notes,
+    });
+    await refetchClaims();
+  };
+
   const handleExtendWarranty = async (payload: {
     warrantyId: string;
     extensionType: WarrantyExtensionTypeValue;
@@ -269,19 +284,60 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
 
   const handleClaimRowClick = useCallback(
     (claimId: string) => {
-      navigate({
+      setPendingClaimAction({ claimId, action: 'open' });
+      void navigate({
         to: '/support/claims/$claimId',
         params: { claimId },
         search: {},
-      });
+      })
+        .then(() => {
+          setTimeout(() => {
+            setPendingClaimAction((prev) =>
+              prev?.claimId === claimId && prev.action === 'open' ? null : prev
+            );
+          }, 750);
+        })
+        .catch(() => {
+          setPendingClaimAction((prev) =>
+            prev?.claimId === claimId && prev.action === 'open' ? null : prev
+          );
+        });
     },
     [navigate]
   );
 
   const handleReviewClaim = (claim: WarrantyClaimListItem) => {
+    setPendingClaimAction({
+      claimId: claim.id,
+      action: claim.status === 'approved' ? 'resolve' : 'review',
+    });
     setSelectedClaimForApproval(claim);
     setApprovalDialogOpen(true);
   };
+
+  const handleResolveClaimRow = useCallback(
+    (claimId: string) => {
+      setPendingClaimAction({ claimId, action: 'resolve' });
+      void navigate({
+        to: '/support/claims/$claimId',
+        params: { claimId },
+        search: {},
+      })
+        .then(() => {
+          setTimeout(() => {
+            setPendingClaimAction((prev) =>
+              prev?.claimId === claimId && prev.action === 'resolve' ? null : prev
+            );
+          }, 750);
+        })
+        .catch(() => {
+          setPendingClaimAction((prev) =>
+            prev?.claimId === claimId && prev.action === 'resolve' ? null : prev
+          );
+        });
+    },
+    [navigate]
+  );
 
   const handleDelete = async () => {
     if (!warranty) return;
@@ -294,18 +350,13 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     });
 
     if (confirmed.confirmed) {
-      await deleteWarrantyMutation.mutateAsync(
-        warranty.id,
-        {
-          onSuccess: () => {
-            toast.success('Warranty deleted successfully');
-            navigate({ to: '/support/warranties', params: {} as never });
-          },
-          onError: () => {
-            toast.error('Failed to delete warranty');
-          },
-        }
-      );
+      try {
+        await deleteWarrantyMutation.mutateAsync(warranty.id);
+        toast.success('Warranty deleted successfully');
+        navigate({ to: '/support/warranties' });
+      } catch {
+        toast.error('Failed to delete warranty');
+      }
     }
   };
 
@@ -370,18 +421,29 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         isCertificateLoading={certificateLoading}
         isOptOutUpdating={updateOptOutMutation.isPending}
         isSubmittingClaim={createClaimMutation.isPending}
-        isSubmittingApproval={approveClaimMutation.isPending || denyClaimMutation.isPending}
+        isSubmittingApproval={
+          approveClaimMutation.isPending ||
+          denyClaimMutation.isPending ||
+          updateClaimStatusMutation.isPending
+        }
         isSubmittingExtend={extendMutation.isPending}
         isClaimDialogOpen={claimDialogOpen}
         isApprovalDialogOpen={approvalDialogOpen}
         isExtendDialogOpen={extendDialogOpen}
         selectedClaimForApproval={selectedClaimForApproval}
+        pendingClaimAction={pendingClaimAction}
         onClaimRowClick={handleClaimRowClick}
+        onResolveClaimRow={handleResolveClaimRow}
         onReviewClaim={handleReviewClaim}
         onClaimDialogOpenChange={(open) => setClaimDialogOpen(open)}
         onApprovalDialogOpenChange={(open) => {
           setApprovalDialogOpen(open);
-          if (!open) setSelectedClaimForApproval(null);
+          if (!open) {
+            setSelectedClaimForApproval(null);
+            setPendingClaimAction((prev) =>
+              prev?.action === 'review' || prev?.action === 'resolve' ? null : prev
+            );
+          }
         }}
         onExtendDialogOpenChange={(open) => setExtendDialogOpen(open)}
         onRetryExtensions={() => refetchExtensions()}
@@ -390,6 +452,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         onSubmitClaim={handleSubmitClaim}
         onApproveClaim={handleApproveClaim}
         onDenyClaim={handleDenyClaim}
+        onRequestInfoClaim={handleRequestInfoClaim}
         onExtendWarranty={handleExtendWarranty}
         onToggleOptOut={handleOptOutToggle}
         certificateError={certificateError}

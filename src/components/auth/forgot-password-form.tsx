@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { TextField } from '@/components/shared/forms';
+import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { useRequestPasswordReset } from '@/hooks/auth';
 import { forgotPasswordSchema, type ForgotPassword } from '@/lib/schemas/auth';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
@@ -31,7 +31,6 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
   });
 
   const isSubmitting = forgotPasswordMutation.status === 'pending' || form.state.isSubmitting;
-  const showErrorsAfterSubmit = form.state.submissionAttempts > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +74,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} noValidate>
+              <FormFieldDisplayProvider form={form}>
               <div className="flex flex-col gap-5">
                 <form.Field name="email">
                   {(field) => (
@@ -84,7 +84,6 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
                       type="email"
                       placeholder="name@company.com"
                       required
-                      showErrorsAfterSubmit={showErrorsAfterSubmit}
                     />
                   )}
                 </form.Field>
@@ -112,6 +111,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
                   )}
                 </Button>
               </div>
+              </FormFieldDisplayProvider>
               <p className="mt-6 text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link

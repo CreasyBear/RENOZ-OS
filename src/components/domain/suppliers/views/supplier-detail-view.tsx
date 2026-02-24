@@ -59,6 +59,7 @@ import { formatAmount } from '@/lib/currency';
 import { FormatAmount, MetricCard, EntityHeader } from '@/components/shared';
 import { StatusCell } from '@/components/shared/data-table';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { SUPPLIER_STATUS_CONFIG, SUPPLIER_TYPE_CONFIG, SUPPLIER_STATUS_CONFIG_FOR_ENTITY_HEADER, formatLeadTime } from '../supplier-status-config';
 import { PO_STATUS_CONFIG } from '../../purchase-orders/po-status-config';
 import type { SupplierStatus, SupplierType, SupplierAddress } from '@/lib/schemas/suppliers';
@@ -1311,6 +1312,7 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                       title="Activity Timeline"
                       description="Complete history of supplier changes, orders, and system events"
                       showFilters={true}
+                      viewAllSearch={getActivitiesFeedSearch('supplier')}
                       emptyMessage="No activity recorded yet"
                       emptyDescription="Supplier activities will appear here when changes are made."
                     />

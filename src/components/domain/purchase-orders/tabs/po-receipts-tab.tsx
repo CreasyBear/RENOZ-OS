@@ -162,6 +162,7 @@ export function POReceiptsTab({ poId }: POReceiptsTabProps) {
                         <TableHead className="text-center">Rejected</TableHead>
                         <TableHead>Condition</TableHead>
                         <TableHead>Lot #</TableHead>
+                        <TableHead>Serials</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -206,6 +207,24 @@ export function POReceiptsTab({ poId }: POReceiptsTabProps) {
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {item.lotNumber || '---'}
+                          </TableCell>
+                          <TableCell>
+                            {(item.serialNumbers?.length ?? 0) > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {item.serialNumbers!.map((serial) => (
+                                  <Link
+                                    key={serial}
+                                    to="/inventory/browser"
+                                    search={{ view: 'serialized', serializedSearch: serial, page: 1 }}
+                                    className="rounded border px-1.5 py-0.5 text-[10px] hover:bg-muted"
+                                  >
+                                    {serial}
+                                  </Link>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">---</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

@@ -79,16 +79,6 @@ interface ContactData {
   jobTitle: string | null;
 }
 
-interface ActivityData {
-  id: string;
-  type: string;
-  description: string;
-  outcome: string | null;
-  scheduledAt: Date | string | null;
-  completedAt: Date | string | null;
-  createdAt: Date | string;
-}
-
 interface QuoteVersionData {
   id: string;
   versionNumber: number;
@@ -144,7 +134,6 @@ export interface OpportunityDetailViewProps {
   opportunity: OpportunityData;
   customer: CustomerData | null;
   contact: ContactData | null;
-  activities: ActivityData[];
   versions: QuoteVersionData[];
   winLossReason: WinLossReasonData | null;
 
@@ -155,6 +144,8 @@ export interface OpportunityDetailViewProps {
   unifiedActivities?: UnifiedActivity[];
   unifiedActivitiesLoading?: boolean;
   unifiedActivitiesError?: Error | null;
+  onCompleteActivity?: (activityId: string, outcome?: string) => void;
+  isCompleteActivityPending?: boolean;
 
   // UI State
   activeTab: string;
@@ -360,7 +351,6 @@ export const OpportunityDetailView = memo(function OpportunityDetailView({
   opportunity,
   customer,
   contact,
-  activities,
   versions,
   winLossReason,
   alerts = [],
@@ -369,6 +359,8 @@ export const OpportunityDetailView = memo(function OpportunityDetailView({
   unifiedActivities = [],
   unifiedActivitiesLoading = false,
   unifiedActivitiesError,
+  onCompleteActivity,
+  isCompleteActivityPending = false,
   activeTab,
   onTabChange,
   showSidebar,
@@ -383,7 +375,7 @@ export const OpportunityDetailView = memo(function OpportunityDetailView({
   className,
 }: OpportunityDetailViewProps) {
   const shouldReduceMotion = useReducedMotion();
-  const activitiesCount = useMemo(() => activities?.length ?? 0, [activities]);
+  const activitiesCount = useMemo(() => unifiedActivities?.length ?? 0, [unifiedActivities]);
   const versionsCount = useMemo(() => versions?.length ?? 0, [versions]);
 
   return (
@@ -484,11 +476,13 @@ export const OpportunityDetailView = memo(function OpportunityDetailView({
                 <TabsContent value="activities" className="mt-0 pt-6">
                   <Suspense fallback={<TabSkeleton />}>
                     <LazyActivitiesTab
-                      activities={activities}
-                      unifiedActivities={unifiedActivities}
-                      unifiedActivitiesLoading={unifiedActivitiesLoading}
-                      unifiedActivitiesError={unifiedActivitiesError}
+                      activities={unifiedActivities}
+                      isLoading={unifiedActivitiesLoading}
+                      error={unifiedActivitiesError}
                       onLogActivity={onLogActivity}
+                      onScheduleFollowUp={onScheduleFollowUp}
+                      onComplete={onCompleteActivity}
+                      isCompletePending={isCompleteActivityPending}
                     />
                   </Suspense>
                 </TabsContent>

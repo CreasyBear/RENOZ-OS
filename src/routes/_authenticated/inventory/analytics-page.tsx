@@ -13,39 +13,36 @@
 import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   DollarSign,
   Clock,
   RefreshCw,
   ArrowLeftRight,
+  ShieldCheck,
+  Wrench,
 } from "lucide-react";
+import { ValuationReport, type ValuationSummary, type CategoryValuation, type LocationValuation } from "@/components/domain/inventory/reports/valuation-report";
+import { AgingReport, type AgingSummary, type AgeBucket, type AgingItem } from "@/components/domain/inventory/reports/aging-report";
+import { TurnoverReport, type TurnoverSummary, type CategoryTurnover, type TurnoverTrend } from "@/components/domain/inventory/reports/turnover-report";
 import {
-  ValuationReport,
-  AgingReport,
-  TurnoverReport,
   MovementAnalytics,
-  type ValuationSummary,
-  type CategoryValuation,
-  type LocationValuation,
-  type AgingSummary,
-  type AgeBucket,
-  type AgingItem,
-  type TurnoverSummary,
-  type CategoryTurnover,
-  type TurnoverTrend,
-  type ReportMovementSummary as MovementSummary,
+  type MovementSummary,
   type MovementByType,
-  type ReportTopMover as TopMover,
+  type TopMover,
   type MovementTrend,
   type MovementType,
-} from "@/components/domain/inventory";
+} from "@/components/domain/inventory/reports/movement-analytics";
 import {
   useInventoryValuation,
   useInventoryAging,
   useInventoryTurnover,
   useMovements,
+  useReconcileInventoryFinance,
 } from "@/hooks/inventory";
 import type {
+  InventoryFinanceReconcileResult,
   MovementWithRelations,
   ListMovementsResult,
   MovementTypeCount,
@@ -61,6 +58,8 @@ type AnalyticsTab = "valuation" | "aging" | "turnover" | "movements";
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>("valuation");
+  const [reconcileResult, setReconcileResult] = useState<InventoryFinanceReconcileResult | null>(null);
+  const reconcileMutation = useReconcileInventoryFinance();
 
   // Data hooks - using TanStack Query via hooks
   // Valuation data - always fetched as default tab
@@ -406,6 +405,65 @@ export default function AnalyticsPage() {
       />
 
       <PageLayout.Content>
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={reconcileMutation.isPending}
+            onClick={() =>
+              reconcileMutation.mutate(
+                { dryRun: true, limit: 1000 },
+                { onSuccess: (result) => setReconcileResult(result) }
+              )
+            }
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            Run Integrity Dry-Run
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={reconcileMutation.isPending}
+            onClick={() =>
+              reconcileMutation.mutate(
+                { dryRun: false, limit: 1000 },
+                { onSuccess: (result) => setReconcileResult(result) }
+              )
+            }
+          >
+            <Wrench className="mr-2 h-4 w-4" />
+            Apply Reconciliation
+          </Button>
+        </div>
+        {reconcileResult ? (
+          <Card className="mb-4">
+            <CardContent className="pt-4">
+              <div className="grid gap-3 text-sm md:grid-cols-5">
+                <div>
+                  <p className="text-muted-foreground">Mode</p>
+                  <p className="font-medium">{reconcileResult.dryRun ? 'Dry Run' : 'Applied'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Missing Layers</p>
+                  <p className="font-medium tabular-nums">{reconcileResult.repairedMissingLayers}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Drift Repaired</p>
+                  <p className="font-medium tabular-nums">{reconcileResult.repairedValueDriftRows}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Layer Clamp Fixes</p>
+                  <p className="font-medium tabular-nums">{reconcileResult.clampedInvalidLayers}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Remaining Mismatches</p>
+                  <p className="font-medium tabular-nums">{reconcileResult.remainingMismatches}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AnalyticsTab)}>
           <TabsList className="mb-6">
             <TabsTrigger value="valuation">
@@ -431,6 +489,7 @@ export default function AnalyticsPage() {
               summary={valuationSummary}
               byCategory={valuationByCategory}
               byLocation={valuationByLocation}
+              financeIntegrity={valuationData?.financeIntegrity ?? null}
               isLoading={isLoadingValuation}
             />
           </TabsContent>

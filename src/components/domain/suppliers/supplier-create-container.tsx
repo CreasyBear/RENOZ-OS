@@ -2,162 +2,93 @@
  * Supplier Create Container
  *
  * Handles mutation for creating suppliers.
- * Follows container/presenter pattern from STANDARDS.md.
+ * Uses TanStack Form with Zod validation.
  *
  * @source createMutation from useCreateSupplier hook
  */
 
-import { useCallback, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { SupplierForm, type SupplierFormData, type SupplierFormErrors } from './supplier-form';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { SupplierForm } from './supplier-form';
+import { supplierFormSchema, type SupplierFormValues } from '@/lib/schemas/suppliers/supplier-form';
 import { useCreateSupplier } from '@/hooks/suppliers';
 import { toast } from '@/lib/toast';
 import { logger } from '@/lib/logger';
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function isValidEmail(email: string): boolean {
-  if (!email) return true; // Optional field
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isValidUrl(url: string): boolean {
-  if (!url) return true; // Optional field
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ============================================================================
-// CONTAINER COMPONENT
-// ============================================================================
+const defaultValues: SupplierFormValues = {
+  name: '',
+  legalName: '',
+  email: '',
+  phone: '',
+  website: '',
+  status: 'active',
+  supplierType: null,
+  taxId: '',
+  registrationNumber: '',
+  primaryContactName: '',
+  primaryContactEmail: '',
+  primaryContactPhone: '',
+  paymentTerms: null,
+  currency: 'AUD',
+  leadTimeDays: undefined,
+  minimumOrderValue: undefined,
+  maximumOrderValue: undefined,
+  notes: '',
+};
 
 export function SupplierCreateContainer() {
   const navigate = useNavigate();
-  
-  // Mutation
   const createMutation = useCreateSupplier();
-  
-  // Form state
-  const [formData, setFormData] = useState<SupplierFormData>({
-    name: '',
-    legalName: '',
-    email: '',
-    phone: '',
-    website: '',
-    status: 'active',
-    supplierType: undefined,
-    taxId: '',
-    registrationNumber: '',
-    primaryContactName: '',
-    primaryContactEmail: '',
-    primaryContactPhone: '',
-    paymentTerms: undefined,
-    currency: 'AUD',
-    leadTimeDays: undefined,
-    minimumOrderValue: undefined,
-    maximumOrderValue: undefined,
-    notes: '',
+
+  const form = useTanStackForm<SupplierFormValues>({
+    schema: supplierFormSchema,
+    defaultValues,
+    onSubmit: async (values) => {
+      try {
+        const cleanedData = {
+          name: values.name,
+          legalName: values.legalName || undefined,
+          email: values.email || undefined,
+          phone: values.phone || undefined,
+          website: values.website || undefined,
+          status: values.status,
+          supplierType: values.supplierType ?? undefined,
+          taxId: values.taxId || undefined,
+          registrationNumber: values.registrationNumber || undefined,
+          primaryContactName: values.primaryContactName || undefined,
+          primaryContactEmail: values.primaryContactEmail || undefined,
+          primaryContactPhone: values.primaryContactPhone || undefined,
+          paymentTerms: values.paymentTerms ?? undefined,
+          currency: values.currency,
+          leadTimeDays: values.leadTimeDays,
+          minimumOrderValue: values.minimumOrderValue,
+          maximumOrderValue: values.maximumOrderValue,
+          notes: values.notes || undefined,
+        };
+
+        const result = await createMutation.mutateAsync({ data: cleanedData });
+
+        toast.success('Supplier created successfully', {
+          description: `Supplier Code: ${result.supplierCode}`,
+        });
+
+        navigate({ to: '/suppliers/$supplierId', params: { supplierId: result.id } });
+      } catch (error) {
+        logger.error('Failed to create supplier', error);
+        toast.error('Failed to create supplier', {
+          description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        });
+        throw error;
+      }
+    },
   });
-  
-  const [errors, setErrors] = useState<SupplierFormErrors>({});
-  
-  // Handlers
-  const handleChange = useCallback((field: keyof SupplierFormData, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error when field is edited (type guard for error fields)
-    const hasError = (f: keyof SupplierFormData): f is keyof SupplierFormErrors =>
-      ['name', 'email', 'website', 'primaryContactEmail'].includes(f);
-    if (hasError(field) && errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
-  }, [errors]);
-  
-  const validateForm = useCallback((): boolean => {
-    const newErrors: SupplierFormErrors = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Supplier name is required';
-    }
-    
-    if (!isValidEmail(formData.email)) {
-      newErrors.email = 'Invalid email address';
-    }
-    
-    if (!isValidUrl(formData.website)) {
-      newErrors.website = 'Invalid URL';
-    }
-    
-    if (!isValidEmail(formData.primaryContactEmail)) {
-      newErrors.primaryContactEmail = 'Invalid email address';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [formData]);
-  
-  const handleSubmit = useCallback(async () => {
-    if (!validateForm()) {
-      return;
-    }
-    
-    try {
-      // Clean up empty strings to undefined
-      const cleanedData = {
-        name: formData.name,
-        legalName: formData.legalName || undefined,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
-        website: formData.website || undefined,
-        status: formData.status,
-        supplierType: formData.supplierType,
-        taxId: formData.taxId || undefined,
-        registrationNumber: formData.registrationNumber || undefined,
-        primaryContactName: formData.primaryContactName || undefined,
-        primaryContactEmail: formData.primaryContactEmail || undefined,
-        primaryContactPhone: formData.primaryContactPhone || undefined,
-        paymentTerms: formData.paymentTerms,
-        currency: formData.currency,
-        leadTimeDays: formData.leadTimeDays,
-        minimumOrderValue: formData.minimumOrderValue,
-        maximumOrderValue: formData.maximumOrderValue,
-        notes: formData.notes || undefined,
-      };
-      
-      const result = await createMutation.mutateAsync({ data: cleanedData });
-      
-      toast.success('Supplier created successfully', {
-        description: `Supplier Code: ${result.supplierCode}`,
-      });
-      
-      navigate({ to: '/suppliers/$supplierId', params: { supplierId: result.id } });
-    } catch (error) {
-      logger.error('Failed to create supplier', error);
-      toast.error('Failed to create supplier', {
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
-      });
-    }
-  }, [formData, createMutation, navigate, validateForm]);
-  
-  const handleCancel = useCallback(() => {
-    navigate({ to: '/suppliers' });
-  }, [navigate]);
-  
+
   return (
     <SupplierForm
-      data={formData}
-      errors={errors}
-      isSubmitting={createMutation.isPending}
-
+      form={form}
       submitLabel="Create Supplier"
-      onChange={handleChange}
-      onSubmit={handleSubmit}
-      onCancel={handleCancel}
+      onCancel={() => navigate({ to: '/suppliers' })}
+      isSubmitting={createMutation.isPending}
     />
   );
 }

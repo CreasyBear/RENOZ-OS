@@ -18,6 +18,8 @@ import {
   getInventoryCostLayers,
   createCostLayer,
   getInventoryValuation,
+  getInventoryFinanceIntegrity,
+  reconcileInventoryFinanceIntegrity,
   calculateCOGS,
   getInventoryAging,
   getInventoryTurnover,
@@ -48,6 +50,11 @@ export interface AgingFilters {
 export interface TurnoverFilters extends Record<string, unknown> {
   productId?: string;
   period?: '30d' | '90d' | '365d';
+}
+
+export interface FinanceIntegrityFilters extends Record<string, unknown> {
+  valueDriftTolerance?: number;
+  topDriftLimit?: number;
 }
 
 // ============================================================================
@@ -101,6 +108,22 @@ export function useInventoryValuation(filters: ValuationFilters = {}, enabled = 
     },
     enabled,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch finance integrity reconciliation for valuation trust signals.
+ */
+export function useInventoryFinanceIntegrity(filters: FinanceIntegrityFilters = {}, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.inventory.financeIntegrity(filters),
+    queryFn: async () => {
+      const result = await getInventoryFinanceIntegrity({ data: filters });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -195,10 +218,12 @@ export function useCalculateCOGS() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { inventoryId: string; quantity: number }) =>
-      calculateCOGS({ data: { ...data, simulate: false } }),
-    onSuccess: (result, variables) => {
-      toast.success(`COGS calculated: $${result.cogs.toFixed(2)}`);
+    mutationFn: async (_data: { inventoryId: string; quantity: number }) => {
+      throw new Error(
+        'Manual COGS apply is disabled. Use shipment and RMA workflows to post canonical COGS.'
+      );
+    },
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.inventory.costLayersDetail(variables.inventoryId),
@@ -207,6 +232,30 @@ export function useCalculateCOGS() {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to calculate COGS');
+    },
+  });
+}
+
+/**
+ * Run finance integrity reconciliation (dry-run or apply).
+ */
+export function useReconcileInventoryFinance() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { dryRun?: boolean; limit?: number }) =>
+      reconcileInventoryFinanceIntegrity({ data }),
+    onSuccess: (result) => {
+      toast.success(
+        result.dryRun
+          ? `Dry run complete: ${result.repairedMissingLayers} missing-layer rows detected`
+          : `Reconciliation applied: ${result.repairedValueDriftRows} drift rows repaired`
+      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to reconcile inventory finance integrity');
     },
   });
 }

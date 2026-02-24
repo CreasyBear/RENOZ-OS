@@ -433,17 +433,35 @@ export const OrderDetailView = memo(function OrderDetailView({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/financial/invoices"
-                    className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-2')}
-                  >
-                    <Receipt className="h-4 w-4" />
-                    Generate Invoice
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
+                  {documentActions ? (
+                    <Button
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => {
+                        void documentActions.onGenerateInvoice();
+                      }}
+                      disabled={documentActions.isGeneratingInvoice}
+                    >
+                      {documentActions.isGeneratingInvoice ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Receipt className="h-4 w-4" />
+                      )}
+                      Generate Invoice
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <Link
+                      to="/financial/invoices"
+                      className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-2')}
+                    >
+                      <Receipt className="h-4 w-4" />
+                      Invoices
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  )}
                   <Link
                     to="/support/warranties"
-                    params={{} as never}
                     className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-2')}
                   >
                     <Shield className="h-4 w-4" />

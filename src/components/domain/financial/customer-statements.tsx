@@ -37,8 +37,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { DatePickerControl } from '@/components/shared';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { format, subMonths } from 'date-fns';
@@ -111,14 +110,16 @@ function GenerateStatementDialog({
           <DialogTitle>Generate Statement</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label>From Date</Label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <Label>To Date</Label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          </div>
+          <DatePickerControl
+            label="From Date"
+            value={dateFrom}
+            onChange={setDateFrom}
+          />
+          <DatePickerControl
+            label="To Date"
+            value={dateTo}
+            onChange={setDateTo}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -185,7 +186,7 @@ function StatementPreview({ statement, onEmail, isEmailing }: StatementPreviewPr
           </CardTitle>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Download className="mr-2 h-4 w-4" />
             PDF
           </Button>

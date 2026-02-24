@@ -9,9 +9,8 @@
  */
 
 import { z } from 'zod';
+import { DEFAULT_COUNTRY } from '@/lib/country';
 import { shipmentAddressSchema } from './shipments';
-
-const DEFAULT_COUNTRY = 'AU';
 
 export const shipOrderFormSchema = z
   .object({

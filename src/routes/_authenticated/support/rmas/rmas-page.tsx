@@ -1,22 +1,19 @@
 /**
  * RMA List Page Component
  *
- * Displays all RMAs with filtering, sorting, and pagination.
- * Links to RMA detail view for workflow actions.
- *
- * @source rmas from useRmas hook
+ * Displays all RMAs with filtering, sorting, pagination, and bulk actions.
+ * Uses RmasListContainer per STANDARDS §2 (container owns data).
  *
  * @see src/routes/_authenticated/support/rmas/index.tsx - Route definition
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-003c
- * @see src/components/domain/support/rma-list.tsx
+ * @see src/components/domain/support/rma/rmas-list-container.tsx
  */
 import { useNavigate, Link } from '@tanstack/react-router';
 import { Package, ExternalLink } from 'lucide-react';
 
 import { PageLayout } from '@/components/layout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { RmaList } from '@/components/domain/support';
-import { useRmas } from '@/hooks/support';
+import { RmasListContainer } from '@/components/domain/support/rma/rmas-list-container';
 import type { RmaStatus, RmaReason } from '@/lib/schemas/support/rma';
 import type { rmasSearchSchema } from './index';
 import type { z } from 'zod';
@@ -30,43 +27,15 @@ interface RmasPageProps {
 export default function RmasPage({ search }: RmasPageProps) {
   const navigate = useNavigate();
 
-  // Fetch RMAs
-  const { data, isLoading, error, refetch } = useRmas({
-    status: search.status,
-    reason: search.reason,
-    search: search.search,
-    page: search.page,
-    pageSize: search.pageSize,
-    sortBy: search.sortBy,
-    sortOrder: search.sortOrder,
-  });
-
-  const rmas = data?.data ?? [];
-  const totalCount = data?.pagination?.totalCount ?? 0;
-
-  // Update search params
   const updateSearch = (updates: Partial<RmasSearch>) => {
     navigate({
       to: '.',
       search: {
         ...search,
         ...updates,
-        // Reset to page 1 when filters change
         page: 'page' in updates ? updates.page : 1,
       },
     });
-  };
-
-  // Handle RMA click - navigate to detail
-  const handleRmaClick = (rma: { id: string }) => {
-    navigate({
-      to: '/support/rmas/$rmaId',
-      params: { rmaId: rma.id },
-    });
-  };
-
-  const handleCreateRma = () => {
-    navigate({ to: '/orders' });
   };
 
   return (
@@ -82,7 +51,6 @@ export default function RmasPage({ search }: RmasPageProps) {
       />
 
       <PageLayout.Content>
-        {/* Info about creating RMAs */}
         <Alert className="mb-4">
           <ExternalLink className="h-4 w-4" />
           <AlertTitle>Creating RMAs</AlertTitle>
@@ -95,16 +63,15 @@ export default function RmasPage({ search }: RmasPageProps) {
           </AlertDescription>
         </Alert>
 
-        <RmaList
-          rmas={rmas}
-          totalCount={totalCount}
-          isLoading={isLoading}
-          error={error instanceof Error ? error : null}
-          onRetry={refetch}
-          statusFilter={search.status ?? 'all'}
-          reasonFilter={search.reason ?? 'all'}
-          searchQuery={search.search ?? ''}
+        <RmasListContainer
+          status={search.status}
+          reason={search.reason}
+          search={search.search}
           page={search.page}
+          pageSize={search.pageSize}
+          sortBy={search.sortBy}
+          sortOrder={search.sortOrder}
+          onCreateRma={() => navigate({ to: '/orders' })}
           onStatusFilterChange={(value) =>
             updateSearch({ status: value === 'all' ? undefined : (value as RmaStatus) })
           }
@@ -113,10 +80,6 @@ export default function RmasPage({ search }: RmasPageProps) {
           }
           onSearchChange={(value) => updateSearch({ search: value || undefined })}
           onPageChange={(page) => updateSearch({ page })}
-          onRmaClick={handleRmaClick}
-          onCreateRma={handleCreateRma}
-          showCreateButton
-          pageSize={search.pageSize}
         />
       </PageLayout.Content>
     </PageLayout>

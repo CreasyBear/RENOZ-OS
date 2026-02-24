@@ -4,34 +4,26 @@
  * Dialog for adjusting inventory stock levels (positive or negative).
  * Creates an inventory movement record for audit trail.
  *
+ * @see docs/design-system/FORM-STANDARDS.md
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json
  */
 
-import { useState, useCallback } from "react";
-import { Loader2, Package, AlertTriangle, Plus, Minus } from "lucide-react";
-import { z } from "zod";
-import { useForm } from "@tanstack/react-form";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { Package, AlertTriangle, Plus, Minus } from "lucide-react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  FormDialog,
+  NumberField,
+  SelectField,
+  TextareaField,
+} from "@/components/shared/forms";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import {
+  createStockAdjustmentFormSchema,
+  type StockAdjustmentFormValues,
+} from "@/lib/schemas/inventory/stock-adjustment-form";
 
 // ============================================================================
 // TYPES
@@ -48,6 +40,8 @@ export interface StockAdjustmentDialogProps {
     productId: string;
     productName: string;
     productSku: string;
+    isSerialized?: boolean;
+    serialNumber?: string | null;
     locationId: string;
     locationName: string;
     quantityOnHand: number;
@@ -86,19 +80,6 @@ const ADJUSTMENT_REASONS = [
 ] as const;
 
 // ============================================================================
-// VALIDATION SCHEMA
-// ============================================================================
-
-const adjustmentSchema = z.object({
-  adjustmentType: z.enum(["increase", "decrease"]),
-  quantity: z.number().positive("Quantity must be greater than 0"),
-  reason: z.string().min(1, "Reason is required"),
-  notes: z.string().optional(),
-});
-
-type AdjustmentFormValues = z.infer<typeof adjustmentSchema>;
-
-// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -111,106 +92,95 @@ export function StockAdjustmentDialog({
 }: StockAdjustmentDialogProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const form = useForm({
+  const adjustmentFormSchema = useMemo(
+    () => createStockAdjustmentFormSchema(item),
+    [item]
+  );
+
+  const form = useTanStackForm<StockAdjustmentFormValues>({
+    schema: adjustmentFormSchema,
     defaultValues: {
       adjustmentType: "increase" as const,
       quantity: 1,
       reason: "",
       notes: "",
-    } as AdjustmentFormValues,
-    onSubmit: async ({ value }) => {
+    },
+    onSubmit: async (values) => {
       try {
         setError(null);
-        await adjustmentSchema.parseAsync(value);
 
         // Calculate actual adjustment quantity (positive or negative)
         const adjustmentQty =
-          value.adjustmentType === "increase"
-            ? value.quantity
-            : -value.quantity;
-
-        // Validate decrease doesn't exceed available
-        if (
-          value.adjustmentType === "decrease" &&
-          value.quantity > item.quantityOnHand
-        ) {
-          setError(
-            `Cannot decrease by more than current stock (${item.quantityOnHand} units)`
-          );
-          return;
-        }
+          values.adjustmentType === "increase"
+            ? (item.isSerialized ? 1 : values.quantity)
+            : -(item.isSerialized ? 1 : values.quantity);
 
         await onAdjust({
           inventoryId: item.id,
           productId: item.productId,
           locationId: item.locationId,
           adjustmentQty,
-          reason: value.reason,
-          notes: value.notes,
+          reason: values.reason,
+          notes: values.notes,
         });
 
-        // Reset form and close on success
         form.reset();
         onClose();
       } catch (err) {
-        if (err instanceof z.ZodError) {
-          setError(err.issues[0]?.message ?? "Validation failed");
-        } else if (err instanceof Error) {
+        if (err instanceof Error) {
           setError(err.message);
         } else {
           setError("Failed to adjust inventory");
         }
       }
     },
+    onSubmitInvalid: () => {
+      setError("Please fix the errors below and try again");
+    },
   });
 
   const handleClose = useCallback(() => {
+    if (isLoading) return;
     setError(null);
     form.reset();
     onClose();
-  }, [form, onClose]);
+  }, [form, isLoading, onClose]);
 
-  const adjustmentType = form.getFieldValue("adjustmentType");
-  const quantity = form.getFieldValue("quantity") ?? 0;
+  useEffect(() => {
+    if (!item.isSerialized) return;
+    const forcedType = item.quantityOnHand > 0 ? "decrease" : "increase";
+    if (form.state.values.adjustmentType !== forcedType) {
+      form.setFieldValue("adjustmentType", forcedType);
+    }
+  }, [form, item.isSerialized, item.quantityOnHand]);
+
+  const adjustmentType = form.state.values.adjustmentType;
+  const quantity = form.state.values.quantity ?? 0;
+  const effectiveQuantity = item.isSerialized ? 1 : quantity;
 
   // Calculate new quantity preview
   const newQuantity =
     adjustmentType === "increase"
-      ? item.quantityOnHand + quantity
-      : item.quantityOnHand - quantity;
+      ? item.quantityOnHand + effectiveQuantity
+      : item.quantityOnHand - effectiveQuantity;
 
   const isDecrease = adjustmentType === "decrease";
-  const canSubmit =
-    quantity > 0 &&
-    form.getFieldValue("reason") &&
-    (!isDecrease || quantity <= item.quantityOnHand);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Adjust Inventory</DialogTitle>
-          <DialogDescription>
-            Adjust stock levels for {item.productName} at {item.locationName}.
-          </DialogDescription>
-        </DialogHeader>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            form.handleSubmit();
-          }}
-          className="space-y-6"
-        >
-          {/* Item Details */}
-          <div className="rounded-lg border bg-muted/50 p-4">
+    <FormDialog
+      open={open}
+      onOpenChange={(nextOpen) => !nextOpen && handleClose()}
+      title="Adjust Inventory"
+      description={`Adjust stock levels for ${item.productName} at ${item.locationName}.`}
+      form={form}
+      submitLabel="Adjust Inventory"
+      loadingLabel="Adjusting..."
+      submitError={error}
+      size="md"
+      className="sm:max-w-[500px]"
+    >
+      {/* Item Details */}
+      <div className="rounded-lg border bg-muted/50 p-4">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4 text-muted-foreground" />
               <div>
@@ -247,7 +217,7 @@ export function StockAdjustmentDialog({
                         "bg-green-600 hover:bg-green-700"
                     )}
                     onClick={() => field.handleChange("increase")}
-                    disabled={isLoading}
+                    disabled={isLoading || (item.isSerialized && item.quantityOnHand > 0)}
                   >
                     <Plus className="h-4 w-4" />
                     Increase
@@ -263,7 +233,7 @@ export function StockAdjustmentDialog({
                         "bg-destructive hover:bg-destructive/90"
                     )}
                     onClick={() => field.handleChange("decrease")}
-                    disabled={isLoading}
+                    disabled={isLoading || (item.isSerialized && item.quantityOnHand <= 0)}
                   >
                     <Minus className="h-4 w-4" />
                     Decrease
@@ -277,12 +247,15 @@ export function StockAdjustmentDialog({
           <form.Field
             name="quantity"
             validators={{
-              onChange: ({ value }) => {
+              onChangeListenTo: ["adjustmentType"],
+              onChange: ({ value, fieldApi }) => {
+                const adjType = fieldApi.form.state.values.adjustmentType;
+                const isDec = adjType === "decrease";
+                if (item.isSerialized && value !== 1) {
+                  return "Serialized adjustments are one unit at a time";
+                }
                 if (value <= 0) return "Quantity must be greater than 0";
-                if (
-                  isDecrease &&
-                  value > item.quantityOnHand
-                ) {
+                if (isDec && value > item.quantityOnHand) {
                   return `Cannot decrease by more than current stock (${item.quantityOnHand})`;
                 }
                 return undefined;
@@ -290,34 +263,21 @@ export function StockAdjustmentDialog({
             }}
           >
             {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor="quantity">
-                  Quantity to {isDecrease ? "Decrease" : "Increase"}{" "}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min={1}
-                  max={isDecrease ? item.quantityOnHand : undefined}
-                  value={field.state.value}
-                  onChange={(e) =>
-                    field.handleChange(parseInt(e.target.value) || 0)
-                  }
-                  onBlur={field.handleBlur}
-                  disabled={isLoading}
-                />
-                {isDecrease && (
-                  <p className="text-xs text-muted-foreground">
-                    Max: {item.quantityOnHand} units
-                  </p>
-                )}
-                {field.state.meta.errors.length > 0 && (
-                  <p className="text-xs text-destructive">
-                    {field.state.meta.errors[0]}
-                  </p>
-                )}
-              </div>
+              <NumberField
+                field={field}
+                label={`Quantity to ${isDecrease ? "Decrease" : "Increase"}`}
+                required
+                min={1}
+                max={item.isSerialized ? 1 : (isDecrease ? item.quantityOnHand : undefined)}
+                disabled={isLoading || item.isSerialized}
+                description={
+                  item.isSerialized
+                    ? `Serialized adjustment for ${item.serialNumber ?? "selected serial"}`
+                    : isDecrease
+                      ? `Max: ${item.quantityOnHand} units`
+                      : undefined
+                }
+              />
             )}
           </form.Field>
 
@@ -330,55 +290,32 @@ export function StockAdjustmentDialog({
             }}
           >
             {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor="reason">
-                  Reason <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={field.state.value}
-                  onValueChange={field.handleChange}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger id="reason">
-                    <SelectValue placeholder="Select a reason..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ADJUSTMENT_REASONS.map((reason) => (
-                      <SelectItem key={reason.value} value={reason.value}>
-                        {reason.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {field.state.meta.errors.length > 0 && (
-                  <p className="text-xs text-destructive">
-                    {field.state.meta.errors[0]}
-                  </p>
-                )}
-              </div>
+              <SelectField
+                field={field}
+                label="Reason"
+                options={ADJUSTMENT_REASONS.map((r) => ({ value: r.value, label: r.label }))}
+                placeholder="Select a reason..."
+                required
+                disabled={isLoading}
+              />
             )}
           </form.Field>
 
           {/* Notes Field */}
           <form.Field name="notes">
             {(field) => (
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Additional details about this adjustment..."
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                  disabled={isLoading}
-                  rows={3}
-                />
-              </div>
+              <TextareaField
+                field={field}
+                label="Notes (Optional)"
+                placeholder="Additional details about this adjustment..."
+                rows={3}
+                disabled={isLoading}
+              />
             )}
           </form.Field>
 
           {/* Preview */}
-          {quantity > 0 && (
+          {effectiveQuantity > 0 && (
             <div
               className={cn(
                 "rounded-lg border p-4",
@@ -406,7 +343,7 @@ export function StockAdjustmentDialog({
                   )}
                 >
                   {isDecrease ? "-" : "+"}
-                  {quantity}
+                  {effectiveQuantity}
                 </span>
                 <span>=</span>
                 <span
@@ -427,29 +364,7 @@ export function StockAdjustmentDialog({
             </div>
           )}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading || !canSubmit}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adjusting...
-                </>
-              ) : (
-                "Adjust Inventory"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }
 

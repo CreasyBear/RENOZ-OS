@@ -8,30 +8,27 @@
  * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Folder, MapPin, Calendar } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
+  FormDialog,
   TextField,
   TextareaField,
   SelectField,
   NumberField,
   DateField,
+  FormField,
+  extractFieldError,
 } from '@/components/shared/forms';
 import { useCreateProject, useJobTemplates, useJobTemplate } from '@/hooks/jobs';
-import { useCustomers, useCustomer } from '@/hooks/customers';
+import { useCustomer } from '@/hooks/customers';
+import { CustomerCombobox } from '@/components/shared';
+import type { Customer } from '@/lib/schemas/customers';
+import { normalizeCustomerForCombobox } from '@/lib/schemas/customers/normalize';
 import { toast } from '@/lib/toast';
 import {
   createProjectFormSchema,
@@ -80,7 +77,7 @@ export function ProjectCreateDialog({
 }: ProjectCreateDialogProps) {
   const navigate = useNavigate();
   const createProject = useCreateProject();
-  const { data: customersData } = useCustomers({ pageSize: 100 });
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { data: templatesData } = useJobTemplates({ includeInactive: false });
 
   const form = useTanStackForm({
@@ -107,6 +104,7 @@ export function ProjectCreateDialog({
       estimatedTotalValue: null,
     },
     onSubmit: async (data) => {
+      setSubmitError(null);
       try {
         const payload = transformCreateProjectFormToApi(data);
         const result = await createProject.mutateAsync(payload);
@@ -120,9 +118,14 @@ export function ProjectCreateDialog({
         onOpenChange(false);
         form.reset();
         onSuccess?.(result.id);
-      } catch {
-        toast.error('Failed to create project');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to create project';
+        setSubmitError(msg);
+        toast.error(msg);
       }
+    },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
     },
   });
 
@@ -176,12 +179,6 @@ export function ProjectCreateDialog({
     }
   }, [open, selectedCustomer, form]);
 
-  const customers = useMemo(() => customersData?.items ?? [], [customersData]);
-  const customerOptions = customers.map((customer) => ({
-    value: customer.id,
-    label: customer.name,
-  }));
-
   useEffect(() => {
     if (!open) {
       lastPrefilledTemplateId.current = null;
@@ -192,6 +189,7 @@ export function ProjectCreateDialog({
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         templateId: '',
         title: '',
@@ -216,29 +214,33 @@ export function ProjectCreateDialog({
     }
   }, [open, defaultCustomerId, form]);
 
-  const isSubmitting = createProject.isPending;
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && createProject.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Folder className="h-5 w-5" />
-            Create New Project
-          </DialogTitle>
-          <DialogDescription>
-            Create a new project for solar or battery installation.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="flex-1 overflow-hidden"
-        >
-          <ScrollArea className="h-[60vh] pr-4">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Folder className="h-5 w-5" />
+          Create New Project
+        </span>
+      }
+      description="Create a new project for solar or battery installation."
+      form={form}
+      submitLabel="Create Project"
+      loadingLabel="Creating..."
+      submitError={submitError}
+      submitDisabled={createProject.isPending}
+      size="xl"
+      className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+      resetOnClose={false}
+    >
+      <ScrollArea className="h-[60vh] pr-4">
             <div className="space-y-6 py-4">
               {/* Basic Info */}
               <div className="space-y-4">
@@ -281,15 +283,29 @@ export function ProjectCreateDialog({
 
                 <div className="grid grid-cols-2 gap-4">
                   <form.Field name="customerId">
-                    {(field) => (
-                      <SelectField
-                        field={field}
-                        label="Customer"
-                        options={customerOptions}
-                        placeholder="Select customer"
-                        required
-                      />
-                    )}
+                    {(field) => {
+                      const error = extractFieldError(field);
+                      const currentId = (field.state.value ?? "") as string;
+                      return (
+                        <FormField
+                          label="Customer"
+                          name={field.name}
+                          error={error}
+                          required
+                        >
+                          <CustomerCombobox
+                            value={selectedCustomer ? (normalizeCustomerForCombobox(selectedCustomer) as Customer) : undefined}
+                            onSelect={(c) => {
+                              const newId = c?.id ?? "";
+                              if (currentId !== newId) {
+                                field.handleChange(newId);
+                              }
+                            }}
+                            placeholder="Search customers..."
+                          />
+                        </FormField>
+                      );
+                    }}
                   </form.Field>
 
                   <form.Field name="projectType">
@@ -447,22 +463,6 @@ export function ProjectCreateDialog({
               </div>
             </div>
           </ScrollArea>
-
-          <DialogFooter className="mt-4 pt-4 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create Project'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

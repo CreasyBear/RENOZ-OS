@@ -31,6 +31,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -132,9 +136,16 @@ function TemplateDialog({ open, onOpenChange, template, onSave, isSaving }: Temp
     onOpenChange(false);
   };
 
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isSaving);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSaving, onOpenChange);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-w-2xl"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Template' : 'Create Reminder Template'}</DialogTitle>
         </DialogHeader>

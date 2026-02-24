@@ -25,6 +25,7 @@ import { queryKeys } from '@/lib/query-keys';
 // Dashboard
 import {
   getFinancialDashboardMetrics,
+  getFinancialCloseReadiness,
   getRevenueByPeriod,
   getTopCustomersByRevenue,
   getOutstandingInvoices,
@@ -123,6 +124,23 @@ export function useFinancialDashboardMetrics(options: UseFinancialDashboardMetri
   });
 }
 
+/**
+ * Finance close-readiness guard (hard gates for period close / release).
+ */
+export function useFinancialCloseReadiness(enabled = true) {
+  const fn = useServerFn(getFinancialCloseReadiness);
+  return useQuery({
+    queryKey: queryKeys.financial.closeReadiness(),
+    queryFn: async () => {
+      const result = await fn({ data: undefined });
+      if (result == null) throw new Error('Financial close readiness returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
 export interface UseRevenueByPeriodOptions {
   dateFrom: Date;
   dateTo: Date;
@@ -162,6 +180,8 @@ export interface UseTopCustomersByRevenueOptions {
   commercialOnly?: boolean;
   pageSize?: number;
   page?: number;
+  /** Revenue basis: invoiced (orders) or cash (payments received) */
+  basis?: 'invoiced' | 'cash';
   enabled?: boolean;
 }
 
@@ -179,6 +199,7 @@ export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOption
       dateTo: params.dateTo,
       commercialOnly: params.commercialOnly,
       pageSize: params.pageSize,
+      basis: params.basis,
     }),
     queryFn: async () => {
       const result = await fn({ data: params });

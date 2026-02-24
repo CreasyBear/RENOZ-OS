@@ -94,6 +94,14 @@ export {
   type CustomerDetailActions,
 } from './use-customer-detail';
 
+// Edit submission orchestration
+export {
+  useCustomerEditSubmission,
+  type CustomerEditFormValues,
+  type EditableContact,
+  type EditableAddress,
+} from './use-customer-edit-submission';
+
 // Navigation hook
 export { useCustomerNavigation, type UseCustomerNavigationReturn } from './use-customer-navigation';
 

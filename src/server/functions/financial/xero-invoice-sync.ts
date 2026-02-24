@@ -38,6 +38,7 @@ import {
 import { getRequest } from '@tanstack/react-start/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { AuthError, ServerError, ValidationError } from '@/lib/server/errors';
+import { safeNumber } from '@/lib/numeric';
 
 // ============================================================================
 // CONSTANTS (fallback when org settings not set)
@@ -566,8 +567,8 @@ export const handleXeroPaymentUpdate = createServerFn({ method: 'POST' })
     return {
       success: true,
       orderId: order.id,
-      newPaidAmount: Number(updatedOrder.paidAmount),
-      newBalanceDue: Number(updatedOrder.balanceDue),
+      newPaidAmount: safeNumber(updatedOrder.paidAmount),
+      newBalanceDue: safeNumber(updatedOrder.balanceDue),
       paymentStatus,
     };
   });
@@ -688,7 +689,7 @@ export const listInvoicesBySyncStatus = createServerFn({ method: 'GET' })
           orderId: r.orderId,
           orderNumber: r.orderNumber,
           orderDate: new Date(r.orderDate),
-          total: Number(r.total),
+          total: safeNumber(r.total),
           customerId: r.customerId,
           customerName: r.customerName,
           xeroInvoiceId: r.xeroInvoiceId,

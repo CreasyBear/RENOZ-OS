@@ -11,6 +11,7 @@ import { memo } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 
 // ============================================================================
@@ -53,6 +54,7 @@ export const POActivityTab = memo(function POActivityTab({
         title="Activity Timeline"
         description="Complete history of purchase order changes, approvals, and receipts"
         showFilters={true}
+        viewAllSearch={getActivitiesFeedSearch('purchase_order')}
         emptyMessage="No activity recorded yet"
         emptyDescription="Purchase order activities will appear here when changes are made."
       />

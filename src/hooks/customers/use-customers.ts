@@ -167,8 +167,7 @@ export function useCreateCustomer() {
 
   return useMutation({
     mutationFn: (input: CreateCustomer) => createFn({ data: input }),
-    onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.customers.detail(result.id), result);
+    onSuccess: () => {
       // Invalidate customer lists
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
     },

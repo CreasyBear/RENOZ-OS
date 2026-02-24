@@ -44,6 +44,7 @@ import {
   type DeferredRevenueBalance,
 } from '@/lib/schemas';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { safeNumber } from '@/lib/numeric';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 
 // ============================================================================
@@ -125,7 +126,7 @@ export const recognizeRevenue = createServerFn({ method: 'POST' })
         recognitionId: recognition.id,
         recognitionType,
         milestoneName: milestoneName ?? undefined,
-        recognizedAmount: Number(recognizedAmount),
+        recognizedAmount: safeNumber(recognizedAmount),
         recognitionDate: recognition.recognitionDate,
       },
     });
@@ -200,7 +201,7 @@ export const createDeferredRevenue = createServerFn({ method: 'POST' })
       metadata: {
         orderId,
         deferredRevenueId: deferred.id,
-        total: Number(amount),
+        total: safeNumber(amount),
         expectedRecognitionDate: expectedRecognitionDate ?? undefined,
         reason: reason ?? undefined,
       },
@@ -230,6 +231,9 @@ export const releaseDeferredRevenue = createServerFn({ method: 'POST' })
 
     // Wrap all operations in a transaction for atomicity
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get deferred revenue record INSIDE transaction
       const [deferred] = await tx
         .select({
@@ -318,8 +322,8 @@ export const releaseDeferredRevenue = createServerFn({ method: 'POST' })
         orderId: result.orderId,
         deferredRevenueId,
         recognitionId: result.recognitionId,
-        releasedAmount: Number(result.releaseAmount),
-        remainingAmount: Number(result.newRemainingAmount),
+        releasedAmount: safeNumber(result.releaseAmount),
+        remainingAmount: safeNumber(result.newRemainingAmount),
         newStatus: result.newStatus,
         milestoneName: milestoneName ?? undefined,
       },
@@ -689,10 +693,10 @@ export const getRecognitionSummary = createServerFn({ method: 'GET' })
     return results.map((r): RecognitionSummary => ({
       period: r.period,
       periodLabel: r.periodLabel,
-      totalRecognized: Number(r.totalRecognized),
-      onDeliveryAmount: Number(r.onDeliveryAmount),
-      milestoneAmount: Number(r.milestoneAmount),
-      timeBasedAmount: Number(r.timeBasedAmount),
+      totalRecognized: safeNumber(r.totalRecognized),
+      onDeliveryAmount: safeNumber(r.onDeliveryAmount),
+      milestoneAmount: safeNumber(r.milestoneAmount),
+      timeBasedAmount: safeNumber(r.timeBasedAmount),
       recordCount: r.recordCount,
     }));
   });
@@ -725,14 +729,14 @@ export const getDeferredRevenueBalance = createServerFn({ method: 'GET' })
       .where(eq(deferredRevenue.organizationId, ctx.organizationId));
 
     return {
-      totalDeferred: Number(result?.totalDeferred ?? 0),
-      totalRecognized: Number(result?.totalRecognized ?? 0),
-      totalRemaining: Number(result?.totalRemaining ?? 0),
+      totalDeferred: safeNumber(result?.totalDeferred),
+      totalRecognized: safeNumber(result?.totalRecognized),
+      totalRemaining: safeNumber(result?.totalRemaining),
       recordCount: result?.recordCount ?? 0,
       byStatus: {
-        deferred: Number(result?.deferredAmount ?? 0),
-        partiallyRecognized: Number(result?.partiallyRecognizedAmount ?? 0),
-        fullyRecognized: Number(result?.fullyRecognizedAmount ?? 0),
+        deferred: safeNumber(result?.deferredAmount),
+        partiallyRecognized: safeNumber(result?.partiallyRecognizedAmount),
+        fullyRecognized: safeNumber(result?.fullyRecognizedAmount),
       },
     };
   });

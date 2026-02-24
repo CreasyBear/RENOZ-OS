@@ -48,6 +48,7 @@ export const Route = createFileRoute("/_authenticated/procurement/receiving")({
 // ============================================================================
 
 function ReceivingPage() {
+  const navigate = Route.useNavigate();
   // Receiving dialog state (for single PO receiving)
   const receivingDialog = useReceivingDialog({
     syncWithUrl: true,
@@ -55,9 +56,9 @@ function ReceivingPage() {
   });
 
   // Handlers
-  const handleViewPO = useCallback(() => {
-    // Navigate to PO detail view is handled by Link components in dashboard
-  }, []);
+  const handleViewPO = useCallback((poId: string) => {
+    navigate({ to: '/purchase-orders/$poId', params: { poId } });
+  }, [navigate]);
 
   const handleReceivePO = useCallback((poId: string) => {
     receivingDialog.openDialog(poId);

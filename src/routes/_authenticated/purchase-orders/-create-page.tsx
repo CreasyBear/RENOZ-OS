@@ -19,7 +19,13 @@ import { useCreatePurchaseOrder } from "@/hooks/suppliers/use-purchase-orders";
 import { toast } from "@/hooks";
 import { logger } from "@/lib/logger";
 
-export default function PurchaseOrderCreatePage() {
+interface PurchaseOrderCreatePageProps {
+  search: {
+    supplierId?: string;
+  };
+}
+
+export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreatePageProps) {
   const navigate = useNavigate();
   const { data: suppliersData, isLoading: isLoadingSuppliers } = useSuppliers({
     page: 1,
@@ -139,6 +145,7 @@ export default function PurchaseOrderCreatePage() {
         <POCreationWizard
           suppliers={suppliers}
           products={products}
+          initialSupplierId={search.supplierId ?? null}
           isSubmitting={createMutation.isPending}
           onSubmit={handleSubmit}
           onCancel={handleCancel}

@@ -72,6 +72,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover"
 import { FormField } from "./form-field"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { logger } from "~/lib/logger"
 import { cn } from "~/lib/utils"
 import { extractFieldError, type AnyFieldApi } from "./types"
@@ -81,12 +82,14 @@ import { extractFieldError, type AnyFieldApi } from "./types"
 // ============================================================================
 
 export interface ComboboxOption {
-  /** Option value */
+  /** Option value (stored in form) */
   value: string
   /** Display label */
   label: string
-  /** Optional description */
+  /** Optional description (also used for search filtering) */
   description?: string
+  /** Keywords for search filtering. Defaults to `${label} ${description}` */
+  keywords?: string
   /** Disabled state */
   disabled?: boolean
 }
@@ -124,6 +127,10 @@ export interface ComboboxFieldProps {
   onCreate?: (inputValue: string) => ComboboxOption | Promise<ComboboxOption>
   /** Custom label for the create option (default: "Create {inputValue}") */
   formatCreateLabel?: (inputValue: string) => string
+  /** Callback when search input changes (e.g. for parent to load/filter options) */
+  onSearchChange?: (search: string) => void
+  /** External loading state (e.g. when parent is fetching options) */
+  isLoading?: boolean
 }
 
 // ============================================================================
@@ -147,6 +154,8 @@ export function ComboboxField({
   creatable = false,
   onCreate,
   formatCreateLabel = (value) => `Create "${value}"`,
+  onSearchChange,
+  isLoading: externalLoading = false,
 }: ComboboxFieldProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -156,13 +165,16 @@ export function ComboboxField({
   const [isCreating, setIsCreating] = useState(false)
 
   const debouncedSearch = useDebounce(search, debounceMs)
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
-  // Use refs to store callbacks to avoid dependency issues
+  // Use refs to store callbacks to avoid dependency issues (sync in effect to satisfy ref-during-render rule)
   const loadOptionsRef = useRef(loadOptions)
-  loadOptionsRef.current = loadOptions
   const onCreateRef = useRef(onCreate)
-  onCreateRef.current = onCreate
+  useEffect(() => {
+    loadOptionsRef.current = loadOptions
+    onCreateRef.current = onCreate
+  }, [loadOptions, onCreate])
 
   // Merge static/async options with created options
   const baseOptions = staticOptions ?? asyncOptions
@@ -279,10 +291,13 @@ export function ComboboxField({
             <CommandInput
               placeholder={searchPlaceholder}
               value={search}
-              onValueChange={setSearch}
+              onValueChange={(v) => {
+                setSearch(v)
+                onSearchChange?.(v)
+              }}
             />
             <CommandList>
-              {isLoading ? (
+              {(isLoading || externalLoading) ? (
                 <div className="flex items-center justify-center py-6">
                   <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none text-muted-foreground" />
                   <span className="ml-2 text-sm text-muted-foreground">
@@ -316,8 +331,8 @@ export function ComboboxField({
                       {options.map((option) => (
                         <CommandItem
                           key={option.value}
-                          value={option.value}
-                          onSelect={handleSelect}
+                          value={option.keywords ?? `${option.label} ${option.description ?? ""}`.trim()}
+                          onSelect={() => handleSelect(option.value)}
                           disabled={option.disabled}
                           className="cursor-pointer"
                         >
@@ -453,7 +468,8 @@ export function MultiComboboxField({
     selectedValues.includes(opt.value)
   )
 
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
   // Group options by group property
   const groupedOptions = options.reduce<Record<string, GroupedComboboxOption[]>>(

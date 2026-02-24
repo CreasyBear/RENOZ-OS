@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePickerControl } from '@/components/shared'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -283,15 +284,11 @@ function ScheduleStep({
 
       {scheduleType === 'scheduled' && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="date">Date</Label>
-            <Input
-              id="date"
-              type="date"
-              value={scheduledDate}
-              onChange={(e) => onDateChange(e.target.value)}
-            />
-          </div>
+          <DatePickerControl
+            label="Date"
+            value={scheduledDate}
+            onChange={onDateChange}
+          />
           <div className="space-y-2">
             <Label htmlFor="time">Time</Label>
             <Input

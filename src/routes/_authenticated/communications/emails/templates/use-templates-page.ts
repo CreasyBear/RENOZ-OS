@@ -9,15 +9,13 @@
 
 import { useCallback, useState } from "react";
 import {
-  useCreateTemplate,
-  useUpdateTemplate,
   useDeleteTemplate,
   useCloneTemplate,
   useTemplateVersions,
+  useRestoreTemplateVersion,
 } from "@/hooks/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
-import type { TemplateFormValues } from "@/lib/schemas/communications";
 
 export function useTemplatesPage() {
   // Only manage version history state here (not filter state - that's URL-synced)
@@ -33,10 +31,9 @@ export function useTemplatesPage() {
   // ============================================================================
   // MUTATIONS
   // ============================================================================
-  const createMutation = useCreateTemplate();
-  const updateMutation = useUpdateTemplate();
   const deleteMutation = useDeleteTemplate();
   const cloneMutation = useCloneTemplate();
+  const restoreVersionMutation = useRestoreTemplateVersion();
 
   const { data: versionsData, isLoading: versionsLoading } = useTemplateVersions({
     templateId: versionsTemplateId ?? "",
@@ -46,49 +43,6 @@ export function useTemplatesPage() {
   // ============================================================================
   // HANDLERS
   // ============================================================================
-
-  const handleCreate = useCallback(
-    async (values: TemplateFormValues): Promise<void> => {
-      try {
-        await createMutation.mutateAsync({
-          name: values.name,
-          description: values.description,
-          category: values.category,
-          subject: values.subject,
-          bodyHtml: values.bodyHtml,
-          variables: [],
-          // Note: isActive not in create schema, templates are active by default
-        });
-        toastSuccess("Template created");
-      } catch {
-        toastError("Failed to create template");
-        throw new Error("Failed to create template");
-      }
-    },
-    [createMutation]
-  );
-
-  const handleUpdate = useCallback(
-    async (id: string, values: TemplateFormValues) => {
-      try {
-        await updateMutation.mutateAsync({
-          id,
-          name: values.name,
-          description: values.description,
-          category: values.category,
-          subject: values.subject,
-          bodyHtml: values.bodyHtml,
-          isActive: values.isActive,
-          createVersion: values.createVersion,
-        });
-        toastSuccess("Template updated");
-      } catch {
-        toastError("Failed to update template");
-        throw new Error("Failed to update template");
-      }
-    },
-    [updateMutation]
-  );
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -124,21 +78,33 @@ export function useTemplatesPage() {
     setVersionsTemplateId(templateId);
   }, []);
 
+  const handleRestoreVersion = useCallback(
+    async (versionId: string): Promise<void> => {
+      try {
+        await restoreVersionMutation.mutateAsync({ versionId });
+        toastSuccess("Template version restored");
+      } catch {
+        toastError("Failed to restore template version");
+        throw new Error("Failed to restore template version");
+      }
+    },
+    [restoreVersionMutation]
+  );
+
   return {
     // State (only version history - filters are URL-synced in page component)
     versions: versionsData ?? [],
     versionsLoading,
 
     // Handlers
-    handleCreate,
-    handleUpdate,
     handleDelete,
     handleClone,
     handleFetchVersions,
+    handleRestoreVersion,
 
     // Loading states
     isDeleting: deleteMutation.isPending,
     isCloning: cloneMutation.isPending,
-    isSaving: createMutation.isPending || updateMutation.isPending,
+    isRestoringVersion: restoreVersionMutation.isPending,
   };
 }

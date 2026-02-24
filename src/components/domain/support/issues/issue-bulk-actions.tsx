@@ -48,7 +48,7 @@ interface User {
 interface IssueBulkActionsProps {
   selectedCount: number;
   onClearSelection: () => void;
-  onAction: (event: BulkActionEvent) => void;
+  onAction: (event: BulkActionEvent) => void | Promise<void>;
   users?: User[];
   isPending?: boolean;
 }
@@ -64,6 +64,7 @@ export function IssueBulkActions({
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [priorityDialogOpen, setPriorityDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
 
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedPriority, setSelectedPriority] = useState<string>('');
@@ -71,64 +72,94 @@ export function IssueBulkActions({
 
   if (selectedCount < 2) return null;
 
-  const handleAssign = () => {
-    if (selectedUserId) {
+  const handleAssign = async () => {
+    if (!selectedUserId || isPending) return;
+    await Promise.resolve(
       onAction({
         action: 'assign',
         issueIds: [], // Will be filled by parent
         value: selectedUserId,
-      });
-      setAssignDialogOpen(false);
-      setSelectedUserId('');
-    }
+      })
+    );
+    setAssignDialogOpen(false);
+    setSelectedUserId('');
   };
 
-  const handlePriorityChange = () => {
-    if (selectedPriority) {
+  const handlePriorityChange = async () => {
+    if (!selectedPriority || isPending) return;
+    await Promise.resolve(
       onAction({
         action: 'change_priority',
         issueIds: [],
         value: selectedPriority,
-      });
-      setPriorityDialogOpen(false);
-      setSelectedPriority('');
-    }
+      })
+    );
+    setPriorityDialogOpen(false);
+    setSelectedPriority('');
   };
 
-  const handleStatusChange = () => {
-    if (selectedStatus) {
+  const handleStatusChange = async () => {
+    if (!selectedStatus || isPending) return;
+    await Promise.resolve(
       onAction({
         action: 'change_status',
         issueIds: [],
         value: selectedStatus,
-      });
-      setStatusDialogOpen(false);
-      setSelectedStatus('');
-    }
+      })
+    );
+    setStatusDialogOpen(false);
+    setSelectedStatus('');
   };
 
-  const handleClose = () => {
-    onAction({
-      action: 'close',
-      issueIds: [],
-      value: 'closed',
-    });
+  const handleClose = async () => {
+    if (isPending) return;
+    await Promise.resolve(
+      onAction({
+        action: 'close',
+        issueIds: [],
+        value: 'closed',
+      })
+    );
   };
 
   const handleBulkDelete = async () => {
-    const confirmed = await confirm.confirm({
-      title: 'Delete Issues',
-      description: `Are you sure you want to delete ${selectedCount} selected issue${selectedCount === 1 ? '' : 's'}? This action cannot be undone.`,
-      confirmLabel: 'Delete Issues',
-      variant: 'destructive',
-    });
+    if (isPending || isDeleteConfirming) return;
+    setIsDeleteConfirming(true);
 
-    if (confirmed.confirmed) {
-      onAction({
-        action: 'delete',
-        issueIds: [],
+    try {
+      const confirmed = await confirm.confirm({
+        title: 'Delete Issues',
+        description: `Are you sure you want to delete ${selectedCount} selected issue${selectedCount === 1 ? '' : 's'}? This action cannot be undone.`,
+        confirmLabel: 'Delete Issues',
+        variant: 'destructive',
       });
+
+      if (confirmed.confirmed) {
+        await Promise.resolve(
+          onAction({
+            action: 'delete',
+            issueIds: [],
+          })
+        );
+      }
+    } finally {
+      setIsDeleteConfirming(false);
     }
+  };
+
+  const handleAssignDialogOpenChange = (open: boolean) => {
+    if (!open && isPending) return;
+    setAssignDialogOpen(open);
+  };
+
+  const handlePriorityDialogOpenChange = (open: boolean) => {
+    if (!open && isPending) return;
+    setPriorityDialogOpen(open);
+  };
+
+  const handleStatusDialogOpenChange = (open: boolean) => {
+    if (!open && isPending) return;
+    setStatusDialogOpen(open);
   };
 
   return (
@@ -143,7 +174,13 @@ export function IssueBulkActions({
         {/* Selection count */}
         <div className="flex items-center gap-2 border-r px-2">
           <span className="text-sm font-medium">{selectedCount} selected</span>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClearSelection}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={onClearSelection}
+            disabled={isPending}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -193,15 +230,15 @@ export function IssueBulkActions({
           size="sm"
           className="text-destructive hover:text-destructive"
           onClick={handleBulkDelete}
-          disabled={isPending}
+          disabled={isPending || isDeleteConfirming}
         >
           <Trash2 className="mr-1 h-4 w-4" />
-          Delete
+          {isDeleteConfirming ? 'Confirming...' : 'Delete'}
         </Button>
       </div>
 
       {/* Assign Dialog */}
-      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+      <Dialog open={assignDialogOpen} onOpenChange={handleAssignDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Assign Issues</DialogTitle>
@@ -209,7 +246,7 @@ export function IssueBulkActions({
               Assign {selectedCount} issue{selectedCount > 1 ? 's' : ''} to a team member.
             </DialogDescription>
           </DialogHeader>
-          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+          <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={isPending}>
             <SelectTrigger>
               <SelectValue placeholder="Select assignee" />
             </SelectTrigger>
@@ -223,7 +260,11 @@ export function IssueBulkActions({
             </SelectContent>
           </Select>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handleAssignDialogOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
             <Button onClick={handleAssign} disabled={!selectedUserId || isPending}>
@@ -234,7 +275,7 @@ export function IssueBulkActions({
       </Dialog>
 
       {/* Priority Dialog */}
-      <Dialog open={priorityDialogOpen} onOpenChange={setPriorityDialogOpen}>
+      <Dialog open={priorityDialogOpen} onOpenChange={handlePriorityDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change Priority</DialogTitle>
@@ -242,7 +283,7 @@ export function IssueBulkActions({
               Update priority for {selectedCount} issue{selectedCount > 1 ? 's' : ''}.
             </DialogDescription>
           </DialogHeader>
-          <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+          <Select value={selectedPriority} onValueChange={setSelectedPriority} disabled={isPending}>
             <SelectTrigger>
               <SelectValue placeholder="Select priority" />
             </SelectTrigger>
@@ -254,7 +295,11 @@ export function IssueBulkActions({
             </SelectContent>
           </Select>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPriorityDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handlePriorityDialogOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
             <Button onClick={handlePriorityChange} disabled={!selectedPriority || isPending}>
@@ -265,7 +310,7 @@ export function IssueBulkActions({
       </Dialog>
 
       {/* Status Dialog */}
-      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+      <Dialog open={statusDialogOpen} onOpenChange={handleStatusDialogOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change Status</DialogTitle>
@@ -273,7 +318,7 @@ export function IssueBulkActions({
               Update status for {selectedCount} issue{selectedCount > 1 ? 's' : ''}.
             </DialogDescription>
           </DialogHeader>
-          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+          <Select value={selectedStatus} onValueChange={setSelectedStatus} disabled={isPending}>
             <SelectTrigger>
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
@@ -286,7 +331,11 @@ export function IssueBulkActions({
             </SelectContent>
           </Select>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handleStatusDialogOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
             <Button onClick={handleStatusChange} disabled={!selectedStatus || isPending}>

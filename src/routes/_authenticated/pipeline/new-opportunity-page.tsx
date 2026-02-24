@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { PageLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePickerControl } from '@/components/shared';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -52,10 +53,43 @@ interface NewOpportunityPageProps {
 
 export default function NewOpportunityPage({ search }: NewOpportunityPageProps) {
   const navigate = useNavigate();
-  const { stage: stageParam } = search;
+  const { stage: stageParam, customerId: searchCustomerId } = search;
+
+  return (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="New Opportunity"
+        description="Create a new opportunity in your pipeline"
+        actions={
+          <Button variant="outline" onClick={() => navigate({ to: '/pipeline' })}>
+            Back to Pipeline
+          </Button>
+        }
+      />
+      <PageLayout.Content>
+        <NewOpportunityForm
+          key={searchCustomerId ?? 'new'}
+          searchCustomerId={searchCustomerId}
+          stageParam={stageParam}
+          navigate={navigate}
+        />
+      </PageLayout.Content>
+    </PageLayout>
+  );
+}
+
+function NewOpportunityForm({
+  searchCustomerId,
+  stageParam,
+  navigate,
+}: {
+  searchCustomerId?: string;
+  stageParam?: string;
+  navigate: (opts: { to: string } | { to: string; params: { opportunityId: string } }) => void;
+}) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState(searchCustomerId ?? '');
   const [stage, setStage] = useState<OpportunityStage>(normalizeStage(stageParam));
   const [probability, setProbability] = useState(STAGE_PROBABILITY_DEFAULTS[stage]);
   const [valueDollars, setValueDollars] = useState('0');
@@ -71,7 +105,7 @@ export default function NewOpportunityPage({ search }: NewOpportunityPageProps) 
     setProbability(STAGE_PROBABILITY_DEFAULTS[nextStage]);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!customerId) {
       toastError('Please select a customer.');
@@ -112,18 +146,7 @@ export default function NewOpportunityPage({ search }: NewOpportunityPageProps) 
   const isLoading = customersQuery.isLoading || createOpportunity.isPending;
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="New Opportunity"
-        description="Create a new opportunity in your pipeline"
-        actions={
-          <Button variant="outline" onClick={() => navigate({ to: '/pipeline' })}>
-            Back to Pipeline
-          </Button>
-        }
-      />
-      <PageLayout.Content>
-        <Card>
+    <Card>
           <CardHeader>
             <CardTitle>Opportunity Details</CardTitle>
           </CardHeader>
@@ -144,11 +167,17 @@ export default function NewOpportunityPage({ search }: NewOpportunityPageProps) 
                         <SelectValue placeholder="Select customer" />
                       </SelectTrigger>
                       <SelectContent>
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id}>
-                            {customer.name}
-                          </SelectItem>
-                        ))}
+                        {!customers?.length ? (
+                          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                            No customers found
+                          </div>
+                        ) : (
+                          customers.map((customer) => (
+                            <SelectItem key={customer.id} value={customer.id}>
+                              {customer.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -217,15 +246,11 @@ export default function NewOpportunityPage({ search }: NewOpportunityPageProps) 
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="expectedCloseDate">Expected Close Date</Label>
-                    <Input
-                      id="expectedCloseDate"
-                      type="date"
-                      value={expectedCloseDate}
-                      onChange={(e) => setExpectedCloseDate(e.target.value)}
-                    />
-                  </div>
+                  <DatePickerControl
+                    label="Expected Close Date"
+                    value={expectedCloseDate}
+                    onChange={setExpectedCloseDate}
+                  />
                   <div className="space-y-2">
                     <Label htmlFor="tags">Tags</Label>
                     <Input
@@ -253,7 +278,5 @@ export default function NewOpportunityPage({ search }: NewOpportunityPageProps) 
             )}
           </CardContent>
         </Card>
-      </PageLayout.Content>
-    </PageLayout>
   );
 }

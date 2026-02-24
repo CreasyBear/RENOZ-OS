@@ -26,6 +26,7 @@ import { AlertCircle } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group"
 import { Label } from "~/components/ui/label"
 import { cn } from "~/lib/utils"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { extractFieldError, type AnyFieldApi } from "./types"
 
 // ============================================================================
@@ -76,7 +77,8 @@ export function RadioGroupField({
   disabled,
   orientation = "vertical",
 }: RadioGroupFieldProps) {
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
   const id = `field-${field.name}`
 
   return (
@@ -173,7 +175,8 @@ export function RadioCardField({
   disabled,
   columns = 2,
 }: RadioCardFieldProps) {
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
   const id = `field-${field.name}`
 
   const gridClasses = {

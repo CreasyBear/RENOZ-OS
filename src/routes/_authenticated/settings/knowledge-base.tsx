@@ -16,11 +16,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/loading-state';
 import { EmptyState } from '@/components/shared/empty-state';
-import { KbCategoryTree } from '@/components/domain/support';
-import {
-  KbCategoryFormDialog,
-  type CategoryFormValues,
-} from '@/components/domain/support';
+import { ErrorState } from '@/components/shared/error-state';
+import { KbCategoryTree } from '@/components/domain/support/knowledge-base/kb-category-tree';
+import { KbCategoryFormDialog, type CategoryFormValues } from '@/components/domain/support/knowledge-base/kb-category-form-dialog';
 import {
   useKbCategories,
   useDeleteKbCategory,
@@ -54,6 +52,7 @@ function KnowledgeBaseSettingsPage() {
     data: categories,
     isLoading,
     error,
+    refetch,
   } = useKbCategories({
     includeArticleCount: true,
   });
@@ -62,6 +61,7 @@ function KnowledgeBaseSettingsPage() {
   const deleteCategoryMutation = useDeleteKbCategory();
   const createCategoryMutation = useCreateKbCategory();
   const updateCategoryMutation = useUpdateKbCategory();
+  const isCategorySubmitting = createCategoryMutation.isPending || updateCategoryMutation.isPending;
 
   const handleCreateCategory = () => {
     setEditingCategory(null);
@@ -73,26 +73,35 @@ function KnowledgeBaseSettingsPage() {
     setCategoryDialogOpen(true);
   };
 
-  const handleCloseDialog = () => {
-    setCategoryDialogOpen(false);
-    setEditingCategory(null);
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isCategorySubmitting) return;
+    setCategoryDialogOpen(nextOpen);
+    if (!nextOpen) {
+      setEditingCategory(null);
+    }
   };
 
   const handleDeleteCategory = async (category: KbCategoryResponse) => {
+    if (deleteCategoryMutation.isPending) return;
+    const impactedCount = category.articleCount ?? 0;
+    const impactMessage =
+      impactedCount > 0
+        ? `${impactedCount} article${impactedCount === 1 ? '' : 's'} will be moved to the parent category.`
+        : 'No articles are currently assigned to this category.';
+
     const confirmed = await confirm.confirm({
       title: 'Delete Category',
-      description:
-        'Are you sure you want to delete this category? All articles in this category will be moved to the parent category.',
+      description: `Are you sure you want to delete this category? ${impactMessage}`,
       confirmLabel: 'Delete Category',
       variant: 'destructive',
     });
 
     if (confirmed.confirmed) {
       try {
-        await deleteCategoryMutation.mutateAsync(category.id);
-        toast.success('Category deleted successfully');
-      } catch {
-        toast.error('Failed to delete category');
+        const result = await deleteCategoryMutation.mutateAsync(category.id);
+        toast.success(result.message ?? 'Category deleted successfully');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to delete category');
       }
     }
   };
@@ -187,7 +196,11 @@ function KnowledgeBaseSettingsPage() {
           {isLoading ? (
             <LoadingState text="Loading categories..." />
           ) : error ? (
-            <div className="text-destructive py-8 text-center">Failed to load categories</div>
+            <ErrorState
+              title="Failed to load categories"
+              message={error instanceof Error ? error.message : 'Unknown category loading error'}
+              onRetry={() => void refetch()}
+            />
           ) : categories && categories.length > 0 ? (
             <div className="rounded-lg border p-2">
               <KbCategoryTree
@@ -215,11 +228,14 @@ function KnowledgeBaseSettingsPage() {
       <KbCategoryFormDialog
         key={editingCategory?.id ?? 'new'}
         open={categoryDialogOpen}
-        onOpenChange={handleCloseDialog}
+        onOpenChange={handleDialogOpenChange}
         category={editingCategory}
         categories={categories ?? []}
-        isSubmitting={createCategoryMutation.isPending || updateCategoryMutation.isPending}
+        isSubmitting={isCategorySubmitting}
         onSubmit={handleSubmitCategory}
+        submitError={
+          editingCategory ? updateCategoryMutation.error?.message : createCategoryMutation.error?.message
+        }
       />
       </PageLayout.Content>
     </PageLayout>

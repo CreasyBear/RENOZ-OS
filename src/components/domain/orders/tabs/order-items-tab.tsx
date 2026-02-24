@@ -7,7 +7,7 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
-import { memo, useState, useMemo, useEffect } from 'react';
+import { memo, useState, useMemo, useCallback, Fragment } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import {
@@ -27,7 +27,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { FormatAmount } from '@/components/shared/format';
-import { OrderLineItemSerialsCell } from '../components/order-line-item-serials-cell';
+import { OrderLineItemSerialsCell, SerialNumbersList } from '../components';
 import { getTaxTypeLabel } from '@/lib/schemas/products/products';
 import type { OrderWithCustomer } from '@/hooks/orders/use-order-detail';
 
@@ -151,21 +151,8 @@ function TablePagination({
 export const OrderItemsTab = memo(function OrderItemsTab({
   lineItems,
 }: OrderItemsTabProps) {
-  const [page, setPage] = useState(0);
-
-  const paginatedItems = useMemo(() => {
-    if (lineItems.length <= PAGE_SIZE) return lineItems;
-    const start = page * PAGE_SIZE;
-    return lineItems.slice(start, start + PAGE_SIZE);
-  }, [lineItems, page]);
-
-  const pageCount = Math.max(1, Math.ceil(lineItems.length / PAGE_SIZE));
-  const showPagination = lineItems.length > PAGE_SIZE;
-
-  // Clamp page when pageCount changes (e.g. switched to order with fewer items)
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(0, pageCount - 1)));
-  }, [pageCount]);
+  const pageCount = Math.max(1, Math.ceil((lineItems?.length ?? 0) / PAGE_SIZE));
+  const showPagination = (lineItems?.length ?? 0) > PAGE_SIZE;
 
   if (!lineItems?.length) {
     return (
@@ -174,6 +161,37 @@ export const OrderItemsTab = memo(function OrderItemsTab({
       </div>
     );
   }
+
+  return (
+    <OrderItemsTableContent
+      key={pageCount}
+      lineItems={lineItems}
+      pageCount={pageCount}
+      showPagination={showPagination}
+    />
+  );
+});
+
+function OrderItemsTableContent({
+  lineItems,
+  pageCount,
+  showPagination,
+}: {
+  lineItems: NonNullable<OrderItemsTabProps['lineItems']>;
+  pageCount: number;
+  showPagination: boolean;
+}) {
+  const [page, setPage] = useState(0);
+  const [expandedSerialsRowId, setExpandedSerialsRowId] = useState<string | null>(null);
+  const handleToggleSerials = useCallback((lineItemId: string) => {
+    setExpandedSerialsRowId((prev) => (prev === lineItemId ? null : lineItemId));
+  }, []);
+
+  const paginatedItems = useMemo(() => {
+    if (lineItems.length <= PAGE_SIZE) return lineItems;
+    const start = page * PAGE_SIZE;
+    return lineItems.slice(start, start + PAGE_SIZE);
+  }, [lineItems, page]);
 
   return (
     <TooltipProvider>
@@ -203,55 +221,73 @@ export const OrderItemsTab = memo(function OrderItemsTab({
               </span>
             );
 
+            const serials = (item.allocatedSerialNumbers as string[] | null) ?? [];
+            const hasExpandableSerials = serials.length > 2;
+            const isExpanded = expandedSerialsRowId === item.id;
+
             return (
-              <TableRow key={item.id}>
-                <TableCell className="text-muted-foreground">{item.lineNumber}</TableCell>
-                <TableCell>
-                  {item.product?.id && item.product?.name ? (
-                    <Link
-                      to="/products/$productId"
-                      params={{ productId: item.product.id }}
-                      className="font-medium hover:underline"
-                    >
-                      {item.product.name}
-                    </Link>
-                  ) : (
-                    <div className="font-medium">{item.description}</div>
-                  )}
-                  {item.sku && (
-                    <div className="text-xs text-muted-foreground">SKU: {item.sku}</div>
-                  )}
-                  {item.product?.isSerialized && (
-                    <Badge variant="outline" className="text-[10px] ml-1 mt-0.5">
-                      Serial
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{item.quantity}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  <FormatAmount amount={Number(item.unitPrice)} />
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-medium">
-                  {hasDetailTooltip ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 cursor-help">
-                          {totalCellContent}
-                          <Info className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="max-w-xs">
-                        <LineItemDetailTooltipContent item={item} />
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    totalCellContent
-                  )}
-                </TableCell>
-                <TableCell className="text-center">
-                  <OrderLineItemSerialsCell allocatedSerialNumbers={item.allocatedSerialNumbers} />
-                </TableCell>
-              </TableRow>
+              <Fragment key={item.id}>
+                <TableRow>
+                  <TableCell className="text-muted-foreground">{item.lineNumber}</TableCell>
+                  <TableCell>
+                    {item.product?.id && item.product?.name ? (
+                      <Link
+                        to="/products/$productId"
+                        params={{ productId: item.product.id }}
+                        className="font-medium hover:underline"
+                      >
+                        {item.product.name}
+                      </Link>
+                    ) : (
+                      <div className="font-medium">{item.description}</div>
+                    )}
+                    {item.sku && (
+                      <div className="text-xs text-muted-foreground">SKU: {item.sku}</div>
+                    )}
+                    {item.product?.isSerialized && (
+                      <Badge variant="outline" className="text-[10px] ml-1 mt-0.5">
+                        Serial
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{item.quantity}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <FormatAmount amount={Number(item.unitPrice)} />
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums font-medium">
+                    {hasDetailTooltip ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 cursor-help">
+                            {totalCellContent}
+                            <Info className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-xs">
+                          <LineItemDetailTooltipContent item={item} />
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      totalCellContent
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <OrderLineItemSerialsCell
+                      allocatedSerialNumbers={item.allocatedSerialNumbers}
+                      lineItemId={hasExpandableSerials ? item.id : undefined}
+                      isExpanded={hasExpandableSerials ? isExpanded : undefined}
+                      onToggle={hasExpandableSerials ? handleToggleSerials : undefined}
+                    />
+                  </TableCell>
+                </TableRow>
+                {hasExpandableSerials && isExpanded && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="bg-muted/30 py-2 pl-8">
+                      <SerialNumbersList serials={serials} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </Fragment>
             );
           })}
         </TableBody>
@@ -268,6 +304,6 @@ export const OrderItemsTab = memo(function OrderItemsTab({
     </div>
     </TooltipProvider>
   );
-});
+}
 
 export default OrderItemsTab;

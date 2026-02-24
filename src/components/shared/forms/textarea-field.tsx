@@ -2,6 +2,7 @@
  * TextareaField Component
  *
  * Multiline text input field integrated with TanStack Form.
+ * Uses shadcn Textarea for consistent styling.
  *
  * @example
  * ```tsx
@@ -17,29 +18,31 @@
  * </form.Field>
  * ```
  */
-import { FormField } from "./form-field"
-import { cn } from "~/lib/utils"
-import type { FormFieldWithType } from "./types"
+import { Textarea } from "~/components/ui/textarea";
+import { FormField } from "./form-field";
+import { useFormFieldDisplay } from "./form-field-display-context";
+import { cn } from "~/lib/utils";
+import { extractFieldError, type FormFieldWithType } from "./types";
 
 export interface TextareaFieldProps {
   /** TanStack Form field instance */
-  field: FormFieldWithType<string | null | undefined>
+  field: FormFieldWithType<string | null | undefined>;
   /** Field label */
-  label: string
+  label: string;
   /** Placeholder text */
-  placeholder?: string
+  placeholder?: string;
   /** Whether the field is required */
-  required?: boolean
+  required?: boolean;
   /** Helper text */
-  description?: string
+  description?: string;
   /** Number of visible rows */
-  rows?: number
+  rows?: number;
   /** Additional class names for the wrapper */
-  className?: string
+  className?: string;
   /** Disabled state */
-  disabled?: boolean
+  disabled?: boolean;
   /** Maximum character length */
-  maxLength?: number
+  maxLength?: number;
 }
 
 export function TextareaField({
@@ -53,15 +56,10 @@ export function TextareaField({
   disabled,
   maxLength,
 }: TextareaFieldProps) {
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
+  const { showErrorsAfterSubmit } = useFormFieldDisplay();
+  const error = extractFieldError(field, { showErrorsAfterSubmit });
 
-  const error = typeof rawError === 'string'
-    ? rawError
-    : rawError?.message
-
-  const currentLength = field.state.value?.length ?? 0
+  const currentLength = field.state.value?.length ?? 0;
 
   return (
     <FormField
@@ -76,7 +74,7 @@ export function TextareaField({
       required={required}
       className={className}
     >
-      <textarea
+      <Textarea
         placeholder={placeholder}
         value={field.state.value ?? ""}
         onChange={(e) => field.handleChange(e.target.value)}
@@ -84,15 +82,8 @@ export function TextareaField({
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
-        className={cn(
-          "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background",
-          "placeholder:text-muted-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-          "md:text-sm",
-          "resize-y"
-        )}
+        className={cn("min-h-[80px] resize-y")}
       />
     </FormField>
-  )
+  );
 }

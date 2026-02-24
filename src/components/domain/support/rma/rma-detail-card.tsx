@@ -25,6 +25,7 @@ import { useCurrency } from '@/lib/pricing-utils';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Package, Calendar, User, FileText, Hash, ClipboardList } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 
 interface RmaDetailCardProps {
   /** From route container (useRma). */
@@ -92,7 +93,7 @@ export function RmaDetailCard({
         </CardHeader>
       )}
       {hideHeader && showActions && workflowActions && (
-        <div className="px-6 pt-4 flex justify-end">{workflowActions}</div>
+        <div className="flex justify-end px-6 pt-4">{workflowActions}</div>
       )}
 
       <CardContent className={cn('space-y-6', hideHeader && 'pt-2')}>
@@ -214,7 +215,7 @@ export function RmaDetailCard({
         {rma.internalNotes && (
           <>
             <Separator />
-            <div className="bg-muted/50 space-y-2 rounded-md p-3">
+            <div className="space-y-2 rounded-md bg-muted/50 p-3">
               <h4 className="text-muted-foreground text-sm font-medium">Internal Notes</h4>
               <p className="text-sm whitespace-pre-wrap">{rma.internalNotes}</p>
             </div>
@@ -236,7 +237,7 @@ interface DetailItemProps {
 function DetailItem({ icon: Icon, label, value }: DetailItemProps) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <Icon className="text-muted-foreground h-4 w-4" />
+      <Icon className="h-4 w-4 text-muted-foreground" />
       <span className="text-muted-foreground">{label}:</span>
       <span className="font-medium">{value}</span>
     </div>
@@ -254,7 +255,18 @@ function LineItemRow({ item }: LineItemRowProps) {
         <div className="font-medium">{item.orderLineItem?.productName ?? 'Unknown Product'}</div>
         <div className="text-muted-foreground text-sm">
           Qty: {item.quantityReturned}
-          {item.serialNumber && ` • S/N: ${item.serialNumber}`}
+          {item.serialNumber ? (
+            <>
+              {' • S/N: '}
+              <Link
+                to="/inventory/browser"
+                search={{ view: 'serialized', serializedSearch: item.serialNumber, page: 1 }}
+                className="font-mono text-primary hover:underline"
+              >
+                {item.serialNumber}
+              </Link>
+            </>
+          ) : null}
         </div>
         {item.itemReason && (
           <div className="text-muted-foreground text-sm">Reason: {item.itemReason}</div>

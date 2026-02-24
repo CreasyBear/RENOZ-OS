@@ -33,7 +33,7 @@ import { randomBytes } from 'crypto';
 import { getRequest } from '@tanstack/react-start/server';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
 import { getAppUrl } from '@/lib/server/app-url';
-import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
+import { logAuditEvent } from '@/server/functions/_shared/audit-logs-internal';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { NotFoundError, ConflictError, ValidationError, ServerError } from '@/lib/server/errors';
 import { getDefaultPreferences } from './user-preferences';
@@ -536,6 +536,9 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
     }
 
     const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${invitation.organizationId}, false)`
+        );
         // Use optimistic locking to ensure only one accept succeeds.
         const updateResult = await tx
           .update(userInvitations)

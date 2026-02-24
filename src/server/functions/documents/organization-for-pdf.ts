@@ -13,7 +13,13 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { organizations } from 'drizzle/schema';
 import { NotFoundError } from '@/lib/server/errors';
+import { logger } from '@/lib/logger';
+import { createAdminSupabase } from '@/lib/supabase/server';
 import { fetchImageAsDataUrl } from '@/lib/documents/fetch-image-as-data-url';
+import {
+  isOurStorageUrl,
+  extractStoragePathFromPublicUrl,
+} from '@/lib/storage/storage-url-utils';
 import type { DocumentOrganization } from '@/lib/documents';
 
 const addressSchema = z
@@ -89,7 +95,40 @@ export async function fetchOrganizationForDocument(
 
   let logoDataUrl: string | null = null;
   if (branding?.logoUrl) {
-    logoDataUrl = await fetchImageAsDataUrl(branding.logoUrl);
+    // Prefer Supabase storage download for our logos (bypasses fetch/CORS issues)
+    if (isOurStorageUrl(branding.logoUrl)) {
+      const storagePath = extractStoragePathFromPublicUrl(branding.logoUrl, 'public');
+      if (storagePath) {
+        try {
+          const supabase = createAdminSupabase();
+          const { data, error } = await supabase.storage
+            .from('public')
+            .download(storagePath);
+          if (!error && data) {
+            const buffer = Buffer.from(await data.arrayBuffer());
+            const base64 = buffer.toString('base64');
+            const ext = storagePath.endsWith('.jpg') || storagePath.endsWith('.jpeg')
+              ? 'jpeg'
+              : 'png';
+            logoDataUrl = `data:image/${ext};base64,${base64}`;
+          }
+        } catch (err) {
+          logger.warn('[fetchOrganizationForDocument] Supabase storage download failed', {
+            storagePath,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+    if (!logoDataUrl) {
+      logoDataUrl = await fetchImageAsDataUrl(branding.logoUrl);
+    }
+    if (!logoDataUrl) {
+      logger.warn('[fetchOrganizationForDocument] Logo could not be loaded', {
+        organizationId,
+        logoUrl: branding.logoUrl?.slice(0, 80),
+      });
+    }
   }
 
   return {

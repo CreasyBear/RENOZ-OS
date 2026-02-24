@@ -11,18 +11,12 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, gte, lte, count as drizzleCount } from 'drizzle-orm';
-import { getRequest } from '@tanstack/react-start/server';
 import { db } from '@/lib/db';
 import { auditLogs, users } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { auditLogFilterSchema } from '@/lib/schemas/users';
-import {
-  AUDIT_ACTIONS,
-  AUDIT_ENTITY_TYPES,
-  type AuditAction,
-  type AuditEntityType,
-} from 'drizzle/schema';
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 
@@ -389,64 +383,6 @@ export const getAuditStats = createServerFn({ method: 'GET' })
   });
 
 // ============================================================================
-// LOG AUDIT EVENT (internal utility)
-// ============================================================================
-
-interface LogAuditEventInput {
-  organizationId: string;
-  userId: string | null;
-  action: AuditAction | string;
-  entityType: AuditEntityType | string;
-  entityId?: string;
-  oldValues?: Record<string, unknown>;
-  newValues?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * Internal function to log an audit event.
- * Call this from other server functions when actions occur.
- */
-export async function logAuditEvent(input: LogAuditEventInput): Promise<void> {
-  // Get request context for IP/user agent if available
-  let ipAddress: string | null = null;
-  let userAgent: string | null = null;
-
-  try {
-    const request = getRequest();
-    // Try common headers for real IP (behind proxies)
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    if (forwardedFor) {
-      // Take the first IP (client's actual IP)
-      ipAddress = forwardedFor.split(',')[0].trim();
-    } else {
-      const realIp = request.headers.get('x-real-ip');
-      if (realIp) {
-        ipAddress = realIp;
-      }
-    }
-    userAgent = request.headers.get('user-agent');
-  } catch {
-    // Not in request context (e.g., background job)
-    ipAddress = null;
-    userAgent = null;
-  }
-
-  await db.insert(auditLogs).values({
-    organizationId: input.organizationId,
-    userId: input.userId,
-    action: input.action,
-    entityType: input.entityType,
-    entityId: input.entityId,
-    oldValues: input.oldValues,
-    newValues: input.newValues,
-    ipAddress,
-    userAgent,
-    metadata: input.metadata,
-  });
-}
-
-// ============================================================================
 // GET AVAILABLE ACTIONS
 // ============================================================================
 
@@ -532,7 +468,8 @@ export const exportAuditLogs = createServerFn({ method: 'POST' })
       .orderBy(desc(auditLogs.timestamp))
       .limit(10000);
 
-    // Log the export action
+    // Log the export action (dynamic import - audit-logs-internal uses getRequest, server-only)
+    const { logAuditEvent } = await import('./audit-logs-internal');
     await logAuditEvent({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,

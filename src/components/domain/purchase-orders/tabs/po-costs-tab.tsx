@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 import {
   Select,
   SelectContent,
@@ -121,10 +122,13 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
   const { data: costsData, isLoading: costsLoading } = usePurchaseOrderCosts(poId);
   const { data: allocationData, isLoading: allocationLoading } = useAllocatedCosts(poId);
 
-  // Mutations
+  // Mutations (must be declared before costDialogPending)
   const addCost = useAddPurchaseOrderCost();
   const updateCost = useUpdatePurchaseOrderCost(poId);
   const removeCost = useDeletePurchaseOrderCost(poId);
+
+  const costDialogPending = addCost.isPending || updateCost.isPending;
+  const costDialogGuards = createPendingDialogInteractionGuards(costDialogPending);
 
   const costs = costsData?.costs ?? [];
   const totalCosts = costsData?.totalCosts ?? 0;
@@ -403,7 +407,11 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          className="sm:max-w-[425px]"
+          onEscapeKeyDown={costDialogGuards.onEscapeKeyDown}
+          onInteractOutside={costDialogGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>{editingCostId ? 'Edit Cost' : 'Add Cost'}</DialogTitle>
             <DialogDescription>

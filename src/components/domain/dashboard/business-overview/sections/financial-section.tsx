@@ -197,7 +197,7 @@ export function FinancialSection({ metrics, revenueTrend, isLoading }: Financial
         {/* KPI Grid - Using shared MetricCard with drill-down */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
-            title="Revenue MTD"
+            title="Revenue (Invoiced) MTD"
             value={<FormatAmount amount={metrics?.revenueMtd ?? 0} currency="AUD" />}
             delta={metrics?.revenueMtdChange}
             icon={DollarSign}
@@ -221,7 +221,7 @@ export function FinancialSection({ metrics, revenueTrend, isLoading }: Financial
             />
           </MetricCardPopover>
           <MetricCard
-            title="Cash Received"
+            title="Revenue (Cash) MTD"
             value={<FormatAmount amount={metrics?.cashReceived ?? 0} currency="AUD" />}
             subtitle={cashSubtitle}
             icon={Banknote}

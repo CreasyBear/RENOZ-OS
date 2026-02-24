@@ -22,11 +22,14 @@ import {
   purchaseOrders,
   orders,
   activities,
+  orderLineSerialAllocations,
+  serializedItems,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { containsPattern } from '@/lib/db/utils';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { inventoryFinanceMutationSuccess } from '@/lib/server/inventory-finance-mutation-contract';
 import { inventoryLogger } from '@/lib/logger';
 import {
   inventoryListQuerySchema,
@@ -43,6 +46,19 @@ import {
   type RecentMovement,
 } from '@/lib/schemas/inventory';
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
+import { normalizeSerial } from '@/lib/serials';
+import {
+  addSerializedItemEvent,
+  isMissingSerializedInfraError,
+  upsertSerializedItemForInventory,
+} from '@/server/functions/_shared/serialized-lineage';
+import {
+  assertSerializedInventoryCostIntegrity,
+  consumeLayersFIFO,
+  moveLayersBetweenInventory,
+  createReceiptLayersWithCostComponents,
+  recomputeInventoryValueFromLayers,
+} from '@/server/functions/_shared/inventory-finance';
 
 // ============================================================================
 // TYPES
@@ -539,18 +555,39 @@ export const adjustInventory = createServerFn({ method: 'POST' })
   .inputValidator(stockAdjustmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
+    const [product] = await db
+      .select({ id: products.id, isSerialized: products.isSerialized })
+      .from(products)
+      .where(
+        and(
+          eq(products.id, data.productId),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!product) {
+      throw new NotFoundError('Product not found', 'product');
+    }
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Read WITH lock inside transaction to prevent race conditions
       let [inventoryRecord] = await tx
         .select({
           id: inventory.id,
+          serialNumber: inventory.serialNumber,
           quantityOnHand: inventory.quantityOnHand,
           unitCost: inventory.unitCost,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .where(
           and(
+            data.inventoryId ? eq(inventory.id, data.inventoryId) : undefined,
             eq(inventory.organizationId, ctx.organizationId),
             eq(inventory.productId, data.productId),
             eq(inventory.locationId, data.locationId)
@@ -562,6 +599,36 @@ export const adjustInventory = createServerFn({ method: 'POST' })
       // Use fresh data from locked row
       const previousQuantity = inventoryRecord?.quantityOnHand ?? 0;
       const newQuantity = previousQuantity + data.adjustmentQty;
+      const valuationBefore = Number(inventoryRecord?.totalValue ?? 0);
+      const layerDeltas: Array<{
+        inventoryId?: string;
+        layerId?: string;
+        quantityDelta: number;
+        costDelta: number;
+        action: string;
+      }> = [];
+      const affectedLayerIds = new Set<string>();
+
+      if (product.isSerialized) {
+        if (!data.inventoryId) {
+          throw new ValidationError('Serialized adjustment requires a specific inventory item', {
+            inventoryId: ['Select a serialized inventory row to adjust'],
+          });
+        }
+        if (!inventoryRecord?.serialNumber) {
+          throw new ValidationError('Serialized adjustment requires an inventory row with a serial number');
+        }
+        if (Math.abs(data.adjustmentQty) !== 1) {
+          throw new ValidationError('Serialized adjustment must be exactly one unit (+1 or -1)', {
+            adjustmentQty: ['Serialized items can only be adjusted one unit at a time'],
+          });
+        }
+        if (newQuantity !== 0 && newQuantity !== 1) {
+          throw new ValidationError('Serialized inventory quantity must remain 0 or 1', {
+            adjustmentQty: [`Adjustment would result in invalid serialized quantity ${newQuantity}`],
+          });
+        }
+      }
 
       // Validate with fresh locked data
       if (newQuantity < 0) {
@@ -616,6 +683,80 @@ export const adjustInventory = createServerFn({ method: 'POST' })
           .returning();
       }
 
+      const adjustmentQuantity = Math.abs(data.adjustmentQty);
+      let movementUnitCost = Number(inventoryRecord.unitCost ?? 0);
+      let movementTotalCost = movementUnitCost * data.adjustmentQty;
+      if (data.adjustmentQty < 0) {
+        const consumed = await consumeLayersFIFO(tx, {
+          organizationId: ctx.organizationId,
+          inventoryId: inventoryRecord.id,
+          quantity: adjustmentQuantity,
+        });
+        if (consumed.quantityUnfulfilled > 0) {
+          throw new ValidationError('Adjustment cannot consume more than active cost layers', {
+            adjustmentQty: [
+              `Missing ${consumed.quantityUnfulfilled} layer units for this adjustment`,
+            ],
+            code: ['insufficient_cost_layers'],
+          });
+        }
+        movementTotalCost = -Math.abs(consumed.totalCost);
+        movementUnitCost = adjustmentQuantity > 0 ? consumed.totalCost / adjustmentQuantity : 0;
+        for (const delta of consumed.layerDeltas) {
+          affectedLayerIds.add(delta.layerId);
+          layerDeltas.push({
+            inventoryId: delta.inventoryId,
+            layerId: delta.layerId,
+            quantityDelta: -delta.quantity,
+            costDelta: -(delta.quantity * delta.unitCost),
+            action: 'consume_fifo',
+          });
+        }
+      } else if (data.adjustmentQty > 0) {
+        const layerId = await createReceiptLayersWithCostComponents(tx, {
+          organizationId: ctx.organizationId,
+          inventoryId: inventoryRecord.id,
+          quantity: adjustmentQuantity,
+          receivedAt: new Date(),
+          unitCost: movementUnitCost,
+          referenceType: 'adjustment',
+          currency: 'AUD',
+          createdBy: ctx.user.id,
+          costComponents: [
+            {
+              componentType: 'base_unit_cost',
+              costType: 'adjustment',
+              amountTotal: movementUnitCost * adjustmentQuantity,
+              amountPerUnit: movementUnitCost,
+              quantityBasis: adjustmentQuantity,
+              metadata: { reason: data.reason },
+            },
+          ],
+        });
+        affectedLayerIds.add(layerId);
+        layerDeltas.push({
+          inventoryId: inventoryRecord.id,
+          layerId,
+          quantityDelta: adjustmentQuantity,
+          costDelta: movementUnitCost * adjustmentQuantity,
+          action: 'create_adjustment_layer',
+        });
+        movementTotalCost = movementUnitCost * adjustmentQuantity;
+      }
+      const recomputed = await recomputeInventoryValueFromLayers(tx, {
+        organizationId: ctx.organizationId,
+        inventoryId: inventoryRecord.id,
+        userId: ctx.user.id,
+      });
+      if (product.isSerialized && inventoryRecord?.serialNumber) {
+        await assertSerializedInventoryCostIntegrity(tx, {
+          organizationId: ctx.organizationId,
+          inventoryId: inventoryRecord.id,
+          serialNumber: inventoryRecord.serialNumber,
+          expectedQuantityOnHand: newQuantity as 0 | 1,
+        });
+      }
+
       // Create movement record
       const [movement] = await tx
         .insert(inventoryMovements)
@@ -628,16 +769,83 @@ export const adjustInventory = createServerFn({ method: 'POST' })
           quantity: data.adjustmentQty,
           previousQuantity,
           newQuantity,
-          unitCost: inventoryRecord.unitCost,
-          totalCost: sql`${data.adjustmentQty} * COALESCE(${inventoryRecord.unitCost}, 0)`,
+          unitCost: movementUnitCost,
+          totalCost: movementTotalCost,
           referenceType: 'adjustment',
           metadata: {
             reason: data.reason,
+            serialNumbers:
+              product.isSerialized && inventoryRecord?.serialNumber
+                ? [normalizeSerial(inventoryRecord.serialNumber)]
+                : undefined,
           },
           notes: data.notes,
           createdBy: ctx.user.id,
         })
         .returning();
+
+      if (product.isSerialized && inventoryRecord?.serialNumber) {
+        const normalizedSerial = normalizeSerial(inventoryRecord.serialNumber);
+        try {
+          if (newQuantity > 0) {
+            const serializedItemId = await upsertSerializedItemForInventory(tx, {
+              organizationId: ctx.organizationId,
+              productId: data.productId,
+              serialNumber: normalizedSerial,
+              inventoryId: inventoryRecord.id,
+              status: 'available',
+              userId: ctx.user.id,
+            });
+            if (serializedItemId) {
+              await addSerializedItemEvent(tx, {
+                organizationId: ctx.organizationId,
+                serializedItemId,
+                eventType: 'status_changed',
+                entityType: 'inventory_movement',
+                entityId: movement.id,
+                notes: `Adjusted inventory (${data.adjustmentQty > 0 ? '+' : ''}${data.adjustmentQty})`,
+                userId: ctx.user.id,
+              });
+            }
+          } else {
+            const [serializedItem] = await tx
+              .select({ id: serializedItems.id })
+              .from(serializedItems)
+              .where(
+                and(
+                  eq(serializedItems.organizationId, ctx.organizationId),
+                  eq(serializedItems.serialNumberNormalized, normalizedSerial)
+                )
+              )
+              .limit(1);
+
+            if (serializedItem) {
+              await tx
+                .update(serializedItems)
+                .set({
+                  status: 'scrapped',
+                  currentInventoryId: null,
+                  updatedBy: ctx.user.id,
+                  updatedAt: new Date(),
+                })
+                .where(eq(serializedItems.id, serializedItem.id));
+              await addSerializedItemEvent(tx, {
+                organizationId: ctx.organizationId,
+                serializedItemId: serializedItem.id,
+                eventType: 'status_changed',
+                entityType: 'inventory_movement',
+                entityId: movement.id,
+                notes: `Adjusted out (${data.reason})`,
+                userId: ctx.user.id,
+              });
+            }
+          }
+        } catch (error) {
+          if (!isMissingSerializedInfraError(error)) {
+            throw error;
+          }
+        }
+      }
 
       // Log activity for adjustment (significant movement) - inside transaction for atomicity
       const activityExists = await checkActivityExists(tx, ctx.organizationId, movement.id);
@@ -658,10 +866,23 @@ export const adjustInventory = createServerFn({ method: 'POST' })
         });
       }
 
-      return {
-        item: inventoryRecord,
-        movement,
-      };
+      return inventoryFinanceMutationSuccess(
+        {
+          item: inventoryRecord,
+          movement,
+        },
+        'Inventory adjusted successfully',
+        {
+          affectedInventoryIds: [inventoryRecord.id],
+          affectedLayerIds: Array.from(affectedLayerIds),
+          financeMetadata: {
+            valuationBefore,
+            valuationAfter: Number(recomputed.totalValue ?? 0),
+            cogsImpact: data.adjustmentQty < 0 ? Math.abs(movementTotalCost) : 0,
+            layerDeltas,
+          },
+        }
+      );
     });
   });
 
@@ -672,6 +893,21 @@ export const transferInventory = createServerFn({ method: 'POST' })
   .inputValidator(stockTransferSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.transfer });
+    const [product] = await db
+      .select({ id: products.id, isSerialized: products.isSerialized })
+      .from(products)
+      .where(
+        and(
+          eq(products.id, data.productId),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!product) {
+      throw new NotFoundError('Product not found', 'product');
+    }
 
     if (data.fromLocationId === data.toLocationId) {
       throw new ValidationError('Cannot transfer to the same location', {
@@ -679,13 +915,49 @@ export const transferInventory = createServerFn({ method: 'POST' })
       });
     }
 
+    const normalizedSerials = (data.serialNumbers ?? []).map((serial) => normalizeSerial(serial));
+    if (product.isSerialized) {
+      if (normalizedSerials.length === 0) {
+        throw new ValidationError('Serialized transfer requires serial numbers', {
+          serialNumbers: ['Select at least one serial number to transfer'],
+        });
+      }
+      if (normalizedSerials.length !== data.quantity) {
+        throw new ValidationError('Quantity must match serial count for serialized products', {
+          quantity: [
+            `Expected quantity ${normalizedSerials.length} to match selected serial numbers`,
+          ],
+        });
+      }
+    } else if (normalizedSerials.length > 0) {
+      throw new ValidationError('Serial numbers are only valid for serialized products', {
+        serialNumbers: ['Remove serial numbers for non-serialized transfer'],
+      });
+    }
+
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+      const affectedInventoryIds = new Set<string>();
+      const affectedLayerIds = new Set<string>();
+      let valuationBefore = 0;
+      let valuationAfter = 0;
+      const layerDeltas: Array<{
+        inventoryId?: string;
+        layerId?: string;
+        quantityDelta: number;
+        costDelta: number;
+        action: string;
+      }> = [];
+
       // Read source WITH lock inside transaction to prevent race conditions
       const [sourceInventory] = await tx
         .select()
         .from(inventory)
         .where(
           and(
+            data.inventoryId ? eq(inventory.id, data.inventoryId) : undefined,
             eq(inventory.organizationId, ctx.organizationId),
             eq(inventory.productId, data.productId),
             eq(inventory.locationId, data.fromLocationId)
@@ -698,6 +970,258 @@ export const transferInventory = createServerFn({ method: 'POST' })
         throw new NotFoundError('Source inventory not found', 'inventory');
       }
 
+      if (product.isSerialized) {
+        const serialSet = new Set(normalizedSerials);
+        const serializedSourceRows = await tx
+          .select()
+          .from(inventory)
+          .where(
+            and(
+              eq(inventory.organizationId, ctx.organizationId),
+              eq(inventory.productId, data.productId),
+              eq(inventory.locationId, data.fromLocationId),
+              inArray(inventory.serialNumber, normalizedSerials)
+            )
+          )
+          .for('update');
+
+        const bySerial = new Map(
+          serializedSourceRows
+            .filter((row) => !!row.serialNumber)
+            .map((row) => [normalizeSerial(row.serialNumber as string), row] as const)
+        );
+
+        if (bySerial.size !== serialSet.size) {
+          const missing = normalizedSerials.find((serial) => !bySerial.has(serial));
+          throw new ValidationError('Serial not found in source location', {
+            serialNumbers: [`Serial ${missing ?? 'unknown'} is not in source inventory`],
+          });
+        }
+
+        for (const serialNumber of normalizedSerials) {
+          const row = bySerial.get(serialNumber);
+          if (!row) continue;
+          if ((row.quantityAvailable ?? 0) < 1) {
+            throw new ValidationError('Serial is not available for transfer', {
+              serialNumbers: [`Serial ${serialNumber} has no available quantity`],
+            });
+          }
+
+          const sourcePrevQty = Number(row.quantityOnHand ?? 0);
+          const sourceNextQty = sourcePrevQty - 1;
+          const sourcePrevValue = Number(row.totalValue ?? 0);
+          valuationBefore += sourcePrevValue;
+          affectedInventoryIds.add(row.id);
+          await tx
+            .update(inventory)
+            .set({
+              quantityOnHand: sourceNextQty,
+              updatedAt: new Date(),
+              updatedBy: ctx.user.id,
+            })
+            .where(eq(inventory.id, row.id));
+
+          await tx.insert(inventoryMovements).values({
+            organizationId: ctx.organizationId,
+            inventoryId: row.id,
+            productId: data.productId,
+            locationId: data.fromLocationId,
+            movementType: 'transfer',
+            quantity: -1,
+            previousQuantity: sourcePrevQty,
+            newQuantity: sourceNextQty,
+            unitCost: row.unitCost,
+            totalCost: sql`${-1} * COALESCE(${row.unitCost}, 0)`,
+            referenceType: 'transfer',
+            metadata: {
+              serialNumbers: [serialNumber],
+              fromLocationId: data.fromLocationId,
+              toLocationId: data.toLocationId,
+            },
+            notes: data.notes,
+            createdBy: ctx.user.id,
+          });
+
+          let [destRow] = await tx
+            .select()
+            .from(inventory)
+            .where(
+              and(
+                eq(inventory.organizationId, ctx.organizationId),
+                eq(inventory.productId, data.productId),
+                eq(inventory.locationId, data.toLocationId),
+                eq(inventory.serialNumber, serialNumber)
+              )
+            )
+            .for('update')
+            .limit(1);
+
+          const destPrevQty = Number(destRow?.quantityOnHand ?? 0);
+          const destNextQty = destPrevQty + 1;
+          const destPrevValue = Number(destRow?.totalValue ?? 0);
+          valuationBefore += destPrevValue;
+          if (!destRow) {
+            [destRow] = await tx
+              .insert(inventory)
+              .values({
+                organizationId: ctx.organizationId,
+                productId: data.productId,
+                locationId: data.toLocationId,
+                status: 'available',
+                quantityOnHand: 1,
+                quantityAllocated: 0,
+                unitCost: row.unitCost,
+                totalValue: 0,
+                lotNumber: row.lotNumber,
+                serialNumber,
+                expiryDate: row.expiryDate,
+                createdBy: ctx.user.id,
+                updatedBy: ctx.user.id,
+              })
+              .returning();
+          } else {
+            if (destPrevQty >= 1) {
+              throw new ValidationError('Serialized destination already has an active unit', {
+                serialNumbers: [`Serial ${serialNumber} already exists at destination location`],
+                code: ['serialized_unit_violation'],
+              });
+            }
+            [destRow] = await tx
+              .update(inventory)
+              .set({
+                quantityOnHand: destNextQty,
+                updatedAt: new Date(),
+                updatedBy: ctx.user.id,
+              })
+              .where(eq(inventory.id, destRow.id))
+              .returning();
+          }
+
+          const transferred = await moveLayersBetweenInventory(tx, {
+            organizationId: ctx.organizationId,
+            sourceInventoryId: row.id,
+            destinationInventoryId: destRow.id,
+            quantity: 1,
+            referenceType: 'transfer',
+            receivedAt: new Date(),
+          });
+          if (transferred.quantityUnfulfilled > 0) {
+            throw new ValidationError('Serialized transfer has missing layer quantities', {
+              serialNumbers: [`Serial ${serialNumber} missing cost layers`],
+              code: ['layer_transfer_mismatch'],
+            });
+          }
+          const sourceRecomputed = await recomputeInventoryValueFromLayers(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: row.id,
+            userId: ctx.user.id,
+          });
+          const destRecomputed = await recomputeInventoryValueFromLayers(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: destRow.id,
+            userId: ctx.user.id,
+          });
+          valuationAfter += Number(sourceRecomputed.totalValue ?? 0);
+          valuationAfter += Number(destRecomputed.totalValue ?? 0);
+          affectedInventoryIds.add(destRow.id);
+          for (const delta of transferred.layerDeltas) {
+            affectedLayerIds.add(delta.layerId);
+            layerDeltas.push({
+              inventoryId: delta.inventoryId,
+              layerId: delta.layerId,
+              quantityDelta: -delta.quantity,
+              costDelta: -(delta.quantity * delta.unitCost),
+              action: 'transfer_out',
+            });
+          }
+          transferred.createdLayerIds.forEach((layerId, index) => {
+            const correspondingDelta = transferred.layerDeltas[index];
+            affectedLayerIds.add(layerId);
+            layerDeltas.push({
+              inventoryId: destRow.id,
+              layerId,
+              quantityDelta: correspondingDelta?.quantity ?? 1,
+              costDelta: correspondingDelta
+                ? correspondingDelta.quantity * correspondingDelta.unitCost
+                : Number(row.unitCost ?? 0),
+              action: 'transfer_in',
+            });
+          });
+          await assertSerializedInventoryCostIntegrity(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: row.id,
+            serialNumber,
+            expectedQuantityOnHand: 0,
+          });
+          await assertSerializedInventoryCostIntegrity(tx, {
+            organizationId: ctx.organizationId,
+            inventoryId: destRow.id,
+            serialNumber,
+            expectedQuantityOnHand: 1,
+          });
+
+          await tx.insert(inventoryMovements).values({
+            organizationId: ctx.organizationId,
+            inventoryId: destRow.id,
+            productId: data.productId,
+            locationId: data.toLocationId,
+            movementType: 'transfer',
+            quantity: 1,
+            previousQuantity: destPrevQty,
+            newQuantity: destNextQty,
+            unitCost: row.unitCost,
+            totalCost: row.unitCost,
+            referenceType: 'transfer',
+            metadata: {
+              serialNumbers: [serialNumber],
+              fromLocationId: data.fromLocationId,
+              toLocationId: data.toLocationId,
+            },
+            notes: data.notes,
+            createdBy: ctx.user.id,
+          });
+
+          const serializedItemId = await upsertSerializedItemForInventory(tx, {
+            organizationId: ctx.organizationId,
+            productId: data.productId,
+            serialNumber,
+            inventoryId: destRow.id,
+            status: 'available',
+            userId: ctx.user.id,
+          });
+          if (serializedItemId) {
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId,
+              eventType: 'status_changed',
+              entityType: 'inventory',
+              entityId: destRow.id,
+              notes: `Transferred from ${data.fromLocationId} to ${data.toLocationId}`,
+              userId: ctx.user.id,
+            });
+          }
+        }
+
+        return inventoryFinanceMutationSuccess(
+          {
+            sourceItem: { ...sourceInventory, quantityOnHand: Number(sourceInventory.quantityOnHand ?? 0) - data.quantity },
+            destinationItem: null,
+            movement: null,
+          },
+          'Inventory transferred successfully',
+          {
+            affectedInventoryIds: Array.from(affectedInventoryIds),
+            affectedLayerIds: Array.from(affectedLayerIds),
+            financeMetadata: {
+              valuationBefore,
+              valuationAfter,
+              cogsImpact: 0,
+              layerDeltas,
+            },
+          }
+        );
+      }
+
       // Validate with fresh locked data
       if ((sourceInventory.quantityAvailable ?? 0) < data.quantity) {
         throw new ValidationError('Insufficient available quantity for transfer', {
@@ -707,11 +1231,12 @@ export const transferInventory = createServerFn({ method: 'POST' })
 
       // Use fresh data from locked row
       const newSourceQty = (sourceInventory.quantityOnHand ?? 0) - data.quantity;
+      valuationBefore += Number(sourceInventory.totalValue ?? 0);
+      affectedInventoryIds.add(sourceInventory.id);
       await tx
         .update(inventory)
         .set({
           quantityOnHand: newSourceQty,
-          totalValue: sql`${newSourceQty} * COALESCE(${inventory.unitCost}, 0)`,
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
@@ -750,6 +1275,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
 
       const destPrevQty = destInventory?.quantityOnHand ?? 0;
       const destNewQty = destPrevQty + data.quantity;
+      valuationBefore += Number(destInventory?.totalValue ?? 0);
 
       if (!destInventory) {
         [destInventory] = await tx
@@ -762,7 +1288,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
             quantityOnHand: destNewQty,
             quantityAllocated: 0,
             unitCost: sourceInventory.unitCost,
-            totalValue: sql`${destNewQty} * COALESCE(${sourceInventory.unitCost}, 0)`,
+            totalValue: 0,
             createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
           })
@@ -772,13 +1298,63 @@ export const transferInventory = createServerFn({ method: 'POST' })
           .update(inventory)
           .set({
             quantityOnHand: destNewQty,
-            totalValue: sql`${destNewQty} * COALESCE(${inventory.unitCost}, 0)`,
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
           .where(eq(inventory.id, destInventory.id))
           .returning();
       }
+
+      const movedLayers = await moveLayersBetweenInventory(tx, {
+        organizationId: ctx.organizationId,
+        sourceInventoryId: sourceInventory.id,
+        destinationInventoryId: destInventory.id,
+        quantity: data.quantity,
+        referenceType: 'transfer',
+        receivedAt: new Date(),
+      });
+      if (movedLayers.quantityUnfulfilled > 0) {
+        throw new ValidationError('Transfer has missing layer quantities', {
+          quantity: [`${movedLayers.quantityUnfulfilled} units have no cost layer to transfer`],
+          code: ['layer_transfer_mismatch'],
+        });
+      }
+      const sourceRecomputed = await recomputeInventoryValueFromLayers(tx, {
+        organizationId: ctx.organizationId,
+        inventoryId: sourceInventory.id,
+        userId: ctx.user.id,
+      });
+      const destRecomputed = await recomputeInventoryValueFromLayers(tx, {
+        organizationId: ctx.organizationId,
+        inventoryId: destInventory.id,
+        userId: ctx.user.id,
+      });
+      valuationAfter += Number(sourceRecomputed.totalValue ?? 0);
+      valuationAfter += Number(destRecomputed.totalValue ?? 0);
+      affectedInventoryIds.add(destInventory.id);
+      for (const delta of movedLayers.layerDeltas) {
+        affectedLayerIds.add(delta.layerId);
+        layerDeltas.push({
+          inventoryId: delta.inventoryId,
+          layerId: delta.layerId,
+          quantityDelta: -delta.quantity,
+          costDelta: -(delta.quantity * delta.unitCost),
+          action: 'transfer_out',
+        });
+      }
+      movedLayers.createdLayerIds.forEach((layerId, index) => {
+        const correspondingDelta = movedLayers.layerDeltas[index];
+        affectedLayerIds.add(layerId);
+        layerDeltas.push({
+          inventoryId: destInventory.id,
+          layerId,
+          quantityDelta: correspondingDelta?.quantity ?? 0,
+          costDelta: correspondingDelta
+            ? correspondingDelta.quantity * correspondingDelta.unitCost
+            : 0,
+          action: 'transfer_in',
+        });
+      });
 
       // Create inbound movement
       const [movement] = await tx
@@ -819,11 +1395,24 @@ export const transferInventory = createServerFn({ method: 'POST' })
         });
       }
 
-      return {
-        sourceItem: { ...sourceInventory, quantityOnHand: newSourceQty },
-        destinationItem: destInventory,
-        movement,
-      };
+      return inventoryFinanceMutationSuccess(
+        {
+          sourceItem: { ...sourceInventory, quantityOnHand: newSourceQty },
+          destinationItem: destInventory,
+          movement,
+        },
+        'Inventory transferred successfully',
+        {
+          affectedInventoryIds: Array.from(affectedInventoryIds),
+          affectedLayerIds: Array.from(affectedLayerIds),
+          financeMetadata: {
+            valuationBefore,
+            valuationAfter,
+            cogsImpact: 0,
+            layerDeltas,
+          },
+        }
+      );
     });
   });
 
@@ -852,6 +1441,9 @@ export const allocateInventory = createServerFn({ method: 'POST' })
     return await retryWithBackoff(
       () =>
         db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Read WITH lock inside transaction to prevent race conditions
       const [item] = await tx
         .select()
@@ -864,6 +1456,15 @@ export const allocateInventory = createServerFn({ method: 'POST' })
 
       if (!item) {
         throw new NotFoundError('Inventory item not found', 'inventory');
+      }
+
+      const normalizedSerialNumber = item.serialNumber
+        ? normalizeSerial(item.serialNumber)
+        : null;
+      if (normalizedSerialNumber && data.quantity !== 1) {
+        throw new ValidationError('Serialized allocation must be exactly one unit', {
+          quantity: ['Serialized inventory rows can only allocate one unit per operation'],
+        });
       }
 
       // Validate with fresh locked data
@@ -910,6 +1511,28 @@ export const allocateInventory = createServerFn({ method: 'POST' })
         })
         .returning();
 
+      if (normalizedSerialNumber) {
+        const serializedItemId = await upsertSerializedItemForInventory(tx, {
+          organizationId: ctx.organizationId,
+          productId: item.productId,
+          serialNumber: normalizedSerialNumber,
+          inventoryId: data.inventoryId,
+          status: 'allocated',
+          userId: ctx.user.id,
+        });
+        if (serializedItemId) {
+          await addSerializedItemEvent(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId,
+            eventType: 'allocated',
+            entityType: 'inventory_movement',
+            entityId: movement.id,
+            notes: `Allocated via ${data.referenceType}`,
+            userId: ctx.user.id,
+          });
+        }
+      }
+
       // Log activity for allocation - inside transaction for atomicity
       const activityExists = await checkActivityExists(tx, ctx.organizationId, movement.id);
       if (!activityExists) {
@@ -954,6 +1577,9 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.allocate });
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Read WITH lock inside transaction to prevent race conditions
       const [item] = await tx
         .select()
@@ -966,6 +1592,15 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
 
       if (!item) {
         throw new NotFoundError('Inventory item not found', 'inventory');
+      }
+
+      const normalizedSerialNumber = item.serialNumber
+        ? normalizeSerial(item.serialNumber)
+        : null;
+      if (normalizedSerialNumber && data.quantity !== 1) {
+        throw new ValidationError('Serialized deallocation must be exactly one unit', {
+          quantity: ['Serialized inventory rows can only deallocate one unit per operation'],
+        });
       }
 
       // Validate with fresh locked data
@@ -1010,6 +1645,28 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
           createdBy: ctx.user.id,
         })
         .returning();
+
+      if (normalizedSerialNumber) {
+        const serializedItemId = await upsertSerializedItemForInventory(tx, {
+          organizationId: ctx.organizationId,
+          productId: item.productId,
+          serialNumber: normalizedSerialNumber,
+          inventoryId: data.inventoryId,
+          status: newAllocated > 0 ? 'allocated' : 'available',
+          userId: ctx.user.id,
+        });
+        if (serializedItemId) {
+          await addSerializedItemEvent(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId,
+            eventType: 'deallocated',
+            entityType: 'inventory_movement',
+            entityId: movement.id,
+            notes: data.reason ?? 'Deallocated inventory reservation',
+            userId: ctx.user.id,
+          });
+        }
+      }
 
       // Log activity for deallocation - inside transaction for atomicity
       const activityExists = await checkActivityExists(tx, ctx.organizationId, movement.id);
@@ -1065,7 +1722,7 @@ export const receiveInventory = createServerFn({ method: 'POST' })
 
     // Validate product exists (only need id for existence check)
     const [product] = await db
-      .select({ id: products.id })
+      .select({ id: products.id, isSerialized: products.isSerialized })
       .from(products)
       .where(and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId)))
       .limit(1);
@@ -1073,8 +1730,21 @@ export const receiveInventory = createServerFn({ method: 'POST' })
     if (!product) {
       throw new NotFoundError('Product not found', 'product');
     }
+    const normalizedSerialNumber = data.serialNumber ? normalizeSerial(data.serialNumber) : undefined;
+    if (product.isSerialized && !normalizedSerialNumber) {
+      throw new ValidationError('Serialized products require a serial number');
+    }
+    if (product.isSerialized && data.quantity !== 1) {
+      throw new ValidationError('Serialized product receive quantity must be 1 per serial');
+    }
+    if (!product.isSerialized && normalizedSerialNumber) {
+      throw new ValidationError('Serial number is only allowed for serialized products');
+    }
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Validate location exists (inside transaction)
       const [location] = await tx
         .select({ id: locations.id })
@@ -1103,6 +1773,9 @@ export const receiveInventory = createServerFn({ method: 'POST' })
             eq(inventory.organizationId, ctx.organizationId),
             eq(inventory.productId, data.productId),
             eq(inventory.locationId, data.locationId),
+            ...(product.isSerialized && normalizedSerialNumber
+              ? [eq(inventory.serialNumber, normalizedSerialNumber)]
+              : []),
             data.lotNumber ? eq(inventory.lotNumber, data.lotNumber) : isNull(inventory.lotNumber)
           )
         )
@@ -1111,6 +1784,13 @@ export const receiveInventory = createServerFn({ method: 'POST' })
 
       const prevQuantity = inventoryRecord?.quantityOnHand ?? 0;
       const newQuantity = prevQuantity + data.quantity;
+      const valuationBefore = Number(inventoryRecord?.totalValue ?? 0);
+      if (product.isSerialized && newQuantity > 1) {
+        throw new ValidationError('Serialized inventory cannot exceed one unit', {
+          quantity: [`Serial ${normalizedSerialNumber ?? ''} is already in stock`],
+          code: ['serialized_unit_violation'],
+        });
+      }
 
       // Calculate weighted average cost
       const prevTotalCost = inventoryRecord?.totalValue ?? 0;
@@ -1128,9 +1808,9 @@ export const receiveInventory = createServerFn({ method: 'POST' })
             quantityOnHand: newQuantity,
             quantityAllocated: 0,
             unitCost: newUnitCost,
-            totalValue: newTotalCost,
+            totalValue: 0,
             lotNumber: data.lotNumber,
-            serialNumber: data.serialNumber,
+            serialNumber: normalizedSerialNumber,
             expiryDate: data.expiryDate,
             createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
@@ -1142,7 +1822,6 @@ export const receiveInventory = createServerFn({ method: 'POST' })
           .set({
             quantityOnHand: newQuantity,
             unitCost: newUnitCost,
-            totalValue: newTotalCost,
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
@@ -1171,25 +1850,58 @@ export const receiveInventory = createServerFn({ method: 'POST' })
         })
         .returning();
 
-      // Create cost layer for FIFO
+      const costLayerId = await createReceiptLayersWithCostComponents(tx, {
+        organizationId: ctx.organizationId,
+        inventoryId: inventoryRecord.id,
+        quantity: data.quantity,
+        receivedAt: new Date(),
+        unitCost: data.unitCost,
+        referenceType: data.referenceType ?? 'adjustment',
+        referenceId: data.referenceId,
+        currency: 'AUD',
+        createdBy: ctx.user.id,
+        costComponents: [
+          {
+            componentType: 'base_unit_cost',
+            costType: 'manual_receive',
+            amountTotal: data.quantity * data.unitCost,
+            amountPerUnit: data.unitCost,
+            quantityBasis: data.quantity,
+            metadata: { source: 'inventory_receive' },
+          },
+        ],
+      });
+      const recomputed = await recomputeInventoryValueFromLayers(tx, {
+        organizationId: ctx.organizationId,
+        inventoryId: inventoryRecord.id,
+        userId: ctx.user.id,
+      });
       const [costLayer] = await tx
-        .insert(inventoryCostLayers)
-        .values({
+        .select()
+        .from(inventoryCostLayers)
+        .where(eq(inventoryCostLayers.id, costLayerId))
+        .limit(1);
+
+      if (product.isSerialized && normalizedSerialNumber) {
+        const serializedItemId = await upsertSerializedItemForInventory(tx, {
           organizationId: ctx.organizationId,
+          productId: data.productId,
+          serialNumber: normalizedSerialNumber,
           inventoryId: inventoryRecord.id,
-          receivedAt: new Date(),
-          quantityReceived: data.quantity,
-          quantityRemaining: data.quantity,
-          unitCost: String(data.unitCost),
-          referenceType: data.referenceType as
-            | 'purchase_order'
-            | 'adjustment'
-            | 'transfer'
-            | undefined,
-          referenceId: data.referenceId,
-          expiryDate: data.expiryDate,
-        })
-        .returning();
+          userId: ctx.user.id,
+        });
+        if (serializedItemId) {
+          await addSerializedItemEvent(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId,
+            eventType: 'received',
+            entityType: 'inventory_movement',
+            entityId: movement.id,
+            notes: data.notes ?? 'Received into inventory',
+            userId: ctx.user.id,
+          });
+        }
+      }
 
       // Log activity for receive - inside transaction for atomicity
       const activityExists = await checkActivityExists(tx, ctx.organizationId, movement.id);
@@ -1212,11 +1924,32 @@ export const receiveInventory = createServerFn({ method: 'POST' })
         });
       }
 
-      return {
-        item: inventoryRecord,
-        movement,
-        costLayer,
-      };
+      return inventoryFinanceMutationSuccess(
+        {
+          item: inventoryRecord,
+          movement,
+          costLayer,
+        },
+        'Inventory received successfully',
+        {
+          affectedInventoryIds: [inventoryRecord.id],
+          affectedLayerIds: [costLayerId],
+          financeMetadata: {
+            valuationBefore,
+            valuationAfter: Number(recomputed.totalValue ?? 0),
+            cogsImpact: 0,
+            layerDeltas: [
+              {
+                inventoryId: inventoryRecord.id,
+                layerId: costLayerId,
+                quantityDelta: data.quantity,
+                costDelta: data.quantity * data.unitCost,
+                action: 'receive',
+              },
+            ],
+          },
+        }
+      );
     });
   });
 
@@ -1975,6 +2708,9 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Update all items
       const updated = await tx
         .update(inventory)
@@ -2073,6 +2809,69 @@ export const getAvailableSerials = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
+    // Prefer canonical serialized lineage when migration exists.
+    try {
+      const canonicalRows = await db
+        .select({
+          id: serializedItems.id,
+          serialNumber: serializedItems.serialNumberNormalized,
+          locationId: inventory.locationId,
+          locationName: locations.name,
+          createdAt: serializedItems.createdAt,
+          activeAllocationId: orderLineSerialAllocations.id,
+        })
+        .from(serializedItems)
+        .leftJoin(
+          inventory,
+          and(
+            eq(serializedItems.currentInventoryId, inventory.id),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(locations, eq(inventory.locationId, locations.id))
+        .leftJoin(
+          orderLineSerialAllocations,
+          and(
+            eq(orderLineSerialAllocations.serializedItemId, serializedItems.id),
+            eq(orderLineSerialAllocations.organizationId, ctx.organizationId),
+            eq(orderLineSerialAllocations.isActive, true)
+          )
+        )
+        .where(
+          and(
+            eq(serializedItems.organizationId, ctx.organizationId),
+            eq(serializedItems.productId, data.productId),
+            eq(serializedItems.status, 'available'),
+            isNull(orderLineSerialAllocations.id),
+            ...(data.locationId ? [eq(inventory.locationId, data.locationId)] : [])
+          )
+        )
+        .orderBy(asc(serializedItems.createdAt))
+        .limit(500);
+
+      const availableSerials = canonicalRows.map((row) => ({
+        id: row.id,
+        serialNumber: row.serialNumber,
+        locationId: row.locationId,
+        locationName: row.locationName,
+        receivedAt: row.createdAt ? new Date(row.createdAt).toISOString() : undefined,
+      }));
+
+      return {
+        productId: data.productId,
+        availableSerials,
+        totalAvailable: availableSerials.length,
+      } satisfies GetAvailableSerialsResult;
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      const message = (error as { message?: string })?.message ?? '';
+      const missingCanonicalTables =
+        code === '42P01' || code === '42703' || message.includes('does not exist');
+      if (!missingCanonicalTables) {
+        throw error;
+      }
+    }
+
     // Build conditions
     const conditions = [
       eq(inventory.organizationId, ctx.organizationId),
@@ -2128,7 +2927,7 @@ export const getAvailableSerials = createServerFn({ method: 'GET' })
       .filter((item) => item.serialNumber?.trim()) // Filter out null/empty serials
       .map((item) => ({
         id: item.id,
-        serialNumber: item.serialNumber!.trim(),
+        serialNumber: normalizeSerial(item.serialNumber!),
         locationId: item.locationId,
         locationName: item.locationName,
         receivedAt: item.createdAt ? new Date(item.createdAt).toISOString() : undefined,

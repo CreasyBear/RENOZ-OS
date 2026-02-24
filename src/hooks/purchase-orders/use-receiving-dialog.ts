@@ -78,15 +78,16 @@ export function useReceivingDialog(
   // Sync state when initialPOId changes (e.g., URL param updates)
   // Only update if it's different to avoid unnecessary re-renders
   useEffect(() => {
-    if (initialPOId && initialPOId !== selectedPOId) {
+    if (initialPOId) {
       setSelectedPOId(initialPOId);
       setIsOpen(true);
-    } else if (!initialPOId && selectedPOId) {
-      // URL param was cleared, close dialog
-      setSelectedPOId(null);
-      setIsOpen(false);
+      return;
     }
-  }, [initialPOId, selectedPOId]);
+
+    // URL param was cleared (e.g. back navigation), so close URL-synced dialog state.
+    setSelectedPOId(null);
+    setIsOpen(false);
+  }, [initialPOId]);
 
   // Clear URL param helper
   const clearUrlParam = useCallback(() => {

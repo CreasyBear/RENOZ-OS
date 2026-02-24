@@ -1,242 +1,213 @@
 /**
- * Credit Note PDF Template - Accounting Style
+ * Credit Note PDF Template
  *
- * Similar to invoice template but for credit notes/refunds.
- * Shows credit amount, reason, and related order/invoice reference.
+ * 20pt margins, two-column From/Credit To, 9pt typography,
+ * black borders, 21pt total. Fixed header on all pages.
  */
 
-import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
 import {
   PageNumber,
-  FixedDocumentHeader,
-  pageMargins,
-  fixedHeaderClearance,
+  DocumentFixedHeader,
+  formatAddressLines,
   colors,
-  spacing,
-  fontSize,
+  tabularNums,
   FONT_FAMILY,
   FONT_WEIGHTS,
   formatCurrencyForPdf,
   formatDateForPdf,
+  DOCUMENT_PAGE_MARGINS,
+  DOCUMENT_FIXED_HEADER_CLEARANCE,
+  DOCUMENT_BORDER_COLOR,
+  DOCUMENT_LOGO_HEIGHT,
+  DOCUMENT_LOGO_MAX_WIDTH,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { DocumentOrganization } from "../../types";
 
 // ============================================================================
-// STYLES - Reuse invoice styles
+// STYLES
 // ============================================================================
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: pageMargins.top,
-    paddingBottom: pageMargins.bottom,
-    paddingLeft: pageMargins.left,
-    paddingRight: pageMargins.right,
+    paddingTop: DOCUMENT_PAGE_MARGINS.top,
+    paddingBottom: DOCUMENT_PAGE_MARGINS.bottom,
+    paddingLeft: DOCUMENT_PAGE_MARGINS.left,
+    paddingRight: DOCUMENT_PAGE_MARGINS.right,
     backgroundColor: colors.background.white,
+    color: colors.text.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
   },
   content: {
     flex: 1,
-    marginTop: fixedHeaderClearance,
+    marginTop: DOCUMENT_FIXED_HEADER_CLEARANCE,
   },
+
+  // Header: Meta left, Logo right
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.lg,
+    marginBottom: 20,
   },
-  companySection: {
+  metaSection: {
     flex: 1,
   },
-  companyName: {
-    fontSize: fontSize.lg,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  companyDetail: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
-    lineHeight: 1.4,
-  },
-  creditNoteInfo: {
-    alignItems: "flex-end",
-  },
-  creditNoteTitle: {
-    fontSize: fontSize["2xl"],
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.primary,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  infoRow: {
-    flexDirection: "row",
-    marginBottom: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+  metaTitle: {
+    fontSize: 21,
     fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    width: 80,
-    textAlign: "right",
-    marginRight: spacing.sm,
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
-    width: 100,
+    marginBottom: 8,
   },
-  statusBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 4,
-    marginTop: spacing.xs,
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    gap: 2,
   },
-  statusApplied: {
-    backgroundColor: colors.status.successLight,
+  metaLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
   },
-  statusIssued: {
-    backgroundColor: colors.status.infoLight,
+  metaValue: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
   },
   statusText: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    textTransform: "uppercase",
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    marginTop: 4,
   },
-  statusTextApplied: {
-    color: colors.status.success,
+  logoWrapper: {
+    maxWidth: DOCUMENT_LOGO_MAX_WIDTH,
   },
-  statusTextIssued: {
-    color: colors.status.info,
+  logo: {
+    height: DOCUMENT_LOGO_HEIGHT,
+    objectFit: "contain",
   },
-  billToSection: {
-    marginBottom: spacing.lg,
+
+  // From/Credit To two-column
+  fromToRow: {
+    flexDirection: "row",
+    marginTop: 20,
   },
-  billToLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    marginBottom: spacing.xs,
+  fromColumn: {
+    flex: 1,
+    marginRight: 10,
   },
-  billToName: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+  toColumn: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  sectionLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
-  billToDetail: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+  sectionName: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  sectionDetail: {
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
   },
+
+  // Summary - marginTop 60, width 250, 21pt total, plain black border
   summarySection: {
-    marginTop: spacing.lg,
+    marginTop: 60,
+    marginBottom: 40,
     flexDirection: "row",
     justifyContent: "flex-end",
   },
   summaryBox: {
-    width: 240,
+    width: 250,
   },
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: spacing.xs,
+    marginBottom: 5,
   },
   summaryLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
   summaryValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
     textAlign: "right",
+    ...tabularNums,
   },
   summaryTotal: {
     flexDirection: "row",
     justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: colors.border.medium,
-    paddingTop: spacing.sm,
-    marginTop: spacing.sm,
+    alignItems: "center",
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
+    paddingTop: 5,
+    marginTop: 5,
   },
   summaryTotalLabel: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
   },
   summaryTotalValue: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: 21,
+    fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
     textAlign: "right",
+    ...tabularNums,
   },
-  creditAmount: {
+  statusRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: colors.status.successLight,
-    padding: spacing.sm,
-    marginTop: spacing.sm,
-    borderRadius: 4,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
+    paddingTop: 5,
+    marginTop: 5,
   },
-  creditAmountLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.status.success,
+  statusRowLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
   },
-  creditAmountValue: {
-    fontSize: fontSize.lg,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.status.success,
-    textAlign: "right",
+  statusRowValue: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
   },
+
+  // Reason
   reasonSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
   },
   reasonLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    marginBottom: spacing.xs,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+    marginBottom: 4,
   },
   reasonText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
-  },
-  qrSection: {
-    marginTop: spacing.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: spacing.lg,
   },
 });
 
@@ -245,7 +216,7 @@ const styles = StyleSheet.create({
 // ============================================================================
 
 export interface CreditNoteDocumentData {
-  documentNumber: string; // e.g., "CN-2024-001"
+  documentNumber: string;
   issueDate: Date;
   customer: {
     id: string;
@@ -261,8 +232,8 @@ export interface CreditNoteDocumentData {
       country?: string | null;
     } | null;
   };
-  amount: number; // Credit amount (positive number)
-  gstAmount: number; // GST included in credit
+  amount: number;
+  gstAmount: number;
   reason: string;
   relatedOrderNumber?: string | null;
   relatedOrderId?: string | null;
@@ -288,87 +259,80 @@ function CreditNoteContent({ data }: CreditNotePdfTemplateProps) {
   const isApplied = data.status === "applied";
   const isIssued = data.status === "issued";
 
+  const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
+  const fromAddressLines = formatAddressLines(organization.address);
+  const toAddressLines = formatAddressLines(data.customer.address);
+
+  const totalCredit = data.amount + data.gstAmount;
+
   return (
     <Page size="A4" style={styles.page}>
-      <FixedDocumentHeader
+      <DocumentFixedHeader
         orgName={organization.name}
         documentType="Credit Note"
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header - Company left, Credit Note info right */}
+        {/* Header: Meta left, Logo right */}
         <View style={styles.headerRow}>
-          <View style={styles.companySection}>
-            <Text style={styles.companyName}>{organization.name}</Text>
-            {organization.address && (
-              <>
-                <Text style={styles.companyDetail}>
-                  {organization.address.addressLine1}
-                  {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
-                </Text>
-                <Text style={styles.companyDetail}>
-                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
-                </Text>
-                {organization.phone && (
-                  <Text style={styles.companyDetail}>{organization.phone}</Text>
-                )}
-              </>
-            )}
-          </View>
-
-          <View style={styles.creditNoteInfo}>
-            <Text style={styles.creditNoteTitle}>Credit Note</Text>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Number</Text>
-              <Text style={styles.infoValue}>{data.documentNumber}</Text>
+          <View style={styles.metaSection}>
+            <Text style={styles.metaTitle}>Credit Note</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Credit Note: </Text>
+              <Text style={styles.metaValue}>{data.documentNumber}</Text>
             </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Date</Text>
-              <Text style={styles.infoValue}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Date: </Text>
+              <Text style={styles.metaValue}>
                 {formatDateForPdf(data.issueDate, locale, "short")}
               </Text>
             </View>
-
             {data.relatedOrderNumber && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Invoice</Text>
-                <Text style={styles.infoValue}>{data.relatedOrderNumber}</Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Invoice: </Text>
+                <Text style={styles.metaValue}>{data.relatedOrderNumber}</Text>
               </View>
             )}
+            {isApplied && <Text style={styles.statusText}>Applied</Text>}
+            {isIssued && !isApplied && <Text style={styles.statusText}>Issued</Text>}
+          </View>
 
-            {isApplied && (
-              <View style={[styles.statusBadge, styles.statusApplied]}>
-                <Text style={[styles.statusText, styles.statusTextApplied]}>Applied</Text>
-              </View>
+          {logoUrl && (
+            <View style={styles.logoWrapper}>
+              <Image src={logoUrl} style={styles.logo} />
+            </View>
+          )}
+        </View>
+
+        {/* From / Credit To two-column */}
+        <View style={styles.fromToRow}>
+          <View style={styles.fromColumn}>
+            <Text style={styles.sectionLabel}>From</Text>
+            <Text style={styles.sectionName}>{organization.name}</Text>
+            {organization.taxId && (
+              <Text style={styles.sectionDetail}>ABN: {organization.taxId}</Text>
             )}
-            {isIssued && !isApplied && (
-              <View style={[styles.statusBadge, styles.statusIssued]}>
-                <Text style={[styles.statusText, styles.statusTextIssued]}>Issued</Text>
-              </View>
+            {fromAddressLines.map((line) => (
+              <Text key={line} style={styles.sectionDetail}>{line}</Text>
+            ))}
+            {organization.phone && (
+              <Text style={styles.sectionDetail}>{organization.phone}</Text>
+            )}
+          </View>
+          <View style={styles.toColumn}>
+            <Text style={styles.sectionLabel}>Credit To</Text>
+            <Text style={styles.sectionName}>{data.customer.name}</Text>
+            {toAddressLines.length > 0 ? (
+              toAddressLines.map((line) => (
+                <Text key={line} style={styles.sectionDetail}>{line}</Text>
+              ))
+            ) : (
+              <Text style={styles.sectionDetail}>—</Text>
             )}
           </View>
         </View>
 
-        {/* Bill To */}
-        <View style={styles.billToSection}>
-          <Text style={styles.billToLabel}>Credit To</Text>
-          <Text style={styles.billToName}>{data.customer.name}</Text>
-          {data.customer.address && (
-            <>
-              <Text style={styles.billToDetail}>
-                {data.customer.address.addressLine1}
-                {data.customer.address.addressLine2 ? `, ${data.customer.address.addressLine2}` : ""}
-              </Text>
-              <Text style={styles.billToDetail}>
-                {`${data.customer.address.city}, ${data.customer.address.state} ${data.customer.address.postalCode}`}
-              </Text>
-            </>
-          )}
-        </View>
-
-        {/* Summary - unbreakable */}
+        {/* Summary */}
         <View style={styles.summarySection} wrap={false}>
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
@@ -377,7 +341,7 @@ function CreditNoteContent({ data }: CreditNotePdfTemplateProps) {
                 {formatCurrencyForPdf(data.amount, organization.currency, locale)}
               </Text>
             </View>
-            
+
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>GST (10%)</Text>
               <Text style={styles.summaryValue}>
@@ -388,28 +352,28 @@ function CreditNoteContent({ data }: CreditNotePdfTemplateProps) {
             <View style={styles.summaryTotal}>
               <Text style={styles.summaryTotalLabel}>Total Credit</Text>
               <Text style={styles.summaryTotalValue}>
-                {formatCurrencyForPdf(data.amount + data.gstAmount, organization.currency, locale)}
+                {formatCurrencyForPdf(totalCredit, organization.currency, locale)}
               </Text>
             </View>
 
-            <View style={styles.creditAmount}>
-              <Text style={styles.creditAmountLabel}>Credit Amount</Text>
-              <Text style={styles.creditAmountValue}>
-                {formatCurrencyForPdf(data.amount + data.gstAmount, organization.currency, locale)}
+            <View style={styles.statusRow}>
+              <Text style={styles.statusRowLabel}>Status</Text>
+              <Text style={styles.statusRowValue}>
+                {isApplied ? "Applied" : isIssued ? "Issued" : "—"}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Reason - allow orphans/widows for long text */}
+        {/* Reason */}
         <View style={styles.reasonSection}>
           <Text style={styles.reasonLabel}>Reason for Credit</Text>
-          <Text style={styles.reasonText} orphans={2} widows={2}>{data.reason}</Text>
+          <Text style={styles.reasonText} orphans={2} widows={2}>
+            {data.reason}
+          </Text>
         </View>
-
       </View>
 
-      {/* Page Number */}
       <PageNumber documentNumber={data.documentNumber} />
     </Page>
   );

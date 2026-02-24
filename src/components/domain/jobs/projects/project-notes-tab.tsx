@@ -56,6 +56,7 @@ import { toast } from '@/lib/toast';
 
 // Hooks
 import { useNotes, useDeleteNote } from '@/hooks/jobs';
+import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { useUserLookup } from '@/hooks/users';
 
 // Dialogs
@@ -599,14 +600,15 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
     return counts;
   }, [notes]);
 
+  const confirmation = useConfirmation();
   const handleDeleteNote = async (note: NoteWithAuthor) => {
-    if (confirm(`Delete note "${note.title}"?`)) {
-      try {
-        await deleteNote.mutateAsync(note.id);
-        toast.success('Note deleted');
-      } catch {
-        toast.error('Failed to delete note');
-      }
+    const { confirmed } = await confirmation.confirm(confirmations.delete(note.title, 'note'));
+    if (!confirmed) return;
+    try {
+      await deleteNote.mutateAsync(note.id);
+      toast.success('Note deleted');
+    } catch {
+      toast.error('Failed to delete note');
     }
   };
 

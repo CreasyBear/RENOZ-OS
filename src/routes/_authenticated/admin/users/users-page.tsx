@@ -8,7 +8,7 @@
  * @source stats from users-page-container.tsx
  * @see src/routes/_authenticated/admin/users/users-page-container.tsx - Container component
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Users, UserCheck, Mail, UserX } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
@@ -20,6 +20,13 @@ import {
   buildFilterItems,
   countActiveFilters,
 } from '@/components/shared/filters';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { UsersTablePresenter } from './users-table-presenter';
 import type { UserTableItem } from '@/lib/schemas/users';
 import {
@@ -93,6 +100,15 @@ interface UsersAdminPagePresenterProps {
 // PRESENTER COMPONENT
 // ============================================================================
 
+const BULK_ROLES = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'sales', label: 'Sales' },
+  { value: 'operations', label: 'Operations' },
+  { value: 'support', label: 'Support' },
+  { value: 'viewer', label: 'Viewer' },
+] as const;
+
 export default function UsersAdminPagePresenter({
   users,
   stats,
@@ -117,6 +133,8 @@ export default function UsersAdminPagePresenter({
   isSelected,
   clearSelection,
 }: UsersAdminPagePresenterProps) {
+  const [bulkRoleSelect, setBulkRoleSelect] = useState('');
+
   // Sort state for server-side sorting
   const sortField = search.sortBy ?? 'name';
   const sortDirection = search.sortOrder ?? 'asc';
@@ -212,24 +230,30 @@ export default function UsersAdminPagePresenter({
             {selectedIds.size} user(s) selected
           </span>
           <div className="flex items-center gap-2">
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  onBulkRoleChange(e.target.value, selectedIds);
-                  e.target.value = '';
+            <Select
+              value={bulkRoleSelect || '__placeholder__'}
+              onValueChange={(value) => {
+                if (value && value !== '__placeholder__') {
+                  onBulkRoleChange(value, selectedIds);
+                  setBulkRoleSelect('');
                 }
               }}
-              className="rounded-md border border-indigo-300 px-3 py-1 text-sm focus:border-indigo-500 focus:ring-indigo-500"
               disabled={isLoading}
             >
-              <option value="">Change Role...</option>
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="sales">Sales</option>
-              <option value="operations">Operations</option>
-              <option value="support">Support</option>
-              <option value="viewer">Viewer</option>
-            </select>
+              <SelectTrigger className="h-8 w-[140px] rounded-md border-indigo-300">
+                <SelectValue placeholder="Change Role..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__placeholder__" disabled>
+                  Change Role...
+                </SelectItem>
+                {BULK_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <button
               onClick={() => onExport('csv', selectedIds)}
               disabled={isLoading}

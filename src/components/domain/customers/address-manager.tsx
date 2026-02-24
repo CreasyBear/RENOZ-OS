@@ -48,8 +48,10 @@ import {
   TextField,
   SelectField,
   CheckboxField,
+  FormFieldDisplayProvider,
 } from '@/components/shared/forms'
 import { addressTypeValues } from '@/lib/schemas/customers'
+import { toast } from 'sonner'
 
 // ============================================================================
 // TYPES
@@ -261,6 +263,9 @@ function AddressFormDialog({
       form.reset()
       onOpenChange(false)
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.')
+    },
   })
 
   // Reset form when dialog opens with new values
@@ -309,6 +314,7 @@ function AddressFormDialog({
           }}
           className="space-y-4"
         >
+          <FormFieldDisplayProvider form={form}>
           <form.Field name="type">
             {(field) => (
               <SelectField
@@ -404,6 +410,8 @@ function AddressFormDialog({
               />
             )}
           </form.Field>
+
+          </FormFieldDisplayProvider>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

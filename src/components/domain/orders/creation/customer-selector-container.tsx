@@ -11,7 +11,7 @@
  * @see customer-selector.tsx for the presenter component
  */
 
-import { memo, useState, useCallback, useEffect, useRef } from 'react';
+import { memo, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { CustomerSelector, type SelectedCustomer } from './customer-selector';
 import { useCustomers, useCustomer } from '@/hooks/customers';
 
@@ -193,6 +193,20 @@ export const CustomerSelectorContainer = memo(function CustomerSelectorContainer
     status: customer.status,
   }));
 
+  const selectedCustomer = useMemo(() => {
+    if (selectedCustomerData) {
+      return mapToSelectedCustomer(selectedCustomerData);
+    }
+    if (!selectedCustomerId) return null;
+    const summary = customers.find((c) => c.id === selectedCustomerId);
+    if (!summary) return null;
+    return {
+      ...summary,
+      billingAddress: undefined,
+      shippingAddress: undefined,
+    };
+  }, [selectedCustomerData, selectedCustomerId, customers]);
+
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
   }, []);
@@ -208,6 +222,7 @@ export const CustomerSelectorContainer = memo(function CustomerSelectorContainer
       search={search}
       onSearchChange={handleSearchChange}
       customers={customers}
+      selectedCustomer={selectedCustomer}
       isLoading={isLoading}
       error={error}
       className={className}

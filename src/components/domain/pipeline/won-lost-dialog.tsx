@@ -9,21 +9,14 @@
 
 import { useMemo } from "react";
 import { Trophy, XCircle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { FormatAmount } from "@/components/shared/format";
 import {
-  FormActions,
+  FormDialog,
   SelectField,
   TextField,
   TextareaField,
 } from "@/components/shared/forms";
+import { toast } from "sonner";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { useWinLossReasons } from "@/hooks/settings";
 import type { WinLossDialog, WinLossReasonType } from "@/lib/schemas/pipeline";
@@ -82,6 +75,9 @@ export function WonLostDialog({
 
   const form = useTanStackForm<WinLossDialog>({
     schema: winLossDialogSchema,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     defaultValues: {
       winLossReasonId: "",
       lostNotes: "",
@@ -106,46 +102,47 @@ export function WonLostDialog({
   if (!opportunity) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isWon ? (
-              <>
-                <Trophy className="h-5 w-5 text-green-600" />
-                Mark as Won
-              </>
-            ) : (
-              <>
-                <XCircle className="h-5 w-5 text-red-600" />
-                Mark as Lost
-              </>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {isWon ? (
-              <>
-                Congratulations! Mark {opportunity.title} as won for{" "}
-                <span className="font-semibold">
-                  <FormatAmount amount={opportunity.value} />
-                </span>
-                ?
-              </>
-            ) : (
-              <>
-                Mark {opportunity.title} as lost?
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            form.handleSubmit();
-          }}
-        >
-          <div className="space-y-4 py-4">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          {isWon ? (
+            <>
+              <Trophy className="h-5 w-5 text-green-600" />
+              Mark as Won
+            </>
+          ) : (
+            <>
+              <XCircle className="h-5 w-5 text-red-600" />
+              Mark as Lost
+            </>
+          )}
+        </span>
+      }
+      description={
+        isWon ? (
+          <>
+            Congratulations! Mark {opportunity.title} as won for{" "}
+            <span className="font-semibold">
+              <FormatAmount amount={opportunity.value} />
+            </span>
+            ?
+          </>
+        ) : (
+          <>Mark {opportunity.title} as lost?</>
+        )
+      }
+      form={form}
+      submitLabel={isWon ? "Confirm Win" : "Confirm Loss"}
+      loadingLabel={isWon ? "Confirming win..." : "Confirming loss..."}
+      submitVariant={isWon ? "default" : "destructive"}
+      submitDisabled={reasons.length === 0}
+      size="sm"
+      className="sm:max-w-[425px]"
+      resetOnClose={false}
+    >
+      <div className="space-y-4 py-4">
             <form.Field name="winLossReasonId">
               {(field) => (
                 <SelectField
@@ -194,21 +191,7 @@ export function WonLostDialog({
               )}
             </form.Field>
           </div>
-
-          <DialogFooter>
-            <FormActions
-              form={form}
-              submitLabel={isWon ? "Confirm Win" : "Confirm Loss"}
-              loadingLabel={isWon ? "Confirming win..." : "Confirming loss..."}
-              submitVariant={isWon ? "default" : "destructive"}
-              onCancel={onCancel}
-              submitDisabled={reasons.length === 0}
-              align="right"
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }
 

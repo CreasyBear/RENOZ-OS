@@ -264,13 +264,13 @@ export function validateOrderBusinessRules(result: OrderCalculationResult): {
     warnings.push('Order total is negative - please review discounts');
   }
 
-  // Check for unusually high GST amounts
-  if (result.gstAmount > result.subtotal) {
+  // Check for unusually high GST amounts (skip when subtotal is 0 - shipping-only orders are valid)
+  if (result.subtotal > 0 && result.gstAmount > result.subtotal) {
     warnings.push('GST amount exceeds subtotal - please verify GST rate');
   }
 
   // Check for discount exceeding subtotal
-  if (result.discountAmount > result.subtotal) {
+  if (result.subtotal > 0 && result.discountAmount > result.subtotal) {
     warnings.push('Total discount exceeds subtotal - please review discount amounts');
   }
 

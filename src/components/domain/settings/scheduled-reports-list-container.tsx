@@ -207,11 +207,10 @@ export function ScheduledReportsListContainer({
         }
         setFormOpen(false);
         setEditingReport(null);
-      } catch (err) {
+      } catch {
         toast.error(
           editingReport ? 'Failed to update report' : 'Failed to create report'
         );
-        throw err;
       }
     },
     [editingReport, createMutation, updateMutation]
@@ -408,6 +407,7 @@ export function ScheduledReportsListContainer({
         report={editingReport}
         onSubmit={handleFormSubmit}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
+        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
       />
     </div>
   );

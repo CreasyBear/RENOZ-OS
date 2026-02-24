@@ -25,8 +25,7 @@ import {
   amendmentListCursorQuerySchema,
   type ItemChange,
 } from '@/lib/schemas';
-import { GST_RATE } from '@/lib/order-calculations';
-import { calculateLineItemTotals } from '@/server/functions/orders/orders';
+import { calculateLineItemTotals, calculateOrderTotals } from '@/server/functions/orders/orders';
 
 interface ListAmendmentsResult {
   amendments: (typeof orderAmendments.$inferSelect)[];
@@ -41,20 +40,21 @@ interface ListAmendmentsResult {
 // ============================================================================
 
 /**
- * Recalculate order totals with explicit shipping amount.
- * Used when applying shipping_change amendments.
- * 
- * Calculation: subtotal + shipping = taxable amount
- *              taxable amount * GST_RATE = tax
- *              taxable amount + tax = total
+ * Recalculate order totals from line items with optional shipping and discount overrides.
+ * Used when applying shipping_change or discount_change amendments.
  */
-async function recalculateOrderTotalsWithShipping(
+async function recalculateOrderTotalsForAmendment(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   orderId: string,
   organizationId: string,
-  shippingAmount: number
+  opts: {
+    shippingAmount: number;
+    discountPercent?: number | null;
+    discountAmount?: number | null;
+  }
 ): Promise<{
   subtotal: number;
+  discountAmount: number;
   taxAmount: number;
   total: number;
 }> {
@@ -68,25 +68,17 @@ async function recalculateOrderTotalsWithShipping(
       and(eq(orderLineItems.orderId, orderId), eq(orderLineItems.organizationId, organizationId))
     );
 
-  // Subtotal from line items (line totals already include tax per line)
-  const lineSubtotal = lineItems.reduce((sum, item) => sum + (item.lineTotal ?? 0), 0);
-  const lineTaxTotal = lineItems.reduce((sum, item) => sum + (item.taxAmount ?? 0), 0);
-  
-  // Subtotal is line totals minus their tax (net of GST)
-  const subtotal = lineSubtotal - lineTaxTotal;
-  
-  // Calculate GST on (subtotal + shipping)
-  const taxableAmount = subtotal + shippingAmount;
-  const taxAmount = Math.round(taxableAmount * GST_RATE * 100) / 100;
-  
-  // Total = taxable amount + tax
-  const total = Math.round((taxableAmount + taxAmount) * 100) / 100;
+  const lineItemTotals = lineItems.map((item) => ({
+    lineTotal: Number(item.lineTotal ?? 0),
+    taxAmount: Number(item.taxAmount ?? 0),
+  }));
 
-  return {
-    subtotal: Math.round(subtotal * 100) / 100,
-    taxAmount,
-    total,
-  };
+  return calculateOrderTotals(
+    lineItemTotals,
+    opts.discountPercent ?? null,
+    opts.discountAmount ?? null,
+    opts.shippingAmount
+  );
 }
 
 // ============================================================================
@@ -413,6 +405,10 @@ export const applyAmendment = createServerFn({ method: 'POST' })
     // FIX #4: Wrap entire apply operation in transaction
     // Version check moved inside transaction with row lock to prevent race conditions
     const amendment = await db.transaction(async (tx) => {
+      // Set RLS context (matches pattern used by orders.ts, order-picking.ts, order-shipments.ts)
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Re-fetch order with row lock for version check
       const [order] = await tx
         .select()
@@ -457,9 +453,9 @@ export const applyAmendment = createServerFn({ method: 'POST' })
           }
         }
 
-        // Get max line number once before the loop
+        // Get max line number once before the loop (lineNumber is text, e.g. "1", "2", "001")
         const [maxLine] = await tx
-          .select({ max: sql<number>`COALESCE(MAX(${orderLineItems.lineNumber}), 0)` })
+          .select({ max: sql<string>`MAX(${orderLineItems.lineNumber})` })
           .from(orderLineItems)
           .where(
             and(
@@ -467,7 +463,7 @@ export const applyAmendment = createServerFn({ method: 'POST' })
               eq(orderLineItems.organizationId, ctx.organizationId)
             )
           );
-        let lineNumber = (maxLine?.max ?? 0);
+        let lineNumber = (parseInt(maxLine?.max ?? '0', 10) || 0);
 
         for (const itemChange of changes.itemChanges) {
           if (itemChange.action === 'add' && itemChange.productId) {
@@ -505,6 +501,30 @@ export const applyAmendment = createServerFn({ method: 'POST' })
             // FIX #3: Add orderId check to prevent IDOR
             const quantity = itemChange.after?.quantity ?? 1;
             const unitPrice = itemChange.after?.unitPrice ?? 0;
+
+            // Guard: block when reducing quantity below qtyPicked — user must unpick first
+            const [existingLine] = await tx
+              .select({ qtyPicked: orderLineItems.qtyPicked, description: orderLineItems.description })
+              .from(orderLineItems)
+              .where(
+                and(
+                  eq(orderLineItems.id, itemChange.orderLineItemId),
+                  eq(orderLineItems.organizationId, ctx.organizationId),
+                  eq(orderLineItems.orderId, order.id)
+                )
+              )
+              .limit(1);
+            if (existingLine) {
+              const qtyPicked = Number(existingLine.qtyPicked) || 0;
+              if (qtyPicked > quantity) {
+                throw new ValidationError('Unpick excess items first', {
+                  quantity: [
+                    `Line has ${qtyPicked} picked, new quantity is ${quantity}. Unpick excess items before applying amendment.`,
+                  ],
+                });
+              }
+            }
+
             const { taxAmount, lineTotal } = calculateLineItemTotals({
               quantity,
               unitPrice,
@@ -544,36 +564,52 @@ export const applyAmendment = createServerFn({ method: 'POST' })
       }
 
       // Apply shipping amount change if this is a shipping_change amendment
-      let newShippingAmount = order.shippingAmount;
+      let newShippingAmount = Number(order.shippingAmount ?? 0);
       if (existing.amendmentType === 'shipping_change' && changes.shippingAmount !== undefined) {
         newShippingAmount = changes.shippingAmount;
-        
-        // Update order with new shipping amount
-        await tx
-          .update(orders)
-          .set({
-            shippingAmount: newShippingAmount,
-            updatedBy: ctx.user.id,
-          })
-          .where(eq(orders.id, order.id));
       }
 
-      // Recalculate order totals (passes new shipping amount)
-      const totals = await recalculateOrderTotalsWithShipping(
-        tx, 
-        order.id, 
+      // Apply discount change if this is a discount_change amendment
+      let newDiscountPercent = order.discountPercent;
+      let newDiscountAmount = order.discountAmount;
+      if (existing.amendmentType === 'discount_change') {
+        const changesWithDiscount = changes as {
+          discountPercent?: number;
+          discountAmount?: number;
+        };
+        if (changesWithDiscount.discountPercent !== undefined) {
+          newDiscountPercent = changesWithDiscount.discountPercent;
+        }
+        if (changesWithDiscount.discountAmount !== undefined) {
+          newDiscountAmount = changesWithDiscount.discountAmount;
+        }
+      }
+
+      // Recalculate order totals with shipping and discount
+      const totals = await recalculateOrderTotalsForAmendment(
+        tx,
+        order.id,
         ctx.organizationId,
-        Number(newShippingAmount)
+        {
+          shippingAmount: newShippingAmount,
+          discountPercent: newDiscountPercent ?? null,
+          discountAmount: newDiscountAmount ?? null,
+        }
       );
 
-      // Update order with new totals and increment version
+      // Update order with new totals, shipping, discount, and increment version
       await tx
         .update(orders)
         .set({
           subtotal: totals.subtotal,
           taxAmount: totals.taxAmount,
           total: totals.total,
-          balanceDue: totals.total - (order.paidAmount ?? 0),
+          balanceDue: totals.total - Number(order.paidAmount ?? 0),
+          ...(existing.amendmentType === 'shipping_change' && { shippingAmount: newShippingAmount }),
+          ...(existing.amendmentType === 'discount_change' && {
+            discountPercent: newDiscountPercent,
+            discountAmount: newDiscountAmount,
+          }),
           version: (order.version ?? 1) + 1,
           updatedBy: ctx.user.id,
         })

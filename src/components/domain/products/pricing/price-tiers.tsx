@@ -3,17 +3,13 @@
  *
  * Manages volume-based pricing tiers with add/edit/delete functionality.
  */
-import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState, useCallback } from "react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import { Plus, Edit, Trash2, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -22,14 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +30,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
+  FormDialog,
+  NumberField,
+  SwitchField,
+} from "@/components/shared/forms";
+import {
   useCreatePriceTier,
   useUpdatePriceTier,
   useDeletePriceTier,
@@ -51,15 +44,15 @@ import type { PriceTier } from "@/lib/schemas/products";
 // Tier form schema
 const tierFormSchema = z.object({
   minQuantity: z.number().int().positive("Must be at least 1"),
-  maxQuantity: z.number().int().positive().nullable(),
-  price: z.number().min(0, "Price cannot be negative").nullable(),
-  discountPercent: z.number().min(0).max(100).nullable(),
+  maxQuantity: z.number().int().positive().optional().nullable(),
+  price: z.number().min(0, "Price cannot be negative").optional().nullable(),
+  discountPercent: z.number().min(0).max(100).optional().nullable(),
   isActive: z.boolean(),
 }).refine(
   (data) => !data.maxQuantity || data.maxQuantity > data.minQuantity,
   { message: "Max quantity must be greater than min quantity", path: ["maxQuantity"] }
 ).refine(
-  (data) => data.price !== null || data.discountPercent !== null,
+  (data) => data.price != null || data.discountPercent != null,
   { message: "Either price or discount percentage is required", path: ["price"] }
 );
 
@@ -93,89 +86,72 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
-  const {
-    control,
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    formState: { errors },
-  } = useForm<TierFormValues>({
-    resolver: zodResolver(tierFormSchema),
-    defaultValues: {
-      minQuantity: 1,
-      maxQuantity: null,
-      price: null,
-      discountPercent: null,
-      isActive: true,
-    },
-  });
-
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch(); known limitation
-  const watchPrice = watch("price");
-  const watchDiscount = watch("discountPercent");
-
   // Sort tiers by min quantity
   const sortedTiers = [...tiers].sort((a, b) => a.minQuantity - b.minQuantity);
+
+  const getDefaultValues = useCallback(
+    (tier?: PriceTier | null): TierFormValues => ({
+      minQuantity: tier?.minQuantity ?? (sortedTiers.length > 0
+        ? (sortedTiers[sortedTiers.length - 1].maxQuantity ?? sortedTiers[sortedTiers.length - 1].minQuantity) + 1
+        : 2),
+      maxQuantity: tier?.maxQuantity ?? null,
+      price: tier?.price ?? null,
+      discountPercent: tier?.discountPercent ?? null,
+      isActive: tier?.isActive ?? true,
+    }),
+    [sortedTiers]
+  );
+
+  const form = useTanStackForm<TierFormValues>({
+    schema: tierFormSchema,
+    defaultValues: getDefaultValues(),
+    onSubmit: (data) => {
+      const tierData = {
+        ...data,
+        maxQuantity: data.maxQuantity ?? undefined,
+        price: data.price ?? undefined,
+        discountPercent: data.discountPercent ?? undefined,
+      };
+      if (editingTier) {
+        updateMutation.mutate(
+          { id: editingTier.id, ...tierData },
+          {
+            onSuccess: () => {
+              setIsDialogOpen(false);
+              onTiersChange?.();
+            },
+          }
+        );
+      } else {
+        createMutation.mutate(
+          { productId, ...tierData },
+          {
+            onSuccess: () => {
+              setIsDialogOpen(false);
+              onTiersChange?.();
+            },
+          }
+        );
+      }
+    },
+    onSubmitInvalid: () => {},
+  });
+
+  const watchPrice = form.useWatch("price");
+  const watchDiscount = form.useWatch("discountPercent");
 
   // Open dialog for new tier
   const handleAdd = () => {
     setEditingTier(null);
-    reset({
-      minQuantity: sortedTiers.length > 0
-        ? (sortedTiers[sortedTiers.length - 1].maxQuantity ?? sortedTiers[sortedTiers.length - 1].minQuantity) + 1
-        : 2,
-      maxQuantity: null,
-      price: null,
-      discountPercent: null,
-      isActive: true,
-    });
+    form.reset(getDefaultValues());
     setIsDialogOpen(true);
   };
 
   // Open dialog for editing
   const handleEdit = (tier: PriceTier) => {
     setEditingTier(tier);
-    reset({
-      minQuantity: tier.minQuantity,
-      maxQuantity: tier.maxQuantity,
-      price: tier.price,
-      discountPercent: tier.discountPercent,
-      isActive: tier.isActive,
-    });
+    form.reset(getDefaultValues(tier));
     setIsDialogOpen(true);
-  };
-
-  // Submit form
-  const onSubmit = (data: TierFormValues) => {
-    const tierData = {
-      ...data,
-      maxQuantity: data.maxQuantity ?? undefined,
-      price: data.price ?? undefined,
-      discountPercent: data.discountPercent ?? undefined,
-    };
-
-    if (editingTier) {
-      updateMutation.mutate(
-        { id: editingTier.id, ...tierData },
-        {
-          onSuccess: () => {
-            setIsDialogOpen(false);
-            onTiersChange?.();
-          },
-        }
-      );
-    } else {
-      createMutation.mutate(
-        { productId, ...tierData },
-        {
-          onSuccess: () => {
-            setIsDialogOpen(false);
-            onTiersChange?.();
-          },
-        }
-      );
-    }
   };
 
   // Delete tier
@@ -326,147 +302,112 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
       </Card>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingTier ? "Edit Price Tier" : "Add Price Tier"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingTier
-                ? "Modify the quantity range and pricing for this tier"
-                : "Set up a new volume-based pricing tier"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Quantity Range */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="minQuantity">Min Quantity</Label>
-                <Input
-                  id="minQuantity"
-                  type="number"
-                  min="1"
-                  {...register("minQuantity", { valueAsNumber: true })}
-                />
-                {errors.minQuantity && (
-                  <p className="text-sm text-destructive">{errors.minQuantity.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="maxQuantity">Max Quantity</Label>
-                <Input
-                  id="maxQuantity"
-                  type="number"
-                  min="1"
-                  placeholder="Unlimited"
-                  {...register("maxQuantity", {
-                    setValueAs: (v) => (v === "" ? null : parseInt(v, 10)),
-                  })}
-                />
-                {errors.maxQuantity && (
-                  <p className="text-sm text-destructive">{errors.maxQuantity.message}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Pricing Options */}
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Set either a fixed price or a discount percentage (not both)
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price">Fixed Price</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder={formatPrice(basePrice)}
-                    disabled={watchDiscount !== null && watchDiscount > 0}
-                    {...register("price", {
-                      setValueAs: (v) => (v === "" ? null : parseFloat(v)),
-                    })}
-                  />
-                  {errors.price && (
-                    <p className="text-sm text-destructive">{errors.price.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="discountPercent">Discount %</Label>
-                  <Input
-                    id="discountPercent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    placeholder="e.g. 10"
-                    disabled={watchPrice !== null && watchPrice > 0}
-                    {...register("discountPercent", {
-                      setValueAs: (v) => (v === "" ? null : parseFloat(v)),
-                    })}
-                  />
-                </div>
-              </div>
-
-              {/* Preview */}
-              {(watchPrice || watchDiscount) && (
-                <div className="p-3 bg-muted rounded-md">
-                  <p className="text-sm text-muted-foreground">
-                    Effective price:{" "}
-                    <span className="font-medium text-foreground">
-                      {formatPrice(
-                        watchPrice ?? basePrice * (1 - (watchDiscount ?? 0) / 100)
-                      )}
-                    </span>
-                    {watchDiscount && (
-                      <span className="text-green-600 ml-2">
-                        ({watchDiscount}% off)
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Active Status */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Active</Label>
-                <p className="text-sm text-muted-foreground">
-                  Inactive tiers are not applied during pricing
-                </p>
-              </div>
-              <Controller
-                name="isActive"
-                control={control}
-                render={({ field }) => (
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                )}
+      <FormDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={editingTier ? "Edit Price Tier" : "Add Price Tier"}
+        description={
+          editingTier
+            ? "Modify the quantity range and pricing for this tier"
+            : "Set up a new volume-based pricing tier"
+        }
+        form={form}
+        submitLabel={editingTier ? "Update Tier" : "Create Tier"}
+        cancelLabel="Cancel"
+        loadingLabel="Saving..."
+        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
+        submitDisabled={isSubmitting}
+        className="sm:max-w-[500px]"
+      >
+        {/* Quantity Range */}
+        <div className="grid grid-cols-2 gap-4">
+          <form.Field name="minQuantity">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Min Quantity"
+                min={1}
+                required
               />
-            </div>
+            )}
+          </form.Field>
+          <form.Field name="maxQuantity">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Max Quantity"
+                min={1}
+                placeholder="Unlimited"
+              />
+            )}
+          </form.Field>
+        </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : editingTier ? "Update Tier" : "Create Tier"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        {/* Pricing Options */}
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Set either a fixed price or a discount percentage (not both)
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <form.Field name="price">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Fixed Price"
+                  min={0}
+                  step={0.01}
+                  prefix="$"
+                  placeholder={formatPrice(basePrice)}
+                  disabled={watchDiscount != null && watchDiscount > 0}
+                />
+              )}
+            </form.Field>
+            <form.Field name="discountPercent">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Discount %"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  placeholder="e.g. 10"
+                  disabled={watchPrice != null && watchPrice > 0}
+                />
+              )}
+            </form.Field>
+          </div>
+
+          {/* Preview */}
+          {(watchPrice || watchDiscount) && (
+            <div className="p-3 bg-muted rounded-md">
+              <p className="text-sm text-muted-foreground">
+                Effective price:{" "}
+                <span className="font-medium text-foreground">
+                  {formatPrice(
+                    watchPrice ?? basePrice * (1 - (watchDiscount ?? 0) / 100)
+                  )}
+                </span>
+                {watchDiscount && (
+                  <span className="text-green-600 ml-2">
+                    ({watchDiscount}% off)
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Active Status */}
+        <form.Field name="isActive">
+          {(field) => (
+            <SwitchField
+              field={field}
+              label="Active"
+              description="Inactive tiers are not applied during pricing"
+            />
+          )}
+        </form.Field>
+      </FormDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingTier} onOpenChange={() => setDeletingTier(null)}>

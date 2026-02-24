@@ -150,26 +150,29 @@ useSignOut mutation --> supabase.auth.signOut()
 ### Password Reset
 
 ```
-ForgotPasswordForm --> requestPasswordReset (server function)
-                   --> supabase.auth.resetPasswordForEmail (redirectTo: /update-password)
+ForgotPasswordForm --> checkPasswordResetAllowed (server: rate limit only)
+                   --> supabase.auth.resetPasswordForEmail (CLIENT: redirectTo: /update-password)
                    --> Email with reset link
-                   --> User clicks link --> /update-password (PKCE: code exchanged by @supabase/ssr or explicit fallback exchange)
+                   --> User clicks link --> /update-password?code=...
+                   --> beforeLoad: exchangeCodeForSession(code)
                    --> ResetPasswordForm --> supabase.auth.updateUser({ password })
                    --> Navigate to /dashboard
 ```
 
 **Key files:**
-- `src/server/functions/auth/password-reset.ts` -- rate-limited server function
+- `src/server/functions/auth/password-reset.ts` -- `checkPasswordResetAllowed` (rate limit only)
+- `src/hooks/auth/use-password-reset.ts` -- rate limit check + client `resetPasswordForEmail` (PKCE code verifier must be stored in browser)
 - `src/routes/forgot-password.tsx` -- form page
-- `src/routes/update-password.tsx` -- renders `ResetPasswordForm` and performs fallback `exchangeCodeForSession` when `code` is present
+- `src/routes/update-password.tsx` -- `beforeLoad` exchanges code; redirects to `/auth/error` if exchange fails
 - `src/routes/reset-password.tsx` -- redirects to `/update-password` (legacy URL support)
-- `src/components/auth/reset-password-form.tsx` -- calls `updateUser` with password+confirm validation and strength feedback
+- `src/components/auth/reset-password-form.tsx` -- calls `updateUser` with password+confirm validation
 
 **Architecture notes:**
+- **PKCE requires client-initiated flow:** `resetPasswordForEmail` must be called from the browser so the code verifier is stored. Server-initiated flow = no verifier = `exchangeCodeForSession` fails = "Auth session missing".
 - Password reset is rate-limited server-side per email
 - Always returns success to prevent email enumeration
-- The reset link uses PKCE (code in query) or implicit flow (hash). `beforeLoad` exchanges code; `useExchangeHashForSession` exchanges hash
-- After password update, the user has an active session and navigates directly to dashboard
+- The reset link uses PKCE (code in query). `beforeLoad` exchanges code; on failure, redirects to `/auth/error` with "Link invalid or expired"
+- Implicit flow (hash) is handled by `useExchangeHashForSession` if present
 
 ### Invitation
 

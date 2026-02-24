@@ -24,7 +24,7 @@ import {
   bulkUpdateServerSchema,
   exportUsersServerSchema,
 } from '@/lib/schemas/users';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
 import {

@@ -26,6 +26,8 @@ export interface RmaDetailViewProps {
   isLoading?: boolean;
   error?: Error | null;
   onRetry?: () => void;
+  /** Called when any workflow action succeeds (for refetch) */
+  onSuccess?: () => void;
   isPending?: boolean;
   onApprove: (notes?: string) => Promise<void>;
   onReject: (reason: string) => Promise<void>;
@@ -44,6 +46,7 @@ export function RmaDetailView({
   isLoading,
   error,
   onRetry,
+  onSuccess,
   isPending = false,
   onApprove,
   onReject,
@@ -90,6 +93,7 @@ export function RmaDetailView({
               rma && (
                 <RmaWorkflowActions
                   rma={rma}
+                  onSuccess={onSuccess}
                   onApprove={onApprove}
                   onReject={onReject}
                   onReceive={onReceive}

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
-import { TextField } from '@/components/shared/forms';
+import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
@@ -51,7 +51,6 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
   };
 
   const isSubmitting = form.state.isSubmitting;
-  const showErrorsAfterSubmit = form.state.submissionAttempts > 0;
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
@@ -64,6 +63,7 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} noValidate>
+            <FormFieldDisplayProvider form={form}>
             <div className="flex flex-col gap-5">
               <form.Field name="password">
                 {(field) => (
@@ -74,7 +74,6 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
                     placeholder="Enter a strong password"
                     required
                     autocomplete="new-password"
-                    showErrorsAfterSubmit={showErrorsAfterSubmit}
                   />
                 )}
               </form.Field>
@@ -101,7 +100,6 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
                     placeholder="Re-enter your password"
                     required
                     autocomplete="new-password"
-                    showErrorsAfterSubmit={showErrorsAfterSubmit}
                   />
                 )}
               </form.Field>
@@ -134,6 +132,7 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
                 )}
               </Button>
             </div>
+            </FormFieldDisplayProvider>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Back to{' '}

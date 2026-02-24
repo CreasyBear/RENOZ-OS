@@ -273,6 +273,7 @@ export type InventoryParams = z.infer<typeof inventoryParamsSchema>;
 // ============================================================================
 
 export const stockAdjustmentSchema = z.object({
+  inventoryId: z.string().uuid().optional(),
   productId: z.string().uuid(),
   locationId: z.string().uuid(),
   adjustmentQty: z.number(), // Positive or negative
@@ -287,10 +288,12 @@ export type StockAdjustment = z.infer<typeof stockAdjustmentSchema>;
 // ============================================================================
 
 export const stockTransferSchema = z.object({
+  inventoryId: z.string().uuid().optional(),
   productId: z.string().uuid(),
   fromLocationId: z.string().uuid(),
   toLocationId: z.string().uuid(),
   quantity: quantitySchema,
+  serialNumbers: z.array(z.string().min(1)).optional(),
   reason: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
 });
@@ -332,7 +335,7 @@ export const inventoryAlertTypeValues = [
 
 export const forecastIntervalValues = ['daily', 'weekly', 'monthly'] as const;
 
-export const costLayerReferenceTypeValues = ['purchase_order', 'adjustment', 'transfer'] as const;
+export const costLayerReferenceTypeValues = ['purchase_order', 'adjustment', 'transfer', 'rma'] as const;
 
 export const stockCountStatusSchema = z.enum(stockCountStatusValues);
 export const stockCountTypeSchema = z.enum(stockCountTypeValues);
@@ -494,6 +497,19 @@ export interface InventoryCostLayerRow {
   referenceType: string | null;
   referenceId: string | null;
   expiryDate: Date | null;
+  costComponents?: InventoryCostLayerCostComponent[];
+}
+
+export interface InventoryCostLayerCostComponent {
+  id: string;
+  componentType: 'base_unit_cost' | 'allocated_additional_cost';
+  costType: string | null;
+  quantityBasis: number;
+  amountTotal: number;
+  amountPerUnit: number;
+  currency: string;
+  exchangeRate: number | null;
+  metadata: FlexibleJson | null;
 }
 
 export const costLayerFilterSchema = filterSchema.extend({
@@ -707,6 +723,20 @@ export const inventoryTurnoverQuerySchema = z.object({
 
 export type InventoryTurnoverQuery = z.infer<typeof inventoryTurnoverQuerySchema>;
 
+export const inventoryFinanceIntegrityQuerySchema = z.object({
+  valueDriftTolerance: z.coerce.number().nonnegative().default(0.01),
+  topDriftLimit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export type InventoryFinanceIntegrityQuery = z.infer<typeof inventoryFinanceIntegrityQuerySchema>;
+
+export const inventoryFinanceReconcileSchema = z.object({
+  dryRun: z.coerce.boolean().default(true),
+  limit: z.coerce.number().int().min(1).max(5000).default(1000),
+});
+
+export type InventoryFinanceReconcileInput = z.infer<typeof inventoryFinanceReconcileSchema>;
+
 // ============================================================================
 // VALUATION RESPONSE TYPES
 // ============================================================================
@@ -763,6 +793,42 @@ export interface InventoryValuationResult {
   byProduct: ProductValuation[];
   valuationMethod: string;
   asOf: string;
+  financeIntegrity?: InventoryFinanceIntegritySummary;
+}
+
+export interface InventoryFinanceDriftItem {
+  inventoryId: string;
+  productId: string;
+  productSku: string;
+  productName: string;
+  locationId: string;
+  locationName: string;
+  quantityOnHand: number;
+  inventoryValue: number;
+  layerValue: number;
+  absoluteDrift: number;
+}
+
+export interface InventoryFinanceIntegritySummary {
+  status: 'green' | 'amber' | 'red';
+  stockWithoutActiveLayers: number;
+  inventoryValueMismatchCount: number;
+  totalAbsoluteValueDrift: number;
+  negativeOrOverconsumedLayers: number;
+  duplicateActiveSerializedAllocations: number;
+  shipmentLinkStatusMismatch: number;
+  topDriftItems: InventoryFinanceDriftItem[];
+  asOf: string;
+}
+
+export interface InventoryFinanceReconcileResult {
+  dryRun: boolean;
+  scannedInventoryRows: number;
+  repairedMissingLayers: number;
+  repairedValueDriftRows: number;
+  clampedInvalidLayers: number;
+  remainingMismatches: number;
+  postIntegrity: InventoryFinanceIntegritySummary;
 }
 
 // ============================================================================

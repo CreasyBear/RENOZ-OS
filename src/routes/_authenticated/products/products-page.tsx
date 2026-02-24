@@ -12,16 +12,23 @@
 
 import { useState, useMemo } from "react";
 import { useNavigate, Link, useRouter } from "@tanstack/react-router";
-import { Plus, Download, Upload, X, Loader2, Trash2, Tag, Package, AlertTriangle, Layers, DollarSign, RefreshCw } from "lucide-react";
+import { Plus, Download, Upload, X, Loader2, Trash2, Tag, Package, AlertTriangle, Layers, DollarSign, RefreshCw, FolderTree } from "lucide-react";
 
 import { PageLayout } from "@/components/layout";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useConfirmation, toastError } from "@/hooks";
 import { logger } from "@/lib/logger";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
 import {
   useBulkDeleteProducts,
+  useBulkUpdateProducts,
   useDeleteProduct,
   useDuplicateProduct,
   useExportProducts,
@@ -92,12 +99,25 @@ interface ProductsPageProps {
   };
 }
 
+type CategoryNode = {
+  id: string;
+  name: string;
+  children?: CategoryNode[];
+};
+
+function isCategoryNode(value: unknown): value is CategoryNode {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === "string" && typeof record.name === "string";
+}
+
 export default function ProductsPage({ search, loaderData }: ProductsPageProps) {
   const router = useRouter();
   const navigate = useNavigate();
   const { formatCurrency } = useOrgFormat();
   const confirm = useConfirmation();
   const bulkDeleteProducts = useBulkDeleteProducts();
+  const bulkUpdateProducts = useBulkUpdateProducts();
   const deleteProduct = useDeleteProduct();
   const duplicateProduct = useDuplicateProduct();
   const productsResult = useMemo(
@@ -123,6 +143,68 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
 
   // Selected rows for bulk actions
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+
+  const flattenedCategories = useMemo(() => {
+    const flatten = (
+      categories: CategoryNode[],
+      prefix = ""
+    ): Array<{ id: string; name: string }> => {
+      return categories.flatMap((category) => {
+        const displayName = prefix ? `${prefix} > ${category.name}` : category.name;
+        const children = Array.isArray(category.children)
+          ? flatten(category.children.filter(isCategoryNode), displayName)
+          : [];
+        return [{ id: category.id, name: displayName }, ...children];
+      });
+    };
+
+    const rootCategories = Array.isArray(loaderData?.categoryTree)
+      ? loaderData.categoryTree.filter(isCategoryNode)
+      : [];
+    return flatten(rootCategories);
+  }, [loaderData]);
+
+  const handleBulkStatusUpdate = async (status: 'active' | 'inactive' | 'discontinued') => {
+    if (selectedRows.length === 0) return;
+    const { confirmed } = await confirm.confirm({
+      title: `Update status for ${selectedRows.length} product${selectedRows.length > 1 ? "s" : ""}?`,
+      description: `Set selected products to "${status}".`,
+      confirmLabel: "Update",
+    });
+    if (!confirmed) return;
+
+    bulkUpdateProducts.mutate(
+      {
+        productIds: selectedRows,
+        updates: { status },
+      },
+      {
+        onSuccess: () => setSelectedRows([]),
+      }
+    );
+  };
+
+  const handleBulkCategoryUpdate = async (categoryId: string | null) => {
+    if (selectedRows.length === 0) return;
+    const { confirmed } = await confirm.confirm({
+      title: `Update category for ${selectedRows.length} product${selectedRows.length > 1 ? "s" : ""}?`,
+      description: categoryId
+        ? "Selected products will be moved to the chosen category."
+        : "Selected products will have their category cleared.",
+      confirmLabel: "Update",
+    });
+    if (!confirmed) return;
+
+    bulkUpdateProducts.mutate(
+      {
+        productIds: selectedRows,
+        updates: { categoryId },
+      },
+      {
+        onSuccess: () => setSelectedRows([]),
+      }
+    );
+  };
 
   // Update URL search params (for pagination, sort, category)
   const updateSearch = (updates: Partial<SearchParams>) => {
@@ -284,21 +366,52 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled
-                  title="Bulk status update is not available yet"
+                  onClick={() => handleBulkStatusUpdate("active")}
+                  className="hidden"
                 >
                   <Tag className="mr-2 h-4 w-4" />
                   Update Status
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  title="Bulk category update is not available yet"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Update Category
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={bulkUpdateProducts.isPending}>
+                      <Tag className="mr-2 h-4 w-4" />
+                      Update Status
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("active")}>
+                      Active
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("inactive")}>
+                      Inactive
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("discontinued")}>
+                      Discontinued
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={bulkUpdateProducts.isPending}>
+                      <FolderTree className="mr-2 h-4 w-4" />
+                      Update Category
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-80 overflow-auto">
+                    <DropdownMenuItem onClick={() => handleBulkCategoryUpdate(null)}>
+                      Clear Category
+                    </DropdownMenuItem>
+                    {flattenedCategories.map((category) => (
+                      <DropdownMenuItem
+                        key={category.id}
+                        onClick={() => handleBulkCategoryUpdate(category.id)}
+                      >
+                        {category.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -314,7 +427,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                       });
                     }
                   }}
-                  disabled={bulkDeleteProducts.isPending}
+                  disabled={bulkDeleteProducts.isPending || bulkUpdateProducts.isPending}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete

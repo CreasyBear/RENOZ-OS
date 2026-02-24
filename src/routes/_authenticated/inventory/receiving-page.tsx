@@ -13,11 +13,8 @@ import { useState, useCallback } from "react";
 import { History, Plus } from "lucide-react";
 import { PageLayout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  ReceivingForm,
-  ReceivingHistory,
-  type ReceivingRecord,
-} from "@/components/domain/inventory";
+import { ReceivingForm } from "@/components/domain/inventory/receiving/receiving-form";
+import { ReceivingHistory, type ReceivingRecord } from "@/components/domain/inventory/receiving/receiving-history";
 import {
   useLocations,
   useMovements,
@@ -38,6 +35,7 @@ interface Product {
   sku: string;
   name: string;
   costPrice?: number | null;
+  isSerialized?: boolean;
 }
 
 interface Location {
@@ -80,6 +78,7 @@ export default function ReceivingPage() {
     sku: p.sku,
     name: p.name,
     costPrice: p.costPrice,
+    isSerialized: p.isSerialized,
   }));
 
   const locations: Location[] = locationsData.map((l: HookWarehouseLocation) => ({
@@ -153,6 +152,7 @@ export default function ReceivingPage() {
                 onSubmit={handleReceive}
                 onProductSearch={handleProductSearch}
                 defaultLocationId={defaultLocation?.id}
+                submitError={receiveMutation.error?.message ?? null}
               />
 
               {/* Recent receives sidebar */}

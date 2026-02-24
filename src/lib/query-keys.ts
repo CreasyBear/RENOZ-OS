@@ -507,6 +507,21 @@ export const queryKeys = {
     // Triage data (credit holds, low health scores)
     triage: (filters?: Record<string, unknown>) =>
       [...queryKeys.customers.all, 'triage', filters ?? {}] as const,
+    // Action plans (health improvement plans per customer)
+    actionPlans: {
+      all: () => [...queryKeys.customers.all, 'action-plans'] as const,
+      list: (
+        customerId?: string,
+        filters?: {
+          isCompleted?: boolean;
+          priority?: 'high' | 'medium' | 'low';
+          category?: string;
+        }
+      ) =>
+        [...queryKeys.customers.actionPlans.all(), customerId ?? '', filters ?? {}] as const,
+      detail: (id: string) =>
+        [...queryKeys.customers.actionPlans.all(), id] as const,
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -720,6 +735,13 @@ export const queryKeys = {
     availableSerials: (productId: string, locationId?: string) =>
       [...queryKeys.inventory.all, 'availableSerials', productId, locationId ?? ''] as const,
 
+    // Canonical Serialized Items
+    serializedAll: () => [...queryKeys.inventory.all, 'serializedItems'] as const,
+    serializedList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.serializedAll(), 'list', filters ?? {}] as const,
+    serializedDetail: (id: string) =>
+      [...queryKeys.inventory.serializedAll(), 'detail', id] as const,
+
     // WMS Dashboard
     wmsDashboard: () => [...queryKeys.inventory.all, 'wms'] as const,
     stockByCategory: () => [...queryKeys.inventory.all, 'wms', 'byCategory'] as const,
@@ -752,6 +774,8 @@ export const queryKeys = {
       [...queryKeys.inventory.valuationAll(), 'costLayers', inventoryId] as const,
     cogs: (inventoryId: string, quantity?: number) =>
       [...queryKeys.inventory.valuationAll(), 'cogs', inventoryId, quantity ?? 0] as const,
+    financeIntegrity: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.valuationAll(), 'financeIntegrity', filters ?? {}] as const,
 
     // Stock counts
     stockCountsAll: () => [...queryKeys.inventory.all, 'stockCounts'] as const,
@@ -1491,6 +1515,7 @@ export const queryKeys = {
     // Dashboard Metrics
     dashboardMetrics: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.all, 'dashboard', filters ?? {}] as const,
+    closeReadiness: () => [...queryKeys.financial.all, 'closeReadiness'] as const,
 
     // Reminders
     reminders: () => [...queryKeys.financial.all, 'reminders'] as const,
@@ -1532,6 +1557,8 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   documents: {
     all: ['documents'] as const,
+    status: (orderId: string, documentType: string) =>
+      [...queryKeys.documents.all, 'status', orderId, documentType] as const,
     history: (entityType: string, entityId: string, documentType?: string) =>
       [...queryKeys.documents.all, 'history', entityType, entityId, documentType ?? ''] as const,
     counts: (entityType: string, entityId: string) =>
@@ -1801,6 +1828,8 @@ export const queryKeys = {
     all: ['projectTasks'] as const,
     byProject: (projectId: string) =>
       [...queryKeys.projectTasks.all, 'byProject', projectId] as const,
+    siteVisit: (siteVisitId: string) =>
+      [...queryKeys.projectTasks.all, 'siteVisit', siteVisitId] as const,
     detail: (id: string) =>
       [...queryKeys.projectTasks.all, 'detail', id] as const,
   },

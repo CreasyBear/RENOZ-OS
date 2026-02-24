@@ -14,7 +14,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { cache } from 'react';
-import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull, count, sum, max, min, avg, notInArray } from 'drizzle-orm';
+import { eq, and, or, ilike, desc, asc, sql, inArray, gte, lte, isNull, count, sum, max, min, avg, notInArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
@@ -113,7 +113,13 @@ export const getCustomers = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(customers.name, containsPattern(search)));
+      const searchPattern = containsPattern(search);
+      conditions.push(
+        or(
+          ilike(customers.name, searchPattern),
+          ilike(customers.email, searchPattern)
+        )!
+      );
     }
     if (status) {
       conditions.push(eq(customers.status, status));
@@ -290,7 +296,13 @@ export const getCustomersCursor = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(customers.name, containsPattern(search)));
+      const searchPattern = containsPattern(search);
+      conditions.push(
+        or(
+          ilike(customers.name, searchPattern),
+          ilike(customers.email, searchPattern)
+        )!
+      );
     }
     if (status) {
       conditions.push(eq(customers.status, status));

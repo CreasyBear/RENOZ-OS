@@ -11,7 +11,7 @@ import { useState, useEffect, startTransition } from 'react';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SupportFormSkeleton } from '@/components/skeletons/support';
-import { ChevronLeft, TicketIcon, Shield, Package, User, Loader2 } from 'lucide-react';
+import { ChevronLeft, TicketIcon, Shield, Package, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageLayout } from '@/components/layout';
@@ -32,6 +32,9 @@ import {
 import { useCreateIssue } from '@/hooks/support';
 import { useCustomer } from '@/hooks/customers';
 import { useWarranty } from '@/hooks/warranty';
+import { CustomerCombobox } from '@/components/shared';
+import { customerSchema } from '@/lib/schemas/customers';
+import type { Customer } from '@/lib/schemas/customers';
 import type { IssueType, IssuePriority } from '@/lib/schemas/support/issues';
 import { z } from 'zod';
 
@@ -125,7 +128,17 @@ function NewIssuePage() {
   const [description, setDescription] = useState('');
   const [type, setType] = useState<IssueType>('other');
   const [priority, setPriority] = useState<IssuePriority>('medium');
-  const [customerId, setCustomerId] = useState(searchCustomerId ?? '');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Prefill customer from entity linking (e.g. ?customerId= in URL)
+  useEffect(() => {
+    if (searchCustomerId && customerData) {
+      const result = customerSchema.safeParse(customerData);
+      if (result.success) {
+        startTransition(() => setSelectedCustomer(result.data));
+      }
+    }
+  }, [searchCustomerId, customerData]);
 
   // Auto-populate description with warranty context
   useEffect(() => {
@@ -168,7 +181,7 @@ function NewIssuePage() {
         description: description.trim() || null,
         type,
         priority,
-        customerId: customerId || undefined,
+        customerId: selectedCustomer?.id ?? undefined,
         // Store warranty context in metadata
         metadata: warrantyId
           ? {
@@ -184,8 +197,8 @@ function NewIssuePage() {
         to: '/support/issues/$issueId',
         params: { issueId: result.id },
       });
-    } catch {
-      toast.error('Failed to create issue');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create issue');
     }
   };
 
@@ -303,36 +316,13 @@ function NewIssuePage() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span className="text-sm">Loading...</span>
                     </div>
-                  ) : searchCustomerId && customerData ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{customerData.name}</span>
-                      </div>
-                      {customerData.email && (
-                        <p className="text-sm text-muted-foreground ml-6">
-                          {customerData.email}
-                        </p>
-                      )}
-                      <input type="hidden" value={customerId} />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-muted-foreground"
-                        onClick={() => setCustomerId('')}
-                      >
-                        Remove customer
-                      </Button>
-                    </div>
                   ) : (
                     <div className="space-y-2">
-                      <Label htmlFor="customerId">Customer ID</Label>
-                      <Input
-                        id="customerId"
-                        placeholder="Enter customer ID"
-                        value={customerId}
-                        onChange={(e) => setCustomerId(e.target.value)}
+                      <CustomerCombobox
+                        value={selectedCustomer}
+                        onSelect={setSelectedCustomer}
+                        placeholder="Search customers..."
+                        disabled={false}
                       />
                       <p className="text-muted-foreground text-xs">
                         Link this issue to a specific customer

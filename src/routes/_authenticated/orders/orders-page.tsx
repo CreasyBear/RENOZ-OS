@@ -45,10 +45,12 @@ import { listOrders } from "@/server/functions/orders/orders";
 // Note: Skeleton is used in the route file's Suspense fallback
 import {
   OrdersListContainer,
-  DEFAULT_ORDER_FILTERS,
   buildOrderQuery,
+} from "@/components/domain/orders/orders-list-container";
+import {
+  DEFAULT_ORDER_FILTERS,
   type OrderFiltersState,
-} from "@/components/domain/orders";
+} from "@/components/domain/orders/order-filter-config";
 import { MetricCard } from "@/components/shared/metric-card";
 import { useDashboardMetrics } from "@/hooks/dashboard";
 import { useIssue } from "@/hooks/support";

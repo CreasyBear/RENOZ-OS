@@ -25,7 +25,7 @@ function run(cmd, args, opts = {}) {
     const p = spawn(cmd, args, {
       stdio: 'inherit',
       cwd: ROOT,
-      shell: true,
+      shell: false,
       ...opts,
     });
     p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
@@ -44,6 +44,9 @@ async function main() {
     'tests/unit/build-asset-paths.test.ts',
   ]);
 
+  console.log('--- Release Gate A: Reliability Gates ---');
+  await run('node', ['scripts/run-release-gates.mjs']);
+
   console.log('--- Release Gate A: Build ---');
   await run('npm', ['run', 'build:vercel']);
 
@@ -53,6 +56,8 @@ async function main() {
   if (!skipProbe) {
     console.log('--- Release Gate B: Post-deploy probe (5 min window) ---');
     await run('node', ['scripts/probe-production.mjs']);
+    console.log('--- Release Gate B: Post-deploy drift recheck ---');
+    await run('node', ['scripts/run-release-gates.mjs']);
   } else {
     console.log('--- Skipping probe (--skip-probe) ---');
   }

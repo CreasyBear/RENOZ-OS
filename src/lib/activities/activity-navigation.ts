@@ -5,9 +5,28 @@
  * based on activity types and entity contexts.
  *
  * @see src/components/shared/activity/activity-item.tsx for related link generation
+ * @see src/routes/_authenticated/activities/index.tsx for activity feed search params
  */
 
 import type { ActivityEntityType } from '@/lib/schemas/activities';
+
+// ============================================================================
+// ACTIVITY FEED SEARCH (typed navigation for /activities)
+// ============================================================================
+
+/**
+ * Get search params for Link to /activities route.
+ * Use with: <Link to="/activities" search={getActivitiesFeedSearch('customer')} />
+ *
+ * @param entityType - Optional entity type to filter feed (e.g. 'customer', 'opportunity')
+ * @returns Search object for typed navigation
+ */
+export function getActivitiesFeedSearch(
+  entityType?: ActivityEntityType | string
+): { entityType?: ActivityEntityType } {
+  if (!entityType) return {};
+  return { entityType: entityType as ActivityEntityType };
+}
 
 // ============================================================================
 // ENTITY LINK GENERATION
@@ -93,7 +112,7 @@ export function getEntityLinkWithTab(
  * @returns The route path with context params or null if not supported
  */
 export function getCreateEntityLinkWithContext(
-  targetEntityType: 'quote' | 'order' | 'project' | 'claim',
+  targetEntityType: 'quote' | 'order' | 'project' | 'claim' | 'issue',
   contextEntityType: ActivityEntityType | string,
   contextEntityId: string
 ): string | null {
@@ -109,9 +128,10 @@ export function getCreateEntityLinkWithContext(
 
   const routeMap: Record<string, string> = {
     quote: '/pipeline/quotes/new',
-    order: '/orders/new',
+    order: '/orders/create',
     project: '/projects/new',
     claim: '/support/claims/new',
+    issue: '/support/issues/new',
   };
 
   const route = routeMap[targetEntityType];

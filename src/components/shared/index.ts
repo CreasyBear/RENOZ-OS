@@ -185,6 +185,17 @@ export {
   type OrderSummary,
 } from "./order-combobox"
 
+export {
+  AddressPicker,
+  type AddressPickerProps,
+  type AddressOption,
+} from "./address-picker"
+
+export {
+  DatePickerControl,
+  type DatePickerControlProps,
+} from "./date-picker-control"
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Format Components
 // ─────────────────────────────────────────────────────────────────────────────

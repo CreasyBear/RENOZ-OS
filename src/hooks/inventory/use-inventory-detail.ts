@@ -32,7 +32,7 @@ import { useLocations } from './use-locations';
 import { useInventoryItemAlerts } from './use-inventory-item-alerts';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useUpdateProduct } from '@/hooks/products';
-import { toastSuccess, toastError, toast } from '@/hooks';
+import { toastSuccess, toastError } from '@/hooks';
 import type { InventoryItemAlert } from '@/lib/schemas/inventory/item-alerts';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import type { UpdateProduct } from '@/lib/schemas/products';
@@ -49,8 +49,6 @@ export interface InventoryDetailActions {
   onTransfer: () => void;
   /** Open edit dialog */
   onEdit: () => void;
-  /** Open delete confirmation */
-  onDelete: () => void;
   /** Copy page link to clipboard */
   onCopyLink: () => void;
   /** Print page */
@@ -116,15 +114,12 @@ export interface UseInventoryDetailReturn {
   setAdjustDialogOpen: (open: boolean) => void;
   editDialogOpen: boolean;
   setEditDialogOpen: (open: boolean) => void;
-  deleteDialogOpen: boolean;
-  setDeleteDialogOpen: (open: boolean) => void;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Mutation States
   // ─────────────────────────────────────────────────────────────────────────
   isTransferring: boolean;
   isAdjusting: boolean;
-  isDeleting: boolean;
   isUpdatingProduct: boolean;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -138,8 +133,6 @@ export interface UseInventoryDetailReturn {
   handleAdjust: (data: StockAdjustment) => Promise<void>;
   handleTransfer: (data: StockTransfer) => Promise<void>;
   handleEditProduct: (data: UpdateProduct) => Promise<void>;
-  handleDelete: () => Promise<void>;
-
   // ─────────────────────────────────────────────────────────────────────────
   // Tab Counts
   // ─────────────────────────────────────────────────────────────────────────
@@ -183,7 +176,6 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Data Fetching
@@ -330,31 +322,19 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
   // ─────────────────────────────────────────────────────────────────────────
   const handleAdjust = useCallback(
     async (data: StockAdjustment) => {
-      try {
-        await adjustMutation.mutateAsync(data);
-        toastSuccess('Inventory adjusted successfully');
-        await refetch();
-        setAdjustDialogOpen(false);
-      } catch {
-        toastError('Failed to adjust inventory');
-        throw new Error('Adjustment failed');
-      }
+      await adjustMutation.mutateAsync(data);
+      await refetch();
+      setAdjustDialogOpen(false);
     },
     [adjustMutation, refetch]
   );
 
   const handleTransfer = useCallback(
     async (data: StockTransfer) => {
-      try {
-        await transferMutation.mutateAsync(data);
-        toastSuccess('Inventory transferred successfully');
-        setTransferDialogOpen(false);
-        // Navigate back since the item may be depleted
-        navigate({ to: '/inventory' });
-      } catch {
-        toastError('Failed to transfer inventory');
-        throw new Error('Transfer failed');
-      }
+      await transferMutation.mutateAsync(data);
+      setTransferDialogOpen(false);
+      // Navigate back since the item may be depleted
+      navigate({ to: '/inventory' });
     },
     [transferMutation, navigate]
   );
@@ -380,15 +360,6 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
     [productId, updateProductMutation, refetch]
   );
 
-  const handleDelete = useCallback(async () => {
-    // Inventory items shouldn't be deleted - use adjustment instead
-    toast.info('Delete functionality not available', {
-      description:
-        'To remove inventory, use the Adjust feature to set quantity to zero.',
-    });
-    setDeleteDialogOpen(false);
-  }, []);
-
   // ─────────────────────────────────────────────────────────────────────────
   // Actions (memoized)
   // ─────────────────────────────────────────────────────────────────────────
@@ -397,7 +368,6 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
       onAdjust: () => setAdjustDialogOpen(true),
       onTransfer: () => setTransferDialogOpen(true),
       onEdit: () => setEditDialogOpen(true),
-      onDelete: () => setDeleteDialogOpen(true),
       onCopyLink: () => {
         navigator.clipboard.writeText(window.location.href);
         toastSuccess('Link copied to clipboard');
@@ -456,13 +426,9 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
     setAdjustDialogOpen,
     editDialogOpen,
     setEditDialogOpen,
-    deleteDialogOpen,
-    setDeleteDialogOpen,
-
     // Mutation states
     isTransferring: transferMutation.isPending,
     isAdjusting: adjustMutation.isPending,
-    isDeleting: false, // No actual delete mutation
     isUpdatingProduct: updateProductMutation.isPending,
 
     // Actions
@@ -472,7 +438,6 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
     handleAdjust,
     handleTransfer,
     handleEditProduct,
-    handleDelete,
 
     // Tab counts
     counts,

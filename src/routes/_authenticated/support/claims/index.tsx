@@ -6,6 +6,7 @@
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json - DOM-WAR-006c
  * @see _Initiation/_prd/2-domains/warranty/wireframes/WAR-006c.wireframe.md
+ * @see docs/reliability/MUTATION-CONTRACT-STANDARD.md - Mutation checklist for claim dialogs
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { FileWarning } from 'lucide-react';
@@ -21,6 +22,7 @@ import type { WarrantyClaimsSearchParams } from '@/lib/schemas/warranty';
 // ============================================================================
 
 const claimsSearchSchema = z.object({
+  quickFilter: z.enum(['submitted', 'at_risk_sla', 'awaiting_decision']).optional(),
   status: z
     .enum(['submitted', 'under_review', 'approved', 'denied', 'resolved', 'cancelled'])
     .optional(),

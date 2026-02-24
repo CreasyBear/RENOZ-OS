@@ -48,6 +48,7 @@ interface ReceiveEntry {
   quantity: number;
   unitCost: number;
   locationId: string;
+  serialNumber?: string;
 }
 
 export default function MobileReceivingPage() {
@@ -56,6 +57,7 @@ export default function MobileReceivingPage() {
   const [scannedItem, setScannedItem] = useState<ScannedItem | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState(0);
+  const [serialNumber, setSerialNumber] = useState("");
   const [locationId, setLocationId] = useState("");
   const [barcodeSearch, setBarcodeSearch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,9 +99,11 @@ export default function MobileReceivingPage() {
         productId: product.id,
         productName: product.name,
         productSku: product.sku,
+        isSerialized: !!product.isSerialized,
       });
       setUnitCost(Number(product.basePrice ?? product.costPrice ?? 0));
       setQuantity(1);
+      setSerialNumber("");
       setBarcodeSearch("");
       toast.success(`Found: ${product.name}`);
     } else if (barcodeSearch && searchResult?.products?.length === 0) {
@@ -119,19 +123,31 @@ export default function MobileReceivingPage() {
       toast.error("Please select a location");
       return;
     }
+    if (scannedItem.isSerialized) {
+      if (quantity !== 1) {
+        toast.error("Serialized products must be received one unit per serial");
+        return;
+      }
+      if (!serialNumber.trim()) {
+        toast.error("Serial number is required for serialized products");
+        return;
+      }
+    }
     addToQueue({
       product: scannedItem,
       quantity,
       unitCost,
       locationId,
+      serialNumber: serialNumber.trim() || undefined,
     });
     setScannedItem(null);
     setQuantity(1);
     setUnitCost(0);
+    setSerialNumber("");
     toast.success("Added to queue", {
       description: `${quantity} x ${scannedItem.productName}`,
     });
-  }, [scannedItem, quantity, unitCost, locationId, addToQueue]);
+  }, [scannedItem, quantity, unitCost, locationId, addToQueue, serialNumber]);
 
   const handleReceiveNowClick = useCallback(() => {
     if (!scannedItem?.productId) {
@@ -142,8 +158,18 @@ export default function MobileReceivingPage() {
       toast.error("Please select a location");
       return;
     }
+    if (scannedItem.isSerialized) {
+      if (quantity !== 1) {
+        toast.error("Serialized products must be received one unit per serial");
+        return;
+      }
+      if (!serialNumber.trim()) {
+        toast.error("Serial number is required for serialized products");
+        return;
+      }
+    }
     setShowConfirmDialog(true);
-  }, [scannedItem, locationId]);
+  }, [scannedItem, locationId, quantity, serialNumber]);
 
   const handleConfirmedReceive = useCallback(async () => {
     setShowConfirmDialog(false);
@@ -155,6 +181,7 @@ export default function MobileReceivingPage() {
         locationId,
         quantity,
         unitCost,
+        serialNumber: serialNumber.trim() || undefined,
       });
       toast.success("Inventory received", {
         description: `${quantity} x ${scannedItem.productName}`,
@@ -162,13 +189,14 @@ export default function MobileReceivingPage() {
       setScannedItem(null);
       setQuantity(1);
       setUnitCost(0);
+      setSerialNumber("");
     } catch (error: unknown) {
       logger.error("Failed to receive", error);
       toast.error(error instanceof Error ? error.message : "Failed to receive inventory");
     } finally {
       setIsSubmitting(false);
     }
-  }, [scannedItem, quantity, unitCost, locationId, receiveMutation]);
+  }, [scannedItem, quantity, unitCost, locationId, receiveMutation, serialNumber]);
 
   const handleSync = useCallback(async () => {
     const result = await syncQueue(async (item) => {
@@ -177,6 +205,7 @@ export default function MobileReceivingPage() {
         locationId: item.locationId,
         quantity: item.quantity,
         unitCost: item.unitCost,
+        serialNumber: item.serialNumber,
       });
     });
     if (result.failed === 0) {
@@ -224,7 +253,10 @@ export default function MobileReceivingPage() {
         {scannedItem && (
           <MobileInventoryCard
             item={scannedItem}
-            onCancel={() => setScannedItem(null)}
+            onCancel={() => {
+              setScannedItem(null);
+              setSerialNumber("");
+            }}
           >
             <div className="space-y-4">
               <div className="space-y-2">
@@ -258,8 +290,31 @@ export default function MobileReceivingPage() {
                   <Package className="h-4 w-4" aria-hidden="true" />
                   Quantity
                 </Label>
-                <QuantityInput id="quantity-input" value={quantity} onChange={setQuantity} min={1} />
+                <QuantityInput
+                  id="quantity-input"
+                  value={quantity}
+                  onChange={setQuantity}
+                  min={1}
+                  max={scannedItem.isSerialized ? 1 : undefined}
+                  disabled={scannedItem.isSerialized}
+                />
               </div>
+              {scannedItem.isSerialized && (
+                <div className="space-y-2">
+                  <Label htmlFor="serial-input">Serial Number</Label>
+                  <Input
+                    id="serial-input"
+                    value={serialNumber}
+                    onChange={(event) => setSerialNumber(event.target.value)}
+                    placeholder="Scan or enter serial number"
+                    className="min-h-[44px] text-base font-mono"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Serialized products require one unit per serial number.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="unit-cost-input">Unit Cost ($)</Label>
                 <Input
@@ -332,6 +387,11 @@ export default function MobileReceivingPage() {
                     <div className="text-sm text-muted-foreground">
                       {item.quantity} x ${item.unitCost.toFixed(2)}
                     </div>
+                    {item.serialNumber ? (
+                      <div className="text-xs font-mono text-muted-foreground">
+                        SN: {item.serialNumber}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-right">
                     <div className="font-bold tabular-nums">
@@ -350,6 +410,12 @@ export default function MobileReceivingPage() {
             <AlertDialogTitle>Confirm Receive</AlertDialogTitle>
             <AlertDialogDescription>
               Receive {quantity} x {scannedItem?.productName} at ${unitCost.toFixed(2)} each?
+              {scannedItem?.isSerialized && serialNumber.trim() ? (
+                <>
+                  <br />
+                  <span className="font-mono">Serial: {serialNumber.trim()}</span>
+                </>
+              ) : null}
               <br />
               <span className="font-semibold">Total: ${(quantity * unitCost).toFixed(2)}</span>
             </AlertDialogDescription>

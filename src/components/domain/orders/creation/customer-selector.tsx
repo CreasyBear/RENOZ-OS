@@ -51,6 +51,7 @@ export interface SelectedCustomer {
   status: string;
   billingAddress?: {
     street1?: string;
+    street2?: string;
     city?: string;
     state?: string;
     postcode?: string;
@@ -58,6 +59,7 @@ export interface SelectedCustomer {
   };
   shippingAddress?: {
     street1?: string;
+    street2?: string;
     city?: string;
     state?: string;
     postcode?: string;
@@ -76,6 +78,8 @@ export interface CustomerSelectorProps {
   onSearchChange: (value: string) => void;
   /** @source useQuery(getCustomers) in container */
   customers: CustomerSummary[];
+  /** Selected customer details resolved independently from list filtering */
+  selectedCustomer?: SelectedCustomer | null;
   /** @source useQuery loading state in container */
   isLoading?: boolean;
   /** @source useQuery error state in container */
@@ -93,14 +97,15 @@ export const CustomerSelector = memo(function CustomerSelector({
   search,
   onSearchChange,
   customers,
+  selectedCustomer: selectedCustomerProp = null,
   isLoading = false,
   error,
   className,
 }: CustomerSelectorProps) {
   // Get selected customer details from the list
-  const selectedCustomer = selectedCustomerId
-    ? customers.find((c) => c.id === selectedCustomerId)
-    : null;
+  const selectedCustomer =
+    selectedCustomerProp ??
+    (selectedCustomerId ? customers.find((c) => c.id === selectedCustomerId) ?? null : null);
 
   const handleSelect = useCallback(
     (customer: CustomerSummary) => {
@@ -134,7 +139,7 @@ export const CustomerSelector = memo(function CustomerSelector({
                 <Check className="h-5 w-5 text-primary" />
                 <CardTitle className="text-base">Selected Customer</CardTitle>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleClear} className="h-8 w-8 p-0">
+              <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="h-8 w-8 p-0">
                 <X className="h-4 w-4" />
                 <span className="sr-only">Clear selection</span>
               </Button>
@@ -217,6 +222,7 @@ export const CustomerSelector = memo(function CustomerSelector({
                 {customers.map((customer) => (
                   <button
                     key={customer.id}
+                    type="button"
                     onClick={() => handleSelect(customer)}
                     className={cn(
                       'hover:bg-muted/50 flex w-full items-center gap-3 p-4 text-left transition-colors',

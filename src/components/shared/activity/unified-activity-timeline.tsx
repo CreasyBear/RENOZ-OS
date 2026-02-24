@@ -57,7 +57,7 @@ import { cn } from '@/lib/utils';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { getActivityTypeConfig } from '@/lib/schemas/unified-activity';
 import { ENTITY_ICONS, ENTITY_LABELS } from './activity-config';
-import type { ActivityMetadata } from '@/lib/schemas/activities';
+import type { ActivityEntityType, ActivityMetadata } from '@/lib/schemas/activities';
 import { isActivityEntityType, isActivityMetadata } from '@/lib/schemas/activities';
 
 // ============================================================================
@@ -114,8 +114,8 @@ export interface UnifiedActivityTimelineProps {
   isCompletePending?: boolean;
   /** Show grouped by date with collapsible sections (for large timelines) */
   groupByDate?: boolean;
-  /** Optional link to the full activity feed for this context */
-  viewAllHref?: string;
+  /** Search params for Link to /activities (typed navigation) */
+  viewAllSearch?: { entityType?: ActivityEntityType };
   /** Label for the view-all link (defaults to "View in Activity Feed") */
   viewAllLabel?: string;
   /** Wrap in Card component (default true) */
@@ -781,7 +781,7 @@ export function UnifiedActivityTimeline({
   onComplete,
   isCompletePending = false,
   groupByDate = false,
-  viewAllHref,
+  viewAllSearch,
   viewAllLabel = 'View in Activity Feed',
   compact = false,
   virtualizationThreshold = 50,
@@ -1092,9 +1092,10 @@ export function UnifiedActivityTimeline({
         )}
       </div>
       <div className="flex items-center gap-2">
-        {viewAllHref && (
+        {viewAllSearch && (
           <Link
-            to={viewAllHref}
+            to="/activities"
+            search={viewAllSearch}
             className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
           >
             {viewAllLabel}

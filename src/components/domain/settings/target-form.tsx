@@ -11,12 +11,14 @@
  * - Target Value (currency/number)
  * - Description (optional)
  *
+ * @see docs/design-system/FORM-STANDARDS.md
  * @see DASH-TARGETS-UI acceptance criteria
  * @see src/lib/schemas/reports/targets.ts for validation
  */
 
 import { memo, useCallback, useEffect } from 'react';
-import { useForm } from '@tanstack/react-form';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { FormFieldDisplayProvider } from '@/components/shared/forms';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,13 +47,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { FormErrorSummary } from '@/components/shared/forms';
 import {
   targetMetricValues,
   targetPeriodValues,
+  targetFormSchema,
   type TargetMetric,
   type TargetPeriod,
   type Target,
   type CreateTargetInput,
+  type TargetFormValues,
 } from '@/lib/schemas/reports/targets';
 
 function isTargetMetric(v: string): v is TargetMetric {
@@ -77,6 +82,8 @@ export interface TargetFormProps {
   onSubmit: (data: CreateTargetInput) => Promise<void>;
   /** Whether submission is in progress */
   isSubmitting?: boolean;
+  /** Server error message for inline display when mutation fails */
+  submitError?: string | null;
 }
 
 /** Form values use string for targetValue (input field) */
@@ -95,7 +102,7 @@ interface FormValues {
 // ============================================================================
 
 const METRIC_LABELS: Record<TargetMetric, string> = {
-  revenue: 'Revenue',
+  revenue: 'Revenue (Invoiced)',
   kwh_deployed: 'kWh Deployed',
   quote_win_rate: 'Quote Win Rate',
   active_installations: 'Active Installations',
@@ -107,7 +114,7 @@ const METRIC_LABELS: Record<TargetMetric, string> = {
 };
 
 const METRIC_DESCRIPTIONS: Record<TargetMetric, string> = {
-  revenue: 'Total revenue from delivered orders',
+  revenue: 'Orders by order date (invoiced)',
   kwh_deployed: 'Total kWh capacity from installations',
   quote_win_rate: 'Percentage of accepted quotes',
   active_installations: 'Number of active installation jobs',
@@ -172,23 +179,23 @@ export const TargetForm = memo(function TargetForm({
   target,
   onSubmit,
   isSubmitting = false,
+  submitError,
 }: TargetFormProps) {
   const isEditMode = !!target;
 
-  const form = useForm({
+  const form = useTanStackForm<TargetFormValues>({
+    schema: targetFormSchema,
     defaultValues: target ? targetToFormValues(target) : getDefaultFormValues(),
-    onSubmit: async ({ value }) => {
-      // Convert form values to schema input (string targetValue -> number)
-      const submitData: CreateTargetInput = {
-        name: value.name,
-        metric: value.metric,
-        period: value.period,
-        startDate: value.startDate,
-        endDate: value.endDate,
-        targetValue: parseFloat(value.targetValue) || 0,
-        description: value.description,
-      };
-      await onSubmit(submitData);
+    onSubmit: async (values) => {
+      await onSubmit({
+        name: values.name,
+        metric: values.metric,
+        period: values.period,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        targetValue: parseFloat(values.targetValue) || 0,
+        description: values.description,
+      });
       onOpenChange(false);
     },
   });
@@ -221,10 +228,12 @@ export const TargetForm = memo(function TargetForm({
           onSubmit={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            form.handleSubmit();
+            void form.handleSubmit();
           }}
           className="space-y-6 py-6"
         >
+          <FormErrorSummary form={form} submitError={submitError} />
+          <FormFieldDisplayProvider form={form}>
           {/* Name */}
           <form.Field name="name">
             {(field) => (
@@ -434,6 +443,8 @@ export const TargetForm = memo(function TargetForm({
               </div>
             )}
           </form.Field>
+
+          </FormFieldDisplayProvider>
 
           {/* Footer */}
           <SheetFooter className="pt-4">

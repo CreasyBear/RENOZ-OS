@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { EntityHeader, MetricCard, type EntityHeaderAction } from '@/components/shared';
 import { PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_CONFIG } from '../project-status-config';
 import { StatusProgressCircle } from '../progress-circle';
@@ -759,6 +760,7 @@ export const ProjectDetailView = memo(function ProjectDetailView({
                   title="Activity Timeline"
                   description="Complete history of project changes, status updates, and system events"
                   showFilters={true}
+                  viewAllSearch={getActivitiesFeedSearch('project')}
                   emptyMessage="No activity recorded yet"
                   emptyDescription="Project activities will appear here when changes are made."
                 />

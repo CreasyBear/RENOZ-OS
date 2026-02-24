@@ -35,7 +35,7 @@ export default function MobileHomePage() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
 
-  const quickActions = [
+  const quickActions: React.ComponentProps<typeof MobileQuickActions>["actions"] = [
     {
       icon: <PackagePlus />,
       label: "Receive",

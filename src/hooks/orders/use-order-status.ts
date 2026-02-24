@@ -66,11 +66,18 @@ export function useUpdateOrderStatus(options: UseUpdateOrderStatusOptions = {}) 
           },
         },
       }),
-    onSuccess: () => {
-      // Invalidate order lists and fulfillment queries
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(variables.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
       queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
+      // Cancellation releases serial allocations — availableSerials must refresh
+      if (variables.status === 'cancelled') {
+        queryClient.invalidateQueries({
+          queryKey: [...queryKeys.inventory.all, 'availableSerials'],
+        });
+      }
       options.onSuccess?.();
     },
     onError: (error) => {
@@ -93,11 +100,17 @@ export function useBulkUpdateOrderStatus(options: UseBulkUpdateOrderStatusOption
       bulkUpdateFn({
         data: input,
       }),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
       queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
+      // Bulk cancellation releases serial allocations — availableSerials must refresh
+      if (variables.status === 'cancelled') {
+        queryClient.invalidateQueries({
+          queryKey: [...queryKeys.inventory.all, 'availableSerials'],
+        });
+      }
       options.onSuccess?.();
     },
     onError: (error) => {

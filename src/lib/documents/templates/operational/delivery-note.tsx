@@ -1,21 +1,25 @@
 /**
- * Delivery Note PDF Template - Accounting Style
+ * Delivery Note PDF Template
  *
- * Practical, dense layout focused on delivery confirmation.
- * Clear item list with checkboxes for recipient verification.
+ * 20pt margins, two-column From/Deliver To, 9pt typography,
+ * black borders, 5pt row padding. Fixed header on all pages.
  */
 
-import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
 import {
   PageNumber,
-  FixedDocumentHeader,
-  pageMargins,
-  fixedHeaderClearance,
-  fontSize,
-  spacing,
+  DocumentFixedHeader,
+  SerialNumbersCell,
+  formatAddressLines,
+  formatDateForPdf,
   colors,
   FONT_FAMILY,
   FONT_WEIGHTS,
+  DOCUMENT_PAGE_MARGINS,
+  DOCUMENT_FIXED_HEADER_CLEARANCE,
+  DOCUMENT_BORDER_COLOR,
+  DOCUMENT_LOGO_HEIGHT,
+  DOCUMENT_LOGO_MAX_WIDTH,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { DocumentOrganization } from "../../types";
@@ -75,253 +79,235 @@ export interface DeliveryNotePdfDocumentProps extends DeliveryNotePdfTemplatePro
 }
 
 // ============================================================================
-// STYLES - Dense, Practical
+// STYLES
 // ============================================================================
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: pageMargins.top,
-    paddingBottom: pageMargins.bottom,
-    paddingLeft: pageMargins.left,
-    paddingRight: pageMargins.right,
+    paddingTop: DOCUMENT_PAGE_MARGINS.top,
+    paddingBottom: DOCUMENT_PAGE_MARGINS.bottom,
+    paddingLeft: DOCUMENT_PAGE_MARGINS.left,
+    paddingRight: DOCUMENT_PAGE_MARGINS.right,
     backgroundColor: colors.background.white,
+    color: colors.text.primary,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
   },
   content: {
     flex: 1,
-    marginTop: fixedHeaderClearance,
+    marginTop: DOCUMENT_FIXED_HEADER_CLEARANCE,
   },
 
-  // Header
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.lg,
+    marginBottom: 20,
   },
-  companySection: {
+  metaSection: {
     flex: 1,
   },
-  companyName: {
-    fontSize: fontSize.lg,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  companyDetail: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
-    lineHeight: 1.4,
-  },
-  noteInfo: {
-    alignItems: "flex-end",
-  },
-  noteTitle: {
-    fontSize: fontSize["2xl"],
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.primary,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  infoRow: {
-    flexDirection: "row",
-    marginBottom: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+  metaTitle: {
+    fontSize: 21,
     fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    width: 100,
-    textAlign: "right",
-    marginRight: spacing.sm,
-  },
-  infoValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
-    width: 120,
+    marginBottom: 8,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    gap: 2,
+  },
+  metaLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+  },
+  metaValue: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+  },
+  logoWrapper: {
+    maxWidth: DOCUMENT_LOGO_MAX_WIDTH,
+  },
+  logo: {
+    height: DOCUMENT_LOGO_HEIGHT,
+    objectFit: "contain",
   },
 
-  // Deliver To
-  deliverToSection: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+  fromToRow: {
+    flexDirection: "row",
+    marginTop: 20,
   },
-  deliverToLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
+  fromColumn: {
+    flex: 1,
+    marginRight: 10,
   },
-  deliverToName: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
+  toColumn: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  sectionLabel: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
-  deliverToDetail: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+  sectionName: {
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  sectionDetail: {
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
   },
 
-  // Delivery Details
   deliveryDetails: {
     flexDirection: "row",
-    gap: spacing.xl,
-    marginBottom: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: colors.background.subtle,
-    borderRadius: 4,
+    gap: 20,
+    marginTop: 20,
+    marginBottom: 20,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
   },
   deliveryItem: {
     minWidth: 80,
   },
   deliveryLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.muted,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   deliveryValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
   },
 
-  // Table
   table: {
-    marginTop: spacing.md,
+    marginTop: 20,
   },
   tableHeader: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.medium,
-    paddingBottom: spacing.xs,
-    marginBottom: spacing.xs,
+    borderBottomWidth: 0.5,
+    borderBottomColor: DOCUMENT_BORDER_COLOR,
+    paddingBottom: 5,
+    marginBottom: 5,
   },
   tableHeaderCell: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: colors.text.secondary,
-    textTransform: "uppercase",
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
   },
   tableRow: {
     flexDirection: "row",
-    paddingVertical: spacing.xs,
+    paddingVertical: 5,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: DOCUMENT_BORDER_COLOR,
     alignItems: "center",
   },
   checkbox: {
-    width: 18,
-    height: 18,
-    borderWidth: 1,
-    borderColor: colors.border.medium,
-    marginRight: spacing.sm,
+    width: 16,
+    height: 16,
+    borderWidth: 0.5,
+    borderColor: DOCUMENT_BORDER_COLOR,
+    marginRight: 8,
   },
   tableCell: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 10,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
+    lineHeight: 1.4,
   },
   tableCellMuted: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
   },
-  serialNumberRow: {
-    flexDirection: "row" as const,
-    paddingLeft: 44, // checkbox (30) + item col (14 approx)
-    paddingVertical: 2,
+  colCheckbox: { width: 30 },
+  colItem: { width: 30 },
+  colSku: { flex: 1 },
+  colDescription: { flex: 2.5 },
+  colQty: { width: 50, textAlign: "center" },
+  colSerial: { width: 70 },
+
+  serialSummarySection: {
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
   },
-  serialNumberLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+  serialSummaryTitle: {
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginRight: 4,
+    color: colors.text.primary,
+    marginBottom: 8,
   },
-  serialNumberValues: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+  serialSummaryRow: {
+    flexDirection: "row",
+    marginBottom: 4,
+    gap: 8,
+  },
+  serialSummarySerial: {
+    fontSize: 9,
+    fontFamily: "Courier",
+    color: colors.text.primary,
+    minWidth: 70,
+  },
+  serialSummaryProduct: {
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     flex: 1,
   },
-  colCheckbox: { width: 30 },
-  colItem: { width: 30 },
-  colSku: { flex: 1.2 },
-  colDescription: { flex: 3 },
-  colQty: { width: 50, textAlign: "center" },
 
-  // Acknowledgment
   acknowledgmentSection: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: DOCUMENT_BORDER_COLOR,
   },
   acknowledgmentTitle: {
-    fontSize: fontSize.md,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    marginBottom: 4,
   },
   acknowledgmentText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     lineHeight: 1.4,
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
   signatureRow: {
     flexDirection: "row",
-    gap: spacing.xl,
+    gap: 20,
   },
   signatureBlock: {
     flex: 1,
   },
   signatureLine: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.dark,
-    height: 40,
-    marginBottom: spacing.xs,
+    borderBottomWidth: 0.5,
+    borderBottomColor: DOCUMENT_BORDER_COLOR,
+    height: 32,
+    marginBottom: 4,
   },
   signatureLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
+    fontSize: 9,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
   },
   dateBlock: {
     width: 100,
-  },
-
-  // QR Code
-  qrSection: {
-    position: "absolute",
-    top: 32,
-    right: 40,
   },
 });
 
@@ -331,94 +317,113 @@ const styles = StyleSheet.create({
 
 function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
+  const hasSerials = data.lineItems.some((i) => (i.serialNumbers?.length ?? 0) > 0);
+
+  const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
+  const fromAddressLines = formatAddressLines(organization.address);
+  const toAddressLines = formatAddressLines(data.shippingAddress);
+
+  const serialSummaryRows = hasSerials
+    ? data.lineItems.flatMap((item) =>
+        (item.serialNumbers ?? []).map((serial) => ({
+          serial,
+          description: item.description,
+          quantity: item.quantity,
+        }))
+      )
+    : [];
 
   return (
     <Page size="A4" style={styles.page}>
-      <FixedDocumentHeader
+      <DocumentFixedHeader
         orgName={organization.name}
         documentType="Delivery Note"
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header */}
+        {/* Header: Meta left, Logo right */}
         <View style={styles.headerRow}>
-          <View style={styles.companySection}>
-            <Text style={styles.companyName}>{organization.name}</Text>
-            {organization.address && (
-              <>
-                <Text style={styles.companyDetail}>
-                  {organization.address.addressLine1}
-                  {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
-                </Text>
-                <Text style={styles.companyDetail}>
-                  {`${organization.address.city}, ${organization.address.state} ${organization.address.postalCode}`}
-                </Text>
-              </>
-            )}
-          </View>
-
-          <View style={styles.noteInfo}>
-            <Text style={styles.noteTitle}>Delivery Note</Text>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Note #</Text>
-              <Text style={styles.infoValue}>{data.documentNumber}</Text>
+          <View style={styles.metaSection}>
+            <Text style={styles.metaTitle}>Delivery Note</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Note #: </Text>
+              <Text style={styles.metaValue}>{data.documentNumber}</Text>
             </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Order #</Text>
-              <Text style={styles.infoValue}>{data.orderNumber}</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Order #: </Text>
+              <Text style={styles.metaValue}>{data.orderNumber}</Text>
             </View>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Delivery Date</Text>
-              <Text style={styles.infoValue}>
-                {new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" }).format(data.deliveryDate)}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Issue: </Text>
+              <Text style={styles.metaValue}>
+                {formatDateForPdf(data.issueDate, locale, "short")}
+              </Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Delivery: </Text>
+              <Text style={styles.metaValue}>
+                {formatDateForPdf(data.deliveryDate, locale, "short")}
               </Text>
             </View>
           </View>
+
+          {logoUrl && (
+            <View style={styles.logoWrapper}>
+              <Image src={logoUrl} style={styles.logo} />
+            </View>
+          )}
         </View>
 
-        {/* Deliver To */}
-        <View style={styles.deliverToSection}>
-          <Text style={styles.deliverToLabel}>Deliver To</Text>
-          <Text style={styles.deliverToName}>{data.customer.name}</Text>
-          {data.shippingAddress && (
-            <>
-              {data.shippingAddress.contactName && (
-                <Text style={styles.deliverToDetail}>{`Attn: ${data.shippingAddress.contactName}`}</Text>
-              )}
-              <Text style={styles.deliverToDetail}>
-                {data.shippingAddress.addressLine1}
-                {data.shippingAddress.addressLine2 ? `, ${data.shippingAddress.addressLine2}` : ""}
-              </Text>
-              <Text style={styles.deliverToDetail}>
-                {`${data.shippingAddress.city}, ${data.shippingAddress.state} ${data.shippingAddress.postalCode}`}
-              </Text>
-              {data.shippingAddress.contactPhone && (
-                <Text style={styles.deliverToDetail}>{data.shippingAddress.contactPhone}</Text>
-              )}
-            </>
-          )}
+        {/* From / Deliver To two-column */}
+        <View style={styles.fromToRow}>
+          <View style={styles.fromColumn}>
+            <Text style={styles.sectionLabel}>From</Text>
+            <Text style={styles.sectionName}>{organization.name}</Text>
+            {fromAddressLines.map((line) => (
+              <Text key={line} style={styles.sectionDetail}>{line}</Text>
+            ))}
+            {organization.phone && (
+              <Text style={styles.sectionDetail}>{organization.phone}</Text>
+            )}
+          </View>
+          <View style={styles.toColumn}>
+            <Text style={styles.sectionLabel}>Deliver To</Text>
+            <Text style={styles.sectionName}>{data.customer.name}</Text>
+            {data.shippingAddress?.contactName && (
+              <Text style={styles.sectionDetail}>Attn: {data.shippingAddress.contactName}</Text>
+            )}
+            {toAddressLines.length > 0 ? (
+              toAddressLines.map((line) => (
+                <Text key={line} style={styles.sectionDetail}>{line}</Text>
+              ))
+            ) : (
+              <Text style={styles.sectionDetail}>—</Text>
+            )}
+            {data.shippingAddress?.contactPhone && (
+              <Text style={styles.sectionDetail}>{data.shippingAddress.contactPhone}</Text>
+            )}
+          </View>
         </View>
 
         {/* Delivery Details */}
-        <View style={styles.deliveryDetails}>
-          {data.carrier && (
-            <View style={styles.deliveryItem}>
-              <Text style={styles.deliveryLabel}>Carrier</Text>
-              <Text style={styles.deliveryValue}>{data.carrier}</Text>
-            </View>
-          )}
-          {data.trackingNumber && (
-            <View style={styles.deliveryItem}>
-              <Text style={styles.deliveryLabel}>Tracking #</Text>
-              <Text style={styles.deliveryValue}>{data.trackingNumber}</Text>
-            </View>
-          )}
-        </View>
+        {(data.carrier || data.trackingNumber) && (
+          <View style={styles.deliveryDetails}>
+            {data.carrier && (
+              <View style={styles.deliveryItem}>
+                <Text style={styles.deliveryLabel}>Carrier</Text>
+                <Text style={styles.deliveryValue}>{data.carrier}</Text>
+              </View>
+            )}
+            {data.trackingNumber && (
+              <View style={styles.deliveryItem}>
+                <Text style={styles.deliveryLabel}>Tracking #</Text>
+                <Text style={styles.deliveryValue}>{data.trackingNumber}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
-        {/* Line Items */}
+        {/* Line Items Table */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <View style={styles.colCheckbox} />
@@ -426,49 +431,76 @@ function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
             <Text style={[styles.tableHeaderCell, styles.colSku]}>SKU</Text>
             <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
+            {hasSerials && (
+              <Text style={[styles.tableHeaderCell, styles.colSerial]}>Serials</Text>
+            )}
           </View>
 
-          {data.lineItems.map((item, index) => (
-            <View key={item.id} wrap={true}>
-              <View style={styles.tableRow}>
-                <View style={styles.colCheckbox}>
-                  <View style={styles.checkbox} />
-                </View>
-                <Text style={[styles.tableCell, styles.colItem]}>{String(index + 1)}</Text>
-                <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "-"}</Text>
-                <View style={styles.colDescription}>
-                  <Text style={styles.tableCell}>{item.description}</Text>
-                  {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
-                </View>
-                <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
+          {data.lineItems.length === 0 ? (
+            <View style={styles.tableRow}>
+              <View style={styles.colCheckbox}>
+                <View style={styles.checkbox} />
               </View>
-              {item.serialNumbers && item.serialNumbers.length > 0 && (
-                <View style={styles.serialNumberRow}>
-                  <Text style={styles.serialNumberLabel}>Serial Numbers:</Text>
-                  <Text style={styles.serialNumberValues}>
-                    {item.serialNumbers.join(", ")}
-                  </Text>
+              <Text style={[styles.tableCell, styles.colItem]}>—</Text>
+              <Text style={[styles.tableCell, styles.colSku]}>—</Text>
+              <Text style={[styles.tableCell, styles.colDescription]}>—</Text>
+              <Text style={[styles.tableCell, styles.colQty]}>—</Text>
+              {hasSerials && (
+                <View style={styles.colSerial}>
+                  <Text style={styles.tableCell}>—</Text>
                 </View>
               )}
             </View>
-          ))}
+          ) : (
+            data.lineItems.map((item, index) => (
+            <View key={item.id} style={styles.tableRow} wrap={true}>
+              <View style={styles.colCheckbox}>
+                <View style={styles.checkbox} />
+              </View>
+              <Text style={[styles.tableCell, styles.colItem]}>{String(index + 1)}</Text>
+              <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "—"}</Text>
+              <View style={styles.colDescription}>
+                <Text style={styles.tableCell}>{item.description || "—"}</Text>
+                {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
+              </View>
+              <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
+              {hasSerials && (
+                <View style={styles.colSerial}>
+                  <SerialNumbersCell serialNumbers={item.serialNumbers ?? []} />
+                </View>
+              )}
+            </View>
+            ))
+          )}
         </View>
 
+        {/* Serial Summary */}
+        {hasSerials && serialSummaryRows.length > 0 && (
+          <View style={styles.serialSummarySection}>
+            <Text style={styles.serialSummaryTitle}>Serial Numbers on This Delivery</Text>
+            {serialSummaryRows.map((row, idx) => (
+              <View key={`${row.serial}-${idx}`} style={styles.serialSummaryRow}>
+                <Text style={styles.serialSummarySerial}>
+                  {idx + 1}. {row.serial}
+                </Text>
+                <Text style={styles.serialSummaryProduct}>
+                  {row.description} (Qty {row.quantity})
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Acknowledgment */}
-        <View style={styles.acknowledgmentSection}>
+        <View style={styles.acknowledgmentSection} wrap={false}>
           <Text style={styles.acknowledgmentTitle}>Delivery Acknowledgment</Text>
           <Text style={styles.acknowledgmentText}>
-            I confirm that the above items have been received in good condition. 
-            I understand that any damage or shortages must be reported within 24 hours of delivery.
+            I confirm receipt of the above items in good condition. Any damage or shortages must be reported within 24 hours of delivery.
           </Text>
           <View style={styles.signatureRow}>
             <View style={styles.signatureBlock}>
               <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Recipient Signature</Text>
-            </View>
-            <View style={styles.signatureBlock}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Print Name</Text>
+              <Text style={styles.signatureLabel}>Signature</Text>
             </View>
             <View style={styles.dateBlock}>
               <View style={styles.signatureLine} />

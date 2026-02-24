@@ -6,7 +6,7 @@
  */
 
 import { Text, View, StyleSheet } from "@react-pdf/renderer";
-import { colors, fontSize, spacing, FONT_FAMILY, FONT_WEIGHTS } from "./theme";
+import { colors, fontSize, spacing, borderRadius, FONT_FAMILY, FONT_WEIGHTS } from "./theme";
 import { formatDateForPdf } from "./theme";
 import { useOrgDocument } from "../context";
 
@@ -91,6 +91,14 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
     marginBottom: spacing.sm,
+  },
+  signOffCard: {
+    marginTop: spacing["2xl"],
+    padding: spacing.lg,
+    backgroundColor: colors.background.subtle,
+    borderRadius: borderRadius.md,
+    borderWidth: 0.5,
+    borderColor: colors.border.light,
   },
 });
 
@@ -331,7 +339,7 @@ export function WorkOrderSignOff({
   } = labels;
 
   return (
-    <View style={styles.container} wrap={false}>
+    <View style={[styles.container, styles.signOffCard]} wrap={false}>
       <View style={styles.divider} />
 
       {/* Technician Section */}

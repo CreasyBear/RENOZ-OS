@@ -7,6 +7,7 @@
 
 /**
  * Normalize customer for combobox display. Handles optional fields at boundary.
+ * Converts null to undefined for schema compatibility (Customer expects undefined, not null).
  */
 export function normalizeCustomerForCombobox<T extends {
   tags?: unknown[] | null;
@@ -16,6 +17,8 @@ export function normalizeCustomerForCombobox<T extends {
   website?: string | null;
   size?: string | null;
   industry?: string | null;
+  taxId?: string | null;
+  registrationNumber?: string | null;
 }>(item: T) {
   return {
     ...item,
@@ -26,5 +29,7 @@ export function normalizeCustomerForCombobox<T extends {
     website: item.website ?? undefined,
     size: item.size ?? undefined,
     industry: item.industry ?? undefined,
+    taxId: item.taxId ?? undefined,
+    registrationNumber: item.registrationNumber ?? undefined,
   };
 }

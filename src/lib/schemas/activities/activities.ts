@@ -378,9 +378,11 @@ export type EntityActivitiesQuery = z.infer<typeof entityActivitiesQuerySchema>;
 /**
  * Hook options for useUnifiedActivities.
  * Extends entity activities query params with client-side enabled flag.
+ * pageSize is optional; hook defaults to 50.
  */
 export interface UseUnifiedActivitiesOptions
-  extends Pick<EntityActivitiesQuery, 'entityType' | 'entityId' | 'relatedCustomerId' | 'pageSize'> {
+  extends Pick<EntityActivitiesQuery, 'entityType' | 'entityId' | 'relatedCustomerId'> {
+  pageSize?: number;
   enabled?: boolean;
 }
 

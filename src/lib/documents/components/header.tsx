@@ -102,13 +102,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   pillSuccess: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: colors.status.successLight,
   },
   pillWarning: {
-    backgroundColor: "#FFF3E0",
+    backgroundColor: colors.status.warningLight,
   },
   pillError: {
-    backgroundColor: "#FFEBEE",
+    backgroundColor: colors.status.errorLight,
   },
   pillText: {
     fontSize: fontSize.xs,
@@ -116,13 +116,13 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.semibold,
   },
   pillTextSuccess: {
-    color: "#2E7D32",
+    color: colors.status.success,
   },
   pillTextWarning: {
-    color: "#E65100",
+    color: colors.status.warning,
   },
   pillTextError: {
-    color: "#C62828",
+    color: colors.status.error,
   },
 
   // Fixed header (repeats on every page)

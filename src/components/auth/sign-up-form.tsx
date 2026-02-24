@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
-import { TextField } from '@/components/shared/forms';
+import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
@@ -71,6 +71,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         </CardHeader>
         <CardContent>
           <form id="sign-up-form" onSubmit={handleSubmit} noValidate>
+            <FormFieldDisplayProvider form={form}>
             <div className="flex flex-col gap-5">
               <form.Field name="name">
                 {(field) => (
@@ -79,7 +80,6 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     label="Full Name"
                     placeholder="John Doe"
                     required
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -90,7 +90,6 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     label="Organization Name"
                     placeholder="Acme Inc"
                     required
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -103,7 +102,6 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     placeholder="m@example.com"
                     required
                     autocomplete="email"
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -115,7 +113,6 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     type="password"
                     required
                     autocomplete="new-password"
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -127,7 +124,6 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                     type="password"
                     required
                     autocomplete="new-password"
-                    showErrorsAfterSubmit={form.state.submissionAttempts > 0}
                   />
                 )}
               </form.Field>
@@ -153,6 +149,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                 )}
               </Button>
             </div>
+            </FormFieldDisplayProvider>
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{' '}
               <Link

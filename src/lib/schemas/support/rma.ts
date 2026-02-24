@@ -147,6 +147,28 @@ export const processRmaSchema = z.object({
 export type ProcessRmaInput = z.infer<typeof processRmaSchema>;
 
 // ============================================================================
+// BULK WORKFLOW SCHEMAS
+// ============================================================================
+
+export const bulkApproveRmaSchema = z.object({
+  rmaIds: z.array(z.string().uuid()).min(1, 'At least one RMA is required').max(50, 'Maximum 50 RMAs per batch'),
+  notes: z.string().max(2000).nullable().optional(),
+});
+export type BulkApproveRmaInput = z.infer<typeof bulkApproveRmaSchema>;
+
+export const bulkReceiveRmaSchema = z.object({
+  rmaIds: z.array(z.string().uuid()).min(1, 'At least one RMA is required').max(50, 'Maximum 50 RMAs per batch'),
+  inspectionNotes: rmaInspectionNotesSchema.optional(),
+});
+export type BulkReceiveRmaInput = z.infer<typeof bulkReceiveRmaSchema>;
+
+/** Result of bulk RMA operation */
+export interface BulkRmaResult {
+  updated: number;
+  failed: { rmaId: string; error: string }[];
+}
+
+// ============================================================================
 // QUERY SCHEMAS
 // ============================================================================
 
@@ -245,6 +267,8 @@ export interface RmaResponse {
   lineItems?: RmaLineItemResponse[];
   customer?: { id: string; name: string } | null;
   issue?: { id: string; title: string } | null;
+  /** Units restored to inventory (receiveRma only) */
+  unitsRestored?: number;
 }
 
 export interface ListRmasResponse {

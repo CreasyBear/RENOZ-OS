@@ -49,11 +49,11 @@ export interface POTablePresenterProps {
   /** View PO handler */
   onViewPO: (id: string) => void;
   /** Edit PO handler */
-  onEditPO: (id: string) => void;
+  onEditPO?: (id: string) => void;
   /** Delete PO handler */
-  onDeletePO: (id: string) => void;
+  onDeletePO?: (id: string) => void;
   /** Receive goods handler */
-  onReceivePO: (id: string) => void;
+  onReceivePO?: (id: string) => void;
   /** Additional className */
   className?: string;
 }

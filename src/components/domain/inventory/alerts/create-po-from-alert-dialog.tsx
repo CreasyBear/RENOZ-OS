@@ -7,28 +7,20 @@
  * @see INV-001c Create PO from Alert
  */
 import { useState, useEffect } from "react";
-import { Package, Truck, AlertTriangle } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Package, Truck } from "lucide-react";
 import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
 import type { InventoryAlert } from "./alerts-panel";
 import {
   createPOFromAlertFormSchema,
   type CreatePOFromAlertFormValues,
 } from "@/lib/schemas/inventory";
+import { toast } from "sonner";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
+  FormDialog,
   SelectField,
   NumberField,
   TextareaField,
-  FormActions,
 } from "@/components/shared/forms";
 
 // ============================================================================
@@ -65,6 +57,9 @@ export function CreatePOFromAlertDialog({
 
   const form = useTanStackForm<FormValues>({
     schema: createPOFromAlertFormSchema,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     defaultValues: {
       supplierId: "",
       quantity: 10,
@@ -118,10 +113,15 @@ export function CreatePOFromAlertDialog({
     }
   }, [alert, open, form]);
 
-  const handleClose = () => {
-    form.reset();
-    setError(null);
-    onOpenChange(false);
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      if (createPO.isPending) return;
+      form.reset();
+      setError(null);
+      onOpenChange(false);
+    } else {
+      onOpenChange(newOpen);
+    }
   };
 
   const supplierOptions = suppliers.map((s) => ({
@@ -132,48 +132,40 @@ export function CreatePOFromAlertDialog({
   if (!alert) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" />
-            Order Stock
-          </DialogTitle>
-          <DialogDescription>
-            Create a purchase order for low-stock item
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
-          <Package className="h-8 w-8 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">{alert.productName}</p>
-            <p className="text-sm text-muted-foreground">
-              Current stock: {alert.value ?? 0}
-              {alert.threshold && (
-                <span className="ml-2 text-orange-600">
-                  (min: {alert.threshold})
-                </span>
-              )}
-            </p>
-          </div>
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Truck className="h-5 w-5" />
+          Order Stock
+        </span>
+      }
+      description="Create a purchase order for low-stock item"
+      form={form}
+      submitLabel="Create PO"
+      submitError={error}
+      submitDisabled={createPO.isPending}
+      size="md"
+      className="sm:max-w-md"
+      resetOnClose={false}
+    >
+      <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
+        <Package className="h-8 w-8 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{alert.productName}</p>
+          <p className="text-sm text-muted-foreground">
+            Current stock: {alert.value ?? 0}
+            {alert.threshold && (
+              <span className="ml-2 text-orange-600">
+                (min: {alert.threshold})
+              </span>
+            )}
+          </p>
         </div>
+      </div>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="supplierId">
+      <form.Field name="supplierId">
             {(field) => (
               <SelectField
                 field={field}
@@ -225,19 +217,7 @@ export function CreatePOFromAlertDialog({
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <FormActions
-              form={form}
-              submitLabel="Create PO"
-              cancelLabel="Cancel"
-              onCancel={handleClose}
-              submitDisabled={createPO.isPending}
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }
 

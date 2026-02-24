@@ -4,20 +4,22 @@
  * Streamlined quote creation form for rapid quoting.
  * Allows creating quotes with minimal input - customer, products, and basic details.
  *
- * Pure presenter - all data passed via props from container.
+ * Uses TanStack Form with Zod validation.
  *
  * @see ./quick-quote-form-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-QUICK-QUOTE-UI)
  */
 
-import { memo, useState, useCallback, useMemo } from "react";
+import { memo, useState, useCallback, useMemo, useEffect } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import { FormFieldDisplayProvider } from "@/components/shared/forms";
+import { quickQuoteFormSchema, type QuickQuoteFormValues, type QuickQuoteLineItem } from "@/lib/schemas/pipeline/quick-quote-form";
 import {
   Zap,
   Plus,
   Trash2,
-  Search,
   Check,
   Building2,
   Package,
@@ -69,20 +71,15 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
+import { CustomerCombobox } from "@/components/shared";
 import { toastSuccess, toastError } from "@/hooks";
+import type { Customer } from "@/lib/schemas/customers";
 import { GST_RATE } from "@/lib/order-calculations";
 import type { CreateQuoteVersionInput } from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-// Minimal customer type for presenter - only fields used in the UI
-interface CustomerItem {
-  id: string;
-  name: string;
-  email: string | null;
-}
 
 interface ProductItem {
   id: string;
@@ -108,8 +105,8 @@ export interface QuickQuoteFormContainerProps {
 export interface QuickQuoteFormPresenterProps {
   opportunityId?: string;
   customerId?: string;
-  /** @source useCustomers hook */
-  customers: CustomerItem[];
+  /** Pre-filled customer when opening from entity linking (e.g. customer detail) */
+  initialSelectedCustomer?: Customer | null;
   /** @source useProducts hook */
   products: ProductItem[];
   /** @source Combined loading state from container - available for loading UI */
@@ -121,22 +118,13 @@ export interface QuickQuoteFormPresenterProps {
   className?: string;
 }
 
-interface QuoteLineItem {
-  productId: string;
-  productName: string;
-  productSku: string;
-  unitPrice: number;
-  quantity: number;
-  discount: number;
-}
-
 const DEFAULT_VALIDITY_DAYS = 30;
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
-function calculateLineTotal(item: QuoteLineItem): number {
+function calculateLineTotal(item: QuickQuoteLineItem): number {
   const subtotal = item.unitPrice * item.quantity;
   const discountAmount = subtotal * (item.discount / 100);
   return subtotal - discountAmount;
@@ -149,7 +137,7 @@ function calculateLineTotal(item: QuoteLineItem): number {
 export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
   opportunityId,
   customerId: initialCustomerId,
-  customers,
+  initialSelectedCustomer,
   products,
   isLoading: _isLoading,
   createMutation,
@@ -158,20 +146,88 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
   className,
 }: QuickQuoteFormPresenterProps) {
   const navigate = useNavigate();
-  // Note: isLoading passed from container is available for skeleton/loading UI if needed
-
-  // Form state
-  const [customerId, setCustomerId] = useState(initialCustomerId ?? "");
-  const [customerOpen, setCustomerOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
-  const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
-  const [validityDays, setValidityDays] = useState(DEFAULT_VALIDITY_DAYS);
-  const [notes, setNotes] = useState("");
-
-  const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === customerId),
-    [customers, customerId]
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    initialSelectedCustomer ?? null
   );
+
+  const form = useTanStackForm<QuickQuoteFormValues>({
+    schema: quickQuoteFormSchema,
+    defaultValues: {
+      customerId: initialSelectedCustomer?.id ?? "",
+      lineItems: [],
+      validityDays: DEFAULT_VALIDITY_DAYS,
+      notes: "",
+    },
+    onSubmit: async (values) => {
+      if (!opportunityId) {
+        toastError("Opportunity ID is required");
+        return;
+      }
+
+      createMutation.mutate(
+        {
+          opportunityId,
+          notes: values.notes?.trim() || undefined,
+          items: values.lineItems.map((item) => {
+            const subtotal = item.quantity * item.unitPrice;
+            const discount = item.discount ? subtotal * (item.discount / 100) : 0;
+            const total = Math.round((subtotal - discount) * 100) / 100;
+
+            return {
+              productId: item.productId,
+              description: item.productName || "Item",
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discountPercent: item.discount,
+              total,
+            };
+          }),
+        },
+        {
+          onSuccess: (result) => {
+            toastSuccess("Quote created successfully");
+            const data = result as { quoteVersion: { id: string } };
+            if (onSuccess && data?.quoteVersion?.id) {
+              onSuccess(data.quoteVersion.id);
+            } else {
+              navigate({ to: "/pipeline" });
+            }
+          },
+          onError: () => {
+            toastError("Failed to create quote");
+          },
+        }
+      );
+    },
+  });
+
+  const watchedLineItems = form.useWatch("lineItems");
+  const lineItems = useMemo(
+    () => watchedLineItems ?? [],
+    [watchedLineItems]
+  );
+
+  // Sync customerId when selectedCustomer changes
+  useEffect(() => {
+    form.setFieldValue("customerId", selectedCustomer?.id ?? "");
+  }, [selectedCustomer, form]);
+
+  // Sync form when initialSelectedCustomer loads
+  useEffect(() => {
+    if (initialSelectedCustomer && initialCustomerId) {
+      setSelectedCustomer(initialSelectedCustomer);
+      form.setFieldValue("customerId", initialSelectedCustomer.id);
+    }
+  }, [initialSelectedCustomer, initialCustomerId, form]);
+
+  // Derive effective customer for combobox display
+  const effectiveSelectedCustomer =
+    initialSelectedCustomer &&
+    initialCustomerId &&
+    (selectedCustomer === null || selectedCustomer.id === initialSelectedCustomer.id)
+      ? initialSelectedCustomer
+      : selectedCustomer;
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -191,14 +247,13 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
       const product = products.find((p) => p.id === productId);
       if (!product) return;
 
-      // Check if already in list
       if (lineItems.some((item) => item.productId === productId)) {
         toastError("Product already in quote");
         return;
       }
 
-      setLineItems((prev) => [
-        ...prev,
+      form.setFieldValue("lineItems", [
+        ...lineItems,
         {
           productId: product.id,
           productName: product.name,
@@ -210,87 +265,41 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
       ]);
       setProductOpen(false);
     },
-    [products, lineItems]
+    [products, lineItems, form]
   );
 
   // Update line item
   const handleUpdateLineItem = useCallback(
-    (productId: string, updates: Partial<QuoteLineItem>) => {
-      setLineItems((prev) =>
-        prev.map((item) =>
+    (productId: string, updates: Partial<QuickQuoteLineItem>) => {
+      form.setFieldValue(
+        "lineItems",
+        lineItems.map((item) =>
           item.productId === productId ? { ...item, ...updates } : item
         )
       );
     },
-    []
+    [lineItems, form]
   );
 
   // Remove line item
-  const handleRemoveLineItem = useCallback((productId: string) => {
-    setLineItems((prev) => prev.filter((item) => item.productId !== productId));
-  }, []);
-
-  // Handle submit using mutation from container
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!customerId) {
-      toastError("Please select a customer");
-      return;
-    }
-
-    if (lineItems.length === 0) {
-      toastError("Please add at least one product");
-      return;
-    }
-
-    if (!opportunityId) {
-      toastError("Opportunity ID is required");
-      return;
-    }
-
-    createMutation.mutate(
-      {
-        opportunityId,
-        notes: notes.trim() || undefined,
-        items: lineItems.map((item) => {
-          const subtotal = item.quantity * item.unitPrice;
-          const discount = item.discount ? subtotal * (item.discount / 100) : 0;
-          const total = Math.round((subtotal - discount) * 100) / 100;
-
-          return {
-            productId: item.productId,
-            description: item.productName || "Item",
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discountPercent: item.discount,
-            total,
-          };
-        }),
-      },
-      {
-        onSuccess: (result) => {
-          toastSuccess("Quote created successfully");
-          // Cast result to expected type
-          const data = result as { quoteVersion: { id: string } };
-          if (onSuccess && data?.quoteVersion?.id) {
-            onSuccess(data.quoteVersion.id);
-          } else {
-            navigate({ to: "/pipeline" });
-          }
-        },
-        onError: () => {
-          toastError("Failed to create quote");
-        },
-      }
-    );
-  };
-
-  const canSubmit = customerId && lineItems.length > 0;
+  const handleRemoveLineItem = useCallback(
+    (productId: string) => {
+      form.setFieldValue(
+        "lineItems",
+        lineItems.filter((item) => item.productId !== productId)
+      );
+    },
+    [lineItems, form]
+  );
 
   return (
     <Card className={className}>
-      <form onSubmit={handleSubmit}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit();
+        }}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-yellow-500" />
@@ -302,69 +311,22 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
         </CardHeader>
 
         <CardContent className="space-y-6">
+          <FormFieldDisplayProvider form={form}>
           {/* Customer Selection */}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               Customer
             </Label>
-            <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={customerOpen}
-                  className="w-full justify-between"
-                  disabled={!!initialCustomerId}
-                >
-                  {selectedCustomer ? (
-                    <span>{selectedCustomer.name}</span>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      Select customer...
-                    </span>
-                  )}
-                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search customers..." />
-                  <CommandList>
-                    <CommandEmpty>No customers found.</CommandEmpty>
-                    <CommandGroup>
-                      {customers.map((customer) => (
-                        <CommandItem
-                          key={customer.id}
-                          value={customer.name}
-                          onSelect={() => {
-                            setCustomerId(customer.id);
-                            setCustomerOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              customerId === customer.id
-                                ? "opacity-100"
-                                : "opacity-0"
-                            )}
-                          />
-                          <div className="flex-1">
-                            <p className="font-medium">{customer.name}</p>
-                            {customer.email && (
-                              <p className="text-sm text-muted-foreground">
-                                {customer.email}
-                              </p>
-                            )}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <CustomerCombobox
+              value={effectiveSelectedCustomer}
+              onSelect={(customer) => {
+                setSelectedCustomer(customer);
+                form.setFieldValue("customerId", customer?.id ?? "");
+              }}
+              placeholder="Search customers..."
+              disabled={!!initialCustomerId}
+            />
           </div>
 
           <Separator />
@@ -541,41 +503,55 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
 
           {/* Validity & Notes */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Valid For
-              </Label>
-              <Select
-                value={validityDays.toString()}
-                onValueChange={(v) => setValidityDays(parseInt(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">7 days</SelectItem>
-                  <SelectItem value="14">14 days</SelectItem>
-                  <SelectItem value="30">30 days</SelectItem>
-                  <SelectItem value="60">60 days</SelectItem>
-                  <SelectItem value="90">90 days</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Expires: {format(addDays(new Date(), validityDays), "PPP")}
-              </p>
-            </div>
+            <form.Field name="validityDays">
+              {(field) => (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Valid For
+                  </Label>
+                  <Select
+                    value={(field.state.value ?? DEFAULT_VALIDITY_DAYS).toString()}
+                    onValueChange={(v) => field.handleChange(parseInt(v, 10))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">7 days</SelectItem>
+                      <SelectItem value="14">14 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Expires:{" "}
+                    {format(
+                      addDays(new Date(), field.state.value ?? DEFAULT_VALIDITY_DAYS),
+                      "PPP"
+                    )}
+                  </p>
+                </div>
+              )}
+            </form.Field>
 
-            <div className="space-y-2">
-              <Label>Notes (optional)</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Any additional notes..."
-                rows={3}
-              />
-            </div>
+            <form.Field name="notes">
+              {(field) => (
+                <div className="space-y-2">
+                  <Label>Notes (optional)</Label>
+                  <Textarea
+                    value={field.state.value ?? ""}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                    placeholder="Any additional notes..."
+                    rows={3}
+                  />
+                </div>
+              )}
+            </form.Field>
           </div>
+          </FormFieldDisplayProvider>
         </CardContent>
 
         <CardFooter className="flex justify-between">
@@ -587,7 +563,7 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
           <div className={cn(!onCancel && "ml-auto")}>
             <Button
               type="submit"
-              disabled={!canSubmit || createMutation.isPending}
+              disabled={createMutation.isPending}
             >
               {createMutation.isPending ? (
                 "Creating..."

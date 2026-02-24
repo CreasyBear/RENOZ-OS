@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/lib/toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   PODirectory,
   DEFAULT_PO_FILTERS,
@@ -119,6 +120,10 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
   // Selection state for bulk receive
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkReceivingOpen, setBulkReceivingOpen] = useState(false);
+  const [bulkReceiveAttempted, setBulkReceiveAttempted] = useState(false);
+  const [bulkDeleteFailures, setBulkDeleteFailures] = useState<
+    Array<{ id: string; poNumber: string; error: string }>
+  >([]);
 
   // Receiving dialog state (using custom hook)
   const receivingDialog = useReceivingDialog({
@@ -192,7 +197,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
 
   const handleEdit = useCallback(
     (id: string) => {
-      navigate({ to: '/purchase-orders/$poId', params: { poId: id } });
+      navigate({ to: '/purchase-orders/$poId/edit', params: { poId: id } });
     },
     [navigate]
   );
@@ -312,8 +317,10 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
 
   const handleBulkReceive = useCallback(() => {
     if (selectedIds.size === 0) return;
+    bulkReceiveMutation.reset();
+    setBulkReceiveAttempted(false);
     setBulkReceivingOpen(true);
-  }, [selectedIds.size]);
+  }, [selectedIds.size, bulkReceiveMutation]);
 
   const pendingApprovalPOs = useMemo(
     () => selectedPOs.filter((po) => po.status === 'pending_approval'),
@@ -337,7 +344,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
     if (!result.confirmed) return;
 
     try {
-      const { approvalIds } = await getApprovalIdsForPurchaseOrders({
+      const { approvalIds, approvals } = await getApprovalIdsForPurchaseOrders({
         data: { purchaseOrderIds: pendingApprovalPOs.map((po) => po.id) },
       });
       if (approvalIds.length === 0) {
@@ -351,11 +358,26 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
       });
       const approved = bulkResult.approved.length;
       const failed = bulkResult.failed.length;
+      const approvalToPO = new Map(approvals.map((entry) => [entry.id, entry.purchaseOrderId]));
+
       if (approved > 0) {
         toast.success(`Approved ${approved} purchase order${approved === 1 ? '' : 's'}`);
       }
       if (failed > 0) {
-        toast.error(`${failed} approval${failed === 1 ? ' failed' : 's failed'}`);
+        const failedPOIds = bulkResult.failed
+          .map((entry) => approvalToPO.get(entry.id))
+          .filter((id): id is string => Boolean(id));
+        const failedPONumbers = pendingApprovalPOs
+          .filter((po) => failedPOIds.includes(po.id))
+          .map((po) => po.poNumber);
+        const preview = failedPONumbers.slice(0, 3).join(', ');
+        const overflow = failedPONumbers.length > 3 ? ` +${failedPONumbers.length - 3} more` : '';
+
+        toast.error(`${failed} approval${failed === 1 ? ' failed' : 's failed'}`, {
+          description: failedPONumbers.length > 0 ? `${preview}${overflow}` : undefined,
+        });
+        setSelectedIds(new Set(failedPOIds));
+        return;
       }
       setSelectedIds(new Set());
     } catch (error) {
@@ -388,8 +410,19 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
         toast.success(`Deleted ${bulkResult.deleted} purchase order${bulkResult.deleted === 1 ? '' : 's'}`);
       }
       if (bulkResult.failed.length > 0) {
-        toast.error(`${bulkResult.failed.length} could not be deleted`);
+        const failedIds = bulkResult.failed.map((f) => f.id);
+        const idToPoNumber = new Map(draftPOs.map((po) => [po.id, po.poNumber ?? po.id]));
+        setBulkDeleteFailures(
+          bulkResult.failed.map((f) => ({
+            id: f.id,
+            poNumber: idToPoNumber.get(f.id) ?? f.id,
+            error: f.error,
+          }))
+        );
+        setSelectedIds(new Set(failedIds));
+        return;
       }
+      setBulkDeleteFailures([]);
       setSelectedIds(new Set());
     } catch (error) {
       toast.error(
@@ -398,8 +431,40 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
     }
   }, [canBulkDelete, draftPOs, confirm, bulkDeleteMutation]);
 
+  const handleRetryBulkDelete = useCallback(async () => {
+    if (bulkDeleteFailures.length === 0) return;
+    const idsToRetry = bulkDeleteFailures.map((f) => f.id);
+    try {
+      const bulkResult = await bulkDeleteMutation.mutateAsync({
+        purchaseOrderIds: idsToRetry,
+      });
+      if (bulkResult.deleted > 0) {
+        toast.success(`Deleted ${bulkResult.deleted} purchase order${bulkResult.deleted === 1 ? '' : 's'}`);
+      }
+      if (bulkResult.failed.length > 0) {
+        const idToFailure = new Map(bulkDeleteFailures.map((f) => [f.id, f]));
+        setBulkDeleteFailures(
+          bulkResult.failed.map((f) => ({
+            id: f.id,
+            poNumber: idToFailure.get(f.id)?.poNumber ?? f.id,
+            error: f.error,
+          }))
+        );
+        setSelectedIds(new Set(bulkResult.failed.map((f) => f.id)));
+      } else {
+        setBulkDeleteFailures([]);
+        setSelectedIds(new Set());
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to retry bulk delete'
+      );
+    }
+  }, [bulkDeleteFailures, bulkDeleteMutation]);
+
   const handleBulkReceiveConfirm = useCallback(
     async (receiptData: BulkReceiptData) => {
+      setBulkReceiveAttempted(true);
       return bulkReceiveMutation.mutateAsync({
         purchaseOrderIds: receiptData.purchaseOrderIds,
         serialNumbers: receiptData.serialNumbers
@@ -417,8 +482,17 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
 
   const handleBulkDialogChange = useCallback((open: boolean) => {
     setBulkReceivingOpen(open);
-    if (!open) setSelectedIds(new Set());
-  }, []);
+    if (!open) {
+      if (!bulkReceiveAttempted) return;
+
+      const failedIds = bulkReceiveMutation.data?.errors
+        ?.map((entry) => entry.poId)
+        .filter(Boolean) ?? [];
+
+      setSelectedIds(failedIds.length > 0 ? new Set(failedIds) : new Set());
+      setBulkReceiveAttempted(false);
+    }
+  }, [bulkReceiveAttempted, bulkReceiveMutation.data]);
 
   return (
     <PageLayout variant="full-width">
@@ -463,10 +537,50 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
         }
       />
       <PageLayout.Content>
+        {bulkDeleteFailures.length > 0 && (
+          <Alert variant="destructive" className="mb-3">
+            <AlertTitle>
+              {bulkDeleteFailures.length} could not be deleted
+            </AlertTitle>
+            <AlertDescription className="space-y-3">
+              <div className="text-sm">
+                {bulkDeleteFailures.slice(0, 5).map((failure) => (
+                  <div key={failure.id}>
+                    <strong>{failure.poNumber}</strong>: {failure.error}
+                  </div>
+                ))}
+                {bulkDeleteFailures.length > 5 && (
+                  <div>…and {bulkDeleteFailures.length - 5} more.</div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleRetryBulkDelete()}
+                  disabled={bulkDeleteMutation.isPending}
+                >
+                  Retry Failed
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setBulkDeleteFailures([])}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {selectedIds.size >= 2 && (
           <BulkActionsBar
             selectedCount={selectedIds.size}
-            onClear={() => setSelectedIds(new Set())}
+            onClear={() => {
+              setSelectedIds(new Set());
+              setBulkDeleteFailures([]);
+            }}
           >
             {canBulkApprove && (
               <Button

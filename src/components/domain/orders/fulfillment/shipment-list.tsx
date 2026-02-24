@@ -43,6 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useOrderShipments } from "@/hooks/orders";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
+import { SerialNumbersList } from "../components/serial-numbers-list";
 
 // ============================================================================
 // TYPES
@@ -265,12 +266,19 @@ export const ShipmentList = memo(function ShipmentList({
                       {shipment.items.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center justify-between text-sm py-1"
+                          className="py-1 text-sm"
                         >
-                          <span>Line Item #{item.orderLineItemId.slice(0, 8)}...</span>
-                          <span className="font-medium">
-                            Qty: {item.quantity}
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span>Line Item #{item.orderLineItemId.slice(0, 8)}...</span>
+                            <span className="font-medium">
+                              Qty: {item.quantity}
+                            </span>
+                          </div>
+                          {item.serialNumbers && item.serialNumbers.length > 0 ? (
+                            <div className="mt-1">
+                              <SerialNumbersList serials={item.serialNumbers} />
+                            </div>
+                          ) : null}
                         </div>
                       ))}
                     </div>

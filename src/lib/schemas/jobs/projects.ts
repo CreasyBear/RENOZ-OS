@@ -388,8 +388,13 @@ export interface ProjectMetadata {
 /**
  * Raw project shape from getProject (db.query.projects.findFirst).
  * Used as input to transformToProjectDetailData.
+ * Explicit id/customerId for type-safe access; index signature allows other db columns.
  */
-export type GetProjectRawInput = Record<string, unknown>;
+export interface GetProjectRawInput {
+  id: string;
+  customerId: string;
+  [key: string]: unknown;
+}
 
 /**
  * Project entity.

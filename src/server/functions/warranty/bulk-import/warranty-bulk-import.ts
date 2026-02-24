@@ -12,12 +12,17 @@
 import { eq, and, sql, or, inArray, like } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { warranties, warrantyPolicies, customers, products } from 'drizzle/schema';
+import { warranties, warrantyPolicies, customers, products, warrantyItems, inventory } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { triggerWarrantyRegistrationNotification } from '../policies/warranty-policies';
 import { warrantyLogger } from '@/lib/logger';
 import { createServerFn } from '@tanstack/react-start';
 import { ValidationError } from '@/lib/server/errors';
+import { normalizeSerial } from '@/lib/serials';
+import {
+  addSerializedItemEvent,
+  findSerializedItemBySerial,
+} from '@/server/functions/_shared/serialized-lineage';
 
 const MAX_IMPORT_ROWS = 1000;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5MB
@@ -136,6 +141,12 @@ export interface PreviewResult {
   };
 }
 
+/** Per-row failure for bulk import (WAR-001 / D4.3) */
+export interface BulkRegisterFailure {
+  rowIndex: number;
+  error: string;
+}
+
 export interface BulkRegisterResult {
   createdWarranties: Array<{
     id: string;
@@ -143,8 +154,10 @@ export interface BulkRegisterResult {
     customerId: string;
     productId: string;
   }>;
+  failed?: BulkRegisterFailure[];
   summary: {
     totalCreated: number;
+    totalFailed?: number;
     byPolicyType: {
       battery_performance: number;
       inverter_manufacturer: number;
@@ -342,7 +355,8 @@ export const previewBulkWarrantyImport = createServerFn({ method: 'POST' })
       const custId = row[getColumnIndex('customer_id')]?.trim();
       const sku = row[getColumnIndex('product_sku')]?.trim();
       const prodId = row[getColumnIndex('product_id')]?.trim();
-      const serial = row[getColumnIndex('serial_number')]?.trim();
+      const serialRaw = row[getColumnIndex('serial_number')]?.trim();
+      const serial = serialRaw ? normalizeSerial(serialRaw) : '';
 
       if (email) customerEmails.add(email.toLowerCase());
       if (custId) customerIds.add(custId);
@@ -437,7 +451,7 @@ export const previewBulkWarrantyImport = createServerFn({ method: 'POST' })
         );
 
       existingWarranties.forEach((w) => {
-        if (w.serial) existingSerials.add(w.serial);
+        if (w.serial) existingSerials.add(normalizeSerial(w.serial));
       });
     }
 
@@ -518,7 +532,8 @@ export const previewBulkWarrantyImport = createServerFn({ method: 'POST' })
       const custId = row[getColumnIndex('customer_id')]?.trim();
       const productSku = row[getColumnIndex('product_sku')]?.trim();
       const prodId = row[getColumnIndex('product_id')]?.trim();
-      const serialNumber = row[getColumnIndex('serial_number')]?.trim() || null;
+      const serialRaw = row[getColumnIndex('serial_number')]?.trim();
+      const serialNumber = serialRaw ? normalizeSerial(serialRaw) : null;
       const registrationDateStr = row[getColumnIndex('registration_date')]?.trim();
       const policyId = row[getColumnIndex('warranty_policy_id')]?.trim();
 
@@ -672,6 +687,11 @@ export const previewBulkWarrantyImport = createServerFn({ method: 'POST' })
  * Takes validated rows from previewBulkWarrantyImport and creates warranty records.
  * Generates warranty numbers, calculates expiry dates, optionally sends notifications.
  *
+ * WAR-001 / D4.3: Row-by-row processing for partial failure.
+ * Batch insert would fail entire import on first DB constraint. Row-by-row
+ * allows per-row failure mapping and retry. Trade-off: slower for large
+ * imports; warranty number gaps when rows fail.
+ *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-005a
  */
 export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
@@ -713,64 +733,140 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
       policies.map((p) => [p.id, { durationMonths: p.durationMonths, cycleLimit: p.cycleLimit }])
     );
 
-    // Pre-generate all warranty numbers in a single query
+    // Pre-generate all warranty numbers (WAR-001: row-by-row allows partial success)
     const warrantyNumbers = await generateWarrantyNumbers(ctx.organizationId, rows.length);
 
-    // Build all warranty records upfront
-    const warrantyValues = rows.map((row, index) => {
-      const registrationDate = new Date(row.registrationDate);
-      const policyInfo = policyDurationMap.get(row.warrantyPolicyId);
-      const expiryDate = calculateExpiryDate(registrationDate, policyInfo?.durationMonths || 12);
+    // Pre-fetch inventory for serial linkage (batch for efficiency)
+    const serialProductIds = [...new Set(rows.filter((r) => r.serialNumber).map((r) => r.productId))];
+    const serialNumbers = [...new Set(rows.filter((r) => r.serialNumber).map((r) => normalizeSerial(r.serialNumber!)))];
+    const inventoryRows =
+      serialProductIds.length > 0 && serialNumbers.length > 0
+        ? await db
+            .select({
+              id: inventory.id,
+              productId: inventory.productId,
+              serialNumber: inventory.serialNumber,
+            })
+            .from(inventory)
+            .where(
+              and(
+                eq(inventory.organizationId, ctx.organizationId),
+                inArray(inventory.productId, serialProductIds),
+                inArray(inventory.serialNumber, serialNumbers)
+              )
+            )
+        : [];
+    const inventoryByProductSerial = new Map<string, string>();
+    for (const row of inventoryRows) {
+      if (!row.serialNumber) continue;
+      inventoryByProductSerial.set(`${row.productId}:${normalizeSerial(row.serialNumber)}`, row.id);
+    }
 
-      return {
-        organizationId: ctx.organizationId,
-        warrantyNumber: warrantyNumbers[index],
-        customerId: row.customerId,
-        productId: row.productId,
-        productSerial: row.serialNumber || null,
-        warrantyPolicyId: row.warrantyPolicyId,
-        registrationDate,
-        expiryDate,
-        status: 'active' as const,
-        createdBy: ctx.user.id,
-      };
-    });
-
-    // Single batch insert for all warranties
-    const insertedWarranties = await db
-      .insert(warranties)
-      .values(warrantyValues)
-      .returning({
-        id: warranties.id,
-        warrantyNumber: warranties.warrantyNumber,
-      });
-
-    // Build result and count by policy type
+    const createdWarranties: BulkRegisterResult['createdWarranties'] = [];
+    const createdWithRows: Array<{ warranty: (typeof createdWarranties)[0]; row: (typeof rows)[0] }> = [];
+    const failed: BulkRegisterResult['failed'] = [];
     const byPolicyType = {
       battery_performance: 0,
       inverter_manufacturer: 0,
       installation_workmanship: 0,
     };
 
-    const createdWarranties: BulkRegisterResult['createdWarranties'] = insertedWarranties.map(
-      (warranty, index) => {
-        const row = rows[index];
-        byPolicyType[row.policyType]++;
+    // Process each row individually for per-row partial failure (WAR-001 / D4.3)
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+      const rowIndex = index + 1; // 1-based for user display
+      const policyInfo = policyDurationMap.get(row.warrantyPolicyId);
+      const durationMonths = policyInfo?.durationMonths ?? 12;
 
-        return {
-          id: warranty.id,
-          warrantyNumber: warranty.warrantyNumber,
-          customerId: row.customerId,
-          productId: row.productId,
-        };
+      try {
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+          );
+          const registrationDate = new Date(row.registrationDate);
+          const expiryDate = calculateExpiryDate(registrationDate, durationMonths);
+
+          const [inserted] = await tx
+            .insert(warranties)
+            .values({
+              organizationId: ctx.organizationId,
+              warrantyNumber: warrantyNumbers[index],
+              customerId: row.customerId,
+              productId: row.productId,
+              productSerial: row.serialNumber || null,
+              warrantyPolicyId: row.warrantyPolicyId,
+              registrationDate,
+              expiryDate,
+              status: 'active',
+              createdBy: ctx.user.id,
+            })
+            .returning({ id: warranties.id, warrantyNumber: warranties.warrantyNumber });
+
+          if (!inserted) throw new Error('Insert failed');
+
+          const normalizedSerial = row.serialNumber ? normalizeSerial(row.serialNumber) : null;
+          const inventoryId = normalizedSerial
+            ? inventoryByProductSerial.get(`${row.productId}:${normalizedSerial}`) ?? null
+            : null;
+
+          await tx.insert(warrantyItems).values({
+            organizationId: ctx.organizationId,
+            warrantyId: inserted.id,
+            productId: row.productId,
+            productSerial: normalizedSerial,
+            inventoryId,
+            warrantyStartDate: row.registrationDate.slice(0, 10),
+            warrantyEndDate: expiryDate.toISOString().slice(0, 10),
+            warrantyPeriodMonths: durationMonths,
+            installationNotes: null,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          });
+
+          const created = {
+            id: inserted.id,
+            warrantyNumber: inserted.warrantyNumber,
+            customerId: row.customerId,
+            productId: row.productId,
+          };
+          createdWarranties.push(created);
+          createdWithRows.push({ warranty: created, row });
+          byPolicyType[row.policyType]++;
+        });
+
+        // Serial lineage (outside tx - fire-and-forget style, don't fail row)
+        const serialNumber = row.serialNumber ? normalizeSerial(row.serialNumber) : null;
+        if (serialNumber) {
+          try {
+            const serializedItem = await findSerializedItemBySerial(db, ctx.organizationId, serialNumber, {
+              userId: ctx.user.id,
+              productId: row.productId,
+              source: 'warranty_bulk_import',
+            });
+            if (serializedItem) {
+              await addSerializedItemEvent(db, {
+                organizationId: ctx.organizationId,
+                serializedItemId: serializedItem.id,
+                eventType: 'warranty_registered',
+                entityType: 'warranty',
+                entityId: createdWarranties[createdWarranties.length - 1]!.id,
+                notes: `Warranty registered: ${warrantyNumbers[index]}`,
+                userId: ctx.user.id,
+              });
+            }
+          } catch {
+            // Log but don't fail - lineage is best-effort
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        failed.push({ rowIndex, error: msg });
       }
-    );
+    }
 
-    // Send notifications after batch insert (fire-and-forget, don't block)
-    if (sendNotifications) {
-      // Process notifications in parallel but don't await all of them to block return
-      const notificationPromises = insertedWarranties.map(async (warranty, index) => {
-        const row = rows[index];
+    // Send notifications for created warranties
+    if (sendNotifications && createdWithRows.length > 0) {
+      const notificationPromises = createdWithRows.map(async ({ warranty, row }) => {
         const registrationDate = new Date(row.registrationDate);
         const policyInfo = policyDurationMap.get(row.warrantyPolicyId);
         const expiryDate = calculateExpiryDate(registrationDate, policyInfo?.durationMonths || 12);
@@ -780,29 +876,28 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
             warrantyId: warranty.id,
             warrantyNumber: warranty.warrantyNumber,
             organizationId: ctx.organizationId,
-            customerId: row.customerId,
-            productId: row.productId,
+            customerId: warranty.customerId,
+            productId: warranty.productId,
             productSerial: row.serialNumber,
             policyId: row.warrantyPolicyId,
             registrationDate,
             expiryDate,
           });
         } catch (error) {
-          // Log but don't fail the import
           warrantyLogger.error('Failed to send post-import notification', error, {
             warrantyNumber: warranty.warrantyNumber,
           });
         }
       });
-
-      // Await all notifications (they run in parallel)
       await Promise.all(notificationPromises);
     }
 
     return {
       createdWarranties,
+      failed: failed.length > 0 ? failed : undefined,
       summary: {
         totalCreated: createdWarranties.length,
+        totalFailed: failed.length > 0 ? failed.length : undefined,
         byPolicyType,
       },
     };

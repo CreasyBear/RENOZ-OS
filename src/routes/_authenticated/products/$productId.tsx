@@ -49,6 +49,9 @@ function ProductDetailPage() {
       productId={product.id}
       loaderData={loaderData}
       onBack={() => navigate({ to: "/products" })}
+      onEdit={(editProductId) =>
+        navigate({ to: "/products/$productId/edit", params: { productId: editProductId } })
+      }
       onDuplicate={(newProductId) =>
         navigate({ to: "/products/$productId", params: { productId: newProductId } })
       }

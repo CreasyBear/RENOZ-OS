@@ -57,6 +57,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -254,8 +258,12 @@ function AddBomItemDialog({
     : 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(addItem.isPending, onOpenChange)}>
+      <DialogContent
+        className="max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        onEscapeKeyDown={createPendingDialogInteractionGuards(addItem.isPending).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(addItem.isPending).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5" />
@@ -478,8 +486,12 @@ function EditBomItemDialog({
   const productName = item.product?.name || 'Unknown Product';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(updateItem.isPending, onOpenChange)}>
+      <DialogContent
+        className="max-w-lg"
+        onEscapeKeyDown={createPendingDialogInteractionGuards(updateItem.isPending).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(updateItem.isPending).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Edit3 className="h-5 w-5" />
@@ -1240,8 +1252,11 @@ function BulkStatusDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(onUpdateStatus.isPending, onOpenChange)}>
+      <DialogContent
+        onEscapeKeyDown={createPendingDialogInteractionGuards(onUpdateStatus.isPending).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(onUpdateStatus.isPending).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Update Status</DialogTitle>
           <DialogDescription>

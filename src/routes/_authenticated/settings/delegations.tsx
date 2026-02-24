@@ -31,6 +31,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -332,8 +336,12 @@ function DelegationsPage() {
       </Tabs>
 
       {/* Create Delegation Dialog */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+      <Dialog open={isCreateOpen} onOpenChange={createPendingDialogOpenChangeHandler(isSubmitting, setIsCreateOpen)}>
+        <DialogContent
+          className="sm:max-w-[500px]"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(isSubmitting).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(isSubmitting).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Create Delegation</DialogTitle>
             <DialogDescription>

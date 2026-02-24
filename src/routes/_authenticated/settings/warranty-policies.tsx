@@ -13,7 +13,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
-import { WarrantyPolicySettingsContainer } from '@/components/domain/warranty';
+import { WarrantyPolicySettingsContainer } from '@/components/domain/warranty/containers/warranty-policy-settings-container';
 
 export const Route = createFileRoute('/_authenticated/settings/warranty-policies')({
   component: WarrantyPoliciesSettingsPage,

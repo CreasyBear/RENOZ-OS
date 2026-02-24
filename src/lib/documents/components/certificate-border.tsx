@@ -15,13 +15,13 @@ import { colors, spacing } from "./theme";
 
 const styles = StyleSheet.create({
   outerContainer: {
-    padding: 8,
+    padding: spacing.sm,
     backgroundColor: colors.background.white,
   },
   outerBorder: {
     borderWidth: 3,
     borderColor: colors.border.dark,
-    padding: 4,
+    padding: spacing.xs,
   },
   innerBorder: {
     borderWidth: 1,

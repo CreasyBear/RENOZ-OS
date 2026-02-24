@@ -87,15 +87,15 @@ export function ProductRelationsTab({
                 Products included when this bundle is purchased
               </CardDescription>
             </div>
-            <Button
-              size="sm"
-              disabled={!onAddComponent}
-              title={!onAddComponent ? "Bundle component management is not available yet" : undefined}
-              onClick={() => onAddComponent?.()}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Component
-            </Button>
+            {onAddComponent && (
+              <Button
+                size="sm"
+                onClick={onAddComponent}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Component
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {bundleComponents.length === 0 ? (
@@ -142,16 +142,16 @@ export function ProductRelationsTab({
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          disabled={!onRemoveComponent}
-                          title={!onRemoveComponent ? "Bundle component removal is not available yet" : undefined}
-                          onClick={() => onRemoveComponent?.(component.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {onRemoveComponent && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => onRemoveComponent(component.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -174,16 +174,16 @@ export function ProductRelationsTab({
               Products that are related to this product
             </CardDescription>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!onAddRelation}
-            title={!onAddRelation ? "Product relation management is not available yet" : undefined}
-            onClick={() => onAddRelation?.()}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Relation
-          </Button>
+          {onAddRelation && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onAddRelation}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Relation
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {relations.length === 0 ? (
@@ -231,16 +231,16 @@ export function ProductRelationsTab({
                         {relation.relatedProduct?.sku ?? "-"}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          disabled={!onRemoveRelation}
-                          title={!onRemoveRelation ? "Relation removal is not available yet" : undefined}
-                          onClick={() => onRemoveRelation?.(relation.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {onRemoveRelation && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => onRemoveRelation(relation.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

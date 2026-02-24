@@ -13,19 +13,10 @@ import * as React from "react";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { DateTimePicker } from "../date-time-picker";
 
 import { useScheduleCall } from "@/hooks/communications/use-scheduled-calls";
-import { toast } from "@/lib/toast";
+import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/lib/error-handling";
 import {
   scheduleCallFormSchema,
@@ -38,7 +29,7 @@ import {
   TextareaField,
   SwitchField,
   FormField,
-  FormActions,
+  FormDialog,
   extractFieldError,
 } from "@/components/shared/forms";
 import {
@@ -88,6 +79,9 @@ export function ScheduleCallDialog({
 
   const form = useTanStackForm<ScheduleCallFormValues>({
     schema: scheduleCallFormSchema,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     defaultValues: {
       scheduledAt: new Date(),
       purpose: "general",
@@ -116,7 +110,6 @@ export function ScheduleCallDialog({
           onSuccess: (data) => {
             toast.success("Call scheduled successfully");
             handleOpenChange(false);
-            form.reset();
             onSuccess?.(data.id);
           },
           onError: (error) => {
@@ -140,51 +133,44 @@ export function ScheduleCallDialog({
   const enableReminder = form.useWatch("enableReminder");
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-
-      <DialogContent
-        className="sm:max-w-[500px]"
-        aria-labelledby="schedule-call-title"
-        aria-describedby="schedule-call-description"
-      >
-        <DialogHeader>
-          <DialogTitle id="schedule-call-title">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="h-5 w-5" />
-              Schedule Call
-            </div>
-          </DialogTitle>
-          <DialogDescription id="schedule-call-description">
-            {customerName
-              ? (
-                  <>
-                    Schedule a follow-up call with{" "}
-                    <Link
-                      to="/customers/$customerId"
-                      params={{ customerId }}
-                      search={{}}
-                      className="font-medium hover:underline text-primary"
-                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    >
-                      {customerName}
-                    </Link>
-                    .
-                  </>
-                )
-              : "Schedule a follow-up call with this customer."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-          aria-label="call-form"
-        >
-          <form.Field name="scheduledAt">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      trigger={trigger}
+      title={
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-5 w-5" />
+          Schedule Call
+        </div>
+      }
+      description={
+        customerName
+          ? (
+              <>
+                Schedule a follow-up call with{" "}
+                <Link
+                  to="/customers/$customerId"
+                  params={{ customerId }}
+                  search={{}}
+                  className="font-medium hover:underline text-primary"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                >
+                  {customerName}
+                </Link>
+                .
+              </>
+            )
+          : "Schedule a follow-up call with this customer."
+      }
+      form={form}
+      submitLabel="Schedule Call"
+      cancelLabel="Cancel"
+      loadingLabel="Scheduling..."
+      submitError={scheduleMutation.error?.message ?? null}
+      submitDisabled={scheduleMutation.isPending}
+      className="sm:max-w-[500px]"
+    >
+      <form.Field name="scheduledAt">
             {(field) => {
               const error = extractFieldError(field);
               return (
@@ -277,19 +263,6 @@ export function ScheduleCallDialog({
               }}
             </form.Field>
           )}
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <FormActions
-              form={form}
-              submitLabel="Schedule Call"
-              cancelLabel="Cancel"
-              loadingLabel="Scheduling..."
-              onCancel={() => handleOpenChange(false)}
-              submitDisabled={scheduleMutation.isPending}
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

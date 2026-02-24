@@ -13,60 +13,35 @@
  * - Form validation with clear error messages
  * - Numeric inputs with proper constraints
  */
-import { memo, useState, useCallback, useEffect } from "react";
-import { useForm, type Resolver } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { memo, useEffect } from "react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
   Package,
-  MapPin,
-  DollarSign,
   Hash,
   FileText,
   Loader2,
-  Check,
-  Search,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  FormFieldDisplayProvider,
+  FormErrorSummary,
+  ComboboxField,
+  TextField,
+  NumberField,
+  SelectField,
+  TextareaField,
+  DateStringField,
+} from "@/components/shared/forms";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-const receivingFormSchema = z.object({
+const receivingFormBaseSchema = z.object({
   productId: z.string().uuid("Product is required"),
   locationId: z.string().uuid("Location is required"),
   quantity: z.coerce.number().int().positive("Quantity must be positive"),
@@ -80,13 +55,36 @@ const receivingFormSchema = z.object({
   notes: z.string().optional(),
 });
 
-type ReceivingFormValues = z.infer<typeof receivingFormSchema>;
+type ReceivingFormValues = z.infer<typeof receivingFormBaseSchema>;
+
+function createReceivingFormSchema(products: { id: string; isSerialized?: boolean }[]) {
+  return receivingFormBaseSchema.superRefine((data, ctx) => {
+    const product = products.find((p) => p.id === data.productId);
+    if (product?.isSerialized) {
+      if (data.quantity !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quantity"],
+          message: "Serialized products must be received one unit per serial.",
+        });
+      }
+      if (!data.serialNumber?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["serialNumber"],
+          message: "Serial number is required for serialized products.",
+        });
+      }
+    }
+  });
+}
 
 interface Product {
   id: string;
   sku: string;
   name: string;
   costPrice?: number | null;
+  isSerialized?: boolean;
 }
 
 interface Location {
@@ -103,6 +101,7 @@ interface ReceivingFormProps {
   onSubmit: (data: ReceivingFormValues) => Promise<void>;
   onProductSearch?: (query: string) => void;
   defaultLocationId?: string;
+  submitError?: string | null;
   className?: string;
 }
 
@@ -118,16 +117,15 @@ export const ReceivingForm = memo(function ReceivingForm({
   onSubmit,
   onProductSearch,
   defaultLocationId,
+  submitError,
   className,
 }: ReceivingFormProps) {
   const { formatCurrency } = useOrgFormat();
   const formatCurrencyDisplay = (value: number) =>
     formatCurrency(value, { cents: false, showCents: true });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [productOpen, setProductOpen] = useState(false);
 
-  const form = useForm<ReceivingFormValues>({
-    resolver: zodResolver(receivingFormSchema) as Resolver<ReceivingFormValues>,
+  const form = useTanStackForm<ReceivingFormValues>({
+    schema: createReceivingFormSchema(products),
     defaultValues: {
       productId: "",
       locationId: defaultLocationId ?? "",
@@ -141,35 +139,46 @@ export const ReceivingForm = memo(function ReceivingForm({
       referenceId: "",
       notes: "",
     },
+    onSubmit: async (values) => {
+      await onSubmit(values);
+      form.reset({
+        productId: "",
+        locationId: defaultLocationId ?? "",
+        quantity: 1,
+        unitCost: 0,
+        serialNumber: "",
+        batchNumber: "",
+        lotNumber: "",
+        expiryDate: "",
+        referenceType: "",
+        referenceId: "",
+        notes: "",
+      });
+    },
+    onSubmitInvalid: () => {},
   });
 
-   
-  const selectedProductId = form.watch("productId");
+  const selectedProductId = form.useWatch("productId");
   const selectedProduct = products.find((p) => p.id === selectedProductId);
+  const isSerializedProduct = !!selectedProduct?.isSerialized;
 
   // Auto-fill cost from product when selected
   useEffect(() => {
-    if (selectedProduct?.costPrice) {
-      form.setValue("unitCost", selectedProduct.costPrice);
+    if (selectedProduct?.costPrice != null) {
+      form.setFieldValue("unitCost", selectedProduct.costPrice);
     }
-  }, [selectedProduct, form]);
+  }, [selectedProduct?.costPrice, form]);
 
-  const handleSubmit = useCallback(
-    async (values: ReceivingFormValues) => {
-      try {
-        setIsSubmitting(true);
-        await onSubmit(values);
-        form.reset();
-      } finally {
-        setIsSubmitting(false);
-      }
-    },
-    [onSubmit, form]
-  );
+  // Force quantity to 1 when serialized
+  useEffect(() => {
+    if (!isSerializedProduct) return;
+    if (form.getValues().quantity !== 1) {
+      form.setFieldValue("quantity", 1);
+    }
+  }, [isSerializedProduct, form]);
 
-  const quantity = form.watch("quantity") || 0;
-  const unitCost = form.watch("unitCost") || 0;
-   
+  const quantity = form.useWatch("quantity") || 0;
+  const unitCost = form.useWatch("unitCost") || 0;
   const totalValue = quantity * unitCost;
 
   return (
@@ -178,176 +187,89 @@ export const ReceivingForm = memo(function ReceivingForm({
         <CardTitle>Receive Inventory</CardTitle>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void form.handleSubmit();
+          }}
+          className="space-y-6"
+        >
+          <FormFieldDisplayProvider form={form}>
+            <FormErrorSummary form={form} submitError={submitError} />
             {/* Product Selection */}
-            <FormField
-              control={form.control}
-              name="productId"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Product</FormLabel>
-                  <Popover open={productOpen} onOpenChange={setProductOpen}>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={productOpen}
-                          className={cn(
-                            "w-full justify-between",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4" aria-hidden="true" />
-                              <span>{selectedProduct?.name}</span>
-                              <span className="text-muted-foreground font-mono text-xs">
-                                {selectedProduct?.sku}
-                              </span>
-                            </div>
-                          ) : (
-                            <span>Select product...</span>
-                          )}
-                          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0" align="start">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search products..."
-                          onValueChange={onProductSearch}
-                        />
-                        <CommandList>
-                          {isLoadingProducts ? (
-                            <div className="py-6 text-center text-sm">
-                              <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                            </div>
-                          ) : (
-                            <>
-                              <CommandEmpty>No products found</CommandEmpty>
-                              <CommandGroup>
-                                {products.map((product) => (
-                                  <CommandItem
-                                    key={product.id}
-                                    value={`${product.name} ${product.sku}`}
-                                    onSelect={() => {
-                                      field.onChange(product.id);
-                                      setProductOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        field.value === product.id
-                                          ? "opacity-100"
-                                          : "opacity-0"
-                                      )}
-                                    />
-                                    <div className="flex flex-col">
-                                      <span>{product.name}</span>
-                                      <span className="text-xs text-muted-foreground font-mono">
-                                        {product.sku}
-                                      </span>
-                                    </div>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </>
-                          )}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="productId">
+              {(field) => (
+                <ComboboxField
+                  field={field}
+                  label="Product"
+                  options={products.map((p) => ({
+                    value: p.id,
+                    label: p.name,
+                    description: p.sku,
+                  }))}
+                  placeholder="Select product..."
+                  searchPlaceholder="Search products..."
+                  emptyText="No products found"
+                  onSearchChange={onProductSearch}
+                  isLoading={isLoadingProducts}
+                  required
+                />
               )}
-            />
+            </form.Field>
+
+            {isSerializedProduct ? (
+              <Alert>
+                <AlertDescription>
+                  This product is serialized. Receive exactly 1 unit and provide a serial number.
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             {/* Location Selection */}
-            <FormField
-              control={form.control}
-              name="locationId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    disabled={isLoadingLocations}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select location..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {locations.map((location) => (
-                        <SelectItem key={location.id} value={location.id}>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" aria-hidden="true" />
-                            <span>{location.name}</span>
-                            <span className="text-muted-foreground text-xs">
-                              ({location.code})
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="locationId">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Location"
+                  placeholder="Select location..."
+                  disabled={isLoadingLocations}
+                  options={locations.map((loc) => ({
+                    value: loc.id,
+                    label: `${loc.name} (${loc.code})`,
+                  }))}
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Quantity and Cost */}
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantity</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="1"
-                        className="tabular-nums"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="quantity">
+                {(field) => (
+                  <NumberField
+                    field={field}
+                    label="Quantity"
+                    min={1}
+                    max={isSerializedProduct ? 1 : undefined}
+                    disabled={isSerializedProduct}
+                    required
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="unitCost"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Unit Cost</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <DollarSign
-                          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          className="pl-9 tabular-nums"
-                          {...field}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="unitCost">
+                {(field) => (
+                  <NumberField
+                    field={field}
+                    label="Unit Cost"
+                    min={0}
+                    step={0.01}
+                    prefix="$"
+                    required
+                  />
                 )}
-              />
+              </form.Field>
             </div>
 
             {/* Total Value Display */}
@@ -364,67 +286,50 @@ export const ReceivingForm = memo(function ReceivingForm({
             <div className="space-y-4">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <Hash className="h-4 w-4" aria-hidden="true" />
-                Tracking Information (Optional)
+                Tracking Information {isSerializedProduct ? "(Serial Required)" : "(Optional)"}
               </h4>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="lotNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Lot Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="LOT-001" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="lotNumber">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Lot Number"
+                      placeholder="LOT-001"
+                    />
                   )}
-                />
+                </form.Field>
 
-                <FormField
-                  control={form.control}
-                  name="batchNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Batch Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="BATCH-001" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="batchNumber">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Batch Number"
+                      placeholder="BATCH-001"
+                    />
                   )}
-                />
+                </form.Field>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="serialNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Serial Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="SN-12345" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="serialNumber">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Serial Number"
+                      placeholder="SN-12345"
+                    />
                   )}
-                />
+                </form.Field>
 
-                <FormField
-                  control={form.control}
-                  name="expiryDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Expiry Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="expiryDate">
+                  {(field) => (
+                    <DateStringField
+                      field={field}
+                      label="Expiry Date"
+                    />
                   )}
-                />
+                </form.Field>
               </div>
             </div>
 
@@ -436,86 +341,62 @@ export const ReceivingForm = memo(function ReceivingForm({
               </h4>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="referenceType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reference Type</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="purchase_order">
-                            Purchase Order
-                          </SelectItem>
-                          <SelectItem value="transfer">Transfer</SelectItem>
-                          <SelectItem value="return">Return</SelectItem>
-                          <SelectItem value="adjustment">Adjustment</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="referenceType">
+                  {(field) => (
+                    <SelectField
+                      field={field}
+                      label="Reference Type"
+                      placeholder="Select type..."
+                      options={[
+                        { value: "purchase_order", label: "Purchase Order" },
+                        { value: "transfer", label: "Transfer" },
+                        { value: "return", label: "Return" },
+                        { value: "adjustment", label: "Adjustment" },
+                      ]}
+                    />
                   )}
-                />
+                </form.Field>
 
-                <FormField
-                  control={form.control}
-                  name="referenceId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reference ID</FormLabel>
-                      <FormControl>
-                        <Input placeholder="PO-001" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="referenceId">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Reference ID"
+                      placeholder="PO-001"
+                    />
                   )}
-                />
+                </form.Field>
               </div>
             </div>
 
             {/* Notes */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Additional notes about this receipt..."
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="notes">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Notes"
+                  placeholder="Additional notes about this receipt..."
+                  rows={3}
+                />
               )}
-            />
+            </form.Field>
+          </FormFieldDisplayProvider>
 
-            {/* Submit */}
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  Receiving...
-                </>
-              ) : (
-                <>
-                  <Package className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Receive Inventory
-                </>
-              )}
-            </Button>
-          </form>
-        </Form>
+          {/* Submit */}
+          <Button type="submit" className="w-full" disabled={form.state.isSubmitting}>
+            {form.state.isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                Receiving...
+              </>
+            ) : (
+              <>
+                <Package className="mr-2 h-4 w-4" aria-hidden="true" />
+                Receive Inventory
+              </>
+            )}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

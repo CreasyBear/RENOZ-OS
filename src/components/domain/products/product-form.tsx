@@ -36,20 +36,22 @@ import {
   SelectField,
   NumberField,
   SwitchField,
+  FormFieldDisplayProvider,
 } from "@/components/shared/forms";
-import { productFormSchema, type ProductFormValues } from "./product-form/types";
+import { productFormSchema, type ProductFormValues } from "./product-form-types";
 
 export type { ProductFormValues };
 import type { Category } from "@/lib/schemas/products";
 import { PRODUCT_TYPE_OPTIONS, PRODUCT_STATUS_OPTIONS } from "./product-filter-config";
 import type { SelectOption } from "@/components/shared/forms";
+import { toast } from "sonner";
 
 // Schema imported from types.ts to avoid duplication
 
 // Type for passing form to section sub-components
 type ProductFormApi = TanStackFormApi<ProductFormValues>;
 
-interface ProductFormProps {
+export interface ProductFormProps {
   defaultValues?: Partial<ProductFormValues>;
   categories?: Category[];
   onSubmit: (data: ProductFormValues) => Promise<void>;
@@ -337,71 +339,70 @@ function SettingsSection({
           </div>
         </div>
 
-        {/* Inventory settings - conditional on product type */}
+        {/* Track Inventory and Serialized - always visible so they can be changed */}
+        <Separator />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <label className="text-sm font-medium">Track Inventory</label>
+              <p className="text-sm text-muted-foreground">
+                Monitor stock levels
+              </p>
+            </div>
+            <form.Field name="trackInventory">
+              {(field) => (
+                <SwitchField field={field} label="" />
+              )}
+            </form.Field>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <label className="text-sm font-medium">Serialized</label>
+              <p className="text-sm text-muted-foreground">
+                Track individual units by serial number
+              </p>
+            </div>
+            <form.Field name="isSerialized">
+              {(field) => (
+                <SwitchField field={field} label="" />
+              )}
+            </form.Field>
+          </div>
+        </div>
+
+        {/* Reorder point/qty - only for physical/bundle */}
         <form.Subscribe selector={(state) => state.values.type}>
           {(productType) => {
-            const showInventorySettings = productType === "physical" || productType === "bundle";
-            if (!showInventorySettings) return null;
+            const showReorder = productType === "physical" || productType === "bundle";
+            if (!showReorder) return null;
 
             return (
-              <>
-                <Separator />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <label className="text-sm font-medium">Track Inventory</label>
-                      <p className="text-sm text-muted-foreground">
-                        Monitor stock levels
-                      </p>
-                    </div>
-                    <form.Field name="trackInventory">
-                      {(field) => (
-                        <SwitchField field={field} label="" />
-                      )}
-                    </form.Field>
-                  </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <form.Field name="reorderPoint">
+                  {(field) => (
+                    <NumberField
+                      field={field}
+                      label="Reorder Point"
+                      min={0}
+                      placeholder="0"
+                      description="Alert when stock falls below this level"
+                    />
+                  )}
+                </form.Field>
 
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <label className="text-sm font-medium">Serialized</label>
-                      <p className="text-sm text-muted-foreground">
-                        Track individual units by serial number
-                      </p>
-                    </div>
-                    <form.Field name="isSerialized">
-                      {(field) => (
-                        <SwitchField field={field} label="" />
-                      )}
-                    </form.Field>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <form.Field name="reorderPoint">
-                    {(field) => (
-                      <NumberField
-                        field={field}
-                        label="Reorder Point"
-                        min={0}
-                        placeholder="0"
-                        description="Alert when stock falls below this level"
-                      />
-                    )}
-                  </form.Field>
-
-                  <form.Field name="reorderQty">
-                    {(field) => (
-                      <NumberField
-                        field={field}
-                        label="Reorder Quantity"
-                        min={0}
-                        placeholder="0"
-                        description="Suggested quantity when reordering"
-                      />
-                    )}
-                  </form.Field>
-                </div>
-              </>
+                <form.Field name="reorderQty">
+                  {(field) => (
+                    <NumberField
+                      field={field}
+                      label="Reorder Quantity"
+                      min={0}
+                      placeholder="0"
+                      description="Suggested quantity when reordering"
+                    />
+                  )}
+                </form.Field>
+              </div>
             );
           }}
         </form.Subscribe>
@@ -595,6 +596,9 @@ export function ProductForm({
         setIsSubmitting(false);
       }
     },
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
   });
 
   return (
@@ -605,6 +609,7 @@ export function ProductForm({
       }}
       className="space-y-6"
     >
+      <FormFieldDisplayProvider form={form}>
       <BasicInfoSection form={form} categories={categories} />
       <PricingSection form={form} />
       <SettingsSection form={form} />
@@ -635,6 +640,7 @@ export function ProductForm({
           </Button>
         </div>
       </div>
+      </FormFieldDisplayProvider>
     </form>
   );
 }

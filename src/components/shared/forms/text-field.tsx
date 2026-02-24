@@ -20,6 +20,7 @@
  */
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import type { FormFieldWithType } from "./types"
 
 export interface TextFieldProps {
@@ -33,8 +34,8 @@ export interface TextFieldProps {
   required?: boolean
   /** Helper text */
   description?: string
-  /** Input type (text, password, date, etc.) */
-  type?: "text" | "password" | "tel" | "url" | "email" | "date"
+  /** Input type (text, password, tel, url, email). For date fields, use DateField (Date | null) or DateStringField (string). */
+  type?: "text" | "password" | "tel" | "url" | "email"
   /** Autocomplete attribute for form autofill */
   autocomplete?: string
   /** Input mode for mobile keyboards */
@@ -43,10 +44,14 @@ export interface TextFieldProps {
   spellCheck?: boolean
   /** Additional class names for the wrapper */
   className?: string
+  /** When true, hide the label (visually, still for a11y) */
+  hideLabel?: boolean
   /** Disabled state */
   disabled?: boolean
   /** Optional additional blur handler (called after field.handleBlur) */
   onBlur?: () => void
+  /** Optional callback when value changes (e.g. to clear field-level validation state) */
+  onChange?: (value: string) => void
   /**
    * When true, show errors when field has errors (ignore isTouched).
    * Use for auth forms so submit-time validation errors are visible.
@@ -65,10 +70,15 @@ export function TextField({
   inputMode,
   spellCheck,
   className,
+  hideLabel,
   disabled,
   onBlur,
-  showErrorsAfterSubmit,
+  onChange,
+  showErrorsAfterSubmit: showErrorsAfterSubmitProp,
 }: TextFieldProps) {
+  const { showErrorsAfterSubmit: showErrorsFromContext } = useFormFieldDisplay()
+  const showErrorsAfterSubmit = showErrorsAfterSubmitProp ?? showErrorsFromContext
+
   const hasErrors = field.state.meta.errors.length > 0
   const shouldShowError = showErrorsAfterSubmit ? hasErrors : (field.state.meta.isTouched && hasErrors)
   const rawError = shouldShowError ? field.state.meta.errors[0] : undefined
@@ -106,12 +116,17 @@ export function TextField({
       description={description}
       required={required}
       className={className}
+      hideLabel={hideLabel}
     >
       <Input
         type={type}
         placeholder={placeholder}
         value={field.state.value ?? ""}
-        onChange={(e) => field.handleChange(e.target.value)}
+        onChange={(e) => {
+          const value = e.target.value;
+          field.handleChange(value);
+          onChange?.(value);
+        }}
         onBlur={() => {
           field.handleBlur()
           onBlur?.()

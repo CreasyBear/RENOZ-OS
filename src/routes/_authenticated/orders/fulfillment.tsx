@@ -10,8 +10,8 @@ import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-route
 import { useState, useCallback, useMemo } from "react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrdersTableSkeleton } from "@/components/skeletons/orders";
-import { FulfillmentDashboardContainer } from "@/components/domain/orders";
-import { ShipOrderDialog, ConfirmDeliveryDialog } from "@/components/domain/orders";
+import { FulfillmentDashboardContainer } from "@/components/domain/orders/fulfillment/fulfillment-dashboard-container";
+import { ConfirmDeliveryDialog } from "@/components/domain/orders/fulfillment/confirm-delivery-dialog";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -49,8 +49,6 @@ function FulfillmentPage() {
   }, [location.state]);
 
   // Dialog state
-  const [shipDialogOpen, setShipDialogOpen] = useState(false);
-  const [shipOrderId, setShipOrderId] = useState<string | null>(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmShipmentId, setConfirmShipmentId] = useState<string | null>(null);
 
@@ -66,18 +64,16 @@ function FulfillmentPage() {
   );
 
   const handleShipOrder = useCallback((orderId: string) => {
-    setShipOrderId(orderId);
-    setShipDialogOpen(true);
-  }, []);
+    navigate({
+      to: "/orders/$orderId",
+      params: { orderId },
+      search: { ship: true },
+    });
+  }, [navigate]);
 
   const handleConfirmDelivery = useCallback((shipmentId: string) => {
     setConfirmShipmentId(shipmentId);
     setConfirmDialogOpen(true);
-  }, []);
-
-  const handleShipDialogClose = useCallback(() => {
-    setShipDialogOpen(false);
-    setShipOrderId(null);
   }, []);
 
   const handleConfirmDialogClose = useCallback(() => {
@@ -99,16 +95,6 @@ function FulfillmentPage() {
           highlightOrderIds={highlightOrderIds}
         />
       </PageLayout.Content>
-
-      {/* Ship Order Dialog */}
-      {shipOrderId && (
-        <ShipOrderDialog
-          open={shipDialogOpen}
-          onOpenChange={handleShipDialogClose}
-          orderId={shipOrderId}
-          onSuccess={handleShipDialogClose}
-        />
-      )}
 
       {/* Confirm Delivery Dialog */}
       {confirmShipmentId && (

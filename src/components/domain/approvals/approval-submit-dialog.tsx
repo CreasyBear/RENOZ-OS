@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
@@ -62,9 +63,15 @@ export function ApprovalSubmitDialog({
     }
   };
 
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isSubmitting);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Submit for Approval?</DialogTitle>
           <DialogDescription>This order will be sent to a manager for approval.</DialogDescription>

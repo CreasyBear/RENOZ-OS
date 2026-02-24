@@ -64,6 +64,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -499,9 +503,17 @@ function FulfillmentImportDialog({
     URL.revokeObjectURL(url);
   }, [importResults]);
 
+  const isPending = importMutation.isPending;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleOpenChange);
+
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[80vh] max-w-4xl sm:max-w-4xl overflow-y-auto">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-h-[80vh] max-w-4xl sm:max-w-4xl overflow-y-auto"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Import Fulfillment Shipments</DialogTitle>
           <DialogDescription>

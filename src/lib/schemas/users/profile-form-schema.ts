@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { phoneSchema } from "../_shared/patterns";
 
 /**
  * Profile form data schema
@@ -16,7 +17,7 @@ import { z } from "zod";
  */
 export const profileFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),
-  phone: z.string().optional(),
+  phone: phoneSchema,
   jobTitle: z.string().max(100, "Job title is too long").optional(),
   department: z.string().max(100, "Department is too long").optional(),
   bio: z.string().max(500, "Bio is too long").optional(),

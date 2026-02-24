@@ -101,6 +101,24 @@ export function focusFirstInvalidField(): void {
 }
 
 /**
+ * Convert Zod error path to TanStack Form field name.
+ * TanStack Form uses bracket notation for array indices: lineItems[0].quantity
+ * (React Hook Form's zodResolver uses path.join('.') which produces lineItems.0.quantity)
+ */
+function zodPathToTanStackField(path: (string | number)[]): string {
+  if (path.length === 0) return ''
+  return path
+    .map((segment, i) =>
+      typeof segment === 'number'
+        ? `[${segment}]`
+        : i === 0
+          ? segment
+          : `.${segment}`
+    )
+    .join('')
+}
+
+/**
  * Extended form API with additional utilities.
  * Use this type when you need to pass the form to components that need the extended methods.
  */
@@ -112,6 +130,8 @@ export interface FormUtilities<TFormData> {
     field: TField,
     value: TFormData[TField]
   ) => void
+  /** Set a nested field value (e.g. lineItems[0].action). Use for array/object paths. */
+  setNestedFieldValue: (field: string, value: unknown) => void
   /** Check if form has been modified */
   isDirty: () => boolean
   /**
@@ -162,21 +182,29 @@ export function useTanStackForm<TFormData>({
   })
 
   // Maps Zod errors to TanStack Form's { fields: { fieldName: string } } format
-  // so field-level errors propagate to TextField and show under each input
+  // so field-level errors propagate to TextField and show under each input.
+  // Uses error.issues directly (not flatten()) so nested array errors map to
+  // lineItems[0].quantity instead of collapsing under lineItems.
   const mapZodErrorsToFieldErrors = (
     error: z.ZodError
   ): { fields: Record<string, string> } | string | undefined => {
-    const flattened = error.flatten()
     const fields: Record<string, string> = {}
-    for (const [key, messages] of Object.entries(flattened.fieldErrors)) {
-      if (messages && Array.isArray(messages) && messages.length > 0) {
-        fields[key] = messages[0]
+    let formLevelMessage: string | undefined
+    for (const issue of error.issues) {
+      const path = issue.path.filter((p): p is string | number =>
+        typeof p === 'string' || typeof p === 'number'
+      )
+      const key = zodPathToTanStackField(path)
+      const message = issue.message
+      if (!message) continue
+      if (key) {
+        if (!(key in fields)) fields[key] = message
+      } else {
+        if (!formLevelMessage) formLevelMessage = message
       }
     }
-    if (Object.keys(fields).length > 0) {
-      return { fields }
-    }
-    return flattened.formErrors[0] ?? 'Validation failed'
+    if (Object.keys(fields).length > 0) return { fields }
+    return formLevelMessage ?? error.issues[0]?.message ?? 'Validation failed'
   }
 
   const form = useForm({
@@ -233,6 +261,10 @@ export function useTanStackForm<TFormData>({
       baseSetFieldValue(fieldName as string, value as DeepValue<TFormData, string>)
     },
 
+    setNestedFieldValue: (field: string, value: unknown) => {
+      baseSetFieldValue(field, value as DeepValue<TFormData, string>)
+    },
+
     isDirty: () => {
       const current = JSON.stringify(form.state.values)
       const initial = JSON.stringify(defaultValues)
@@ -242,7 +274,10 @@ export function useTanStackForm<TFormData>({
     useWatch,
   }
 
-  return Object.assign(form, utilities)
+  return {
+    ...form,
+    ...utilities,
+  } as typeof form & FormUtilities<TFormData>
 }
 
 /**

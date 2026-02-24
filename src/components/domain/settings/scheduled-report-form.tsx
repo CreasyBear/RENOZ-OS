@@ -12,13 +12,14 @@
  * - Recipients (email array)
  * - Metrics configuration (multi-select + options)
  *
+ * @see docs/design-system/FORM-STANDARDS.md
  * @see DASH-REPORTS-UI acceptance criteria
  * @see src/lib/schemas/reports/scheduled-reports.ts for validation
  */
 
 import { memo, useCallback, useEffect, useState, startTransition } from 'react';
-import { toast } from 'sonner';
-import { useForm } from '@tanstack/react-form';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Loader2, Plus, X, Mail, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { FormErrorSummary } from '@/components/shared/forms';
 import {
   createScheduledReportSchema,
   reportFrequencyValues,
@@ -77,6 +79,8 @@ export interface ScheduledReportFormProps {
   onSubmit: (data: CreateScheduledReportInput) => Promise<void>;
   /** Whether submission is in progress */
   isSubmitting?: boolean;
+  /** Server error message for inline display when mutation fails */
+  submitError?: string | null;
 }
 
 type FormValues = CreateScheduledReportInput;
@@ -130,7 +134,8 @@ const COMPARISON_LABELS: Record<string, string> = {
 
 // Available metrics that can be included in reports
 const AVAILABLE_METRICS = [
-  { id: 'revenue', label: 'Revenue', description: 'Total revenue from orders' },
+  { id: 'revenue', label: 'Revenue (Invoiced)', description: 'Orders by order date' },
+  { id: 'revenue_cash', label: 'Revenue (Cash)', description: 'Payments received by payment date' },
   { id: 'orders_count', label: 'Orders Count', description: 'Number of orders' },
   { id: 'customer_count', label: 'Customer Count', description: 'Number of customers' },
   { id: 'pipeline_value', label: 'Pipeline Value', description: 'Value of open opportunities' },
@@ -213,24 +218,23 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
   defaultValues,
   onSubmit,
   isSubmitting = false,
+  submitError,
 }: ScheduledReportFormProps) {
   const isEditMode = !!report;
   const [emailInput, setEmailInput] = useState('');
   const [emailError, setEmailError] = useState('');
 
-  const form = useForm({
+  const form = useTanStackForm<FormValues>({
+    schema: createScheduledReportSchema,
     defaultValues: report
       ? reportToFormValues(report)
       : getDefaultFormValues(defaultValues),
-    onSubmit: async ({ value }) => {
-      const result = createScheduledReportSchema.safeParse(value);
-      if (!result.success) {
-        const firstError = result.error.issues[0];
-        toast.error(firstError?.message ?? 'Please fix the form errors');
-        return;
-      }
-      await onSubmit(result.data);
+    onSubmit: async (values) => {
+      await onSubmit(values);
       onOpenChange(false);
+    },
+    onSubmitInvalid: () => {
+      // Validation errors are shown per-field via FormFieldDisplayProvider
     },
   });
 
@@ -261,24 +265,27 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
       return;
     }
 
-    const currentEmails = form.getFieldValue('recipients.emails') || [];
+    const currentEmails = form.state.values.recipients?.emails || [];
     if (currentEmails.includes(email)) {
       setEmailError('This email has already been added');
       return;
     }
 
-    form.setFieldValue('recipients.emails', [...currentEmails, email]);
+    form.setFieldValue('recipients' as keyof FormValues, {
+      ...form.state.values.recipients,
+      emails: [...currentEmails, email],
+    });
     setEmailInput('');
     setEmailError('');
   }, [emailInput, form]);
 
   const handleRemoveEmail = useCallback(
     (emailToRemove: string) => {
-      const currentEmails = form.getFieldValue('recipients.emails') || [];
-      form.setFieldValue(
-        'recipients.emails',
-        currentEmails.filter((e: string) => e !== emailToRemove)
-      );
+      const currentEmails = form.state.values.recipients?.emails || [];
+      form.setFieldValue('recipients' as keyof FormValues, {
+        ...form.state.values.recipients,
+        emails: currentEmails.filter((e: string) => e !== emailToRemove),
+      });
     },
     [form]
   );
@@ -309,10 +316,12 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
           onSubmit={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            form.handleSubmit();
+            void form.handleSubmit();
           }}
           className="space-y-6 py-6"
         >
+          <FormErrorSummary form={form} submitError={submitError} />
+          <FormFieldDisplayProvider form={form}>
           {/* Name */}
           <form.Field name="name">
             {(field) => (
@@ -615,6 +624,8 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
               </AccordionContent>
             </AccordionItem>
           </Accordion>
+
+          </FormFieldDisplayProvider>
 
           {/* Footer */}
           <SheetFooter className="pt-4">

@@ -32,7 +32,7 @@ import { DataTable } from '@/components/shared/data-table/data-table';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { EmptyState } from '@/components/shared/empty-state';
-import { SlaBadge } from '@/components/domain/support';
+import { SlaBadge } from '@/components/domain/support/sla/sla-badge';
 import { useIssuesWithSlaMetrics } from '@/hooks/support';
 import type { IssueListItem, IssueFiltersState, IssuePriority } from '@/lib/schemas/support/issues';
 import { fromUrlParams, toUrlParams } from '@/lib/utils/issues-filter-url';

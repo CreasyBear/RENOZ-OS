@@ -7,6 +7,9 @@
 // --- Core Customer Types ---
 export * from './customers';
 
+// --- Customer Wizard ---
+export * from './customer-wizard';
+
 // --- Detail Extended Types ---
 export * from './customer-detail-extended';
 

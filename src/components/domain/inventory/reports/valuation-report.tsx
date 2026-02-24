@@ -19,6 +19,9 @@ import {
   MapPin,
   TrendingUp,
   Layers,
+  ShieldCheck,
+  ShieldAlert,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -69,6 +72,19 @@ interface ValuationReportProps {
   summary: ValuationSummary | null;
   byCategory: CategoryValuation[];
   byLocation: LocationValuation[];
+  financeIntegrity?: {
+    status: "green" | "amber" | "red";
+    stockWithoutActiveLayers: number;
+    inventoryValueMismatchCount: number;
+    totalAbsoluteValueDrift: number;
+    topDriftItems?: Array<{
+      inventoryId: string;
+      productSku: string;
+      productName: string;
+      locationName: string;
+      absoluteDrift: number;
+    }>;
+  } | null;
   isLoading?: boolean;
   className?: string;
 }
@@ -81,6 +97,7 @@ export const ValuationReport = memo(function ValuationReport({
   summary,
   byCategory,
   byLocation,
+  financeIntegrity,
   isLoading,
   className,
 }: ValuationReportProps) {
@@ -194,6 +211,65 @@ export const ValuationReport = memo(function ValuationReport({
           </CardContent>
         </Card>
       </div>
+
+      {financeIntegrity ? (
+        <Card
+          className={cn(
+            financeIntegrity.status === "green" && "border-emerald-200 bg-emerald-50/40",
+            financeIntegrity.status === "amber" && "border-amber-200 bg-amber-50/40",
+            financeIntegrity.status === "red" && "border-red-200 bg-red-50/40"
+          )}
+        >
+          <CardContent className="pt-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Data Integrity</p>
+                <p className="text-xs text-muted-foreground">
+                  Cost-layer reconciliation status for valuation trust
+                </p>
+              </div>
+              {financeIntegrity.status === "green" ? (
+                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+              ) : financeIntegrity.status === "amber" ? (
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              ) : (
+                <ShieldAlert className="h-5 w-5 text-red-600" />
+              )}
+            </div>
+            <div className="mt-3 grid gap-3 text-xs md:grid-cols-3">
+              <div>
+                <p className="text-muted-foreground">Stock without layers</p>
+                <p className="font-semibold tabular-nums">{financeIntegrity.stockWithoutActiveLayers}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Rows with value mismatch</p>
+                <p className="font-semibold tabular-nums">{financeIntegrity.inventoryValueMismatchCount}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Absolute drift</p>
+                <p className="font-semibold tabular-nums">{formatCurrencyDisplay(financeIntegrity.totalAbsoluteValueDrift)}</p>
+              </div>
+            </div>
+            {financeIntegrity.topDriftItems && financeIntegrity.topDriftItems.length > 0 ? (
+              <div className="mt-4 rounded-md border bg-background p-2">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Top Drift Items</p>
+                <div className="space-y-1 text-xs">
+                  {financeIntegrity.topDriftItems.slice(0, 5).map((row) => (
+                    <div key={row.inventoryId} className="grid grid-cols-1 gap-1 md:grid-cols-4">
+                      <span className="font-medium">{row.productSku || 'N/A'}</span>
+                      <span>{row.productName}</span>
+                      <span className="text-muted-foreground">{row.locationName}</span>
+                      <span className="tabular-nums text-right">
+                        {formatCurrencyDisplay(row.absoluteDrift)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Breakdown Tables */}
       <div className="grid gap-6 lg:grid-cols-2">

@@ -9,7 +9,6 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json
  */
 import { createFileRoute } from '@tanstack/react-router';
-import type { FileRoutesByPath } from '@tanstack/react-router';
 import { z } from 'zod';
 import { lazy, Suspense } from 'react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
@@ -31,9 +30,7 @@ export const searchSchema = z.object({
 
 export type SearchParams = z.infer<typeof searchSchema>;
 
-export const Route = createFileRoute(
-  '/_authenticated/support/warranties/' as keyof FileRoutesByPath
-)({
+export const Route = createFileRoute('/_authenticated/support/warranties/')({
   validateSearch: searchSchema,
   component: function WarrantiesRouteComponent() {
     const rawSearch = Route.useSearch();

@@ -133,6 +133,35 @@ export interface PaymentSummary {
 }
 
 // ============================================================================
+// RECORD PAYMENT FORM SCHEMA
+// ============================================================================
+
+/**
+ * Schema for the record payment dialog form.
+ * Accepts balanceDue to validate amount does not exceed balance.
+ */
+export const createRecordPaymentFormSchema = (balanceDue: number) =>
+  z
+    .object({
+      amount: z.number().positive("Amount must be greater than 0"),
+      paymentMethod: z.enum(PAYMENT_METHODS),
+      paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+      reference: z.string().optional(),
+      notes: z.string().optional(),
+    })
+    .refine(
+      (v) => v.amount <= balanceDue,
+      {
+        message: `Amount cannot exceed balance due ($${balanceDue.toFixed(2)})`,
+        path: ["amount"],
+      }
+    );
+
+export type RecordPaymentFormValues = z.infer<
+  ReturnType<typeof createRecordPaymentFormSchema>
+>;
+
+// ============================================================================
 // FORM DEFAULTS
 // ============================================================================
 

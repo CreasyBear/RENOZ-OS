@@ -49,6 +49,7 @@ const TREND_ICONS = {
  * Adds + prefix for positive values, - is already included for negative.
  */
 function formatPercentage(value: number): string {
+  if (Number.isNaN(value)) return '0%';
   const absValue = Math.abs(value);
   const formatted = absValue.toFixed(1);
 
@@ -71,7 +72,7 @@ function formatPercentage(value: number): string {
  * - Zero: muted gray
  */
 function getTrendColorClasses(value: number, invertColors: boolean): string {
-  if (value === 0) {
+  if (value === 0 || Number.isNaN(value)) {
     return 'text-muted-foreground';
   }
 

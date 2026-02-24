@@ -39,9 +39,12 @@ function normalizeCommaList(val: string | undefined, allowed: readonly string[])
 }
 
 export const searchParamsSchema = z.object({
+  view: z.enum(['inventory', 'serialized']).optional().default('inventory'),
   page: z.coerce.number().int().positive().optional().default(1),
   pageSize: z.coerce.number().int().min(10).max(100).optional().default(20),
   search: z.string().optional(),
+  serializedSearch: z.string().optional(),
+  serializedId: z.string().uuid().optional(),
   productId: z.string().uuid().optional(),
   locationId: z.string().uuid().optional(),
   /** Comma-separated status values for multi-select presets. Invalid values filtered out. */

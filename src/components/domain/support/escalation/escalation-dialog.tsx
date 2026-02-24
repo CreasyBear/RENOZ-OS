@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 import { AlertTriangle, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks';
@@ -125,21 +126,31 @@ export function EscalationDialog(props: EscalationDialogProps) {
   const buttonLabel = isEscalated ? 'De-escalate' : 'Escalate';
   const Icon = isEscalated ? ArrowDown : AlertTriangle;
 
-  // Get trigger and className for uncontrolled mode
-  const trigger = isUncontrolled(props) ? props.trigger : undefined;
+  const uncontrolledProps = isUncontrolled(props) ? props : null;
+  const trigger = uncontrolledProps?.trigger;
   const className = props.className;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant={isEscalated ? 'outline' : 'destructive'} size="sm" className={className}>
-            <Icon className="mr-2 h-4 w-4" />
-            {buttonLabel}
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent>
+      {uncontrolledProps ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button
+              variant={isEscalated ? 'outline' : 'destructive'}
+              size="sm"
+              className={className}
+            >
+              <Icon className="mr-2 h-4 w-4" />
+              {buttonLabel}
+            </Button>
+          )}
+        </DialogTrigger>
+      ) : null}
+      <DialogContent
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon
@@ -170,7 +181,7 @@ export function EscalationDialog(props: EscalationDialogProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
             Cancel
           </Button>
           <Button

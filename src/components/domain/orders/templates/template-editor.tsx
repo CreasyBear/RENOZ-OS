@@ -5,11 +5,9 @@
  *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-TEMPLATES-UI)
  */
-/* eslint-disable react-hooks/incompatible-library -- form.watch() used inline in form fields; React Hook Form API limitation */
 
 import { memo, useState, useCallback } from "react";
-import { useForm, useFieldArray, type Resolver } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
   Plus,
@@ -23,9 +21,14 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import {
@@ -36,21 +39,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  FormFieldDisplayProvider,
+  FormErrorSummary,
+  TextField,
+  TextareaField,
+  NumberField,
+  SelectField,
+  SwitchField,
+} from "@/components/shared/forms";
 import {
   Collapsible,
   CollapsibleContent,
@@ -111,6 +107,7 @@ export interface TemplateEditorProps {
   onSubmit: (data: TemplateFormData) => Promise<void>;
   onCancel?: () => void;
   isLoading?: boolean;
+  submitError?: string | null;
   className?: string;
 }
 
@@ -123,6 +120,7 @@ export const TemplateEditor = memo(function TemplateEditor({
   onSubmit,
   onCancel,
   isLoading,
+  submitError,
   className,
 }: TemplateEditorProps) {
   const { formatCurrency } = useOrgFormat();
@@ -132,8 +130,19 @@ export const TemplateEditor = memo(function TemplateEditor({
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState("");
 
-  const form = useForm<TemplateFormData>({
-    resolver: zodResolver(templateFormSchema) as Resolver<z.infer<typeof templateFormSchema>>,
+  const defaultItems = [
+    {
+      lineNumber: "1",
+      sortOrder: "0",
+      description: "",
+      defaultQuantity: 1,
+      useCurrentPrice: true,
+      taxType: "gst" as const,
+    },
+  ];
+
+  const form = useTanStackForm<TemplateFormData>({
+    schema: templateFormSchema,
     defaultValues: {
       name: "",
       description: "",
@@ -148,24 +157,60 @@ export const TemplateEditor = memo(function TemplateEditor({
       paymentTermsDays: undefined,
       internalNotes: "",
       customerNotes: "",
-      items: [
-        {
-          lineNumber: "1",
-          sortOrder: "0",
-          description: "",
-          defaultQuantity: 1,
-          useCurrentPrice: true,
-          taxType: "gst",
-        },
-      ],
+      items: defaultItems,
       ...initialData,
     },
+    onSubmit: async (data) => {
+      await onSubmit(data);
+    },
+    onSubmitInvalid: () => {},
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "items",
-  });
+  const items = form.useWatch("items") ?? defaultItems;
+
+  const addItem = useCallback(() => {
+    const nextLineNumber = (items.length + 1).toString();
+    form.setFieldValue("items", [
+      ...items,
+      {
+        lineNumber: nextLineNumber,
+        sortOrder: nextLineNumber,
+        description: "",
+        defaultQuantity: 1,
+        useCurrentPrice: true,
+        taxType: "gst" as const,
+      },
+    ]);
+  }, [items, form]);
+
+  const removeItem = useCallback(
+    (index: number) => {
+      form.setFieldValue(
+        "items",
+        items.filter((_, i) => i !== index)
+      );
+    },
+    [items, form]
+  );
+
+  const selectProduct = useCallback(
+    (index: number, product: { id: string; sku: string | null; name: string; basePrice: number }) => {
+      const updated = [...items];
+      if (updated[index]) {
+        updated[index] = {
+          ...updated[index],
+          productId: product.id,
+          sku: product.sku || "",
+          description: product.name,
+          fixedUnitPrice: product.basePrice,
+        };
+        form.setFieldValue("items", updated);
+      }
+      setProductSearchOpen(null);
+      setProductSearch("");
+    },
+    [items, form]
+  );
 
   // Product search query using hook
   const { data: productsData, isLoading: productsLoading } = useProducts({
@@ -178,41 +223,14 @@ export const TemplateEditor = memo(function TemplateEditor({
 
   const products = productsData?.products ?? [];
 
-  const handleSubmit = useCallback(
-    async (data: TemplateFormData) => {
-      await onSubmit(data);
-    },
-    [onSubmit]
-  );
-
-  const addItem = useCallback(() => {
-    const nextLineNumber = (fields.length + 1).toString();
-    append({
-      lineNumber: nextLineNumber,
-      sortOrder: nextLineNumber,
-      description: "",
-      defaultQuantity: 1,
-      useCurrentPrice: true,
-      taxType: "gst",
-    });
-  }, [fields.length, append]);
-
-  const selectProduct = useCallback(
-    (index: number, product: { id: string; sku: string | null; name: string; basePrice: number }) => {
-      form.setValue(`items.${index}.productId`, product.id);
-      form.setValue(`items.${index}.sku`, product.sku || "");
-      form.setValue(`items.${index}.description`, product.name);
-      form.setValue(`items.${index}.fixedUnitPrice`, product.basePrice);
-      setProductSearchOpen(null);
-      setProductSearch("");
-    },
-    [form]
-  );
-
   return (
-    <Form {...form}>
+    <FormFieldDisplayProvider form={form}>
+      <FormErrorSummary form={form} submitError={submitError} />
       <form
-        onSubmit={form.handleSubmit(handleSubmit)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit();
+        }}
         className={cn("space-y-6", className)}
       >
         {/* Basic Info */}
@@ -225,87 +243,55 @@ export const TemplateEditor = memo(function TemplateEditor({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Template name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="name">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Name"
+                    placeholder="Template name"
+                    required
+                  />
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g., Residential, Commercial"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              </form.Field>
+              <form.Field name="category">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="Category"
+                    placeholder="e.g., Residential, Commercial"
+                  />
                 )}
-              />
+              </form.Field>
             </div>
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Brief description of when to use this template"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="description">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Description"
+                  placeholder="Brief description of when to use this template"
+                />
               )}
-            />
+            </form.Field>
 
             <div className="flex items-center gap-6">
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2">
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="!mt-0">Active</FormLabel>
-                  </FormItem>
+              <form.Field name="isActive">
+                {(field) => (
+                  <div className="rounded-lg border p-3">
+                    <SwitchField field={field} label="Active" />
+                  </div>
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="isGlobal"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2">
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="!mt-0">
-                      Global (all organizations)
-                    </FormLabel>
-                  </FormItem>
+              </form.Field>
+              <form.Field name="isGlobal">
+                {(field) => (
+                  <div className="rounded-lg border p-3">
+                    <SwitchField
+                      field={field}
+                      label="Global (all organizations)"
+                    />
+                  </div>
                 )}
-              />
+              </form.Field>
             </div>
           </CardContent>
         </Card>
@@ -327,7 +313,7 @@ export const TemplateEditor = memo(function TemplateEditor({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {fields.length === 0 ? (
+            {items.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
                 <p>No items added yet</p>
@@ -343,8 +329,8 @@ export const TemplateEditor = memo(function TemplateEditor({
                 </Button>
               </div>
             ) : (
-              fields.map((field, index) => (
-                <Card key={field.id} className="relative">
+              items.map((_, index) => (
+                <Card key={index} className="relative">
                   <CardContent className="pt-4">
                     <div className="flex items-start gap-3">
                       {/* Drag handle placeholder */}
@@ -430,101 +416,87 @@ export const TemplateEditor = memo(function TemplateEditor({
                                   </ScrollArea>
                                 </PopoverContent>
                               </Popover>
-                              <Input
-                                {...form.register(`items.${index}.description`)}
-                                placeholder="Product or service description"
-                                className="flex-1"
-                              />
+                              <form.Field name={`items[${index}].description` as const}>
+                                {(field) => (
+                                  <TextField
+                                    field={field}
+                                    label="Description"
+                                    placeholder="Product or service description"
+                                    required
+                                    className="flex-1"
+                                    hideLabel
+                                  />
+                                )}
+                              </form.Field>
                             </div>
-                            {form.formState.errors.items?.[index]?.description && (
-                              <p className="text-xs text-destructive mt-1">
-                                {form.formState.errors.items[index]?.description?.message}
-                              </p>
-                            )}
                           </div>
 
-                          <div className="w-20">
-                            <Label className="text-xs text-muted-foreground">
-                              Qty
-                            </Label>
-                            <Input
-                              type="number"
-                              min={1}
-                              {...form.register(`items.${index}.defaultQuantity`, {
-                                valueAsNumber: true,
-                              })}
-                              className="mt-1"
-                            />
-                          </div>
+                          <form.Field name={`items[${index}].defaultQuantity` as const}>
+                            {(field) => (
+                              <NumberField
+                                field={field}
+                                label="Qty"
+                                min={1}
+                                className="w-20"
+                              />
+                            )}
+                          </form.Field>
                         </div>
 
                         {/* Pricing Options */}
                         <div className="flex flex-wrap items-end gap-4">
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={form.watch(`items.${index}.useCurrentPrice`)}
-                              onCheckedChange={(checked) =>
-                                form.setValue(`items.${index}.useCurrentPrice`, checked)
-                              }
-                            />
-                            <Label className="text-sm">Use current price</Label>
-                          </div>
+                          <form.Field name={`items[${index}].useCurrentPrice` as const}>
+                            {(field) => (
+                              <SwitchField
+                                field={field}
+                                label="Use current price"
+                              />
+                            )}
+                          </form.Field>
 
-                          {!form.watch(`items.${index}.useCurrentPrice`) && (
-                            <div className="w-32">
-                              <Label className="text-xs text-muted-foreground">
-                                Fixed Price
-                              </Label>
-                              <div className="relative mt-1">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                  $
-                                </span>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  {...form.register(`items.${index}.fixedUnitPrice`, {
-                                    setValueAs: (v) =>
-                                      v === "" ? undefined : parseFloat(v),
-                                  })}
-                                  className="pl-7"
-                                  placeholder="0.00"
-                                />
-                              </div>
-                            </div>
-                          )}
+                          {(() => {
+                            const useCurrent = items[index]?.useCurrentPrice ?? true;
+                            return !useCurrent ? (
+                              <form.Field name={`items[${index}].fixedUnitPrice` as const}>
+                                {(field) => (
+                                  <NumberField
+                                    field={field}
+                                    label="Fixed Price"
+                                    min={0}
+                                    step={0.01}
+                                    prefix="$"
+                                    placeholder="0.00"
+                                    className="w-32"
+                                  />
+                                )}
+                              </form.Field>
+                            ) : null;
+                          })()}
 
-                          <div className="w-28">
-                            <Label className="text-xs text-muted-foreground">
-                              Tax
-                            </Label>
-                            <Select
-                              value={form.watch(`items.${index}.taxType`)}
-                              onValueChange={(value) =>
-                                form.setValue(
-                                  `items.${index}.taxType`,
-                                  value as "gst" | "gst_free" | "input_taxed"
-                                )
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="gst">GST</SelectItem>
-                                <SelectItem value="gst_free">GST Free</SelectItem>
-                                <SelectItem value="input_taxed">
-                                  Input Taxed
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <form.Field name={`items[${index}].taxType` as const}>
+                            {(field) => (
+                              <SelectField
+                                field={field}
+                                label="Tax"
+                                options={[
+                                  { value: "gst", label: "GST" },
+                                  { value: "gst_free", label: "GST Free" },
+                                  { value: "input_taxed", label: "Input Taxed" },
+                                ]}
+                                className="w-28"
+                              />
+                            )}
+                          </form.Field>
 
-                          {form.watch(`items.${index}.sku`) && (
-                            <Badge variant="secondary" className="text-xs">
-                              SKU: {form.watch(`items.${index}.sku`)}
-                            </Badge>
-                          )}
+                          <form.Field name={`items[${index}].sku` as const}>
+                            {(field) =>
+                              field.state.value ? (
+                                <Badge variant="secondary" className="text-xs">
+                                  SKU: {field.state.value}
+                                </Badge>
+                              ) : null
+                            }
+                          </form.Field>
                         </div>
                       </div>
 
@@ -534,8 +506,8 @@ export const TemplateEditor = memo(function TemplateEditor({
                         variant="ghost"
                         size="icon"
                         className="shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => remove(index)}
-                        disabled={fields.length === 1}
+                        onClick={() => removeItem(index)}
+                        disabled={items.length === 1}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -574,183 +546,102 @@ export const TemplateEditor = memo(function TemplateEditor({
             <CollapsibleContent>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <FormField
-                    control={form.control}
-                    name="discountPercent"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Discount %</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step="0.01"
-                            placeholder="0"
-                            {...field}
-                            value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value === ""
-                                  ? undefined
-                                  : parseFloat(e.target.value)
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="discountPercent">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Discount %"
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        placeholder="0"
+                      />
                     )}
-                  />
+                  </form.Field>
 
-                  <FormField
-                    control={form.control}
-                    name="discountAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Discount $</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              $
-                            </span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className="pl-7"
-                              value={
-                                field.value !== undefined
-                                  ? field.value.toFixed(2)
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value === ""
-                                    ? undefined
-                                    : parseFloat(e.target.value)
-                                )
-                              }
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="discountAmount">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Discount $"
+                        min={0}
+                        step={0.01}
+                        prefix="$"
+                        placeholder="0.00"
+                      />
                     )}
-                  />
+                  </form.Field>
 
-                  <FormField
-                    control={form.control}
-                    name="shippingAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Shipping</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              $
-                            </span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className="pl-7"
-                              value={
-                                field.value !== undefined
-                                  ? field.value.toFixed(2)
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value === ""
-                                    ? undefined
-                                    : parseFloat(e.target.value)
-                                )
-                              }
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="shippingAmount">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Shipping"
+                        min={0}
+                        step={0.01}
+                        prefix="$"
+                        placeholder="0.00"
+                      />
                     )}
-                  />
+                  </form.Field>
 
-                  <FormField
-                    control={form.control}
-                    name="paymentTermsDays"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Terms</FormLabel>
-                        <FormControl>
-                          <Select
-                            value={field.value?.toString() ?? "__NONE__"}
-                            onValueChange={(v) =>
-                              field.onChange(v === "__NONE__" ? undefined : parseInt(v))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__NONE__">None</SelectItem>
-                              <SelectItem value="0">Due on Receipt</SelectItem>
-                              <SelectItem value="7">Net 7</SelectItem>
-                              <SelectItem value="14">Net 14</SelectItem>
-                              <SelectItem value="30">Net 30</SelectItem>
-                              <SelectItem value="60">Net 60</SelectItem>
-                              <SelectItem value="90">Net 90</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="paymentTermsDays">
+                    {(field) => (
+                      <div className="space-y-2">
+                        <Label>Payment Terms</Label>
+                        <Select
+                          value={field.state.value?.toString() ?? "__NONE__"}
+                          onValueChange={(v) =>
+                            field.handleChange(
+                              v === "__NONE__" ? undefined : parseInt(v, 10)
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__NONE__">None</SelectItem>
+                            <SelectItem value="0">Due on Receipt</SelectItem>
+                            <SelectItem value="7">Net 7</SelectItem>
+                            <SelectItem value="14">Net 14</SelectItem>
+                            <SelectItem value="30">Net 30</SelectItem>
+                            <SelectItem value="60">Net 60</SelectItem>
+                            <SelectItem value="90">Net 90</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {field.state.meta.errors.length > 0 && (
+                          <p className="text-sm text-destructive">
+                            {field.state.meta.errors.join(", ")}
+                          </p>
+                        )}
+                      </div>
                     )}
-                  />
+                  </form.Field>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="internalNotes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Internal Notes</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Notes for staff (not visible to customer)"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          These notes will be copied to orders created from this
-                          template.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="internalNotes">
+                    {(field) => (
+                      <TextareaField
+                        field={field}
+                        label="Internal Notes"
+                        placeholder="Notes for staff (not visible to customer)"
+                        description="These notes will be copied to orders created from this template."
+                      />
                     )}
-                  />
+                  </form.Field>
 
-                  <FormField
-                    control={form.control}
-                    name="customerNotes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Customer Notes</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Notes visible to customer"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Shown on invoices and order confirmations.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="customerNotes">
+                    {(field) => (
+                      <TextareaField
+                        field={field}
+                        label="Customer Notes"
+                        placeholder="Notes visible to customer"
+                        description="Shown on invoices and order confirmations."
+                      />
                     )}
-                  />
+                  </form.Field>
                 </div>
               </CardContent>
             </CollapsibleContent>
@@ -770,7 +661,7 @@ export const TemplateEditor = memo(function TemplateEditor({
           </Button>
         </div>
       </form>
-    </Form>
+    </FormFieldDisplayProvider>
   );
 });
 

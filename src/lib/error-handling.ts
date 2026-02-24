@@ -46,15 +46,33 @@ export function createAppError(message: string, code?: string, context?: ErrorCo
 }
 
 /**
- * Convert unknown errors to AppError format
+ * Extract HTTP status from error objects (e.g. ky HTTPError, fetch responses, etc.)
+ */
+function extractHttpStatus(error: unknown): number | undefined {
+  if (error && typeof error === 'object') {
+    const e = error as Record<string, unknown>;
+    if (typeof e.status === 'number') return e.status;
+    if (typeof e.statusCode === 'number') return e.statusCode;
+    const res = e.response as Record<string, unknown> | undefined;
+    if (res && typeof res.status === 'number') return res.status;
+  }
+  return undefined;
+}
+
+/**
+ * Convert unknown errors to AppError format.
+ * Extracts HTTP status from HTTPError-like objects (ky, fetch wrappers, etc.)
+ * so getUserFriendlyMessage can show appropriate messages.
  */
 export function normalizeError(error: unknown, context?: ErrorContext): AppError {
   if (isAppError(error)) {
     return error;
   }
 
+  const statusCode = extractHttpStatus(error);
+
   if (error instanceof Error) {
-    return createAppError(error.message, 'UNKNOWN_ERROR', {
+    const appError = createAppError(error.message, 'UNKNOWN_ERROR', {
       ...context,
       metadata: {
         ...context?.metadata,
@@ -62,13 +80,31 @@ export function normalizeError(error: unknown, context?: ErrorContext): AppError
         originalName: error.name,
       },
     });
+    if (statusCode !== undefined) {
+      appError.statusCode = statusCode;
+    }
+    return appError;
+  }
+
+  // Handle plain objects with status/message (e.g. serialized HTTPError)
+  if (error && typeof error === 'object' && 'message' in error) {
+    const e = error as { message?: string };
+    const appError = createAppError(
+      typeof e.message === 'string' ? e.message : 'An unexpected error occurred',
+      'UNKNOWN_ERROR',
+      context
+    );
+    if (statusCode !== undefined) {
+      appError.statusCode = statusCode;
+    }
+    return appError;
   }
 
   if (typeof error === 'string') {
     return createAppError(error, 'STRING_ERROR', context);
   }
 
-  return createAppError('An unknown error occurred', 'UNKNOWN_ERROR', context);
+  return createAppError('An unexpected error occurred', 'UNKNOWN_ERROR', context);
 }
 
 /**
@@ -174,8 +210,21 @@ export function getUserFriendlyMessage(error: AppError | Error | unknown): strin
     return 'Too many requests. Please wait a moment and try again.';
   }
 
-  // Default fallback
-  return normalized.message || 'An unexpected error occurred. Please try again.';
+  // Generic HTTP error names (e.g. ky HTTPError) - treat as server error when status is 5xx
+  const isGenericHttpError =
+    normalized.message === 'HTTPError' ||
+    normalized.message === 'FetchError' ||
+    normalized.message === 'NetworkError';
+  if (isGenericHttpError && normalized.statusCode && normalized.statusCode >= 500) {
+    return 'Something went wrong on our end. Please try again later.';
+  }
+
+  // Default fallback - avoid exposing technical error names to users
+  const msg = normalized.message?.trim();
+  if (msg && !isGenericHttpError) {
+    return msg;
+  }
+  return 'An unexpected error occurred. Please try again.';
 }
 
 // ============================================================================

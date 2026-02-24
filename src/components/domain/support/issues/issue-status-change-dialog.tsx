@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { IssueStatus } from '@/lib/schemas/support';
+import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 
 // ============================================================================
 // TYPES
@@ -62,6 +63,7 @@ interface IssueStatusChangeDialogProps {
   fromStatus: IssueStatus;
   toStatus: IssueStatus;
   onConfirm: (result: StatusChangeResult) => void;
+  isPending?: boolean;
 }
 
 export function IssueStatusChangeDialog({
@@ -71,6 +73,7 @@ export function IssueStatusChangeDialog({
   fromStatus,
   toStatus,
   onConfirm,
+  isPending = false,
 }: IssueStatusChangeDialogProps) {
   const [note, setNote] = useState('');
   const [skipPrompt, setSkipPrompt] = useState(false);
@@ -102,10 +105,21 @@ export function IssueStatusChangeDialog({
   const requiresNote = toStatus === 'on_hold' || toStatus === 'resolved' || toStatus === 'closed';
 
   const canSubmit = !requiresNote || note.trim().length > 0;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && isPending) return;
+        onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-[425px]"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Change Issue Status</DialogTitle>
           <DialogDescription className="pt-2">
@@ -167,10 +181,10 @@ export function IssueStatusChangeDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
+          <Button variant="outline" onClick={handleCancel} disabled={isPending}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={!canSubmit}>
+          <Button onClick={handleConfirm} disabled={!canSubmit || isPending}>
             Confirm Change
           </Button>
         </DialogFooter>

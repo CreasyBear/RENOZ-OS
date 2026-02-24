@@ -240,6 +240,7 @@ export type OrderParams = z.infer<typeof orderParamsSchema>;
 export const updateOrderStatusSchema = z.object({
   status: orderStatusSchema,
   notes: z.string().max(500).optional(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;

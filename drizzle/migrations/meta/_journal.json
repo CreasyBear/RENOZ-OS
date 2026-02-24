@@ -162,6 +162,20 @@
       "when": 1770864870175,
       "tag": "0022_add_search_entity_types",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1771327885062,
+      "tag": "0024_faithful_crusher_hogan",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771382308931,
+      "tag": "0024_drop_po_items_line_total_calc",
+      "breakpoints": true
     }
   ]
 }

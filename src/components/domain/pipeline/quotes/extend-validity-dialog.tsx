@@ -24,6 +24,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -135,7 +139,7 @@ export const ExtendValidityDialog = memo(function ExtendValidityDialog({
   const newValidUntil = getNewValidUntil();
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(extendMutation.isPending, setOpen)}>
       {!controlledOpen && (
         <DialogTrigger asChild>
           {trigger ?? (
@@ -146,7 +150,10 @@ export const ExtendValidityDialog = memo(function ExtendValidityDialog({
           )}
         </DialogTrigger>
       )}
-      <DialogContent>
+      <DialogContent
+        onEscapeKeyDown={createPendingDialogInteractionGuards(extendMutation.isPending).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(extendMutation.isPending).onInteractOutside}
+      >
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Extend Quote Validity</DialogTitle>

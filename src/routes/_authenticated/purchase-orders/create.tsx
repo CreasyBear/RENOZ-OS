@@ -11,6 +11,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
+import { z } from "zod";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 
@@ -28,29 +29,40 @@ function PurchaseOrderCreateError({ error }: { error: Error }) {
 }
 
 export const Route = createFileRoute("/_authenticated/purchase-orders/create")({
-  component: () => (
-    <Suspense fallback={
-      <PageLayout variant="full-width">
-        <PageLayout.Header
-          title="Create Purchase Order"
-          description="Create a new purchase order for a supplier"
-          actions={
-            <Button variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          }
-        />
-        <PageLayout.Content>
-          <div className="space-y-4">
-            <div className="h-24 bg-muted rounded animate-pulse" />
-            <div className="h-96 bg-muted rounded animate-pulse" />
-          </div>
-        </PageLayout.Content>
-      </PageLayout>
-    }>
-      <PurchaseOrderCreatePage />
-    </Suspense>
-  ),
+  validateSearch: z.object({
+    supplierId: z.string().uuid().optional(),
+  }),
+  component: PurchaseOrderCreateRouteComponent,
   errorComponent: PurchaseOrderCreateError,
 });
+
+function PurchaseOrderCreateRouteComponent() {
+  const search = Route.useSearch();
+
+  return (
+    <Suspense
+      fallback={
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title="Create Purchase Order"
+            description="Create a new purchase order for a supplier"
+            actions={
+              <Button variant="outline" disabled>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+            }
+          />
+          <PageLayout.Content>
+            <div className="space-y-4">
+              <div className="h-24 bg-muted rounded animate-pulse" />
+              <div className="h-96 bg-muted rounded animate-pulse" />
+            </div>
+          </PageLayout.Content>
+        </PageLayout>
+      }
+    >
+      <PurchaseOrderCreatePage search={search} />
+    </Suspense>
+  );
+}

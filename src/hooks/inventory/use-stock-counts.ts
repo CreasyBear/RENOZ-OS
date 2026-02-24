@@ -27,6 +27,55 @@ import {
 } from '@/server/functions/inventory';
 import type { StockCount } from '@/lib/schemas/inventory';
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function getErrorCode(error: unknown): string | null {
+  const candidates = [
+    (error as { errors?: { code?: string[] } })?.errors?.code?.[0],
+    (error as { data?: { errors?: { code?: string[] } } })?.data?.errors?.code?.[0],
+    (error as { cause?: { errors?: { code?: string[] } } })?.cause?.errors?.code?.[0],
+  ];
+  return candidates.find((value): value is string => typeof value === 'string') ?? null;
+}
+
+function getFieldError(error: unknown): string | null {
+  const buckets = [
+    (error as { errors?: Record<string, unknown> })?.errors,
+    (error as { data?: { errors?: Record<string, unknown> } })?.data?.errors,
+    (error as { cause?: { errors?: Record<string, unknown> } })?.cause?.errors,
+  ];
+  for (const bucket of buckets) {
+    if (!isRecord(bucket)) continue;
+    for (const [field, value] of Object.entries(bucket)) {
+      if (field === 'code') continue;
+      if (Array.isArray(value)) {
+        const first = value.find((entry) => typeof entry === 'string');
+        if (typeof first === 'string' && first.trim().length > 0) return first;
+      }
+      if (typeof value === 'string' && value.trim().length > 0) return value;
+    }
+  }
+  return null;
+}
+
+function mapStockCountError(error: Error): string {
+  const code = getErrorCode(error);
+  const fieldError = getFieldError(error);
+
+  if (code === 'insufficient_cost_layers') {
+    return fieldError ?? 'Count cannot complete because some rows have missing cost layers.';
+  }
+  if (code === 'serialized_unit_violation') {
+    return fieldError ?? 'Count cannot complete because serialized unit bounds were violated.';
+  }
+
+  return (fieldError ?? error.message) || 'Failed to complete stock count';
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -279,8 +328,18 @@ export function useCompleteStockCount() {
       applyAdjustments?: boolean;
     }) => completeStockCount({ data: { id, notes, applyAdjustments } }),
     onSuccess: (result, variables) => {
+      const valuationDelta =
+        (result.financeMetadata?.valuationAfter ?? 0) -
+        (result.financeMetadata?.valuationBefore ?? 0);
+      const hasFiniteDelta = Number.isFinite(valuationDelta);
+      const valueDeltaSuffix = hasFiniteDelta
+        ? `, value delta ${valuationDelta >= 0 ? '+' : ''}$${valuationDelta.toFixed(2)}`
+        : '';
       toast.success('Stock count completed', {
-        description: `${result.adjustments.length} adjustments applied`,
+        description:
+          result.adjustments.length > 0
+            ? `${result.adjustments.length} adjustments applied${valueDeltaSuffix}`
+            : 'No adjustments required',
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(variables.id) });
@@ -288,7 +347,7 @@ export function useCompleteStockCount() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to complete stock count');
+      toast.error(mapStockCountError(error));
     },
   });
 }

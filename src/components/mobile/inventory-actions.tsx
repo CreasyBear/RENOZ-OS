@@ -43,6 +43,7 @@ export interface ScannedItem {
   productId?: string;
   productName?: string;
   productSku?: string;
+  isSerialized?: boolean;
   locationCode?: string;
   quantity?: number;
 }

@@ -20,6 +20,7 @@ import type {
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError, ServerError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -111,6 +112,9 @@ export const escalateIssue = createServerFn({ method: 'POST' })
     const now = new Date();
 
     const [historyRecord] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       await tx
         .update(issues)
         .set({
@@ -200,6 +204,9 @@ export const deEscalateIssue = createServerFn({ method: 'POST' })
     }
 
     const [historyRecord] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       await tx
         .update(issues)
         .set({
@@ -408,14 +415,19 @@ export const deleteEscalationRule = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
-    await db
+    const [deletedRule] = await db
       .delete(escalationRules)
       .where(
         and(
           eq(escalationRules.id, data.ruleId),
           eq(escalationRules.organizationId, ctx.organizationId)
         )
-      );
+      )
+      .returning({ id: escalationRules.id, name: escalationRules.name });
+
+    if (!deletedRule) {
+      throw new NotFoundError('Escalation rule not found', 'escalationRule');
+    }
 
     // Log rule deletion
     if (existingRule) {
@@ -432,7 +444,11 @@ export const deleteEscalationRule = createServerFn({ method: 'POST' })
       });
     }
 
-    return { success: true };
+    return serializedMutationSuccess(
+      { id: deletedRule.id },
+      `Escalation rule "${deletedRule.name}" deleted.`,
+      { affectedIds: [deletedRule.id] }
+    );
   });
 
 // ============================================================================
@@ -534,6 +550,9 @@ async function applyEscalationAction(
     case 'assign_user': {
       if (action.params?.userId) {
         await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${organizationId}, false)`
+          );
           await tx
             .update(issues)
             .set({

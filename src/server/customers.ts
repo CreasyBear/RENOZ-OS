@@ -85,7 +85,13 @@ export const getCustomers = createServerFn({ method: "GET" })
     ];
 
     if (search) {
-      conditions.push(ilike(customers.name, containsPattern(search)));
+      const searchPattern = containsPattern(search);
+      conditions.push(
+        or(
+          ilike(customers.name, searchPattern),
+          ilike(customers.email, searchPattern)
+        )!
+      );
     }
     if (status) {
       conditions.push(eq(customers.status, status));
@@ -260,7 +266,13 @@ export const getCustomersCursor = createServerFn({ method: "GET" })
     ];
 
     if (search) {
-      conditions.push(ilike(customers.name, containsPattern(search)));
+      const searchPattern = containsPattern(search);
+      conditions.push(
+        or(
+          ilike(customers.name, searchPattern),
+          ilike(customers.email, searchPattern)
+        )!
+      );
     }
     if (status) {
       conditions.push(eq(customers.status, status));

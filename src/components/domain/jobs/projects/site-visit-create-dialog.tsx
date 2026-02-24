@@ -6,24 +6,16 @@
  * SPRINT-03: New component for project-centric jobs model
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Calendar } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
+  FormDialog,
   TextareaField,
   SelectField,
   NumberField,
@@ -31,7 +23,7 @@ import {
 } from '@/components/shared/forms';
 import { useCreateSiteVisit } from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
 
@@ -72,6 +64,7 @@ export function SiteVisitCreateDialog({
 }: SiteVisitCreateDialogProps) {
   const navigate = useNavigate();
   const createSiteVisit = useCreateSiteVisit();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { data: usersData } = useUsers();
 
   // Filter installers (users with installer type)
@@ -97,7 +90,11 @@ export function SiteVisitCreateDialog({
       installerId: 'unassigned',
       notes: '',
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
+      setSubmitError(null);
       try {
         const result = await createSiteVisit.mutateAsync({
           projectId,
@@ -118,15 +115,17 @@ export function SiteVisitCreateDialog({
         onOpenChange(false);
         form.reset();
         onSuccess?.(result.id);
-      } catch {
-        toast.error('Failed to schedule site visit');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to schedule site visit';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
 
-  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         visitType: 'installation',
         scheduledDate: new Date(),
@@ -138,28 +137,32 @@ export function SiteVisitCreateDialog({
     }
   }, [open, form]);
 
-  const isSubmitting = createSiteVisit.isPending;
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && createSiteVisit.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Schedule Site Visit
-          </DialogTitle>
-          <DialogDescription>
-            Schedule a new site visit for this project.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-6"
-        >
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Calendar className="h-5 w-5" />
+          Schedule Site Visit
+        </span>
+      }
+      description="Schedule a new site visit for this project."
+      form={form}
+      submitLabel="Schedule Visit"
+      loadingLabel="Scheduling..."
+      submitError={submitError}
+      submitDisabled={createSiteVisit.isPending}
+      size="lg"
+      className="max-w-lg"
+      resetOnClose={false}
+    >
           <div className="space-y-4">
             {/* Visit Type */}
             <form.Field name="visitType">
@@ -240,22 +243,6 @@ export function SiteVisitCreateDialog({
               )}
             </form.Field>
           </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Scheduling...' : 'Schedule Visit'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

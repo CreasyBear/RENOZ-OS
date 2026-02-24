@@ -34,6 +34,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -263,14 +267,17 @@ export const FollowUpScheduler = memo(function FollowUpScheduler({
             )}
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={createPendingDialogOpenChangeHandler(logActivityMutation.isPending, setIsDialogOpen)}>
             <DialogTrigger asChild>
               <Button variant="outline" size={compact ? "sm" : "default"}>
                 <Plus className="h-4 w-4 mr-1" />
                 {compact ? "Add" : "Schedule Follow-up"}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent
+              onEscapeKeyDown={createPendingDialogInteractionGuards(logActivityMutation.isPending).onEscapeKeyDown}
+              onInteractOutside={createPendingDialogInteractionGuards(logActivityMutation.isPending).onInteractOutside}
+            >
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
                   <DialogTitle>Schedule Follow-up</DialogTitle>

@@ -30,8 +30,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePickerControl } from '@/components/shared';
 import { Filter, MessageSquare } from 'lucide-react';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import type { OpportunityActivityType } from '@/lib/schemas/pipeline';
@@ -269,20 +269,17 @@ export const OpportunityActivityTimeline = memo(function OpportunityActivityTime
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Date Range</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="date"
-                        value={filters.dateFrom}
-                        onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-                      />
-                      <Input
-                        type="date"
-                        value={filters.dateTo}
-                        onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-                      />
-                    </div>
+                  <div className="flex gap-2">
+                    <DatePickerControl
+                      label="From"
+                      value={filters.dateFrom}
+                      onChange={(value) => setFilters((f) => ({ ...f, dateFrom: value }))}
+                    />
+                    <DatePickerControl
+                      label="To"
+                      value={filters.dateTo}
+                      onChange={(value) => setFilters((f) => ({ ...f, dateTo: value }))}
+                    />
                   </div>
 
                   {hasActiveFilters && (

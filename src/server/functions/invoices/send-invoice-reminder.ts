@@ -17,7 +17,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { orders, customers, organizations, emailHistory, type NewEmailHistory } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -173,6 +173,9 @@ export const sendInvoiceReminder = createServerFn({ method: 'POST' })
     // Update email history and invoice in transaction
     // If order update fails, email history still reflects send attempt
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${organizationId}, false)`
+      );
       if (sendError) {
         // Update email history with failure
         await tx

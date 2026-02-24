@@ -20,15 +20,6 @@ import {
   PhoneCall,
 } from "lucide-react";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -45,7 +36,7 @@ import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
   TextareaField,
   FormField,
-  FormActions,
+  FormDialog,
   extractFieldError,
 } from "@/components/shared/forms";
 
@@ -120,6 +111,9 @@ export function CallOutcomeDialog({
 
   const form = useTanStackForm<CallOutcomeFormValues>({
     schema: callOutcomeFormSchema,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     defaultValues: {
       outcome: "completed_successfully",
       outcomeNotes: "",
@@ -135,7 +129,6 @@ export function CallOutcomeDialog({
           onSuccess: () => {
             toast.success("Call outcome logged successfully");
             handleOpenChange(false);
-            form.reset();
             onSuccess?.();
           },
           onError: (error) => {
@@ -159,55 +152,48 @@ export function CallOutcomeDialog({
   const selectedOutcome = form.useWatch("outcome");
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-
-      <DialogContent
-        className="sm:max-w-[500px]"
-        aria-labelledby="outcome-dialog-title"
-        aria-describedby="outcome-dialog-description"
-      >
-        <DialogHeader>
-          <DialogTitle id="outcome-dialog-title">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" />
-              Log Call Outcome
-            </div>
-          </DialogTitle>
-          <DialogDescription id="outcome-dialog-description">
-            {customerName
-              ? (
-                  <>
-                    Record the outcome of your call with{" "}
-                    {customerId ? (
-                      <Link
-                        to="/customers/$customerId"
-                        params={{ customerId }}
-                        search={{}}
-                        className="font-medium hover:underline text-primary"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {customerName}
-                      </Link>
-                    ) : (
-                      customerName
-                    )}
-                    .
-                  </>
-                )
-              : "Record the outcome of this call."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-          aria-label="outcome-dialog"
-        >
-          <form.Field name="outcome">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      trigger={trigger}
+      title={
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-5 w-5" />
+          Log Call Outcome
+        </div>
+      }
+      description={
+        customerName
+          ? (
+              <>
+                Record the outcome of your call with{" "}
+                {customerId ? (
+                  <Link
+                    to="/customers/$customerId"
+                    params={{ customerId }}
+                    search={{}}
+                    className="font-medium hover:underline text-primary"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {customerName}
+                  </Link>
+                ) : (
+                  customerName
+                )}
+                .
+              </>
+            )
+          : "Record the outcome of this call."
+      }
+      form={form}
+      submitLabel="Log Outcome"
+      cancelLabel="Cancel"
+      loadingLabel="Saving..."
+      submitError={completeMutation.error?.message ?? null}
+      submitDisabled={completeMutation.isPending}
+      className="sm:max-w-[500px]"
+    >
+      <form.Field name="outcome">
             {(field) => {
               const error = extractFieldError(field);
               return (
@@ -290,19 +276,6 @@ export function CallOutcomeDialog({
               />
             )}
           </form.Field>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <FormActions
-              form={form}
-              submitLabel="Log Outcome"
-              cancelLabel="Cancel"
-              loadingLabel="Saving..."
-              onCancel={() => handleOpenChange(false)}
-              submitDisabled={completeMutation.isPending}
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

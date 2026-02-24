@@ -142,15 +142,53 @@ export function Inbox({
     [deleteMutation, selectedId, currentIndex, items]
   );
 
-  const handleReply = useCallback((_id: string) => {
-    // Reply functionality not yet implemented
-    toast.info("Reply feature coming soon");
+  const openMailto = useCallback((to: string, subject: string, body: string) => {
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
   }, []);
 
-  const handleForward = useCallback((_id: string) => {
-    // Forward functionality not yet implemented
-    toast.info("Forward feature coming soon");
-  }, []);
+  const handleReply = useCallback((id: string) => {
+    const email = items.find((item) => item.id === id);
+    if (!email) {
+      toast.error("Email not found");
+      return;
+    }
+
+    const replySubject = /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`;
+    const quotedBody = email.bodyText?.trim() || email.preview;
+    const body = [
+      "",
+      "",
+      `On ${email.sentAt ? email.sentAt.toLocaleString() : "a previous message"}, ${email.from.name} <${email.from.email}> wrote:`,
+      `> ${quotedBody.replace(/\n/g, "\n> ")}`,
+    ].join("\n");
+
+    openMailto(email.from.email, replySubject, body);
+  }, [items, openMailto]);
+
+  const handleForward = useCallback((id: string) => {
+    const email = items.find((item) => item.id === id);
+    if (!email) {
+      toast.error("Email not found");
+      return;
+    }
+
+    const forwardSubject = /^fwd:/i.test(email.subject) ? email.subject : `Fwd: ${email.subject}`;
+    const forwardedBody = email.bodyText?.trim() || email.preview;
+    const body = [
+      "",
+      "",
+      "---------- Forwarded message ---------",
+      `From: ${email.from.name} <${email.from.email}>`,
+      `Date: ${email.sentAt ? email.sentAt.toLocaleString() : "Unknown"}`,
+      `Subject: ${email.subject}`,
+      `To: ${email.to.name} <${email.to.email}>`,
+      "",
+      forwardedBody,
+    ].join("\n");
+
+    openMailto("", forwardSubject, body);
+  }, [items, openMailto]);
 
   // ============================================================================
   // KEYBOARD SHORTCUTS

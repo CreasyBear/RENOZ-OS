@@ -20,14 +20,14 @@ import { toast } from "@/hooks";
 import {
   ReorderRecommendations,
   type ReorderRecommendation,
-  CreatePOFromRecommendationDialog,
-} from "@/components/domain/inventory";
+} from "@/components/domain/inventory/forecasting/reorder-recommendations";
+import { CreatePOFromRecommendationDialog } from "@/components/domain/inventory/forecasting/create-po-from-recommendation-dialog";
 import {
   ForecastChart,
   type ForecastDataPoint,
   type ForecastPeriod,
   type ForecastAccuracy,
-} from "@/components/domain/inventory";
+} from "@/components/domain/inventory/forecasting/forecast-chart";
 import {
   useReorderRecommendations,
   useProductForecast,
@@ -96,6 +96,8 @@ export default function ForecastingPage() {
   // Dialog state for PO creation
   const [selectedRecommendation, setSelectedRecommendation] = useState<ReorderRecommendation | null>(null);
   const [showPODialog, setShowPODialog] = useState(false);
+  const [bulkReorderQueue, setBulkReorderQueue] = useState<ReorderRecommendation[]>([]);
+  const [bulkReorderTotal, setBulkReorderTotal] = useState(0);
 
   // Handlers - use refetch from hook instead of queryClient
   const handleRefresh = useCallback(async () => {
@@ -105,22 +107,58 @@ export default function ForecastingPage() {
   const handleReorder = useCallback((productId: string, _quantity: number) => {
     const recommendation = recommendations.find((r) => r.productId === productId);
     if (recommendation) {
+      setBulkReorderQueue([]);
+      setBulkReorderTotal(0);
       setSelectedRecommendation(recommendation);
       setShowPODialog(true);
     }
   }, [recommendations, setShowPODialog]);
 
   const handleReorderAll = useCallback(() => {
-    toast.info("Create Bulk Order", {
-      description: "Bulk order creation for all urgent items coming soon",
-    });
-  }, []);
+    const urgentRecommendations = recommendations.filter(
+      (r) => r.urgency === "critical" || r.urgency === "high"
+    );
+
+    if (urgentRecommendations.length === 0) {
+      toast.info("No urgent recommendations", {
+        description: "There are no critical or high-priority items to reorder right now.",
+      });
+      return;
+    }
+
+    setBulkReorderQueue(urgentRecommendations);
+    setBulkReorderTotal(urgentRecommendations.length);
+    setSelectedRecommendation(urgentRecommendations[0]);
+    setShowPODialog(true);
+  }, [recommendations, setShowPODialog]);
 
   const handlePOCreated = useCallback(async () => {
-    toast.success("Purchase order created successfully");
+    const totalInQueue = bulkReorderQueue.length;
+    if (totalInQueue > 0 && bulkReorderTotal > 0) {
+      const completed = bulkReorderTotal - totalInQueue + 1;
+      toast.success(`Purchase order created (${completed}/${bulkReorderTotal})`);
+    } else {
+      toast.success("Purchase order created successfully");
+    }
+
     // Refresh recommendations using refetch from hook
     await refetchRecommendations();
-  }, [refetchRecommendations]);
+
+    if (totalInQueue > 1) {
+      const remaining = bulkReorderQueue.slice(1);
+      setBulkReorderQueue(remaining);
+      setSelectedRecommendation(remaining[0]);
+      setShowPODialog(true);
+      toast.info("Next urgent recommendation loaded", {
+        description: `${remaining.length} item${remaining.length === 1 ? "" : "s"} remaining in this run.`,
+      });
+      return;
+    }
+
+    setBulkReorderQueue([]);
+    setBulkReorderTotal(0);
+    setSelectedRecommendation(null);
+  }, [bulkReorderQueue, bulkReorderTotal, refetchRecommendations, setShowPODialog]);
 
   return (
     <PageLayout variant="full-width">

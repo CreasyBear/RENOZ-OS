@@ -115,8 +115,8 @@ export const FormatAmount = memo(function FormatAmount({
   const locale = localeProp ?? settings.locale;
   const numberFormat = settings.numberFormat;
 
-  // Handle null/undefined
-  if (amount === null || amount === undefined) {
+  // Handle null/undefined/NaN
+  if (amount === null || amount === undefined || Number.isNaN(amount)) {
     return <span className={cn("text-muted-foreground", className)}>—</span>;
   }
 

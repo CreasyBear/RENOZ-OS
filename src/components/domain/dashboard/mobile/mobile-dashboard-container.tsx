@@ -114,7 +114,7 @@ export function MobileDashboardContainer() {
                   label={kpi.label}
                   trend={
                     kpi.trend !== undefined
-                      ? { value: kpi.trend, period: "vs last period" }
+                      ? { value: kpi.trend, period: "last period" }
                       : undefined
                   }
                   isLoading={metricsQuery.isLoading}

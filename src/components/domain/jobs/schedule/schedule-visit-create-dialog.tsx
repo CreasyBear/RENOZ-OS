@@ -22,6 +22,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,10 +37,11 @@ import {
   NumberField,
   DateField,
   ComboboxField,
+  FormFieldDisplayProvider,
 } from '@/components/shared/forms';
 import { useCreateSiteVisit, useLoadProjectOptions } from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { scheduleVisitFormSchema } from '@/lib/schemas/jobs';
 import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
@@ -95,6 +100,9 @@ export function ScheduleVisitCreateDialog({
       installerId: 'unassigned',
       notes: '',
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
       const resolvedProjectId = initialProjectId ?? data.projectId;
       if (!resolvedProjectId) {
@@ -145,10 +153,16 @@ export function ScheduleVisitCreateDialog({
 
   const isSubmitting = createSiteVisit.isPending;
   const showProjectSelector = !initialProjectId;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isSubmitting);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSubmitting, onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-w-lg"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
@@ -168,6 +182,7 @@ export function ScheduleVisitCreateDialog({
           }}
           className="space-y-6"
         >
+          <FormFieldDisplayProvider form={form}>
           <div className="space-y-4">
             {showProjectSelector && (
               <form.Field name="projectId">
@@ -255,6 +270,7 @@ export function ScheduleVisitCreateDialog({
               )}
             </form.Field>
           </div>
+          </FormFieldDisplayProvider>
 
           <DialogFooter>
             <Button

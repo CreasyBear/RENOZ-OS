@@ -11,21 +11,13 @@
  */
 
 import { useState, useCallback } from "react";
-import { Loader2, Package, Save } from "lucide-react";
+import { Package } from "lucide-react";
 import { useForm } from "@tanstack/react-form";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { ControlledFormDialog } from "@/components/shared/forms";
 import type { UpdateProduct } from "@/lib/schemas/products";
 
 // ============================================================================
@@ -111,37 +103,39 @@ export function InventoryItemEditDialog({
     },
   });
 
-  const handleClose = useCallback(() => {
-    if (!isLoading) {
-      setSubmitError(null);
-      onClose();
-    }
-  }, [isLoading, onClose]);
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen && isLoading) return;
+      if (!newOpen) {
+        setSubmitError(null);
+        onClose();
+      }
+    },
+    [isLoading, onClose]
+  );
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Package className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <DialogTitle>Edit Inventory Item</DialogTitle>
-              <DialogDescription>
-                Update product details for {product.name}
-              </DialogDescription>
-            </div>
+    <ControlledFormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Package className="h-5 w-5 text-primary" />
           </div>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-6 py-4"
-        >
+          Edit Inventory Item
+        </span>
+      }
+      description={`Update product details for ${product.name}`}
+      submitLabel="Save Changes"
+      loadingLabel="Saving..."
+      submitError={submitError}
+      isSubmitting={isLoading}
+      onSubmit={() => form.handleSubmit()}
+      onCancel={onClose}
+      size="lg"
+      className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
+    >
           {/* Basic Information */}
           <div className="space-y-4">
             <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -394,38 +388,6 @@ export function InventoryItemEditDialog({
             </div>
           </div>
 
-          {/* Error Message */}
-          {submitError && (
-            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-              {submitError}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </ControlledFormDialog>
   );
 }

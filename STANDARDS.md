@@ -8,6 +8,7 @@ This document establishes authoritative patterns for the Renoz v3 codebase. It i
 - [CLAUDE.md](./CLAUDE.md) - Project overview and commands
 - [SCHEMA-TRACE.md](./SCHEMA-TRACE.md) - Schema & query trace-through framework
 - [docs/WORKFLOW-AUDIT-REMEDIATION-PROCESS.md](./docs/WORKFLOW-AUDIT-REMEDIATION-PROCESS.md) - Workflow audit and hardening process
+- [docs/reliability/RELIABILITY-STANDARDS.md](./docs/reliability/RELIABILITY-STANDARDS.md) - Reliability rules and anti-pattern prevention
 - [.claude/rules/hook-architecture.md](./.claude/rules/hook-architecture.md) - Detailed hook rules
 
 ---

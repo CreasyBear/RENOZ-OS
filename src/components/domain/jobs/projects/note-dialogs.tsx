@@ -10,25 +10,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { z } from 'zod';
 import { Plus, Mic, MicOff, Edit3 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
+  FormDialog,
   TextField,
   TextareaField,
   SelectField,
 } from '@/components/shared/forms';
 import { useCreateNote, useUpdateNote } from '@/hooks/jobs';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import type { ProjectNote } from '@/lib/schemas/jobs';
 
 // ============================================================================
@@ -68,6 +61,7 @@ export interface NoteCreateDialogProps {
 
 export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: NoteCreateDialogProps) {
   const createNote = useCreateNote(projectId);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -81,7 +75,11 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
       content: '',
       noteType: 'general' as const,
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
+      setSubmitError(null);
       try {
         await createNote.mutateAsync({
           title: data.title,
@@ -94,23 +92,24 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
         onOpenChange(false);
         form.reset();
         onSuccess?.();
-      } catch {
-        toast.error('Failed to create note');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to create note';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
 
-  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         title: '',
         content: '',
         noteType: 'general',
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
-  }, [open]);
+  }, [open, form]);
 
   const startRecording = async () => {
     try {
@@ -168,25 +167,32 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Add Note
-          </DialogTitle>
-          <DialogDescription>Create a new note for this project</DialogDescription>
-        </DialogHeader>
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && createNote.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="title">
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Plus className="h-5 w-5" />
+          Add Note
+        </span>
+      }
+      description="Create a new note for this project"
+      form={form}
+      submitLabel="Create"
+      submitError={submitError}
+      submitDisabled={createNote.isPending}
+      size="lg"
+      className="max-w-lg"
+      resetOnClose={false}
+    >
+      <form.Field name="title">
             {(field) => (
               <TextField
                 field={field}
@@ -251,18 +257,7 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
               )}
             </form.Field>
           </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createNote.isPending}>
-              {createNote.isPending ? 'Creating...' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }
 
@@ -286,6 +281,7 @@ const noteEditFormSchema = z.object({
 
 export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEditDialogProps) {
   const updateNote = useUpdateNote(note?.projectId ?? '');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -300,14 +296,14 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
       noteType: note?.noteType ?? 'general',
       status: note?.status ?? 'completed',
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
       if (!note) return;
 
-      // Stop recording if active
-      if (isRecording) {
-        stopRecording();
-      }
-
+      if (isRecording) stopRecording();
+      setSubmitError(null);
       try {
         await updateNote.mutateAsync({
           id: note.id,
@@ -318,15 +314,17 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
         form.reset();
         onOpenChange(false);
         onSuccess?.();
-      } catch {
-        toast.error('Failed to update note');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to update note';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
 
-  // Update form values when note changes
   useEffect(() => {
     if (open && note) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         title: note.title,
         content: note.content ?? '',
@@ -334,8 +332,7 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
         status: note.status,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
-  }, [open, note]);
+  }, [open, note, form]);
 
   const startRecording = async () => {
     try {
@@ -380,11 +377,19 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
   };
 
   const handleCancel = () => {
-    if (isRecording) {
-      stopRecording();
-    }
+    if (isRecording) stopRecording();
+    setSubmitError(null);
     form.reset();
     onOpenChange(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && updateNote.isPending) return;
+    if (nextOpen) {
+      onOpenChange(true);
+    } else {
+      handleCancel();
+    }
   };
 
   // Clean up on unmount
@@ -397,24 +402,25 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
   }, []);
 
   return (
-    <Dialog open={open} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[525px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Edit3 className="h-5 w-5" />
-            Edit Note
-          </DialogTitle>
-          <DialogDescription>Update this project note.</DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="title">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Edit3 className="h-5 w-5" />
+          Edit Note
+        </span>
+      }
+      description="Update this project note."
+      form={form}
+      submitLabel="Save Changes"
+      submitError={submitError}
+      submitDisabled={updateNote.isPending}
+      size="lg"
+      className="sm:max-w-[525px]"
+      resetOnClose={false}
+    >
+      <form.Field name="title">
             {(field) => (
               <TextField
                 field={field}
@@ -484,17 +490,6 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={updateNote.isPending}>
-              {updateNote.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

@@ -3,10 +3,12 @@
  *
  * Shared type definitions for the customer creation wizard.
  */
-import { z } from 'zod';
-import type { UseFormReturn } from 'react-hook-form';
+import type { TanStackFormApi } from '@/hooks/_shared/use-tanstack-form';
 import type { ManagedContact } from '../contact-manager';
 import type { ManagedAddress } from '../address-manager';
+import type { CustomerWizardValues } from '@/lib/schemas/customers';
+
+export type { CustomerWizardValues };
 
 // ============================================================================
 // WIZARD STEPS
@@ -14,28 +16,6 @@ import type { ManagedAddress } from '../address-manager';
 
 export const wizardSteps = ['basic', 'contacts', 'addresses', 'review'] as const;
 export type WizardStep = (typeof wizardSteps)[number];
-
-// ============================================================================
-// FORM SCHEMA
-// ============================================================================
-
-export const customerWizardSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(255),
-  legalName: z.string().max(255).optional(),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().max(30).optional(),
-  website: z.string().url('Invalid URL').optional().or(z.literal('')),
-  status: z.enum(['prospect', 'active', 'inactive', 'suspended', 'blacklisted']),
-  type: z.enum(['individual', 'business', 'government', 'non_profit']),
-  size: z.enum(['micro', 'small', 'medium', 'large', 'enterprise']).optional(),
-  industry: z.string().max(100).optional(),
-  taxId: z.string().max(20).optional(),
-  registrationNumber: z.string().max(50).optional(),
-  creditHold: z.boolean(),
-  tags: z.array(z.string().max(50)),
-});
-
-export type CustomerWizardValues = z.infer<typeof customerWizardSchema>;
 
 // ============================================================================
 // WIZARD DATA
@@ -59,7 +39,7 @@ export interface CustomerWizardProps {
 }
 
 export interface BasicInfoStepProps {
-  form: UseFormReturn<CustomerWizardValues>;
+  form: TanStackFormApi<CustomerWizardValues>;
   availableTags?: Array<{ id: string; name: string; color: string }>;
 }
 

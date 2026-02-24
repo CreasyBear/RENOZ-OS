@@ -21,8 +21,8 @@ import { Progress } from '@/components/ui/progress';
 import { MetricCard } from '@/components/shared';
 import { useSupportMetrics } from '@/hooks/support';
 import { useCsatMetrics } from '@/hooks/support';
-import { CsatMetricsWidget } from '@/components/domain/support';
-import { CsatLowRatingAlerts } from '@/components/domain/support';
+import { CsatMetricsWidget } from '@/components/domain/support/csat/csat-metrics-widget';
+import { CsatLowRatingAlerts } from '@/components/domain/support/csat/csat-low-rating-alerts';
 import {
   AlertCircle,
   Clock,

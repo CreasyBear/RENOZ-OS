@@ -20,8 +20,9 @@
  */
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { cn } from "~/lib/utils"
-import type { AnyFieldApi } from "./types"
+import { extractFieldError, type AnyFieldApi } from "./types"
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   AUD: "$",
@@ -60,14 +61,8 @@ export function CurrencyField({
   disabled,
 }: CurrencyFieldProps) {
   const symbol = CURRENCY_SYMBOLS[currency] ?? "$"
-
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
-
-  const error = typeof rawError === 'string'
-    ? rawError
-    : rawError?.message
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
   // Format value for display
   const formatValue = (value: string): string => {

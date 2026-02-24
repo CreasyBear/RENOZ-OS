@@ -22,7 +22,7 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ACTIONS } from 'drizzle/schema';
 import { paginationSchema } from '@/lib/schemas';
 import { cursorPaginationSchema } from '@/lib/db/pagination';

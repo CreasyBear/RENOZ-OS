@@ -13,37 +13,24 @@
  * - Form validation with clear error messages
  * - Logical field grouping
  */
-import { memo, useState, useCallback } from "react";
-import { useForm, type Resolver } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { memo, useCallback } from "react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
-  Package,
-  MapPin,
   Bell,
   Loader2,
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  FormFieldDisplayProvider,
+  FormErrorSummary,
+  TextField,
+  NumberField,
+  SelectField,
+  SwitchField,
+} from "@/components/shared/forms";
 
 // ============================================================================
 // TYPES
@@ -97,6 +84,7 @@ interface AlertConfigFormProps {
   onSubmit: (data: AlertConfigValues) => Promise<void>;
   onCancel?: () => void;
   isLoading?: boolean;
+  submitError?: string | null;
   className?: string;
 }
 
@@ -144,6 +132,20 @@ const ALERT_TYPE_CONFIG: Record<
 // COMPONENT
 // ============================================================================
 
+function getDefaultValues(initial?: Partial<AlertConfigValues>): AlertConfigValues {
+  return {
+    alertType: initial?.alertType ?? "low_stock",
+    name: initial?.name ?? "",
+    productId: initial?.productId ?? null,
+    locationId: initial?.locationId ?? null,
+    thresholdValue: initial?.thresholdValue ?? 10,
+    thresholdPercentage: initial?.thresholdPercentage ?? undefined,
+    notifyEmail: initial?.notifyEmail ?? false,
+    notifyInApp: initial?.notifyInApp ?? true,
+    isActive: initial?.isActive ?? true,
+  };
+}
+
 export const AlertConfigForm = memo(function AlertConfigForm({
   products = [],
   locations = [],
@@ -151,40 +153,27 @@ export const AlertConfigForm = memo(function AlertConfigForm({
   onSubmit,
   onCancel,
   isLoading,
+  submitError,
   className,
 }: AlertConfigFormProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const form = useForm<AlertConfigValues>({
-    resolver: zodResolver(alertConfigSchema) as Resolver<AlertConfigValues>,
-    defaultValues: {
-      alertType: initialValues?.alertType ?? "low_stock",
-      name: initialValues?.name ?? "",
-      productId: initialValues?.productId ?? null,
-      locationId: initialValues?.locationId ?? null,
-      thresholdValue: initialValues?.thresholdValue ?? 10,
-      thresholdPercentage: initialValues?.thresholdPercentage ?? undefined,
-      notifyEmail: initialValues?.notifyEmail ?? false,
-      notifyInApp: initialValues?.notifyInApp ?? true,
-      isActive: initialValues?.isActive ?? true,
+  const form = useTanStackForm<AlertConfigValues>({
+    schema: alertConfigSchema,
+    defaultValues: getDefaultValues(initialValues),
+    onSubmit: async (values) => {
+      await onSubmit(values);
     },
+    onSubmitInvalid: () => {},
   });
 
-   
-  const alertType = form.watch("alertType") as AlertType;
+  const alertType = form.useWatch("alertType") as AlertType;
   const alertConfig = ALERT_TYPE_CONFIG[alertType];
 
-  const handleSubmit = useCallback(
-    async (values: AlertConfigValues) => {
-      try {
-        setIsSubmitting(true);
-        await onSubmit(values);
-      } finally {
-        setIsSubmitting(false);
-      }
-    },
-    [onSubmit]
-  );
+  const handleCancel = useCallback(() => {
+    form.reset();
+    onCancel?.();
+  }, [form, onCancel]);
+
+  const isSubmitting = form.state.isSubmitting;
 
   return (
     <Card className={className}>
@@ -195,196 +184,109 @@ export const AlertConfigForm = memo(function AlertConfigForm({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void form.handleSubmit();
+          }}
+          className="space-y-6"
+        >
+          <FormFieldDisplayProvider form={form}>
+            <FormErrorSummary form={form} submitError={submitError} />
             {/* Alert Type */}
-            <FormField
-              control={form.control}
-              name="alertType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Alert Type</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select alert type..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {(Object.entries(ALERT_TYPE_CONFIG) as [AlertType, typeof ALERT_TYPE_CONFIG[AlertType]][]).map(
-                        ([type, config]) => (
-                          <SelectItem key={type} value={type}>
-                            <div className="flex flex-col">
-                              <span>{config.label}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {config.description}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        )
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="alertType">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Alert Type"
+                  placeholder="Select alert type..."
+                  options={(Object.entries(ALERT_TYPE_CONFIG) as [AlertType, (typeof ALERT_TYPE_CONFIG)[AlertType]][]).map(
+                    ([type, config]) => ({
+                      value: type,
+                      label: `${config.label} – ${config.description}`,
+                    })
+                  )}
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Name */}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Alert Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., Low Stock Warning - Warehouse A"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="name">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Alert Name"
+                  placeholder="e.g., Low Stock Warning - Warehouse A"
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Scope */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm">Alert Scope</h4>
 
-              <FormField
-                control={form.control}
-                name="productId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product (Optional)</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === "all" ? null : v)}
-                      defaultValue={field.value ?? "all"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All products" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="all">
-                          <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4" aria-hidden="true" />
-                            All Products
-                          </div>
-                        </SelectItem>
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4" aria-hidden="true" />
-                              {product.name}
-                              <span className="text-muted-foreground text-xs">
-                                ({product.sku})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Leave as &quot;All&quot; to monitor all products
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="productId">
+                {(field) => (
+                  <SelectField
+                    field={field}
+                    label="Product (Optional)"
+                    nullOption={{ value: "__all__", label: "All Products" }}
+                    options={products.map((p) => ({
+                      value: p.id,
+                      label: `${p.name} (${p.sku})`,
+                    }))}
+                    placeholder="All products"
+                    description="Leave as &quot;All&quot; to monitor all products"
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="locationId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Location (Optional)</FormLabel>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === "all" ? null : v)}
-                      defaultValue={field.value ?? "all"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All locations" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="all">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" aria-hidden="true" />
-                            All Locations
-                          </div>
-                        </SelectItem>
-                        {locations.map((location) => (
-                          <SelectItem key={location.id} value={location.id}>
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4" aria-hidden="true" />
-                              {location.name}
-                              <span className="text-muted-foreground text-xs">
-                                ({location.code})
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="locationId">
+                {(field) => (
+                  <SelectField
+                    field={field}
+                    label="Location (Optional)"
+                    nullOption={{ value: "__all__", label: "All Locations" }}
+                    options={locations.map((loc) => ({
+                      value: loc.id,
+                      label: `${loc.name} (${loc.code})`,
+                    }))}
+                    placeholder="All locations"
+                  />
                 )}
-              />
+              </form.Field>
             </div>
 
             {/* Threshold */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm">Threshold</h4>
 
-              <FormField
-                control={form.control}
-                name="thresholdValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{alertConfig.thresholdLabel}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        className="tabular-nums"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="thresholdValue">
+                {(field) => (
+                  <NumberField
+                    field={field}
+                    label={alertConfig.thresholdLabel}
+                    min={0}
+                    required
+                  />
                 )}
-              />
+              </form.Field>
 
               {alertType === "forecast_deviation" && (
-                <FormField
-                  control={form.control}
-                  name="thresholdPercentage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Deviation Threshold (%)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          className="tabular-nums"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Alert when forecast deviation exceeds this percentage
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                <form.Field name="thresholdPercentage">
+                  {(field) => (
+                    <NumberField
+                      field={field}
+                      label="Deviation Threshold (%)"
+                      min={0}
+                      max={100}
+                      description="Alert when forecast deviation exceeds this percentage"
+                    />
                   )}
-                />
+                </form.Field>
               )}
             </div>
 
@@ -395,102 +297,72 @@ export const AlertConfigForm = memo(function AlertConfigForm({
                 Notifications
               </h4>
 
-              <FormField
-                control={form.control}
-                name="notifyInApp"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>In-App Notifications</FormLabel>
-                      <FormDescription>
-                        Show alerts in the notification center
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
+              <form.Field name="notifyInApp">
+                {(field) => (
+                  <SwitchField
+                    field={field}
+                    label="In-App Notifications"
+                    description="Show alerts in the notification center"
+                    className="rounded-lg border p-3"
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="notifyEmail"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Email Notifications</FormLabel>
-                      <FormDescription>
-                        Send email when alert triggers
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
+              <form.Field name="notifyEmail">
+                {(field) => (
+                  <SwitchField
+                    field={field}
+                    label="Email Notifications"
+                    description="Send email when alert triggers"
+                    className="rounded-lg border p-3"
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Alert Active</FormLabel>
-                      <FormDescription>
-                        Enable or disable this alert rule
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
+              <form.Field name="isActive">
+                {(field) => (
+                  <SwitchField
+                    field={field}
+                    label="Alert Active"
+                    description="Enable or disable this alert rule"
+                    className="rounded-lg border p-3"
+                  />
                 )}
-              />
+              </form.Field>
             </div>
+          </FormFieldDisplayProvider>
 
-            {/* Actions */}
-            <div className="flex items-center gap-4 pt-4 border-t">
-              {onCancel && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onCancel}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-              )}
+          {/* Actions */}
+          <div className="flex items-center gap-4 pt-4 border-t">
+            {onCancel && (
               <Button
-                type="submit"
-                className="flex-1"
-                disabled={isSubmitting || isLoading}
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isSubmitting}
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" aria-hidden="true" />
-                    {initialValues ? "Save Changes" : "Create Alert"}
-                  </>
-                )}
+                Cancel
               </Button>
-            </div>
-          </form>
-        </Form>
+            )}
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={isSubmitting || isLoading}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {initialValues ? "Save Changes" : "Create Alert"}
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

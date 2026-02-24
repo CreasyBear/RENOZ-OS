@@ -95,7 +95,7 @@ export function OverviewDashboard({
               icon={kpi.icon}
               trend={
                 kpi.trend !== undefined
-                  ? { value: kpi.trend, period: 'vs last period' }
+                  ? { value: kpi.trend, period: 'last period' }
                   : undefined
               }
               isLoading={kpiLoading}

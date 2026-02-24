@@ -11,6 +11,7 @@
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { useUnifiedActivities } from '@/hooks/activities';
 
 // ============================================================================
@@ -71,6 +72,7 @@ export function IssueActivityTimelineContainer({
         description ?? `${activities.length} ${activities.length === 1 ? 'activity' : 'activities'}`
       }
       showFilters={showFilters}
+      viewAllSearch={getActivitiesFeedSearch('issue')}
       maxItems={maxItems}
       groupByDate={groupByDate}
       asCard={asCard}

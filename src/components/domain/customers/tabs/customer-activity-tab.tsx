@@ -11,6 +11,7 @@ import { memo } from 'react';
 import { Plus, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 
 // ============================================================================
@@ -66,7 +67,7 @@ export const CustomerActivityTab = memo(function CustomerActivityTab({
         title="Activity Timeline"
         description="Complete history of customer interactions and system events"
         showFilters={true}
-        viewAllHref="/activities?entityType=customer"
+        viewAllSearch={getActivitiesFeedSearch('customer')}
         emptyMessage="No activity recorded yet"
         emptyDescription="Customer activities will appear here when interactions occur."
       />

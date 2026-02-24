@@ -199,9 +199,9 @@ export const POTable = memo(function POTable({
         onSelectAll: handleSelectAll,
         isSelected,
         onViewPO: onView ?? (() => {}),
-        onEditPO: onEdit ?? (() => {}),
-        onDeletePO: onDelete ?? (() => {}),
-        onReceivePO: onReceive ?? (() => {}),
+        onEditPO: onEdit,
+        onDeletePO: onDelete,
+        onReceivePO: onReceive,
       }),
     [
       handleSelect,

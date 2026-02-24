@@ -13,6 +13,7 @@
 import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table/data-table';
+import { CheckboxCell } from '@/components/shared/data-table';
 import { RmaStatusBadge, RmaReasonBadge } from './rma-status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { RMA_STATUS_OPTIONS, RMA_REASON_OPTIONS } from './rma-options';
 
 interface RmaListProps {
   /** From route container (useRmas). */
@@ -75,29 +77,18 @@ interface RmaListProps {
   pageSize?: number;
   /** Additional class names */
   className?: string;
+  /** Selection state for bulk actions (when provided, shows checkbox column) */
+  selection?: {
+    isSelected: (id: string) => boolean;
+    isAllSelected: boolean;
+    isPartiallySelected: boolean;
+    onSelect: (id: string, checked: boolean) => void;
+    onSelectAll: (checked: boolean) => void;
+    onShiftClickRange: (rowIndex: number) => void;
+    lastClickedIndex: number | null;
+    setLastClickedIndex: (index: number | null) => void;
+  };
 }
-
-// Status filter options
-const STATUS_OPTIONS: { value: RmaStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'requested', label: 'Requested' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'received', label: 'Received' },
-  { value: 'processed', label: 'Processed' },
-  { value: 'rejected', label: 'Rejected' },
-];
-
-// Reason filter options
-const REASON_OPTIONS: { value: RmaReason | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Reasons' },
-  { value: 'defective', label: 'Defective' },
-  { value: 'damaged_in_shipping', label: 'Damaged in Shipping' },
-  { value: 'wrong_item', label: 'Wrong Item' },
-  { value: 'not_as_described', label: 'Not as Described' },
-  { value: 'performance_issue', label: 'Performance Issue' },
-  { value: 'installation_failure', label: 'Installation Failure' },
-  { value: 'other', label: 'Other' },
-];
 
 export function RmaList({
   rmas,
@@ -119,10 +110,37 @@ export function RmaList({
   showFilters = true,
   pageSize = 10,
   className,
+  selection,
 }: RmaListProps) {
   // Column definitions
   const columns: ColumnDef<RmaResponse>[] = useMemo(
     () => [
+      ...(selection
+        ? [
+            {
+              id: 'select',
+              header: () => (
+                <CheckboxCell
+                  checked={selection.isAllSelected}
+                  onChange={selection.onSelectAll}
+                  indeterminate={selection.isPartiallySelected}
+                  ariaLabel="Select all"
+                />
+              ),
+              cell: ({ row }) => (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <CheckboxCell
+                    checked={selection.isSelected(row.original.id)}
+                    onChange={(checked) => selection.onSelect(row.original.id, checked)}
+                    onShiftClick={() => selection.onShiftClickRange(row.index)}
+                    ariaLabel={`Select ${row.original.rmaNumber}`}
+                  />
+                </div>
+              ),
+              meta: { skipRowClick: true },
+            } as ColumnDef<RmaResponse>,
+          ]
+        : []),
       {
         accessorKey: 'rmaNumber',
         header: 'RMA Number',
@@ -171,7 +189,7 @@ export function RmaList({
         ),
       },
     ],
-    [onRmaClick]
+    [onRmaClick, selection]
   );
 
   // Loading state
@@ -203,16 +221,13 @@ export function RmaList({
           {/* Status filter */}
           <Select
             value={statusFilter}
-            onValueChange={(value) => {
-              const opt = STATUS_OPTIONS.find((o) => o.value === value);
-              if (opt) onStatusFilterChange(opt.value);
-            }}
+            onValueChange={(v) => onStatusFilterChange(v as RmaStatus | 'all')}
           >
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              {STATUS_OPTIONS.map((option) => (
+              {RMA_STATUS_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>
@@ -223,16 +238,13 @@ export function RmaList({
           {/* Reason filter */}
           <Select
             value={reasonFilter}
-            onValueChange={(value) => {
-              const opt = REASON_OPTIONS.find((o) => o.value === value);
-              if (opt) onReasonFilterChange(opt.value);
-            }}
+            onValueChange={(v) => onReasonFilterChange(v as RmaReason | 'all')}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Reason" />
             </SelectTrigger>
             <SelectContent>
-              {REASON_OPTIONS.map((option) => (
+              {RMA_REASON_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>

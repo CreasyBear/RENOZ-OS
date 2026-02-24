@@ -17,8 +17,14 @@ import {
   deleteOrder,
   duplicateOrder,
 } from '@/server/functions/orders/orders';
+import type { Address } from 'drizzle/schema';
 
-export type OrderWithCustomer = Awaited<ReturnType<typeof getOrderWithCustomer>>;
+type BaseOrderWithCustomer = Awaited<ReturnType<typeof getOrderWithCustomer>>;
+
+/** Order with customer; customer includes addresses when present (from getOrderWithCustomer) */
+export type OrderWithCustomer = Omit<BaseOrderWithCustomer, 'customer'> & {
+  customer: (BaseOrderWithCustomer['customer'] & { addresses?: Address[] }) | null;
+};
 
 // ============================================================================
 // ORDER WITH CUSTOMER HOOK
@@ -42,14 +48,14 @@ export function useOrderWithCustomer({
 }: UseOrderWithCustomerOptions) {
   const getOrderWithCustomerFn = useServerFn(getOrderWithCustomer);
 
-  return useQuery({
+  return useQuery<OrderWithCustomer>({
     queryKey: queryKeys.orders.withCustomer(orderId),
     queryFn: async () => {
       const result = await getOrderWithCustomerFn({
         data: { id: orderId }
       });
       if (result == null) throw new Error('Query returned no data');
-      return result;
+      return result as OrderWithCustomer;
     },
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds

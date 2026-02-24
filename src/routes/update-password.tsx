@@ -3,7 +3,9 @@ import { useEffect } from 'react';
 import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { ResetPasswordForm } from '@/components/auth/reset-password-form';
+import { exchangeCodeForSession } from '@/lib/auth/exchange-code-for-session';
 import { useExchangeHashForSession } from '@/lib/auth/use-exchange-hash-for-session';
+import { supabase } from '@/lib/supabase/client';
 
 export const Route = createFileRoute('/update-password')({
   ssr: false, // Auth callback route: avoid 307 loops from SSR path normalization
@@ -13,9 +15,14 @@ export const Route = createFileRoute('/update-password')({
   beforeLoad: async ({ search }) => {
     if (typeof window === 'undefined') return;
     if (search.code) {
-      const { supabase } = await import('@/lib/supabase/client');
-      const { error } = await supabase.auth.exchangeCodeForSession(search.code);
+      const { error } = await exchangeCodeForSession(search.code);
       if (error) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          // Recovery session can already exist if the one-time code was consumed
+          // before a chunk-load reload; allow user to continue resetting password.
+          return;
+        }
         throw redirect({
           to: '/auth/error',
           search: {

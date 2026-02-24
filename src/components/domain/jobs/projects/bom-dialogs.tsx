@@ -10,25 +10,22 @@
 import { useState } from 'react';
 import { z } from 'zod';
 import { Plus, Search, Package } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { NumberField, TextareaField, extractFieldError } from '@/components/shared/forms';
+import {
+  FormDialog,
+  NumberField,
+  TextareaField,
+  extractFieldError,
+} from '@/components/shared/forms';
 import { useAddBomItem } from '@/hooks/jobs';
 import { useProductSearch } from '@/hooks/products';
 import { useDebounce } from '@/hooks/_shared';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import type { ProductSearchItem } from '@/lib/schemas/products';
 
 // ============================================================================
@@ -64,6 +61,7 @@ export function BomAddItemDialog({
   onSuccess,
 }: BomAddItemDialogProps) {
   const addBomItem = useAddBomItem(projectId);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
   const debouncedQuery = useDebounce(searchQuery, 300);
@@ -82,7 +80,11 @@ export function BomAddItemDialog({
       unitCost: undefined,
       notes: '',
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
+      setSubmitError(null);
       try {
         await addBomItem.mutateAsync({
           data: {
@@ -99,8 +101,10 @@ export function BomAddItemDialog({
         form.reset();
         setSelectedProduct(null);
         onSuccess?.();
-      } catch {
-        toast.error('Failed to add item');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to add item';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
@@ -112,24 +116,35 @@ export function BomAddItemDialog({
     setSearchQuery('');
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Add BOM Item
-          </DialogTitle>
-          <DialogDescription>Search and add products to the bill of materials</DialogDescription>
-        </DialogHeader>
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && addBomItem.isPending) return;
+    if (!newOpen) {
+      setSubmitError(null);
+      setSelectedProduct(null);
+      form.reset();
+    }
+    onOpenChange(newOpen);
+  };
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Plus className="h-5 w-5" />
+          Add BOM Item
+        </span>
+      }
+      description="Search and add products to the bill of materials"
+      form={form}
+      submitLabel="Add Item"
+      submitError={submitError}
+      submitDisabled={addBomItem.isPending || !selectedProduct}
+      size="lg"
+      className="max-w-lg"
+      resetOnClose={false}
+    >
           {/* Product Search */}
           <div className="space-y-2">
             <Label>Product *</Label>
@@ -253,25 +268,6 @@ export function BomAddItemDialog({
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onOpenChange(false);
-                setSelectedProduct(null);
-                form.reset();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={addBomItem.isPending || !selectedProduct}>
-              {addBomItem.isPending ? 'Adding...' : 'Add Item'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

@@ -97,7 +97,9 @@ export type MetricValue = z.infer<typeof metricValueSchema>;
 // ============================================================================
 
 export const dashboardSummarySchema = z.object({
-  revenue: metricValueSchema,
+  revenue: metricValueSchema, // Invoiced (orders by orderDate) - primary for backward compat
+  revenueCash: metricValueSchema.optional(), // Cash (payments by paymentDate)
+  revenueInvoiced: metricValueSchema.optional(), // Explicit alias for revenue
   kwhDeployed: metricValueSchema,
   quoteWinRate: metricValueSchema,
   activeInstallations: metricValueSchema,

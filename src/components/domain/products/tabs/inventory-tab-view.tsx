@@ -334,16 +334,16 @@ export function ProductInventoryTabView({
                 Track individual items by serial number
               </CardDescription>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!onAddSerial}
-              title={!onAddSerial ? "Serial management is not available yet" : undefined}
-              onClick={() => onAddSerial?.()}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Serial
-            </Button>
+            {onAddSerial && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onAddSerial}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Serial
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <EmptyState

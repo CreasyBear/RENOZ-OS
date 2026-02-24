@@ -19,24 +19,22 @@ import {
   AlertCircle,
   AlertTriangle,
   Loader2,
-  Check,
   ChevronDown,
   ChevronUp,
-  ArrowLeft,
   MapPin,
   Package,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { toCents } from "@/lib/currency";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { toCents } from "@/lib/currency";
+import { createPendingDialogOpenChangeHandler } from "@/components/ui/dialog-pending-guards";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -57,31 +55,35 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { toastSuccess, toastError } from "@/hooks";
 import {
   useOrderWithCustomer,
   useCreateShipment,
   useMarkShipped,
+  type OrderWithCustomer,
 } from "@/hooks/orders";
+import { AddressPicker, type AddressOption } from "@/components/shared";
 import { SerialPicker } from "./serial-picker";
+import { SerialNumbersList } from "../components/serial-numbers-list";
 import { ValidationError } from "@/lib/server/errors";
 import { ordersLogger } from "@/lib/logger";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
+  FormDialog,
   TextField,
   TextareaField,
   NumberField,
   SelectField,
   CheckboxField,
   FormField,
+  FormFieldDisplayProvider,
 } from "@/components/shared/forms";
+import { DEFAULT_COUNTRY, toCountryCode } from "@/lib/country";
 import {
   shipOrderFormSchema,
   type ShipOrderFormData,
 } from "@/lib/schemas/orders/ship-order-form";
-
-// Inline constants for carrier/address UI (schema is source of truth for validation)
-const DEFAULT_COUNTRY = "AU";
 const FALLBACK_RECIPIENT_NAME = "Recipient";
 const CARRIERS = [
   { value: "australia_post", label: "Australia Post" },
@@ -157,6 +159,54 @@ function hasAnyAddress(
   );
 }
 
+/** Build address options for picker: customer addresses + order shipping (if present) */
+function buildAddressOptions(order: OrderWithCustomer | null | undefined): AddressOption[] {
+  const options: AddressOption[] = [];
+  const seen = new Set<string>();
+
+  // Order shipping address first (if present)
+  const orderAddr = order?.shippingAddress;
+  if (orderAddr?.street1) {
+    const key = `order-${orderAddr.street1}-${orderAddr.city}-${orderAddr.postalCode}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      options.push({
+        id: "order-shipping",
+        type: "shipping",
+        street1: orderAddr.street1,
+        street2: orderAddr.street2 ?? null,
+        city: orderAddr.city,
+        state: orderAddr.state ?? null,
+        postalCode: orderAddr.postalCode,
+        country: orderAddr.country ?? null,
+        contactName: orderAddr.contactName ?? null,
+        contactPhone: orderAddr.contactPhone ?? null,
+      });
+    }
+  }
+
+  // Customer addresses (shipping first, then billing)
+  const addrs = order?.customer?.addresses ?? [];
+  for (const a of addrs) {
+    if (!a.street1) continue;
+    const key = `${a.id}-${a.street1}-${a.city}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({
+      id: a.id,
+      type: a.type as AddressOption["type"],
+      street1: a.street1,
+      street2: a.street2 ?? null,
+      city: a.city,
+      state: a.state ?? null,
+      postcode: a.postcode ?? null,
+      country: a.country ?? null,
+    });
+  }
+
+  return options;
+}
+
 function handleShipmentError(
   error: unknown,
   context: { orderId: string; shipmentId?: string },
@@ -213,6 +263,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   /** Server ValidationError per lineItemId; keys = orderLineItemId */
   const [serverItemErrors, setServerItemErrors] = useState<Record<string, string>>({});
   const [addressExpanded, setAddressExpanded] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<AddressOption | null>(null);
   const [initialized, setInitialized] = useState(false);
   const performCreateShipmentRef = useRef<
     (values: ShipOrderFormData) => Promise<void>
@@ -242,6 +293,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     schema: shipOrderFormSchema,
     defaultValues: getDefaultFormValues(),
     validateOnBlur: true,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     onSubmit: async (values) => {
       if (selectedItems.length === 0) {
         toastError("Please select at least one item to ship");
@@ -301,7 +355,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             city: values.addressCity!.trim(),
             state: values.addressState!.trim(),
             postcode: values.addressPostcode!.trim(),
-            country: values.addressCountry?.trim() || DEFAULT_COUNTRY,
+            country: toCountryCode(values.addressCountry),
             phone: values.addressPhone?.trim() || undefined,
           }
         : undefined;
@@ -402,33 +456,20 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     performCreateShipmentRef.current = performCreateShipment;
   }, [performCreateShipment]);
 
-  // Initialize item selections and form when order first loads
+  // Initialize item selections and form when order first loads (no address prefill)
   useEffect(() => {
     if (!orderData || initialized) return;
     const formValues: ShipOrderFormData = {
       ...getDefaultFormValues(),
       addressCountry: DEFAULT_COUNTRY,
     };
-    if (orderData.shippingAddress) {
-      const addr = orderData.shippingAddress;
-      formValues.addressName = addr.contactName || orderData.customer?.name || "";
-      formValues.addressStreet1 = addr.street1 || "";
-      formValues.addressStreet2 = addr.street2 || "";
-      formValues.addressCity = addr.city || "";
-      formValues.addressState = addr.state || "";
-      formValues.addressPostcode = addr.postalCode || "";
-      formValues.addressCountry =
-        (addr.country && addr.country.length <= 2 ? addr.country : DEFAULT_COUNTRY) ||
-        DEFAULT_COUNTRY;
-      formValues.addressPhone = addr.contactPhone || "";
-    } else if (orderData.customer?.name) {
+    // Only prefill recipient name from customer (minimal hint)
+    if (orderData.customer?.name) {
       formValues.addressName = orderData.customer.name;
     }
-    const hasAnyAddressField = orderData.shippingAddress
-      ? !!(orderData.shippingAddress.street1 || orderData.shippingAddress.city || orderData.shippingAddress.state || orderData.shippingAddress.postalCode)
-      : false;
     startTransition(() => {
-      setAddressExpanded(hasAnyAddressField);
+      setSelectedAddress(null);
+      setAddressExpanded(false);
       setInitialized(true);
       if (orderData.lineItems) {
         setItemSelections(
@@ -477,9 +518,49 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
   const isPending = createShipmentMutation.isPending || markShippedMutation.isPending;
 
-  const handleProceedToConfirm = () => {
-    form.handleSubmit();
-  };
+  const handleAddressSelect = useCallback(
+    (addr: AddressOption | null) => {
+      setSelectedAddress(addr);
+      if (addr) {
+        form.setFieldValue("addressStreet1", addr.street1 ?? "");
+        form.setFieldValue("addressStreet2", addr.street2 ?? "");
+        form.setFieldValue("addressCity", addr.city ?? "");
+        form.setFieldValue("addressState", addr.state?.trim() || "N/A");
+        form.setFieldValue("addressPostcode", addr.postcode ?? addr.postalCode ?? "");
+        form.setFieldValue("addressCountry", toCountryCode(addr.country));
+        if (addr.contactName) form.setFieldValue("addressName", addr.contactName);
+        else if (orderData?.customer?.name) form.setFieldValue("addressName", orderData.customer.name);
+        if (addr.contactPhone) form.setFieldValue("addressPhone", addr.contactPhone ?? "");
+        setAddressExpanded(true);
+      } else {
+        form.setFieldValue("addressStreet1", "");
+        form.setFieldValue("addressStreet2", "");
+        form.setFieldValue("addressCity", "");
+        form.setFieldValue("addressState", "");
+        form.setFieldValue("addressPostcode", "");
+        setAddressExpanded(true);
+      }
+    },
+    [form, orderData]
+  );
+
+  const addressOptions = buildAddressOptions(orderData);
+
+  const handleFormDialogOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen) {
+        if (step === "confirm") {
+          setStep("form");
+          return;
+        }
+        if (isPending) return;
+        handleOpenChange(false);
+      } else {
+        onOpenChange(newOpen);
+      }
+    },
+    [step, isPending, handleOpenChange, onOpenChange]
+  );
 
   // Handle item selection toggle
   const handleItemToggle = useCallback((lineItemId: string) => {
@@ -550,57 +631,114 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const hasAddrForDisplay = hasAnyAddress(form.state.values);
   const addressIsCollapsible = true;
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" aria-hidden />
-            {step === "form" ? "Create Shipment" : "Confirm Shipment"}
-          </DialogTitle>
-          <DialogDescription>
-            <span className="block text-xs text-muted-foreground mb-1">
-              Step {step === "form" ? "1" : "2"} of 2
-            </span>
-            {step === "form"
-              ? "Select items to ship and enter carrier details"
-              : "Review the details below before confirming"}
-          </DialogDescription>
-        </DialogHeader>
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleOpenChange);
 
-        {orderLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : (itemSelections.length === 0 || totalAvailableQty === 0) ? (
-          <div className="py-8 text-center space-y-4">
-            <p className="text-muted-foreground">
-              {itemSelections.length === 0
-                ? "This order has no line items."
-                : "All items have been shipped. No items to ship."}
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {itemSelections.length > 0 && totalAvailableQty === 0 && onViewShipments && (
-                <Button
-                  variant="default"
-                  onClick={() => {
-                    handleOpenChange(false);
-                    onViewShipments();
-                  }}
-                >
-                  View Shipments
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                Close
-              </Button>
+  if (orderLoading || itemSelections.length === 0 || totalAvailableQty === 0) {
+    return (
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+        <DialogContent
+          className="max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto"
+          onEscapeKeyDown={(e) => {
+            if (isPending) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (isPending) e.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5" aria-hidden />
+              Create Shipment
+            </DialogTitle>
+            <DialogDescription>
+              {orderLoading
+                ? "Loading order..."
+                : itemSelections.length === 0
+                  ? "This order has no line items."
+                  : "All items have been shipped."}
+            </DialogDescription>
+          </DialogHeader>
+          {orderLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          </div>
-        ) : step === "form" ? (
-          /* ============================================================
-             FORM STEP
-             ============================================================ */
+          ) : (
+            <div className="py-8 text-center space-y-4">
+              <p className="text-muted-foreground">
+                {itemSelections.length === 0
+                  ? "This order has no line items."
+                  : "All items have been shipped. No items to ship."}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {itemSelections.length > 0 && totalAvailableQty === 0 && onViewShipments && (
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      handleOpenChange(false);
+                      onViewShipments();
+                    }}
+                  >
+                    View Shipments
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleFormDialogOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Truck className="h-5 w-5" aria-hidden />
+          {step === "form" ? "Create Shipment" : "Confirm Shipment"}
+        </span>
+      }
+      description={
+        <>
+          <span className="block text-xs text-muted-foreground mb-1">
+            Step {step === "form" ? "1" : "2"} of 2
+          </span>
+          {step === "form"
+            ? "Select items to ship and enter carrier details"
+            : "Review the details below before confirming"}
+        </>
+      }
+      form={form}
+      submitLabel={
+        step === "form"
+          ? needsConfirmation
+            ? form.state.values.shipNow
+              ? "Review & Ship"
+              : "Review Shipment"
+            : form.state.values.shipNow
+              ? "Ship Order"
+              : "Create Shipment"
+          : form.state.values.shipNow
+            ? "Confirm & Ship"
+            : "Create Shipment"
+      }
+      cancelLabel={step === "form" ? "Cancel" : "Back"}
+      submitDisabled={
+        isPending ||
+        totalItemsToShip === 0 ||
+        (step === "form" && form.state.values.shipNow && !carrier)
+      }
+      size="full"
+      className="max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto"
+      resetOnClose={false}
+    >
+      {step === "form" ? (
           <div className="space-y-6">
+            <FormFieldDisplayProvider form={form}>
             {/* Item Selection */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -771,14 +909,18 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                       Shipping Address
                     </Label>
                     {!addressExpanded &&
-                      form.state.values.addressStreet1 && (
+                      (form.state.values.addressStreet1 ? (
                         <span className="text-sm text-muted-foreground">
                           — {form.state.values.addressStreet1},{" "}
                           {form.state.values.addressCity}{" "}
                           {form.state.values.addressState}{" "}
                           {form.state.values.addressPostcode}
                         </span>
-                      )}
+                      ) : addressOptions.length > 0 ? (
+                        <span className="text-sm text-muted-foreground">
+                          — Choose address or enter manually
+                        </span>
+                      ) : null)}
                   </div>
                   {addressExpanded ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -812,6 +954,21 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                         </AlertDescription>
                       </Alert>
                     )}
+
+                  {addressOptions.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Choose address</Label>
+                      <AddressPicker
+                        addresses={addressOptions}
+                        selectedAddress={selectedAddress}
+                        onSelect={handleAddressSelect}
+                        placeholder="Choose shipping address"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Or enter manually below
+                      </p>
+                    </div>
+                  )}
 
                   <form.Field name="addressName">
                     {(field) => (
@@ -1009,6 +1166,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                 </AlertDescription>
               </Alert>
             )}
+            </FormFieldDisplayProvider>
           </div>
         ) : (
           /* ============================================================
@@ -1062,7 +1220,11 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                           {item.selectedQty}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {item.selectedSerials.length > 0 ? item.selectedSerials.join(", ") : "—"}
+                          {item.selectedSerials.length > 0 ? (
+                            <SerialNumbersList serials={item.selectedSerials} />
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1169,69 +1331,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             )}
           </div>
         )}
-
-        <DialogFooter>
-          {step === "form" ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleProceedToConfirm}
-                disabled={
-                  isPending ||
-                  totalItemsToShip === 0 ||
-                  (form.state.values.shipNow && !carrier)
-                }
-              >
-                {needsConfirmation ? (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    {form.state.values.shipNow ? "Review & Ship" : "Review Shipment"}
-                  </>
-                ) : (
-                  <>
-                    <Truck className="h-4 w-4 mr-2" />
-                    {form.state.values.shipNow ? "Ship Order" : "Create Shipment"}
-                  </>
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setStep("form")}
-                disabled={isPending}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              <Button
-                onClick={() => form.handleSubmit()}
-                disabled={isPending}
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {form.state.values.shipNow ? "Shipping..." : "Creating..."}
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    {form.state.values.shipNow ? "Confirm & Ship" : "Create Shipment"}
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 });
 

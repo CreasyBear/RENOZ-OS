@@ -9,10 +9,15 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
-import { transformAuditActivity, transformPlannedActivity } from '@/lib/schemas/unified-activity';
+import {
+  transformAuditActivity,
+  transformPlannedActivity,
+  transformOpportunityActivity,
+} from '@/lib/schemas/unified-activity';
 import { getEntityActivities } from '@/server/functions/activities/activities';
 import { getCustomerActivities } from '@/server/customers';
 import { getCustomerEmailActivities } from '@/server/functions/communications/customer-communications';
+import { getActivityTimeline } from '@/server/functions/pipeline/pipeline';
 import { queryKeys } from '@/lib/query-keys';
 import { isActivityEntityType, type UseUnifiedActivitiesOptions } from '@/lib/schemas/activities';
 
@@ -104,22 +109,63 @@ export function useUnifiedActivities({
     enabled: enabled && !!entityId && entityType === 'customer',
   });
 
-  // Merge and sort activities (audit + planned + emails)
+  // Fetch opportunity activities (only for opportunity entity type)
+  // Reuses pipeline.activityTimeline key so pipeline mutations invalidate correctly
+  const {
+    data: opportunityData,
+    isLoading: isLoadingOpportunity,
+    error: opportunityError,
+  } = useQuery({
+    queryKey: queryKeys.pipeline.activityTimeline(entityId, { days: 90 }),
+    queryFn: async () => {
+      const result = await getActivityTimeline({
+        data: { opportunityId: entityId, days: 90 },
+      });
+      if (!result) throw new Error('Activity timeline returned no data');
+      return result.activities.map((a) =>
+        transformOpportunityActivity(
+          {
+            id: a.id,
+            type: a.type,
+            description: a.description,
+            outcome: a.outcome,
+            scheduledAt: a.scheduledAt,
+            completedAt: a.completedAt,
+            createdAt: a.createdAt,
+            createdBy: a.createdBy,
+          },
+          entityId
+        )
+      );
+    },
+    enabled: enabled && !!entityId && entityType === 'opportunity',
+  });
+
+  // Merge and sort activities (audit + planned + emails + opportunity)
   const activities: UnifiedActivity[] = (() => {
     const audit = auditData || [];
     const planned = plannedData || [];
     const emails = emailData || [];
+    const opportunity = opportunityData || [];
 
-    return [...audit, ...planned, ...emails].sort((a, b) => {
+    return [...audit, ...planned, ...emails, ...opportunity].sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   })();
 
   return {
     activities,
-    isLoading: isLoadingAudit || isLoadingPlanned || isLoadingEmails,
-    error: auditError || plannedError || emailError,
-    hasError: !!auditError || !!plannedError || !!emailError,
+    isLoading:
+      isLoadingAudit ||
+      isLoadingPlanned ||
+      isLoadingEmails ||
+      isLoadingOpportunity,
+    error: auditError || plannedError || emailError || opportunityError,
+    hasError:
+      !!auditError ||
+      !!plannedError ||
+      !!emailError ||
+      !!opportunityError,
   };
 }
 

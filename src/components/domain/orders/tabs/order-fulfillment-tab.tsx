@@ -8,12 +8,14 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
-import { memo } from 'react';
+import { memo, useCallback, useState, Fragment } from 'react';
 import { Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { PackageCheck, Truck, Info } from 'lucide-react';
 import { ShipmentList } from '../fulfillment/shipment-list';
-import { OrderLineItemSerialsCell } from '../components/order-line-item-serials-cell';
+import { AmendmentList } from '../amendments';
+import { useCancelAmendment } from '@/hooks/orders';
+import { OrderLineItemSerialsCell, SerialNumbersList } from '../components';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +34,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useUserLookup } from '@/hooks/users';
+import { toastSuccess, toastError } from '@/hooks';
 import type { OrderWithCustomer } from '@/hooks/orders/use-order-detail';
 
 // ============================================================================
@@ -43,6 +46,10 @@ export interface FulfillmentActions {
   onShipOrder?: () => void;
   /** Opens confirm delivery dialog for the given shipment */
   onConfirmDelivery?: (shipmentId: string) => void;
+  /** Apply an approved amendment to the order */
+  onApplyAmendment?: (amendmentId: string) => void;
+  /** Open review dialog for a requested amendment */
+  onReviewAmendment?: (amendmentId: string) => void;
 }
 
 export interface OrderFulfillmentTabProps {
@@ -139,22 +146,32 @@ function FulfillmentActionBar({
     );
   }
 
-  if (orderStatus === 'picked' && onShipOrder) {
+  if (orderStatus === 'picked' && (onShipOrder || onPickItems)) {
     return (
       <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg mb-4">
         <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
           <Truck className="h-4 w-4" />
           <span>All items picked. Ready to create a shipment.</span>
         </div>
-        <Button size="sm" onClick={onShipOrder}>
-          <Truck className="h-4 w-4 mr-2" />
-          Ship Order
-        </Button>
+        <div className="flex items-center gap-2">
+          {onPickItems && (
+            <Button size="sm" variant="outline" onClick={onPickItems}>
+              <PackageCheck className="h-4 w-4 mr-2" />
+              Pick / Unpick
+            </Button>
+          )}
+          {onShipOrder && (
+            <Button size="sm" onClick={onShipOrder}>
+              <Truck className="h-4 w-4 mr-2" />
+              Ship Order
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
 
-  if (orderStatus === 'partially_shipped' && onShipOrder) {
+  if (orderStatus === 'partially_shipped' && (onShipOrder || onPickItems)) {
     const remaining = progress.totalOrdered - progress.totalShipped;
     return (
       <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg mb-4">
@@ -165,10 +182,20 @@ function FulfillmentActionBar({
             {remaining} remaining.
           </span>
         </div>
-        <Button size="sm" onClick={onShipOrder}>
-          <Truck className="h-4 w-4 mr-2" />
-          Ship Remaining
-        </Button>
+        <div className="flex items-center gap-2">
+          {onPickItems && (
+            <Button size="sm" variant="outline" onClick={onPickItems}>
+              <PackageCheck className="h-4 w-4 mr-2" />
+              Pick / Unpick
+            </Button>
+          )}
+          {onShipOrder && (
+            <Button size="sm" onClick={onShipOrder}>
+              <Truck className="h-4 w-4 mr-2" />
+              Ship Remaining
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -176,6 +203,14 @@ function FulfillmentActionBar({
   if ((orderStatus === 'shipped' || orderStatus === 'partially_shipped') && onConfirmDelivery && orderId) {
     return (
       <div className="mb-4">
+        {onPickItems && (
+          <div className="flex items-center justify-end mb-2">
+            <Button size="sm" variant="outline" onClick={onPickItems}>
+              <PackageCheck className="h-4 w-4 mr-2" />
+              Pick / Unpick
+            </Button>
+          </div>
+        )}
         <ShipmentList orderId={orderId} onConfirmDelivery={onConfirmDelivery} />
       </div>
     );
@@ -183,11 +218,19 @@ function FulfillmentActionBar({
 
   if (orderStatus === 'shipped') {
     return (
-      <div className="flex items-center gap-2 p-3 bg-muted/50 border rounded-lg mb-4 text-sm text-muted-foreground">
-        <Info className="h-4 w-4" />
-        <span>
-          All {progress.totalOrdered} units shipped. Awaiting delivery confirmation.
-        </span>
+      <div className="flex items-center justify-between p-3 bg-muted/50 border rounded-lg mb-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Info className="h-4 w-4" />
+          <span>
+            All {progress.totalOrdered} units shipped. Awaiting delivery confirmation.
+          </span>
+        </div>
+        {onPickItems && (
+          <Button size="sm" variant="outline" onClick={onPickItems}>
+            <PackageCheck className="h-4 w-4 mr-2" />
+            Pick / Unpick
+          </Button>
+        )}
       </div>
     );
   }
@@ -205,9 +248,27 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
   orderStatus,
   fulfillmentActions,
 }: OrderFulfillmentTabProps) {
+  const [expandedSerialsRowId, setExpandedSerialsRowId] = useState<string | null>(null);
+  const { onApplyAmendment, onReviewAmendment } = fulfillmentActions ?? {};
   const { getUser } = useUserLookup({
     enabled: lineItems.some((i) => i.pickedBy),
   });
+  const cancelAmendmentMutation = useCancelAmendment();
+  const handleToggleSerials = useCallback((lineItemId: string) => {
+    setExpandedSerialsRowId((prev) => (prev === lineItemId ? null : lineItemId));
+  }, []);
+  const handleCancelAmendment = useCallback(
+    (amendmentId: string) => {
+      cancelAmendmentMutation.mutate(
+        { amendmentId },
+        {
+          onSuccess: () => toastSuccess('Amendment cancelled'),
+          onError: (err) => toastError(err instanceof Error ? err.message : 'Failed to cancel amendment'),
+        }
+      );
+    },
+    [cancelAmendmentMutation]
+  );
 
   if (!lineItems?.length) {
     return (
@@ -259,80 +320,110 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
               </Badge>
             );
 
+            const serials = (item.allocatedSerialNumbers as string[] | null) ?? [];
+            const hasExpandableSerials = serials.length > 2;
+            const isExpanded = expandedSerialsRowId === item.id;
+
             return (
-              <TableRow key={item.id}>
-                <TableCell className="font-medium">
-                  {item.product && item.productId ? (
-                    <Link
-                      to="/products/$productId"
-                      params={{ productId: item.productId }}
-                      className="hover:underline"
-                    >
-                      {item.product.name}
-                    </Link>
-                  ) : (
-                    <span>{item.description}</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {pickedTooltipContent ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="cursor-help inline-block">{statusBadge}</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="max-w-xs">
-                        <p className="text-xs">{pickedTooltipContent}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    statusBadge
-                  )}
-                </TableCell>
-                <TableCell className="text-center tabular-nums">{item.quantity}</TableCell>
-                <TableCell
-                  className={cn(
-                    'text-center tabular-nums',
-                    Number(item.qtyPicked) >= Number(item.quantity)
-                      ? 'text-green-600'
-                      : Number(item.qtyPicked) > 0
-                        ? 'text-amber-600'
-                        : ''
-                  )}
-                >
-                  {item.qtyPicked || 0}
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    'text-center tabular-nums',
-                    Number(item.qtyShipped) >= Number(item.quantity)
-                      ? 'text-green-600'
-                      : Number(item.qtyShipped) > 0
-                        ? 'text-amber-600'
-                        : ''
-                  )}
-                >
-                  {item.qtyShipped || 0}
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    'text-center tabular-nums',
-                    Number(item.qtyDelivered) >= Number(item.quantity)
-                      ? 'text-green-600'
-                      : Number(item.qtyDelivered) > 0
-                        ? 'text-amber-600'
-                        : ''
-                  )}
-                >
-                  {item.qtyDelivered || 0}
-                </TableCell>
-                <TableCell className="text-center">
-                  <OrderLineItemSerialsCell allocatedSerialNumbers={item.allocatedSerialNumbers} />
-                </TableCell>
-              </TableRow>
+              <Fragment key={item.id}>
+                <TableRow>
+                  <TableCell className="font-medium">
+                    {item.product && item.productId ? (
+                      <Link
+                        to="/products/$productId"
+                        params={{ productId: item.productId }}
+                        className="hover:underline"
+                      >
+                        {item.product.name}
+                      </Link>
+                    ) : (
+                      <span>{item.description}</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {pickedTooltipContent ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-block">{statusBadge}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-xs">
+                          <p className="text-xs">{pickedTooltipContent}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      statusBadge
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center tabular-nums">{item.quantity}</TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-center tabular-nums',
+                      Number(item.qtyPicked) >= Number(item.quantity)
+                        ? 'text-green-600'
+                        : Number(item.qtyPicked) > 0
+                          ? 'text-amber-600'
+                          : ''
+                    )}
+                  >
+                    {item.qtyPicked || 0}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-center tabular-nums',
+                      Number(item.qtyShipped) >= Number(item.quantity)
+                        ? 'text-green-600'
+                        : Number(item.qtyShipped) > 0
+                          ? 'text-amber-600'
+                          : ''
+                    )}
+                  >
+                    {item.qtyShipped || 0}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-center tabular-nums',
+                      Number(item.qtyDelivered) >= Number(item.quantity)
+                        ? 'text-green-600'
+                        : Number(item.qtyDelivered) > 0
+                          ? 'text-amber-600'
+                          : ''
+                    )}
+                  >
+                    {item.qtyDelivered || 0}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <OrderLineItemSerialsCell
+                      allocatedSerialNumbers={item.allocatedSerialNumbers}
+                      lineItemId={hasExpandableSerials ? item.id : undefined}
+                      isExpanded={hasExpandableSerials ? isExpanded : undefined}
+                      onToggle={hasExpandableSerials ? handleToggleSerials : undefined}
+                    />
+                  </TableCell>
+                </TableRow>
+                {hasExpandableSerials && isExpanded && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="bg-muted/30 py-2 pl-8">
+                      <SerialNumbersList serials={serials} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </Fragment>
             );
           })}
         </TableBody>
       </Table>
+
+      {orderId && orderStatus !== 'draft' && (
+        <div className="mt-8 space-y-4">
+          <h3 className="text-base font-medium">Amendments</h3>
+          <AmendmentList
+            orderId={orderId}
+            onReview={onReviewAmendment}
+            onApply={onApplyAmendment}
+            onCancel={handleCancelAmendment}
+          />
+        </div>
+      )}
     </div>
     </TooltipProvider>
   );

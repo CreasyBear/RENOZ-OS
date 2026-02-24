@@ -42,14 +42,13 @@ export function buildCustomerQuery(
   CustomerListQuery,
   "search" | "status" | "type" | "size" | "healthScoreMin" | "healthScoreMax" | "tags"
 > {
-  // Note: CustomerListQuery expects single values for status/type/size
-  // For now, we take the first value if multiple are selected
-  // TODO: Consider extending the API to support multiple filter values
+  // CustomerListQuery expects single values for status/type/size.
+  // Keep semantics aligned with normalizeCustomerFilters: last selection wins.
   return {
     search: filters.search || undefined,
-    status: filters.status.length > 0 ? (filters.status[0] as CustomerListQuery["status"]) : undefined,
-    type: filters.type.length > 0 ? (filters.type[0] as CustomerListQuery["type"]) : undefined,
-    size: filters.size.length > 0 ? (filters.size[0] as CustomerListQuery["size"]) : undefined,
+    status: filters.status.length > 0 ? (filters.status[filters.status.length - 1] as CustomerListQuery["status"]) : undefined,
+    type: filters.type.length > 0 ? (filters.type[filters.type.length - 1] as CustomerListQuery["type"]) : undefined,
+    size: filters.size.length > 0 ? (filters.size[filters.size.length - 1] as CustomerListQuery["size"]) : undefined,
     healthScoreMin: filters.healthScoreRange?.min ?? undefined,
     healthScoreMax: filters.healthScoreRange?.max ?? undefined,
     tags: filters.tags.length > 0 ? filters.tags : undefined,
@@ -72,7 +71,13 @@ export function fromUrlParams(search: {
   healthScoreMin?: number;
   healthScoreMax?: number;
   tag?: string;
+  tags?: string;
 }): CustomerFiltersState {
+  const parsedTags = (search.tags ?? '')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+
   const healthScoreRange =
     search.healthScoreMin != null || search.healthScoreMax != null
       ? {
@@ -87,7 +92,7 @@ export function fromUrlParams(search: {
     type: search.type ? [search.type] : [],
     size: search.size ? [search.size] : [],
     healthScoreRange,
-    tags: search.tag ? [search.tag] : [],
+    tags: parsedTags.length > 0 ? parsedTags : search.tag ? [search.tag] : [],
   };
 }
 
@@ -107,6 +112,7 @@ export function toUrlParams(filters: CustomerFiltersState): Record<string, unkno
     size: filters.size.length > 0 ? filters.size[0] : undefined,
     healthScoreMin: filters.healthScoreRange?.min ?? undefined,
     healthScoreMax: filters.healthScoreRange?.max ?? undefined,
-    tag: filters.tags.length > 0 ? filters.tags[0] : undefined,
+    tag: filters.tags.length === 1 ? filters.tags[0] : undefined,
+    tags: filters.tags.length > 0 ? filters.tags.join(',') : undefined,
   };
 }

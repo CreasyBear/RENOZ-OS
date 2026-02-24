@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { StarRating } from '@/components/domain/support';
+import { StarRating } from '@/components/domain/support/csat/star-rating';
 import { CheckCircle2, AlertCircle, Clock, MessageSquare, Building2 } from 'lucide-react';
 
 // ============================================================================

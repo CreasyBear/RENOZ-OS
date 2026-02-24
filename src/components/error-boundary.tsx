@@ -1,11 +1,38 @@
+import { useEffect } from 'react'
 import { useRouter } from '@tanstack/react-router'
+
+import { logError } from '@/lib/monitoring'
+import { getUserFriendlyMessage } from '@/lib/error-handling'
 
 interface RootErrorBoundaryProps {
   error: Error
 }
 
+function isChunkLoadError(error: Error): boolean {
+  const msg = error.message?.toLowerCase() ?? ''
+  return (
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('importing a module script failed') ||
+    msg.includes('loading chunk') ||
+    msg.includes('chunkloaderror')
+  )
+}
+
 export function RootErrorBoundary({ error }: RootErrorBoundaryProps) {
   const router = useRouter()
+
+  // Surface chunk-load errors with explicit recovery UI; avoid auto-reload loops.
+  const isChunkError = isChunkLoadError(error)
+
+  useEffect(() => {
+    if (isChunkError) {
+      logError('Chunk load error reached error boundary', error, {
+        component: 'RootErrorBoundary',
+        metadata: { url: typeof window !== 'undefined' ? window.location.href : undefined },
+      })
+    }
+  }, [isChunkError, error])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -27,11 +54,12 @@ export function RootErrorBoundary({ error }: RootErrorBoundaryProps) {
           </svg>
         </div>
         <h1 className="text-2xl font-semibold text-gray-900 mb-2">
-          Something went wrong
+          {isChunkError ? 'Could not load app' : 'Something went wrong'}
         </h1>
         <p className="text-gray-600 mb-6">
-          An unexpected error occurred. Please try again or contact support if
-          the problem persists.
+          {isChunkError
+            ? 'A required app bundle failed to load. Please refresh the page. If this keeps happening, contact support.'
+            : getUserFriendlyMessage(error)}
         </p>
         {import.meta.env.DEV && (
           <pre className="text-left bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-800 overflow-auto max-h-48">
@@ -44,13 +72,23 @@ export function RootErrorBoundary({ error }: RootErrorBoundaryProps) {
             )}
           </pre>
         )}
-        <div className="flex gap-3 justify-center">
-          <button
-            onClick={() => router.invalidate()}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Try Again
-          </button>
+        <div className="flex gap-3 justify-center flex-wrap">
+          {isChunkError && (
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Refresh Page
+            </button>
+          )}
+          {!isChunkError && (
+            <button
+              onClick={() => router.invalidate()}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Try Again
+            </button>
+          )}
           <button
             onClick={() => router.navigate({ to: '/', search: { code: undefined } })}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

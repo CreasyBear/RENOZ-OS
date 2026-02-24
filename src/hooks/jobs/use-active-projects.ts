@@ -25,7 +25,8 @@ interface ProjectItem {
   workstreams?: Array<{ tasks?: Array<{ status: string }> }>
 }
 
-export function useActiveProjects(limit = 5) {
+export function useActiveProjects(limit = 5, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true
   return useQuery({
     queryKey: queryKeys.jobs.activeProjects(limit),
     queryFn: async () => {
@@ -49,6 +50,7 @@ export function useActiveProjects(limit = 5) {
 
       return projects
     },
+    enabled,
     staleTime: 60 * 1000, // 1 minute
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   })

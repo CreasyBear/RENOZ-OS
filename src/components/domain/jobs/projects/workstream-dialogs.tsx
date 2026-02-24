@@ -7,23 +7,19 @@
  * SPRINT-05: Migrated to TanStack Form
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { Layers, Plus } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { TextField, TextareaField, SelectField } from '@/components/shared/forms';
+import {
+  FormDialog,
+  TextField,
+  TextareaField,
+  SelectField,
+} from '@/components/shared/forms';
 import { useCreateWorkstream, useUpdateWorkstream } from '@/hooks/jobs';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import type { ProjectWorkstream } from '@/lib/schemas/jobs';
 
 // ============================================================================
@@ -83,13 +79,19 @@ export function WorkstreamCreateDialog({
 }: WorkstreamCreateDialogProps) {
   const createWorkstream = useCreateWorkstream(projectId);
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const form = useTanStackForm({
     schema: workstreamFormSchema,
     defaultValues: {
       name: '',
       description: '',
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
+      setSubmitError(null);
       try {
         await createWorkstream.mutateAsync({
           name: data.name,
@@ -102,45 +104,51 @@ export function WorkstreamCreateDialog({
         onOpenChange(false);
         form.reset();
         onSuccess?.();
-      } catch {
-        toast.error('Failed to create workstream');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to create workstream';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
 
-  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         name: '',
         description: '',
         defaultVisitType: undefined,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
-  }, [open]);
+  }, [open, form]);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && createWorkstream.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Add Workstream
-          </DialogTitle>
-          <DialogDescription>
-            Create a new workstream to organize project tasks
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="name">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Plus className="h-5 w-5" />
+          Add Workstream
+        </span>
+      }
+      description="Create a new workstream to organize project tasks"
+      form={form}
+      submitLabel="Create"
+      submitError={submitError}
+      submitDisabled={createWorkstream.isPending}
+      size="md"
+      className="max-w-md"
+      resetOnClose={false}
+    >
+      <form.Field name="name">
             {(field) => (
               <TextField
                 field={field}
@@ -172,18 +180,7 @@ export function WorkstreamCreateDialog({
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createWorkstream.isPending}>
-              {createWorkstream.isPending ? 'Creating...' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }
 
@@ -207,6 +204,7 @@ export function WorkstreamEditDialog({
   onSuccess,
 }: WorkstreamEditDialogProps) {
   const updateWorkstream = useUpdateWorkstream(projectId);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useTanStackForm({
     schema: workstreamFormSchema,
@@ -215,9 +213,13 @@ export function WorkstreamEditDialog({
       description: workstream?.description || '',
       defaultVisitType: parseDefaultVisitType(workstream?.defaultVisitType),
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
       if (!workstream) return;
 
+      setSubmitError(null);
       try {
         await updateWorkstream.mutateAsync({
           id: workstream.id,
@@ -229,45 +231,53 @@ export function WorkstreamEditDialog({
         toast.success('Workstream updated');
         onOpenChange(false);
         onSuccess?.();
-      } catch {
-        toast.error('Failed to update workstream');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to update workstream';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
 
-  // Reset form when workstream changes
   useEffect(() => {
     if (workstream && open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         name: workstream.name,
         description: workstream.description || '',
         defaultVisitType: parseDefaultVisitType(workstream.defaultVisitType),
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
-  }, [workstream, open]);
+  }, [workstream, open, form]);
 
   if (!workstream) return null;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Layers className="h-5 w-5" />
-            Edit Workstream
-          </DialogTitle>
-          <DialogDescription>Update workstream details</DialogDescription>
-        </DialogHeader>
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && updateWorkstream.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="name">
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Layers className="h-5 w-5" />
+          Edit Workstream
+        </span>
+      }
+      description="Update workstream details"
+      form={form}
+      submitLabel="Save Changes"
+      submitError={submitError}
+      submitDisabled={updateWorkstream.isPending}
+      size="md"
+      className="max-w-md"
+      resetOnClose={false}
+    >
+      <form.Field name="name">
             {(field) => (
               <TextField
                 field={field}
@@ -297,18 +307,7 @@ export function WorkstreamEditDialog({
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={updateWorkstream.isPending}>
-              {updateWorkstream.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }
 

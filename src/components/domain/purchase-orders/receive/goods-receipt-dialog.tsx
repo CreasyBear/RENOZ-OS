@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -313,26 +314,37 @@ export function GoodsReceiptDialog({
       });
 
       const accepted = totalReceiving - totalRejected;
+      const firstReceivedSerial =
+        itemsToReceive.flatMap((item) => item.serialNumbers.map((serial) => serial.trim()).filter(Boolean))[0];
       toastSuccess(
-        `Received ${accepted} item${accepted !== 1 ? 's' : ''} into inventory. PO status: ${result.newPOStatus.replace('_', ' ')}`,
+        `${result.message} Received ${accepted} item${accepted !== 1 ? 's' : ''} into inventory. PO status: ${result.newPOStatus.replace('_', ' ')}`,
         {
           action: {
-            label: 'View PO',
-            onClick: () => navigate({ to: '/purchase-orders/$poId', params: { poId } }),
+            label: firstReceivedSerial ? 'View Serials' : 'View PO',
+            onClick: () =>
+              firstReceivedSerial
+                ? navigate({
+                    to: '/inventory/browser',
+                    search: { view: 'serialized', serializedSearch: firstReceivedSerial, page: 1 },
+                  })
+                : navigate({ to: '/purchase-orders/$poId', params: { poId } }),
           },
         }
       );
       onOpenChange(false);
       onReceiptComplete?.();
-    } catch {
-      toastError('Failed to receive goods. Please try again.');
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : 'Failed to receive goods. Please try again.');
     }
   }, [lineItems, poId, receiptNotes, totalReceiving, totalRejected, receiveGoods, onOpenChange, onReceiptComplete, navigate]);
 
   // Unsaved changes guard (#6)
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!nextOpen && isDirty && !receiveGoods.isPending) {
+      if (!nextOpen && receiveGoods.isPending) {
+        return;
+      }
+      if (!nextOpen && isDirty) {
         setShowCloseConfirm(true);
         return;
       }
@@ -369,6 +381,8 @@ export function GoodsReceiptDialog({
         <DialogContent
           className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto"
           onKeyDown={handleKeyDown}
+          onEscapeKeyDown={createPendingDialogInteractionGuards(receiveGoods.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(receiveGoods.isPending).onInteractOutside}
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

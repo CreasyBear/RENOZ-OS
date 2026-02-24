@@ -31,6 +31,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks";
 import {
@@ -43,14 +47,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  StockCountList,
-  CountSheet,
-  VarianceReport,
-  type StockCount,
-  type CountItem,
-  type CountProgress,
-} from "@/components/domain/inventory";
+import { StockCountList, type StockCount } from "@/components/domain/inventory/counts/stock-count-list";
+import { CountSheet, type CountItem, type CountProgress } from "@/components/domain/inventory/counts/count-sheet";
+import { VarianceReport } from "@/components/domain/inventory/counts/variance-report";
 import {
   useStockCounts,
   useStockCount,
@@ -367,8 +366,12 @@ export default function StockCountsPage() {
           </AlertDialog>
 
           {/* Create Count Dialog */}
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogContent className="sm:max-w-[500px]">
+          <Dialog open={showCreateDialog} onOpenChange={createPendingDialogOpenChangeHandler(createCountMutation.isPending, setShowCreateDialog)}>
+            <DialogContent
+              className="sm:max-w-[500px]"
+              onEscapeKeyDown={createPendingDialogInteractionGuards(createCountMutation.isPending).onEscapeKeyDown}
+              onInteractOutside={createPendingDialogInteractionGuards(createCountMutation.isPending).onInteractOutside}
+            >
               <DialogHeader>
                 <DialogTitle>Create Stock Count</DialogTitle>
                 <DialogDescription>

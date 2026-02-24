@@ -9,7 +9,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, asc, desc, ilike, or, gte, lte, isNull, isNotNull, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, or, gte, lte, isNull, isNotNull, inArray, sql } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse, encodeCursor } from '@/lib/db/pagination';
 import { z } from 'zod';
 import { db } from '@/lib/db';
@@ -47,10 +47,11 @@ import {
   toSlaTracking,
   toSlaConfiguration,
 } from '@/lib/sla';
-import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
+import { createSerializedMutationError, serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -81,6 +82,9 @@ export const createIssue = createServerFn({ method: 'POST' })
 
     // Wrap issue creation + SLA tracking in a transaction for atomicity
     const { issue, slaTrackingRecord } = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Create the issue first
       const [newIssue] = await tx
         .insert(issues)
@@ -493,6 +497,9 @@ export const updateIssue = createServerFn({ method: 'POST' })
     }
 
     const [issue] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       if (updates.status && existing.slaTrackingId) {
         const [tracking] = await tx
           .select()
@@ -962,16 +969,24 @@ export const deleteIssue = createServerFn({ method: 'POST' })
 
     // Guard: Cannot delete issues that are in_progress or escalated
     if (['in_progress', 'escalated'].includes(existing.status)) {
-      throw new ValidationError(`Cannot delete issue in '${existing.status}' status. Resolve or close it first.`);
+      throw createSerializedMutationError(
+        `Cannot delete issue in '${existing.status}' status. Resolve or close it first.`,
+        'transition_blocked'
+      );
     }
 
-    await db
+    const [deletedIssue] = await db
       .update(issues)
       .set({
         deletedAt: new Date(),
         updatedBy: ctx.user.id,
       })
-      .where(eq(issues.id, id));
+      .where(eq(issues.id, id))
+      .returning({ id: issues.id, issueNumber: issues.issueNumber });
+
+    if (!deletedIssue) {
+      throw new NotFoundError('Issue not found', 'issue');
+    }
 
     logger.logAsync({
       entityType: 'issue',
@@ -983,5 +998,9 @@ export const deleteIssue = createServerFn({ method: 'POST' })
       },
     });
 
-    return { success: true, id };
+    return serializedMutationSuccess(
+      { id: deletedIssue.id },
+      `Issue ${deletedIssue.issueNumber ?? deletedIssue.id} deleted.`,
+      { affectedIds: [deletedIssue.id] }
+    );
   });

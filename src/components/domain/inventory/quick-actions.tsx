@@ -51,6 +51,7 @@ interface QuickAction {
 type QuickActionRoute =
   | '/inventory/receiving'
   | '/inventory/counts'
+  | '/inventory/browser'
   | '/inventory'
   | '/reports';
 
@@ -94,6 +95,14 @@ const QUICK_ACTIONS: (Omit<QuickAction, 'href'> & {
     icon: BarChart3,
     href: "/reports",
     description: "Inventory analytics",
+  },
+  {
+    id: "serialized",
+    label: "Serialized Items",
+    icon: Package,
+    href: "/inventory/browser",
+    search: { view: "serialized" },
+    description: "Manage serial lineage",
   },
 ];
 

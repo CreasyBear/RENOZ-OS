@@ -23,6 +23,62 @@ import {
 } from '@/server/functions/products/product-inventory';
 import { getProductCostLayers } from '@/server/functions/inventory/valuation';
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function getErrorCode(error: unknown): string | null {
+  const candidates = [
+    (error as { errors?: { code?: string[] } })?.errors?.code?.[0],
+    (error as { data?: { errors?: { code?: string[] } } })?.data?.errors?.code?.[0],
+    (error as { cause?: { errors?: { code?: string[] } } })?.cause?.errors?.code?.[0],
+  ];
+  return candidates.find((value): value is string => typeof value === 'string') ?? null;
+}
+
+function getFieldError(error: unknown): string | null {
+  const buckets = [
+    (error as { errors?: Record<string, unknown> })?.errors,
+    (error as { data?: { errors?: Record<string, unknown> } })?.data?.errors,
+    (error as { cause?: { errors?: Record<string, unknown> } })?.cause?.errors,
+  ];
+
+  for (const bucket of buckets) {
+    if (!isRecord(bucket)) continue;
+    for (const [field, value] of Object.entries(bucket)) {
+      if (field === 'code') continue;
+      if (Array.isArray(value)) {
+        const first = value.find((entry) => typeof entry === 'string');
+        if (typeof first === 'string' && first.trim().length > 0) return first;
+      }
+      if (typeof value === 'string' && value.trim().length > 0) return value;
+    }
+  }
+  return null;
+}
+
+function mapInventoryMutationError(error: Error): string {
+  const code = getErrorCode(error);
+  const fieldMessage = getFieldError(error);
+
+  if (code === 'insufficient_cost_layers') {
+    return fieldMessage ?? 'Cost layers are incomplete for this movement. Reconcile and retry.';
+  }
+  if (code === 'layer_transfer_mismatch') {
+    return fieldMessage ?? 'Cost-layer transfer mismatch detected. Refresh and retry.';
+  }
+  if (code === 'serialized_unit_violation') {
+    return fieldMessage ?? 'Serialized item integrity failed. Refresh and retry.';
+  }
+  if (code === 'invalid_serial_state') {
+    return fieldMessage ?? 'Serialized state conflict detected. Review serial lifecycle and retry.';
+  }
+
+  return (fieldMessage ?? error.message) || 'Inventory mutation failed';
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -269,8 +325,8 @@ export function useAdjustStock() {
   return useMutation({
     mutationFn: (data: Parameters<typeof adjustStock>[0]['data']) =>
       adjustStock({ data }),
-    onSuccess: (_, variables) => {
-      toast.success('Stock adjusted successfully');
+    onSuccess: (result, variables) => {
+      toast.success(result.message || 'Stock adjusted successfully');
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.inventory(variables.productId),
       });
@@ -279,7 +335,7 @@ export function useAdjustStock() {
       });
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to adjust stock');
+      toast.error(mapInventoryMutationError(error));
     },
   });
 }
@@ -322,8 +378,8 @@ export function useReceiveStock() {
   return useMutation({
     mutationFn: (data: Parameters<typeof receiveStock>[0]['data']) =>
       receiveStock({ data }),
-    onSuccess: (_, variables) => {
-      toast.success('Stock received successfully');
+    onSuccess: (result, variables) => {
+      toast.success(result.message || 'Stock received successfully');
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.inventory(variables.productId),
       });
@@ -332,7 +388,7 @@ export function useReceiveStock() {
       });
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to receive stock');
+      toast.error(mapInventoryMutationError(error));
     },
   });
 }

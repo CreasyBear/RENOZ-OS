@@ -134,16 +134,24 @@ function CustomerStatementsPage() {
   // Handlers
   // ---------------------------------------------------------------------------
   const handleSelectCustomer = useCallback((customer: SelectedCustomer | null) => {
+    const nextCustomerId = customer?.id ?? undefined;
+    const currentCustomerId = selectedCustomer?.id ?? urlCustomerId ?? undefined;
+    const customerChanged = nextCustomerId !== currentCustomerId;
+
     setSelectedCustomer(customer);
-    setSelectedStatementId(null); // Reset statement selection when customer changes
-    
-    // Persist selection in URL
-    navigate({
-      to: '/financial/statements',
-      search: { customerId: customer?.id },
-      replace: true, // Use replace to avoid cluttering history
-    });
-  }, [navigate]);
+    if (customerChanged) {
+      setSelectedStatementId(null); // Reset statement selection when customer changes
+    }
+
+    // Persist selection in URL only when customer actually changes.
+    if (customerChanged) {
+      navigate({
+        to: '/financial/statements',
+        search: { customerId: nextCustomerId },
+        replace: true, // Use replace to avoid cluttering history
+      });
+    }
+  }, [navigate, selectedCustomer?.id, urlCustomerId]);
 
   const handleGenerate = useCallback(
     (dateFrom: string, dateTo: string) => {

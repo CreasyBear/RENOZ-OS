@@ -61,6 +61,16 @@ export type RevenueByPeriodQuery = z.infer<typeof revenueByPeriodQuerySchema>;
 // ============================================================================
 
 /**
+ * Revenue basis for top customers: invoiced (orders) or cash (payments received).
+ * Single source of truth for default - used by schema and server.
+ */
+export const DEFAULT_REVENUE_BASIS = 'invoiced' as const;
+
+export const revenueBasisSchema = z.enum(['invoiced', 'cash']).default(DEFAULT_REVENUE_BASIS);
+
+export type RevenueBasis = z.infer<typeof revenueBasisSchema>;
+
+/**
  * Query parameters for top customers by revenue.
  */
 export const topCustomersQuerySchema = paginationSchema.extend({
@@ -69,6 +79,9 @@ export const topCustomersQuerySchema = paginationSchema.extend({
 
   // Only show commercial accounts ($50K+)
   commercialOnly: z.boolean().default(false),
+
+  // Revenue basis: invoiced (orders by orderDate) or cash (payments by paymentDate)
+  basis: revenueBasisSchema,
 });
 
 export type TopCustomersQuery = z.infer<typeof topCustomersQuerySchema>;
@@ -106,19 +119,24 @@ export interface KPIMetric {
 
 /**
  * Financial dashboard KPIs.
+ * Dual-metrics: Revenue (Invoiced) = orders by orderDate; Revenue (Cash) = payments by paymentDate.
  */
 export interface FinancialDashboardMetrics {
-  // Revenue metrics
-  revenueMTD: KPIMetric; // Month-to-date revenue in AUD
-  revenueYTD: KPIMetric; // Year-to-date revenue
+  // Revenue metrics (invoiced = orders placed; cash = payments received)
+  revenueMTD: KPIMetric; // Month-to-date revenue in AUD (invoiced) - deprecated, use revenueInvoicedMTD
+  revenueYTD: KPIMetric; // Year-to-date revenue (invoiced) - deprecated, use revenueInvoicedYTD
+  revenueInvoicedMTD: KPIMetric; // Month-to-date invoiced revenue (orders by orderDate)
+  revenueInvoicedYTD: KPIMetric; // Year-to-date invoiced revenue
+  revenueCashMTD: KPIMetric; // Month-to-date cash revenue (payments by paymentDate)
+  revenueCashYTD: KPIMetric; // Year-to-date cash revenue
 
   // Receivables metrics
   arBalance: KPIMetric; // Total accounts receivable
   overdueAmount: KPIMetric; // Total overdue (past due date)
 
-  // Payment metrics
-  cashReceivedMTD: KPIMetric; // Payments received this month
-  cashReceivedYTD: KPIMetric; // Payments received this year
+  // Payment metrics (aliases for revenueCash for backward compat)
+  cashReceivedMTD: KPIMetric; // Payments received this month (= revenueCashMTD)
+  cashReceivedYTD: KPIMetric; // Payments received this year (= revenueCashYTD)
 
   // Tax metrics
   gstCollectedMTD: KPIMetric; // GST collected this month (10% of revenue)
@@ -137,13 +155,15 @@ export interface FinancialDashboardMetrics {
 
 /**
  * Revenue data point for charts.
+ * Dual-metrics: totalRevenue = invoiced; cashRevenue = payments received.
  */
 export interface RevenuePeriodData {
   period: string; // e.g., "2026-01", "2026-Q1"
   periodLabel: string; // e.g., "January 2026", "Q1 2026"
-  residentialRevenue: number; // Revenue from individual customers
-  commercialRevenue: number; // Revenue from business/gov/non-profit customers
-  totalRevenue: number;
+  residentialRevenue: number; // Invoiced revenue from individual customers
+  commercialRevenue: number; // Invoiced revenue from business/gov/non-profit customers
+  totalRevenue: number; // Invoiced (orders by orderDate)
+  cashRevenue: number; // Cash received (payments by paymentDate)
   invoiceCount: number;
 }
 
@@ -156,6 +176,7 @@ export interface RevenueByPeriodResult {
     residentialRevenue: number;
     commercialRevenue: number;
     totalRevenue: number;
+    cashRevenue: number;
   };
 }
 
@@ -204,6 +225,35 @@ export interface OutstandingInvoiceEntry {
 }
 
 /**
+ * Aggregated dashboard data from parallel queries.
+ * Used by FinancialDashboard presenter.
+ */
+export interface FinancialDashboardData {
+  /** @source useQuery(['financial-dashboard-metrics']) */
+  metrics?: FinancialDashboardMetrics;
+  /** @source useQuery(['revenue-by-period', periodType]) */
+  revenueByPeriod?: RevenueByPeriodResult;
+  /** @source useQuery(['top-customers']) */
+  topCustomers?: TopCustomersResult;
+  /** @source useQuery(['outstanding-invoices']) */
+  outstanding?: OutstandingInvoicesResult;
+}
+
+/**
+ * Revenue chart basis: invoiced (orders) or cash (payments).
+ */
+export type RevenueChartBasis = 'invoiced' | 'cash';
+
+/**
+ * Props for RevenueChart component (financial dashboard).
+ */
+export interface RevenueChartProps {
+  periods: RevenuePeriodData[];
+  basis: RevenueChartBasis;
+  onBasisChange: (basis: RevenueChartBasis) => void;
+}
+
+/**
  * Outstanding invoices response.
  */
 export interface OutstandingInvoicesResult {
@@ -220,4 +270,23 @@ export interface OutstandingInvoicesResult {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/**
+ * Close readiness guard result for finance period close and release gating.
+ */
+export interface FinancialCloseReadiness {
+  isReady: boolean;
+  blockingReasons: string[];
+  generatedAt: string;
+  gates: {
+    stockWithoutActiveLayers: number;
+    rowsValueMismatch: number;
+    layerNegativeOrOverconsumed: number;
+    duplicateActiveSerializedAllocations: number;
+    shipmentLinkNotShippedOrReturned: number;
+  };
+  totals: {
+    totalAbsValueDrift: number;
+  };
 }

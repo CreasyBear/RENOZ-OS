@@ -37,11 +37,11 @@ export interface CreatePOColumnsOptions {
   /** View PO handler */
   onViewPO: (id: string) => void;
   /** Edit PO handler */
-  onEditPO: (id: string) => void;
+  onEditPO?: (id: string) => void;
   /** Delete PO handler */
-  onDeletePO: (id: string) => void;
+  onDeletePO?: (id: string) => void;
   /** Receive goods handler */
-  onReceivePO: (id: string) => void;
+  onReceivePO?: (id: string) => void;
 }
 
 /**
@@ -223,7 +223,7 @@ export function createPOColumns(
           },
         ];
 
-        if (showReceive) {
+        if (showReceive && onReceivePO) {
           actions.push({
             label: "Receive Goods",
             icon: PackageOpen,
@@ -231,16 +231,16 @@ export function createPOColumns(
           });
         }
 
-        if (showEdit) {
+        if (showEdit && onEditPO) {
           actions.push({
             label: "Edit Order",
             icon: Pencil,
             onClick: () => onEditPO(po.id),
-            separator: !showDelete,
+            separator: !showDelete || !onDeletePO,
           });
         }
 
-        if (showDelete) {
+        if (showDelete && onDeletePO) {
           actions.push({
             label: "Delete Order",
             icon: Trash2,

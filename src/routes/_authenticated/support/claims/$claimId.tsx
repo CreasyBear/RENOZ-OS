@@ -8,7 +8,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
-import { WarrantyClaimDetailContainer } from '@/components/domain/warranty';
+import { WarrantyClaimDetailContainer } from '@/components/domain/warranty/containers/warranty-claim-detail-container';
 
 export const Route = createFileRoute('/_authenticated/support/claims/$claimId')({
   component: ClaimDetailPage,

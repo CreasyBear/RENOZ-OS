@@ -40,7 +40,10 @@ import type {
 } from '@/lib/documents/templates/operational';
 import { NotFoundError } from '@/lib/server/errors';
 import { fetchOrganizationForDocument } from './organization-for-pdf';
-import { fetchShipmentSerialsByOrderLineItem } from './fetch-order-line-items-with-serials';
+import {
+  fetchAllocatedSerialsByOrderLineItem,
+  fetchShipmentSerialsByOrderLineItem,
+} from './fetch-order-line-items-with-serials';
 
 // ============================================================================
 // CONSTANTS
@@ -124,7 +127,6 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       taxAmount: orderLineItems.taxAmount,
       lineTotal: orderLineItems.lineTotal,
       notes: orderLineItems.notes,
-      allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
     })
     .from(orderLineItems)
     .where(eq(orderLineItems.orderId, orderId))
@@ -414,10 +416,13 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
 
       case 'packing-slip': {
         const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+        const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
+          orderData.lineItems.map((item) => item.id)
+        );
         const packingSlipLineItems: PackingSlipLineItem[] = orderData.lineItems.map((item, index) => {
           const serialNumbers =
             shipmentSerialMap.get(item.id) ??
-            (item.allocatedSerialNumbers as string[] | null) ??
+            allocationSerialMap.get(item.id) ??
             undefined;
           return {
             id: item.id,
@@ -474,12 +479,15 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
 
       case 'delivery-note': {
         const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+        const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
+          orderData.lineItems.map((item) => item.id)
+        );
 
         // Map line items to DeliveryNoteLineItem format
         const deliveryNoteLineItems: DeliveryNoteLineItem[] = orderData.lineItems.map((item, index) => {
-          // Use shipment serial numbers if available, otherwise fall back to allocated
+          // Use shipment serial numbers if available, otherwise fall back to canonical active allocations.
           const serialNumbers = shipmentSerialMap.get(item.id)
-            ?? (item.allocatedSerialNumbers as string[] | null)
+            ?? allocationSerialMap.get(item.id)
             ?? undefined;
           return {
             id: item.id,

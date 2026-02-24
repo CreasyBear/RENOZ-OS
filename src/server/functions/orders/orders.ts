@@ -25,7 +25,10 @@ import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-inde
 import {
   orders,
   orderLineItems,
+  orderLineSerialAllocations,
+  serializedItems,
   customers,
+  addresses,
   products,
   type OrderAddress,
   type OrderMetadata,
@@ -53,8 +56,19 @@ import {
   buildCursorCondition,
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
-import { GST_RATE } from '@/lib/order-calculations';
+import { GST_RATE, roundCurrency } from '@/lib/order-calculations';
 import { validateInvoiceTotals } from '@/lib/utils/financial';
+import type { SerializedMutationErrorCode } from '@/lib/schemas/inventory';
+import {
+  createSerializedMutationError,
+  serializedMutationSuccess,
+  type SerializedMutationEnvelope,
+} from '@/lib/server/serialized-mutation-contract';
+import {
+  addSerializedItemEvent,
+  releaseSerializedItemAllocation,
+} from '@/server/functions/_shared/serialized-lineage';
+import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
 import {
   generateQuotePdf,
   generateInvoicePdf,
@@ -93,6 +107,74 @@ interface OrderWithLineItems extends Order {
 }
 
 // Types moved to schemas - imported above
+
+async function releaseOrderSerialAllocations(
+  tx: DbTransaction,
+  params: {
+    organizationId: string;
+    orderId: string;
+    orderNumber: string;
+    userId: string;
+  }
+): Promise<void> {
+  const lineItemsWithSerials = await tx
+    .select({
+      id: orderLineItems.id,
+    })
+    .from(orderLineItems)
+    .where(
+      and(
+        eq(orderLineItems.orderId, params.orderId),
+        eq(orderLineItems.organizationId, params.organizationId)
+      )
+    );
+
+  const lineItemIds = lineItemsWithSerials.map((li) => li.id);
+  if (lineItemIds.length > 0) {
+    await tx
+      .update(orderLineItems)
+      .set({
+        allocatedSerialNumbers: null,
+        updatedAt: new Date(),
+      })
+      .where(inArray(orderLineItems.id, lineItemIds));
+  }
+
+  const activeAllocations = lineItemIds.length > 0
+    ? await tx
+        .select({
+          lineItemId: orderLineSerialAllocations.orderLineItemId,
+          serializedItemId: orderLineSerialAllocations.serializedItemId,
+          serialNumber: serializedItems.serialNumberNormalized,
+        })
+        .from(orderLineSerialAllocations)
+        .innerJoin(serializedItems, eq(orderLineSerialAllocations.serializedItemId, serializedItems.id))
+        .where(
+          and(
+            eq(orderLineSerialAllocations.organizationId, params.organizationId),
+            eq(orderLineSerialAllocations.isActive, true),
+            inArray(orderLineSerialAllocations.orderLineItemId, lineItemIds)
+          )
+        )
+    : [];
+
+  for (const allocation of activeAllocations) {
+    await releaseSerializedItemAllocation(tx, {
+      organizationId: params.organizationId,
+      serializedItemId: allocation.serializedItemId,
+      userId: params.userId,
+    });
+    await addSerializedItemEvent(tx, {
+      organizationId: params.organizationId,
+      serializedItemId: allocation.serializedItemId,
+      eventType: 'deallocated',
+      entityType: 'order_line_item',
+      entityId: allocation.lineItemId,
+      notes: `Order ${params.orderNumber} cancelled`,
+      userId: params.userId,
+    });
+  }
+}
 
 // ============================================================================
 // ORDER NUMBER GENERATION
@@ -185,6 +267,7 @@ function validateStatusTransition(current: OrderStatus, next: OrderStatus): bool
 
 /**
  * Calculate line item totals including tax.
+ * Uses roundCurrency for DB CHECK constraint compatibility (avoids floating-point drift).
  */
 export function calculateLineItemTotals(lineItem: {
   quantity: number;
@@ -193,34 +276,37 @@ export function calculateLineItemTotals(lineItem: {
   discountAmount?: number | null;
   taxType?: string;
 }): { taxAmount: number; lineTotal: number } {
-  const subtotal = lineItem.quantity * lineItem.unitPrice;
+  const subtotal = roundCurrency(lineItem.quantity * lineItem.unitPrice);
 
   // Apply discount
   let discountedAmount = subtotal;
   if (lineItem.discountPercent) {
-    discountedAmount -= subtotal * (lineItem.discountPercent / 100);
+    discountedAmount = roundCurrency(
+      discountedAmount - subtotal * (lineItem.discountPercent / 100)
+    );
   }
   if (lineItem.discountAmount) {
-    discountedAmount -= lineItem.discountAmount;
+    discountedAmount = roundCurrency(discountedAmount - lineItem.discountAmount);
   }
   discountedAmount = Math.max(0, discountedAmount);
 
-  // Calculate tax
-  const taxAmount = lineItem.taxType === 'exempt' ? 0 : discountedAmount * GST_RATE;
-
-  // Round to 2 decimal places
-  const lineTotal = Math.round((discountedAmount + taxAmount) * 100) / 100;
+  // Tax-free types: gst_free, export (DB enum values)
+  const isTaxFree =
+    lineItem.taxType === 'gst_free' || lineItem.taxType === 'export';
+  const taxAmount = isTaxFree ? 0 : roundCurrency(discountedAmount * GST_RATE);
+  const lineTotal = roundCurrency(discountedAmount + taxAmount);
 
   return {
-    taxAmount: Math.round(taxAmount * 100) / 100,
+    taxAmount,
     lineTotal,
   };
 }
 
 /**
  * Calculate order totals from line items.
+ * Uses roundCurrency for DB CHECK constraint compatibility (avoids floating-point drift).
  */
-function calculateOrderTotals(
+export function calculateOrderTotals(
   lineItems: Array<{ lineTotal: number; taxAmount: number }>,
   discountPercent?: number | null,
   discountAmount?: number | null,
@@ -236,7 +322,7 @@ function calculateOrderTotals(
   const lineTaxTotal = lineItems.reduce((sum, item) => sum + item.taxAmount, 0);
 
   // The subtotal is line totals minus their tax
-  const subtotal = lineSubtotal - lineTaxTotal;
+  const subtotal = roundCurrency(lineSubtotal - lineTaxTotal);
 
   // Apply order-level discount
   let discountAmt = 0;
@@ -246,18 +332,20 @@ function calculateOrderTotals(
   if (discountAmount) {
     discountAmt += discountAmount;
   }
-  discountAmt = Math.min(discountAmt, subtotal);
+  discountAmt = roundCurrency(Math.min(discountAmt, subtotal));
 
   // Recalculate tax after discount
-  const taxableAmount = subtotal - discountAmt + shippingAmount;
-  const taxAmount = Math.round(taxableAmount * GST_RATE * 100) / 100;
+  const taxableAmount = roundCurrency(subtotal - discountAmt + shippingAmount);
+  const taxAmount = roundCurrency(taxableAmount * GST_RATE);
 
   // Final total
-  const total = Math.round((subtotal - discountAmt + taxAmount + shippingAmount) * 100) / 100;
+  const total = roundCurrency(
+    subtotal - discountAmt + taxAmount + shippingAmount
+  );
 
   return {
-    subtotal: Math.round(subtotal * 100) / 100,
-    discountAmount: Math.round(discountAmt * 100) / 100,
+    subtotal,
+    discountAmount: discountAmt,
     taxAmount,
     total,
   };
@@ -295,10 +383,12 @@ export const listOrders = createServerFn({ method: 'GET' })
 
     // Add filters - use ilike helper instead of raw SQL for type safety
     if (search) {
+      const searchPattern = containsPattern(search);
       conditions.push(
         or(
-          ilike(orders.orderNumber, containsPattern(search)),
-          ilike(orders.internalNotes, containsPattern(search))
+          ilike(orders.orderNumber, searchPattern),
+          ilike(orders.internalNotes, searchPattern),
+          ilike(customers.name, searchPattern)
         )!
       );
     }
@@ -403,7 +493,7 @@ export const getOrderStats = createServerFn({ method: 'GET' })
       .select({
         totalOrders: sql<number>`count(*)::int`,
         totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-        pendingOrders: sql<number>`count(CASE WHEN ${orders.status} = 'pending' THEN 1 END)::int`,
+        pendingOrders: sql<number>`count(CASE WHEN ${orders.status} IN ('confirmed', 'picking', 'picked', 'partially_shipped', 'shipped') THEN 1 END)::int`,
         unpaidOrders: sql<number>`count(CASE WHEN ${orders.paymentStatus} = 'pending' AND ${orders.status} = 'delivered' THEN 1 END)::int`,
         draftOrders: sql<number>`count(CASE WHEN ${orders.status} = 'draft' THEN 1 END)::int`,
       })
@@ -616,9 +706,26 @@ const _getOrderWithCustomerCached = cache(async (id: string, organizationId: str
 
   if (!orderResult[0]) return null;
 
+  const customer = orderResult[0].customer;
+  let customerWithAddresses = customer;
+
+  if (customer?.id) {
+    const customerAddresses = await db
+      .select()
+      .from(addresses)
+      .where(
+        and(
+          eq(addresses.customerId, customer.id),
+          eq(addresses.organizationId, organizationId)
+        )
+      )
+      .orderBy(desc(addresses.isPrimary), asc(addresses.type));
+    customerWithAddresses = { ...customer, addresses: customerAddresses } as typeof customer & { addresses: typeof customerAddresses };
+  }
+
   return {
     ...orderResult[0].order,
-    customer: orderResult[0].customer,
+    customer: customerWithAddresses,
     lineItems: lineItems.map((li) => ({
       ...li.lineItem,
       product: li.product,
@@ -735,6 +842,9 @@ export const createOrder = createServerFn({ method: 'POST' })
 
     // Insert order and line items in transaction
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Insert order
       const [newOrder] = await tx
         .insert(orders)
@@ -881,6 +991,8 @@ export const updateOrder = createServerFn({ method: 'POST' })
     }
 
     const before = existing;
+    const currentStatus = existing.status as OrderStatus;
+    const requestedStatus = data.status as OrderStatus | undefined;
 
     // Validate customer if changing
     if (data.customerId && data.customerId !== existing.customerId) {
@@ -922,8 +1034,47 @@ export const updateOrder = createServerFn({ method: 'POST' })
       }
     }
 
+    if (requestedStatus && requestedStatus !== currentStatus) {
+      if (!validateStatusTransition(currentStatus, requestedStatus)) {
+        throw new ValidationError('Invalid status transition', {
+          status: [`Cannot transition from '${currentStatus}' to '${requestedStatus}'`],
+        });
+      }
+
+      if (requestedStatus === 'cancelled') {
+        const [shippedLineItem] = await db
+          .select({ id: orderLineItems.id })
+          .from(orderLineItems)
+          .where(
+            and(
+              eq(orderLineItems.orderId, id),
+              eq(orderLineItems.organizationId, ctx.organizationId),
+              sql`${orderLineItems.qtyShipped} > 0`
+            )
+          )
+          .limit(1);
+
+        if (shippedLineItem) {
+          throw new ValidationError('Cannot cancel order with shipped items', {
+            status: ['This order has shipped quantities. Create returns/RMA before cancellation.'],
+          });
+        }
+      }
+    }
+
     // Update order
     const updateData: Record<string, unknown> = { ...data };
+    if (requestedStatus && requestedStatus === currentStatus) {
+      delete updateData.status;
+    }
+    if (requestedStatus && requestedStatus !== currentStatus) {
+      if (requestedStatus === 'shipped' || requestedStatus === 'partially_shipped') {
+        updateData.shippedDate = new Date().toISOString().slice(0, 10);
+      }
+      if (requestedStatus === 'delivered') {
+        updateData.deliveredDate = new Date().toISOString().slice(0, 10);
+      }
+    }
     if (data.billingAddress) updateData.billingAddress = data.billingAddress as OrderAddress;
     if (data.shippingAddress) updateData.shippingAddress = data.shippingAddress as OrderAddress;
     if (data.metadata) updateData.metadata = data.metadata as OrderMetadata;
@@ -931,6 +1082,18 @@ export const updateOrder = createServerFn({ method: 'POST' })
     updateData.updatedBy = ctx.user.id;
 
     const updated = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+      if (requestedStatus === 'cancelled' && requestedStatus !== currentStatus) {
+        await releaseOrderSerialAllocations(tx, {
+          organizationId: ctx.organizationId,
+          orderId: id,
+          orderNumber: existing.orderNumber,
+          userId: ctx.user.id,
+        });
+      }
+
       const [result] = await tx
         .update(orders)
         .set(updateData)
@@ -938,10 +1101,19 @@ export const updateOrder = createServerFn({ method: 'POST' })
           and(
             eq(orders.id, id),
             eq(orders.organizationId, ctx.organizationId),
+            requestedStatus && requestedStatus !== currentStatus
+              ? eq(orders.status, currentStatus)
+              : undefined,
             isNull(orders.deletedAt) // MUST include deletedAt check
           )
         )
         .returning();
+
+      if (!result) {
+        throw new ConflictError(
+          'Order was modified by another user. Please refresh and try again.'
+        );
+      }
 
       await enqueueSearchIndexOutbox(
         {
@@ -999,7 +1171,7 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
       data: updateOrderStatusSchema,
     })
   )
-  .handler(async ({ data: { id, data } }): Promise<Order> => {
+  .handler(async ({ data: { id, data } }): Promise<SerializedMutationEnvelope<Order>> => {
     const ctx = await withAuth();
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -1023,11 +1195,73 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
     // Validate status transition
     const currentStatus = existing.status as OrderStatus;
     const newStatus = data.status as OrderStatus;
+    const transitionName = 'order_status_update';
+    const idempotencyKey = data.idempotencyKey?.trim();
+
+    if (idempotencyKey) {
+      const replayed = await hasProcessedIdempotencyKey(db, {
+        organizationId: ctx.organizationId,
+        entityType: 'order',
+        entityId: id,
+        action: 'updated',
+        idempotencyKey,
+      });
+      if (replayed) {
+        return serializedMutationSuccess(
+          existing,
+          `Idempotent replay ignored. Order remains in ${currentStatus} status.`,
+          {
+            affectedIds: [existing.id],
+            transition: {
+              transition: transitionName,
+              fromStatus: currentStatus,
+              toStatus: currentStatus,
+              blockedBy: 'idempotency_key_replay',
+            },
+          }
+        );
+      }
+    }
+
+    // Idempotent retry safety: repeated status update returns current state.
+    if (currentStatus === newStatus) {
+      return serializedMutationSuccess(existing, `Order already in ${newStatus} status.`, {
+        affectedIds: [existing.id],
+        transition: {
+          transition: transitionName,
+          fromStatus: currentStatus,
+          toStatus: newStatus,
+        },
+      });
+    }
+
+    // Guard: cannot cancel orders that already have shipped quantities.
+    if (newStatus === 'cancelled') {
+      const [shippedLineItem] = await db
+        .select({ id: orderLineItems.id })
+        .from(orderLineItems)
+        .where(
+          and(
+            eq(orderLineItems.orderId, id),
+            eq(orderLineItems.organizationId, ctx.organizationId),
+            sql`${orderLineItems.qtyShipped} > 0`
+          )
+        )
+        .limit(1);
+
+      if (shippedLineItem) {
+        throw createSerializedMutationError(
+          'Cannot cancel order with shipped items. Create returns/RMA before cancellation.',
+          'shipped_status_conflict'
+        );
+      }
+    }
 
     if (!validateStatusTransition(currentStatus, newStatus)) {
-      throw new ValidationError('Invalid status transition', {
-        status: [`Cannot transition from '${currentStatus}' to '${newStatus}'`],
-      });
+      throw createSerializedMutationError(
+        `Invalid status transition: cannot move from '${currentStatus}' to '${newStatus}'.`,
+        'transition_blocked'
+      );
     }
 
     // Update status-related dates
@@ -1041,6 +1275,18 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
 
     // Update order with optimistic locking on current status
     const updated = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+      if (newStatus === 'cancelled') {
+        await releaseOrderSerialAllocations(tx, {
+          organizationId: ctx.organizationId,
+          orderId: id,
+          orderNumber: existing.orderNumber,
+          userId: ctx.user.id,
+        });
+      }
+
       const [result] = await tx
         .update(orders)
         .set({
@@ -1130,10 +1376,18 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
         previousStatus: currentStatus,
         newStatus,
         notes: data.notes ?? undefined,
+        idempotencyKey: data.idempotencyKey ?? undefined,
       },
     });
 
-    return updated;
+    return serializedMutationSuccess(updated, `Order status updated to ${newStatus}.`, {
+      affectedIds: [updated.id],
+      transition: {
+        transition: transitionName,
+        fromStatus: currentStatus,
+        toStatus: newStatus,
+      },
+    });
   });
 
 // ============================================================================
@@ -1182,6 +1436,9 @@ export const deleteOrder = createServerFn({ method: 'POST' })
 
     // Soft delete
     await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       await tx
         .update(orders)
         .set({
@@ -1273,6 +1530,9 @@ export const addOrderLineItem = createServerFn({ method: 'POST' })
 
     // Wrap insert and recalculate in transaction for atomicity
     const newItem = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get next line number - MUST include organizationId filter
       const [maxLine] = await tx
         .select({ max: sql<string>`MAX(${orderLineItems.lineNumber})` })
@@ -1405,6 +1665,9 @@ export const updateOrderLineItem = createServerFn({ method: 'POST' })
 
     // Wrap update and recalculate in transaction for atomicity
     const updated = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Update line item - MUST include organizationId filter
       const [updatedItem] = await tx
         .update(orderLineItems)
@@ -1477,6 +1740,9 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
 
     // Wrap count check, delete and recalculate in transaction for atomicity
     await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get line item count within transaction to ensure consistency
       // MUST include organizationId filter
       const [countResult] = await tx
@@ -1557,6 +1823,9 @@ export const duplicateOrder = createServerFn({ method: 'POST' })
 
     // Create duplicate in transaction
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Insert new order
       const [newOrder] = await tx
         .insert(orders)
@@ -1747,7 +2016,15 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
   .handler(
     async ({
       data: { orderIds, status, notes },
-    }): Promise<{ updated: number; failed: string[] }> => {
+    }): Promise<{
+      updated: number;
+      failed: string[];
+      success: true;
+      message: string;
+      affectedIds?: string[];
+      errorsById?: Record<string, string>;
+      partialFailure?: { code: SerializedMutationErrorCode; message: string };
+    }> => {
       const ctx = await withAuth();
 
       if (orderIds.length === 0) {
@@ -1792,6 +2069,12 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
         const currentStatus = existing.status as OrderStatus;
         const newStatus = status as OrderStatus;
 
+        // Idempotent retry safety: already in target status.
+        if (currentStatus === newStatus) {
+          updated.push(orderId);
+          continue;
+        }
+
         if (!validateStatusTransition(currentStatus, newStatus)) {
           failed.push(
             `${orderId}: Invalid status transition from '${currentStatus}' to '${newStatus}'`
@@ -1811,13 +2094,54 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
         validUpdates.push({ order: existing, statusDates });
       }
 
+      // Guard: bulk cancellation cannot include orders with shipped quantities.
+      if ((status as OrderStatus) === 'cancelled' && validUpdates.length > 0) {
+        const candidateOrderIds = validUpdates.map(({ order }) => order.id);
+        const shippedRows = await db
+          .select({ orderId: orderLineItems.orderId })
+          .from(orderLineItems)
+          .where(
+            and(
+              eq(orderLineItems.organizationId, ctx.organizationId),
+              inArray(orderLineItems.orderId, candidateOrderIds),
+              sql`${orderLineItems.qtyShipped} > 0`
+            )
+          )
+          .groupBy(orderLineItems.orderId);
+
+        const shippedOrderIds = new Set(shippedRows.map((row) => row.orderId));
+        if (shippedOrderIds.size > 0) {
+          const blocked = new Set(shippedRows.map((row) => row.orderId));
+          for (const orderId of blocked) {
+            failed.push(
+              `${orderId}: Cannot cancel order with shipped quantities (process return/RMA first)`
+            );
+          }
+          const filtered = validUpdates.filter(({ order }) => !blocked.has(order.id));
+          validUpdates.length = 0;
+          validUpdates.push(...filtered);
+        }
+      }
+
       // Process valid updates in a transaction for atomicity
       if (validUpdates.length > 0) {
         await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+          );
           for (const { order: existing, statusDates } of validUpdates) {
             const newStatus = status as OrderStatus;
 
             const currentStatus = existing.status as OrderStatus;
+
+            if (newStatus === 'cancelled') {
+              await releaseOrderSerialAllocations(tx, {
+                organizationId: ctx.organizationId,
+                orderId: existing.id,
+                orderNumber: existing.orderNumber,
+                userId: ctx.user.id,
+              });
+            }
 
             // Optimistic lock: only update if status hasn't changed since validation
             const [updateResult] = await tx
@@ -1876,7 +2200,32 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
         });
       }
 
-      return { updated: updated.length, failed };
+      const errorsById: Record<string, string> = {};
+      for (const errorLine of failed) {
+        const [failedId, ...rest] = errorLine.split(':');
+        if (failedId && rest.length > 0) {
+          errorsById[failedId.trim()] = rest.join(':').trim();
+        }
+      }
+
+      return {
+        updated: updated.length,
+        failed,
+        success: true,
+        message:
+          failed.length > 0
+            ? `Updated ${updated.length} orders with ${failed.length} failures.`
+            : `Updated ${updated.length} orders.`,
+        affectedIds: updated,
+        errorsById: Object.keys(errorsById).length > 0 ? errorsById : undefined,
+        partialFailure:
+          failed.length > 0
+            ? {
+                code: 'transition_blocked',
+                message: 'Some orders could not be updated due to state transition constraints.',
+              }
+            : undefined,
+      };
     }
   );
 
@@ -1939,6 +2288,9 @@ export const createOrderForKanban = createServerFn({ method: 'POST' })
     // Line items and totals are added/calculated later by the user after placing
     // the order in the desired fulfillment stage on the kanban board.
     const created = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       const [result] = await tx
         .insert(orders)
         .values({

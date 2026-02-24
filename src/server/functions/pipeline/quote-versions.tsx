@@ -133,6 +133,9 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
     // Version number generation is inside the transaction to prevent race conditions
     // where two concurrent creates could get the same version number.
     const quoteVersion = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get next version number inside transaction to prevent race condition
       const latest = await tx
         .select({ versionNumber: quoteVersions.versionNumber })
@@ -267,6 +270,9 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
 
     // Wrap all operations in a transaction for atomicity
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get the source version
       const sourceVersion = await tx
         .select()

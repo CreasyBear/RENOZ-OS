@@ -10,7 +10,8 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Package, AlertTriangle, Check, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Package, AlertTriangle, Check, Loader2, ChevronRight, ChevronLeft, Hash } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -32,7 +33,6 @@ import { toastError } from '@/hooks';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import type { PODetailsWithSerials } from '@/lib/schemas/procurement/procurement-types';
 import { SerialNumberBatchEntry } from './serial-number-batch-entry';
-import { Hash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -47,7 +47,11 @@ export interface BulkReceivingDialogProps {
   onConfirm: (receiptData: {
     purchaseOrderIds: string[];
     serialNumbers?: Map<string, Map<string, string[]>>;
-  }) => Promise<{ processed: number; failed: number }>;
+  }) => Promise<{
+    processed: number;
+    failed: number;
+    errors: Array<{ poId: string; error: string }>;
+  }>;
   isLoading?: boolean;
   error?: React.ReactNode;
 }
@@ -80,6 +84,8 @@ export function BulkReceivingDialog({
     processed: 0,
     failed: 0,
   });
+  const [attemptTotal, setAttemptTotal] = useState(0);
+  const [failureDetails, setFailureDetails] = useState<Array<{ poId: string; error: string }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Reset state when dialog opens/closes
@@ -89,6 +95,8 @@ export function BulkReceivingDialog({
       setSelectedPOIds(new Set());
       setSerialNumbers(new Map());
       setProcessingProgress({ processed: 0, failed: 0 });
+      setAttemptTotal(0);
+      setFailureDetails([]);
       setIsProcessing(false);
     }
   }, [open]);
@@ -116,6 +124,17 @@ export function BulkReceivingDialog({
     () => selectedPOs.reduce((sum, po) => sum + (po.totalAmount ?? 0), 0),
     [selectedPOs]
   );
+  const firstCapturedSerial = useMemo(() => {
+    for (const itemMap of serialNumbers.values()) {
+      for (const serialList of itemMap.values()) {
+        for (const serial of serialList) {
+          const normalized = serial.trim();
+          if (normalized.length > 0) return normalized;
+        }
+      }
+    }
+    return null;
+  }, [serialNumbers]);
 
   // Handlers
   const handleTogglePO = useCallback((poId: string, checked: boolean) => {
@@ -186,28 +205,34 @@ export function BulkReceivingDialog({
     setStep('review');
   }, [selectedPODetails, serialNumbers]);
 
-  const handleConfirm = useCallback(async () => {
-    if (selectedPOIds.size === 0) return;
-
+  const runProcessing = useCallback(async (targetPOIds: string[]) => {
+    if (targetPOIds.length === 0) return;
     setIsProcessing(true);
     setStep('processing');
     setProcessingProgress({ processed: 0, failed: 0 });
+    setAttemptTotal(targetPOIds.length);
+    setFailureDetails([]);
 
     try {
+      const targetPOSet = new Set(targetPOIds);
+      const targetSerialNumbers = hasSerializedItems
+        ? new Map(
+            Array.from(serialNumbers.entries()).filter(([poId]) => targetPOSet.has(poId))
+          )
+        : undefined;
+
       const result = await onConfirm({
-        purchaseOrderIds: Array.from(selectedPOIds),
-        serialNumbers: hasSerializedItems ? serialNumbers : undefined,
+        purchaseOrderIds: targetPOIds,
+        serialNumbers: targetSerialNumbers,
       });
       setProcessingProgress(result);
+      setFailureDetails(result.errors ?? []);
 
       if (result.failed === 0) {
         // All succeeded - close dialog
         setTimeout(() => {
           onOpenChange(false);
         }, 1500);
-      } else {
-        // Some failed - stay on processing step to show results
-        // User can close manually
       }
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Failed to process bulk receiving');
@@ -215,7 +240,18 @@ export function BulkReceivingDialog({
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedPOIds, serialNumbers, hasSerializedItems, onConfirm, onOpenChange]);
+  }, [serialNumbers, hasSerializedItems, onConfirm, onOpenChange]);
+
+  const handleConfirm = useCallback(async () => {
+    await runProcessing(Array.from(selectedPOIds));
+  }, [runProcessing, selectedPOIds]);
+
+  const handleRetryFailed = useCallback(async () => {
+    const failedPOIds = Array.from(new Set(failureDetails.map((f) => f.poId)));
+    if (failedPOIds.length === 0) return;
+    setSelectedPOIds(new Set(failedPOIds));
+    await runProcessing(failedPOIds);
+  }, [failureDetails, runProcessing]);
 
   const handleClose = useCallback(() => {
     if (isProcessing) return; // Prevent closing during processing
@@ -438,10 +474,21 @@ export function BulkReceivingDialog({
   );
 
   const renderProcessingStep = () => {
-    const total = selectedPOIds.size;
+    const total = attemptTotal;
     const { processed, failed } = processingProgress;
-    const percentage = total > 0 ? Math.round((processed / total) * 100) : 0;
-    const isComplete = processed + failed >= total;
+    const percentage = total > 0 ? Math.round(((processed + failed) / total) * 100) : 0;
+    const isComplete = total > 0 && processed + failed >= total;
+    const failedByPO = Array.from(new Set(failureDetails.map((f) => f.poId))).map((poId) => {
+      const po = purchaseOrders.find((candidate) => candidate.id === poId);
+      const reasons = failureDetails
+        .filter((failure) => failure.poId === poId)
+        .map((failure) => failure.error);
+      return {
+        poId,
+        poNumber: po?.poNumber ?? poId,
+        reasons,
+      };
+    });
 
     return (
       <div className="space-y-6">
@@ -449,6 +496,8 @@ export function BulkReceivingDialog({
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
             {isComplete && failed === 0 ? (
               <Check className="h-8 w-8 text-primary" />
+            ) : isComplete ? (
+              <AlertTriangle className="h-8 w-8 text-destructive" />
             ) : (
               <Loader2 className="h-8 w-8 text-primary animate-spin" />
             )}
@@ -491,13 +540,37 @@ export function BulkReceivingDialog({
         </div>
 
         {failed > 0 && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              {failed} purchase order{failed !== 1 ? 's' : ''} failed to process. Please review
-              individual purchase orders for details.
-            </AlertDescription>
-          </Alert>
+          <div className="space-y-3">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {failed} purchase order{failed !== 1 ? 's' : ''} failed to process. Review exact
+                reasons below and retry failed items.
+              </AlertDescription>
+            </Alert>
+
+            {failedByPO.length > 0 && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5">
+                <div className="border-b border-destructive/20 px-3 py-2 text-sm font-medium">
+                  Failed Purchase Orders
+                </div>
+                <ScrollArea className="max-h-[180px]">
+                  <div className="divide-y divide-destructive/10">
+                    {failedByPO.map((entry) => (
+                      <div key={entry.poId} className="px-3 py-2">
+                        <div className="text-sm font-medium">{entry.poNumber}</div>
+                        {entry.reasons.map((reason, idx) => (
+                          <p key={`${entry.poId}-${idx}`} className="text-xs text-muted-foreground mt-1">
+                            {reason}
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
         )}
       </div>
     );
@@ -625,13 +698,29 @@ export function BulkReceivingDialog({
             </>
           )}
           {step === 'processing' && (
-            <Button
-              onClick={handleClose}
-              disabled={isProcessing}
-              variant={processingProgress.failed > 0 ? 'outline' : 'default'}
-            >
-              {processingProgress.failed > 0 ? 'Close' : 'Done'}
-            </Button>
+            <>
+              {!isProcessing && processingProgress.processed > 0 && firstCapturedSerial && (
+                <Link
+                  to="/inventory/browser"
+                  search={{ view: 'serialized', serializedSearch: firstCapturedSerial, page: 1 }}
+                  className={cn(buttonVariants({ variant: 'outline' }))}
+                >
+                  View Received Serials
+                </Link>
+              )}
+              {processingProgress.failed > 0 && !isProcessing && (
+                <Button onClick={handleRetryFailed}>
+                  Retry Failed ({processingProgress.failed})
+                </Button>
+              )}
+              <Button
+                onClick={handleClose}
+                disabled={isProcessing}
+                variant={processingProgress.failed > 0 ? 'outline' : 'default'}
+              >
+                {processingProgress.failed > 0 ? 'Close' : 'Done'}
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

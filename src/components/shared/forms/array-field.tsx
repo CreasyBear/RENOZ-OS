@@ -43,8 +43,12 @@
  */
 import * as React from "react"
 import { Plus, Trash2, GripVertical, ChevronUp, ChevronDown, AlertCircle } from "lucide-react"
+
+/** Module-level WeakMap for stable keys when getItemKey is not provided. Avoids ref access during render. */
+const arrayItemKeyMap = new WeakMap<object, string>()
 import { Button } from "~/components/ui/button"
 import { Label } from "~/components/ui/label"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { cn } from "~/lib/utils"
 
 // ============================================================================
@@ -111,6 +115,11 @@ export interface ArrayFieldProps<TItem> {
   emptyMessage?: string
   /** Disabled state */
   disabled?: boolean
+  /**
+   * When reorderable, supply a function to get a stable key for each item.
+   * Prefer item.id if your items have ids. Without this, a key is generated per item.
+   */
+  getItemKey?: (item: TItem, index: number) => string | number
 }
 
 // ============================================================================
@@ -132,15 +141,16 @@ export function ArrayField<TItem>({
   itemClassName,
   emptyMessage = "No items added yet",
   disabled = false,
+  getItemKey,
 }: ArrayFieldProps<TItem>) {
   const items = field.state.value ?? []
   const canAdd = !maxItems || items.length < maxItems
   const canRemove = items.length > minItems
 
-  // Extract error
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const hasErrors = field.state.meta.errors.length > 0
+  const shouldShowError = showErrorsAfterSubmit ? hasErrors : (field.state.meta.isTouched && hasErrors)
+  const rawError = shouldShowError ? field.state.meta.errors[0] : undefined
   const error = typeof rawError === 'string' ? rawError : rawError?.message
 
   const handleAdd = () => {
@@ -214,6 +224,16 @@ export function ArrayField<TItem>({
       ) : (
         <div className="space-y-3">
           {items.map((item, index) => {
+            const key = getItemKey
+              ? String(getItemKey(item, index))
+              : (() => {
+                  let k = arrayItemKeyMap.get(item as object)
+                  if (!k) {
+                    k = `array-item-${index}-${Math.random().toString(36).slice(2)}`
+                    arrayItemKeyMap.set(item as object, k)
+                  }
+                  return k
+                })()
             const actions: ItemActions = {
               remove: () => handleRemove(index),
               moveUp: () => handleMoveUp(index),
@@ -225,7 +245,7 @@ export function ArrayField<TItem>({
 
             return (
               <div
-                key={index}
+                key={key}
                 className={cn(
                   "relative rounded-lg border bg-card p-4",
                   itemClassName
@@ -341,9 +361,10 @@ export function StringArrayField({
   const [inputValue, setInputValue] = React.useState("")
   const items = field.state.value ?? []
 
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const hasErrors = field.state.meta.errors.length > 0
+  const shouldShowError = showErrorsAfterSubmit ? hasErrors : (field.state.meta.isTouched && hasErrors)
+  const rawError = shouldShowError ? field.state.meta.errors[0] : undefined
   const error = typeof rawError === 'string' ? rawError : rawError?.message
 
   const canAdd = !maxItems || items.length < maxItems

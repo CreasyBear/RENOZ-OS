@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { createPendingDialogInteractionGuards } from "@/components/ui/dialog-pending-guards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -133,7 +134,11 @@ export function EmailPreviewModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent
+        className="max-w-4xl sm:max-w-4xl max-h-[90vh] flex flex-col"
+        onEscapeKeyDown={createPendingDialogInteractionGuards(sendTestMutation.isPending).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(sendTestMutation.isPending).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />

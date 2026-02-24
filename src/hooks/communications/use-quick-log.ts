@@ -44,6 +44,14 @@ export function useCreateQuickLog() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.unifiedActivities.entityAudit('customer', variables.customerId),
         });
+        // Invalidate entityAuditWithRelated (used by customer detail timeline)
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+            'customer',
+            variables.customerId,
+            null
+          ),
+        });
         queryClient.invalidateQueries({
           queryKey: queryKeys.communications.customerCommunications(variables.customerId),
         });
@@ -60,6 +68,13 @@ export function useCreateQuickLog() {
         });
         queryClient.invalidateQueries({
           queryKey: queryKeys.unifiedActivities.entityAudit('opportunity', variables.opportunityId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+            'opportunity',
+            variables.opportunityId,
+            null
+          ),
         });
       }
     },

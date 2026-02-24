@@ -218,10 +218,6 @@ export interface TemplatesListProps {
     search: string
     category: TemplateCategory | 'all'
   }) => void
-  /** @source useCreateTemplate() in container */
-  onCreate: (values: TemplateFormValues) => Promise<void>
-  /** @source useUpdateTemplate() in container */
-  onUpdate: (id: string, values: TemplateFormValues) => Promise<void>
   /** @source useDeleteTemplate() in container */
   onDelete: (id: string) => Promise<void>
   /** @source useCloneTemplate() in container */
@@ -230,8 +226,10 @@ export interface TemplatesListProps {
   versions: TemplateVersion[]
   versionsLoading: boolean
   onFetchVersions: (templateId: string) => void
+  /** @source useRestoreTemplateVersion() in container */
+  onRestoreVersion?: (versionId: string) => Promise<void>
   isDeleting?: boolean
   isCloning?: boolean
-  isSaving?: boolean
+  isRestoringVersion?: boolean
   className?: string
 }

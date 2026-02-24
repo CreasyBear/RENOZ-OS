@@ -98,6 +98,7 @@ export function OrdersListContainer({
   // Bulk operations dialog state
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkOperation, setBulkOperation] = useState<BulkOperationConfig | null>(null);
+  const [bulkFailures, setBulkFailures] = useState<string[]>([]);
 
   const queryFilters = useMemo<OrderListQuery>(
     () => ({
@@ -240,6 +241,7 @@ export function OrdersListContainer({
       const config = OPERATION_CONFIGS[operationType];
       if (config) {
         setBulkOperation(config);
+        setBulkFailures([]);
         setBulkDialogOpen(true);
       }
     },
@@ -280,6 +282,25 @@ export function OrdersListContainer({
         return;
       }
 
+      if (
+        status === "cancelled" &&
+        selectedItems.some((order) =>
+          ["partially_shipped", "shipped", "delivered"].includes(order.status)
+        )
+      ) {
+        const blocked = selectedItems.filter((order) =>
+          ["partially_shipped", "shipped", "delivered"].includes(order.status)
+        );
+        setBulkFailures(
+          blocked.map(
+            (order) =>
+              `${order.orderNumber}: Cannot cancel orders with shipped quantities (process return/RMA first)`
+          )
+        );
+        toastError("Cancellation blocked for shipped orders");
+        throw new Error("Some orders failed to update");
+      }
+
       try {
         const result = await bulkUpdateStatusMutation.mutateAsync({
           orderIds,
@@ -291,13 +312,33 @@ export function OrdersListContainer({
         }
 
         if (result.failed.length > 0) {
-          toastError(`${result.failed.length} order${result.failed.length === 1 ? "" : "s"} failed`);
+          const orderNumberById = new Map(
+            selectedItems.map((order) => [order.id, order.orderNumber] as const)
+          );
+          const mappedFailures = result.failed.map((entry) => {
+            const delimiterIndex = entry.indexOf(": ");
+            const orderId =
+              delimiterIndex === -1 ? entry : entry.slice(0, delimiterIndex);
+            const reason =
+              delimiterIndex === -1 ? "" : entry.slice(delimiterIndex + 2);
+            const orderNumber = orderNumberById.get(orderId) ?? orderId;
+            return reason ? `${orderNumber}: ${reason}` : `${orderNumber}: Failed`;
+          });
+          setBulkFailures(mappedFailures);
+          toastError(
+            `${result.failed.length} order${result.failed.length === 1 ? "" : "s"} failed. Review details in the dialog.`
+          );
+          throw new Error("Some orders failed to update");
         }
 
+        setBulkFailures([]);
         clearSelection();
         setBulkDialogOpen(false);
         setBulkOperation(null);
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message === "Some orders failed to update") {
+          throw error;
+        }
         toastError("Failed to update order statuses");
         throw new Error("Bulk status update failed");
       }
@@ -401,11 +442,15 @@ export function OrdersListContainer({
         {/* Bulk Operations Dialog */}
         <OrderBulkOperationsDialog
           open={bulkDialogOpen}
-          onOpenChange={setBulkDialogOpen}
+          onOpenChange={(open) => {
+            setBulkDialogOpen(open);
+            if (!open) setBulkFailures([]);
+          }}
           operation={bulkOperation}
           orders={bulkOperationOrders}
           onConfirm={handleBulkConfirm}
           isLoading={bulkUpdateStatusMutation.isPending}
+          failures={bulkFailures}
         />
       </div>
   );

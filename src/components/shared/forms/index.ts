@@ -47,11 +47,20 @@ export {
   type StringArrayFieldApi,
   // Utilities
   extractFieldError,
+  type ExtractFieldErrorOptions,
 } from "./types"
 
 // ============================================================================
 // LAYOUT COMPONENTS
 // ============================================================================
+
+export {
+  FormFieldDisplayContext,
+  FormFieldDisplayProvider,
+  useFormFieldDisplay,
+  type FormFieldDisplayContextValue,
+  type FormFieldDisplayProviderProps,
+} from "./form-field-display-context"
 
 export {
   FormField,
@@ -98,6 +107,7 @@ export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field"
 // ============================================================================
 
 export { DateField, type DateFieldProps } from "./date-field"
+export { DateStringField, type DateStringFieldProps } from "./date-string-field"
 
 // ============================================================================
 // FORM UTILITY COMPONENTS

@@ -7,6 +7,7 @@
 import { memo, useCallback } from "react";
 import { Mail, Phone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StatusCell, ScoreCell, PriceCell, TagsCell } from "@/components/shared/data-table";
 import type { TagItem } from "@/components/shared/data-table";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export interface CustomersMobileCardsProps {
 export const CustomersMobileCards = memo(function CustomersMobileCards({
   customers,
   selectedIds,
+  onSelect,
   onViewCustomer,
   className,
 }: CustomersMobileCardsProps) {
@@ -86,11 +88,20 @@ export const CustomersMobileCards = memo(function CustomersMobileCards({
             <CardContent className="p-4">
               {/* Header row: Name + Status */}
               <div className="flex items-start justify-between mb-2">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{customer.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {customer.customerCode}
-                  </p>
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={(checked) => {
+                      onSelect(customer.id, checked === true);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select ${customer.name}`}
+                    className="mt-0.5"
+                  />
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{customer.name}</p>
+                    <p className="text-xs text-muted-foreground">{customer.customerCode}</p>
+                  </div>
                 </div>
                 <StatusCell
                   status={customer.status as CustomerStatus}

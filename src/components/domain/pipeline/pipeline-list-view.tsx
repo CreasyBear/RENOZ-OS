@@ -13,7 +13,7 @@
  * @see STANDARDS.md - Data table pattern for large datasets
  */
 
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, memo, useCallback } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -181,6 +181,7 @@ export const PipelineListView = memo(function PipelineListView({
 
   // Selection state for bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkChangingStage, setIsBulkChangingStage] = useState(false);
 
   // Handle sort
   const handleSort = (field: SortField) => {
@@ -260,6 +261,23 @@ export const PipelineListView = memo(function PipelineListView({
       .reduce((sum, o) => sum + o.value, 0);
   }, [sortedOpportunities, selectedIds]);
 
+  const handleBulkStageChange = useCallback(
+    async (targetStage: OpportunityStage) => {
+      if (selectedIds.size === 0 || isBulkChangingStage) return;
+      setIsBulkChangingStage(true);
+      try {
+        const ids = Array.from(selectedIds);
+        await Promise.allSettled(
+          ids.map((id) => Promise.resolve(onStageChange(id, targetStage)))
+        );
+        setSelectedIds(new Set());
+      } finally {
+        setIsBulkChangingStage(false);
+      }
+    },
+    [selectedIds, onStageChange, isBulkChangingStage]
+  );
+
   if (isLoading) {
     return (
       <div className="rounded-lg border">
@@ -294,10 +312,21 @@ export const PipelineListView = memo(function PipelineListView({
             </span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <ArrowRightLeft className="h-4 w-4 mr-1.5" />
-              Change Stage
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isBulkChangingStage}>
+                  <ArrowRightLeft className="h-4 w-4 mr-1.5" />
+                  {isBulkChangingStage ? "Updating..." : "Change Stage"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(Object.keys(STAGE_CONFIG) as OpportunityStage[]).map((stage) => (
+                  <DropdownMenuItem key={stage} onClick={() => void handleBulkStageChange(stage)}>
+                    {STAGE_CONFIG[stage].label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
               Clear Selection
             </Button>

@@ -568,6 +568,7 @@ export const costLayerReferenceTypeEnum = pgEnum("cost_layer_reference_type", [
   "purchase_order",
   "adjustment",
   "transfer",
+  "rma",
 ]);
 
 // ============================================================================

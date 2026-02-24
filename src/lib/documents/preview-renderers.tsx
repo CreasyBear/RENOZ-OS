@@ -92,6 +92,13 @@ export interface PreviewRenderContext {
 
 type PreviewRenderer = (ctx: PreviewRenderContext) => ReactElement;
 
+/** Sample serial numbers for preview documents (first two line items). */
+function sampleSerialsForPreview(idx: number): string[] | undefined {
+  if (idx === 0) return ['SN-2024-001', 'SN-2024-002'];
+  if (idx === 1) return ['PUMP-789'];
+  return undefined;
+}
+
 function shippingAddressFromContext(ctx: PreviewRenderContext) {
   const c = ctx.documentData.customer;
   return {
@@ -164,13 +171,14 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
           phone: ctx.documentData.customer.phone,
         },
         shippingAddress: shippingAddressFromContext(ctx),
-        lineItems: ctx.baseLineItems.map((li) => ({
+        lineItems: ctx.baseLineItems.map((li, idx) => ({
           id: li.id,
           lineNumber: li.lineNumber,
           sku: li.sku,
           description: li.description,
           quantity: li.quantity,
           notes: li.notes,
+          serialNumbers: sampleSerialsForPreview(idx),
         })),
       }}
     />
@@ -189,13 +197,15 @@ const DOCUMENT_RENDERERS: Record<PreviewDocumentType, PreviewRenderer> = {
           phone: ctx.documentData.customer.phone,
         },
         shippingAddress: shippingAddressFromContext(ctx),
-        lineItems: ctx.baseLineItems.map((li) => ({
+        lineItems: ctx.baseLineItems.map((li, idx) => ({
           id: li.id,
           lineNumber: li.lineNumber,
           sku: li.sku,
           description: li.description,
           quantity: li.quantity,
           notes: li.notes,
+          location: null,
+          serialNumbers: sampleSerialsForPreview(idx),
         })),
       }}
     />

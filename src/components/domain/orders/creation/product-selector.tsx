@@ -221,6 +221,7 @@ export const ProductSelector = memo(function ProductSelector({
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
                         <Button
+                          type="button"
                           variant="outline"
                           size="icon"
                           className="h-7 w-7"
@@ -234,6 +235,7 @@ export const ProductSelector = memo(function ProductSelector({
                           {item.quantity}
                         </span>
                         <Button
+                          type="button"
                           variant="outline"
                           size="icon"
                           className="h-7 w-7"
@@ -246,6 +248,7 @@ export const ProductSelector = memo(function ProductSelector({
                         {formatPrice(item.quantity * item.unitPrice)}
                       </span>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -357,6 +360,7 @@ export const ProductSelector = memo(function ProductSelector({
                         {isSelected ? (
                           <div className="flex items-center gap-1">
                             <Button
+                              type="button"
                               variant="outline"
                               size="icon"
                               className="h-8 w-8"
@@ -370,6 +374,7 @@ export const ProductSelector = memo(function ProductSelector({
                               {qty}
                             </span>
                             <Button
+                              type="button"
                               variant="outline"
                               size="icon"
                               className="h-8 w-8"
@@ -380,6 +385,7 @@ export const ProductSelector = memo(function ProductSelector({
                           </div>
                         ) : (
                           <Button
+                            type="button"
                             size="sm"
                             onClick={() => handleAddProduct(product)}
                           >

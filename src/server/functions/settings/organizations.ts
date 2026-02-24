@@ -16,7 +16,7 @@ import { db } from '@/lib/db';
 import { organizations } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { NotFoundError } from '@/lib/server/errors';
 import type { OrganizationSettingsResponse } from '@/lib/schemas/settings';

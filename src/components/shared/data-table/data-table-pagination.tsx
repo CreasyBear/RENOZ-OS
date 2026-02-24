@@ -7,6 +7,13 @@
 import type { Table } from "@tanstack/react-table"
 import { Button } from "~/components/ui/button"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select"
+import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -45,20 +52,24 @@ export function DataTablePagination<TData>({
       <div className="flex items-center space-x-6 lg:space-x-8">
         <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Rows per page</p>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              table.setPageSize(Number(e.target.value))
-            }}
-            className="h-8 w-[70px] rounded-md border border-input bg-background px-2 text-sm"
-            aria-label="Rows per page"
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => table.setPageSize(Number(v))}
           >
-            {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              className="h-8 w-[70px]"
+              aria-label="Rows per page"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {pageSizeOptions.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex w-[100px] items-center justify-center text-sm font-medium">

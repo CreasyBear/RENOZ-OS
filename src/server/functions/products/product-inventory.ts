@@ -15,13 +15,10 @@ import {
   inventory,
   inventoryMovements,
   warehouseLocations as locations,
-  activities,
 } from 'drizzle/schema';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
-import type { ActivityEntityType } from '@/lib/schemas/activities';
 import {
   createLocationSchema,
   updateLocationSchema,
@@ -32,6 +29,11 @@ import {
   movementTypeValues,
   isValidMovementType,
 } from '@/lib/schemas/inventory';
+import {
+  adjustInventory,
+  receiveInventory,
+  transferInventory,
+} from '@/server/functions/inventory/inventory';
 
 // ============================================================================
 // TYPES
@@ -528,196 +530,62 @@ export const getLocationInventory = createServerFn({ method: 'GET' })
 export const recordMovement = createServerFn({ method: 'POST' })
   .inputValidator(createMovementSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    if (data.movementType === 'receive') {
+      return receiveInventory({
+        data: {
+          productId: data.productId,
+          quantity: data.quantity,
+          unitCost: data.unitCost ?? 0,
+          locationId: data.locationId,
+          referenceId: data.referenceId,
+          referenceType: data.referenceType,
+          notes: data.notes,
+        },
+      });
+    }
 
-    return await db.transaction(async (tx) => {
-      // Get or create inventory record
-      let [inv] = await tx
-        .select()
-        .from(inventory)
-        .where(
-          and(
-            eq(inventory.productId, data.productId),
-            eq(inventory.locationId, data.locationId),
-            eq(inventory.organizationId, ctx.organizationId)
-          )
-        )
-        .limit(1);
-
-      // Drizzle's numericCasted automatically converts to number, no Number() needed
-      const previousQuantity = inv?.quantityOnHand ?? 0;
-      const newQuantity = previousQuantity + data.quantity;
-
-      // Check for negative inventory
-      if (newQuantity < 0) {
-        // Check if location allows negative
-        const [location] = await tx
-          .select({
-            allowNegative: sql<boolean>`COALESCE((${locations.attributes}->>'allowNegative')::boolean, false)`,
-          })
-          .from(locations)
-          .where(eq(locations.id, data.locationId))
-          .limit(1);
-
-        if (!location?.allowNegative) {
-          throw new ValidationError(
-            `Insufficient stock. Available: ${previousQuantity}, Requested: ${Math.abs(data.quantity)}`,
-            {
-              quantity: [
-                `Insufficient stock. Available: ${previousQuantity}, Requested: ${Math.abs(data.quantity)}`,
-              ],
-            }
-          );
-        }
-      }
-
-      if (!inv) {
-        // Create new inventory record
-        [inv] = await tx
-          .insert(inventory)
-          .values({
-            organizationId: ctx.organizationId,
-            productId: data.productId,
-            locationId: data.locationId,
-            status: 'available',
-            quantityOnHand: data.quantity,
-            quantityAllocated: 0,
-            unitCost: data.unitCost ?? 0,
-            totalValue: (data.unitCost ?? 0) * data.quantity,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          })
-          .returning();
-      } else {
-        // Update existing inventory
-        // Drizzle's numericCasted automatically converts to number, no Number() needed
-        const unitCost = data.unitCost ?? inv.unitCost ?? 0;
-
-        [inv] = await tx
-          .update(inventory)
-          .set({
-            quantityOnHand: newQuantity,
-            unitCost: unitCost,
-            totalValue: unitCost * newQuantity,
-            updatedBy: ctx.user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(inventory.id, inv.id))
-          .returning();
-      }
-
-      // Record the movement
-      const [movement] = await tx
-        .insert(inventoryMovements)
-        .values({
-          organizationId: ctx.organizationId,
-          inventoryId: inv.id,
+    if (data.movementType === 'adjust') {
+      return adjustInventory({
+        data: {
           productId: data.productId,
           locationId: data.locationId,
-          movementType: data.movementType,
-          quantity: data.quantity,
-          previousQuantity: previousQuantity,
-          newQuantity: newQuantity,
-          unitCost: data.unitCost ?? 0,
-          totalCost: (data.unitCost ?? 0) * Math.abs(data.quantity),
-          referenceType: data.referenceType,
-          referenceId: data.referenceId,
-          metadata: data.metadata ?? {},
+          adjustmentQty: data.quantity,
+          reason:
+            typeof data.metadata?.reason === 'string' && data.metadata.reason.trim().length > 0
+              ? data.metadata.reason
+              : 'system_correction',
           notes: data.notes,
-          createdBy: ctx.user.id,
-        })
-        .returning();
+        },
+      });
+    }
 
-      // Log activity for significant movements (customer-facing, supplier-facing, significant)
-      const logger = createActivityLoggerWithContext(ctx);
-      const movementType = data.movementType;
-      
-      // Only log significant movements
-      if (['ship', 'receive', 'return', 'adjust'].includes(movementType)) {
-        let entityType: string;
-        let entityId: string | null = null;
-        let description: string;
-
-        // Shipments linked to orders
-        if (movementType === 'ship' && data.referenceType === 'order' && data.referenceId) {
-          entityType = 'order';
-          entityId = data.referenceId;
-          description = `Inventory shipped for order`;
-        }
-        // Returns linked to orders
-        else if (movementType === 'return' && data.referenceType === 'order' && data.referenceId) {
-          entityType = 'order';
-          entityId = data.referenceId;
-          description = `Inventory returned for order`;
-        }
-        // Receipts linked to purchase orders
-        else if (movementType === 'receive' && data.referenceType === 'purchase_order' && data.referenceId) {
-          entityType = 'purchase_order';
-          entityId = data.referenceId;
-          description = `Inventory received for purchase order`;
-        }
-        // Receipts not linked to purchase orders (still supplier-facing)
-        else if (movementType === 'receive') {
-          entityType = 'product';
-          entityId = data.productId;
-          description = `Inventory received`;
-        }
-        // Returns not linked to orders
-        else if (movementType === 'return') {
-          entityType = 'product';
-          entityId = data.productId;
-          description = `Inventory returned`;
-        }
-        // Adjustments
-        else if (movementType === 'adjust') {
-          entityType = 'product';
-          entityId = data.productId;
-          description = `Inventory adjusted`;
-        }
-        // Fallback (shouldn't happen)
-        else {
-          entityType = 'product';
-          entityId = data.productId;
-          description = `Inventory movement: ${movementType}`;
-        }
-
-        if (entityId) {
-          // Check if activity already exists (prevent duplicates from backfill)
-          const [existingActivity] = await db
-            .select({ id: activities.id })
-            .from(activities)
-            .where(
-              and(
-                eq(activities.organizationId, ctx.organizationId),
-                sql`${activities.metadata}->>'movementId' = ${movement.id}`
-              )
-            )
-            .limit(1);
-
-          if (!existingActivity) {
-            logger.logAsync({
-              entityType: entityType as ActivityEntityType,
-              entityId,
-              action: 'updated',
-              description: `${description} (movement: ${movementType})`,
-              metadata: {
-                movementId: movement.id,
-                movementType: movementType,
-                referenceType: data.referenceType,
-                referenceId: data.referenceId,
-                productId: data.productId,
-                quantity: data.quantity,
-              },
-            });
-          }
-        }
+    if (data.movementType === 'transfer') {
+      const toLocationId =
+        typeof data.metadata?.toLocationId === 'string' ? data.metadata.toLocationId : null;
+      if (!toLocationId) {
+        throw new ValidationError('Transfer movement requires metadata.toLocationId', {
+          toLocationId: ['Provide destination location when recording transfer movements'],
+        });
       }
+      return transferInventory({
+        data: {
+          productId: data.productId,
+          fromLocationId: data.locationId,
+          toLocationId,
+          quantity: Math.abs(data.quantity),
+          notes: data.notes,
+        },
+      });
+    }
 
-      return {
-        inventory: inv as Inventory,
-        movement: movement as InventoryMovement,
-      };
-    });
+    throw new ValidationError(
+      `Movement type "${data.movementType}" must use its domain workflow endpoint`,
+      {
+        movementType: [
+          'Use canonical inventory/order/rma mutation endpoints for this movement type',
+        ],
+      }
+    );
   });
 
 /**
@@ -736,10 +604,15 @@ export const receiveStock = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return recordMovement({
+    return receiveInventory({
       data: {
-        ...data,
-        movementType: 'receive',
+        productId: data.productId,
+        locationId: data.locationId,
+        quantity: data.quantity,
+        unitCost: data.unitCost ?? 0,
+        referenceId: data.referenceId,
+        referenceType: data.referenceType,
+        notes: data.notes,
       },
     });
   });
@@ -762,6 +635,9 @@ export const allocateStock = createServerFn({ method: 'POST' })
     const ctx = await withAuth();
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get inventory record
       const [inv] = await tx
         .select()
@@ -861,6 +737,9 @@ export const deallocateStock = createServerFn({ method: 'POST' })
     const ctx = await withAuth();
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get inventory record
       const [inv] = await tx
         .select()
@@ -942,14 +821,13 @@ export const deallocateStock = createServerFn({ method: 'POST' })
 export const adjustStock = createServerFn({ method: 'POST' })
   .inputValidator(stockAdjustmentSchema)
   .handler(async ({ data }) => {
-    return recordMovement({
+    return adjustInventory({
       data: {
         productId: data.productId,
         locationId: data.locationId,
-        movementType: 'adjust',
-        quantity: data.adjustmentQty,
+        adjustmentQty: data.adjustmentQty,
+        reason: data.reason,
         notes: data.notes,
-        metadata: { reason: data.reason },
       },
     });
   });
@@ -960,154 +838,17 @@ export const adjustStock = createServerFn({ method: 'POST' })
 export const transferStock = createServerFn({ method: 'POST' })
   .inputValidator(stockTransferSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
-
-    return await db.transaction(async (tx) => {
-      // Check source inventory
-      const [sourceInv] = await tx
-        .select()
-        .from(inventory)
-        .where(
-          and(
-            eq(inventory.productId, data.productId),
-            eq(inventory.locationId, data.fromLocationId),
-            eq(inventory.organizationId, ctx.organizationId)
-          )
-        )
-        .limit(1);
-
-      if (!sourceInv) {
-        throw new NotFoundError('No inventory at source location', 'fromLocation');
-      }
-
-      // Drizzle's numericCasted automatically converts to number, no Number() needed
-      const sourceAvailable = sourceInv.quantityAvailable ?? 0;
-      if (data.quantity > sourceAvailable) {
-        throw new ValidationError(
-          `Insufficient available stock at source. Available: ${sourceAvailable}, Requested: ${data.quantity}`,
-          {
-            quantity: [
-              `Insufficient available stock at source. Available: ${sourceAvailable}, Requested: ${data.quantity}`,
-            ],
-          }
-        );
-      }
-
-      // Deduct from source
-      const sourceOnHand = sourceInv.quantityOnHand ?? 0;
-      const newSourceOnHand = sourceOnHand - data.quantity;
-      const sourceAllocated = sourceInv.quantityAllocated ?? 0;
-      const newSourceAvailable = newSourceOnHand - sourceAllocated;
-      const unitCost = sourceInv.unitCost ?? 0;
-
-      await tx
-        .update(inventory)
-        .set({
-          quantityOnHand: newSourceOnHand,
-          totalValue: unitCost * newSourceOnHand,
-          updatedBy: ctx.user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(inventory.id, sourceInv.id));
-
-      // Record source movement
-      await tx.insert(inventoryMovements).values({
-        organizationId: ctx.organizationId,
-        inventoryId: sourceInv.id,
+    return transferInventory({
+      data: {
+        inventoryId: data.inventoryId,
         productId: data.productId,
-        locationId: data.fromLocationId,
-        movementType: 'transfer',
-        quantity: -data.quantity,
-        previousQuantity: sourceOnHand,
-        newQuantity: newSourceOnHand,
-        unitCost: unitCost,
-        totalCost: unitCost * data.quantity,
-        referenceType: 'transfer',
-        metadata: { toLocationId: data.toLocationId },
+        fromLocationId: data.fromLocationId,
+        toLocationId: data.toLocationId,
+        quantity: data.quantity,
+        serialNumbers: data.serialNumbers,
+        reason: data.reason,
         notes: data.notes,
-        createdBy: ctx.user.id,
-      });
-
-      // Get or create destination inventory
-      let [destInv] = await tx
-        .select()
-        .from(inventory)
-        .where(
-          and(
-            eq(inventory.productId, data.productId),
-            eq(inventory.locationId, data.toLocationId),
-            eq(inventory.organizationId, ctx.organizationId)
-          )
-        )
-        .limit(1);
-
-      // Drizzle's numericCasted automatically converts to number, no Number() needed
-      const destPreviousOnHand = destInv?.quantityOnHand ?? 0;
-      const destNewOnHand = destPreviousOnHand + data.quantity;
-
-      if (!destInv) {
-        // Create new inventory record at destination
-        [destInv] = await tx
-          .insert(inventory)
-          .values({
-            organizationId: ctx.organizationId,
-            productId: data.productId,
-            locationId: data.toLocationId,
-            status: 'available',
-            quantityOnHand: data.quantity,
-            quantityAllocated: 0,
-            unitCost: unitCost,
-            totalValue: unitCost * data.quantity,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          })
-          .returning();
-      } else {
-        // Update existing destination inventory
-        // Note: destInv.quantityAllocated available for future allocation tracking
-
-        [destInv] = await tx
-          .update(inventory)
-          .set({
-            quantityOnHand: destNewOnHand,
-            totalValue: unitCost * destNewOnHand,
-            updatedBy: ctx.user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(inventory.id, destInv.id))
-          .returning();
-      }
-
-      // Record destination movement
-      const [destMovement] = await tx
-        .insert(inventoryMovements)
-        .values({
-          organizationId: ctx.organizationId,
-          inventoryId: destInv.id,
-          productId: data.productId,
-          locationId: data.toLocationId,
-          movementType: 'transfer',
-          quantity: data.quantity,
-          previousQuantity: destPreviousOnHand,
-          newQuantity: destNewOnHand,
-          unitCost: unitCost,
-          totalCost: unitCost * data.quantity,
-          referenceType: 'transfer',
-          metadata: { fromLocationId: data.fromLocationId },
-          notes: data.notes,
-          createdBy: ctx.user.id,
-        })
-        .returning();
-
-      return {
-        sourceInventory: {
-          ...sourceInv,
-          quantityOnHand: newSourceOnHand,
-          quantityAvailable: newSourceAvailable,
-        } as Inventory,
-        destinationInventory: destInv as Inventory,
-        movement: destMovement as InventoryMovement,
-      };
+      },
     });
   });
 
@@ -1513,6 +1254,9 @@ export const bulkReceiveStock = createServerFn({ method: 'POST' })
     const ctx = await withAuth();
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       const productIds = data.items.map((item) => item.productId);
       const results: Array<{
         productId: string;

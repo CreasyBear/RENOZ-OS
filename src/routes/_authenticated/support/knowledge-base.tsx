@@ -5,14 +5,14 @@
  *
  * Main page for browsing and managing KB articles.
  *
- * LAYOUT: full-width
- *
  * @see src/components/domain/support/kb-article-list.tsx
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-007b
+ * @see docs/reliability/MUTATION-CONTRACT-STANDARD.md - Mutation checklist for article/category forms
  */
 
 import { useMemo, useState } from 'react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { KnowledgeBaseSkeleton } from '@/components/skeletons/support';
 import { BookOpen, Settings } from 'lucide-react';
@@ -20,15 +20,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LoadingState } from '@/components/shared/loading-state';
-import { KbCategoryTree } from '@/components/domain/support';
-import { KbArticleList } from '@/components/domain/support';
-import { KbArticleSearch } from '@/components/domain/support';
-import { KbPopularArticles } from '@/components/domain/support';
-import { KbSuggestedArticles } from '@/components/domain/support';
-import {
-  KbArticleFormDialog,
-  type ArticleFormValues,
-} from '@/components/domain/support';
+import { KbCategoryTree } from '@/components/domain/support/knowledge-base/kb-category-tree';
+import { KbArticleList } from '@/components/domain/support/knowledge-base/kb-article-list';
+import { KbArticleSearch } from '@/components/domain/support/knowledge-base/kb-article-search';
+import { KbPopularArticles } from '@/components/domain/support/knowledge-base/kb-popular-articles';
+import { KbSuggestedArticles } from '@/components/domain/support/knowledge-base/kb-suggested-articles';
+import { KbArticleFormDialog, type ArticleFormValues } from '@/components/domain/support/knowledge-base/kb-article-form-dialog';
 import {
   useKbCategories,
   useKbArticles,
@@ -37,6 +34,7 @@ import {
   useCreateKbArticle,
   useUpdateKbArticle,
   useRecordArticleFeedback,
+  useOptimisticFeedbackDeltas,
 } from '@/hooks/support';
 import { useDebounce } from '@/hooks/_shared';
 import { useConfirmation } from '@/hooks';
@@ -49,6 +47,14 @@ import type {
 } from '@/lib/schemas/support/knowledge-base';
 
 export const Route = createFileRoute('/_authenticated/support/knowledge-base')({
+  validateSearch: z.object({
+    categoryId: z.string().uuid().optional(),
+    search: z.string().optional(),
+    status: z.enum(['all', 'draft', 'published', 'archived']).default('all').optional(),
+    tags: z.string().optional(),
+    page: z.coerce.number().int().positive().default(1).optional(),
+    sortBy: z.enum(['updatedAt', 'createdAt', 'title', 'viewCount', 'publishedAt']).default('updatedAt').optional(),
+  }),
   component: KnowledgeBasePage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/support" />
@@ -67,28 +73,59 @@ export const Route = createFileRoute('/_authenticated/support/knowledge-base')({
 });
 
 function KnowledgeBasePage() {
-  const [selectedCategory, setSelectedCategory] = useState<KbCategoryResponse | null>(null);
+  const navigate = useNavigate({ from: Route.fullPath });
+  const searchState = Route.useSearch();
   const [articleDialogOpen, setArticleDialogOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<KbArticleResponse | null>(null);
-  const [searchInput, setSearchInput] = useState('');
-  const [status, setStatus] = useState<KbArticleStatus | 'all'>('all');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState<ListArticlesInput['sortBy']>('updatedAt');
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [quickSearchInput, setQuickSearchInput] = useState('');
   const [previewArticleId, setPreviewArticleId] = useState<string | null>(null);
+  const [pendingFeedbackArticleId, setPendingFeedbackArticleId] = useState<string | null>(null);
+  const {
+    apply: applyFeedbackDelta,
+    rollback: rollbackFeedbackDelta,
+    clear: clearFeedbackDelta,
+    adjustCounts: adjustFeedbackCounts,
+  } = useOptimisticFeedbackDeltas();
 
   const { data: categories, isLoading: categoriesLoading } = useKbCategories({
     isActive: true,
     includeArticleCount: true,
   });
 
+  const searchInput = searchState.search ?? '';
+  const status = (searchState.status ?? 'all') as KbArticleStatus | 'all';
+  const selectedTags = (searchState.tags ?? '')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const page = searchState.page ?? 1;
+  const sortBy = (searchState.sortBy ?? 'updatedAt') as ListArticlesInput['sortBy'];
+  const selectedCategory = (categories ?? []).find((category) => category.id === searchState.categoryId) ?? null;
+
+  const updateSearchState = (updates: Partial<{
+    categoryId?: string;
+    search?: string;
+    status?: 'all' | KbArticleStatus;
+    tags?: string;
+    page?: number;
+    sortBy?: ListArticlesInput['sortBy'];
+  }>) => {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        ...updates,
+      }),
+      replace: true,
+    });
+  };
+
   const debouncedSearch = useDebounce(searchInput, 300);
   const {
     data: articlesData,
     isLoading: articlesLoading,
     error: articlesError,
+    refetch: refetchArticles,
   } = useKbArticles({
     categoryId: selectedCategory?.id ?? undefined,
     status: status === 'all' ? undefined : status,
@@ -155,9 +192,10 @@ function KnowledgeBasePage() {
     sortOrder: 'desc',
     enabled: hasSuggestionFilters,
   });
-  const suggestedArticles = hasSuggestionFilters
+  const rawSuggestedArticles = hasSuggestionFilters
     ? (suggestedData?.data ?? [])
     : (popularViewedData?.data ?? []);
+  const suggestedArticles = rawSuggestedArticles.map(adjustFeedbackCounts);
   const suggestedIsLoading = hasSuggestionFilters ? suggestedLoading : popularViewedLoading;
   const suggestedErrorState = hasSuggestionFilters ? suggestedError : popularViewedError;
 
@@ -166,7 +204,11 @@ function KnowledgeBasePage() {
     incrementViews: true,
     enabled: !!previewArticleId,
   });
-  const previewArticleById = previewArticle ? { [previewArticle.id]: previewArticle } : undefined;
+  const previewArticleById = previewArticle
+    ? {
+        [previewArticle.id]: adjustFeedbackCounts(previewArticle),
+      }
+    : undefined;
 
   const feedbackMutation = useRecordArticleFeedback();
 
@@ -174,6 +216,7 @@ function KnowledgeBasePage() {
   const deleteArticleMutation = useDeleteKbArticle();
   const createArticleMutation = useCreateKbArticle();
   const updateArticleMutation = useUpdateKbArticle();
+  const isArticleSubmitting = createArticleMutation.isPending || updateArticleMutation.isPending;
 
   const handleCreateArticle = () => {
     setEditingArticle(null);
@@ -185,60 +228,67 @@ function KnowledgeBasePage() {
     setArticleDialogOpen(true);
   };
 
-  const handleCloseDialog = () => {
-    setArticleDialogOpen(false);
-    setEditingArticle(null);
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isArticleSubmitting) return;
+    setArticleDialogOpen(nextOpen);
+    if (!nextOpen) {
+      setEditingArticle(null);
+    }
   };
 
   const handleCategorySelect = (category: KbCategoryResponse | null) => {
-    setSelectedCategory(category);
-    setPage(1);
+    updateSearchState({
+      categoryId: category?.id,
+      page: 1,
+    });
   };
 
   const handleSearchChange = (value: string) => {
-    setSearchInput(value);
-    setPage(1);
+    updateSearchState({ search: value || undefined, page: 1 });
   };
 
   const handleStatusChange = (value: KbArticleStatus | 'all') => {
-    setStatus(value);
-    setPage(1);
+    updateSearchState({ status: value, page: 1 });
   };
 
   const handleSortByChange = (value: ListArticlesInput['sortBy']) => {
-    setSortBy(value);
-    setPage(1);
+    updateSearchState({ sortBy: value, page: 1 });
   };
 
   const handleTagToggle = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-    setPage(1);
+    const nextTags = selectedTags.includes(tag)
+      ? selectedTags.filter((t) => t !== tag)
+      : [...selectedTags, tag];
+    updateSearchState({
+      tags: nextTags.length > 0 ? nextTags.join(',') : undefined,
+      page: 1,
+    });
   };
 
   const handleClearTags = () => {
-    setSelectedTags([]);
-    setPage(1);
+    updateSearchState({ tags: undefined, page: 1 });
   };
 
   const handleClearFilters = () => {
-    setSearchInput('');
-    setStatus('all');
-    setSelectedTags([]);
-    setPage(1);
+    updateSearchState({
+      search: undefined,
+      status: 'all',
+      tags: undefined,
+      page: 1,
+    });
   };
 
   const handlePageChange = (nextPage: number) => {
-    setPage(nextPage);
+    updateSearchState({ page: nextPage });
   };
 
   const handleQuickSearchSelect = (article: KbArticleResponse) => {
-    setSearchInput(article.title);
-    setPage(1);
+    updateSearchState({ search: article.title, page: 1 });
   };
 
   const handleDeleteArticle = async (article: KbArticleResponse) => {
+    if (deleteArticleMutation.isPending) return;
+
     const confirmed = await confirm.confirm({
       title: 'Delete Article',
       description:
@@ -249,16 +299,26 @@ function KnowledgeBasePage() {
 
     if (confirmed.confirmed) {
       try {
-        await deleteArticleMutation.mutateAsync(article.id);
-        toast.success('Article deleted successfully');
-      } catch {
-        toast.error('Failed to delete article');
+        const result = await deleteArticleMutation.mutateAsync(article.id);
+        toast.success(result.message ?? 'Article deleted successfully');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to delete article');
       }
     }
   };
 
   const handleRecordFeedback = async (articleId: string, helpful: boolean) => {
-    await feedbackMutation.mutateAsync({ articleId, helpful });
+    applyFeedbackDelta(articleId, helpful);
+    setPendingFeedbackArticleId(articleId);
+    try {
+      await feedbackMutation.mutateAsync({ articleId, helpful });
+      clearFeedbackDelta(articleId);
+    } catch (error) {
+      rollbackFeedbackDelta(articleId, helpful);
+      throw error;
+    } finally {
+      setPendingFeedbackArticleId(null);
+    }
   };
 
   const handleSubmitArticle = async (values: ArticleFormValues) => {
@@ -319,12 +379,12 @@ function KnowledgeBasePage() {
             {categoriesLoading ? (
               <LoadingState text="Loading..." />
             ) : (
-              <KbCategoryTree
-                categories={categories ?? []}
-                selectedId={selectedCategory?.id ?? null}
-                onSelect={handleCategorySelect}
-                showActions={false}
-                showCounts={true}
+                <KbCategoryTree
+                  categories={categories ?? []}
+                  selectedId={searchState.categoryId ?? null}
+                  onSelect={handleCategorySelect}
+                  showActions={false}
+                  showCounts={true}
               />
             )}
           </CardContent>
@@ -335,7 +395,7 @@ function KnowledgeBasePage() {
           {/* Breadcrumb */}
           {selectedCategory && (
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
-              <button onClick={() => setSelectedCategory(null)} className="hover:text-foreground">
+              <button onClick={() => handleCategorySelect(null)} className="hover:text-foreground">
                 All Articles
               </button>
               <span>/</span>
@@ -364,6 +424,9 @@ function KnowledgeBasePage() {
             onCreateArticle={handleCreateArticle}
             onEditArticle={handleEditArticle}
             onDeleteArticle={handleDeleteArticle}
+            onRetry={() => {
+              void refetchArticles();
+            }}
           />
         </div>
 
@@ -410,7 +473,9 @@ function KnowledgeBasePage() {
             previewArticleById={previewArticleById}
             onPreviewOpen={(article) => setPreviewArticleId(article.id)}
             onFeedback={handleRecordFeedback}
-            isFeedbackPending={() => feedbackMutation.isPending}
+            isFeedbackPending={(articleId) =>
+              feedbackMutation.isPending && pendingFeedbackArticleId === articleId
+            }
           />
         </div>
       </div>
@@ -419,10 +484,10 @@ function KnowledgeBasePage() {
         <KbArticleFormDialog
           key={editingArticle?.id ?? 'new'}
           open={articleDialogOpen}
-          onOpenChange={handleCloseDialog}
+          onOpenChange={handleDialogOpenChange}
           article={editingArticle}
           categories={categories ?? []}
-          isSubmitting={createArticleMutation.isPending || updateArticleMutation.isPending}
+          isSubmitting={isArticleSubmitting}
           onSubmit={handleSubmitArticle}
         />
       </PageLayout.Content>

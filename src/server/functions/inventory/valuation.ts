@@ -19,6 +19,7 @@ import {
   categories,
   warehouseLocations as locations,
 } from 'drizzle/schema';
+import { inventoryCostLayerCapitalizations } from 'drizzle/schema/inventory/inventory';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { formatAmount } from '@/lib/currency';
@@ -30,11 +31,18 @@ import {
   cogsCalculationSchema,
   inventoryAgingQuerySchema,
   inventoryTurnoverQuerySchema,
+  inventoryFinanceIntegrityQuerySchema,
+  inventoryFinanceReconcileSchema,
   type InventoryValuationResult,
   type InventoryTurnoverResult,
   type AggregatedAgingItem,
   type COGSResult,
+  type InventoryFinanceIntegritySummary,
+  type InventoryFinanceReconcileResult,
+  type InventoryCostLayerRow,
+  type InventoryCostLayerCostComponent,
 } from '@/lib/schemas/inventory';
+import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 
 // ============================================================================
 // TYPES
@@ -52,6 +60,266 @@ type CostLayerRecord = typeof inventoryCostLayers.$inferSelect;
  */
 function parseDecimal(value: string | number): number {
   return typeof value === 'string' ? Number(value) : value;
+}
+
+function toInventoryCostLayerRow(
+  layer: typeof inventoryCostLayers.$inferSelect,
+  costComponents: InventoryCostLayerCostComponent[]
+): InventoryCostLayerRow {
+  const expiryDate = layer.expiryDate
+    ? typeof layer.expiryDate === 'string'
+      ? new Date(layer.expiryDate)
+      : layer.expiryDate
+    : null;
+  return {
+    id: layer.id,
+    receivedAt: layer.receivedAt,
+    quantityReceived: layer.quantityReceived,
+    quantityRemaining: layer.quantityRemaining,
+    unitCost: layer.unitCost,
+    referenceType: layer.referenceType,
+    referenceId: layer.referenceId,
+    expiryDate,
+    costComponents,
+  };
+}
+
+async function attachCostLayerCapitalizations(
+  organizationId: string,
+  layers: Array<typeof inventoryCostLayers.$inferSelect>
+): Promise<InventoryCostLayerRow[]> {
+  if (layers.length === 0) return [];
+  const layerIds = layers.map((layer) => layer.id);
+  const components = await db
+    .select()
+    .from(inventoryCostLayerCapitalizations)
+    .where(
+      and(
+        eq(inventoryCostLayerCapitalizations.organizationId, organizationId),
+        inArray(inventoryCostLayerCapitalizations.inventoryCostLayerId, layerIds)
+      )
+    );
+  const byLayerId = new Map<string, typeof components>();
+  for (const component of components) {
+    const existing = byLayerId.get(component.inventoryCostLayerId) ?? [];
+    existing.push(component);
+    byLayerId.set(component.inventoryCostLayerId, existing);
+  }
+
+  return layers.map((layer) => {
+    const rawComponents = byLayerId.get(layer.id) ?? [];
+    const costComponents: InventoryCostLayerCostComponent[] = rawComponents.map((c) => ({
+      id: c.id,
+      componentType:
+        c.componentType === 'allocated_additional_cost' ? 'allocated_additional_cost' : 'base_unit_cost',
+      costType: c.costType,
+      quantityBasis: c.quantityBasis,
+      amountTotal: Number(c.amountTotal),
+      amountPerUnit: Number(c.amountPerUnit),
+      currency: c.currency,
+      exchangeRate: c.exchangeRate == null ? null : Number(c.exchangeRate),
+      metadata: (c.metadata ?? null) as FlexibleJson | null,
+    }));
+    return toInventoryCostLayerRow(layer, costComponents);
+  });
+}
+
+async function getFinanceIntegritySummary(
+  organizationId: string,
+  options?: { valueDriftTolerance?: number; topDriftLimit?: number }
+): Promise<InventoryFinanceIntegritySummary> {
+  const valueDriftTolerance = options?.valueDriftTolerance ?? 0.01;
+  const topDriftLimit = options?.topDriftLimit ?? 25;
+
+  const aggregateResult = await db.execute<{
+    stock_without_active_layers: number;
+    inventory_value_mismatch_count: number;
+    total_absolute_value_drift: number;
+    negative_or_overconsumed_layers: number;
+    duplicate_active_serialized_allocations: number;
+    shipment_link_status_mismatch: number;
+  }>(
+    sql`
+      WITH layer_totals AS (
+        SELECT
+          icl.inventory_id,
+          COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining ELSE 0 END), 0)::numeric AS active_qty,
+          COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining * icl.unit_cost ELSE 0 END), 0)::numeric AS active_value
+        FROM inventory_cost_layers icl
+        WHERE icl.organization_id = ${organizationId}
+        GROUP BY icl.inventory_id
+      ),
+      inv AS (
+        SELECT
+          i.id,
+          COALESCE(i.quantity_on_hand, 0)::numeric AS quantity_on_hand,
+          COALESCE(i.total_value, 0)::numeric AS inventory_value,
+          COALESCE(lt.active_qty, 0)::numeric AS active_qty,
+          COALESCE(lt.active_value, 0)::numeric AS active_value
+        FROM inventory i
+        LEFT JOIN layer_totals lt ON lt.inventory_id = i.id
+        WHERE i.organization_id = ${organizationId}
+      ),
+      serialized_dupes AS (
+        SELECT COUNT(*)::int AS cnt
+        FROM (
+          SELECT serialized_item_id
+          FROM order_line_serial_allocations
+          WHERE organization_id = ${organizationId}
+            AND is_active = true
+            AND released_at IS NULL
+          GROUP BY serialized_item_id
+          HAVING COUNT(*) > 1
+        ) t
+      ),
+      shipment_mismatch AS (
+        SELECT COUNT(*)::int AS cnt
+        FROM shipment_item_serials sis
+        INNER JOIN serialized_items si ON si.id = sis.serialized_item_id
+        WHERE sis.organization_id = ${organizationId}
+          AND si.organization_id = ${organizationId}
+          AND si.status NOT IN ('shipped', 'returned')
+      ),
+      layer_bounds AS (
+        SELECT COUNT(*)::int AS cnt
+        FROM inventory_cost_layers icl
+        WHERE icl.organization_id = ${organizationId}
+          AND (
+            icl.quantity_remaining < 0
+            OR icl.quantity_remaining > icl.quantity_received
+          )
+      )
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN inv.quantity_on_hand > 0 AND inv.active_qty = 0 THEN 1
+            ELSE 0
+          END
+        ), 0)::int AS stock_without_active_layers,
+        COALESCE(SUM(
+          CASE
+            WHEN ABS(inv.inventory_value - inv.active_value) > ${valueDriftTolerance} THEN 1
+            ELSE 0
+          END
+        ), 0)::int AS inventory_value_mismatch_count,
+        COALESCE(SUM(ABS(inv.inventory_value - inv.active_value)), 0)::numeric AS total_absolute_value_drift,
+        (SELECT cnt FROM layer_bounds) AS negative_or_overconsumed_layers,
+        (SELECT cnt FROM serialized_dupes) AS duplicate_active_serialized_allocations,
+        (SELECT cnt FROM shipment_mismatch) AS shipment_link_status_mismatch
+      FROM inv
+    `
+  );
+
+  const topDriftRowsResult = await db.execute<{
+    inventory_id: string;
+    product_id: string;
+    product_sku: string;
+    product_name: string;
+    location_id: string;
+    location_name: string;
+    quantity_on_hand: number;
+    inventory_value: number;
+    layer_value: number;
+    absolute_drift: number;
+  }>(
+    sql`
+      WITH layer_totals AS (
+        SELECT
+          icl.inventory_id,
+          COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining * icl.unit_cost ELSE 0 END), 0)::numeric AS layer_value
+        FROM inventory_cost_layers icl
+        WHERE icl.organization_id = ${organizationId}
+        GROUP BY icl.inventory_id
+      )
+      SELECT
+        i.id AS inventory_id,
+        i.product_id,
+        COALESCE(p.sku, '') AS product_sku,
+        COALESCE(p.name, 'Unknown Product') AS product_name,
+        i.location_id,
+        COALESCE(l.name, 'Unknown') AS location_name,
+        COALESCE(i.quantity_on_hand, 0)::numeric AS quantity_on_hand,
+        COALESCE(i.total_value, 0)::numeric AS inventory_value,
+        COALESCE(lt.layer_value, 0)::numeric AS layer_value,
+        ABS(COALESCE(i.total_value, 0) - COALESCE(lt.layer_value, 0))::numeric AS absolute_drift
+      FROM inventory i
+      LEFT JOIN layer_totals lt ON lt.inventory_id = i.id
+      LEFT JOIN products p ON p.id = i.product_id
+      LEFT JOIN warehouse_locations l ON l.id = i.location_id
+      WHERE i.organization_id = ${organizationId}
+        AND ABS(COALESCE(i.total_value, 0) - COALESCE(lt.layer_value, 0)) > ${valueDriftTolerance}
+      ORDER BY absolute_drift DESC
+      LIMIT ${topDriftLimit}
+    `
+  );
+
+  const aggregate = (
+    aggregateResult as unknown as Array<{
+      stock_without_active_layers: number;
+      inventory_value_mismatch_count: number;
+      total_absolute_value_drift: number;
+      negative_or_overconsumed_layers: number;
+      duplicate_active_serialized_allocations: number;
+      shipment_link_status_mismatch: number;
+    }>
+  )[0];
+  const topDriftRows = topDriftRowsResult as unknown as Array<{
+    inventory_id: string;
+    product_id: string;
+    product_sku: string;
+    product_name: string;
+    location_id: string;
+    location_name: string;
+    quantity_on_hand: number;
+    inventory_value: number;
+    layer_value: number;
+    absolute_drift: number;
+  }>;
+
+  const stockWithoutActiveLayers = Number(aggregate?.stock_without_active_layers ?? 0);
+  const inventoryValueMismatchCount = Number(aggregate?.inventory_value_mismatch_count ?? 0);
+  const totalAbsoluteValueDrift = Number(aggregate?.total_absolute_value_drift ?? 0);
+  const negativeOrOverconsumedLayers = Number(aggregate?.negative_or_overconsumed_layers ?? 0);
+  const duplicateActiveSerializedAllocations = Number(
+    aggregate?.duplicate_active_serialized_allocations ?? 0
+  );
+  const shipmentLinkStatusMismatch = Number(aggregate?.shipment_link_status_mismatch ?? 0);
+
+  const hardFailures = [
+    stockWithoutActiveLayers,
+    inventoryValueMismatchCount,
+    negativeOrOverconsumedLayers,
+    duplicateActiveSerializedAllocations,
+    shipmentLinkStatusMismatch,
+  ].some((v) => v > 0);
+  const status: InventoryFinanceIntegritySummary['status'] = hardFailures
+    ? 'red'
+    : totalAbsoluteValueDrift > 0
+      ? 'amber'
+      : 'green';
+
+  return {
+    status,
+    stockWithoutActiveLayers,
+    inventoryValueMismatchCount,
+    totalAbsoluteValueDrift,
+    negativeOrOverconsumedLayers,
+    duplicateActiveSerializedAllocations,
+    shipmentLinkStatusMismatch,
+    topDriftItems: topDriftRows.map((row) => ({
+      inventoryId: row.inventory_id,
+      productId: row.product_id,
+      productSku: row.product_sku,
+      productName: row.product_name,
+      locationId: row.location_id,
+      locationName: row.location_name,
+      quantityOnHand: Number(row.quantity_on_hand ?? 0),
+      inventoryValue: Number(row.inventory_value ?? 0),
+      layerValue: Number(row.layer_value ?? 0),
+      absoluteDrift: Number(row.absolute_drift ?? 0),
+    })),
+    asOf: new Date().toISOString(),
+  };
 }
 
 // ============================================================================
@@ -97,13 +365,14 @@ export const listCostLayers = createServerFn({ method: 'GET' })
       .orderBy(asc(inventoryCostLayers.receivedAt))
       .limit(limit)
       .offset(offset);
+    const layersWithComponents = await attachCostLayerCapitalizations(ctx.organizationId, layers);
 
     return {
-      layers,
+      layers: layersWithComponents,
       total,
       page,
       limit,
-      hasMore: offset + layers.length < total,
+      hasMore: offset + layersWithComponents.length < total,
     };
   });
 
@@ -139,9 +408,10 @@ export const getInventoryCostLayers = createServerFn({ method: 'GET' })
         )
       )
       .orderBy(asc(inventoryCostLayers.receivedAt));
+    const layersWithComponents = await attachCostLayerCapitalizations(ctx.organizationId, layers);
 
     // Calculate summary
-    const activeLayers = layers.filter((l) => l.quantityRemaining > 0);
+    const activeLayers = layersWithComponents.filter((l) => l.quantityRemaining > 0);
     const totalRemaining = activeLayers.reduce((sum, l) => sum + l.quantityRemaining, 0);
     const totalValue = activeLayers.reduce(
       (sum, l) => sum + l.quantityRemaining * Number(l.unitCost),
@@ -150,16 +420,16 @@ export const getInventoryCostLayers = createServerFn({ method: 'GET' })
     const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
 
     return {
-      layers,
+      layers: layersWithComponents,
       summary: {
-        totalLayers: layers.length,
+        totalLayers: layersWithComponents.length,
         activeLayers: activeLayers.length,
-        depletedLayers: layers.length - activeLayers.length,
+        depletedLayers: layersWithComponents.length - activeLayers.length,
         totalRemaining,
         totalValue,
         weightedAverageCost: weightedAvgCost,
-        oldestLayerDate: layers[0]?.receivedAt ?? null,
-        newestLayerDate: layers[layers.length - 1]?.receivedAt ?? null,
+        oldestLayerDate: layersWithComponents[0]?.receivedAt ?? null,
+        newestLayerDate: layersWithComponents[layersWithComponents.length - 1]?.receivedAt ?? null,
       },
     };
   });
@@ -314,6 +584,8 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
     const totalUnitsNum = Number(totals?.totalUnits ?? 0);
     const averageUnitCost = totalUnitsNum > 0 ? totalValueNum / totalUnitsNum : 0;
 
+    const financeIntegrity = await getFinanceIntegritySummary(ctx.organizationId);
+
     return {
       totalValue: totalValueNum,
       totalSkus: totals?.totalSkus ?? 0,
@@ -353,7 +625,152 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
       })),
       valuationMethod: data.valuationMethod,
       asOf: new Date().toISOString(),
+      financeIntegrity,
     };
+  });
+
+export const getInventoryFinanceIntegrity = createServerFn({ method: 'GET' })
+  .inputValidator(inventoryFinanceIntegrityQuerySchema)
+  .handler(async ({ data }): Promise<InventoryFinanceIntegritySummary> => {
+    const ctx = await withAuth();
+    return getFinanceIntegritySummary(ctx.organizationId, data);
+  });
+
+export const reconcileInventoryFinanceIntegrity = createServerFn({ method: 'POST' })
+  .inputValidator(inventoryFinanceReconcileSchema)
+  .handler(async ({ data }): Promise<InventoryFinanceReconcileResult> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
+
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+      const scannedResult = await tx.execute<{ count: number }>(
+        sql`
+          SELECT COUNT(*)::int AS count
+          FROM inventory i
+          WHERE i.organization_id = ${ctx.organizationId}
+        `
+      );
+      const scannedInventoryRows = Number((scannedResult as unknown as Array<{ count: number }>)[0]?.count ?? 0);
+
+      const missingRowsResult = await tx.execute<{
+        inventory_id: string;
+        quantity_on_hand: number;
+        unit_cost: number;
+      }>(sql`
+        WITH layer_totals AS (
+          SELECT
+            icl.inventory_id,
+            COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining ELSE 0 END), 0)::numeric AS active_qty
+          FROM inventory_cost_layers icl
+          WHERE icl.organization_id = ${ctx.organizationId}
+          GROUP BY icl.inventory_id
+        )
+        SELECT
+          i.id AS inventory_id,
+          COALESCE(i.quantity_on_hand, 0)::numeric AS quantity_on_hand,
+          COALESCE(i.unit_cost, 0)::numeric AS unit_cost
+        FROM inventory i
+        LEFT JOIN layer_totals lt ON lt.inventory_id = i.id
+        WHERE i.organization_id = ${ctx.organizationId}
+          AND COALESCE(i.quantity_on_hand, 0) > 0
+          AND COALESCE(lt.active_qty, 0) = 0
+        LIMIT ${data.limit}
+      `);
+      const missingRows = missingRowsResult as unknown as Array<{
+        inventory_id: string;
+        quantity_on_hand: number;
+        unit_cost: number;
+      }>;
+
+      let repairedMissingLayers = 0;
+      if (!data.dryRun) {
+        for (const row of missingRows) {
+          const qty = Math.max(0, Math.floor(Number(row.quantity_on_hand ?? 0)));
+          if (qty <= 0) continue;
+          const unitCost = Number(row.unit_cost ?? 0);
+          await tx.insert(inventoryCostLayers).values({
+            organizationId: ctx.organizationId,
+            inventoryId: row.inventory_id,
+            receivedAt: new Date(),
+            quantityReceived: qty,
+            quantityRemaining: qty,
+            unitCost: String(unitCost),
+            referenceType: 'adjustment',
+          });
+          repairedMissingLayers += 1;
+        }
+
+        const clampedResult = await tx.execute<{ count: number }>(sql`
+          WITH updated AS (
+            UPDATE inventory_cost_layers
+            SET quantity_remaining = GREATEST(LEAST(quantity_remaining, quantity_received), 0)
+            WHERE organization_id = ${ctx.organizationId}
+              AND (
+                quantity_remaining < 0
+                OR quantity_remaining > quantity_received
+              )
+            RETURNING id
+          )
+          SELECT COUNT(*)::int AS count FROM updated
+        `);
+        const clampedInvalidLayers = Number((clampedResult as unknown as Array<{ count: number }>)[0]?.count ?? 0);
+
+        const driftUpdateResult = await tx.execute<{ count: number }>(sql`
+          WITH layer_totals AS (
+            SELECT
+              icl.inventory_id,
+              COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining * icl.unit_cost ELSE 0 END), 0)::numeric AS layer_value,
+              COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining ELSE 0 END), 0)::numeric AS layer_qty
+            FROM inventory_cost_layers icl
+            WHERE icl.organization_id = ${ctx.organizationId}
+            GROUP BY icl.inventory_id
+          ),
+          updated AS (
+            UPDATE inventory i
+            SET
+              total_value = COALESCE(lt.layer_value, 0),
+              unit_cost = CASE
+                WHEN COALESCE(lt.layer_qty, 0) > 0 THEN COALESCE(lt.layer_value, 0) / lt.layer_qty
+                ELSE 0
+              END,
+              updated_at = NOW()
+            FROM layer_totals lt
+            WHERE i.id = lt.inventory_id
+              AND i.organization_id = ${ctx.organizationId}
+              AND ABS(COALESCE(i.total_value, 0) - COALESCE(lt.layer_value, 0)) > 0.01
+            RETURNING i.id
+          )
+          SELECT COUNT(*)::int AS count FROM updated
+        `);
+        const repairedValueDriftRows = Number(
+          (driftUpdateResult as unknown as Array<{ count: number }>)[0]?.count ?? 0
+        );
+
+        const postIntegrity = await getFinanceIntegritySummary(ctx.organizationId);
+        return {
+          dryRun: data.dryRun,
+          scannedInventoryRows,
+          repairedMissingLayers,
+          repairedValueDriftRows,
+          clampedInvalidLayers,
+          remainingMismatches: postIntegrity.inventoryValueMismatchCount,
+          postIntegrity,
+        };
+      }
+
+      const currentIntegrity = await getFinanceIntegritySummary(ctx.organizationId);
+      return {
+        dryRun: data.dryRun,
+        scannedInventoryRows,
+        repairedMissingLayers: missingRows.length,
+        repairedValueDriftRows: currentIntegrity.inventoryValueMismatchCount,
+        clampedInvalidLayers: currentIntegrity.negativeOrOverconsumedLayers,
+        remainingMismatches: currentIntegrity.inventoryValueMismatchCount,
+        postIntegrity: currentIntegrity,
+      };
+    });
   });
 
 /**
@@ -363,6 +780,15 @@ export const calculateCOGS = createServerFn({ method: 'GET' })
   .inputValidator(cogsCalculationSchema)
   .handler(async ({ data }): Promise<COGSResult> => {
     const ctx = await withAuth();
+
+    if (!data.simulate) {
+      throw new ValidationError(
+        'Manual COGS application is disabled. Use shipment and RMA workflows to post COGS.',
+        {
+          simulate: ['Set simulate=true for previews; workflow mutations apply canonical COGS.'],
+        }
+      );
+    }
 
     // Verify inventory exists
     const [inv] = await db
@@ -425,36 +851,6 @@ export const calculateCOGS = createServerFn({ method: 'GET' })
       updatedLayers.push({
         ...layer,
         quantityRemaining: newRemaining,
-      });
-    }
-
-    // If not simulating, actually update the layers
-    if (!data.simulate && usedLayers.length > 0) {
-      await db.transaction(async (tx) => {
-        // OPTIMIZED: Bulk update using CASE statement instead of sequential updates
-        const layerIds = usedLayers.map((_, i) => layers[i].id);
-        const caseStatement = sql`CASE ${inventoryCostLayers.id}
-          ${sql.join(
-            usedLayers.map((usedLayer, i) => {
-              const layer = layers[i];
-              const quantityUsed = usedLayer.quantityRemaining;
-              const newRemaining = layer.quantityRemaining - quantityUsed;
-              return sql`WHEN ${layer.id} THEN ${newRemaining}`;
-            }),
-            sql` `
-          )}
-          ELSE ${inventoryCostLayers.quantityRemaining}
-        END`;
-
-        await tx
-          .update(inventoryCostLayers)
-          .set({ quantityRemaining: caseStatement })
-          .where(
-            and(
-              eq(inventoryCostLayers.organizationId, ctx.organizationId),
-              inArray(inventoryCostLayers.id, layerIds)
-            )
-          );
       });
     }
 

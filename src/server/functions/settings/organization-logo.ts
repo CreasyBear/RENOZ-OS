@@ -21,7 +21,7 @@ import {
 } from '@/lib/storage/storage-url-utils';
 import { ServerError, NotFoundError } from '@/lib/server/errors';
 import { logger } from '@/lib/logger';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import {
   isAllowedLogoMimeType,

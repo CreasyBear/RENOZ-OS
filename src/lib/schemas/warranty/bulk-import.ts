@@ -156,6 +156,7 @@ export interface CreatedWarranty {
 
 export interface BulkRegisterSummary {
   totalCreated: number;
+  totalFailed?: number;
   byPolicyType: {
     battery_performance: number;
     inverter_manufacturer: number;
@@ -163,8 +164,15 @@ export interface BulkRegisterSummary {
   };
 }
 
+/** Per-row failure for bulk import (WAR-001 / D4.3) */
+export interface BulkRegisterFailure {
+  rowIndex: number;
+  error: string;
+}
+
 export interface BulkRegisterResult {
   createdWarranties: CreatedWarranty[];
+  failed?: BulkRegisterFailure[];
   summary: BulkRegisterSummary;
 }
 

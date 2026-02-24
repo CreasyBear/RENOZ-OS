@@ -54,17 +54,15 @@ export function TemplatesList({
   isLoading,
   filters,
   onFiltersChange,
-  onCreate: _onCreate,
-  onUpdate: _onUpdate,
   onDelete,
   onClone,
   versions,
   versionsLoading,
   onFetchVersions,
+  onRestoreVersion,
   isDeleting = false,
   isCloning = false,
-  // isSaving available for future use when TemplateEditor accepts isSaving prop
-  isSaving: _isSaving = false,
+  isRestoringVersion = false,
   className,
 }: TemplatesListProps) {
   const [editingTemplate, setEditingTemplate] =
@@ -152,6 +150,15 @@ export function TemplatesList({
       }
     },
     [templates]
+  );
+
+  const handleRestoreVersion = useCallback(
+    async (versionId: string) => {
+      if (!onRestoreVersion) return;
+      await onRestoreVersion(versionId);
+      setVersionHistory(null);
+    },
+    [onRestoreVersion]
   );
 
   // Create table columns (memoized with handler dependencies)
@@ -321,7 +328,12 @@ export function TemplatesList({
                       {new Date(version.createdAt).toLocaleDateString()}
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleRestoreVersion(version.id)}
+                    disabled={!onRestoreVersion || isRestoringVersion}
+                  >
                     Restore
                   </Button>
                 </div>

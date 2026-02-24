@@ -19,10 +19,30 @@ export type OnboardingEvent =
 
 export type InvitationEvent = InviteEvent | OnboardingEvent;
 
+export type SupportIssueTransitionEvent = {
+  name: 'support_issue_transition';
+  issueId: string;
+  fromStatus?: string;
+  toStatus?: string;
+  action:
+    | 'start'
+    | 'hold'
+    | 'escalate'
+    | 'resolve'
+    | 'close'
+    | 'delete'
+    | 'status_change';
+  source: 'issue_board' | 'issue_detail' | 'issue_bulk';
+};
+
 export function trackInvitationEvent(event: InvitationEvent): void {
   logger.debug('[analytics]', { eventName: event.name, event });
   // Wire to PostHog, Mixpanel, etc. when configured
   // e.g. posthog?.capture(event.name, event);
+}
+
+export function trackSupportIssueTransition(event: SupportIssueTransitionEvent): void {
+  logger.debug('[analytics]', { eventName: event.name, event });
 }
 
 // Convenience helpers

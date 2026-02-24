@@ -124,7 +124,17 @@ export const letterSpacing = {
   tight: -0.01,
   normal: 0,
   wide: 0.02,
+  /** Display titles (e.g. certificate headings) */
+  wider: 0.05,
 } as const;
+
+/**
+ * Tabular figures for aligned number columns.
+ * Use with number cells (qty, price, amount) for clean alignment.
+ */
+export const tabularNums = {
+  fontVariantNumeric: "tabular-nums" as const,
+};
 
 // ============================================================================
 // BORDER RADIUS - Very rounded

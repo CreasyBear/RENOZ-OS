@@ -74,7 +74,14 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
   );
 
   // RAW SQL (Phase 11 Keep): count(CASE WHEN) for conditional counts. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
-  const [currentMetrics, previousMetrics, currentRevenue, previousRevenue] = await Promise.all([
+  const [
+    currentMetrics,
+    previousMetrics,
+    currentRevenue,
+    previousRevenue,
+    currentPaid,
+    previousPaid,
+  ] = await Promise.all([
     // Current period customer metrics
     db
       .select({
@@ -90,8 +97,7 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
       })
       .from(customers)
       .where(previousCustomerCondition),
-    // Current period revenue from orders - aggregate directly from orders joined with customers
-    // Note: avgLifetimeValue will be calculated as totalRevenue / totalCustomers
+    // Current period revenue (invoiced) from orders
     db
       .select({
         totalRevenue: sum(orders.total),
@@ -105,10 +111,38 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
         )
       )
       .where(validOrderCondition),
-    // Previous period revenue from orders
+    // Previous period revenue (invoiced) from orders
     db
       .select({
         totalRevenue: sum(orders.total),
+      })
+      .from(orders)
+      .innerJoin(
+        customers,
+        and(
+          eq(orders.customerId, customers.id),
+          previousCustomerCondition
+        )
+      )
+      .where(validOrderCondition),
+    // Current period total paid (cash received)
+    db
+      .select({
+        totalPaid: sum(orders.paidAmount),
+      })
+      .from(orders)
+      .innerJoin(
+        customers,
+        and(
+          eq(orders.customerId, customers.id),
+          currentCustomerCondition
+        )
+      )
+      .where(validOrderCondition),
+    // Previous period total paid
+    db
+      .select({
+        totalPaid: sum(orders.paidAmount),
       })
       .from(orders)
       .innerJoin(
@@ -125,17 +159,22 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
   const previous = previousMetrics[0];
   const currentRev = currentRevenue[0] ?? { totalRevenue: null };
   const previousRev = previousRevenue[0] ?? { totalRevenue: null };
-  
+  const currentPaidVal = currentPaid[0] ?? { totalPaid: null };
+  const previousPaidVal = previousPaid[0] ?? { totalPaid: null };
+
   // Calculate average LTV: total revenue / number of customers (including those with 0 orders)
   // Handle nulls from sum() aggregation (returns null when no rows match)
   const totalCustomers = Number(current?.totalCustomers ?? 0);
   const currentRevenueValue = Number(currentRev?.totalRevenue ?? 0);
-  const avgLifetimeValue = totalCustomers > 0 
-    ? currentRevenueValue / totalCustomers 
+  const currentPaidValue = Number(currentPaidVal?.totalPaid ?? 0);
+  const avgLifetimeValue = totalCustomers > 0
+    ? currentRevenueValue / totalCustomers
     : 0;
+  const avgLifetimeValuePaid = totalCustomers > 0 ? currentPaidValue / totalCustomers : 0;
 
   // Calculate changes (handle nulls from sum() aggregation)
   const previousRevenueValue = Number(previousRev?.totalRevenue ?? 0);
+  const previousPaidValue = Number(previousPaidVal?.totalPaid ?? 0);
   const customerChange = calculatePercentChange(
     Number(current?.totalCustomers ?? 0),
     Number(previous?.totalCustomers ?? 0)
@@ -144,8 +183,13 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
     currentRevenueValue,
     previousRevenueValue
   );
+  const paidChange = calculatePercentChange(currentPaidValue, previousPaidValue);
 
   return {
+    totalRevenue: currentRevenueValue,
+    totalPaid: currentPaidValue,
+    avgLifetimeValue,
+    avgLifetimeValuePaid,
     kpis: [
       {
         label: 'Total Customers',
@@ -155,9 +199,16 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
         icon: 'users',
       },
       {
-        label: 'Total Revenue',
+        label: 'Total Revenue (Invoiced)',
         value: formatCurrency(currentRevenueValue),
         change: revenueChange,
+        changeLabel: `vs previous ${range}`,
+        icon: 'dollar',
+      },
+      {
+        label: 'Total Paid',
+        value: formatCurrency(currentPaidValue),
+        change: paidChange,
         changeLabel: `vs previous ${range}`,
         icon: 'dollar',
       },

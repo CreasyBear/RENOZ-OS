@@ -42,9 +42,9 @@ import { ISSUE_STATUS_CONFIG } from './issue-status-config';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SlaBadge } from '@/components/domain/support';
-import { SlaStatusCard } from '@/components/domain/support';
-import { EscalationDialog } from '@/components/domain/support';
+import { SlaBadge } from '@/components/domain/support/sla/sla-badge';
+import { SlaStatusCard } from '@/components/domain/support/sla/sla-status-card';
+import { EscalationDialog } from '@/components/domain/support/escalation/escalation-dialog';
 import { IssueActivityTimelineContainer } from './issue-activity-timeline-container';
 import {
   IssueStatusChangeDialog,
@@ -296,6 +296,7 @@ export function IssueDetailView({
           issueTitle={issue.title}
           fromStatus={issue.status}
           toStatus={statusDialog.toStatus}
+          isPending={isUpdatePending}
           onConfirm={(result: StatusChangeResult) => {
             actions.onStatusConfirm(result);
           }}
@@ -851,12 +852,11 @@ function CustomerWarrantiesCard({
         ) : (
           <div className="space-y-2">
             {warranties.slice(0, 3).map((warranty) => (
-              <RelatedEntityLink
+              <WarrantyEntityLink
                 key={warranty.id}
-                to="/support/warranties/$warrantyId"
-                params={{ warrantyId: warranty.id }}
+                warrantyId={warranty.id}
                 title={warranty.productName || 'Unknown Product'}
-                subtitle={`SN: ${warranty.productSerial || 'N/A'}`}
+                serialNumber={warranty.productSerial || null}
                 badge={warranty.status}
                 badgeVariant={getWarrantyBadgeVariant(warranty.status)}
               />
@@ -1081,12 +1081,11 @@ function RelatedWarrantiesSection({
         ) : (
           <div className="space-y-2">
             {warranties.slice(0, 5).map((warranty) => (
-              <RelatedEntityLink
+              <WarrantyEntityLink
                 key={warranty.id}
-                to="/support/warranties/$warrantyId"
-                params={{ warrantyId: warranty.id }}
+                warrantyId={warranty.id}
                 title={warranty.productName || 'Unknown Product'}
-                subtitle={`SN: ${warranty.productSerial || 'N/A'}`}
+                serialNumber={warranty.productSerial || null}
                 badge={warranty.status}
                 badgeVariant={getWarrantyBadgeVariant(warranty.status)}
               />
@@ -1208,6 +1207,57 @@ function RelatedEntityLink({
         <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 motion-safe:transition-opacity" aria-hidden="true" />
       </div>
     </Link>
+  );
+}
+
+interface WarrantyEntityLinkProps {
+  warrantyId: string;
+  title: string;
+  serialNumber?: string | null;
+  badge?: string;
+  badgeVariant?: 'default' | 'secondary' | 'destructive' | 'outline';
+}
+
+function WarrantyEntityLink({
+  warrantyId,
+  title,
+  serialNumber,
+  badge,
+  badgeVariant = 'outline',
+}: WarrantyEntityLinkProps) {
+  return (
+    <div className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-muted transition-colors">
+      <div className="min-w-0 flex-1">
+        <Link
+          to="/support/warranties/$warrantyId"
+          params={{ warrantyId }}
+          className="text-sm font-medium truncate hover:underline"
+        >
+          {title}
+        </Link>
+        <p className="text-xs text-muted-foreground">
+          SN: {serialNumber || 'N/A'}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {serialNumber ? (
+          <Link
+            to="/inventory/browser"
+            search={{ view: 'serialized', serializedSearch: serialNumber, page: 1 }}
+            className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] text-primary hover:bg-background"
+            aria-label={`Open serial ${serialNumber} in inventory`}
+          >
+            <PackageSearch className="h-3 w-3" aria-hidden="true" />
+            Serial
+          </Link>
+        ) : null}
+        {badge && (
+          <Badge variant={badgeVariant} className="text-xs shrink-0 capitalize">
+            {badge}
+          </Badge>
+        )}
+      </div>
+    </div>
   );
 }
 

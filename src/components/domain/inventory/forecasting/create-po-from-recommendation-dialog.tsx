@@ -11,15 +11,6 @@
 
 import { useState, useEffect, startTransition } from "react";
 import { Truck } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
 import type { ReorderRecommendation } from "./reorder-recommendations";
@@ -27,12 +18,13 @@ import {
   createPOFromAlertFormSchema,
   type CreatePOFromAlertFormValues,
 } from "@/lib/schemas/inventory";
+import { toast } from "sonner";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
+  FormDialog,
   SelectField,
   NumberField,
   TextareaField,
-  FormActions,
 } from "@/components/shared/forms";
 
 // ============================================================================
@@ -88,6 +80,9 @@ export function CreatePOFromRecommendationDialog({
 
   const form = useTanStackForm<FormValues>({
     schema: createPOFromAlertFormSchema,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     defaultValues: {
       supplierId: "",
       quantity: defaultQuantity,
@@ -115,7 +110,9 @@ export function CreatePOFromRecommendationDialog({
           notes: values.notes,
           expectedDeliveryDate: new Date(
             Date.now() + 14 * 24 * 60 * 60 * 1000
-          ).toISOString(),
+          )
+            .toISOString()
+            .slice(0, 10),
         });
 
         onOpenChange(false);
@@ -140,10 +137,15 @@ export function CreatePOFromRecommendationDialog({
     }
   }, [recommendation, open, form]);
 
-  const handleClose = () => {
-    form.reset();
-    setError(null);
-    onOpenChange(false);
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      if (createPO.isPending) return;
+      form.reset();
+      setError(null);
+      onOpenChange(false);
+    } else {
+      onOpenChange(newOpen);
+    }
   };
 
   const supplierOptions = suppliers.map((s) => ({
@@ -151,27 +153,30 @@ export function CreatePOFromRecommendationDialog({
     label: s.name,
   }));
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(isOpen) => (isOpen ? onOpenChange(true) : handleClose())}
-    >
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Truck className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <DialogTitle>Create Purchase Order</DialogTitle>
-              <DialogDescription>
-                Create a PO for {recommendation?.productName}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+  if (!recommendation) return null;
 
-        {recommendation && (
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Truck className="h-5 w-5 text-primary" />
+          </div>
+          Create Purchase Order
+        </span>
+      }
+      description={`Create a PO for ${recommendation.productName}`}
+      form={form}
+      submitLabel="Create Purchase Order"
+      submitError={error}
+      submitDisabled={createPO.isPending || loadingSuppliers}
+      size="md"
+      className="sm:max-w-[500px]"
+      resetOnClose={false}
+    >
+      {recommendation && (
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
@@ -218,14 +223,7 @@ export function CreatePOFromRecommendationDialog({
           </div>
         )}
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <form.Field name="supplierId">
+      <form.Field name="supplierId">
             {(field) => (
               <SelectField
                 field={field}
@@ -276,25 +274,6 @@ export function CreatePOFromRecommendationDialog({
               />
             )}
           </form.Field>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter>
-            <FormActions
-              form={form}
-              submitLabel="Create Purchase Order"
-              cancelLabel="Cancel"
-              loadingLabel="Creating..."
-              onCancel={handleClose}
-              submitDisabled={createPO.isPending || loadingSuppliers}
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

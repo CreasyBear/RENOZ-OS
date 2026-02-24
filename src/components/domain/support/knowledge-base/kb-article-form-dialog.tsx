@@ -23,10 +23,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { useConfirmation } from '@/hooks';
 import {
   TextField,
   TextareaField,
   SelectField,
+  FormFieldDisplayProvider,
 } from '@/components/shared/forms';
 import type { KbArticleResponse, KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
 
@@ -76,8 +78,10 @@ export function KbArticleFormDialog({
   isSubmitting,
   onSubmit,
 }: KbArticleFormDialogProps) {
+  const confirm = useConfirmation();
   const isEditing = !!article;
   const [tagInput, setTagInput] = useState('');
+  const [slugConflictError, setSlugConflictError] = useState<string | null>(null);
 
   const form = useTanStackForm({
     schema: articleFormSchema,
@@ -94,12 +98,20 @@ export function KbArticleFormDialog({
     },
     onSubmit: async (values) => {
       try {
+        setSlugConflictError(null);
         await onSubmit(values);
         onOpenChange(false);
         form.reset();
-      } catch {
-        // errors handled by container
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to save article';
+        if (message.toLowerCase().includes('slug') && message.toLowerCase().includes('exist')) {
+          setSlugConflictError(message);
+        }
+        throw error;
       }
+    },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
     },
   });
 
@@ -118,6 +130,7 @@ export function KbArticleFormDialog({
         metaDescription: article?.metaDescription ?? '',
       });
       startTransition(() => setTagInput(''));
+      globalThis.queueMicrotask(() => setSlugConflictError(null));
     }
   }, [open, article, form]);
 
@@ -161,6 +174,26 @@ export function KbArticleFormDialog({
   };
 
   const isPending = isSubmitting ?? form.state.isSubmitting;
+  const isDirty = form.state.isDirty;
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isPending) return;
+    if (!nextOpen && isDirty) {
+      void (async () => {
+        const result = await confirm.confirm({
+          title: 'Discard Unsaved Changes?',
+          description: 'You have unsaved changes in this article form. Discard changes and close?',
+          confirmLabel: 'Discard',
+          variant: 'destructive',
+        });
+        if (result.confirmed) {
+          onOpenChange(false);
+        }
+      })();
+      return;
+    }
+    onOpenChange(nextOpen);
+  };
 
   const categoryOptions = [
     { value: '', label: 'Uncategorized' },
@@ -177,8 +210,16 @@ export function KbArticleFormDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px]">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-[700px]"
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Article' : 'Create Article'}</DialogTitle>
         </DialogHeader>
@@ -190,6 +231,7 @@ export function KbArticleFormDialog({
           }}
           className="space-y-4"
         >
+          <FormFieldDisplayProvider form={form}>
           <form.Field name="title">
             {(field) => (
               <TextField
@@ -211,9 +253,13 @@ export function KbArticleFormDialog({
                   placeholder="how-to-install-battery"
                   description="URL-friendly identifier"
                   required
+                  onChange={() => setSlugConflictError(null)}
                 />
               )}
             </form.Field>
+            {slugConflictError && (
+              <p className="text-destructive text-xs">{slugConflictError}</p>
+            )}
 
             <form.Field name="status">
               {(field) => (
@@ -332,11 +378,13 @@ export function KbArticleFormDialog({
             </form.Field>
           </div>
 
+          </FormFieldDisplayProvider>
+
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleDialogOpenChange(false)}
               disabled={isPending}
             >
               Cancel

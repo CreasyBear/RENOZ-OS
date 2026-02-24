@@ -88,6 +88,8 @@ export interface MovementMetadata {
   poNumber?: string;
   /** Shipment ID for fulfillment movements */
   shipmentId?: string;
+  /** RMA ID for return movements */
+  rmaId?: string;
   /** Total COGS for this movement */
   cogsTotal?: number;
   /** COGS per unit for this movement */
@@ -170,6 +172,11 @@ export const inventory = pgTable(
     locationIdx: index("idx_inventory_location").on(table.locationId),
     // Serial number lookups (for getAvailableSerials)
     serialNumberIdx: index("idx_inventory_serial_number").on(table.serialNumber),
+    // Serialized rows represent a single physical unit and must stay in {0,1} bounds.
+    serializedSingleUnitCheck: check(
+      "inventory_serial_single_unit",
+      sql`${table.serialNumber} IS NULL OR (${table.quantityOnHand} >= 0 AND ${table.quantityOnHand} <= 1 AND ${table.quantityAllocated} >= 0 AND ${table.quantityAllocated} <= 1)`
+    ),
     // Allocation cannot exceed on-hand
     allocationCheck: check(
       "inventory_allocation_max",
@@ -445,6 +452,51 @@ export const inventoryCostLayers = pgTable(
 
     // Standard CRUD RLS policies for org isolation
     ...standardRlsPolicies("inventory_cost_layers"),
+  })
+);
+
+// ============================================================================
+// INVENTORY COST LAYER CAPITALIZATION TABLE (Landed Cost Provenance)
+// ============================================================================
+
+export const inventoryCostLayerCapitalizations = pgTable(
+  "inventory_cost_layer_capitalizations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    inventoryCostLayerId: uuid("inventory_cost_layer_id")
+      .notNull()
+      .references(() => inventoryCostLayers.id, { onDelete: "cascade" }),
+    purchaseOrderReceiptItemId: uuid("purchase_order_receipt_item_id"),
+    purchaseOrderCostId: uuid("purchase_order_cost_id"),
+    componentType: text("component_type").notNull(), // base_unit_cost | allocated_additional_cost
+    costType: text("cost_type"), // freight | duty | ...
+    quantityBasis: integer("quantity_basis").notNull().default(0),
+    amountTotal: decimal("amount_total", { precision: 12, scale: 4 }).notNull(),
+    amountPerUnit: decimal("amount_per_unit", { precision: 12, scale: 6 }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("AUD"),
+    exchangeRate: decimal("exchange_rate", { precision: 14, scale: 6 }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: uuid("created_by"),
+  },
+  (table) => ({
+    orgLayerIdx: index("idx_cost_layer_cap_org_layer").on(
+      table.organizationId,
+      table.inventoryCostLayerId
+    ),
+    orgReceiptItemIdx: index("idx_cost_layer_cap_org_receipt_item").on(
+      table.organizationId,
+      table.purchaseOrderReceiptItemId
+    ),
+    orgComponentIdx: index("idx_cost_layer_cap_org_component").on(
+      table.organizationId,
+      table.componentType,
+      table.costType
+    ),
+    ...standardRlsPolicies("inventory_cost_layer_capitalizations"),
   })
 );
 

@@ -9,8 +9,12 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getCreateDraftKey, DRAFT_PREFIX } from '@/hooks/_shared/use-form-draft';
-import { logger } from '@/lib/logger';
+import {
+  getCreateDraftKey,
+  readVersionedDraft,
+  writeVersionedDraft,
+  clearVersionedDraft,
+} from '@/hooks/_shared/use-form-draft';
 import type { TanStackFormApi } from '@/hooks/_shared/use-tanstack-form';
 import type { ManagedContact } from '../contact-manager';
 import type { ManagedAddress } from '../address-manager';
@@ -33,49 +37,8 @@ interface CustomerWizardDraftState {
   completedSteps: WizardStep[];
 }
 
-interface DraftData<T> {
-  version: number;
-  values: T;
-  savedAt: string;
-}
-
 function getDraftKey(): string {
-  return `${DRAFT_PREFIX}${getCreateDraftKey('customer-wizard')}`;
-}
-
-function readDraft<T>(expectedVersion: number): DraftData<T> | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(getDraftKey());
-    if (!stored) return null;
-    const data = JSON.parse(stored) as DraftData<T>;
-    if (data.version !== expectedVersion) {
-      localStorage.removeItem(getDraftKey());
-      return null;
-    }
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-function writeDraft<T>(version: number, values: T): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const data: DraftData<T> = {
-      version,
-      values,
-      savedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(getDraftKey(), JSON.stringify(data));
-  } catch (error) {
-    logger.warn('Failed to save customer wizard draft', { error: String(error) });
-  }
-}
-
-function clearDraft(): void {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(getDraftKey());
+  return getCreateDraftKey('customer-wizard');
 }
 
 export interface UseCustomerWizardDraftOptions {
@@ -123,7 +86,7 @@ export function useCustomerWizardDraft({
 
   useEffect(() => {
     if (!enabled) return;
-    const draft = readDraft<CustomerWizardDraftState>(DRAFT_VERSION);
+    const draft = readVersionedDraft<CustomerWizardDraftState>(getDraftKey(), DRAFT_VERSION);
     if (draft) {
       const id = setTimeout(() => {
         setHasDraft(true);
@@ -171,7 +134,8 @@ export function useCustomerWizardDraft({
         currentStep: currentStepIndex,
         completedSteps: Array.from(completedSteps),
       };
-      writeDraft(DRAFT_VERSION, state);
+      writeVersionedDraft(getDraftKey(), DRAFT_VERSION, state);
+      setHasDraft(true);
       setSavedAt(new Date());
       setIsSaving(false);
       debounceRef.current = null;
@@ -186,7 +150,7 @@ export function useCustomerWizardDraft({
   }, [form.state.values, contacts, addresses, currentStepIndex, completedSteps, enabled, debounceMs]);
 
   const restore = useCallback(() => {
-    const draft = readDraft<CustomerWizardDraftState>(DRAFT_VERSION);
+    const draft = readVersionedDraft<CustomerWizardDraftState>(getDraftKey(), DRAFT_VERSION);
     if (!draft) return;
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -204,11 +168,9 @@ export function useCustomerWizardDraft({
       setCurrentStepByIndex(step);
     }
     const completed = (draft.values.completedSteps ?? []) as WizardStep[];
-    if (completed.length > 0) {
-      setCompletedSteps(new Set(completed));
-    }
+    setCompletedSteps(new Set(completed));
 
-    clearDraft();
+    clearVersionedDraft(getDraftKey());
     setHasDraft(false);
     setSavedAt(null);
     suppressAutosaveUntilChangeRef.current = true;
@@ -217,12 +179,12 @@ export function useCustomerWizardDraft({
       contacts: c ?? [],
       addresses: a ?? [],
       currentStepIndex: typeof step === 'number' ? step : currentStepIndex,
-      completedSteps: completed.length > 0 ? completed : Array.from(completedSteps),
+      completedSteps: completed,
     });
     setTimeout(() => {
       isRestoringRef.current = false;
     }, RESTORE_COOLDOWN_MS);
-  }, [form, setContacts, setAddresses, setCurrentStepByIndex, setCompletedSteps, currentStepIndex, completedSteps]);
+  }, [form, setContacts, setAddresses, setCurrentStepByIndex, setCompletedSteps, currentStepIndex]);
 
   const clear = useCallback(() => {
     if (debounceRef.current) {
@@ -230,7 +192,7 @@ export function useCustomerWizardDraft({
       debounceRef.current = null;
     }
     setIsSaving(false);
-    clearDraft();
+    clearVersionedDraft(getDraftKey());
     setHasDraft(false);
     setSavedAt(null);
     suppressAutosaveUntilChangeRef.current = true;

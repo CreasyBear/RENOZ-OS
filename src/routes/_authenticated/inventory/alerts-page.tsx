@@ -22,14 +22,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  AlertsPanel,
-  type InventoryAlert,
-} from "@/components/domain/inventory";
-import { AlertConfigForm } from "@/components/domain/inventory";
-import {
-  AlertsList,
-  type AlertRule,
-} from "@/components/domain/inventory";
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
+import { AlertsPanel, type InventoryAlert } from "@/components/domain/inventory/alerts/alerts-panel";
+import { AlertConfigForm } from "@/components/domain/inventory/alerts/alert-config-form";
+import { AlertsList, type AlertRule } from "@/components/domain/inventory/alerts/alerts-list";
 import {
   useAlerts,
   useTriggeredAlerts,
@@ -316,16 +314,26 @@ export default function AlertsPage() {
           </TabsContent>
 
           <TabsContent value="history">
-            <div className="text-center py-12 text-muted-foreground">
-              Alert history view coming soon...
-            </div>
+            <AlertsPanel
+              alerts={[...triggeredAlerts].sort(
+                (a, b) =>
+                  new Date(b.acknowledgedAt ?? b.triggeredAt).getTime() -
+                  new Date(a.acknowledgedAt ?? a.triggeredAt).getTime()
+              )}
+              isLoading={isLoadingTriggered}
+              maxHeight="520px"
+            />
           </TabsContent>
         </Tabs>
       </PageLayout.Content>
 
       {/* Create Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={showCreateDialog} onOpenChange={createPendingDialogOpenChangeHandler(createAlertMutation.isPending, setShowCreateDialog)}>
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(createAlertMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(createAlertMutation.isPending).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Create Alert Rule</DialogTitle>
           </DialogHeader>
@@ -334,6 +342,7 @@ export default function AlertsPage() {
             locations={locations}
             onSubmit={handleCreateAlert}
             onCancel={() => setShowCreateDialog(false)}
+            submitError={createAlertMutation.error?.message ?? null}
           />
         </DialogContent>
       </Dialog>
@@ -341,9 +350,13 @@ export default function AlertsPage() {
       {/* Edit Dialog */}
       <Dialog
         open={!!editingAlert}
-        onOpenChange={(open) => !open && setEditingAlert(null)}
+        onOpenChange={createPendingDialogOpenChangeHandler(updateAlertMutation.isPending, (open) => !open && setEditingAlert(null))}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(updateAlertMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(updateAlertMutation.isPending).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Edit Alert Rule</DialogTitle>
           </DialogHeader>
@@ -364,6 +377,7 @@ export default function AlertsPage() {
               }}
               onSubmit={handleEditAlert}
               onCancel={() => setEditingAlert(null)}
+              submitError={updateAlertMutation.error?.message ?? null}
             />
           )}
         </DialogContent>

@@ -129,7 +129,7 @@ export function useOrgFormat() {
    */
   const formatCurrency = useCallback(
     (amount: number | null | undefined, options: FormatCurrencyOptions = {}) => {
-      if (amount === null || amount === undefined) {
+      if (amount === null || amount === undefined || Number.isNaN(amount)) {
         return "—";
       }
 

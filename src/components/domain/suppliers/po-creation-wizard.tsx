@@ -10,7 +10,7 @@
  * @see _Initiation/_prd/2-domains/suppliers/wireframes/po-detail.wireframe.md
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Building2,
   Package,
@@ -22,12 +22,12 @@ import {
   Check,
   Loader2,
   Search,
-  Calendar,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePickerControl } from "@/components/shared";
 
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -91,6 +91,8 @@ export interface POCreationWizardProps {
   suppliers: SupplierItem[];
   /** Available products for line items */
   products: ProductItem[];
+  /** Optional supplier preselection intent from route/search */
+  initialSupplierId?: string | null;
   /** Loading state for submission */
   isSubmitting: boolean;
   /** Callback when PO is submitted */
@@ -116,6 +118,27 @@ export interface PurchaseOrderItemFormData {
   quantity: number;
   unitPrice: number;
   notes?: string;
+}
+
+function getLineItemValidationError(items: PurchaseOrderItemFormData[]): string | null {
+  if (items.length === 0) return "Please add at least one item";
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const row = i + 1;
+
+    if (!item.productName?.trim()) {
+      return `Line item #${row} is missing a product name`;
+    }
+    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+      return `Line item #${row} must have a quantity greater than 0`;
+    }
+    if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
+      return `Line item #${row} has an invalid unit price`;
+    }
+  }
+
+  return null;
 }
 
 // ============================================================================
@@ -712,15 +735,23 @@ function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3Revie
 export function POCreationWizard({
   suppliers,
   products,
+  initialSupplierId = null,
   isSubmitting,
   onSubmit,
   onCancel,
 }: POCreationWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<PurchaseOrderFormData>({
-    supplierId: "",
+    supplierId: initialSupplierId ?? "",
     items: [],
   });
+
+  useEffect(() => {
+    if (!initialSupplierId || formData.supplierId) return;
+    globalThis.queueMicrotask(() =>
+      setFormData((prev) => ({ ...prev, supplierId: initialSupplierId }))
+    );
+  }, [initialSupplierId, formData.supplierId]);
 
   // ============================================================================
   // HANDLERS
@@ -766,9 +797,12 @@ export function POCreationWizard({
       toast.error("Please select a supplier");
       return;
     }
-    if (currentStep === 2 && formData.items.length === 0) {
-      toast.error("Please add at least one item");
-      return;
+    if (currentStep === 2) {
+      const lineItemError = getLineItemValidationError(formData.items);
+      if (lineItemError) {
+        toast.error(lineItemError);
+        return;
+      }
     }
     setCurrentStep((prev) => Math.min(prev + 1, 3));
   }, [currentStep, formData]);
@@ -778,7 +812,17 @@ export function POCreationWizard({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    await onSubmit(formData);
+    const lineItemError = getLineItemValidationError(formData.items);
+    if (lineItemError) {
+      toast.error(lineItemError);
+      return;
+    }
+
+    try {
+      await onSubmit(formData);
+    } catch {
+      // onSubmit handler owns user-facing error toasts
+    }
   }, [formData, onSubmit]);
 
   // ============================================================================
@@ -820,23 +864,16 @@ export function POCreationWizard({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="expectedDeliveryDate">
-                        <Calendar className="inline h-4 w-4 mr-1" />
-                        Expected Delivery Date
-                      </Label>
-                      <Input
-                        id="expectedDeliveryDate"
-                        type="date"
-                        value={formData.expectedDeliveryDate || ""}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            expectedDeliveryDate: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
+                    <DatePickerControl
+                      label="Expected Delivery Date"
+                      value={formData.expectedDeliveryDate || ""}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          expectedDeliveryDate: value,
+                        }))
+                      }
+                    />
                     <div className="space-y-2">
                       <Label htmlFor="paymentTerms">Payment Terms</Label>
                       <Select

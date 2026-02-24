@@ -64,10 +64,10 @@ export default function ProjectsPage() {
 
   const handleEditProject = useCallback(
     (project: Project) => {
-      // Navigate to project detail - edit mode handled on detail page
       navigate({
         to: '/projects/$projectId',
         params: { projectId: project.id },
+        search: { edit: true },
       });
     },
     [navigate]

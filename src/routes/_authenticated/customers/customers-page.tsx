@@ -74,6 +74,7 @@ export default function CustomersPage({ search }: CustomersPageProps) {
         <CustomersListContainer
           filters={filters}
           onFiltersChange={setFilters}
+          onCreateCustomer={handleCreateCustomer}
           availableTags={availableTags}
         />
       </PageLayout.Content>

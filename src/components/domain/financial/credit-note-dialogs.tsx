@@ -16,6 +16,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -130,9 +134,16 @@ export function CreateCreditNoteDialog({
     handleClose(false);
   }, [amount, selectedCustomer, selectedOrder, reason, onCreate, handleClose]);
 
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleClose);
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent key={`${initialCustomerId}-${initialOrderId}`}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        key={`${initialCustomerId}-${initialOrderId}`}
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Create Credit Note</DialogTitle>
         </DialogHeader>

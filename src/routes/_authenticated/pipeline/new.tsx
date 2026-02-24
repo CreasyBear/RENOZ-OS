@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export const searchParamsSchema = z.object({
   stage: z.enum(['new', 'qualified', 'proposal', 'negotiation']).optional(),
+  customerId: z.string().uuid().optional().catch(undefined),
 });
 
 export type SearchParams = z.infer<typeof searchParamsSchema>;

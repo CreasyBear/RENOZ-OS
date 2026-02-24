@@ -136,6 +136,9 @@ export type { LocationContents } from './locations/location-detail';
 export * from './receiving';
 export type { ReceivingRecord } from './receiving/receiving-history';
 
+// --- Serialized Items ---
+export * from './serialized-items';
+
 // --- Reports ---
 export * from './reports';
 export type { ValuationSummary, CategoryValuation, LocationValuation } from './reports/valuation-report';

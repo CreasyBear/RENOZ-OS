@@ -17,7 +17,6 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { Download, Settings, X } from "lucide-react";
 import { useCustomerNavigation } from "@/hooks/customers";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +32,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
 import {
   useCustomers,
   useDeleteCustomer,
@@ -103,11 +106,11 @@ type SortDirection = "asc" | "desc";
 export function CustomersListContainer({
   filters,
   onFiltersChange,
+  onCreateCustomer,
   onExport,
   availableTags = [],
 }: CustomersListContainerProps) {
-  const navigate = useNavigate();
-  const { navigateToCustomer } = useCustomerNavigation();
+  const { navigateToCustomer, navigateToEdit } = useCustomerNavigation();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>("createdAt");
@@ -293,14 +296,9 @@ export function CustomersListContainer({
 
   const handleEditCustomer = useCallback(
     (customerId: string) => {
-      // Navigate to customer detail with edit mode
-      navigate({
-        to: "/customers/$customerId/edit",
-        params: { customerId },
-        search: {},
-      });
+      navigateToEdit(customerId);
     },
-    [navigate]
+    [navigateToEdit]
   );
 
   const handleDeleteCustomer = useCallback(
@@ -314,8 +312,12 @@ export function CustomersListContainer({
       try {
         await deleteMutation.mutateAsync(customerId);
         toastSuccess("Customer deleted");
-      } catch {
-        toastError("Failed to delete customer");
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "Failed to delete customer";
+        toastError(message);
       }
     },
     [deleteMutation, customers, confirmation]
@@ -675,6 +677,7 @@ export function CustomersListContainer({
           onClearFilters={handleClearFilters}
           onEditCustomer={handleEditCustomer}
           onDeleteCustomer={handleDeleteCustomer}
+          onCreateCustomer={onCreateCustomer}
           page={page}
           pageSize={DISPLAY_PAGE_SIZE}
           total={total}
@@ -685,14 +688,18 @@ export function CustomersListContainer({
 
       <Dialog
         open={showTagDialog}
-        onOpenChange={(open) => {
+        onOpenChange={createPendingDialogOpenChangeHandler(bulkAssignMutation.isPending, (open) => {
           setShowTagDialog(open);
           if (!open) {
             form.reset();
           }
-        }}
+        })}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(bulkAssignMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(bulkAssignMutation.isPending).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Assign Tags</DialogTitle>
             <DialogDescription>

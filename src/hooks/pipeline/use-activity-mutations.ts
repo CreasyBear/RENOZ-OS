@@ -56,6 +56,16 @@ export function useLogActivity() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+          'opportunity',
+          opportunityId,
+          null
+        ),
+      });
     },
   });
 }
@@ -95,6 +105,16 @@ export function useUpdateActivity() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+          'opportunity',
+          opportunityId,
+          null
+        ),
+      });
     },
   });
 }
@@ -123,6 +143,16 @@ export function useCompleteActivity() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+          'opportunity',
+          opportunityId,
+          null
+        ),
+      });
     },
   });
 }
@@ -150,6 +180,16 @@ export function useDeleteActivity() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+          'opportunity',
+          opportunityId,
+          null
+        ),
+      });
     },
   });
 }

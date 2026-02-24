@@ -7,22 +7,14 @@
  * SPRINT-03: New component for project-centric jobs model
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { Folder, MapPin, Calendar, DollarSign } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
+  FormDialog,
   TextField,
   TextareaField,
   SelectField,
@@ -30,7 +22,7 @@ import {
   DateField,
 } from '@/components/shared/forms';
 import { useUpdateProject } from '@/hooks/jobs';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import {
   projectStatusSchema,
@@ -111,6 +103,7 @@ export function ProjectEditDialog({
   onSuccess,
 }: ProjectEditDialogProps) {
   const updateProject = useUpdateProject();
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useTanStackForm({
     schema: editProjectFormSchema,
@@ -132,9 +125,13 @@ export function ProjectEditDialog({
       estimatedTotalValue: null,
       progressPercent: 0,
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
       if (!project) return;
 
+      setSubmitError(null);
       try {
         await updateProject.mutateAsync({
           projectId: project.id,
@@ -155,15 +152,17 @@ export function ProjectEditDialog({
         toast.success('Project updated successfully');
         onOpenChange(false);
         onSuccess?.();
-      } catch {
-        toast.error('Failed to update project');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to update project';
+        setSubmitError(msg);
+        toast.error(msg);
       }
     },
   });
 
-  // Reset form when project changes
   useEffect(() => {
     if (project && open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset({
         title: project.title,
         description: project.description || '',
@@ -185,27 +184,32 @@ export function ProjectEditDialog({
 
   if (!project) return null;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden p-0">
-        <DialogHeader className="px-6 pt-6 pb-2">
-          <DialogTitle className="flex items-center gap-2">
-            <Folder className="h-5 w-5" />
-            Edit Project
-          </DialogTitle>
-          <DialogDescription>
-            Update project details for {project.projectNumber}
-          </DialogDescription>
-        </DialogHeader>
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && updateProject.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="flex flex-col h-full"
-        >
-          <ScrollArea className="flex-1 px-6 py-4">
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Folder className="h-5 w-5" />
+          Edit Project
+        </span>
+      }
+      description={`Update project details for ${project.projectNumber}`}
+      form={form}
+      submitLabel="Save Changes"
+      submitError={submitError}
+      submitDisabled={updateProject.isPending}
+      size="xl"
+      className="max-w-2xl max-h-[90vh] overflow-hidden p-0"
+      resetOnClose={false}
+    >
+      <ScrollArea className="flex-1 px-6 py-4">
             <div className="space-y-6">
               {/* Basic Info */}
               <div className="space-y-4">
@@ -420,17 +424,6 @@ export function ProjectEditDialog({
               </div>
             </div>
           </ScrollArea>
-
-          <DialogFooter className="px-6 py-4 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={updateProject.isPending}>
-              {updateProject.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

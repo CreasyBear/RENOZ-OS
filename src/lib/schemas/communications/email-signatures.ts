@@ -73,17 +73,12 @@ export interface SignaturesListProps {
   signatures: Signature[]
   /** @source useEmailSignatures().isLoading in container */
   isLoading: boolean
-  /** @source useCreateEmailSignature() in container */
-  onCreate: (values: SignatureFormValues) => Promise<void>
-  /** @source useUpdateEmailSignature() in container */
-  onUpdate: (id: string, values: SignatureFormValues) => Promise<void>
   /** @source useDeleteEmailSignature() in container */
   onDelete: (id: string) => Promise<void>
   /** @source useSetDefaultSignature() in container */
   onSetDefault: (id: string) => Promise<void>
   isDeleting?: boolean
   isSettingDefault?: boolean
-  isSaving?: boolean
   className?: string
 }
 

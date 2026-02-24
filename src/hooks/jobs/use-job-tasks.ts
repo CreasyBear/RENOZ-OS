@@ -122,7 +122,7 @@ export function useCreateTask() {
       }
       if (variables.siteVisitId) {
         queryClient.invalidateQueries({
-          queryKey: ['projectTasks', 'siteVisit', variables.siteVisitId],
+          queryKey: queryKeys.projectTasks.siteVisit(variables.siteVisitId),
         });
       }
     },

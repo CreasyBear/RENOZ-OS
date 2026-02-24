@@ -75,6 +75,32 @@ export {
   formatClaimCost,
 };
 
+function showClaimMutationOutcome(
+  operation: 'submitted' | 'approved' | 'denied' | 'resolved' | 'cancelled',
+  result:
+    | {
+        claimNumber?: string;
+        notificationQueued?: boolean | null;
+        message?: string;
+        partialFailure?: { code: string; message: string } | null;
+      }
+    | null
+    | undefined
+) {
+  const claimLabel = result?.claimNumber ? `Claim ${result.claimNumber}` : 'Claim';
+  if (result?.partialFailure?.message) {
+    toast.warning(result.partialFailure.message);
+    return;
+  }
+  if (result?.notificationQueued === false) {
+    toast.warning(
+      `${claimLabel} ${operation}, but customer notification email failed. Operation succeeded.`
+    );
+    return;
+  }
+  toast.success(result?.message ?? `${claimLabel} ${operation}`);
+}
+
 // ============================================================================
 // LIST WARRANTY CLAIMS
 // ============================================================================
@@ -194,13 +220,7 @@ export function useCreateWarrantyClaim() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
       });
-      if (result.notificationQueued === false) {
-        toast.warning(
-          `Claim ${result.claimNumber} submitted but we couldn't send the notification email. The customer will not be notified.`
-        );
-      } else {
-        toast.success(`Claim ${result.claimNumber} submitted successfully`);
-      }
+      showClaimMutationOutcome('submitted', result);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to submit claim');
@@ -228,10 +248,10 @@ export function useUpdateClaimStatus() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
       });
-      const statusLabel = isWarrantyClaimStatusValue(result.status)
-        ? claimStatusConfig[result.status].label
-        : result.status;
-      toast.success(`Claim status updated to ${statusLabel}`);
+      const message =
+        (result as { message?: string }).message ??
+        `Claim status updated to ${isWarrantyClaimStatusValue(result.status) ? claimStatusConfig[result.status].label : result.status}`;
+      toast.success(message);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to update status');
@@ -259,7 +279,7 @@ export function useApproveClaim() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
       });
-      toast.success(`Claim ${result.claimNumber} approved`);
+      showClaimMutationOutcome('approved', result);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to approve claim');
@@ -287,7 +307,7 @@ export function useDenyClaim() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
       });
-      toast.success(`Claim ${result.claimNumber} denied`);
+      showClaimMutationOutcome('denied', result);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to deny claim');
@@ -318,13 +338,7 @@ export function useResolveClaim() {
       // Also invalidate warranty queries since resolution may extend warranty
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(result.warrantyId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
-      if (result.notificationQueued === false) {
-        toast.warning(
-          `Claim ${result.claimNumber} resolved but we couldn't send the notification email. The customer will not be notified.`
-        );
-      } else {
-        toast.success(`Claim ${result.claimNumber} resolved`);
-      }
+      showClaimMutationOutcome('resolved', result);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to resolve claim');
@@ -370,12 +384,12 @@ export function useCancelWarrantyClaim() {
   return useMutation({
     mutationFn: (data: { id: string; reason?: string }) =>
       cancelWarrantyClaim({ data }),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.warrantyClaims.detail(variables.id),
       });
-      toast.success('Claim cancelled');
+      showClaimMutationOutcome('cancelled', result as { claimNumber?: string; notificationQueued?: boolean | null });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to cancel claim');

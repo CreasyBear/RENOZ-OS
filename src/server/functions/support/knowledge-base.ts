@@ -32,6 +32,7 @@ import {
   type ListArticlesResponse,
 } from '@/lib/schemas/support/knowledge-base';
 import { NotFoundError } from '@/lib/server/errors';
+import { serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
 
 // ============================================================================
 // HELPERS
@@ -253,10 +254,10 @@ export const updateCategory = createServerFn({ method: 'POST' })
 
 export const deleteCategory = createServerFn({ method: 'POST' })
   .inputValidator(deleteCategorySchema)
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    await db
+    const [deletedCategory] = await db
       .update(kbCategories)
       .set({
         deletedAt: new Date(),
@@ -268,9 +269,18 @@ export const deleteCategory = createServerFn({ method: 'POST' })
           eq(kbCategories.id, data.categoryId),
           eq(kbCategories.organizationId, ctx.organizationId)
         )
-      );
+      )
+      .returning({ id: kbCategories.id, name: kbCategories.name });
 
-    return { success: true };
+    if (!deletedCategory) {
+      throw new NotFoundError('Category not found', 'KbCategory');
+    }
+
+    return serializedMutationSuccess(
+      { id: deletedCategory.id },
+      `Category "${deletedCategory.name}" deleted.`,
+      { affectedIds: [deletedCategory.id] }
+    );
   });
 
 // ============================================================================
@@ -553,10 +563,10 @@ export const updateArticle = createServerFn({ method: 'POST' })
 
 export const deleteArticle = createServerFn({ method: 'POST' })
   .inputValidator(deleteArticleSchema)
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    await db
+    const [deletedArticle] = await db
       .update(kbArticles)
       .set({
         deletedAt: new Date(),
@@ -565,14 +575,23 @@ export const deleteArticle = createServerFn({ method: 'POST' })
       })
       .where(
         and(eq(kbArticles.id, data.articleId), eq(kbArticles.organizationId, ctx.organizationId))
-      );
+      )
+      .returning({ id: kbArticles.id, title: kbArticles.title });
 
-    return { success: true };
+    if (!deletedArticle) {
+      throw new NotFoundError('Article not found', 'KbArticle');
+    }
+
+    return serializedMutationSuccess(
+      { id: deletedArticle.id },
+      `Article "${deletedArticle.title}" deleted.`,
+      { affectedIds: [deletedArticle.id] }
+    );
   });
 
 export const recordArticleFeedback = createServerFn({ method: 'POST' })
   .inputValidator(recordArticleFeedbackSchema)
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify article exists
@@ -605,5 +624,9 @@ export const recordArticleFeedback = createServerFn({ method: 'POST' })
         .where(eq(kbArticles.id, data.articleId));
     }
 
-    return { success: true };
+    return serializedMutationSuccess(
+      { articleId: data.articleId, helpful: data.helpful },
+      data.helpful ? 'Marked article as helpful.' : 'Marked article as not helpful.',
+      { affectedIds: [data.articleId] }
+    );
   });

@@ -11,8 +11,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
   useContactPreferences,
@@ -29,14 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
+import { FormFieldDisplayProvider, FormErrorSummary } from "@/components/shared/forms";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -91,6 +83,8 @@ interface CommunicationPreferencesPresenterProps {
   preferences: ContactPreferences | null;
   /** @source useUpdateContactPreferences hook in CommunicationPreferencesContainer */
   isUpdating: boolean;
+  /** @source updateMutation.error in CommunicationPreferencesContainer */
+  submitError?: string | null;
   contactName?: string;
   className?: string;
   onToggle: (field: "emailOptIn" | "smsOptIn", value: boolean) => void;
@@ -102,6 +96,7 @@ interface CommunicationPreferencesPresenterProps {
 function CommunicationPreferencesPresenter({
   preferences,
   isUpdating,
+  submitError,
   contactName,
   className,
   onToggle,
@@ -109,19 +104,25 @@ function CommunicationPreferencesPresenter({
   confirmOptOut,
   onConfirmOptOutChange,
 }: CommunicationPreferencesPresenterProps) {
-  const form = useForm<PreferencesFormValues>({
-    resolver: zodResolver(preferencesFormSchema),
+  const form = useTanStackForm<PreferencesFormValues>({
+    schema: preferencesFormSchema,
     defaultValues: {
-      emailOptIn: true,
-      smsOptIn: false,
+      emailOptIn: preferences?.emailOptIn ?? true,
+      smsOptIn: preferences?.smsOptIn ?? false,
     },
-    values: preferences
-      ? {
-          emailOptIn: preferences.emailOptIn,
-          smsOptIn: preferences.smsOptIn,
-        }
-      : undefined,
+    onSubmit: () => {},
+    onSubmitInvalid: () => {},
   });
+
+  // Sync form when preferences change
+  React.useEffect(() => {
+    if (preferences) {
+      form.reset({
+        emailOptIn: preferences.emailOptIn,
+        smsOptIn: preferences.smsOptIn,
+      });
+    }
+  }, [preferences, form]);
 
   const displayName =
     contactName ||
@@ -142,39 +143,36 @@ function CommunicationPreferencesPresenter({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <div className="space-y-4">
+          <FormFieldDisplayProvider form={form}>
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+              <FormErrorSummary form={form} submitError={submitError} />
               {/* Email Opt-In */}
-              <FormField
-                control={form.control}
-                name="emailOptIn"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) =>
-                          onToggle("emailOptIn", checked === true)
-                        }
-                        disabled={isUpdating}
-                        aria-label="email-opt-in"
-                      />
-                    </FormControl>
+              <form.Field name="emailOptIn">
+                {(field) => (
+                  <div className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
+                    <Checkbox
+                      checked={field.state.value ?? false}
+                      onCheckedChange={(checked) =>
+                        onToggle("emailOptIn", checked === true)
+                      }
+                      disabled={isUpdating}
+                      aria-label="email-opt-in"
+                    />
                     <div className="space-y-1 leading-none">
-                      <FormLabel className="flex items-center gap-2 cursor-pointer">
+                      <label className="flex items-center gap-2 cursor-pointer font-medium">
                         <Mail className="h-4 w-4 text-muted-foreground" />
                         Email Communications
-                        {field.value && (
+                        {field.state.value && (
                           <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Check className="h-3 w-3" />
                             Opted In
                           </span>
                         )}
-                      </FormLabel>
-                      <FormDescription>
+                      </label>
+                      <p className="text-sm text-muted-foreground">
                         Receive marketing emails, newsletters, and promotional
                         content
-                      </FormDescription>
+                      </p>
                       {preferences?.emailOptInAt && (
                         <p className="text-xs text-muted-foreground tabular-nums">
                           Last updated:{" "}
@@ -185,40 +183,36 @@ function CommunicationPreferencesPresenter({
                         </p>
                       )}
                     </div>
-                  </FormItem>
+                  </div>
                 )}
-              />
+              </form.Field>
 
               {/* SMS Opt-In */}
-              <FormField
-                control={form.control}
-                name="smsOptIn"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) =>
-                          onToggle("smsOptIn", checked === true)
-                        }
-                        disabled={isUpdating}
-                        aria-label="sms-opt-in"
-                      />
-                    </FormControl>
+              <form.Field name="smsOptIn">
+                {(field) => (
+                  <div className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border p-4">
+                    <Checkbox
+                      checked={field.state.value ?? false}
+                      onCheckedChange={(checked) =>
+                        onToggle("smsOptIn", checked === true)
+                      }
+                      disabled={isUpdating}
+                      aria-label="sms-opt-in"
+                    />
                     <div className="space-y-1 leading-none">
-                      <FormLabel className="flex items-center gap-2 cursor-pointer">
+                      <label className="flex items-center gap-2 cursor-pointer font-medium">
                         <MessageSquare className="h-4 w-4 text-muted-foreground" />
                         SMS Communications
-                        {field.value && (
+                        {field.state.value && (
                           <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Check className="h-3 w-3" />
                             Opted In
                           </span>
                         )}
-                      </FormLabel>
-                      <FormDescription>
+                      </label>
+                      <p className="text-sm text-muted-foreground">
                         Receive text messages for updates and notifications
-                      </FormDescription>
+                      </p>
                       {preferences?.smsOptInAt && (
                         <p className="text-xs text-muted-foreground tabular-nums">
                           Last updated:{" "}
@@ -229,9 +223,9 @@ function CommunicationPreferencesPresenter({
                         </p>
                       )}
                     </div>
-                  </FormItem>
+                  </div>
                 )}
-              />
+              </form.Field>
 
               {isUpdating && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -239,8 +233,8 @@ function CommunicationPreferencesPresenter({
                   Updating preferences...
                 </div>
               )}
-            </div>
-          </Form>
+            </form>
+          </FormFieldDisplayProvider>
         </CardContent>
       </Card>
 
@@ -488,6 +482,7 @@ export function CommunicationPreferences({
     <CommunicationPreferencesPresenter
       preferences={preferences}
       isUpdating={updateMutation.isPending}
+      submitError={updateMutation.error?.message ?? null}
       contactName={contactName}
       className={className}
       onToggle={handleToggle}

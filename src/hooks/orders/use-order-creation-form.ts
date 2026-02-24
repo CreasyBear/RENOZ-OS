@@ -2,14 +2,16 @@
  * Order Creation Form Hook
  *
  * TanStack Form for the order creation wizard.
- * Integrates with useFormDraft for auto-save.
+ * Draft restore/persistence is intentionally disabled for this flow.
  *
  * @see order-creation-wizard.tsx
  * @see order-creation-form.ts schema
  */
 
+import { useMemo } from 'react';
 import { addDays } from 'date-fns';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { toCountryCode } from '@/lib/country';
 import {
   orderCreationFormSchema,
   type OrderCreationFormValues,
@@ -116,38 +118,49 @@ export function buildOrderSubmitData(
   if (!customerId) throw new Error('Customer is required');
   if (values.lineItems.length === 0) throw new Error('At least one item is required');
 
+  /** API requires street1, city, state, postalCode (min 1), country. Omit address if incomplete. */
+  const isAddressComplete = (a: {
+    street1?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  }) =>
+    !!(a?.street1?.trim() && a?.city?.trim() && a?.state?.trim() && (a?.postcode ?? '').trim() && (a?.country ?? 'AU'));
+
   const customerAddr = customerAddresses.shippingAddress || customerAddresses.billingAddress;
   const effectiveShipping =
-    useBillingAsShipping && customerAddr?.street1
+    useBillingAsShipping && customerAddr && isAddressComplete(customerAddr)
       ? {
           street1: customerAddr.street1 || '',
           street2: customerAddr.street2,
           city: customerAddr.city || '',
           state: customerAddr.state || '',
-          postalCode: customerAddr.postcode || '',
-          country: customerAddr.country || 'AU',
+          postalCode: (customerAddr.postcode ?? '').trim() || '',
+          country: toCountryCode(customerAddr.country),
         }
-      : shippingAddress.street1
+      : shippingAddress.street1?.trim() && isAddressComplete(shippingAddress)
         ? {
             street1: shippingAddress.street1,
             street2: shippingAddress.street2,
             city: shippingAddress.city,
             state: shippingAddress.state,
-            postalCode: shippingAddress.postcode,
-            country: shippingAddress.country,
+            postalCode: (shippingAddress.postcode ?? '').trim(),
+            country: toCountryCode(shippingAddress.country),
           }
         : undefined;
 
   const billingAddr = customerAddresses.billingAddress;
-  const billingAddress = billingAddr?.street1
-    ? {
-        street1: billingAddr.street1 || '',
-        city: billingAddr.city || '',
-        state: billingAddr.state || '',
-        postalCode: billingAddr.postcode || '',
-        country: billingAddr.country || 'AU',
-      }
-    : undefined;
+  const billingAddress =
+    billingAddr && isAddressComplete(billingAddr)
+      ? {
+          street1: billingAddr.street1 || '',
+          city: billingAddr.city || '',
+          state: billingAddr.state || '',
+          postalCode: (billingAddr.postcode ?? '').trim(),
+          country: toCountryCode(billingAddr.country),
+        }
+      : undefined;
 
   return {
     customerId,
@@ -228,7 +241,11 @@ export function useOrderCreationForm({
   onValidationError,
   onSubmitInvalid,
 }: UseOrderCreationFormOptions) {
-  const defaultValues = getOrderCreationDefaultValues(initialCustomerId);
+  // Hard-disabled for this recovery pass: order creation must not restore/persist drafts.
+  const defaultValues = useMemo(
+    () => getOrderCreationDefaultValues(initialCustomerId),
+    [initialCustomerId]
+  );
 
   const form = useTanStackForm<OrderCreationFormValues>({
     schema: orderCreationFormSchema,

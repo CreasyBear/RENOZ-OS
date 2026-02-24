@@ -7,7 +7,7 @@
 
 import { memo } from "react";
 import { Link } from "@tanstack/react-router";
-import { Eye, FileText, Ban, ArrowRightLeft, AlertCircle } from "lucide-react";
+import { Eye, FileText, Ban, ArrowRightLeft, AlertCircle, PackageSearch } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   CheckboxCell,
@@ -160,25 +160,35 @@ export function createWarrantyColumns(
         const productId = row.original.productId;
         const val = row.getValue("productName");
         const productName = val == null ? null : typeof val === "string" ? val : String(val);
-        const subtitle = row.original.productSerial ?? row.original.productSku ?? undefined;
-        const content = (
-          <NameCell
-            name={productName}
-            subtitle={subtitle}
-            maxWidth={220}
-          />
-        );
-        return productId ? (
-          <Link
-            to="/products/$productId"
-            params={{ productId }}
-            className="text-primary hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {content}
-          </Link>
-        ) : (
-          content
+        const serial = row.original.productSerial ?? undefined;
+        const sku = row.original.productSku ?? undefined;
+
+        return (
+          <div className="space-y-1">
+            {productId ? (
+              <Link
+                to="/products/$productId"
+                params={{ productId }}
+                className="block text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <NameCell name={productName} subtitle={sku} maxWidth={220} />
+              </Link>
+            ) : (
+              <NameCell name={productName} subtitle={sku} maxWidth={220} />
+            )}
+            {serial ? (
+              <Link
+                to="/inventory/browser"
+                search={{ view: "serialized", serializedSearch: serial, page: 1 }}
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <PackageSearch className="h-3 w-3" aria-hidden="true" />
+                <span className="font-mono">{serial}</span>
+              </Link>
+            ) : null}
+          </div>
         );
       },
       enableSorting: false,

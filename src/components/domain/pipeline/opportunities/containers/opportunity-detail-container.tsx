@@ -7,6 +7,8 @@
  * Implements render props pattern for flexible header/action composition.
  *
  * @source all data and state from useOpportunityDetail composite hook
+ * @source unifiedActivities from useUnifiedActivities (via useOpportunityDetail)
+ * @source onCompleteActivity from useCompleteActivity hook
  *
  * @see STANDARDS.md - Container/Presenter pattern
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
@@ -43,7 +45,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { useOpportunityDetail } from '@/hooks/pipeline';
+import { useOpportunityDetail, useCompleteActivity } from '@/hooks/pipeline';
 import { useTrackView } from '@/hooks/search';
 import { isValidOpportunityStage, isValidOpportunityMetadata } from '@/lib/schemas/pipeline';
 import { OpportunityDetailView } from '../views/opportunity-detail-view';
@@ -51,6 +53,8 @@ import { OPPORTUNITY_STAGE_CONFIG } from '../opportunity-status-config';
 import { WonLostDialog } from '../../won-lost-dialog';
 import { ActivityLogger } from '../../activities/activity-logger';
 import { ExtendValidityDialog } from '../../quotes/extend-validity-dialog';
+import { OpportunityQuickDialog } from '../opportunity-quick-dialog';
+import { toastSuccess, toastError } from '@/hooks';
 
 // ============================================================================
 // TYPES
@@ -135,6 +139,8 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
     closeWonLostDialog,
     activityDialogOpen,
     setActivityDialogOpen,
+    editDialogOpen,
+    setEditDialogOpen,
     extendQuoteDialogOpen,
     setExtendQuoteDialogOpen,
 
@@ -154,6 +160,17 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
     refetch,
   } = useOpportunityDetail(opportunityId);
   useTrackView('opportunity', opportunity?.id, opportunity?.title, customer?.name ?? undefined, `/pipeline/${opportunityId}`);
+
+  const completeActivityMutation = useCompleteActivity();
+  const handleCompleteActivity = (activityId: string, outcome?: string) => {
+    completeActivityMutation.mutate(
+      { activityId, opportunityId, outcome },
+      {
+        onSuccess: () => toastSuccess('Activity marked as complete.'),
+        onError: () => toastError('Failed to complete activity. Please try again.'),
+      }
+    );
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Loading
@@ -197,22 +214,6 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
     }
     return errorContent;
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Extract activities from opportunity data (immutable log)
-  // ─────────────────────────────────────────────────────────────────────────
-  // Note: The useOpportunity hook returns opportunity.activities in its data shape
-  // We need to extract it for the view. For now, use an empty array as the
-  // activities are accessible via unifiedActivities.
-  const opportunityActivities: Array<{
-    id: string;
-    type: string;
-    description: string;
-    outcome: string | null;
-    scheduledAt: Date | string | null;
-    completedAt: Date | string | null;
-    createdAt: Date | string;
-  }> = [];
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Header Actions
@@ -329,7 +330,6 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
           ...contact,
           jobTitle: (contact as { jobTitle?: string | null }).jobTitle ?? null,
         } : null}
-        activities={opportunityActivities}
         versions={versions}
         winLossReason={winLossReason}
         alerts={alerts}
@@ -338,6 +338,8 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
         unifiedActivities={unifiedActivities}
         unifiedActivitiesLoading={activitiesLoading}
         unifiedActivitiesError={activitiesError}
+        onCompleteActivity={handleCompleteActivity}
+        isCompleteActivityPending={completeActivityMutation.isPending}
         activeTab={activeTab}
         onTabChange={onTabChange}
         showSidebar={showSidebar}
@@ -359,6 +361,13 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
         onSendQuote={actions.onSendQuote}
         onCopyLink={actions.onCopyLink}
         className={className}
+      />
+
+      <OpportunityQuickDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        mode="edit"
+        opportunityId={opportunity.id}
       />
 
       {/* Delete Confirmation Dialog */}

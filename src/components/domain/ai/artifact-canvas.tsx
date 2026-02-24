@@ -131,8 +131,9 @@ const ArtifactError = memo(function ArtifactError({
 const RevenueChartRenderer = memo(function RevenueChartRenderer({
   data,
 }: {
-  data: RevenueChartData;
+  data: RevenueChartData | undefined;
 }) {
+  if (!data) return null;
   const TrendIcon =
     data.summary?.trend === 'up'
       ? TrendingUp
@@ -209,8 +210,9 @@ const RevenueChartRenderer = memo(function RevenueChartRenderer({
 const OrdersPipelineRenderer = memo(function OrdersPipelineRenderer({
   data,
 }: {
-  data: OrdersPipelineData;
+  data: OrdersPipelineData | undefined;
 }) {
+  if (!data) return null;
   const statusColors: Record<string, string> = {
     draft: 'bg-gray-200',
     confirmed: 'bg-blue-200',
@@ -287,8 +289,9 @@ const OrdersPipelineRenderer = memo(function OrdersPipelineRenderer({
 const CustomerSummaryRenderer = memo(function CustomerSummaryRenderer({
   data,
 }: {
-  data: CustomerSummaryData;
+  data: CustomerSummaryData | undefined;
 }) {
+  if (!data) return null;
   const healthColor =
     data.customer?.healthStatus === 'healthy'
       ? 'text-green-600 bg-green-100'
@@ -375,9 +378,9 @@ const CustomerSummaryRenderer = memo(function CustomerSummaryRenderer({
 const MetricsCardRenderer = memo(function MetricsCardRenderer({
   data,
 }: {
-  data: MetricsCardData;
+  data: MetricsCardData | undefined;
 }) {
-  if (!data.metric) return null;
+  if (!data || !data.metric) return null;
 
   const TrendIcon =
     data.metric.trend === 'up'
@@ -423,8 +426,9 @@ const MetricsCardRenderer = memo(function MetricsCardRenderer({
 const TopCustomersRenderer = memo(function TopCustomersRenderer({
   data,
 }: {
-  data: TopCustomersData;
+  data: TopCustomersData | undefined;
 }) {
+  if (!data) return null;
   return (
     <Card className="w-full">
       <CardHeader className="pb-2">
@@ -500,6 +504,11 @@ const ArtifactRenderer = memo(function ArtifactRenderer({
   // Handle error state
   if (status === 'error' && error) {
     return <ArtifactError title={type} error={error} />;
+  }
+
+  // Guard: payload may be undefined during streaming/complete transition
+  if (payload == null) {
+    return <ArtifactLoading title={type} progress={progress} />;
   }
 
   // Route to specific renderer based on type

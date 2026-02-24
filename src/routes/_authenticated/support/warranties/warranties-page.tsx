@@ -13,7 +13,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Shield, BarChart3, MoreVertical } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
-import { WarrantyListContainer, type WarrantyListItem } from '@/components/domain/warranty';
+import { WarrantyListContainer } from '@/components/domain/warranty/containers/warranty-list-container';
+import type { WarrantyListItem } from '@/components/domain/warranty/tables/warranty-list-table';
 import { BulkWarrantyImportDialog } from '@/components/domain/warranty/dialogs/bulk-warranty-import-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -42,7 +43,7 @@ export default function WarrantiesPage({ search }: WarrantiesPageProps) {
       ...updates,
       page: 'page' in updates ? updates.page ?? 1 : search.page,
     };
-    navigate({ to: '/support/warranties', params: {} as never, search: nextSearch });
+    navigate({ to: '/support/warranties', search: nextSearch });
   };
 
   return (

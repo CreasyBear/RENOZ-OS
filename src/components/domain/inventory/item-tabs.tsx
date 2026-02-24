@@ -77,6 +77,15 @@ export interface CostLayer {
   referenceType?: string;
   referenceId?: string;
   expiryDate?: Date;
+  costComponents?: Array<{
+    id: string;
+    componentType: 'base_unit_cost' | 'allocated_additional_cost';
+    costType: string | null;
+    quantityBasis: number;
+    amountTotal: number;
+    amountPerUnit: number;
+    currency: string;
+  }>;
 }
 
 export interface ForecastData {

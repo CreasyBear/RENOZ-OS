@@ -16,6 +16,7 @@ export {
   fontSize,
   lineHeight,
   letterSpacing,
+  tabularNums,
   borderRadius,
   commonStyles,
   formatCurrencyForPdf,
@@ -24,6 +25,33 @@ export {
   FONT_FAMILY,
   FONT_WEIGHTS,
 } from "./theme";
+
+// ============================================================================
+// DOCUMENT LAYOUT CONSTANTS & UTILITIES
+// ============================================================================
+
+export {
+  DOCUMENT_PAGE_MARGINS,
+  DOCUMENT_FONT_SIZE,
+  DOCUMENT_BODY_FONT_SIZE,
+  DOCUMENT_TOTAL_FONT_SIZE,
+  DOCUMENT_TABLE_ROW_PADDING,
+  DOCUMENT_BORDER_COLOR,
+  DOCUMENT_LINE_HEIGHT,
+  DOCUMENT_SUMMARY_WIDTH,
+  DOCUMENT_SUMMARY_MARGIN_TOP,
+  DOCUMENT_LOGO_HEIGHT,
+  DOCUMENT_LOGO_MAX_WIDTH,
+  DOCUMENT_FIXED_HEADER_CLEARANCE,
+  DOCUMENT_SPACING,
+} from "./document-constants";
+
+export { formatAddressLines, type AddressInput } from "./address-utils";
+
+export {
+  DocumentFixedHeader,
+  type DocumentFixedHeaderProps,
+} from "./document-fixed-header";
 
 // ============================================================================
 // HEADER
@@ -119,6 +147,15 @@ export {
   type DeliveryAcknowledgmentProps,
   type WorkOrderSignOffProps,
 } from "./signature-line";
+
+// ============================================================================
+// SERIAL NUMBERS
+// ============================================================================
+
+export {
+  SerialNumbersCell,
+  type SerialNumbersCellProps,
+} from "./serial-numbers-cell";
 
 // ============================================================================
 // ICONS

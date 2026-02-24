@@ -182,7 +182,7 @@ export function useDocumentStatus(
   const statusFn = useServerFn(getDocumentStatus);
 
   return useQuery<DocumentStatusResult, Error>({
-    queryKey: ['documents', 'status', input.orderId, input.documentType],
+    queryKey: queryKeys.documents.status(input.orderId, input.documentType),
     queryFn: async () => {
       const result = await statusFn({ data: input });
       if (result == null) throw new Error('Query returned no data');
@@ -210,13 +210,16 @@ export function useDocumentStatus(
  * ```
  */
 export function useDocumentPolling(
-  input: DocumentStatusInput & { enabled?: boolean }
+  input: DocumentStatusInput & {
+    enabled?: boolean;
+    onTerminalStatus?: (data: DocumentStatusResult) => void;
+  }
 ) {
-  const { enabled = true, ...statusInput } = input;
+  const { enabled = true, onTerminalStatus, ...statusInput } = input;
   const statusFn = useServerFn(getDocumentStatus);
 
   return useQuery<DocumentStatusResult, Error>({
-    queryKey: ['documents', 'status', statusInput.orderId, statusInput.documentType],
+    queryKey: queryKeys.documents.status(statusInput.orderId, statusInput.documentType),
     queryFn: async () => {
       const result = await statusFn({ data: statusInput });
       if (result == null) throw new Error('Query returned no data');
@@ -228,6 +231,7 @@ export function useDocumentPolling(
       const data = query.state.data;
       // Stop polling if completed or failed
       if (data?.status === 'completed' || data?.status === 'failed') {
+        onTerminalStatus?.(data);
         return false;
       }
       // Poll every 2 seconds while pending/generating

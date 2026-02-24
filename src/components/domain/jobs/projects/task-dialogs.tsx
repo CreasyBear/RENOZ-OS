@@ -14,14 +14,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Plus, Edit3, Loader2, CalendarIcon } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -40,13 +33,19 @@ import { format } from 'date-fns';
 import type { TaskWithWorkstream } from '@/lib/schemas/jobs';
 
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { TextField, TextareaField, NumberField, FormField } from '@/components/shared/forms';
+import {
+  FormDialog,
+  TextField,
+  TextareaField,
+  NumberField,
+  FormField,
+} from '@/components/shared/forms';
 import { useUpdateTask, useCreateTask, useSiteVisitsByProject, useWorkstreams, useJobTemplates } from '@/hooks/jobs';
 import { SiteVisitCreateDialog } from './site-visit-create-dialog';
 import { WorkstreamCreateDialog } from './workstream-dialogs';
 import { UserInviteDialog } from '@/components/domain/users/user-invite-dialog';
 import { useUserLookup } from '@/hooks/users';
-import { toast } from '@/lib/toast';
+import { toast } from 'sonner';
 
 
 // ============================================================================
@@ -112,6 +111,7 @@ export function TaskCreateDialog({
   const { userMap } = useUserLookup();
 
   // siteVisitId: '' = no visit (project-level), or a visit id when linked to a visit
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedSiteVisitId, setSelectedSiteVisitId] = useState<string>('');
   const [createMore, setCreateMore] = useState(false);
   const [showSiteVisitCreate, setShowSiteVisitCreate] = useState(false);
@@ -136,7 +136,11 @@ export function TaskCreateDialog({
       const messages = error.issues.map(i => i.message).join(', ');
       toast.error(`Validation error: ${messages}`);
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (values) => {
+      setSubmitError(null);
       try {
         await createTask.mutateAsync({
           projectId,
@@ -180,18 +184,11 @@ export function TaskCreateDialog({
         onSuccess?.();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
+        setSubmitError(message);
         toast.error(`Failed to create task: ${message}`);
       }
     },
   });
-
-  // Handle keyboard shortcut
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      form.handleSubmit();
-    }
-  };
 
   // Handle site visit created
   const handleSiteVisitCreated = () => {
@@ -208,11 +205,25 @@ export function TaskCreateDialog({
     }
   };
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && createTask.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
+
   // Loading state
   if (isLoadingVisits) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent
+          className="max-w-md"
+          onEscapeKeyDown={(e) => {
+            if (createTask.isPending) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (createTask.isPending) e.preventDefault();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Add Task</DialogTitle>
           </DialogHeader>
@@ -236,32 +247,36 @@ export function TaskCreateDialog({
     );
   }
 
-  // Task creation form (workstream-first; site visit optional when project has visits)
   const selectedVisit = siteVisits.find(v => v.id === selectedSiteVisitId);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Add Task
-          </DialogTitle>
-          <DialogDescription>
-            {selectedVisit
-              ? `Adding to visit: ${selectedVisit.visitNumber || 'Site Visit'}`
-              : 'Add a project-level task (optionally link to a site visit)'}
-            <span className="ml-2 text-xs text-muted-foreground">(Cmd+Enter to save)</span>
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4 py-4"
-        >
+    <>
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Plus className="h-5 w-5" />
+          Add Task
+        </span>
+      }
+      description={
+        <>
+          {selectedVisit
+            ? `Adding to visit: ${selectedVisit.visitNumber || 'Site Visit'}`
+            : 'Add a project-level task (optionally link to a site visit)'}
+          <span className="ml-2 text-xs text-muted-foreground">(Cmd+Enter to save)</span>
+        </>
+      }
+      form={form}
+      submitLabel={createMore ? 'Create & Continue' : 'Create Task'}
+      loadingLabel="Creating..."
+      submitError={submitError}
+      submitDisabled={createTask.isPending}
+      size="lg"
+      className="max-w-lg max-h-[90vh] overflow-y-auto"
+      resetOnClose={false}
+    >
           {taskTemplateOptions.length > 0 && (
             <FormField label="From template (optional)" name="taskTemplate">
               <Select
@@ -502,35 +517,18 @@ export function TaskCreateDialog({
             )}
           </form.Field>
 
-          <DialogFooter className="pt-4 flex-col sm:flex-row gap-2">
-            <div className="flex items-center gap-2 mr-auto">
-              <Checkbox
-                id="create-more"
-                checked={createMore}
-                onCheckedChange={(checked) => setCreateMore(checked === true)}
-              />
-              <Label htmlFor="create-more" className="text-sm text-muted-foreground cursor-pointer">
-                Create another
-              </Label>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={createTask.isPending}
-            >
-              {createTask.isPending ? 'Creating...' : createMore ? 'Create & Continue' : 'Create Task'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+          <div className="flex items-center gap-2 pt-2">
+            <Checkbox
+              id="create-more"
+              checked={createMore}
+              onCheckedChange={(checked) => setCreateMore(checked === true)}
+            />
+            <Label htmlFor="create-more" className="text-sm text-muted-foreground cursor-pointer">
+              Create another
+            </Label>
+          </div>
+    </FormDialog>
 
-      {/* Nested Workstream Create Dialog */}
       <WorkstreamCreateDialog
         open={showWorkstreamCreate}
         onOpenChange={setShowWorkstreamCreate}
@@ -538,16 +536,12 @@ export function TaskCreateDialog({
         onSuccess={() => handleWorkstreamCreated()}
       />
 
-      {/* Nested User Invite Dialog */}
       <UserInviteDialog
         open={showUserInvite}
         onOpenChange={setShowUserInvite}
-        onSuccess={() => {
-          // User list will refresh via query invalidation
-          // User can then select the newly invited user (once they accept)
-        }}
+        onSuccess={() => {}}
       />
-    </Dialog>
+    </>
   );
 }
 
@@ -579,9 +573,8 @@ export function TaskEditDialog({
 }: TaskEditDialogProps) {
   const updateTask = useUpdateTask();
   const { userMap } = useUserLookup();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [showUserInvite, setShowUserInvite] = useState(false);
-
-
 
   const form = useTanStackForm({
     schema: editTaskFormSchema,
@@ -598,9 +591,13 @@ export function TaskEditDialog({
       const messages = error.issues.map(i => i.message).join(', ');
       toast.error(`Validation error: ${messages}`);
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     onSubmit: async (data) => {
       if (!task) return;
 
+      setSubmitError(null);
       try {
         await updateTask.mutateAsync({
           taskId: task.id,
@@ -619,12 +616,12 @@ export function TaskEditDialog({
         onSuccess?.();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
+        setSubmitError(message);
         toast.error(`Failed to update task: ${message}`);
       }
     },
   });
 
-  // Reset form when task changes
   useEffect(() => {
     if (task && open) {
       const dueDateStr = task.dueDate instanceof Date
@@ -642,37 +639,40 @@ export function TaskEditDialog({
     }
   }, [task, open, form]);
 
-  // Handle keyboard shortcut
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      form.handleSubmit();
-    }
-  };
-
   if (!task) return null;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg" onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Edit3 className="h-5 w-5" />
-            Edit Task
-          </DialogTitle>
-          <DialogDescription>
-            Update task details
-            <span className="ml-2 text-xs text-muted-foreground">(Cmd+Enter to save)</span>
-          </DialogDescription>
-        </DialogHeader>
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && updateTask.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-4"
-        >
+  return (
+    <>
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Edit3 className="h-5 w-5" />
+          Edit Task
+        </span>
+      }
+      description={
+        <>
+          Update task details
+          <span className="ml-2 text-xs text-muted-foreground">(Cmd+Enter to save)</span>
+        </>
+      }
+      form={form}
+      submitLabel="Save Changes"
+      loadingLabel="Saving..."
+      submitError={submitError}
+      submitDisabled={updateTask.isPending}
+      size="lg"
+      className="max-w-lg"
+      resetOnClose={false}
+    >
           <form.Field name="title">
             {(field) => (
               <TextField
@@ -834,26 +834,13 @@ export function TaskEditDialog({
               />
             )}
           </form.Field>
+    </FormDialog>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={updateTask.isPending}>
-              {updateTask.isPending ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-
-        {/* Nested User Invite Dialog */}
-        <UserInviteDialog
-          open={showUserInvite}
-          onOpenChange={setShowUserInvite}
-          onSuccess={() => {
-            // User list will refresh via query invalidation
-          }}
-        />
-      </DialogContent>
-    </Dialog>
+      <UserInviteDialog
+        open={showUserInvite}
+        onOpenChange={setShowUserInvite}
+        onSuccess={() => {}}
+      />
+    </>
   );
 }

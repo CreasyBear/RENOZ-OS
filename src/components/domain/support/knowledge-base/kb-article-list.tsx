@@ -176,6 +176,8 @@ interface KbArticleListProps {
   isLoading?: boolean;
   /** From route container (useKbArticles). */
   error?: unknown;
+  /** From route container (useKbArticles). */
+  onRetry?: () => void;
   /** From route container (filter state). */
   searchInput: string;
   /** From route container (filter state). */
@@ -214,6 +216,7 @@ export function KbArticleList({
   pagination,
   isLoading,
   error,
+  onRetry,
   searchInput,
   status,
   selectedTags,
@@ -238,8 +241,11 @@ export function KbArticleList({
 
   if (error) {
     return (
-      <div className="text-destructive py-8 text-center">
-        Failed to load articles. Please try again.
+      <div className="py-8 text-center">
+        <p className="text-destructive mb-3">Failed to load articles.</p>
+        <Button variant="outline" onClick={() => onRetry?.()}>
+          Retry
+        </Button>
       </div>
     );
   }

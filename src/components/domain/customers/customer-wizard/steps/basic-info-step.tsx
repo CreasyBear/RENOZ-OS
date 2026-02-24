@@ -6,26 +6,18 @@
  * - Type, status, and size
  * - Industry and registration info
  * - Contact information (email, phone, website)
+ * - Credit management (credit hold)
  * - Tags
  */
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import {
+  TextField,
+  EmailField,
+  PhoneField,
+  SelectField,
+  CheckboxField,
+  MultiComboboxField,
+} from '@/components/shared/forms';
 import {
   customerStatusValues,
   customerTypeValues,
@@ -33,7 +25,24 @@ import {
 } from '@/lib/schemas/customers';
 import { type BasicInfoStepProps, statusLabels, typeLabels, sizeLabels } from '../types';
 
+const typeOptions = customerTypeValues.map((type) => ({
+  value: type,
+  label: typeLabels[type],
+}));
+
+const statusOptions = customerStatusValues.map((status) => ({
+  value: status,
+  label: statusLabels[status],
+}));
+
+const sizeOptions = customerSizeValues.map((size) => ({
+  value: size,
+  label: sizeLabels[size],
+}));
+
 export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
+  const tagOptions = (availableTags ?? []).map((t) => ({ value: t.name, label: t.name }));
+
   return (
     <div className="space-y-6">
       <Card>
@@ -42,154 +51,93 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
           <CardDescription>Enter the basic information for this customer</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Customer Name *</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., Acme Corporation…" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="name">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Customer Name"
+                placeholder="e.g., Acme Corporation…"
+                required
+              />
             )}
-          />
+          </form.Field>
 
-          <FormField
-            control={form.control}
-            name="legalName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Legal Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., Acme Corporation Pty Ltd…" {...field} />
-                </FormControl>
-                <FormDescription>Full legal entity name if different</FormDescription>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="legalName">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Legal Name"
+                placeholder="e.g., Acme Corporation Pty Ltd…"
+                description="Full legal entity name if different"
+              />
             )}
-          />
+          </form.Field>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Type</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customerTypeValues.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {typeLabels[type]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="type">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Type"
+                  options={typeOptions}
+                  placeholder="Select type"
+                />
               )}
-            />
+            </form.Field>
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customerStatusValues.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {statusLabels[status]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="status">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Status"
+                  options={statusOptions}
+                  placeholder="Select status"
+                />
               )}
-            />
+            </form.Field>
 
-            <FormField
-              control={form.control}
-              name="size"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Size</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select size" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customerSizeValues.map((size) => (
-                        <SelectItem key={size} value={size}>
-                          {sizeLabels[size]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="size">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Size"
+                  options={sizeOptions}
+                  placeholder="Select size"
+                />
               )}
-            />
+            </form.Field>
           </div>
 
-          <FormField
-            control={form.control}
-            name="industry"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Industry</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., Construction, Healthcare…" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="industry">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Industry"
+                placeholder="e.g., Construction, Healthcare…"
+              />
             )}
-          />
+          </form.Field>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="taxId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ABN / Tax ID</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 12 345 678 901…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="taxId">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="ABN / Tax ID"
+                  placeholder="e.g., 12 345 678 901…"
+                />
               )}
-            />
+            </form.Field>
 
-            <FormField
-              control={form.control}
-              name="registrationNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Registration Number</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., ACN 123 456 789…" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="registrationNumber">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Registration Number"
+                  placeholder="e.g., ACN 123 456 789…"
+                />
               )}
-            />
+            </form.Field>
           </div>
         </CardContent>
       </Card>
@@ -200,49 +148,67 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
           <CardDescription>Primary contact details for the company</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input type="email" placeholder="info@company.com" autoComplete="email" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="email">
+            {(field) => (
+              <EmailField
+                field={field}
+                label="Email"
+                placeholder="info@company.com"
+              />
             )}
-          />
+          </form.Field>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone</FormLabel>
-                  <FormControl>
-                    <Input type="tel" placeholder="+61 2 1234 5678" autoComplete="tel" inputMode="tel" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="phone">
+              {(field) => (
+                <PhoneField
+                  field={field}
+                  label="Phone"
+                  placeholder="+61 2 1234 5678"
+                />
               )}
-            />
+            </form.Field>
 
-            <FormField
-              control={form.control}
-              name="website"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Website</FormLabel>
-                  <FormControl>
-                    <Input type="url" placeholder="https://www.company.com" autoComplete="url" inputMode="url" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="website">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Website"
+                  type="url"
+                  placeholder="https://www.company.com"
+                />
               )}
-            />
+            </form.Field>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Credit Management</CardTitle>
+          <CardDescription>Credit holds and limits</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form.Field name="creditHold">
+            {(field) => (
+              <CheckboxField
+                field={field}
+                label="Credit Hold"
+                description="Prevent new orders until credit issues are resolved"
+              />
+            )}
+          </form.Field>
+
+          <form.Field name="creditHoldReason">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Credit Hold Reason"
+                placeholder="Reason for credit hold…"
+                description="Required when credit hold is enabled"
+              />
+            )}
+          </form.Field>
         </CardContent>
       </Card>
 
@@ -252,61 +218,19 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
           <CardDescription>Categorize this customer (optional)</CardDescription>
         </CardHeader>
         <CardContent>
-          <FormField
-            control={form.control}
-            name="tags"
-            render={({ field }) => (
-              <FormItem>
-                <div className="flex min-h-[40px] flex-wrap gap-2 rounded-md border p-2">
-                  {field.value?.length > 0 ? (
-                    field.value.map((tag: string) => {
-                      const tagInfo = availableTags?.find((t) => t.name === tag);
-                      return (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          className="cursor-pointer"
-                          style={
-                            tagInfo
-                              ? { backgroundColor: tagInfo.color + '20', color: tagInfo.color }
-                              : undefined
-                          }
-                          onClick={() => {
-                            field.onChange(field.value.filter((t: string) => t !== tag));
-                          }}
-                        >
-                          {tag} x
-                        </Badge>
-                      );
-                    })
-                  ) : (
-                    <span className="text-muted-foreground text-sm">No tags selected</span>
-                  )}
-                </div>
-                {availableTags && availableTags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="text-muted-foreground mr-2 text-xs">Available:</span>
-                    {availableTags
-                      .filter((t) => !field.value?.includes(t.name))
-                      .map((tag) => (
-                        <Badge
-                          key={tag.id}
-                          variant="outline"
-                          className="cursor-pointer text-xs"
-                          style={{ borderColor: tag.color, color: tag.color }}
-                          onClick={() => {
-                            field.onChange([...(field.value || []), tag.name]);
-                          }}
-                        >
-                          + {tag.name}
-                        </Badge>
-                      ))}
-                  </div>
-                )}
-                <FormMessage />
-              </FormItem>
+          <form.Field name="tags">
+            {(field) => (
+              <MultiComboboxField
+                field={field}
+                label="Tags"
+                options={tagOptions}
+                searchPlaceholder="Search tags…"
+                showSelectedTags
+                maxSelections={50}
+                placeholder={tagOptions.length > 0 ? "Select tags…" : "No tags available"}
+              />
             )}
-          />
+          </form.Field>
         </CardContent>
       </Card>
     </div>

@@ -11,7 +11,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
-import { eq, and, desc, asc, gte, lte, count, avg, isNull } from 'drizzle-orm';
+import { eq, and, desc, asc, gte, lte, count, avg, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { csatResponses } from 'drizzle/schema/support/csat-responses';
 import { issues } from 'drizzle/schema/support/issues';
@@ -112,6 +112,9 @@ export const submitInternalFeedback = createServerFn({ method: 'POST' })
 
     try {
       return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Verify issue exists and belongs to organization
       const [issue] = await tx
         .select({

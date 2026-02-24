@@ -94,6 +94,7 @@ export const getFinancialSummaryReport = createServerFn()
       period: p.period,
       periodLabel: p.periodLabel,
       totalRevenue: p.totalRevenue,
+      cashRevenue: p.cashRevenue,
       residentialRevenue: p.residentialRevenue,
       commercialRevenue: p.commercialRevenue,
       invoiceCount: p.invoiceCount,
@@ -101,9 +102,9 @@ export const getFinancialSummaryReport = createServerFn()
 
     return {
       kpis: {
-        revenue: metrics.revenueMTD.value,
-        revenuePrev: metrics.revenueMTD.previousValue,
-        revenueChangePercent: metrics.revenueMTD.changePercent,
+        revenue: metrics.revenueInvoicedMTD.value,
+        revenuePrev: metrics.revenueInvoicedMTD.previousValue,
+        revenueChangePercent: metrics.revenueInvoicedMTD.changePercent,
         arBalance: metrics.arBalance.value,
         overdueAmount: metrics.overdueAmount.value,
         cashReceived: metrics.cashReceivedMTD.value,

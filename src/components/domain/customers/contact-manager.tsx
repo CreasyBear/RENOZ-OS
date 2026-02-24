@@ -50,8 +50,11 @@ import {
   EmailField,
   PhoneField,
   CheckboxField,
+  FormFieldDisplayProvider,
 } from '@/components/shared/forms'
 import { getInitials } from '@/lib/customer-utils'
+import { phoneSchema } from '@/lib/schemas/_shared/patterns'
+import { toast } from 'sonner'
 
 // ============================================================================
 // TYPES
@@ -62,8 +65,8 @@ const contactFormSchema = z.object({
   lastName: z.string().min(1, 'Last name is required').max(100),
   title: z.string().max(100).optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().max(30).optional(),
-  mobile: z.string().max(30).optional(),
+  phone: phoneSchema,
+  mobile: phoneSchema,
   department: z.string().max(100).optional(),
   isPrimary: z.boolean(),
   decisionMaker: z.boolean(),
@@ -273,6 +276,9 @@ function ContactFormDialog({
       form.reset()
       onOpenChange(false)
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.')
+    },
   })
 
   // Reset form when dialog opens with new values
@@ -311,6 +317,7 @@ function ContactFormDialog({
           }}
           className="space-y-4"
         >
+          <FormFieldDisplayProvider form={form}>
           <div className="grid gap-4 grid-cols-2">
             <form.Field name="firstName">
               {(field) => (
@@ -412,6 +419,8 @@ function ContactFormDialog({
               )}
             </form.Field>
           </div>
+
+          </FormFieldDisplayProvider>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

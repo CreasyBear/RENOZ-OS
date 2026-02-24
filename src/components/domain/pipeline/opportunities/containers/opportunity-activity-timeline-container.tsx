@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { toastSuccess, toastError } from '@/hooks';
 import { useActivityTimeline, useCompleteActivity } from '@/hooks/pipeline';
@@ -139,6 +140,7 @@ export function OpportunityActivityTimelineContainer({
       title={title}
       description={description ?? `${activities.length} ${activities.length === 1 ? 'activity' : 'activities'}`}
       showFilters={showFilters}
+      viewAllSearch={getActivitiesFeedSearch('opportunity')}
       maxItems={maxItems}
       groupByDate={groupByDate}
       asCard={asCard}

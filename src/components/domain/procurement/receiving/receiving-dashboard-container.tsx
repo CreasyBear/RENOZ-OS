@@ -130,23 +130,27 @@ export function ReceivingDashboardContainer({
   // ===========================================================================
 
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkReceiveAttempted, setBulkReceiveAttempted] = useState(false);
+
+  // Bulk receiving mutation
+  const bulkReceiveMutation = useBulkReceiveGoods();
 
   const handleBulkReceive = useMemo(() => {
     if (selectedIds.size === 0) return undefined;
     return () => {
+      bulkReceiveMutation.reset();
+      setBulkReceiveAttempted(false);
       setBulkDialogOpen(true);
     };
-  }, [selectedIds]);
+  }, [selectedIds, bulkReceiveMutation]);
 
   const handleRefetch = useCallback(() => {
     refetchOrders();
   }, [refetchOrders]);
 
-  // Bulk receiving mutation
-  const bulkReceiveMutation = useBulkReceiveGoods();
-
   const handleBulkConfirm = useCallback(
     async (receiptData: BulkReceiptData) => {
+      setBulkReceiveAttempted(true);
       return bulkReceiveMutation.mutateAsync({
         purchaseOrderIds: receiptData.purchaseOrderIds,
         serialNumbers: receiptData.serialNumbers
@@ -169,11 +173,21 @@ export function ReceivingDashboardContainer({
     (open: boolean) => {
       setBulkDialogOpen(open);
       if (!open) {
-        clearSelection();
+        if (bulkReceiveAttempted) {
+          const failedIds = bulkReceiveMutation.data?.errors
+            ?.map((entry) => entry.poId)
+            .filter(Boolean) ?? [];
+
+          clearSelection();
+          failedIds.forEach((failedId) => {
+            handleSelect(failedId, true);
+          });
+          setBulkReceiveAttempted(false);
+        }
         refetchOrders();
       }
     },
-    [clearSelection, refetchOrders]
+    [bulkReceiveAttempted, bulkReceiveMutation.data, clearSelection, handleSelect, refetchOrders]
   );
 
   return (

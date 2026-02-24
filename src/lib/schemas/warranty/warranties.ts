@@ -403,8 +403,13 @@ export interface WarrantyDetailViewProps {
   isClaimDialogOpen: boolean;
   isApprovalDialogOpen: boolean;
   isExtendDialogOpen: boolean;
+  pendingClaimAction?: {
+    claimId: string;
+    action: 'review' | 'open' | 'resolve';
+  } | null;
   selectedClaimForApproval: WarrantyClaimListItem | null;
   onClaimRowClick: (claimId: string) => void;
+  onResolveClaimRow?: (claimId: string) => void;
   onReviewClaim: (claim: WarrantyClaimListItem) => void;
   onClaimDialogOpenChange: (open: boolean) => void;
   onApprovalDialogOpenChange: (open: boolean) => void;
@@ -421,6 +426,7 @@ export interface WarrantyDetailViewProps {
   }) => Promise<void>;
   onApproveClaim: (payload: { claimId: string; notes?: string }) => Promise<void>;
   onDenyClaim: (payload: { claimId: string; denialReason: string; notes?: string }) => Promise<void>;
+  onRequestInfoClaim: (payload: { claimId: string; notes: string }) => Promise<void>;
   onExtendWarranty: (payload: {
     warrantyId: string;
     extensionType: WarrantyExtensionTypeValue;

@@ -9,18 +9,10 @@
  * @path src/components/domain/jobs/projects/customer-sign-off-dialog.tsx
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, Star } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useCustomerSignOff } from "@/hooks/jobs";
-import { toast } from "@/lib/toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   customerSignOffFormSchema,
@@ -28,11 +20,11 @@ import {
 } from "@/lib/schemas/jobs/site-visits";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
+  FormDialog,
   TextField,
   CheckboxField,
   TextareaField,
   FormField,
-  FormActions,
   extractFieldError,
 } from "@/components/shared/forms";
 
@@ -45,6 +37,8 @@ export interface CustomerSignOffDialogProps {
   onOpenChange: (open: boolean) => void;
   siteVisitId: string;
   visitNumber: string;
+  /** Pre-filled customer name from project context (site visit → project → customer) */
+  defaultCustomerName?: string;
   /** Callback after successful sign-off */
   onSuccess?: () => void;
 }
@@ -58,20 +52,26 @@ export function CustomerSignOffDialog({
   onOpenChange,
   siteVisitId,
   visitNumber,
+  defaultCustomerName,
   onSuccess,
 }: CustomerSignOffDialogProps) {
   const signOff = useCustomerSignOff();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [hoveredRating, setHoveredRating] = useState<number | null>(null);
 
   const form = useTanStackForm<CustomerSignOffFormData>({
     schema: customerSignOffFormSchema,
     defaultValues: {
-      customerName: "",
+      customerName: defaultCustomerName ?? "",
       confirmed: false,
       customerRating: undefined,
       customerFeedback: "",
     },
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     onSubmit: async (values) => {
+      setSubmitError(null);
       try {
         await signOff.mutateAsync({
           siteVisitId,
@@ -87,6 +87,7 @@ export function CustomerSignOffDialog({
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unknown error";
+        setSubmitError(message);
         toast.error(`Failed to record sign-off: ${message}`);
       }
     },
@@ -94,26 +95,38 @@ export function CustomerSignOffDialog({
 
   const selectedRating = form.useWatch("customerRating");
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            Customer Sign-off
-          </DialogTitle>
-          <DialogDescription>
-            Record customer confirmation for site visit {visitNumber}
-          </DialogDescription>
-        </DialogHeader>
+  useEffect(() => {
+    if (open && defaultCustomerName) {
+      form.setFieldValue("customerName", defaultCustomerName);
+    }
+  }, [open, defaultCustomerName, form]);
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-6"
-        >
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && signOff.isPending) return;
+    if (!newOpen) setSubmitError(null);
+    onOpenChange(newOpen);
+  };
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <CheckCircle className="h-5 w-5 text-green-500" />
+          Customer Sign-off
+        </span>
+      }
+      description={`Record customer confirmation for site visit ${visitNumber}`}
+      form={form}
+      submitLabel="Record Sign-off"
+      cancelLabel="Cancel"
+      loadingLabel="Recording..."
+      submitError={submitError}
+      submitDisabled={signOff.isPending}
+      size="lg"
+      className="sm:max-w-[500px]"
+    >
           <form.Field name="customerName">
             {(field) => (
               <TextField
@@ -184,19 +197,6 @@ export function CustomerSignOffDialog({
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <FormActions
-              form={form}
-              submitLabel="Record Sign-off"
-              cancelLabel="Cancel"
-              loadingLabel="Recording..."
-              onCancel={() => onOpenChange(false)}
-              submitDisabled={signOff.isPending}
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

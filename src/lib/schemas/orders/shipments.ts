@@ -144,6 +144,7 @@ export const updateShipmentStatusSchema = z.object({
   status: shipmentStatusSchema,
   trackingEvent: trackingEventSchema.optional(),
   deliveryConfirmation: deliveryConfirmationSchema.optional(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
 export type UpdateShipmentStatus = z.infer<typeof updateShipmentStatusSchema>;

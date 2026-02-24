@@ -10,7 +10,7 @@
  * @see _Initiation/_prd/2-domains/financial/financial.prd.json (DOM-FIN-007b)
  */
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   TrendingUp,
@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Building2,
   Calendar,
+  HelpCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,6 +42,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { useOrgFormat } from '@/hooks/use-org-format';
@@ -48,10 +54,9 @@ import { format } from 'date-fns';
 import type {
   KPIMetric,
   PeriodType,
-  FinancialDashboardMetrics,
-  RevenueByPeriodResult,
-  TopCustomersResult,
-  OutstandingInvoicesResult,
+  FinancialDashboardData,
+  RevenueChartBasis,
+  RevenueChartProps,
 } from '@/lib/schemas';
 import { periodTypeSchema } from '@/lib/schemas';
 
@@ -59,23 +64,9 @@ import { periodTypeSchema } from '@/lib/schemas';
 // TYPES
 // ============================================================================
 
-/**
- * Aggregated dashboard data from parallel queries
- */
-interface DashboardData {
-  /** @source useQuery(['financial-dashboard-metrics']) */
-  metrics?: FinancialDashboardMetrics;
-  /** @source useQuery(['revenue-by-period', periodType]) */
-  revenueByPeriod?: RevenueByPeriodResult;
-  /** @source useQuery(['top-customers']) */
-  topCustomers?: TopCustomersResult;
-  /** @source useQuery(['outstanding-invoices']) */
-  outstanding?: OutstandingInvoicesResult;
-}
-
 export interface FinancialDashboardProps {
   /** @source Aggregated from 4 parallel queries in container */
-  dashboardData: DashboardData;
+  dashboardData: FinancialDashboardData;
   /** @source Combined loading: metricsLoading || revenueLoading || customersLoading || outstandingLoading */
   isLoading: boolean;
   /** @source Any query error from container */
@@ -84,6 +75,10 @@ export interface FinancialDashboardProps {
   periodType: PeriodType;
   /** @source State setter from container */
   onPeriodTypeChange: (type: PeriodType) => void;
+  /** Top customers revenue basis: invoiced or cash */
+  topCustomersBasis?: 'invoiced' | 'cash';
+  /** @source State setter for top customers basis */
+  onTopCustomersBasisChange?: (basis: 'invoiced' | 'cash') => void;
   className?: string;
 }
 
@@ -139,59 +134,88 @@ function KPICard({ title, icon: Icon, metric, format: fmt = 'currency', classNam
 // REVENUE CHART (SIMPLE BAR)
 // ============================================================================
 
-interface RevenueChartProps {
-  periods: Array<{
-    period: string;
-    periodLabel: string;
-    residentialRevenue: number;
-    commercialRevenue: number;
-    totalRevenue: number;
-  }>;
-}
-
-function RevenueChart({ periods }: RevenueChartProps) {
+function RevenueChart({ periods, basis, onBasisChange }: RevenueChartProps) {
   const { formatCurrency } = useOrgFormat();
-  const maxRevenue = Math.max(...periods.map((p) => p.totalRevenue));
+  const values = periods.map((p) => (basis === 'cash' ? p.cashRevenue : p.totalRevenue));
+  const maxRevenue = Math.max(...values, 1);
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <Select value={basis} onValueChange={(v) => onBasisChange(v as RevenueChartBasis)}>
+          <SelectTrigger className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="invoiced">Invoiced</SelectItem>
+            <SelectItem value="cash">Cash</SelectItem>
+          </SelectContent>
+        </Select>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent side="left" className="max-w-xs">
+            <p>
+              <strong>Invoiced:</strong> Orders placed in period (by order date).
+            </p>
+            <p className="mt-1">
+              <strong>Cash:</strong> Payments received in period (by payment date).
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
       {periods.map((period) => {
-        const resPercent = maxRevenue > 0 ? (period.residentialRevenue / maxRevenue) * 100 : 0;
-        const comPercent = maxRevenue > 0 ? (period.commercialRevenue / maxRevenue) * 100 : 0;
+        const value = basis === 'cash' ? period.cashRevenue : period.totalRevenue;
+        const resPercent =
+          basis === 'invoiced' && maxRevenue > 0 ? (period.residentialRevenue / maxRevenue) * 100 : 0;
+        const comPercent =
+          basis === 'invoiced' && maxRevenue > 0 ? (period.commercialRevenue / maxRevenue) * 100 : 0;
 
         return (
           <div key={period.period} className="space-y-1">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{period.periodLabel}</span>
               <span className="font-medium">
-                <FormatAmount amount={period.totalRevenue} />
+                <FormatAmount amount={value} />
               </span>
             </div>
             <div className="bg-muted flex h-4 overflow-hidden rounded-full">
-              <div
-                className="bg-blue-500 transition-all"
-                style={{ width: `${resPercent}%` }}
-                title={`Residential: ${formatCurrency(period.residentialRevenue, { cents: false, showCents: true })}`}
-              />
-              <div
-                className="bg-green-500 transition-all"
-                style={{ width: `${comPercent}%` }}
-                title={`Commercial: ${formatCurrency(period.commercialRevenue, { cents: false, showCents: true })}`}
-              />
+              {basis === 'invoiced' ? (
+                <>
+                  <div
+                    className="bg-blue-500 transition-all"
+                    style={{ width: `${resPercent}%` }}
+                    title={`Residential: ${formatCurrency(period.residentialRevenue, { cents: false, showCents: true })}`}
+                  />
+                  <div
+                    className="bg-green-500 transition-all"
+                    style={{ width: `${comPercent}%` }}
+                    title={`Commercial: ${formatCurrency(period.commercialRevenue, { cents: false, showCents: true })}`}
+                  />
+                </>
+              ) : (
+                <div
+                  className="bg-primary transition-all"
+                  style={{ width: `${maxRevenue > 0 ? (value / maxRevenue) * 100 : 0}%` }}
+                />
+              )}
             </div>
           </div>
         );
       })}
-      <div className="mt-2 flex gap-4 text-xs">
-        <div className="flex items-center gap-1">
-          <div className="h-3 w-3 rounded-full bg-blue-500" />
-          <span>Residential</span>
+      {basis === 'invoiced' && (
+        <div className="mt-2 flex gap-4 text-xs">
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded-full bg-blue-500" />
+            <span>Residential</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded-full bg-green-500" />
+            <span>Commercial</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="h-3 w-3 rounded-full bg-green-500" />
-          <span>Commercial</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -206,10 +230,13 @@ export const FinancialDashboard = memo(function FinancialDashboard({
   error,
   periodType,
   onPeriodTypeChange,
+  topCustomersBasis = 'invoiced',
+  onTopCustomersBasisChange,
   className,
 }: FinancialDashboardProps) {
   // Destructure aggregated data
   const { metrics, revenueByPeriod, topCustomers, outstanding } = dashboardData;
+  const [chartBasis, setChartBasis] = useState<'invoiced' | 'cash'>('invoiced');
 
   // Loading state
   if (isLoading && !metrics) {
@@ -253,11 +280,19 @@ export const FinancialDashboard = memo(function FinancialDashboard({
         </p>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - Dual metrics: Invoiced (orders) vs Cash (payments) */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KPICard title="Revenue MTD" icon={DollarSign} metric={metrics.revenueMTD} />
+        <KPICard
+          title="Revenue (Invoiced) MTD"
+          icon={DollarSign}
+          metric={metrics.revenueInvoicedMTD}
+        />
         <KPICard title="AR Balance" icon={Receipt} metric={metrics.arBalance} />
-        <KPICard title="Cash Received MTD" icon={CreditCard} metric={metrics.cashReceivedMTD} />
+        <KPICard
+          title="Revenue (Cash) MTD"
+          icon={CreditCard}
+          metric={metrics.revenueCashMTD}
+        />
         <KPICard title="GST Collected MTD" icon={Receipt} metric={metrics.gstCollectedMTD} />
       </div>
 
@@ -323,10 +358,21 @@ export const FinancialDashboard = memo(function FinancialDashboard({
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-purple-500" />
-              <span className="text-muted-foreground text-sm">Revenue YTD</span>
+              <span className="text-muted-foreground text-sm">Revenue (Invoiced) YTD</span>
             </div>
             <p className="mt-1 text-2xl font-bold">
-              <FormatAmount amount={metrics.revenueYTD.value} />
+              <FormatAmount amount={metrics.revenueInvoicedYTD.value} />
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-teal-500" />
+              <span className="text-muted-foreground text-sm">Revenue (Cash) YTD</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold">
+              <FormatAmount amount={metrics.revenueCashYTD.value} />
             </p>
           </CardContent>
         </Card>
@@ -362,15 +408,33 @@ export const FinancialDashboard = memo(function FinancialDashboard({
             {isLoading && !revenueByPeriod ? (
               <Skeleton className="h-48" />
             ) : (
-              <RevenueChart periods={revenueByPeriod?.periods ?? []} />
+              <RevenueChart
+                periods={revenueByPeriod?.periods ?? []}
+                basis={chartBasis}
+                onBasisChange={setChartBasis}
+              />
             )}
           </CardContent>
         </Card>
 
         {/* Top Customers */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Top Customers (YTD)</CardTitle>
+            {onTopCustomersBasisChange && (
+              <Select
+                value={topCustomersBasis}
+                onValueChange={(v) => onTopCustomersBasisChange(v as 'invoiced' | 'cash')}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invoiced">By Invoiced</SelectItem>
+                  <SelectItem value="cash">By Cash</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </CardHeader>
           <CardContent>
             {isLoading && !topCustomers ? (

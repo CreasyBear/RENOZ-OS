@@ -20,6 +20,8 @@ import {
   fontSize,
   spacing,
   pageMargins,
+  borderRadius,
+  letterSpacing,
   FONT_FAMILY,
   FONT_WEIGHTS,
   formatDateForPdf,
@@ -69,7 +71,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.bold,
     color: colors.text.primary,
-    letterSpacing: 2,
+    letterSpacing: letterSpacing.wider,
     marginBottom: spacing.xs,
   },
   subtitle: {
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
-    letterSpacing: 1,
+    letterSpacing: letterSpacing.wide,
   },
   // Certificate number
   certificateNumber: {
@@ -123,7 +125,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.subtle,
     padding: spacing.lg,
     marginVertical: spacing.lg,
-    borderRadius: 4,
+    borderRadius: borderRadius.md,
     width: "100%",
   },
   jobTitle: {

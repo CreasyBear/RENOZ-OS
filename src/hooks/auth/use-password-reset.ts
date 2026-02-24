@@ -14,6 +14,7 @@ import {
   checkPasswordResetAllowed,
   type PasswordResetResult,
 } from '@/server/functions/auth/password-reset';
+import { authLogger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase/client';
 
 // ============================================================================
@@ -25,8 +26,21 @@ export interface RequestPasswordResetInput {
 }
 
 function getUpdatePasswordUrl(): string {
-  const base = import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
-  return `${base.replace(/\/$/, '')}/update-password`;
+  const configuredBase = (import.meta.env.VITE_APP_URL as string | undefined)?.trim();
+  if (configuredBase) {
+    return `${configuredBase.replace(/\/$/, '')}/update-password`;
+  }
+
+  // Production must use explicit app URL to avoid domain/allowlist mismatches.
+  if (import.meta.env.PROD) {
+    throw new Error('VITE_APP_URL is required in production for password reset redirects.');
+  }
+
+  const runtimeOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  if (!runtimeOrigin) {
+    throw new Error('Unable to resolve runtime origin for password reset redirect URL.');
+  }
+  return `${runtimeOrigin.replace(/\/$/, '')}/update-password`;
 }
 
 // ============================================================================
@@ -49,11 +63,26 @@ export function useRequestPasswordReset() {
       if (!result.success) {
         return result;
       }
-      const { error } = await supabase.auth.resetPasswordForEmail(input.email.trim().toLowerCase(), {
-        redirectTo: getUpdatePasswordUrl(),
+      const normalizedEmail = input.email.trim().toLowerCase();
+
+      let redirectTo: string;
+      try {
+        redirectTo = getUpdatePasswordUrl();
+      } catch (error) {
+        authLogger.error('Password reset redirect URL resolution failed', error, {
+          redirectTo: 'unresolved',
+        });
+        throw new Error('Password reset is temporarily unavailable. Please try again shortly.');
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo,
       });
       if (error) {
-        // Don't reveal if email exists or not
+        // Keep user response generic to prevent account enumeration, but log for ops visibility.
+        authLogger.error('Supabase resetPasswordForEmail failed', error, {
+          redirectTo,
+        });
       }
       return { success: true };
     },

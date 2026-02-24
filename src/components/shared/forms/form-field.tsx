@@ -4,6 +4,12 @@
  * Base field wrapper providing consistent layout for form fields.
  * Handles label, description, error display, and required indicator.
  *
+ * **Accessibility:** The direct `children` element receives `id`, `aria-invalid`,
+ * and `aria-describedby` via cloneElement. For correct label association and
+ * screen reader announcements, the child must be the focusable input (Input,
+ * select, etc.). If you pass a wrapper (e.g. div with nested Input), the props
+ * will land on the wrapper, not the input.
+ *
  * ## Orientations
  * - `vertical` (default): Label above input, full-width
  * - `horizontal`: Label and input side-by-side (for settings forms)

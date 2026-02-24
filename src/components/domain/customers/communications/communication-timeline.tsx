@@ -63,12 +63,14 @@ export function CommunicationTimeline({
   isLoading = false,
   onLogCommunication,
   onReply,
+  onForward,
   className,
 }: CommunicationTimelineProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<CommunicationType | 'all'>('all')
   const [directionFilter, setDirectionFilter] = useState<CommunicationDirection | 'all'>('all')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
 
   // Use provided communications or empty array (memoized for stable deps)
   const communications = useMemo(
@@ -79,6 +81,7 @@ export function CommunicationTimeline({
   // Filter communications
   const filteredCommunications = useMemo(() => {
     return communications.filter(comm => {
+      if (hiddenIds.has(comm.id)) return false;
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
@@ -103,7 +106,27 @@ export function CommunicationTimeline({
       }
       return true
     })
-  }, [communications, searchQuery, typeFilter, directionFilter, dateRange])
+  }, [communications, hiddenIds, searchQuery, typeFilter, directionFilter, dateRange])
+
+  const buildMailtoLink = useCallback((opts: {
+    to?: string;
+    subject: string;
+    body?: string;
+  }): string => {
+    const params = new URLSearchParams();
+    params.set('subject', opts.subject);
+    if (opts.body) params.set('body', opts.body);
+    const to = opts.to ?? '';
+    return `mailto:${to}?${params.toString()}`;
+  }, []);
+
+  const hideCommunication = useCallback((communicationId: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(communicationId);
+      return next;
+    });
+  }, []);
 
   // Export functions
   const handleExportCSV = useCallback(() => {
@@ -305,7 +328,47 @@ export function CommunicationTimeline({
             <CommunicationItem
               key={comm.id}
               communication={comm}
-              onReply={() => onReply?.(comm.id)}
+              onReply={() => {
+                if (onReply) {
+                  onReply(comm.id);
+                  return;
+                }
+                const href = buildMailtoLink({
+                  to: comm.from.email ?? '',
+                  subject: `Re: ${comm.subject}`,
+                });
+                window.open(href, '_blank', 'noopener,noreferrer');
+              }}
+              onForward={() => {
+                if (onForward) {
+                  onForward(comm.id);
+                  return;
+                }
+                const body = [
+                  '',
+                  '--- Forwarded message ---',
+                  `From: ${comm.from.name}${comm.from.email ? ` <${comm.from.email}>` : ''}`,
+                  `Date: ${new Date(comm.timestamp).toLocaleString('en-AU')}`,
+                  `Subject: ${comm.subject}`,
+                  '',
+                  comm.content ?? comm.preview,
+                ].join('\n');
+                const href = buildMailtoLink({
+                  subject: `Fwd: ${comm.subject}`,
+                  body,
+                });
+                window.open(href, '_blank', 'noopener,noreferrer');
+              }}
+              onOpenInNewTab={() => {
+                const href = buildMailtoLink({
+                  to: comm.from.email ?? '',
+                  subject: comm.subject,
+                  body: comm.content ?? comm.preview,
+                });
+                window.open(href, '_blank', 'noopener,noreferrer');
+              }}
+              onArchive={() => hideCommunication(comm.id)}
+              onDelete={() => hideCommunication(comm.id)}
             />
           ))}
         </div>

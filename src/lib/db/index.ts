@@ -120,3 +120,13 @@ export { schema };
 
 // Type exports for query building
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
+
+/** Transaction callback parameter type - same query API as db */
+type TransactionTx = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/**
+ * Transaction executor type. Drizzle's transaction callback receives `tx` with the same
+ * query API as `db`. Use this when a helper must accept either `db` or `tx` from
+ * db.transaction().
+ */
+export type TransactionExecutor = Database | TransactionTx;

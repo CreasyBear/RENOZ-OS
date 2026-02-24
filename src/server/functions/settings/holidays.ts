@@ -14,7 +14,7 @@ import { db } from '@/lib/db';
 import { organizationHolidays } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { paginationSchema } from '@/lib/schemas';
 import { cursorPaginationSchema } from '@/lib/db/pagination';

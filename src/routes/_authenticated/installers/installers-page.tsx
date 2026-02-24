@@ -43,9 +43,10 @@ import {
 import { BulkActionsBar } from '@/components/layout';
 import { CheckCircle } from 'lucide-react';
 import { DomainFilterBar } from '@/components/shared/filters';
-import { FormActions, SelectField } from '@/components/shared/forms';
+import { FormActions, FormFieldDisplayProvider, SelectField } from '@/components/shared/forms';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { Search, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { toastError, toastSuccess, useConfirmation } from '@/hooks';
 import {
   useInstallers,
@@ -145,6 +146,9 @@ export default function InstallersPage({ search }: InstallersPageProps) {
   );
   const form = useTanStackForm<CreateInstallerProfileDialogInput>({
     schema: createInstallerProfileDialogSchema,
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.');
+    },
     defaultValues: {
       userId: '',
     },
@@ -408,6 +412,7 @@ export default function InstallersPage({ search }: InstallersPageProps) {
               form.handleSubmit();
             }}
           >
+            <FormFieldDisplayProvider form={form}>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="installer-user-search">Search users</Label>
@@ -450,6 +455,7 @@ export default function InstallersPage({ search }: InstallersPageProps) {
               )}
               {createError && <p className="text-sm text-destructive">{createError}</p>}
             </div>
+            </FormFieldDisplayProvider>
             <DialogFooter>
               <FormActions
                 form={form}

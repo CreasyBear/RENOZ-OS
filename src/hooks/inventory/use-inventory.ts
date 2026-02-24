@@ -33,6 +33,95 @@ import type {
   StockTransfer,
 } from '@/lib/schemas/inventory';
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function getValueAtPath(source: unknown, path: string[]): unknown {
+  let cursor: unknown = source;
+  for (const segment of path) {
+    if (!isRecord(cursor)) return undefined;
+    cursor = cursor[segment];
+  }
+  return cursor;
+}
+
+function extractFirstString(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry === 'string' && entry.trim().length > 0) {
+        return entry;
+      }
+    }
+  }
+  return null;
+}
+
+function extractValidationCode(error: unknown): string | null {
+  const codePaths = [
+    ['errors', 'code'],
+    ['data', 'errors', 'code'],
+    ['cause', 'errors', 'code'],
+    ['cause', 'data', 'errors', 'code'],
+    ['response', 'data', 'errors', 'code'],
+  ];
+
+  for (const path of codePaths) {
+    const code = extractFirstString(getValueAtPath(error, path));
+    if (code) return code;
+  }
+  return null;
+}
+
+function extractFieldErrorMessage(error: unknown): string | null {
+  const errorPaths = [
+    ['errors'],
+    ['data', 'errors'],
+    ['cause', 'errors'],
+    ['cause', 'data', 'errors'],
+    ['response', 'data', 'errors'],
+  ];
+
+  for (const path of errorPaths) {
+    const fieldErrors = getValueAtPath(error, path);
+    if (!isRecord(fieldErrors)) continue;
+    for (const [field, messages] of Object.entries(fieldErrors)) {
+      if (field === 'code') continue;
+      const first = extractFirstString(messages);
+      if (first) return first;
+    }
+  }
+  return null;
+}
+
+function formatInventoryMutationError(error: unknown, fallback: string): string {
+  const code = extractValidationCode(error);
+  const fieldMessage = extractFieldErrorMessage(error);
+  const errorMessage =
+    error instanceof Error && error.message.trim().length > 0 ? error.message : null;
+
+  if (code === 'insufficient_cost_layers') {
+    return fieldMessage ?? 'Cost layers are incomplete for this item. Reconcile layers and retry.';
+  }
+  if (code === 'layer_transfer_mismatch') {
+    return fieldMessage ?? 'Cost-layer transfer mismatch detected. Refresh and retry.';
+  }
+  if (code === 'serialized_unit_violation') {
+    return fieldMessage ?? 'Serialized item integrity failed (unit must remain 0 or 1). Refresh and retry.';
+  }
+  if (code === 'inventory_value_drift_detected') {
+    return fieldMessage ?? 'Inventory valuation drift detected. Reconcile valuation and retry.';
+  }
+  if (code === 'landed_cost_allocation_conflict') {
+    return fieldMessage ?? 'Landed-cost allocation conflict detected. Review receipt costs and retry.';
+  }
+
+  return fieldMessage ?? errorMessage ?? fallback;
+}
+
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
@@ -172,6 +261,12 @@ export function useAdjustInventory() {
         queryKey: queryKeys.inventory.details(),
       });
 
+      // Row-scoped adjustments (inventoryId present) can target serialized rows.
+      // Skip aggregate optimistic math and let refetch reconcile exact rows.
+      if (variables.inventoryId) {
+        return { previousLists, previousDetails };
+      }
+
       queryClient.setQueriesData<InventoryListResult>(
         { queryKey: queryKeys.inventory.lists() },
         (old) => {
@@ -230,7 +325,7 @@ export function useAdjustInventory() {
 
       return { previousLists, previousDetails };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (!context) return;
       context.previousLists.forEach(([key, data]) => {
         queryClient.setQueryData(key, data);
@@ -238,7 +333,7 @@ export function useAdjustInventory() {
       context.previousDetails.forEach(([key, data]) => {
         queryClient.setQueryData(key, data);
       });
-      toast.error('Failed to adjust inventory');
+      toast.error(formatInventoryMutationError(error, 'Failed to adjust inventory'));
     },
     onSuccess: () => {
       toast.success('Inventory adjusted successfully');
@@ -272,6 +367,12 @@ export function useTransferInventory() {
       const previousDetails = queryClient.getQueriesData<InventoryDetailResult>({
         queryKey: queryKeys.inventory.details(),
       });
+
+      // Serialized transfers mutate per-serial rows and are not safely represented
+      // by aggregate optimistic math. Let refetch reconcile authoritative state.
+      if ((variables.serialNumbers?.length ?? 0) > 0) {
+        return { previousLists, previousDetails };
+      }
 
       queryClient.setQueriesData<InventoryListResult>(
         { queryKey: queryKeys.inventory.lists() },
@@ -324,7 +425,7 @@ export function useTransferInventory() {
 
       return { previousLists, previousDetails };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (!context) return;
       context.previousLists.forEach(([key, data]) => {
         queryClient.setQueryData(key, data);
@@ -332,7 +433,7 @@ export function useTransferInventory() {
       context.previousDetails.forEach(([key, data]) => {
         queryClient.setQueryData(key, data);
       });
-      toast.error('Failed to transfer inventory');
+      toast.error(formatInventoryMutationError(error, 'Failed to transfer inventory'));
     },
     onSuccess: () => {
       toast.success('Inventory transferred successfully');

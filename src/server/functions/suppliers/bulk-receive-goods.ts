@@ -22,6 +22,8 @@ import { receiveGoods } from './receive-goods';
 import { products } from 'drizzle/schema/products/products';
 import { getPurchaseOrder } from './purchase-orders';
 import { ValidationError } from '@/lib/server/errors';
+import { normalizeSerial } from '@/lib/serials';
+import { serializedMutationSuccess, type SerializedMutationEnvelope } from '@/lib/server/serialized-mutation-contract';
 
 // ============================================================================
 // INPUT SCHEMA
@@ -62,7 +64,13 @@ const bulkReceiveGoodsSchema = z.object({
  */
 export const bulkReceiveGoods = createServerFn({ method: 'POST' })
   .inputValidator(bulkReceiveGoodsSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<
+    SerializedMutationEnvelope<{
+      processed: number;
+      failed: number;
+      errors: Array<{ poId: string; error: string }>;
+    }>
+  > => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
 
     const results = {
@@ -138,7 +146,13 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
               );
             }
             // Validate no duplicates
-            const uniqueSerials = new Set(itemSerials.map((s) => s.trim().toUpperCase()));
+            const normalizedSerials = itemSerials.map((s) => normalizeSerial(s));
+            if (normalizedSerials.some((s) => s.length === 0)) {
+              throw new ValidationError(
+                `Serialized product "${item.productName}" has an empty serial number`
+              );
+            }
+            const uniqueSerials = new Set(normalizedSerials);
             if (uniqueSerials.size !== itemSerials.length) {
               throw new ValidationError(
                 `Duplicate serial numbers found for "${item.productName}"`
@@ -152,7 +166,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
             quantityRejected: 0,
             condition: 'new' as const,
             lotNumber: undefined,
-            serialNumbers: itemSerials,
+            serialNumbers: itemSerials?.map((s) => normalizeSerial(s)),
             notes: undefined,
           };
         });
@@ -175,5 +189,26 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       }
     }
 
-    return results;
+    const errorsById = results.errors.reduce<Record<string, string>>((acc, entry) => {
+      acc[entry.poId] = entry.error;
+      return acc;
+    }, {});
+
+    return serializedMutationSuccess(
+      results,
+      results.failed === 0
+        ? `Received goods for ${results.processed} purchase order${results.processed === 1 ? '' : 's'}.`
+        : `Processed ${results.processed} purchase order${results.processed === 1 ? '' : 's'} with ${results.failed} failure${results.failed === 1 ? '' : 's'}.`,
+      {
+        affectedIds: data.purchaseOrderIds,
+        errorsById: Object.keys(errorsById).length > 0 ? errorsById : undefined,
+        partialFailure:
+          results.failed > 0
+            ? {
+                code: 'transition_blocked',
+                message: 'Some purchase orders were not receipted. Review failed rows and retry.',
+              }
+            : undefined,
+      }
+    );
   });

@@ -53,11 +53,19 @@ interface IssueKanbanColumnProps {
   column: KanbanColumn;
   issues: IssueKanbanItem[];
   selectedIds: Set<string>;
+  pendingIssueIds: Set<string>;
   onSelect: (id: string, selected: boolean) => void;
   onIssueClick: (issue: IssueKanbanItem) => void;
 }
 
-function IssueKanbanColumn({ column, issues, selectedIds, onSelect, onIssueClick }: IssueKanbanColumnProps) {
+function IssueKanbanColumn({
+  column,
+  issues,
+  selectedIds,
+  pendingIssueIds,
+  onSelect,
+  onIssueClick,
+}: IssueKanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
@@ -93,6 +101,7 @@ function IssueKanbanColumn({ column, issues, selectedIds, onSelect, onIssueClick
                     key={issue.id}
                     issue={issue}
                     isSelected={selectedIds.has(issue.id)}
+                    isPending={pendingIssueIds.has(issue.id)}
                     onSelect={onSelect}
                     onClick={onIssueClick}
                   />
@@ -113,6 +122,7 @@ function IssueKanbanColumn({ column, issues, selectedIds, onSelect, onIssueClick
 interface IssueKanbanBoardProps {
   issues: IssueKanbanItem[];
   selectedIds: Set<string>;
+  pendingIssueIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
   onStatusChange: (event: StatusChangeEvent) => void;
   onIssueClick: (issue: IssueKanbanItem) => void;
@@ -121,6 +131,7 @@ interface IssueKanbanBoardProps {
 export function IssueKanbanBoard({
   issues,
   selectedIds,
+  pendingIssueIds,
   onSelectionChange,
   onStatusChange,
   onIssueClick,
@@ -227,6 +238,7 @@ export function IssueKanbanBoard({
             column={column}
             issues={issuesByStatus[column.id]}
             selectedIds={selectedIds}
+            pendingIssueIds={pendingIssueIds}
             onSelect={handleSelect}
             onIssueClick={onIssueClick}
           />

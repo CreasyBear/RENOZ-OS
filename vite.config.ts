@@ -140,10 +140,71 @@ export default { hash: () => throwServerOnly(), compare: () => throwServerOnly()
 `,
   }
 
+  /**
+   * Client-only modules - stub for SSR. TanStack devtools use @tanstack/devtools-ui (Solid.js)
+   * which calls client-only APIs (onMount, etc.) and fails during SSR.
+   */
+  const clientOnlyStubs: Record<string, string> = {
+    '@tanstack/devtools-ui': `
+export const ThemeContextProvider = ({ children }) => children;
+export const Header = () => null;
+export const HeaderLogo = () => null;
+export const MainPanel = ({ children }) => children;
+export const JsonTree = () => null;
+export const useTheme = () => ({ theme: 'light' });
+export const PiP = () => null;
+export const X = () => null;
+export const Checkbox = () => null;
+export const CloseIcon = () => null;
+export const SocialBubble = () => null;
+export const ChevronDownIcon = () => null;
+export const Button = () => null;
+export const Input = () => null;
+export const Cogs = () => null;
+export const List = () => null;
+export const PageSearch = () => null;
+export default {};
+`,
+    '@tanstack/devtools-ui/icons': `
+export const PiP = () => null;
+export const X = () => null;
+export const SocialBubble = () => null;
+export const SearchIcon = () => null;
+export const SettingsIcon = () => null;
+export const Cogs = () => null;
+export const List = () => null;
+export const PageSearch = () => null;
+export default {};
+`,
+    '@tanstack/react-devtools': `
+export const TanStackDevtools = () => null;
+export default {};
+`,
+    '@tanstack/react-router-devtools': `
+export const TanStackRouterDevtoolsPanel = () => null;
+export const TanStackRouterDevtools = () => null;
+export default {};
+`,
+    '@tanstack/react-form-devtools': `
+export const formDevtoolsPlugin = () => ({ name: 'form', render: () => null });
+export default {};
+`,
+  }
+
   return {
     name: 'server-only-modules-stub',
     enforce: 'pre' as const,
     resolveId(id: string, _importer: string | undefined, options: { ssr?: boolean }) {
+      if (options?.ssr) {
+        if (clientOnlyStubs[id]) return `\0stub:${id}`
+        // Check most specific keys first (e.g. devtools-ui/icons before devtools-ui)
+        const clientOnlyKeys = Object.keys(clientOnlyStubs).sort(
+          (a, b) => b.length - a.length,
+        )
+        for (const key of clientOnlyKeys) {
+          if (id.startsWith(key)) return `\0stub:${key}`
+        }
+      }
       if (options?.ssr) return null
 
       // Handle @/trigger/client alias
@@ -162,15 +223,26 @@ export default { hash: () => throwServerOnly(), compare: () => throwServerOnly()
     load(id: string) {
       if (id.startsWith('\0stub:')) {
         const moduleId = id.slice('\0stub:'.length)
-        return stubs[moduleId] || `export default () => { throw new Error('[${moduleId}] Server-only'); };`
+        return (
+          clientOnlyStubs[moduleId] ??
+          stubs[moduleId] ??
+          `export default () => { throw new Error('[${moduleId}] Server-only'); };`
+        )
       }
       return null
     }
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: '/',
+  mode: command === 'build' ? 'production' : undefined,
+  // CRITICAL: Hardcode 'production' - Vercel/TanStack build may not see process.env.
+  // Ensures production JSX runtime (jsx) not jsxDEV → prevents "jsxDEV is not a function".
+  // @see https://github.com/TanStack/router/issues/6498
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
+  },
   logLevel: 'warn',
   server: { port: 3000 },
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
@@ -180,12 +252,24 @@ export default defineConfig({
     serverOnlyModulesStub(),
     tanstackStart({
       prerender: { enabled: false },
+      server: {
+        build: {
+          // Ensures process.env.NODE_ENV is replaced with 'production' in SSR bundle.
+          // Prevents jsxDEV (dev runtime) from being used → "jsxDEV is not a function" in prod.
+          staticNodeEnv: true,
+        },
+      },
     }),
     nitro({
       preset: 'vercel',
       sourcemap: false,
+      // Force NODE_ENV replacement in Nitro's SSR bundle (Vercel/TanStack may not see process.env).
+      // Prevents jsxDEV (dev runtime) → "jsxDEV is not a function" in prod.
+      replace: {
+        'process.env.NODE_ENV': JSON.stringify('production'),
+      },
       rollupConfig: {
-        maxParallelFileOps: 1,
+        maxParallelFileOps: 2,
       },
     }),
     react(),
@@ -210,7 +294,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Minimal parallelism to reduce peak memory (OOM on Vercel 8GB)
-      maxParallelFileOps: 1,
+      maxParallelFileOps: 2,
       onwarn(warning, warn) {
         // Suppress "use client" directive warnings from node_modules (framer-motion, radix, etc.)
         // - harmless: Rollup strips them during SSR bundle; apps work correctly
@@ -226,4 +310,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

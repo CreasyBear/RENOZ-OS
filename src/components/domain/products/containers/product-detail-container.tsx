@@ -46,9 +46,8 @@ import { toastSuccess, toastError } from '@/hooks';
 import { useProduct, useDeleteProduct, useDuplicateProduct, useUpdateProduct, useProductInventorySummary, useCustomerPrices } from '@/hooks/products';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useTrackView } from '@/hooks/search';
-import { isGetProductResponse, type GetProductResponse, type UpdateProduct } from '@/lib/schemas/products';
+import { isGetProductResponse, type GetProductResponse } from '@/lib/schemas/products';
 import { ProductDetailView } from '../views/product-detail-view';
-import { ProductEditDialog } from '../product-edit-dialog';
 
 // ============================================================================
 // TYPES
@@ -70,6 +69,8 @@ export interface ProductDetailContainerProps {
   onBack?: () => void;
   /** Callback after successful duplication */
   onDuplicate?: (newProductId: string) => void;
+  /** Callback when user chooses to edit the product */
+  onEdit?: (productId: string) => void;
   /** Render props pattern for layout composition */
   children?: (props: ProductDetailContainerRenderProps) => React.ReactNode;
   /** Additional CSS classes */
@@ -101,6 +102,7 @@ export function ProductDetailContainer({
   loaderData,
   onBack,
   onDuplicate,
+  onEdit,
   children,
   className,
 }: ProductDetailContainerProps) {
@@ -109,7 +111,6 @@ export function ProductDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('overview');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [showMetaPanel, setShowMetaPanel] = useState(true);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -192,10 +193,6 @@ export function ProductDetailContainer({
     }
   }, [deleteMutation, productId, onBack]);
 
-  const handleEdit = useCallback(async (data: UpdateProduct) => {
-    await updateMutation.mutateAsync({ id: productId, data });
-  }, [updateMutation, productId]);
-
   const handlePriceUpdate = useCallback(async (newPrice: number) => {
     await updateMutation.mutateAsync({
       id: productId,
@@ -271,7 +268,7 @@ export function ProductDetailContainer({
   const headerActions = (
     <div className="flex items-center gap-2">
       {/* Edit Action */}
-      <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
+      <Button variant="outline" onClick={() => onEdit?.(productId)}>
         <Edit className="h-4 w-4 mr-2" />
         Edit
       </Button>
@@ -334,15 +331,6 @@ export function ProductDetailContainer({
       />
 
       <EntityActivityLogger {...loggerProps} />
-
-      {/* Edit Product Dialog */}
-      <ProductEditDialog
-        open={editDialogOpen}
-        onClose={() => setEditDialogOpen(false)}
-        product={product}
-        onSubmit={handleEdit}
-        isLoading={updateMutation.isPending}
-      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

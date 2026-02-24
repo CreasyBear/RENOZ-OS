@@ -54,7 +54,7 @@ export { SupplierDetail, type SupplierDetailProps, type Supplier } from './suppl
 // ============================================================================
 // FORMS (Container/Presenter Pattern)
 // ============================================================================
-export { SupplierForm, type SupplierFormData, type SupplierFormProps, type SupplierFormErrors } from './supplier-form';
+export { SupplierForm, type SupplierFormProps, type SupplierFormValues } from './supplier-form';
 export { SupplierFormSkeleton } from './supplier-form-skeleton';
 export { SupplierCreateContainer } from './supplier-create-container';
 export { SupplierEditContainer, type SupplierEditContainerProps } from './supplier-edit-container';

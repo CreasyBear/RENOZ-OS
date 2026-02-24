@@ -27,7 +27,7 @@ export interface FormErrorSummaryProps {
   /** TanStack Form instance (optional - for form-level errors) */
   form?: {
     state: {
-      errors: string[]
+      errors?: (string | undefined)[]
     }
   }
   /** Custom error message (e.g., from mutation) */
@@ -57,8 +57,8 @@ export function FormErrorSummary({
   showFieldErrors = false,
   fieldErrors = {},
 }: FormErrorSummaryProps) {
-  // Collect all errors
-  const formErrors = form?.state.errors ?? []
+  // Collect all errors (filter undefined from TanStack Form's errors)
+  const formErrors = (form?.state.errors ?? []).filter((e): e is string => !!e)
   const fieldErrorList = showFieldErrors
     ? Object.entries(fieldErrors)
         .filter(([, error]) => error)

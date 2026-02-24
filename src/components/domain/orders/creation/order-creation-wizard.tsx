@@ -4,13 +4,13 @@
  * Multi-step wizard for creating new orders.
  * Steps: Customer > Products > Pricing > Shipping > Review
  *
- * Uses TanStack Form, useFormDraft, FormWizard, and shared field components per FORM-STANDARDS.
+ * Uses TanStack Form, FormWizard, and shared field components per FORM-STANDARDS.
  *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-CREATION-UI)
  * @see FORM-STANDARDS.md
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { User, Package, DollarSign, Truck, FileCheck, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -38,8 +38,6 @@ import { useCustomer } from "@/hooks/customers";
 import { CustomerSelectorContainer } from "./customer-selector-container";
 import { ProductSelector } from "./product-selector";
 import {
-  DraftRestorePrompt,
-  DraftSavingIndicator,
   FormWizard,
   FormField,
   NumberField,
@@ -48,13 +46,11 @@ import {
   SelectField,
   DateField,
   FormFieldDisplayProvider,
+  FormErrorSummary,
   extractFieldError,
 } from "@/components/shared/forms";
+import { COUNTRY_OPTIONS, getCountryLabel, toCountryCode } from "@/lib/country";
 import { useOrderCreationForm } from "@/hooks/orders/use-order-creation-form";
-import {
-  useFormDraft,
-  getCreateDraftKey,
-} from "@/hooks/_shared/use-form-draft";
 import {
   buildOrderSubmitData,
   getCustomerAddressesFromApi,
@@ -64,6 +60,7 @@ import type {
   OrderCreationFormValues,
   OrderSubmitData,
 } from "@/lib/schemas/orders/order-creation-form";
+import { z, ZodError } from "zod";
 
 // Re-export for consumers (e.g. -create-page, use-order-creation-form)
 export type { OrderSubmitData };
@@ -83,8 +80,6 @@ export interface OrderCreationWizardProps {
   onSubmit: (data: OrderSubmitData) => Promise<{ id: string; orderNumber: string }>;
   /** @source useMutation.isPending in container route */
   isSubmitting?: boolean;
-  /** Called with draft API so parent can clear on cancel. Enables draft persistence. */
-  onDraftReady?: (api: { clear: () => void }) => void;
   className?: string;
 }
 
@@ -141,6 +136,23 @@ const StepCustomer = memo(function StepCustomer({ form, initialCustomerId }: Ste
                   if (currentId !== newId) {
                     field.handleChange(newId);
                   }
+                  // Apply customer address when enriched data arrives (TanStack pattern: event-driven)
+                  const addr = c?.shippingAddress?.street1
+                    ? c.shippingAddress
+                    : c?.billingAddress?.street1
+                      ? c.billingAddress
+                      : null;
+                  if (addr) {
+                    form.setFieldValue("useBillingAsShipping", true);
+                    form.setFieldValue("shippingAddress", {
+                      street1: addr.street1 ?? "",
+                      street2: addr.street2 ?? "",
+                      city: addr.city ?? "",
+                      state: addr.state ?? "",
+                      postcode: addr.postcode ?? "",
+                      country: toCountryCode(addr.country),
+                    });
+                  }
                 }}
               />
             </FormField>
@@ -174,8 +186,8 @@ const StepProducts = memo(function StepProducts({ form }: StepProductsProps) {
       <form.Field name="lineItems">
         {(field) => (
           <ProductSelector
-            selectedProducts={field.state.value}
-            onProductsChange={field.handleChange}
+            selectedProducts={field.state.value ?? []}
+            onProductsChange={(products) => field.handleChange(Array.isArray(products) ? products : [])}
           />
         )}
       </form.Field>
@@ -396,7 +408,7 @@ const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
           city: addr.city ?? "",
           state: addr.state ?? "",
           postcode: addr.postcode ?? "",
-          country: addr.country ?? "AU",
+          country: toCountryCode(addr.country),
         }
       : null;
   }, [customerData?.addresses]);
@@ -420,10 +432,10 @@ const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
     form.setFieldValue("shippingAddress", {
       street1: customerAddr.street1,
       street2: customerAddr.street2 ?? "",
-      city: customerAddr.city,
-      state: customerAddr.state,
-      postcode: customerAddr.postcode,
-      country: customerAddr.country,
+      city: customerAddr.city ?? "",
+      state: customerAddr.state ?? "",
+      postcode: customerAddr.postcode ?? "",
+      country: toCountryCode(customerAddr.country),
     });
   }, [customerAddr, form]);
 
@@ -433,10 +445,16 @@ const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
       form.setFieldValue("shippingAddress", {
         street1: customerAddr.street1,
         street2: customerAddr.street2 ?? "",
-        city: customerAddr.city,
-        state: customerAddr.state,
-        postcode: customerAddr.postcode,
-        country: customerAddr.country,
+        city: customerAddr.city ?? "",
+        state: customerAddr.state ?? "",
+        postcode: customerAddr.postcode ?? "",
+        country: toCountryCode(customerAddr.country),
+      });
+    } else {
+      const current = form.getValues().shippingAddress ?? {};
+      form.setFieldValue("shippingAddress", {
+        ...current,
+        country: toCountryCode(current.country),
       });
     }
   }, [customerAddr, form]);
@@ -494,7 +512,7 @@ const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
                   <p>
                     {customerAddr.city}, {customerAddr.state} {customerAddr.postcode}
                   </p>
-                  <p>{customerAddr.country}</p>
+                  <p>{getCountryLabel(customerAddr.country)}</p>
                 </div>
                 {addressSourceLabel && (
                   <p className="text-xs text-muted-foreground">{addressSourceLabel}</p>
@@ -569,7 +587,12 @@ const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
                 </form.Field>
                 <form.Field name="shippingAddress.country">
                   {(field) => (
-                    <TextField field={field} label="Country" placeholder="AU" disabled />
+                    <SelectField
+                      field={field}
+                      label="Country"
+                      options={COUNTRY_OPTIONS}
+                      placeholder="Select country"
+                    />
                   )}
                 </form.Field>
               </div>
@@ -625,7 +648,7 @@ const StepReview = memo(function StepReview({ form }: StepReviewProps) {
           city: customerAddr.city || "",
           state: customerAddr.state || "",
           postcode: customerAddr.postcode || "",
-          country: customerAddr.country || "AU",
+          country: getCountryLabel(toCountryCode(customerAddr.country)),
         }
       : {
           street1: shippingAddress.street1 ?? "",
@@ -633,7 +656,7 @@ const StepReview = memo(function StepReview({ form }: StepReviewProps) {
           city: shippingAddress.city ?? "",
           state: shippingAddress.state ?? "",
           postcode: shippingAddress.postcode ?? "",
-          country: shippingAddress.country ?? "AU",
+          country: getCountryLabel(shippingAddress.country ?? "AU"),
         };
 
   const subtotal = lineItems.reduce(
@@ -806,6 +829,44 @@ function getStepFromError(error: unknown): number {
   return 4; // Default to Review so user can use Back
 }
 
+/** Map Zod error path to step index. Steps: 0=Customer, 1=Products, 2=Pricing, 3=Shipping, 4=Review */
+function getStepFromZodPath(path: (string | number)[]): number {
+  const first = path[0];
+  if (first === "customerId") return 0;
+  if (first === "lineItems") return 1;
+  if (first === "discountPercent" || first === "discountAmount") return 2;
+  if (
+    first === "shippingAddress" ||
+    first === "dueDate" ||
+    first === "useBillingAsShipping" ||
+    first === "shippingAmount"
+  )
+    return 3;
+  return 4;
+}
+
+/** Extract field errors from Zod error for display. Uses friendly labels for known paths */
+function zodErrorToFieldErrors(error: z.ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const path = issue.path.filter((p): p is string | number => typeof p === "string" || typeof p === "number");
+    const key =
+      path.length > 1 && typeof path[0] === "string" && path[0] === "lineItems" && typeof path[1] === "number"
+        ? `Line item ${path[1] + 1} (${path.slice(2).join(".") || "details"})`
+        : path.length === 1
+          ? path[0] === "customerId"
+            ? "Customer"
+            : path[0] === "discountPercent"
+              ? "Discount %"
+              : path[0] === "discountAmount"
+                ? "Discount amount"
+                : String(path[0])
+          : path.join(".");
+    if (!(key in out) && issue.message) out[key] = issue.message;
+  }
+  return out;
+}
+
 /** Fast local guard so final submit can jump back to the first blocking step. */
 function getBlockingStep(values: OrderCreationFormValues): number | null {
   if (!values.customerId) return 0;
@@ -832,10 +893,27 @@ function getBlockingStep(values: OrderCreationFormValues): number | null {
     if (lineDiscount > lineTotal) return 2;
   }
 
+  if (!values.useBillingAsShipping) {
+    const shipping = values.shippingAddress;
+    const hasRequiredAddress =
+      !!shipping?.street1?.trim() &&
+      !!shipping?.city?.trim() &&
+      !!shipping?.state?.trim() &&
+      !!shipping?.postcode?.trim() &&
+      !!shipping?.country?.trim();
+    if (!hasRequiredAddress) return 3;
+  }
+
   return null;
 }
 
-const DRAFT_VERSION = 2;
+function getStepBlockMessage(step: number): string {
+  if (step === 0) return "Select a customer to continue.";
+  if (step === 1) return "Add at least one product to continue.";
+  if (step === 2) return "Fix pricing and discount rules before continuing.";
+  if (step === 3) return "Complete shipping details before continuing.";
+  return "Please fix the errors below and try again.";
+}
 
 export const OrderCreationWizard = memo(function OrderCreationWizard({
   initialCustomerId,
@@ -843,31 +921,53 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
   onCancel,
   onSubmit,
   isSubmitting = false,
-  onDraftReady,
   className,
 }: OrderCreationWizardProps) {
   const stepContentRef = useRef<HTMLDivElement>(null);
   const customerForSubmitRef = useRef<Awaited<ReturnType<typeof useCustomer>>["data"]>(null);
-  const draftClearRef = useRef<(() => void) | null>(null);
+  const validationErrorRef = useRef<z.ZodError | null>(null);
+  const formRef = useRef<ReturnType<typeof useOrderCreationForm> | null>(null);
+  const submitInFlightRef = useRef(false);
+
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const form = useOrderCreationForm({
     initialCustomerId,
     onSubmit: useCallback(
       async (values: OrderCreationFormValues) => {
+        setValidationErrors({});
+        validationErrorRef.current = null;
         validateOrderCreationForm(values);
         const customerAddr = getCustomerAddressesFromApi(customerForSubmitRef.current);
         const data = buildOrderSubmitData(values, customerAddr);
         const result = await onSubmit(data);
-        draftClearRef.current?.();
         onComplete(result.id, result.orderNumber);
         return result;
       },
       [onSubmit, onComplete]
     ),
-    onSubmitInvalid: () => {
+    onValidationError: useCallback((error: unknown) => {
+      const zodError = error instanceof ZodError ? error : null;
+      validationErrorRef.current = zodError;
+      setValidationErrors(zodError ? zodErrorToFieldErrors(zodError) : {});
+    }, []),
+    onSubmitInvalid: useCallback(() => {
+      const err = validationErrorRef.current;
+      const f = formRef.current;
+      if (err?.issues?.[0] && f) {
+        const path = err.issues[0].path.filter((p): p is string | number => typeof p === "string" || typeof p === "number");
+        const targetStep = getStepFromZodPath(path);
+        f.setFieldValue("currentStep", targetStep);
+        setTimeout(
+          () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          50
+        );
+      }
       toast.error("Please fix the errors below and try again.");
-    },
+    }, []),
   });
+
+  formRef.current = form;
 
   const customerId = form.useWatch("customerId") ?? "";
   const { data: customerForSubmit } = useCustomer({
@@ -875,56 +975,42 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
     enabled: !!customerId,
   });
 
-  const draft = useFormDraft({
-    key: getCreateDraftKey("order"),
-    version: DRAFT_VERSION,
-    form,
-    enabled: !initialCustomerId,
-    debounceMs: 1500,
-  });
-
   useEffect(() => {
     customerForSubmitRef.current = customerForSubmit;
-    draftClearRef.current = draft.clear;
-  }, [customerForSubmit, draft.clear]);
-
-  useEffect(() => {
-    onDraftReady?.({ clear: draft.clear });
-  }, [onDraftReady, draft.clear]);
+  }, [customerForSubmit]);
 
   const currentStep = form.useWatch("currentStep") ?? 0;
 
   const validateStep = useCallback(
     (step: number): boolean => {
-      const values = form.state.values;
-      if (step === 0) {
-        const isValid = !!values.customerId;
-        if (!isValid) {
-          toast.error("Select a customer to continue.");
-        }
-        return isValid;
-      }
-      if (step === 1) {
-        const isValid = (values.lineItems?.length ?? 0) >= 1;
-        if (!isValid) {
-          toast.error("Add at least one product to continue.");
-        }
-        return isValid;
+      const blockingStep = getBlockingStep(form.getValues());
+      if (blockingStep != null && blockingStep <= step) {
+        toast.error(getStepBlockMessage(blockingStep));
+        return false;
       }
       return true;
     },
-    [form.state.values]
+    [form]
   );
 
   const canNavigateToStep = useCallback(
-    (stepIndex: number) => stepIndex <= (currentStep ?? 0) + 1,
-    [currentStep]
+    (stepIndex: number) => {
+      const step = currentStep ?? 0;
+      if (stepIndex <= step) return true;
+      if (stepIndex > step + 1) return false;
+
+      const blockingStep = getBlockingStep(form.getValues());
+      return blockingStep == null || blockingStep >= stepIndex;
+    },
+    [currentStep, form]
   );
 
   const handleComplete = useCallback(async () => {
-    const blockingStep = getBlockingStep(form.state.values);
+    if (submitInFlightRef.current || isSubmitting) return;
+
+    const blockingStep = getBlockingStep(form.getValues());
     if (blockingStep != null) {
-      toast.error("Please fix the errors below and try again.");
+      toast.error(getStepBlockMessage(blockingStep));
       form.setFieldValue("currentStep", blockingStep);
       setTimeout(
         () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -933,6 +1019,7 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
       return;
     }
 
+    submitInFlightRef.current = true;
     try {
       await form.handleSubmit();
     } catch (error) {
@@ -944,14 +1031,23 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
         () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
         50
       );
+    } finally {
+      submitInFlightRef.current = false;
     }
-  }, [form]);
+  }, [form, isSubmitting]);
 
   const handleStepChange = useCallback(
     (step: number) => {
+      if (!canNavigateToStep(step)) {
+        const blockingStep = getBlockingStep(form.getValues());
+        toast.error(getStepBlockMessage(blockingStep ?? step));
+        return;
+      }
+      setValidationErrors({});
+      validationErrorRef.current = null;
       form.setFieldValue("currentStep", step);
     },
-    [form]
+    [canNavigateToStep, form]
   );
 
   const renderStepContent = () => {
@@ -982,14 +1078,11 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
       }}
     >
       <FormFieldDisplayProvider form={form}>
-        <DraftRestorePrompt
-          hasDraft={draft.hasDraft}
-          savedAt={draft.savedAt}
-          onRestore={draft.restore}
-          onDiscard={draft.clear}
-          variant="banner"
+        <FormErrorSummary
+          form={form}
+          fieldErrors={validationErrors}
+          showFieldErrors={Object.keys(validationErrors).length > 0}
         />
-        <DraftSavingIndicator isSaving={draft.isSaving} savedAt={draft.savedAt} />
 
         <div className="flex items-start gap-4">
           <Button type="button" variant="outline" onClick={onCancel}>

@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockExchangeCodeForSession = vi.fn();
+const mockGetSession = vi.fn();
+
+vi.mock('@/lib/auth/exchange-code-for-session', () => ({
+  exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
+}));
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     auth: {
-      exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
+      getSession: () => mockGetSession(),
     },
   },
 }));
@@ -16,6 +21,7 @@ describe('update-password route beforeLoad', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSession.mockResolvedValue({ data: { session: null } });
     mockLocation = { hash: '', href: 'http://localhost:3000/update-password' };
     Object.defineProperty(globalThis, 'window', {
       value: { location: mockLocation },
@@ -112,6 +118,8 @@ describe('update-password route beforeLoad', () => {
     const beforeLoad = Route.options.beforeLoad;
     if (!beforeLoad) throw new Error('Expected beforeLoad');
 
+    mockExchangeCodeForSession.mockResolvedValue({ error: null });
+
     await expect(
       beforeLoad({
         search: { code: 'valid-code-123' },
@@ -142,5 +150,21 @@ describe('update-password route beforeLoad', () => {
         },
       },
     });
+  });
+
+  it('allows through when code exchange fails but recovery session already exists', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      error: { message: 'Invalid or expired code' },
+    });
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'x' } } });
+    const { Route } = await import('@/routes/update-password');
+    const beforeLoad = Route.options.beforeLoad;
+    if (!beforeLoad) throw new Error('Expected beforeLoad');
+
+    await expect(
+      beforeLoad({
+        search: { code: 'already-consumed-code' },
+      } as never)
+    ).resolves.toBeUndefined();
   });
 });

@@ -25,7 +25,11 @@ export interface BulkReceivingDialogContainerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   purchaseOrders: PurchaseOrderTableData[];
-  onConfirm: (receiptData: BulkReceiptData) => Promise<{ processed: number; failed: number }>;
+  onConfirm: (receiptData: BulkReceiptData) => Promise<{
+    processed: number;
+    failed: number;
+    errors: Array<{ poId: string; error: string }>;
+  }>;
   isLoading?: boolean;
 }
 

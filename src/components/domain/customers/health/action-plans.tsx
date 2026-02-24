@@ -34,8 +34,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePickerControl } from '@/components/shared';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -245,9 +250,15 @@ function CreateActionPlanDialog({ open, onOpenChange, onCreate }: CreateActionPl
     }
   };
 
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isSubmitting);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSubmitting, onOpenChange);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Create Action Plan</DialogTitle>
           <DialogDescription>
@@ -312,15 +323,11 @@ function CreateActionPlanDialog({ open, onOpenChange, onCreate }: CreateActionPl
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="dueDate">Due Date (Optional)</Label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
+          <DatePickerControl
+            label="Due Date (Optional)"
+            value={dueDate}
+            onChange={setDueDate}
+          />
         </div>
 
         <DialogFooter>

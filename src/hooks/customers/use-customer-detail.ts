@@ -13,8 +13,9 @@
  * @see STANDARDS.md - Hook patterns
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useCustomerNavigation } from './use-customer-navigation';
 import { useCustomer, useDeleteCustomer } from './use-customers';
 import { useCustomerAlerts, useCustomerActiveItems } from './use-customer-detail-extended';
 import { useUnifiedActivities } from '@/hooks/activities';
@@ -104,17 +105,37 @@ export function useCustomerDetail(
 ): UseCustomerDetailReturn {
   const { initialTab } = options;
   const navigate = useNavigate();
+  const { navigateToEdit, navigateToList } = useCustomerNavigation();
+  const normalizeTab = useCallback((tab?: string) => {
+    return tab && ['overview', 'orders', 'activity'].includes(tab) ? tab : 'overview';
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
   // UI State
   // ─────────────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState(
-    initialTab && ['overview', 'orders', 'activity'].includes(initialTab) ? initialTab : 'overview'
-  );
+  const [activeTab, setActiveTab] = useState(normalizeTab(initialTab));
   const [showSidebar, setShowSidebar] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activityDialogOpen, setActivityDialogOpenInternal] = useState(false);
   const [activityDialogDefaultType, setActivityDialogDefaultType] = useState<ActivityType>('note');
+
+  useEffect(() => {
+    const nextTab = normalizeTab(initialTab);
+    globalThis.queueMicrotask(() =>
+      setActiveTab((prev) => (prev === nextTab ? prev : nextTab))
+    );
+  }, [initialTab, normalizeTab]);
+
+  const handleTabChange = useCallback((tab: string) => {
+    const nextTab = normalizeTab(tab);
+    setActiveTab(nextTab);
+    navigate({
+      to: '/customers/$customerId',
+      params: { customerId },
+      search: { tab: nextTab as 'overview' | 'orders' | 'activity' },
+      replace: true,
+    });
+  }, [navigate, customerId, normalizeTab]);
 
   const setActivityDialogOpen = useCallback((open: boolean) => {
     if (!open) setActivityDialogDefaultType('note');
@@ -160,13 +181,13 @@ export function useCustomerDetail(
   // ─────────────────────────────────────────────────────────────────────────
   const actions = useMemo<CustomerDetailActions>(() => ({
     onEdit: () => {
-      navigate({ to: '/customers/$customerId/edit', params: { customerId } });
+      navigateToEdit(customerId);
     },
-    // Navigate to create quote with stage pre-selected
+    // Navigate to create quote with stage and customer pre-selected
     onCreateQuote: () => {
       navigate({
         to: '/pipeline/new',
-        search: { stage: 'proposal' },
+        search: { stage: 'proposal', customerId: customerId || undefined },
       });
     },
     // Navigate to order creation with customer pre-selected
@@ -189,10 +210,14 @@ export function useCustomerDetail(
         await deleteMutation.mutateAsync(customerId);
         toastSuccess('Customer deleted');
         setDeleteDialogOpen(false);
-        navigate({ to: '/customers' });
-      } catch {
-        toastError('Failed to delete customer');
-        throw new Error('Delete failed');
+        navigateToList();
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : 'Failed to delete customer';
+        toastError(message);
+        throw error instanceof Error ? error : new Error('Delete failed');
       }
     },
     onCopyLink: () => {
@@ -203,7 +228,7 @@ export function useCustomerDetail(
       window.print();
     },
     onBack: () => {
-      navigate({ to: '/customers' });
+      navigateToList();
     },
     onLogActivity: () => {
       setActivityDialogDefaultType('note');
@@ -213,7 +238,7 @@ export function useCustomerDetail(
       setActivityDialogDefaultType('follow_up');
       setActivityDialogOpenInternal(true);
     },
-  }), [customerId, navigate, deleteMutation]);
+  }), [customerId, navigate, navigateToEdit, navigateToList, deleteMutation]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Sidebar toggle
@@ -242,7 +267,7 @@ export function useCustomerDetail(
 
     // UI State
     activeTab,
-    onTabChange: setActiveTab,
+    onTabChange: handleTabChange,
     showSidebar,
     toggleSidebar,
 

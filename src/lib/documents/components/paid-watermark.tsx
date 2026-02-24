@@ -1,7 +1,7 @@
 /**
- * PDF Paid Badge Component - Apple/Linear Style
+ * PDF Paid Badge Component
  *
- * Displays a subtle "PAID" badge instead of an overlay watermark.
+ * Uses org branding primaryColor. Plain text, no decorative fills.
  */
 
 import { Text, View, StyleSheet } from "@react-pdf/renderer";
@@ -10,26 +10,21 @@ import {
   fontSize,
   spacing,
   pageMargins,
-  borderRadius,
   FONT_FAMILY,
   FONT_WEIGHTS,
+  letterSpacing,
 } from "./theme";
 import { formatDateForPdf } from "./theme";
 
 // ============================================================================
-// STYLES
+// STYLES - Color applied via primaryColor from context
 // ============================================================================
 
 const styles = StyleSheet.create({
-  // Subtle badge in corner
   badge: {
     position: "absolute",
-    top: pageMargins.top + 8,
+    top: pageMargins.top + spacing.sm,
     right: pageMargins.right,
-    backgroundColor: "#E8F5E9",
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
@@ -38,36 +33,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.semibold,
-    color: "#2E7D32",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.wide,
   },
   badgeDate: {
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
-    color: "#4CAF50",
-  },
-
-  // Alternative: Stamp style
-  stamp: {
-    position: "absolute",
-    top: "40%",
-    right: "10%",
-    transform: "rotate(-12deg)",
-    borderWidth: 2,
-    borderColor: "#34C759",
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
-  stampText: {
-    fontSize: 24,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
-    color: "#34C759",
-    letterSpacing: 2,
   },
 });
 
@@ -85,18 +57,17 @@ export interface PaidWatermarkProps {
 // ============================================================================
 
 export function PaidWatermark({ show, paidAt }: PaidWatermarkProps) {
-  const { locale } = useOrgDocument();
+  const { locale, primaryColor } = useOrgDocument();
 
   if (!show) {
     return null;
   }
 
-  // Using subtle badge in corner instead of large watermark
   return (
     <View style={styles.badge} fixed>
-      <Text style={styles.badgeText}>Paid</Text>
+      <Text style={[styles.badgeText, { color: primaryColor }]}>Paid</Text>
       {paidAt && (
-        <Text style={styles.badgeDate}>
+        <Text style={[styles.badgeDate, { color: primaryColor }]}>
           {formatDateForPdf(paidAt, locale, "short")}
         </Text>
       )}

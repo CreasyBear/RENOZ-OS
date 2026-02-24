@@ -28,12 +28,14 @@ import {
   calculateProfileCompleteness,
 } from "@/lib/users";
 import { formatDate } from "@/lib/formatters";
+import { toast } from "sonner";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
   TextField,
   TextareaField,
   SelectField,
   FormActions,
+  FormFieldDisplayProvider,
 } from "@/components/shared/forms";
 import { profileFormSchema, type ProfileFormData } from "@/lib/schemas/users/profile";
 import type { ProfileFormProps } from "@/lib/schemas/users/profile";
@@ -87,6 +89,9 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
 
   const form = useTanStackForm<ProfileFormData>({
     schema: profileFormSchema,
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
     defaultValues: initialFormData,
     onSubmit: async (values) => {
       // Build profile update using helper (preserves existing fields, updates changed ones)
@@ -218,6 +223,7 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
                 aria-label="Profile information form"
                 noValidate
               >
+                <FormFieldDisplayProvider form={form}>
                 <form.Field name="name">
                   {(field) => (
                     <TextField
@@ -303,6 +309,8 @@ export function ProfileForm({ user, onUpdate, isUpdating }: ProfileFormProps) {
                     />
                   )}
                 </form.Field>
+
+                </FormFieldDisplayProvider>
 
                 <FormActions
                   form={form}

@@ -52,6 +52,7 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { StatusCell } from '@/components/shared/data-table';
 import { OPPORTUNITY_STAGE_CONFIG } from '@/components/domain/pipeline/opportunities/opportunity-status-config';
 import type { QuoteVersion, QuoteLineItem, Opportunity } from '@/lib/schemas/pipeline';
@@ -928,6 +929,7 @@ export const QuoteDetailView = memo(function QuoteDetailView({
                       title="Activity Timeline"
                       description="Complete history of quote changes, status updates, and system events"
                       showFilters={true}
+                      viewAllSearch={getActivitiesFeedSearch('quote')}
                       emptyMessage="No activity recorded yet"
                       emptyDescription="Quote activities will appear here when changes are made."
                     />

@@ -5,6 +5,7 @@
  */
 
 export * from './use-orders';
+export * from './use-order-creation-form';
 export * from './use-order-detail';
 export * from './use-order-detail-composite';
 export * from './use-fulfillment-kanban';

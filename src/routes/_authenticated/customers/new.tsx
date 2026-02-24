@@ -18,6 +18,12 @@ import {
 import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
 
+interface RelatedCreateFailure {
+  scope: 'contact' | 'address'
+  label: string
+  reason: string
+}
+
 // ============================================================================
 // ROUTE DEFINITION
 // ============================================================================
@@ -68,6 +74,7 @@ function NewCustomerPage() {
       status: string
       type: string
       creditHold: boolean
+      creditHoldReason?: string
       tags: string[]
       legalName?: string
       email?: string
@@ -103,6 +110,21 @@ function NewCustomerPage() {
       country: string
     }>
   }) => {
+    let createdCustomerId: string | null = null
+    const failures: RelatedCreateFailure[] = []
+
+    const recordFailure = (
+      scope: RelatedCreateFailure['scope'],
+      label: string,
+      error: unknown
+    ) => {
+      failures.push({
+        scope,
+        label,
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+
     try {
       // Create customer first
       const customer = await createCustomerMutation.mutateAsync({
@@ -110,6 +132,7 @@ function NewCustomerPage() {
         status: wizardData.customer.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
         type: wizardData.customer.type as 'individual' | 'business' | 'government' | 'non_profit',
         creditHold: wizardData.customer.creditHold,
+        creditHoldReason: wizardData.customer.creditHoldReason,
         tags: wizardData.customer.tags,
         legalName: wizardData.customer.legalName,
         email: wizardData.customer.email,
@@ -121,45 +144,78 @@ function NewCustomerPage() {
         registrationNumber: wizardData.customer.registrationNumber,
         warrantyExpiryAlertOptOut: false,
       })
+      createdCustomerId = customer.id
 
       // Create contacts
       for (const contact of wizardData.contacts) {
-        await createContactMutation.mutateAsync({
-          customerId: customer.id,
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          email: contact.email,
-          phone: contact.phone,
-          mobile: contact.mobile,
-          title: contact.title,
-          department: contact.department,
-          isPrimary: contact.isPrimary,
-          decisionMaker: contact.decisionMaker,
-          influencer: contact.influencer,
-        })
+        const label = `${contact.firstName} ${contact.lastName}`.trim() || contact.id
+        try {
+          await createContactMutation.mutateAsync({
+            customerId: customer.id,
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            email: contact.email,
+            phone: contact.phone,
+            mobile: contact.mobile,
+            title: contact.title,
+            department: contact.department,
+            isPrimary: contact.isPrimary,
+            decisionMaker: contact.decisionMaker,
+            influencer: contact.influencer,
+          })
+        } catch (error) {
+          recordFailure('contact', label, error)
+        }
       }
 
       // Create addresses
       for (const address of wizardData.addresses) {
-        await createAddressMutation.mutateAsync({
-          customerId: customer.id,
-          type: address.type as 'billing' | 'shipping' | 'service' | 'headquarters',
-          isPrimary: address.isPrimary,
-          street1: address.street1,
-          street2: address.street2,
-          city: address.city,
-          state: address.state,
-          postcode: address.postcode,
-          country: address.country,
-        })
+        const label = address.street1 || address.id
+        try {
+          await createAddressMutation.mutateAsync({
+            customerId: customer.id,
+            type: address.type as 'billing' | 'shipping' | 'service' | 'headquarters',
+            isPrimary: address.isPrimary,
+            street1: address.street1,
+            street2: address.street2,
+            city: address.city,
+            state: address.state,
+            postcode: address.postcode,
+            country: address.country,
+          })
+        } catch (error) {
+          recordFailure('address', label, error)
+        }
       }
 
-      // Note: useCreateCustomer hook handles cache invalidation
+      if (failures.length > 0) {
+        const preview = failures
+          .slice(0, 3)
+          .map((f) => `${f.scope} "${f.label}"`)
+          .join(' • ')
+        const remaining = failures.length - 3
+        logger.warn('Customer created with related creation failures', {
+          context: 'customers-new',
+          customerId: customer.id,
+          failureCount: failures.length,
+          failures,
+        })
+        toast.error('Customer created, but some related records failed', {
+          description: remaining > 0 ? `${preview} • +${remaining} more` : preview,
+        })
+        navigate({ to: '/customers/$customerId/edit', params: { customerId: customer.id }, search: {} })
+        return
+      }
+
       toast.success('Customer created successfully')
       navigate({ to: '/customers/$customerId', params: { customerId: customer.id }, search: {} })
     } catch (error) {
       logger.error('Failed to create customer', error as Error, { context: 'customers-new' })
+      if (createdCustomerId) {
+        throw error
+      }
       toast.error('Failed to create customer')
+      throw error
     }
   }
 

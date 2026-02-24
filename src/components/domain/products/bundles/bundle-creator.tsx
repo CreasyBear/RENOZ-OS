@@ -4,8 +4,7 @@
  * Create new product bundles with component selection and price configuration.
  */
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
 import {
   Package,
@@ -20,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -38,9 +36,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
+import {
+  FormFieldDisplayProvider,
+  FormErrorSummary,
+  TextField,
+  NumberField,
+  TextareaField,
+} from "@/components/shared/forms";
 import { ComponentSelector } from "./component-selector";
 import { useCreateProduct, useSetBundleComponents } from "@/hooks/products";
-import { toastError } from "@/hooks";
+import { toastError, toastSuccess } from "@/hooks";
 
 // Form schema
 const bundleFormSchema = z.object({
@@ -85,6 +94,7 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
   const [components, setComponents] = useState<SelectedComponent[]>([]);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [createdBundleId, setCreatedBundleId] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Mutations
   const createProduct = useCreateProduct();
@@ -92,28 +102,56 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
 
   const isSubmitting = createProduct.isPending || setBundleComponents.isPending;
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-    reset,
-  } = useForm<BundleFormValues>({
-    resolver: zodResolver(bundleFormSchema) as never,
+  const form = useTanStackForm<BundleFormValues>({
+    schema: bundleFormSchema,
     defaultValues: {
       sku: "",
       name: "",
       description: "",
       basePrice: 0,
+      costPrice: undefined,
       useCalculatedPrice: true,
     },
+    onSubmit: async (data) => {
+      if (components.length === 0) return;
+      setSubmitError(null);
+      try {
+        const product = await createProduct.mutateAsync({
+          sku: data.sku,
+          name: data.name,
+          description: data.description,
+          type: "bundle",
+          status: "active",
+          basePrice: data.basePrice,
+          costPrice: data.costPrice,
+          isSellable: true,
+          isPurchasable: false,
+          trackInventory: false,
+        });
+        await setBundleComponents.mutateAsync({
+          bundleProductId: product.id,
+          components: components.map((c) => ({
+            componentProductId: c.product.id,
+            quantity: c.quantity,
+            isOptional: c.isOptional,
+          })),
+        });
+        setCreatedBundleId(product.id);
+        setStep(3);
+        toastSuccess("Bundle created successfully", {
+          description: "Configure pricing or add more products.",
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to create bundle";
+        setSubmitError(msg);
+        toastError(msg);
+      }
+    },
+    onSubmitInvalid: () => {},
   });
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
-  const useCalculatedPrice = watch("useCalculatedPrice");
-   
-  const watchPrice = watch("basePrice");
+  const useCalculatedPrice = form.useWatch("useCalculatedPrice") ?? true;
+  const watchPrice = form.useWatch("basePrice") ?? 0;
 
   // Calculate component total
   const componentTotal = components.reduce((sum, c) => {
@@ -129,16 +167,15 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
 
   // Update price when calculated price is toggled
   const handleCalculatedPriceToggle = (checked: boolean) => {
-    setValue("useCalculatedPrice", checked);
+    form.setFieldValue("useCalculatedPrice", checked);
     if (checked) {
-      setValue("basePrice", componentTotal);
+      form.setFieldValue("basePrice", componentTotal);
     }
   };
 
   // Add components
   const handleAddComponents = (newComponents: SelectedComponent[]) => {
     setComponents((prev) => [...prev, ...newComponents]);
-    // Update price if using calculated
     if (useCalculatedPrice) {
       const newTotal = [...components, ...newComponents].reduce((sum, c) => {
         if (!c.isOptional) {
@@ -146,7 +183,7 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
         }
         return sum;
       }, 0);
-      setValue("basePrice", newTotal);
+      form.setFieldValue("basePrice", newTotal);
     }
   };
 
@@ -154,7 +191,6 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
   const handleRemoveComponent = (index: number) => {
     const newComponents = components.filter((_, i) => i !== index);
     setComponents(newComponents);
-    // Update price if using calculated
     if (useCalculatedPrice) {
       const newTotal = newComponents.reduce((sum, c) => {
         if (!c.isOptional) {
@@ -162,7 +198,7 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
         }
         return sum;
       }, 0);
-      setValue("basePrice", newTotal);
+      form.setFieldValue("basePrice", newTotal);
     }
   };
 
@@ -173,7 +209,6 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
       i === index ? { ...c, quantity } : c
     );
     setComponents(newComponents);
-    // Update price if using calculated
     if (useCalculatedPrice) {
       const newTotal = newComponents.reduce((sum, c) => {
         if (!c.isOptional) {
@@ -181,53 +216,14 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
         }
         return sum;
       }, 0);
-      setValue("basePrice", newTotal);
-    }
-  };
-
-  // Submit form
-  const onSubmit = async (data: BundleFormValues) => {
-    if (components.length === 0) {
-      return;
-    }
-
-    try {
-      // Create bundle product
-      const product = await createProduct.mutateAsync({
-        sku: data.sku,
-        name: data.name,
-        description: data.description,
-        type: "bundle",
-        status: "active",
-        basePrice: data.basePrice,
-        costPrice: data.costPrice,
-        isSellable: true,
-        isPurchasable: false,
-        trackInventory: false,
-      });
-
-      // Add components
-      await setBundleComponents.mutateAsync({
-        bundleProductId: product.id,
-        components: components.map((c) => ({
-          componentProductId: c.product.id,
-          quantity: c.quantity,
-          isOptional: c.isOptional,
-        })),
-      });
-
-      setCreatedBundleId(product.id);
-      setStep(3);
-    } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to create bundle"
-      );
+      form.setFieldValue("basePrice", newTotal);
     }
   };
 
   // Reset and close
   const handleClose = () => {
-    reset();
+    setSubmitError(null);
+    form.reset();
     setComponents([]);
     setStep(1);
     setCreatedBundleId(null);
@@ -242,10 +238,17 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
     handleClose();
   };
 
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isSubmitting);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSubmitting, handleClose);
+
   return (
     <>
-      <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="max-w-3xl sm:max-w-3xl">
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+        <DialogContent
+          className="max-w-3xl sm:max-w-3xl"
+          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+          onInteractOutside={pendingInteractionGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
@@ -346,7 +349,12 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
                     <p className="text-sm text-muted-foreground">Components Total</p>
                     <p className="text-xl font-bold">{formatPrice(componentTotal)}</p>
                   </div>
-                  <Button onClick={() => setStep(2)}>
+                  <Button
+                    onClick={() => {
+                      form.setFieldValue("basePrice", componentTotal);
+                      setStep(2);
+                    }}
+                  >
                     Continue
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
@@ -357,41 +365,48 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
 
           {/* Step 2: Bundle Details */}
           {step === 2 && (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                form.handleSubmit();
+              }}
+              className="space-y-6"
+            >
+              <FormFieldDisplayProvider form={form}>
+              <FormErrorSummary form={form} submitError={submitError ?? (createProduct.error ?? setBundleComponents.error)?.message ?? null} />
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
-                  <Input
-                    id="sku"
-                    placeholder="BUNDLE-001"
-                    {...register("sku")}
-                  />
-                  {errors.sku && (
-                    <p className="text-sm text-destructive">{errors.sku.message}</p>
+                <form.Field name="sku">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="SKU"
+                      placeholder="BUNDLE-001"
+                      required
+                    />
                   )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Bundle Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="Starter Kit Bundle"
-                    {...register("name")}
-                  />
-                  {errors.name && (
-                    <p className="text-sm text-destructive">{errors.name.message}</p>
+                </form.Field>
+                <form.Field name="name">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Bundle Name"
+                      placeholder="Starter Kit Bundle"
+                      required
+                    />
                   )}
-                </div>
+                </form.Field>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe what's included in this bundle..."
-                  rows={3}
-                  {...register("description")}
-                />
-              </div>
+              <form.Field name="description">
+                {(field) => (
+                  <TextareaField
+                    field={field}
+                    label="Description (optional)"
+                    placeholder="Describe what's included in this bundle..."
+                    rows={3}
+                  />
+                )}
+              </form.Field>
 
               {/* Pricing */}
               <Card>
@@ -416,34 +431,30 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="basePrice">Bundle Price</Label>
-                      <Input
-                        id="basePrice"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        disabled={useCalculatedPrice}
-                        {...register("basePrice", { valueAsNumber: true })}
-                      />
-                      {errors.basePrice && (
-                        <p className="text-sm text-destructive">
-                          {errors.basePrice.message}
-                        </p>
+                    <form.Field name="basePrice">
+                      {(field) => (
+                        <NumberField
+                          field={field}
+                          label="Bundle Price"
+                          min={0}
+                          step={0.01}
+                          prefix="$"
+                          disabled={useCalculatedPrice}
+                          required
+                        />
                       )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="costPrice">Cost Price (optional)</Label>
-                      <Input
-                        id="costPrice"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        {...register("costPrice", {
-                          setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
-                        })}
-                      />
-                    </div>
+                    </form.Field>
+                    <form.Field name="costPrice">
+                      {(field) => (
+                        <NumberField
+                          field={field}
+                          label="Cost Price (optional)"
+                          min={0}
+                          step={0.01}
+                          prefix="$"
+                        />
+                      )}
+                    </form.Field>
                   </div>
 
                   {/* Savings preview */}
@@ -472,6 +483,8 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
                   </div>
                 </CardContent>
               </Card>
+
+              </FormFieldDisplayProvider>
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>

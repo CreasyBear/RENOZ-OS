@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { EntityCombobox } from '@/components/shared/entity-combobox';
 import { useServerFn } from '@tanstack/react-start';
 import { listOrders } from '@/server/functions/orders/orders';
+import { formatCurrency } from '@/lib/formatters';
 
 export interface OrderSummary {
   id: string;
@@ -72,12 +73,11 @@ export function OrderCombobox({
     [listOrdersFn, customerId]
   );
 
-  const getDisplayValue = useCallback((order: OrderSummary) => {
-    const parts = [order.orderNumber];
-    if (order.customerName) {
-      parts.push(`(${order.customerName})`);
-    }
-    return parts.join(' ');
+  const getDisplayValue = useCallback((order: OrderSummary) => order.orderNumber, []);
+
+  const getDescription = useCallback((order: OrderSummary) => {
+    const parts = [order.customerName, formatCurrency(order.total)].filter(Boolean);
+    return parts.join(' · ');
   }, []);
 
   return (
@@ -86,8 +86,10 @@ export function OrderCombobox({
       onSelect={onSelect}
       searchFn={searchOrders}
       getDisplayValue={getDisplayValue}
+      getDescription={getDescription}
       getKey={(order) => order.id}
       placeholder={placeholder}
+      searchPlaceholder="Search by order number or customer name"
       emptyMessage="No orders found."
       disabled={disabled}
       className={className}

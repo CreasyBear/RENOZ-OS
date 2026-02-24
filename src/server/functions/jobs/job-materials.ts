@@ -39,6 +39,11 @@ import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
+import { normalizeSerial } from '@/lib/serials';
+import {
+  addSerializedItemEvent,
+  findSerializedItemBySerial,
+} from '@/server/functions/_shared/serialized-lineage';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -679,6 +684,9 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
 
     // Update material + insert serials/photos in transaction
     const [material] = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       const [updated] = await tx
         .update(jobMaterials)
         .set({
@@ -725,6 +733,29 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
             installedAt,
           }))
         );
+      }
+
+      // Emit serialized lineage events for installed serials (same pattern as warranty claim)
+      for (const sn of serials) {
+        const normalizedSerial = normalizeSerial(sn);
+        const serializedItem = await findSerializedItemBySerial(tx, ctx.organizationId, normalizedSerial, {
+          userId: ctx.user.id,
+          productId: existingMaterial.productId,
+          source: 'job_material_installation',
+        });
+        if (serializedItem) {
+          await addSerializedItemEvent(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId: serializedItem.id,
+            eventType: 'status_changed',
+            entityType: 'job_material',
+            entityId: data.materialId,
+            notes: data.installedLocation
+              ? `Installed at: ${data.installedLocation}`
+              : `Material installed`,
+            userId: ctx.user.id,
+          });
+        }
       }
 
       // Replace photos in dedicated table (PHASE12-007)

@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react';
+import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { BookmarkCheck, MoreVertical, Trash2, Edit2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -92,8 +93,12 @@ export function SavedFilterPresets({
     }
   };
 
+  const confirmation = useConfirmation();
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this saved filter?')) return;
+    const filter = savedFilters.find((f) => f.id === id);
+    const name = filter?.name ?? 'this saved filter';
+    const { confirmed } = await confirmation.confirm(confirmations.delete(name, 'saved filter'));
+    if (!confirmed) return;
 
     try {
       await onDelete(id);

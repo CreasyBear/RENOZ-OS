@@ -11,6 +11,7 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
+import { useEffect } from 'react';
 import { useIssueDetail } from '@/hooks/support';
 import { useTrackView } from '@/hooks/search';
 import { LoadingState } from '@/components/shared/loading-state';
@@ -21,15 +22,23 @@ import { IssueDetailView } from './issue-detail-view';
 
 interface IssueDetailContainerProps {
   issueId: string;
+  activeTabFromUrl: string;
+  onTabChangeToUrl?: (tab: string) => void;
+  escalationOpenFromUrl?: boolean;
+  onEscalationDialogChangeToUrl?: (open: boolean) => void;
 }
 
-export function IssueDetailContainer({ issueId }: IssueDetailContainerProps) {
+export function IssueDetailContainer({
+  issueId,
+  activeTabFromUrl,
+  onTabChangeToUrl,
+  escalationOpenFromUrl = false,
+  onEscalationDialogChangeToUrl,
+}: IssueDetailContainerProps) {
   const {
     issue,
     isLoading,
     error,
-    activeTab,
-    onTabChange,
     customerContext,
     customerId,
     actions,
@@ -57,6 +66,18 @@ export function IssueDetailContainer({ issueId }: IssueDetailContainerProps) {
     `/support/issues/${issueId}`
   );
 
+  useEffect(() => {
+    if (escalationOpenFromUrl && !escalationDialogOpen) {
+      setEscalationDialogOpen(true);
+    }
+  }, [escalationOpenFromUrl, escalationDialogOpen, setEscalationDialogOpen]);
+
+  useEffect(() => {
+    if (escalationOpenFromUrl !== escalationDialogOpen) {
+      onEscalationDialogChangeToUrl?.(escalationDialogOpen);
+    }
+  }, [escalationDialogOpen, escalationOpenFromUrl, onEscalationDialogChangeToUrl]);
+
   if (isLoading) {
     return <LoadingState text="Loading issue..." />;
   }
@@ -71,13 +92,18 @@ export function IssueDetailContainer({ issueId }: IssueDetailContainerProps) {
     );
   }
 
+  const resolvedActiveTab = activeTabFromUrl;
+  const handleTabChange = (tab: string) => {
+    onTabChangeToUrl?.(tab);
+  };
+
   return (
     <>
       <IssueDetailView
         issue={issue}
         customerId={customerId}
-        activeTab={activeTab}
-        onTabChange={onTabChange}
+        activeTab={resolvedActiveTab}
+        onTabChange={handleTabChange}
         customerContext={customerContext}
         actions={actions}
         statusDialog={statusDialog}

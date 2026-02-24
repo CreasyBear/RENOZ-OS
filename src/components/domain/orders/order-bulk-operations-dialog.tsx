@@ -33,7 +33,6 @@ import { Link } from '@tanstack/react-router';
 import { CheckCircle, AlertTriangle, Package, Loader2 } from 'lucide-react';
 import { FormatAmount } from '@/components/shared/format';
 import { StatusBadge, type StatusConfigItem } from '@/components/shared/status-badge';
-import { toastError } from '@/hooks';
 import type { OrderStatus } from '@/lib/schemas/orders';
 import { orderStatusValues } from '@/lib/schemas/orders';
 import { ORDER_STATUS_OPTIONS } from './order-filter-config';
@@ -68,6 +67,7 @@ export interface OrderBulkOperationsDialogProps {
   orders: OrderBulkOperation[];
   onConfirm: (status?: OrderStatus) => Promise<void>;
   isLoading?: boolean;
+  failures?: string[];
 }
 
 /**
@@ -111,12 +111,16 @@ export function OrderBulkOperationsDialog({
   orders,
   onConfirm,
   isLoading = false,
+  failures = [],
 }: OrderBulkOperationsDialogProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
   const [statusError, setStatusError] = useState<string | null>(null);
   const config = operation ? OPERATION_CONFIGS[operation.type] || operation : null;
   const requiresStatus = config?.type === 'status_update';
+  const hasShippedSelection = orders.some((order) =>
+    ['partially_shipped', 'shipped', 'delivered'].includes(order.currentStatus)
+  );
 
   useEffect(() => {
     if (open) {
@@ -134,13 +138,17 @@ export function OrderBulkOperationsDialog({
       setStatusError('Select a status to continue.');
       return;
     }
+    if (requiresStatus && selectedStatus === 'cancelled' && hasShippedSelection) {
+      setStatusError('Selected orders include shipped quantities. Use return/RMA workflow instead of cancellation.');
+      return;
+    }
 
     setIsConfirming(true);
     try {
       await onConfirm(selectedStatus || undefined);
       onOpenChange(false);
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to complete bulk operation');
+    } catch {
+      // Parent handles user-facing errors and keeps dialog open for actionable retry.
     } finally {
       setIsConfirming(false);
     }
@@ -190,6 +198,29 @@ export function OrderBulkOperationsDialog({
             </Alert>
           )}
 
+          {failures.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  <p className="font-medium">
+                    {failures.length} order{failures.length === 1 ? "" : "s"} failed:
+                  </p>
+                  <ul className="list-disc pl-4 text-sm">
+                    {failures.slice(0, 8).map((failure) => (
+                      <li key={failure}>{failure}</li>
+                    ))}
+                  </ul>
+                  {failures.length > 8 && (
+                    <p className="text-xs">
+                      …and {failures.length - 8} more.
+                    </p>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Separator />
 
           {requiresStatus && (
@@ -211,12 +242,21 @@ export function OrderBulkOperationsDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {ORDER_STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      disabled={option.value === 'cancelled' && hasShippedSelection}
+                    >
                       {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {hasShippedSelection && (
+                <p className="text-xs text-muted-foreground">
+                  Cancelled is disabled because some selected orders already include shipped quantities.
+                </p>
+              )}
               {statusError && <p className="text-sm text-destructive">{statusError}</p>}
             </div>
           )}

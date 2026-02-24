@@ -19,7 +19,8 @@
  */
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
-import type { AnyFieldApi } from "./types"
+import { useFormFieldDisplay } from "./form-field-display-context"
+import { extractFieldError, type AnyFieldApi } from "./types"
 
 export interface EmailFieldProps {
   /** TanStack Form field instance */
@@ -47,13 +48,8 @@ export function EmailField({
   className,
   disabled,
 }: EmailFieldProps) {
-  const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-    ? field.state.meta.errors[0]
-    : undefined
-
-  const error = typeof rawError === 'string'
-    ? rawError
-    : rawError?.message
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
 
   return (
     <FormField

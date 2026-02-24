@@ -97,7 +97,7 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
   const kpis = [
     {
       key: 'revenue',
-      label: 'Revenue',
+      label: 'Revenue (Invoiced)',
       value: metrics?.summary?.revenue?.current ?? 0,
       trend: metrics?.summary?.revenue?.change,
       format: formatCurrencyDisplay,
@@ -155,7 +155,7 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
           value={kpi.format(kpi.value)}
           label={kpi.label}
           icon={kpi.icon}
-          trend={kpi.trend !== undefined ? { value: kpi.trend, period: 'vs last period' } : undefined}
+          trend={kpi.trend !== undefined ? { value: kpi.trend, period: 'last period' } : undefined}
           formatValue={(val) => String(val)}
         />
       ))}

@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { StatusBadge, type StatusConfig } from '@/components/shared';
 import type { SemanticColor } from '@/lib/status';
 import type { RmaStatus, RmaReason, RmaResolution } from '@/lib/schemas/support/rma';
+import { REASON_LABELS } from './rma-options';
 
 /**
  * RMA Status Configuration
@@ -57,16 +58,6 @@ interface RmaReasonBadgeProps {
   reason: RmaReason;
   className?: string;
 }
-
-const REASON_LABELS: Record<RmaReason, string> = {
-  defective: 'Defective',
-  damaged_in_shipping: 'Damaged in Shipping',
-  wrong_item: 'Wrong Item',
-  not_as_described: 'Not as Described',
-  performance_issue: 'Performance Issue',
-  installation_failure: 'Installation Failure',
-  other: 'Other',
-};
 
 export function RmaReasonBadge({ reason, className }: RmaReasonBadgeProps) {
   return (

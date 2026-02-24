@@ -32,6 +32,7 @@ import {
 } from "~/components/ui/sheet"
 import { FormActions } from "./form-actions"
 import { FormErrorSummary } from "./form-error-summary"
+import { FormFieldDisplayProvider, type FormWithSubscribe } from "./form-field-display-context"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { cn } from "~/lib/utils"
 
@@ -57,6 +58,7 @@ export interface FormSheetProps {
     }
     handleSubmit: () => void | Promise<void>
     reset: () => void
+    Subscribe?: FormWithSubscribe['Subscribe']
   }
   /** Form content (fields) */
   children: React.ReactNode
@@ -124,7 +126,7 @@ export function FormSheet({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    form.handleSubmit()
+    void form.handleSubmit()
   }
 
   const isHorizontal = side === "left" || side === "right"
@@ -163,7 +165,9 @@ export function FormSheet({
           <ScrollArea className="flex-1 px-4">
             <div className="space-y-4 pb-4">
               <FormErrorSummary submitError={submitError} form={form} />
-              {children}
+              <FormFieldDisplayProvider form={form}>
+                {children}
+              </FormFieldDisplayProvider>
             </div>
           </ScrollArea>
 

@@ -39,6 +39,7 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { CalendarPlus, DollarSign, ArrowRight } from 'lucide-react';
+import { safeNumber } from '@/lib/numeric';
 import {
   calculateNewExpiryDate,
   formatDateAustralian,
@@ -49,6 +50,10 @@ import {
   isWarrantyExtensionTypeValue,
   type WarrantyExtensionTypeValue,
 } from '@/lib/schemas/warranty';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 
 // ============================================================================
 // TYPES
@@ -124,6 +129,9 @@ export function ExtendWarrantyDialog({
   onSubmit,
   isSubmitting,
 }: ExtendWarrantyDialogProps) {
+  const isPending = isSubmitting ?? false;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+
   // Form state
   const [extensionType, setExtensionType] =
     React.useState<WarrantyExtensionTypeValue>('promotional');
@@ -167,7 +175,7 @@ export function ExtendWarrantyDialog({
   );
 
   const isPaidExtension = extensionType === 'paid_extension';
-  const priceValue = price ? parseFloat(price) : null;
+  const priceValue = price ? safeNumber(price) : null;
   const isValid = extensionMonths > 0 && (!isPaidExtension || (priceValue && priceValue > 0));
 
   // Reset form when dialog opens
@@ -207,9 +215,15 @@ export function ExtendWarrantyDialog({
     setExtensionMonths((prev) => Math.max(1, Math.min(120, prev + delta)));
   };
 
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-lg"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarPlus className="size-5" />
@@ -415,12 +429,12 @@ export function ExtendWarrantyDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!isValid || isSubmitting}>
-              {isSubmitting ? (
+            <Button type="submit" disabled={!isValid || isPending}>
+              {isPending ? (
                 <>
                   <Spinner className="mr-2 size-4" />
                   Extending...

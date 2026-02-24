@@ -3,23 +3,15 @@
  *
  * Dialog for editing image metadata (alt text, caption).
  */
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Image, Info, Star, FileImage } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useUpdateProductImage } from "@/hooks/products";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
+  FormDialog,
   TextField,
   TextareaField,
-  FormActions,
 } from "@/components/shared/forms";
 import {
   imageEditFormSchema,
@@ -58,6 +50,7 @@ export function ImageEditor({
   onSaved,
 }: ImageEditorProps) {
   const updateMutation = useUpdateProductImage();
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useTanStackForm<ImageEditFormValues>({
     schema: imageEditFormSchema,
@@ -68,19 +61,20 @@ export function ImageEditor({
     onSubmit: async (values) => {
       if (!image) return;
 
-      updateMutation.mutate(
-        {
+      setSubmitError(null);
+      try {
+        await updateMutation.mutateAsync({
           id: image.id,
           altText: values.altText || undefined,
           caption: values.caption || undefined,
-        },
-        {
-          onSuccess: () => {
-            onSaved?.();
-            onOpenChange(false);
-          },
-        }
-      );
+        });
+        onSaved?.();
+        onOpenChange(false);
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error ? err.message : "Failed to update image"
+        );
+      }
     },
   });
 
@@ -89,6 +83,7 @@ export function ImageEditor({
 
   useEffect(() => {
     if (image && open) {
+      setSubmitError(null);
       form.reset({
         altText: image.altText ?? "",
         caption: image.caption ?? "",
@@ -96,36 +91,42 @@ export function ImageEditor({
     }
   }, [image, open, form]);
 
-  const handleClose = useCallback(() => {
-    if (!updateMutation.isPending) {
-      onOpenChange(false);
-    }
-  }, [updateMutation.isPending, onOpenChange]);
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen) {
+        if (updateMutation.isPending) return;
+        setSubmitError(null);
+        onOpenChange(false);
+      } else {
+        onOpenChange(newOpen);
+      }
+    },
+    [updateMutation.isPending, onOpenChange]
+  );
 
   const isDirty = form.isDirty();
 
   if (!image) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Image className="h-5 w-5" />
-            Edit Image Details
-          </DialogTitle>
-          <DialogDescription>
-            Update the alt text and caption for this image
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-6"
-        >
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Image className="h-5 w-5" />
+          Edit Image Details
+        </span>
+      }
+      description="Update the alt text and caption for this image"
+      form={form}
+      submitLabel="Save Changes"
+      submitError={submitError}
+      submitDisabled={updateMutation.isPending || !isDirty}
+      size="xl"
+      className="max-w-2xl"
+      resetOnClose={false}
+    >
           {/* Image preview */}
           <div className="flex gap-6">
             <div className="relative w-48 h-48 flex-shrink-0 rounded-lg overflow-hidden border">
@@ -208,19 +209,6 @@ export function ImageEditor({
               />
             )}
           </form.Field>
-
-          <DialogFooter>
-            <FormActions
-              form={form}
-              submitLabel="Save Changes"
-              cancelLabel="Cancel"
-              loadingLabel="Saving..."
-              onCancel={handleClose}
-              submitDisabled={updateMutation.isPending || !isDirty}
-            />
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

@@ -11,6 +11,7 @@ import {
   fontSize,
   spacing,
   borderRadius,
+  tabularNums,
   FONT_FAMILY,
   FONT_WEIGHTS,
 } from "./theme";
@@ -47,13 +48,14 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 
-  // Value styles
+  // Value styles - tabular figures for alignment
   value: {
     fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.secondary,
     textAlign: "right",
+    ...tabularNums,
   },
 
   // Discount (green)
@@ -63,6 +65,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.status.success,
     textAlign: "right",
+    ...tabularNums,
   },
 
   // Divider before total
@@ -96,6 +99,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.bold,
     color: colors.text.primary,
     textAlign: "right",
+    ...tabularNums,
   },
 
   // Balance due - Highlighted with border for B&W printing
@@ -122,11 +126,12 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.bold,
     color: colors.text.inverse,
     textAlign: "right",
+    ...tabularNums,
   },
 
   // Paid in full - Green card
   paidCard: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: colors.status.successLight,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginTop: spacing.md,
@@ -136,7 +141,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.semibold,
-    color: "#2E7D32",
+    color: colors.status.success,
   },
 
   // Tax note

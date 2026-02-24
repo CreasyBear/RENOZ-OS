@@ -36,6 +36,7 @@ import {
   NumberField,
   CheckboxField,
   FormActions,
+  FormFieldDisplayProvider,
   DraftRestorePrompt,
   DraftSavingIndicator,
 } from '@/components/shared/forms'
@@ -44,6 +45,8 @@ import {
   customerTypeValues,
   customerSizeValues,
 } from '@/lib/schemas/customers'
+import { phoneSchema } from '@/lib/schemas/_shared/patterns'
+import { toast } from 'sonner'
 
 // ============================================================================
 // TYPES
@@ -53,7 +56,7 @@ const customerFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   legalName: z.string().max(255).optional().or(z.literal('')),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().max(30).optional().or(z.literal('')),
+  phone: phoneSchema,
   website: z.string().url('Invalid URL').optional().or(z.literal('')),
   status: z.enum(['prospect', 'active', 'inactive', 'suspended', 'blacklisted']),
   type: z.enum(['individual', 'business', 'government', 'non_profit']),
@@ -444,6 +447,7 @@ export function CustomerForm({
   defaultValues,
   onSubmit,
   onCancel,
+  isLoading = false,
   mode = 'create',
   customerId,
   availableTags = [],
@@ -474,6 +478,9 @@ export function CustomerForm({
       await onSubmit(values)
       draft.clear() // Clear draft on successful submit
     },
+    onSubmitInvalid: () => {
+      toast.error('Please fix the errors below and try again.')
+    },
   })
 
   // Auto-save draft functionality
@@ -501,6 +508,7 @@ export function CustomerForm({
       }}
       className="space-y-6"
     >
+      <FormFieldDisplayProvider form={form}>
       {/* Draft restore prompt */}
       <DraftRestorePrompt
         hasDraft={draft.hasDraft}
@@ -531,7 +539,9 @@ export function CustomerForm({
         submitLabel={mode === 'create' ? 'Create Customer' : 'Save Changes'}
         onCancel={onCancel}
         align="right"
+        submitDisabled={isLoading}
       />
+      </FormFieldDisplayProvider>
     </form>
   )
 }

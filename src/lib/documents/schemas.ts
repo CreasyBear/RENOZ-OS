@@ -80,6 +80,8 @@ export const documentLineItemSchema = z.object({
   discountPercent: z.number().min(0).max(100).nullable().optional(),
   discountAmount: z.number().min(0).nullable().optional(),
   taxType: z.enum(["gst", "exempt", "included"]).nullable().optional(),
+  /** Per-line-item tax rate as percentage (e.g., 10 for 10%). Overrides order-level tax rate. */
+  taxRate: z.number().min(0).max(100).nullable().optional(),
   taxAmount: z.number().nullable().optional(),
   total: z.number(),
   sku: z.string().nullable().optional(),
@@ -113,7 +115,7 @@ export const documentOrderSchema = z.object({
   shippedDate: z.coerce.date().nullable().optional(),
   deliveredDate: z.coerce.date().nullable().optional(),
   customer: documentCustomerSchema,
-  lineItems: z.array(documentLineItemSchema).min(1),
+  lineItems: z.array(documentLineItemSchema),
   billingAddress: documentAddressSchema.nullable().optional(),
   shippingAddress: documentAddressSchema.nullable().optional(),
   subtotal: z.number(),

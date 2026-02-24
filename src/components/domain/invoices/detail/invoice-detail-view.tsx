@@ -47,6 +47,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { InvoiceStatusBadge } from '../invoice-status-badge';
 import { MobileSidebarSheet } from '@/components/shared/mobile-sidebar-sheet';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
@@ -766,7 +767,7 @@ export const InvoiceDetailView = memo(function InvoiceDetailView({
                         title="Activity Timeline"
                         description="Complete history of invoice changes, payment plans, credit notes, and system events"
                         showFilters={true}
-                        viewAllHref="/activities?entityType=order"
+                        viewAllSearch={getActivitiesFeedSearch('order')}
                         emptyMessage="No activity recorded yet"
                         emptyDescription="Invoice activities will appear here when changes occur."
                       />

@@ -45,7 +45,7 @@ export const orderCreationLineItemSchema = z.object({
   lineNumber: z.string().max(10),
   sku: z.string().max(50).default(''),
   description: z.string().min(1, 'Description is required').max(500),
-  quantity: quantitySchema,
+  quantity: quantitySchema.refine((n) => n > 0, 'Quantity must be greater than 0'),
   unitPrice: currencySchema,
   discountPercent: percentageSchema.optional(),
   discountAmount: currencySchema.optional(),
@@ -65,7 +65,7 @@ export const orderCreationFormSchema = z
     customerId: z.string().uuid().or(z.literal('')),
 
     // Step 2: Products
-    lineItems: z.array(orderCreationLineItemSchema).default([]),
+    lineItems: z.array(orderCreationLineItemSchema).min(1, 'Add at least one product to continue.').default([]),
 
     // Step 3: Pricing
     discountPercent: percentageSchema.default(0),
@@ -83,6 +83,10 @@ export const orderCreationFormSchema = z
 
     /** For draft persistence - excluded from submit payload */
     currentStep: z.number().int().min(0).max(4).default(0),
+  })
+  .refine((data) => !!data.customerId, {
+    message: 'Select a customer to continue.',
+    path: ['customerId'],
   })
   .refine(
     (data) => {

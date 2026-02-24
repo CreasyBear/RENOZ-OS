@@ -68,6 +68,19 @@ export const createTargetSchema = z.object({
 export type CreateTargetInput = z.infer<typeof createTargetSchema>;
 
 // ============================================================================
+// TARGET FORM (for UI - targetValue as string input)
+// ============================================================================
+
+/** Form schema - targetValue stays as string for input, validated as numeric string */
+export const targetFormSchema = createTargetSchema.omit({ targetValue: true }).extend({
+  targetValue: z
+    .string()
+    .refine((v) => v === '' || (!Number.isNaN(parseFloat(v)) && parseFloat(v) >= 0), 'Target value must be positive'),
+});
+
+export type TargetFormValues = z.infer<typeof targetFormSchema>;
+
+// ============================================================================
 // UPDATE TARGET
 // ============================================================================
 

@@ -168,9 +168,8 @@ export function SuppliersListContainer({
   const handleEditSupplier = useCallback(
     (supplierId: string) => {
       navigate({
-        to: "/suppliers/$supplierId",
+        to: "/suppliers/$supplierId/edit",
         params: { supplierId },
-        search: { edit: true },
       });
     },
     [navigate]

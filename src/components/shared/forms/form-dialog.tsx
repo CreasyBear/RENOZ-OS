@@ -31,9 +31,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "~/components/ui/dialog"
 import { FormActions } from "./form-actions"
 import { FormErrorSummary } from "./form-error-summary"
+import { FormFieldDisplayProvider, type FormWithSubscribe } from "./form-field-display-context"
 import { cn } from "~/lib/utils"
 
 // ============================================================================
@@ -46,18 +48,21 @@ export interface FormDialogProps {
   /** Callback when dialog open state changes */
   onOpenChange: (open: boolean) => void
   /** Dialog title */
-  title: string
+  title: React.ReactNode
   /** Optional dialog description */
-  description?: string
+  description?: React.ReactNode
+  /** Optional trigger element (renders DialogTrigger when provided) */
+  trigger?: React.ReactNode
   /** Form instance for submit/cancel button states */
   form: {
     state: {
       isSubmitting: boolean
       canSubmit: boolean
-      errors: string[]
+      errors?: (string | undefined)[]
     }
     handleSubmit: () => void | Promise<void>
     reset: () => void
+    Subscribe?: FormWithSubscribe['Subscribe']
   }
   /** Form content (fields) */
   children: React.ReactNode
@@ -79,6 +84,8 @@ export interface FormDialogProps {
   submitVariant?: "default" | "destructive"
   /** Show the close (X) button */
   showCloseButton?: boolean
+  /** Disable submit button (e.g. when mutation is pending) */
+  submitDisabled?: boolean
 }
 
 // ============================================================================
@@ -98,12 +105,14 @@ export function FormDialog({
   onOpenChange,
   title,
   description,
+  trigger,
   form,
   children,
   submitLabel = "Save",
   cancelLabel = "Cancel",
   loadingLabel = "Saving...",
   submitError,
+  submitDisabled = false,
   size = "lg",
   className,
   resetOnClose = true,
@@ -126,23 +135,24 @@ export function FormDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    form.handleSubmit()
+    void form.handleSubmit()
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
         className={cn(sizeClasses[size], className)}
         showCloseButton={showCloseButton}
         onInteractOutside={(e) => {
-          // Prevent closing when form is submitting
-          if (form.state.isSubmitting) {
+          // Prevent closing when form is submitting or mutation is pending
+          if (form.state.isSubmitting || submitDisabled) {
             e.preventDefault()
           }
         }}
         onEscapeKeyDown={(e) => {
-          // Prevent closing when form is submitting
-          if (form.state.isSubmitting) {
+          // Prevent closing when form is submitting or mutation is pending
+          if (form.state.isSubmitting || submitDisabled) {
             e.preventDefault()
           }
         }}
@@ -157,7 +167,9 @@ export function FormDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <FormErrorSummary submitError={submitError} form={form} />
 
-          {children}
+          <FormFieldDisplayProvider form={form}>
+            {children}
+          </FormFieldDisplayProvider>
 
           <DialogFooter>
             <FormActions
@@ -167,6 +179,7 @@ export function FormDialog({
               loadingLabel={loadingLabel}
               onCancel={handleCancel}
               submitVariant={submitVariant}
+              submitDisabled={submitDisabled}
               align="right"
             />
           </DialogFooter>

@@ -7,19 +7,10 @@
  * @see src/components/domain/inventory/inventory-item-edit-dialog.tsx
  */
 
-import { useState, useCallback, useEffect, useMemo, startTransition } from "react";
-import { Loader2, Package, Save } from "lucide-react";
+import { useState, useEffect, useMemo, startTransition } from "react";
+import { Package } from "lucide-react";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { updateProductSchema } from "@/lib/schemas/products";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
+import { FormDialog } from "@/components/shared/forms";
 import type { ProductWithRelations, ProductStatus, TaxType } from "@/lib/schemas/products";
 import type { UpdateProduct } from "@/lib/schemas/products";
 
@@ -96,6 +89,9 @@ export function ProductEditDialog({
       const firstError = errors.issues[0];
       setSubmitError(firstError?.message ?? "Validation failed");
     },
+    onSubmitInvalid: () => {
+      toast.error("Please fix the errors below and try again.");
+    },
   });
 
   // Reset form to latest product data each time dialog opens
@@ -106,37 +102,36 @@ export function ProductEditDialog({
     }
   }, [open, defaults, form]);
 
-  const handleClose = useCallback(() => {
-    if (!isLoading) {
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && isLoading) return;
+    if (!newOpen) {
       setSubmitError(null);
       onClose();
     }
-  }, [isLoading, onClose]);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Package className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <DialogTitle>Edit Product</DialogTitle>
-              <DialogDescription>
-                Update details for {product.name}
-              </DialogDescription>
-            </div>
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Package className="h-5 w-5 text-primary" />
           </div>
-        </DialogHeader>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            form.handleSubmit();
-          }}
-          className="space-y-6 py-4"
-        >
+          Edit Product
+        </span>
+      }
+      description={`Update details for ${product.name}`}
+      form={form}
+      submitLabel="Save Changes"
+      loadingLabel="Saving..."
+      submitError={submitError}
+      submitDisabled={isLoading}
+      size="lg"
+      className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto"
+      resetOnClose={false}
+    >
           {/* Basic Information */}
           <div className="space-y-4">
             <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -483,38 +478,6 @@ export function ProductEditDialog({
             </div>
           </div>
 
-          {/* Error Message */}
-          {submitError && (
-            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-              {submitError}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

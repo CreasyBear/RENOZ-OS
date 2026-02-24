@@ -27,7 +27,7 @@ import {
   MessageSquarePlus,
   ShoppingCart,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -52,6 +52,7 @@ import { useCustomerDetail } from '@/hooks/customers';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { useTrackView } from '@/hooks/search';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
+import { cn } from '@/lib/utils';
 import type { CustomerDetailData } from '@/lib/schemas/customers';
 import { CustomerDetailView } from '../views/customer-detail-view';
 
@@ -120,12 +121,13 @@ function HeaderActions({ customer, actions, onDeleteClick }: HeaderActionsProps)
         New Quote
       </Button>
       {customer.phone && (
-        <Button variant="outline" asChild>
-          <a href={`tel:${customer.phone}`}>
-            <Phone className="h-4 w-4 mr-2" />
-            Call
-          </a>
-        </Button>
+        <a
+          href={`tel:${customer.phone}`}
+          className={cn(buttonVariants({ variant: 'outline' }))}
+        >
+          <Phone className="h-4 w-4 mr-2" />
+          Call
+        </a>
       )}
 
       {/* Edit */}
@@ -155,8 +157,11 @@ function HeaderActions({ customer, actions, onDeleteClick }: HeaderActionsProps)
           {customer.email && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a href={`mailto:${customer.email}`}>
+              <DropdownMenuItem className="p-0">
+                <a
+                  href={`mailto:${customer.email}`}
+                  className="flex w-full items-center px-2 py-1.5"
+                >
                   <Mail className="h-4 w-4 mr-2" />
                   Send Email
                 </a>
@@ -313,14 +318,16 @@ export function CustomerDetailContainer({
             <AlertDialogTitle>Delete Customer</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete {customer.name}? This action
-              cannot be undone. All related contacts, addresses, and activities
-              will also be deleted.
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={detail.isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={detail.actions.onDelete}
+              onClick={(event) => {
+                event.preventDefault();
+                void detail.actions.onDelete();
+              }}
               disabled={detail.isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

@@ -8,6 +8,7 @@ export {
   getEntityLink,
   getEntityLinkWithTab,
   getCreateEntityLinkWithContext,
+  getActivitiesFeedSearch,
 } from './activity-navigation';
 
 export {

@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Reliability Lint
+        run: bun run lint:reliability
+
       - name: TypeScript check
         run: bun run typecheck
 

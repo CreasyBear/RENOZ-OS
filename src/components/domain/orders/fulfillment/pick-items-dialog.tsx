@@ -7,6 +7,7 @@
  * @source orderData from useOrderWithCustomer hook
  * @source availableSerials from useAvailableSerials hook
  * @source pickMutation from usePickOrderItems hook
+ * @source unpickMutation from useUnpickOrderItems hook
  */
 
 import { memo, useState, useEffect, useRef, startTransition } from 'react';
@@ -19,6 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -30,12 +35,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { toastSuccess, toastError } from '@/hooks';
 import { useOrderWithCustomer } from '@/hooks/orders/use-order-detail';
-import { usePickOrderItems } from '@/hooks/orders/use-picking';
+import { usePickOrderItems, useUnpickOrderItems } from '@/hooks/orders/use-picking';
 import { useAvailableSerials, useLocations } from '@/hooks/inventory';
 import { SerialPicker } from './serial-picker';
+import {
+  normalizeOrderLineItemsToPickLines,
+  type PickLineState,
+  type PickSerialSelectorProps,
+} from '@/lib/schemas/orders/picking';
 
 // ============================================================================
 // TYPES
@@ -50,29 +61,6 @@ export interface PickItemsDialogProps {
   onShipOrder?: () => void;
 }
 
-interface OrderLineItem {
-  id: string;
-  productId: string | null;
-  product: { name: string; sku: string | null; isSerialized?: boolean | null } | null;
-  description: string;
-  sku: string | null;
-  quantity: number;
-  qtyPicked: number | null;
-}
-
-interface PickLineState {
-  lineItemId: string;
-  productId: string | null;
-  productName: string;
-  sku: string | null;
-  isSerialized: boolean;
-  ordered: number;
-  alreadyPicked: number;
-  remaining: number;
-  pickQty: number;
-  selectedSerials: string[];
-}
-
 // ============================================================================
 // PICK SERIAL SELECTOR (uses SerialPicker + useAvailableSerials)
 // ============================================================================
@@ -84,14 +72,7 @@ const PickSerialSelector = memo(function PickSerialSelector({
   onChange,
   maxSelections,
   disabled,
-}: {
-  productId: string;
-  locationId?: string;
-  selectedSerials: string[];
-  onChange: (serials: string[]) => void;
-  maxSelections: number;
-  disabled?: boolean;
-}) {
+}: PickSerialSelectorProps) {
   // Inline variant: always fetch when rendered (parent only renders when pickQty > 0)
   const { data, isLoading } = useAvailableSerials({
     productId,
@@ -151,6 +132,7 @@ export const PickItemsDialog = memo(function PickItemsDialog({
   });
 
   const pickMutation = usePickOrderItems();
+  const unpickMutation = useUnpickOrderItems();
 
   // Reset hasInitialized when dialog closes
   useEffect(() => {
@@ -164,28 +146,7 @@ export const PickItemsDialog = memo(function PickItemsDialog({
     if (!open || hasInitialized.current || !orderData?.lineItems) return;
     hasInitialized.current = true;
     startTransition(() =>
-      setPickLines(
-        (orderData.lineItems as OrderLineItem[]).map((item) => {
-          const ordered = Number(item.quantity);
-          const alreadyPicked = Number(item.qtyPicked) || 0;
-          const remaining = ordered - alreadyPicked;
-          const isSerialized = item.product?.isSerialized ?? false;
-          const productId = item.productId;
-          const canPick = remaining > 0 && (!isSerialized || productId != null);
-          return {
-            lineItemId: item.id,
-            productId,
-            productName: item.product?.name ?? item.description,
-            sku: item.sku,
-            isSerialized,
-            ordered,
-            alreadyPicked,
-            remaining,
-            pickQty: canPick ? remaining : 0,
-            selectedSerials: [],
-          };
-        })
-      )
+      setPickLines(normalizeOrderLineItemsToPickLines(orderData.lineItems))
     );
   }, [open, orderData]);
 
@@ -209,11 +170,37 @@ export const PickItemsDialog = memo(function PickItemsDialog({
     );
   };
 
+  const handleUnpickQtyChange = (lineItemId: string, value: string) => {
+    const num = parseInt(value, 10);
+    setPickLines((prev) =>
+      prev.map((line) => {
+        if (line.lineItemId !== lineItemId) return line;
+        const qty = isNaN(num) ? 0 : Math.max(0, Math.min(line.maxUnpickable, num));
+        const trimmed =
+          line.selectedSerialsToRelease.length > qty
+            ? line.selectedSerialsToRelease.slice(0, qty)
+            : line.selectedSerialsToRelease;
+        return { ...line, unpickQty: qty, selectedSerialsToRelease: trimmed };
+      })
+    );
+  };
+
+  const handleSerialsToReleaseChange = (lineItemId: string, serials: string[]) => {
+    setPickLines((prev) =>
+      prev.map((line) =>
+        line.lineItemId === lineItemId
+          ? { ...line, selectedSerialsToRelease: serials, unpickQty: serials.length }
+          : line
+      )
+    );
+  };
+
   const validateSubmission = (): string | null => {
     const itemsToPick = pickLines.filter((line) => line.pickQty > 0);
+    const itemsToUnpick = pickLines.filter((line) => line.unpickQty > 0);
 
-    if (itemsToPick.length === 0) {
-      return 'Please enter a quantity for at least one item';
+    if (itemsToPick.length === 0 && itemsToUnpick.length === 0) {
+      return 'Please enter a quantity to pick or unpick for at least one item';
     }
 
     for (const line of itemsToPick) {
@@ -230,6 +217,17 @@ export const PickItemsDialog = memo(function PickItemsDialog({
       }
     }
 
+    for (const line of itemsToUnpick) {
+      if (line.isSerialized) {
+        if (line.selectedSerialsToRelease.length === 0) {
+          return `Select serial numbers to release for "${line.productName}"`;
+        }
+        if (line.selectedSerialsToRelease.length !== line.unpickQty) {
+          return `Select exactly ${line.unpickQty} serial number${line.unpickQty !== 1 ? 's' : ''} to unpick for "${line.productName}"`;
+        }
+      }
+    }
+
     return null;
   };
 
@@ -241,58 +239,89 @@ export const PickItemsDialog = memo(function PickItemsDialog({
     }
 
     const itemsToPick = pickLines.filter((line) => line.pickQty > 0);
+    const itemsToUnpick = pickLines.filter((line) => line.unpickQty > 0);
 
     try {
-      const result = await pickMutation.mutateAsync({
-        orderId,
-        items: itemsToPick.map((line) => ({
-          lineItemId: line.lineItemId,
-          qtyPicked: line.pickQty,
-          serialNumbers: line.selectedSerials.length > 0 ? line.selectedSerials : undefined,
-        })),
-      });
-
-      onOpenChange(false);
-      onSuccess?.();
-
-      if (result.orderStatus === 'picked') {
-        if (onShipOrder) {
-          onShipOrder();
-          toastSuccess('All items picked. Ready to ship.', {
-            description: 'Ship Order dialog opened. Create a shipment with carrier and tracking.',
-            action: {
-              label: 'Ship Order',
-              onClick: () => onShipOrder(),
-            },
-          });
-        } else {
-          toastSuccess('All items picked. Ready to ship.', {
-            description: 'Proceed to create a shipment.',
-            action: {
-              label: 'Go to Fulfillment',
-              onClick: () => onSuccess?.(),
-            },
-          });
-        }
-      } else {
-        toastSuccess('Items picked successfully.', {
-          description: 'Remaining items refreshed. Reopen to pick more.',
+      if (itemsToUnpick.length > 0) {
+        await unpickMutation.mutateAsync({
+          orderId,
+          items: itemsToUnpick.map((line) => ({
+            lineItemId: line.lineItemId,
+            qtyToUnpick: line.unpickQty,
+            serialNumbersToRelease:
+              line.selectedSerialsToRelease.length > 0 ? line.selectedSerialsToRelease : undefined,
+          })),
         });
+        toastSuccess('Items unpicked successfully.');
         hasInitialized.current = false;
+        onSuccess?.();
+      }
+
+      if (itemsToPick.length > 0) {
+        const result = await pickMutation.mutateAsync({
+          orderId,
+          items: itemsToPick.map((line) => ({
+            lineItemId: line.lineItemId,
+            qtyPicked: line.pickQty,
+            serialNumbers: line.selectedSerials.length > 0 ? line.selectedSerials : undefined,
+          })),
+        });
+
+        onOpenChange(false);
+        onSuccess?.();
+
+        if (result.orderStatus === 'picked') {
+          if (onShipOrder) {
+            onShipOrder();
+            toastSuccess('All items picked. Ready to ship.', {
+              description: 'Ship Order dialog opened. Create a shipment with carrier and tracking.',
+              action: {
+                label: 'Ship Order',
+                onClick: () => onShipOrder(),
+              },
+            });
+          } else {
+            toastSuccess('All items picked. Ready to ship.', {
+              description: 'Proceed to create a shipment.',
+              action: {
+                label: 'Go to Fulfillment',
+                onClick: () => onSuccess?.(),
+              },
+            });
+          }
+        } else {
+          toastSuccess('Items picked successfully.', {
+            description: 'Remaining items refreshed. Reopen to pick more.',
+          });
+          hasInitialized.current = false;
+        }
+      } else if (itemsToUnpick.length > 0) {
+        onOpenChange(false);
       }
     } catch (error) {
       toastError(
-        error instanceof Error ? error.message : 'Failed to pick items'
+        error instanceof Error ? error.message : 'Failed to pick or unpick items'
       );
     }
   };
 
   const totalToPick = pickLines.reduce((sum, line) => sum + line.pickQty, 0);
+  const totalToUnpick = pickLines.reduce((sum, line) => sum + line.unpickQty, 0);
   const hasPickableItems = pickLines.some((line) => line.remaining > 0);
+  const hasUnpickableItems = pickLines.some((line) => line.maxUnpickable > 0);
+  const hasActionableItems = hasPickableItems || hasUnpickableItems;
+
+  const isPending = pickMutation.isPending || unpickMutation.isPending;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl sm:max-w-7xl max-h-[90vh] min-h-[70vh] flex flex-col">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-w-7xl sm:max-w-7xl max-h-[90vh] min-h-[70vh] flex flex-col"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PackageCheck className="h-5 w-5" />
@@ -310,10 +339,10 @@ export const PickItemsDialog = memo(function PickItemsDialog({
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : !hasPickableItems ? (
+        ) : !hasActionableItems ? (
           <div className="py-8 text-center space-y-4">
             <p className="text-muted-foreground">
-              All items have been fully picked.
+              All items have been fully picked. Nothing to pick or unpick.
             </p>
             <Button onClick={() => onOpenChange(false)}>Close</Button>
           </div>
@@ -339,16 +368,17 @@ export const PickItemsDialog = memo(function PickItemsDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All locations</SelectItem>
-                  {!locationsLoading && locations.length === 0 && (
-                    <SelectItem value="_empty" disabled>
-                      No locations
-                    </SelectItem>
+                  {!locationsLoading && locations.length === 0 ? (
+                    <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                      No locations found
+                    </div>
+                  ) : (
+                    locations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))
                   )}
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
               {locationFilterId && (
@@ -367,7 +397,11 @@ export const PickItemsDialog = memo(function PickItemsDialog({
               {pickLines.map((line) => (
                 <Card
                   key={line.lineItemId}
-                  className={cn(line.remaining === 0 && 'opacity-50')}
+                  className={cn(
+                    line.remaining === 0 &&
+                      line.maxUnpickable === 0 &&
+                      'opacity-50'
+                  )}
                 >
                   <CardContent className="pt-4 pb-4">
                     <div className="space-y-4">
@@ -465,16 +499,90 @@ export const PickItemsDialog = memo(function PickItemsDialog({
                           No serials required
                         </p>
                       )}
+
+                      {/* Unpick section */}
+                      {line.maxUnpickable > 0 && (
+                        <div className="border-t pt-4 mt-4">
+                          <p className="text-sm font-medium mb-2">
+                            Unpick
+                            {line.remaining === 0 && (
+                              <span className="text-muted-foreground font-normal ml-2">
+                                — Select serials to release below
+                              </span>
+                            )}
+                          </p>
+                          <div className="flex flex-col gap-4">
+                            {line.isSerialized && line.allocatedSerials.length > 0 ? (
+                              <div className="flex flex-col gap-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Select serials to release:
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {line.allocatedSerials.map((sn) => (
+                                    <label
+                                      key={sn}
+                                      className="flex items-center gap-2 text-sm cursor-pointer"
+                                    >
+                                      <Checkbox
+                                        checked={line.selectedSerialsToRelease.includes(sn)}
+                                        onCheckedChange={(checked) => {
+                                          const next = checked
+                                            ? [...line.selectedSerialsToRelease, sn]
+                                            : line.selectedSerialsToRelease.filter((s) => s !== sn);
+                                          if (next.length <= line.maxUnpickable) {
+                                            handleSerialsToReleaseChange(line.lineItemId, next);
+                                          }
+                                        }}
+                                        disabled={
+                                          !line.selectedSerialsToRelease.includes(sn) &&
+                                          line.selectedSerialsToRelease.length >= line.maxUnpickable
+                                        }
+                                      />
+                                      <span className="font-mono text-xs">{sn}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground text-sm">
+                                  Qty to unpick:
+                                </span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={line.maxUnpickable}
+                                  value={line.unpickQty}
+                                  onChange={(e) =>
+                                    handleUnpickQtyChange(line.lineItemId, e.target.value)
+                                  }
+                                  className="w-16 text-center h-8"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            {totalToPick > 0 && (
+            {(totalToPick > 0 || totalToUnpick > 0) && (
               <div className="flex items-center justify-between shrink-0">
                 <p className="text-sm text-muted-foreground">
-                  {totalToPick} unit{totalToPick !== 1 ? 's' : ''} to pick
+                  {totalToPick > 0 && (
+                    <span>
+                      {totalToPick} unit{totalToPick !== 1 ? 's' : ''} to pick
+                    </span>
+                  )}
+                  {totalToPick > 0 && totalToUnpick > 0 && ' · '}
+                  {totalToUnpick > 0 && (
+                    <span>
+                      {totalToUnpick} unit{totalToUnpick !== 1 ? 's' : ''} to unpick
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Serialized items require serial number selection
@@ -488,23 +596,27 @@ export const PickItemsDialog = memo(function PickItemsDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={pickMutation.isPending}
+            disabled={isPending}
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={pickMutation.isPending || totalToPick === 0}
+            disabled={isPending || (totalToPick === 0 && totalToUnpick === 0)}
           >
-            {pickMutation.isPending ? (
+            {isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Picking...
+                Processing...
               </>
             ) : (
               <>
                 <Check className="h-4 w-4 mr-2" />
-                Pick {totalToPick} Item{totalToPick !== 1 ? 's' : ''}
+                {totalToPick > 0 && totalToUnpick > 0
+                  ? `Pick ${totalToPick} / Unpick ${totalToUnpick}`
+                  : totalToUnpick > 0
+                    ? `Unpick ${totalToUnpick} Item${totalToUnpick !== 1 ? 's' : ''}`
+                    : `Pick ${totalToPick} Item${totalToPick !== 1 ? 's' : ''}`}
               </>
             )}
           </Button>

@@ -39,6 +39,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
@@ -154,9 +158,15 @@ function ApplyToInvoiceDialog({
     onOpenChange(newOpen);
   }, [onOpenChange]);
 
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleClose);
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Apply Credit Note to Invoice</DialogTitle>
         </DialogHeader>

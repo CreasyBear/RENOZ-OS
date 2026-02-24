@@ -11,6 +11,7 @@ import {
   fontSize,
   spacing,
   lineHeight,
+  tabularNums,
   FONT_FAMILY,
   FONT_WEIGHTS,
 } from "./theme";
@@ -26,12 +27,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
   },
 
-  // Table Header - Clean, minimal
+  // Table Header - Hairline border, design system
   headerRow: {
     flexDirection: "row",
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
   },
   headerCell: {
     fontSize: fontSize.xs,
@@ -39,7 +42,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.muted,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.02,
   },
 
   // Table Body Rows - Clean with subtle divider
@@ -97,13 +100,14 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.normal,
   },
 
-  // Number cells
+  // Number cells - tabular figures for aligned columns
   quantity: {
     fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     textAlign: "center",
+    ...tabularNums,
   },
   price: {
     fontSize: fontSize.base,
@@ -111,6 +115,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
     textAlign: "right",
+    ...tabularNums,
   },
   total: {
     fontSize: fontSize.base,
@@ -118,6 +123,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
     textAlign: "right",
+    ...tabularNums,
   },
 
   // Empty state

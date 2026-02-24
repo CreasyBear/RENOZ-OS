@@ -1,8 +1,8 @@
 /**
  * Order Creation Components
  *
- * OrderCreationWizard is exported from order-creation-wizard.tsx (main file with onSubmit,
- * initialCustomerId, draft). The order-creation-wizard/ folder contains step components
+ * OrderCreationWizard is exported from order-creation-wizard.tsx (main file with onSubmit
+ * and initialCustomerId). The order-creation-wizard/ folder contains step components
  * used by the folder's alternate wizard - we use the main file explicitly to avoid
  * resolution ambiguity when both file and folder exist.
  */

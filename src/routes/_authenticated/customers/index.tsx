@@ -24,6 +24,7 @@ export const searchParamsSchema = z.object({
   healthScoreMin: z.coerce.number().int().min(0).max(100).optional(),
   healthScoreMax: z.coerce.number().int().min(0).max(100).optional(),
   tag: z.string().uuid().optional(), // Single tag ID for filtering
+  tags: z.string().optional(), // Comma-separated tag IDs for multi-tag filtering
   sortBy: z.string().optional().default('name'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
 });

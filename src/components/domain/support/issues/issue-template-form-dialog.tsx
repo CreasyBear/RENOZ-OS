@@ -31,6 +31,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import type {
   IssueTemplateResponse,
   IssueType,
@@ -155,10 +159,16 @@ export function IssueTemplateFormDialog({
   };
 
   const isLoading = isSubmitting ?? false;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isLoading);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isLoading, onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[550px]">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto sm:max-w-[550px]"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />

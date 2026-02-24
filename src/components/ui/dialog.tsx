@@ -11,9 +11,30 @@ function Dialog({
 }
 
 function DialogTrigger({
+  children,
+  asChild,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
+  const childCount = React.Children.count(children)
+  if (childCount === 0) {
+    return null
+  }
+
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const shouldFallback = !!asChild && !isSingleElement
+
+  return (
+    <DialogPrimitive.Trigger
+      data-slot="dialog-trigger"
+      asChild={shouldFallback ? false : asChild}
+      {...props}
+    >
+      {children}
+    </DialogPrimitive.Trigger>
+  )
 }
 
 function DialogPortal({

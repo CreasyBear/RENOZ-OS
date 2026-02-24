@@ -727,7 +727,10 @@ export const getApprovalIdsForPurchaseOrders = createServerFn({ method: 'POST' }
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     const approvals = await db
-      .select({ id: purchaseOrderApprovals.id })
+      .select({
+        id: purchaseOrderApprovals.id,
+        purchaseOrderId: purchaseOrderApprovals.purchaseOrderId,
+      })
       .from(purchaseOrderApprovals)
       .where(
         and(
@@ -741,7 +744,10 @@ export const getApprovalIdsForPurchaseOrders = createServerFn({ method: 'POST' }
         )
       );
 
-    return { approvalIds: approvals.map((a) => a.id) };
+    return {
+      approvalIds: approvals.map((a) => a.id),
+      approvals,
+    };
   });
 
 /**

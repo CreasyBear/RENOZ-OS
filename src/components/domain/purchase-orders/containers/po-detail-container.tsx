@@ -11,7 +11,7 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { isPast, isBefore, addDays } from 'date-fns';
 import {
   Edit,
@@ -26,6 +26,11 @@ import {
   PanelRight,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { DatePickerControl } from '@/components/shared';
+import { Textarea } from '@/components/ui/textarea';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +41,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { EntityHeaderActions } from '@/components/shared';
@@ -50,6 +66,7 @@ import {
   useRejectPurchaseOrder,
   useMarkAsOrdered,
   useCancelPurchaseOrder,
+  useUpdatePurchaseOrder,
 } from '@/hooks/suppliers';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useTrackView } from '@/hooks/search';
@@ -81,10 +98,22 @@ export interface PODetailContainerRenderProps {
 export interface PODetailContainerProps {
   /** Purchase Order ID to display */
   poId: string;
+  /** Optional controlled tab state (URL-driven routes) */
+  activeTab?: string;
+  /** Optional controlled tab change handler */
+  onTabChange?: (tab: string) => void;
   /** Callback when user navigates back */
   onBack?: () => void;
   /** Callback when user clicks edit */
   onEdit?: () => void;
+  /** When true, open edit UI automatically once data is ready */
+  openEditOnMount?: boolean;
+  /** Called when route-driven edit mode should close */
+  onEditModeClose?: () => void;
+  /** When true, open receive dialog automatically once data is ready */
+  openReceiveOnMount?: boolean;
+  /** Called when route-driven receive mode should close */
+  onReceiveModeClose?: () => void;
   /** Render props pattern for layout composition */
   children?: (props: PODetailContainerRenderProps) => React.ReactNode;
   /** Additional CSS classes */
@@ -113,19 +142,48 @@ function PODetailSkeleton() {
 
 export function PODetailContainer({
   poId,
+  activeTab: controlledActiveTab,
+  onTabChange: controlledOnTabChange,
   onBack,
   onEdit,
+  openEditOnMount = false,
+  onEditModeClose,
+  openReceiveOnMount = false,
+  onReceiveModeClose,
   children,
   className,
 }: PODetailContainerProps) {
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
-  const [activeTab, setActiveTab] = useState('overview');
+  const [internalActiveTab, setInternalActiveTab] = useState('overview');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    requiredDate: '',
+    expectedDeliveryDate: '',
+    paymentTerms: '',
+    notes: '',
+    internalNotes: '',
+    internalReference: '',
+  });
   const [showMetaPanel, setShowMetaPanel] = useState(true);
+  const editModeResolvedRef = useRef(false);
+  const receiveModeResolvedRef = useRef(false);
+  const activeTab = controlledActiveTab ?? internalActiveTab;
+
+  const handleTabChange = useCallback(
+    (tab: string) => {
+      if (controlledOnTabChange) {
+        controlledOnTabChange(tab);
+        return;
+      }
+      setInternalActiveTab(tab);
+    },
+    [controlledOnTabChange]
+  );
 
   // ---------------------------------------------------------------------------
   // Panel Toggle Handler
@@ -135,8 +193,8 @@ export function PODetailContainer({
   }, []);
 
   const handleViewReceipts = useCallback(() => {
-    setActiveTab('receipts');
-  }, []);
+    handleTabChange('receipts');
+  }, [handleTabChange]);
 
   // ---------------------------------------------------------------------------
   // Data Fetching
@@ -174,6 +232,7 @@ export function PODetailContainer({
   const rejectMutation = useRejectPurchaseOrder();
   const orderMutation = useMarkAsOrdered();
   const cancelMutation = useCancelPurchaseOrder();
+  const updateMutation = useUpdatePurchaseOrder();
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -225,6 +284,7 @@ export function PODetailContainer({
   }, [orderMutation, poId]);
 
   const handleCancel = useCallback(async () => {
+    if (cancelMutation.isPending) return;
     try {
       await cancelMutation.mutateAsync({ id: poId, reason: 'Cancelled by user' });
       toastSuccess('Purchase order cancelled');
@@ -236,6 +296,7 @@ export function PODetailContainer({
   }, [cancelMutation, poId, onBack]);
 
   const handleDelete = useCallback(async () => {
+    if (deleteMutation.isPending) return;
     try {
       await deleteMutation.mutateAsync({ id: poId });
       toastSuccess('Purchase order deleted');
@@ -245,6 +306,41 @@ export function PODetailContainer({
       toastError('Failed to delete purchase order');
     }
   }, [deleteMutation, poId, onBack]);
+
+  const handleOpenEditDialog = useCallback(() => {
+    if (!po) return;
+    setEditForm({
+      requiredDate: toInputDate(po.requiredDate),
+      expectedDeliveryDate: toInputDate(po.expectedDeliveryDate),
+      paymentTerms: po.paymentTerms ?? '',
+      notes: po.notes ?? '',
+      internalNotes: po.internalNotes ?? '',
+      internalReference: po.internalReference ?? '',
+    });
+    setEditDialogOpen(true);
+  }, [po]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!po) return;
+    try {
+      await updateMutation.mutateAsync({
+        id: po.id,
+        requiredDate: emptyToUndefined(editForm.requiredDate),
+        expectedDeliveryDate: emptyToUndefined(editForm.expectedDeliveryDate),
+        paymentTerms: emptyToUndefined(editForm.paymentTerms),
+        notes: emptyToUndefined(editForm.notes),
+        internalNotes: emptyToUndefined(editForm.internalNotes),
+        internalReference: emptyToUndefined(editForm.internalReference),
+      });
+      toastSuccess('Purchase order updated');
+      setEditDialogOpen(false);
+      if (openEditOnMount) {
+        onEditModeClose?.();
+      }
+    } catch {
+      toastError('Failed to update purchase order');
+    }
+  }, [po, editForm, updateMutation, openEditOnMount, onEditModeClose]);
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -264,6 +360,73 @@ export function PODetailContainer({
     const parsed = purchaseOrderStatusEnum.safeParse(po.status);
     return parsed.success && canDeletePO(parsed.data);
   }, [po]);
+
+  useEffect(() => {
+    if (!openEditOnMount || !po || editModeResolvedRef.current) return;
+
+    editModeResolvedRef.current = true;
+    if (!canEdit) {
+      toastError('Only draft purchase orders can be edited');
+      onEditModeClose?.();
+      return;
+    }
+
+    const id = setTimeout(() => {
+      handleOpenEditDialog();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [openEditOnMount, po, canEdit, handleOpenEditDialog, onEditModeClose]);
+
+  useEffect(() => {
+    if (!openReceiveOnMount || !po || receiveModeResolvedRef.current) return;
+
+    receiveModeResolvedRef.current = true;
+    const isReceivable = po.status === 'ordered' || po.status === 'partial_received';
+    if (!isReceivable) {
+      toastError('This purchase order cannot receive goods in its current status');
+      onReceiveModeClose?.();
+      return;
+    }
+
+    const id = setTimeout(() => {
+      setReceiveDialogOpen(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [openReceiveOnMount, po, onReceiveModeClose]);
+
+  useEffect(() => {
+    if (!openReceiveOnMount) {
+      receiveModeResolvedRef.current = false;
+    }
+  }, [openReceiveOnMount]);
+
+  const handleEditDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && updateMutation.isPending) return;
+    setEditDialogOpen(open);
+    if (!open && openEditOnMount) {
+      onEditModeClose?.();
+    }
+  }, [openEditOnMount, onEditModeClose, updateMutation.isPending]);
+
+  const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && deleteMutation.isPending) return;
+    setDeleteDialogOpen(open);
+  }, [deleteMutation.isPending]);
+
+  const handleReceiveDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setReceiveDialogOpen(open);
+      if (!open && openReceiveOnMount) {
+        onReceiveModeClose?.();
+      }
+    },
+    [openReceiveOnMount, onReceiveModeClose]
+  );
+
+  const handleCancelDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && cancelMutation.isPending) return;
+    setCancelDialogOpen(open);
+  }, [cancelMutation.isPending]);
 
   const canReceive = useMemo(() => {
     if (!po) return false;
@@ -427,6 +590,7 @@ export function PODetailContainer({
   // Render: Header Config (for EntityHeader in view)
   // ---------------------------------------------------------------------------
   const isPending = submitMutation.isPending || approveMutation.isPending || orderMutation.isPending;
+  const editAction = canEdit ? (onEdit ?? handleOpenEditDialog) : undefined;
 
   const headerConfig: PODetailHeaderConfig = {
     primaryAction:
@@ -484,11 +648,11 @@ export function PODetailContainer({
         onClick: handleToggleMetaPanel,
         icon: <PanelRight className="h-4 w-4 mr-2" />,
       },
-      ...(canEdit && onEdit
+      ...(editAction
         ? [
             {
               label: 'Edit Order',
-              onClick: onEdit,
+              onClick: editAction,
               icon: <Edit className="h-4 w-4 mr-2" />,
             },
           ]
@@ -514,7 +678,7 @@ export function PODetailContainer({
           ]
         : []),
     ],
-    onEdit: canEdit && onEdit ? onEdit : undefined,
+    onEdit: editAction,
     onDelete: canDelete ? () => setDeleteDialogOpen(true) : undefined,
   };
 
@@ -544,7 +708,7 @@ export function PODetailContainer({
         onDismissAlert={handleDismissAlert}
         po={transformedPO}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         showMetaPanel={showMetaPanel}
         onToggleMetaPanel={handleToggleMetaPanel}
         headerConfig={headerConfigForView}
@@ -557,8 +721,94 @@ export function PODetailContainer({
 
       <EntityActivityLogger {...loggerProps} />
 
+      <Dialog open={editDialogOpen} onOpenChange={createPendingDialogOpenChangeHandler(updateMutation.isPending, handleEditDialogOpenChange)}>
+        <DialogContent
+          className="max-w-2xl"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(updateMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(updateMutation.isPending).onInteractOutside}
+        >
+          <DialogHeader>
+            <DialogTitle>Edit Purchase Order</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DatePickerControl
+                label="Required Date"
+                value={editForm.requiredDate}
+                onChange={(value) =>
+                  setEditForm((prev) => ({ ...prev, requiredDate: value }))
+                }
+              />
+              <DatePickerControl
+                label="Expected Delivery Date"
+                value={editForm.expectedDeliveryDate}
+                onChange={(value) =>
+                  setEditForm((prev) => ({ ...prev, expectedDeliveryDate: value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="po-payment-terms">Payment Terms</Label>
+              <Input
+                id="po-payment-terms"
+                value={editForm.paymentTerms}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, paymentTerms: e.target.value }))
+                }
+                placeholder="e.g. Net 30"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="po-reference">Internal Reference</Label>
+              <Input
+                id="po-reference"
+                value={editForm.internalReference}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, internalReference: e.target.value }))
+                }
+                placeholder="Optional internal reference"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="po-notes">Supplier Notes</Label>
+              <Textarea
+                id="po-notes"
+                value={editForm.notes}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="po-internal-notes">Internal Notes</Label>
+              <Textarea
+                id="po-internal-notes"
+                value={editForm.internalNotes}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, internalNotes: e.target.value }))
+                }
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => handleEditDialogOpenChange(false)}
+              disabled={updateMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Purchase Order</AlertDialogTitle>
@@ -568,7 +818,7 @@ export function PODetailContainer({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
@@ -581,7 +831,7 @@ export function PODetailContainer({
       </AlertDialog>
 
       {/* Cancel Confirmation Dialog */}
-      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+      <AlertDialog open={cancelDialogOpen} onOpenChange={handleCancelDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel Purchase Order</AlertDialogTitle>
@@ -591,7 +841,7 @@ export function PODetailContainer({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep Order</AlertDialogCancel>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>Keep Order</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCancel}
               disabled={cancelMutation.isPending}
@@ -607,11 +857,16 @@ export function PODetailContainer({
       {canReceive && (
         <GoodsReceiptDialog
           open={receiveDialogOpen}
-          onOpenChange={setReceiveDialogOpen}
+          onOpenChange={handleReceiveDialogOpenChange}
           poId={po.id}
           poNumber={po.poNumber}
           items={transformedPO.items}
-          onReceiptComplete={() => setActiveTab('receipts')}
+          onReceiptComplete={() => {
+            handleTabChange('receipts');
+            if (openReceiveOnMount) {
+              onReceiveModeClose?.();
+            }
+          }}
         />
       )}
     </>
@@ -625,6 +880,17 @@ export function PODetailContainer({
   }
 
   return <div className={className}>{content}</div>;
+}
+
+function toInputDate(value: string | Date | null | undefined): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+
+function emptyToUndefined(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export default PODetailContainer;

@@ -13,7 +13,7 @@
  * @see STANDARDS.md - Hook patterns
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useIssue, useUpdateIssue, useDeleteIssue, useEscalateIssue, useIssues } from './use-issues';
 import { useCustomerOrderSummary } from '@/hooks/customers';
@@ -21,7 +21,8 @@ import { useWarranties } from '@/hooks/warranty';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { toast } from 'sonner';
 import type { IssueStatus } from '@/lib/schemas/support/issues';
-import type { StatusChangeResult } from '@/components/domain/support';
+import type { StatusChangeResult } from '@/components/domain/support/issues/issue-status-change-dialog';
+import { trackSupportIssueTransition } from '@/lib/analytics';
 
 // ============================================================================
 // TYPES
@@ -205,56 +206,94 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
         }
       },
       onStatusConfirm: (result: StatusChangeResult) => {
-        if (!result.confirmed || !statusDialog) return;
+        if (!result.confirmed) {
+          setStatusDialog(null);
+          return;
+        }
+        if (!statusDialog) return;
+
         const toStatus = statusDialog.toStatus;
-        setStatusDialog(null);
-        updateMutation.mutate(
-          {
-            issueId,
-            status: toStatus,
-            ...(result.note && { resolutionNotes: result.note }),
-          },
-          {
-            onSuccess: () => {
-              const statusLabel = toStatus.replace('_', ' ');
-              toast.success(`Issue ${statusLabel}`, {
-                action: {
-                  label: 'View',
-                  onClick: () => navigate({ to: '/support/issues/$issueId', params: { issueId } }),
-                },
-              });
-            },
+        void (async () => {
+          try {
+            await updateMutation.mutateAsync({
+              issueId,
+              status: toStatus,
+              ...(result.note && { resolutionNotes: result.note }),
+            });
+            trackSupportIssueTransition({
+              name: 'support_issue_transition',
+              issueId,
+              fromStatus: issue?.status,
+              toStatus,
+              action:
+                toStatus === 'in_progress'
+                  ? 'start'
+                  : toStatus === 'on_hold'
+                    ? 'hold'
+                    : toStatus === 'escalated'
+                      ? 'escalate'
+                      : toStatus === 'resolved'
+                        ? 'resolve'
+                        : toStatus === 'closed'
+                          ? 'close'
+                          : 'status_change',
+              source: 'issue_detail',
+            });
+            const statusLabel = toStatus.replace('_', ' ');
+            toast.success(`Issue ${statusLabel}`, {
+              action: {
+                label: 'View',
+                onClick: () => navigate({ to: '/support/issues/$issueId', params: { issueId } }),
+              },
+            });
+            setStatusDialog(null);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to update issue status');
           }
-        );
+        })();
       },
       onDelete: async () => {
         const { confirmed } = await confirm(confirmations.delete(issue?.title ?? 'issue', 'issue'));
         if (!confirmed) return;
         try {
-          await deleteMutation.mutateAsync(issueId);
-          toast.success('Issue deleted successfully', {
+          const result = await deleteMutation.mutateAsync(issueId);
+          trackSupportIssueTransition({
+            name: 'support_issue_transition',
+            issueId,
+            action: 'delete',
+            source: 'issue_detail',
+          });
+          toast.success(result.message ?? 'Issue deleted successfully', {
             action: { label: 'View Issues', onClick: () => navigate({ to: '/support/issues' }) },
           });
           navigate({ to: '/support/issues' });
-        } catch {
-          toast.error('Failed to delete issue');
-          throw new Error('Failed to delete issue');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to delete issue';
+          toast.error(message);
+          throw error;
         }
       },
       onRefresh: () => {
         refetch();
       },
     }),
-    [navigate, issueId, issue?.title, deleteMutation, confirm, refetch, statusDialog, updateMutation, setStatusDialog]
+    [navigate, issueId, issue, deleteMutation, confirm, refetch, statusDialog, updateMutation, setStatusDialog]
   );
 
-  const onEscalate = useMemo(
-    () => async (reason: string, escalateToUserId?: string) => {
+  const onEscalate = useCallback(
+    async (reason: string, escalateToUserId?: string) => {
       try {
         await escalateMutation.mutateAsync({
           issueId,
           reason,
           escalateToUserId,
+        });
+        trackSupportIssueTransition({
+          name: 'support_issue_transition',
+          issueId,
+          toStatus: 'escalated',
+          action: 'escalate',
+          source: 'issue_detail',
         });
         setEscalationDialogOpen(false);
         toast.success('Issue escalated', {
@@ -264,11 +303,12 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
           },
         });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to escalate');
+        const message = err instanceof Error ? err.message : 'Failed to escalate';
+        toast.error(message);
         throw err;
       }
     },
-    [issueId, escalateMutation, setEscalationDialogOpen, navigate]
+    [issueId, escalateMutation, navigate]
   );
 
   return {

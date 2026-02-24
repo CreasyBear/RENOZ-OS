@@ -30,6 +30,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -268,8 +272,12 @@ function CreatePaymentPlanDialog({
   const installments = calculateInstallments();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(isCreating, onOpenChange)}>
+      <DialogContent
+        className="max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+        onEscapeKeyDown={createPendingDialogInteractionGuards(isCreating).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(isCreating).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Create Payment Plan</DialogTitle>
           <DialogDescription>
@@ -547,8 +555,11 @@ function RecordPaymentDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(isRecording, onOpenChange)}>
+      <DialogContent
+        onEscapeKeyDown={createPendingDialogInteractionGuards(isRecording).onEscapeKeyDown}
+        onInteractOutside={createPendingDialogInteractionGuards(isRecording).onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Record Payment</DialogTitle>
         </DialogHeader>

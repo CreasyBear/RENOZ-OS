@@ -192,6 +192,7 @@ export function useApplyAmendment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(amendment.orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(amendment.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(amendment.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(variables.amendmentId) });
     },
@@ -208,8 +209,10 @@ export function useCancelAmendment() {
 
   return useMutation({
     mutationFn: (input: { amendmentId: string; reason?: string }) => cancelFn({ data: input }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
+      const amendment = result as Amendment;
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(amendment.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(variables.amendmentId) });
     },
   });

@@ -42,8 +42,7 @@ export { ProductSearchInterface as SearchInterface } from './search-interface';
 
 // --- Product Form ---
 export { ProductForm } from './product-form';
-export { useProductForm } from './product-form/hooks/use-product-form';
-export type { ProductFormProps, ProductFormValues } from './product-form/types';
+export type { ProductFormProps, ProductFormValues } from './product-form';
 
 // --- Categories ---
 export * from './categories';

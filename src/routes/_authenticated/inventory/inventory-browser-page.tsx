@@ -13,7 +13,8 @@
 import { useMemo, useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { PageLayout } from "@/components/layout";
-import { InventoryBrowser } from "@/components/domain/inventory";
+import { InventoryBrowser } from "@/components/domain/inventory/inventory-browser";
+import { SerializedItemsListContainer } from "@/components/domain/inventory/serialized-items/serialized-items-list-container";
 import { useTransformedFilterUrlState } from "@/hooks/filters/use-filter-url-state";
 import {
   DEFAULT_INVENTORY_FILTERS,
@@ -24,6 +25,7 @@ import { useLocations } from "@/hooks/inventory/use-locations";
 import { useProducts } from "@/hooks/products";
 import type { InventoryItem } from "@/components/domain/inventory/view-modes";
 import { INVENTORY_STATUS_VALUES, QUALITY_STATUS_VALUES, type SearchParams } from "./browser";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ============================================================================
 // URL FILTER TRANSFORMERS
@@ -88,6 +90,7 @@ interface InventoryBrowserPageProps {
 export default function InventoryBrowserPage({ search }: InventoryBrowserPageProps) {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<"list" | "grid" | "map">("list");
+  const activeView = search.view ?? "inventory";
 
   // URL-synced filter state with transformations
   const { filters, setFilters } = useTransformedFilterUrlState({
@@ -131,6 +134,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
     pageSize: search.pageSize,
     sortBy: search.sortBy,
     sortOrder: search.sortOrder,
+    enabled: activeView === "inventory",
   });
 
   // Transform inventory data to InventoryItem format
@@ -179,34 +183,95 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
     });
   }, [navigate]);
 
+  const handleSerializedSearchChange = useCallback((nextSearch: string) => {
+    navigate({
+      to: ".",
+      search: (prev) => ({
+        ...prev,
+        serializedSearch: nextSearch.trim().length > 0 ? nextSearch : undefined,
+        page: 1,
+      }),
+    });
+  }, [navigate]);
+
+  const handleSerializedDetailChange = useCallback(
+    (nextSerializedId: string | null) => {
+      navigate({
+        to: '.',
+        search: (prev) => ({
+          ...prev,
+          serializedId: nextSerializedId ?? undefined,
+        }),
+        replace: true,
+      });
+    },
+    [navigate]
+  );
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
         title="Inventory Browser"
-        description={`${inventoryData?.total ?? 0} items in inventory`}
+        description={
+          activeView === "serialized"
+            ? "Canonical serialized lineage and lifecycle control"
+            : `${inventoryData?.total ?? 0} items in inventory`
+        }
       />
 
       <PageLayout.Content>
-        <InventoryBrowser
-          items={inventoryItems}
-          isLoading={isLoading}
-          products={productsData?.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
-          locations={locations.map((l) => ({
-            id: l.id,
-            name: l.name,
-            code: l.code,
-          }))}
-          page={search.page}
-          pageSize={search.pageSize}
-          totalCount={inventoryData?.total ?? 0}
-          onPageChange={handlePageChange}
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          onItemClick={handleItemClick}
-          onRefresh={() => refetch()}
-        />
+        <div className="space-y-4">
+          <Tabs
+            value={activeView}
+            onValueChange={(value) =>
+              navigate({
+                to: ".",
+                search: (prev) => ({
+                  ...prev,
+                  view: value as SearchParams["view"],
+                  page: 1,
+                  serializedId:
+                    value === 'serialized' ? prev.serializedId : undefined,
+                }),
+              })
+            }
+          >
+            <TabsList>
+              <TabsTrigger value="inventory">Inventory</TabsTrigger>
+              <TabsTrigger value="serialized">Serialized Items</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {activeView === "serialized" ? (
+            <SerializedItemsListContainer
+              initialSearch={search.serializedSearch ?? search.search ?? ""}
+              onSearchChange={handleSerializedSearchChange}
+              initialDetailId={search.serializedId ?? null}
+              onDetailChange={handleSerializedDetailChange}
+            />
+          ) : (
+            <InventoryBrowser
+              items={inventoryItems}
+              isLoading={isLoading}
+              products={productsData?.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
+              locations={locations.map((l) => ({
+                id: l.id,
+                name: l.name,
+                code: l.code,
+              }))}
+              page={search.page}
+              pageSize={search.pageSize}
+              totalCount={inventoryData?.total ?? 0}
+              onPageChange={handlePageChange}
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onItemClick={handleItemClick}
+              onRefresh={() => refetch()}
+            />
+          )}
+        </div>
       </PageLayout.Content>
     </PageLayout>
   );

@@ -33,10 +33,12 @@ export async function fetchImageAsDataUrl(url: string | null | undefined): Promi
       return null;
     }
 
-    const contentType = response.headers.get('content-type') ?? 'image/png';
+    // Use only MIME type (e.g. "image/png") — strip charset etc. for valid data URL
+    const rawContentType = response.headers.get('content-type') ?? 'image/png';
+    const mimeType = rawContentType.split(';')[0]?.trim() || 'image/png';
     const buffer = await response.arrayBuffer();
     const base64 = Buffer.from(buffer).toString('base64');
-    return `data:${contentType};base64,${base64}`;
+    return `data:${mimeType};base64,${base64}`;
   } catch (error) {
     logger.warn('[fetchImageAsDataUrl] Error fetching', { url, error });
     return null;

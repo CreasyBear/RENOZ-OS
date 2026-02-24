@@ -43,6 +43,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -424,12 +428,21 @@ function CampaignWizardContent({
     }
   };
 
+  const isPending =
+    isSubmitting ||
+    populateRecipientsMutation.isPending ||
+    sendCampaignMutation.isPending;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
+
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent
           className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
           aria-label={isEditMode ? "Edit campaign wizard" : "Create campaign wizard"}
+          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+          onInteractOutside={pendingInteractionGuards.onInteractOutside}
         >
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Edit Email Campaign" : "Create Email Campaign"}</DialogTitle>

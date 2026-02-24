@@ -20,6 +20,7 @@
 import { AlertCircle } from "lucide-react"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Label } from "~/components/ui/label"
+import { useFormFieldDisplay } from "./form-field-display-context"
 import { cn } from "~/lib/utils"
 import { extractFieldError, type AnyFieldApi } from "./types"
 
@@ -46,7 +47,8 @@ export function CheckboxField({
   className,
   disabled,
 }: CheckboxFieldProps) {
-  const error = extractFieldError(field)
+  const { showErrorsAfterSubmit } = useFormFieldDisplay()
+  const error = extractFieldError(field, { showErrorsAfterSubmit })
   const id = `field-${field.name}`
   const descriptionId = `${id}-description`
   const errorId = `${id}-error`

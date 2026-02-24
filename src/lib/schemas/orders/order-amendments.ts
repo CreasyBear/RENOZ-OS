@@ -92,6 +92,8 @@ export const amendmentChangesSchema = z.object({
   itemChanges: z.array(itemChangeSchema).optional(),
   financialImpact: financialImpactSchema.optional(),
   shippingAmount: currencySchema.optional(), // For shipping_change amendments
+  discountPercent: percentageSchema.optional(), // For discount_change amendments
+  discountAmount: currencySchema.optional(), // For discount_change amendments
 });
 
 export type AmendmentChanges = z.infer<typeof amendmentChangesSchema>;

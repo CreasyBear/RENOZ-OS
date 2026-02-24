@@ -11,10 +11,29 @@ function AlertDialog({
 }
 
 function AlertDialogTrigger({
+  children,
+  asChild,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
+  const childCount = React.Children.count(children)
+  if (childCount === 0) {
+    return null
+  }
+
+  const isSingleElement =
+    childCount === 1 &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment
+  const shouldFallback = !!asChild && !isSingleElement
+
   return (
-    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
+    <AlertDialogPrimitive.Trigger
+      data-slot="alert-dialog-trigger"
+      asChild={shouldFallback ? false : asChild}
+      {...props}
+    >
+      {children}
+    </AlertDialogPrimitive.Trigger>
   )
 }
 

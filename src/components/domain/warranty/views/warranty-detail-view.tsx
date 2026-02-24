@@ -32,6 +32,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { StatusBadge, EntityHeader, DetailGrid, DetailSection, MetricCard } from '@/components/shared';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
+import { getActivitiesFeedSearch } from '@/lib/activities';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -54,12 +55,10 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import {
-  WarrantyClaimFormDialog,
-  ClaimApprovalDialog,
-  ExtendWarrantyDialog,
-  WarrantyExtensionHistory,
-} from '@/components/domain/warranty';
+import { WarrantyClaimFormDialog } from '@/components/domain/warranty/dialogs/warranty-claim-form-dialog';
+import { ClaimApprovalDialog } from '@/components/domain/warranty/dialogs/claim-approval-dialog';
+import { ExtendWarrantyDialog } from '@/components/domain/warranty/dialogs/extend-warranty-dialog';
+import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
 import {
   claimStatusConfig,
   claimTypeConfig,
@@ -131,8 +130,10 @@ export function WarrantyDetailView({
   isClaimDialogOpen,
   isApprovalDialogOpen,
   isExtendDialogOpen,
+  pendingClaimAction,
   selectedClaimForApproval,
   onClaimRowClick,
+  onResolveClaimRow,
   onReviewClaim,
   onClaimDialogOpenChange,
   onApprovalDialogOpenChange,
@@ -143,6 +144,7 @@ export function WarrantyDetailView({
   onSubmitClaim,
   onApproveClaim,
   onDenyClaim,
+  onRequestInfoClaim,
   onExtendWarranty,
   onToggleOptOut,
   certificateError,
@@ -269,7 +271,20 @@ export function WarrantyDetailView({
           >
             {warranty.productName ?? 'Unknown Product'}
           </Link>
-          <div className="text-muted-foreground">Serial: {warranty.productSerial ?? 'N/A'}</div>
+          <div className="text-muted-foreground">
+            Serial:{' '}
+            {warranty.productSerial ? (
+              <Link
+                to="/inventory/browser"
+                search={{ view: 'serialized', serializedSearch: warranty.productSerial, page: 1 }}
+                className="font-mono text-primary hover:underline"
+              >
+                {warranty.productSerial}
+              </Link>
+            ) : (
+              'N/A'
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -610,7 +625,17 @@ export function WarrantyDetailView({
                         },
                         {
                           label: 'Serial Number',
-                          value: <span className="font-mono">{warranty.productSerial ?? 'N/A'}</span>,
+                          value: warranty.productSerial ? (
+                            <Link
+                              to="/inventory/browser"
+                              search={{ view: 'serialized', serializedSearch: warranty.productSerial, page: 1 }}
+                              className="font-mono text-primary hover:underline"
+                            >
+                              {warranty.productSerial}
+                            </Link>
+                          ) : (
+                            <span className="font-mono">N/A</span>
+                          ),
                         },
                         {
                           label: 'Policy',
@@ -710,7 +735,17 @@ export function WarrantyDetailView({
                                 {item.productSku ?? '—'}
                               </TableCell>
                               <TableCell className="font-mono">
-                                {item.productSerial ?? '—'}
+                                {item.productSerial ? (
+                                  <Link
+                                    to="/inventory/browser"
+                                    search={{ view: 'serialized', serializedSearch: item.productSerial, page: 1 }}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {item.productSerial}
+                                  </Link>
+                                ) : (
+                                  '—'
+                                )}
                               </TableCell>
                               <TableCell>{formatDate(item.warrantyStartDate)}</TableCell>
                               <TableCell>{formatDate(item.warrantyEndDate)}</TableCell>
@@ -793,6 +828,15 @@ export function WarrantyDetailView({
                           const claimTypeCfg = isWarrantyClaimTypeValue(claim.claimType)
                             ? claimTypeConfig[claim.claimType]
                             : undefined;
+                          const isPendingReview =
+                            pendingClaimAction?.claimId === claim.id &&
+                            pendingClaimAction.action === 'review';
+                          const isPendingOpen =
+                            pendingClaimAction?.claimId === claim.id &&
+                            pendingClaimAction.action === 'open';
+                          const isPendingResolve =
+                            pendingClaimAction?.claimId === claim.id &&
+                            pendingClaimAction.action === 'resolve';
 
                           return (
                             <TableRow
@@ -829,9 +873,24 @@ export function WarrantyDetailView({
                                         event.stopPropagation();
                                         onReviewClaim(claim);
                                       }}
+                                      disabled={isPendingReview}
                                       aria-label={`Review claim ${claim.claimNumber}`}
                                     >
-                                      Review
+                                      {isPendingReview ? 'Opening...' : 'Review'}
+                                    </Button>
+                                  )}
+                                  {claim.status === 'approved' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        (onResolveClaimRow ?? onClaimRowClick)(claim.id);
+                                      }}
+                                      disabled={isPendingResolve}
+                                      aria-label={`Resolve claim ${claim.claimNumber}`}
+                                    >
+                                      {isPendingResolve ? 'Opening...' : 'Resolve'}
                                     </Button>
                                   )}
                                   <Button
@@ -841,9 +900,14 @@ export function WarrantyDetailView({
                                       event.stopPropagation();
                                       onClaimRowClick(claim.id);
                                     }}
+                                    disabled={isPendingOpen}
                                     aria-label={`View claim ${claim.claimNumber}`}
                                   >
-                                    <ExternalLink className="h-4 w-4" />
+                                    {isPendingOpen ? (
+                                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+                                    ) : (
+                                      <ExternalLink className="h-4 w-4" />
+                                    )}
                                   </Button>
                                 </div>
                               </TableCell>
@@ -887,6 +951,7 @@ export function WarrantyDetailView({
                   title="Activity Timeline"
                   description="Complete history of warranty interactions and system events"
                   showFilters={true}
+                  viewAllSearch={getActivitiesFeedSearch('warranty')}
                   emptyMessage="No activity recorded yet"
                   emptyDescription="Warranty activities will appear here when interactions occur."
                 />
@@ -944,6 +1009,7 @@ export function WarrantyDetailView({
           }}
           onApprove={onApproveClaim}
           onDeny={onDenyClaim}
+          onRequestInfo={onRequestInfoClaim}
           isSubmitting={isSubmittingApproval}
           onSuccess={onClaimsSuccess}
         />

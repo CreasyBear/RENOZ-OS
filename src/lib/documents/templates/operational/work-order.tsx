@@ -17,6 +17,7 @@ import {
   colors,
   spacing,
   fontSize,
+  borderRadius,
   formatDateForPdf,
 } from "../../components";
 import { FONT_FAMILY, FONT_WEIGHTS } from "../../fonts";
@@ -55,7 +56,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.subtle,
     padding: spacing.md,
     marginTop: spacing.lg,
-    borderRadius: 4,
+    borderRadius: borderRadius.md,
   },
   sectionTitle: {
     fontSize: fontSize.sm,
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.secondary,
-    marginBottom: 2,
+    marginBottom: spacing.xs,
   },
   infoValue: {
     fontSize: fontSize.sm,
@@ -91,8 +92,8 @@ const styles = StyleSheet.create({
   // Priority badge
   priorityBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
     alignSelf: "flex-start",
   },
   priorityText: {
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   descriptionText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
@@ -119,17 +120,17 @@ const styles = StyleSheet.create({
   checklistItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.border.light,
   },
   checkbox: {
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     borderWidth: 1,
     borderColor: colors.border.medium,
     marginRight: spacing.sm,
-    marginTop: 1,
+    marginTop: spacing.xs,
   },
   checkboxChecked: {
     backgroundColor: colors.status.success,
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   checklistTitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
@@ -149,14 +150,14 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.secondary,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   checklistRequired: {
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.status.error,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   // Materials section
   materialsSection: {
@@ -164,27 +165,27 @@ const styles = StyleSheet.create({
   },
   materialRow: {
     flexDirection: "row",
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.md,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.border.light,
   },
   materialHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.dark,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
     backgroundColor: colors.background.subtle,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
   materialName: {
     flex: 3,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
   },
   materialQty: {
     flex: 1,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
   },
   notesText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
@@ -213,9 +214,9 @@ const styles = StyleSheet.create({
   // Internal notes (different styling)
   internalNotesSection: {
     marginTop: spacing.lg,
-    backgroundColor: "#FEF9C3", // Yellow background
+    backgroundColor: colors.status.warningLight,
     padding: spacing.md,
-    borderRadius: 4,
+    borderRadius: borderRadius.md,
   },
   internalNotesTitle: {
     fontSize: fontSize.xs,
@@ -233,9 +234,9 @@ const styles = StyleSheet.create({
   // Safety section
   safetySection: {
     marginTop: spacing.lg,
-    backgroundColor: "#FEE2E2", // Red background
+    backgroundColor: colors.status.errorLight,
     padding: spacing.md,
-    borderRadius: 4,
+    borderRadius: borderRadius.md,
   },
   safetyTitle: {
     fontSize: fontSize.sm,
@@ -372,9 +373,8 @@ export interface WorkOrderPdfDocumentProps extends WorkOrderPdfTemplateProps {
 function getPriorityColor(priority: WorkOrderPriority | null | undefined): string {
   switch (priority) {
     case "urgent":
-      return colors.status.error;
     case "high":
-      return "#EA580C"; // Orange-600
+      return colors.status.error;
     case "medium":
       return colors.status.warning;
     case "low":

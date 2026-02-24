@@ -44,4 +44,4 @@ export type { UseActivityFeedOptions } from './use-activities';
 // Legacy alias for backward compatibility (deprecated)
 /** @deprecated Use ActivityFilter instead */
 export type ActivityFeedFilters = ActivityFilter;
-export type { UseUnifiedActivitiesOptions } from './use-unified-activities';
+export type { UseUnifiedActivitiesOptions } from '@/lib/schemas/activities';

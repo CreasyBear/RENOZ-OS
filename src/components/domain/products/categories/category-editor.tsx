@@ -4,45 +4,18 @@
  * Dialog for creating and editing categories with
  * parent selection, attributes inheritance, and settings.
  */
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState, useEffect } from "react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
-import { Folder, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Folder } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  FormDialog,
+  TextField,
+  TextareaField,
+  SelectField,
+  SwitchField,
+} from "@/components/shared/forms";
 import { toastError } from "@/hooks";
 import type { CategoryNode } from "@/lib/schemas/products";
 
@@ -94,6 +67,16 @@ function flattenCategories(
   return result;
 }
 
+const defaultFormValues: CategoryFormData = {
+  name: "",
+  description: "",
+  parentId: null,
+  isActive: true,
+  inheritAttributes: true,
+  seoTitle: "",
+  seoDescription: "",
+};
+
 export function CategoryEditor({
   open,
   onOpenChange,
@@ -104,34 +87,26 @@ export function CategoryEditor({
   mode,
 }: CategoryEditorProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const form = useForm<CategoryFormData>({
-    resolver: zodResolver(categorySchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      parentId: null,
-      isActive: true,
-      inheritAttributes: true,
-      seoTitle: "",
-      seoDescription: "",
+  const form = useTanStackForm<CategoryFormData>({
+    schema: categorySchema,
+    defaultValues: defaultFormValues,
+    onSubmit: async (data) => {
+      setSubmitError(null);
+      setIsSubmitting(true);
+      try {
+        await onSave(data);
+        onOpenChange(false);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to save category";
+        setSubmitError(msg);
+        toastError(msg);
+      } finally {
+        setIsSubmitting(false);
+      }
     },
   });
-
-
-  const handleSubmit = async (data: CategoryFormData) => {
-    setIsSubmitting(true);
-    try {
-      await onSave(data);
-      onOpenChange(false);
-    } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to save category"
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Get available parent categories (excluding self and descendants)
   const getAvailableParents = () => {
@@ -155,16 +130,26 @@ export function CategoryEditor({
 
   const availableParents = getAvailableParents();
 
-  const handleOpenChange = (isOpen: boolean) => {
-    onOpenChange(isOpen);
-    if (isOpen) {
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      if (isSubmitting) return;
+      setSubmitError(null);
+      onOpenChange(false);
+    } else {
+      onOpenChange(newOpen);
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      setSubmitError(null);
       if (category) {
         form.reset({
           name: category.name,
           description: category.description ?? "",
           parentId: category.parentId ?? null,
           isActive: category.isActive,
-          inheritAttributes: true, // Default, would come from category data
+          inheritAttributes: true,
           seoTitle: "",
           seoDescription: "",
         });
@@ -180,221 +165,120 @@ export function CategoryEditor({
         });
       }
     }
-  };
+  }, [open, category, parentCategory, form]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Folder className="h-5 w-5" />
-            {mode === "create" ? "Create Category" : "Edit Category"}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === "create"
-              ? "Create a new category to organize your products"
-              : "Update the category details"}
-          </DialogDescription>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <span className="flex items-center gap-2">
+          <Folder className="h-5 w-5" />
+          {mode === "create" ? "Create Category" : "Edit Category"}
+        </span>
+      }
+      description={
+        mode === "create"
+          ? "Create a new category to organize your products"
+          : "Update the category details"
+      }
+      form={form}
+      submitLabel={mode === "create" ? "Create Category" : "Save Changes"}
+      submitError={submitError}
+      submitDisabled={isSubmitting}
+      size="lg"
+      className="max-w-lg"
+      resetOnClose={false}
+    >
             {/* Name */}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Electronics" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="name">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Name"
+                  placeholder="e.g., Electronics"
+                  required
+                />
               )}
-            />
+            </form.Field>
 
             {/* Description */}
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Optional description for this category..."
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="description">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Description"
+                  placeholder="Optional description for this category..."
+                  rows={3}
+                />
               )}
-            />
+            </form.Field>
 
             {/* Parent Category */}
-            <FormField
-              control={form.control}
-              name="parentId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    Parent Category
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Select a parent to create a subcategory
-                      </TooltipContent>
-                    </Tooltip>
-                  </FormLabel>
-                  <Select
-                    value={field.value ?? "none"}
-                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="None (top-level category)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">None (top-level category)</SelectItem>
-                      {availableParents.map((parent) => (
-                        <SelectItem key={parent.id} value={parent.id}>
-                          <span style={{ paddingLeft: `${parent.depth * 12}px` }}>
-                            {parent.name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            <form.Field name="parentId">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Parent Category"
+                  options={availableParents.map((p) => ({ value: p.id, label: p.name }))}
+                  nullOption={{ value: "none", label: "None (top-level category)" }}
+                  placeholder="None (top-level category)"
+                  description="Select a parent to create a subcategory"
+                />
               )}
-            />
+            </form.Field>
 
             {/* Status */}
-            <FormField
-              control={form.control}
-              name="isActive"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Active</FormLabel>
-                    <FormDescription>
-                      Inactive categories are hidden from product selection
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
+            <form.Field name="isActive">
+              {(field) => (
+                <SwitchField
+                  field={field}
+                  label="Active"
+                  description="Inactive categories are hidden from product selection"
+                  className="rounded-lg border p-3"
+                />
               )}
-            />
+            </form.Field>
 
             {/* Inherit Attributes */}
-            <FormField
-              control={form.control}
-              name="inheritAttributes"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel className="flex items-center gap-2">
-                      Inherit Parent Attributes
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex">
-                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          Products in this category will inherit attributes from parent categories
-                        </TooltipContent>
-                      </Tooltip>
-                    </FormLabel>
-                    <FormDescription>
-                      Include parent category attributes in this category
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
+            <form.Field name="inheritAttributes">
+              {(field) => (
+                <SwitchField
+                  field={field}
+                  label="Inherit Parent Attributes"
+                  description="Include parent category attributes in this category"
+                  className="rounded-lg border p-3"
+                />
               )}
-            />
+            </form.Field>
 
             {/* SEO Fields - Collapsible */}
             <div className="space-y-3 pt-2 border-t">
               <Label className="text-sm font-medium">SEO Settings</Label>
 
-              <FormField
-                control={form.control}
-                name="seoTitle"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SEO Title</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Category page title for search engines"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {field.value?.length ?? 0}/70 characters
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="seoTitle">
+                {(field) => (
+                  <TextField
+                    field={field}
+                    label="SEO Title"
+                    placeholder="Category page title for search engines"
+                    description={`${field.state.value?.length ?? 0}/70 characters`}
+                  />
                 )}
-              />
+              </form.Field>
 
-              <FormField
-                control={form.control}
-                name="seoDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SEO Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Brief description for search engine results"
-                        rows={2}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {field.value?.length ?? 0}/160 characters
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+              <form.Field name="seoDescription">
+                {(field) => (
+                  <TextareaField
+                    field={field}
+                    label="SEO Description"
+                    placeholder="Brief description for search engine results"
+                    rows={2}
+                    description={`${field.state.value?.length ?? 0}/160 characters`}
+                  />
                 )}
-              />
+              </form.Field>
             </div>
-
-            <DialogFooter className="pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? mode === "create"
-                    ? "Creating..."
-                    : "Saving..."
-                  : mode === "create"
-                    ? "Create Category"
-                    : "Save Changes"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    </FormDialog>
   );
 }

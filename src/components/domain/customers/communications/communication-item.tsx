@@ -48,6 +48,10 @@ import type { Communication } from './communication-timeline.types'
 interface CommunicationItemProps {
   communication: Communication
   onReply?: () => void
+  onForward?: () => void
+  onOpenInNewTab?: () => void
+  onArchive?: () => void
+  onDelete?: () => void
 }
 
 // ============================================================================
@@ -72,7 +76,14 @@ const directionConfig: Record<Communication['direction'], { label: string; icon:
 // COMPONENT
 // ============================================================================
 
-export function CommunicationItem({ communication, onReply }: CommunicationItemProps) {
+export function CommunicationItem({
+  communication,
+  onReply,
+  onForward,
+  onOpenInNewTab,
+  onArchive,
+  onDelete,
+}: CommunicationItemProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const config = typeConfig[communication.type]
   const Icon = config.icon
@@ -196,7 +207,7 @@ export function CommunicationItem({ communication, onReply }: CommunicationItemP
                       <Reply className="h-4 w-4 mr-1" />
                       Reply
                     </Button>
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" onClick={onForward}>
                       <Forward className="h-4 w-4 mr-1" />
                       Forward
                     </Button>
@@ -209,16 +220,16 @@ export function CommunicationItem({ communication, onReply }: CommunicationItemP
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={onOpenInNewTab} disabled={!onOpenInNewTab}>
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Open in new tab
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={onArchive} disabled={!onArchive}>
                       <Archive className="h-4 w-4 mr-2" />
                       Archive
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">
+                    <DropdownMenuItem className="text-destructive" onClick={onDelete} disabled={!onDelete}>
                       Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>

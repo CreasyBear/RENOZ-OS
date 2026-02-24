@@ -58,9 +58,9 @@ export function useReceiveGoods() {
         queryKey: queryKeys.suppliers.purchaseOrderReceipts(variables.purchaseOrderId),
       });
       // Invalidate inventory data (balances changed)
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
       // Invalidate product data (costPrice may have changed)
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
     },
   });
 }

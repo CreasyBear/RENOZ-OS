@@ -3,32 +3,22 @@
  *
  * Dialog for editing a single attribute value with type-specific inputs.
  */
-import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
-import { Save, X, AlertCircle } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  FormDialog,
+  TextField,
+  NumberField,
+  SelectField,
+  SwitchField,
+  DateStringField,
+} from "@/components/shared/forms";
 import { useSetProductAttribute } from "@/hooks/products";
 import { toastError } from "@/hooks";
 
@@ -55,7 +45,6 @@ interface AttributeValueEditorProps {
   onSaved?: () => void;
 }
 
-// Form schema - accepts any value type
 const formSchema = z.object({
   value: z.any(),
 });
@@ -69,230 +58,46 @@ export function AttributeValueEditor({
   onOpenChange,
   onSaved,
 }: AttributeValueEditorProps) {
-  const [error, setError] = useState<string | null>(null);
   const setAttributeMutation = useSetProductAttribute();
 
-  const { control, handleSubmit, setValue, watch } = useForm<FormValues>({
-    resolver: zodResolver(formSchema) as never,
-    defaultValues: {
-      value: null,
+  const form = useTanStackForm<FormValues>({
+    schema: formSchema,
+    defaultValues: { value: null },
+    onSubmit: async (data) => {
+      if (!attribute) return;
+      try {
+        await setAttributeMutation.mutateAsync({
+          productId,
+          attributeId: attribute.attributeId,
+          value: data.value,
+        });
+        onSaved?.();
+        onOpenChange(false);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to save attribute";
+        toastError(errorMessage);
+      }
     },
+    onSubmitInvalid: () => {},
   });
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() returns functions that cannot be memoized; known limitation
-  const currentValue = watch("value");
-
-
-  // Handle save
-  const onSubmit = async (data: FormValues) => {
-    if (!attribute) return;
-
-    setError(null);
-
-    try {
-      await setAttributeMutation.mutateAsync({
-        productId,
-        attributeId: attribute.attributeId,
-        value: data.value,
-      });
-      onSaved?.();
-      onOpenChange(false);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to save attribute";
-      toastError(errorMessage);
-      setError(errorMessage);
+  useEffect(() => {
+    if (open && attribute) {
+      form.reset({ value: attribute.value });
     }
+  }, [open, attribute, form]);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && setAttributeMutation.isPending) return;
+    onOpenChange(newOpen);
   };
 
-  // Handle close
-  const handleClose = () => {
-    if (!setAttributeMutation.isPending) {
-      onOpenChange(false);
-    }
-  };
-
-  // Clear value
   const handleClear = () => {
-    setValue("value", null);
+    form.setFieldValue("value", null);
   };
 
   if (!attribute) return null;
 
-  // Render type-specific input
-  const renderInput = () => {
-    switch (attribute.attributeType) {
-      case "text":
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => (
-              <Input
-                {...field}
-                value={(field.value as string) ?? ""}
-                onChange={(e) => field.onChange(e.target.value || null)}
-                placeholder={attribute.options?.placeholder ?? "Enter value..."}
-              />
-            )}
-          />
-        );
-
-      case "number":
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => (
-              <Input
-                type="number"
-                {...field}
-                value={field.value ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  field.onChange(val === "" ? null : parseFloat(val));
-                }}
-                placeholder={attribute.options?.placeholder ?? "Enter number..."}
-                min={attribute.options?.min}
-                max={attribute.options?.max}
-                step={attribute.options?.step ?? 1}
-              />
-            )}
-          />
-        );
-
-      case "boolean":
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => (
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={field.value === true}
-                  onCheckedChange={(checked) => field.onChange(checked)}
-                />
-                <span className="text-sm text-muted-foreground">
-                  {field.value === true ? "Yes" : field.value === false ? "No" : "Not set"}
-                </span>
-              </div>
-            )}
-          />
-        );
-
-      case "date":
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => (
-              <Input
-                type="date"
-                {...field}
-                value={(field.value as string) ?? ""}
-                onChange={(e) => field.onChange(e.target.value || null)}
-              />
-            )}
-          />
-        );
-
-      case "select":
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => {
-              const choices = attribute.options?.choices ?? [];
-              return (
-                <Select
-                  value={(field.value as string) ?? ""}
-                  onValueChange={(val) => field.onChange(val || null)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an option..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {choices.length === 0 ? (
-                      <div className="px-2 py-6 text-center text-sm text-muted-foreground">
-                        No options available
-                      </div>
-                    ) : (
-                      choices.map((choice) => (
-                        <SelectItem key={choice.value} value={choice.value}>
-                          {choice.label}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              );
-            }}
-          />
-        );
-
-      case "multiselect":
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => {
-              const selectedValues = Array.isArray(field.value) ? field.value : [];
-
-              const toggleValue = (value: string) => {
-                if (selectedValues.includes(value)) {
-                  field.onChange(selectedValues.filter((v) => v !== value));
-                } else {
-                  field.onChange([...selectedValues, value]);
-                }
-              };
-
-              return (
-                <div className="space-y-2">
-                  {attribute.options?.choices?.map((choice) => (
-                    <div key={choice.value} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`choice-${choice.value}`}
-                        checked={selectedValues.includes(choice.value)}
-                        onCheckedChange={() => toggleValue(choice.value)}
-                      />
-                      <Label htmlFor={`choice-${choice.value}`} className="cursor-pointer">
-                        {choice.label}
-                      </Label>
-                    </div>
-                  ))}
-                  {selectedValues.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {selectedValues.map((v) => (
-                        <Badge key={v} variant="secondary">
-                          {attribute.options?.choices?.find((c) => c.value === v)?.label ?? v}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            }}
-          />
-        );
-
-      default:
-        return (
-          <Controller
-            name="value"
-            control={control}
-            render={({ field }) => (
-              <Input
-                {...field}
-                value={String(field.value ?? "")}
-                onChange={(e) => field.onChange(e.target.value || null)}
-                placeholder="Enter value..."
-              />
-            )}
-          />
-        );
-    }
-  };
-
-  // Get type badge color
   const getTypeBadgeVariant = (): "default" | "secondary" | "outline" => {
     switch (attribute.attributeType) {
       case "boolean":
@@ -307,81 +112,161 @@ export function AttributeValueEditor({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Attribute</DialogTitle>
-          <DialogDescription>
-            Update the value for this product attribute
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Attribute info */}
-          <div className="p-3 bg-muted rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{attribute.attributeName}</span>
-              <Badge variant={getTypeBadgeVariant()}>{attribute.attributeType}</Badge>
-            </div>
-            {attribute.isRequired && (
-              <span className="text-xs text-amber-600">Required</span>
+  const valueField = (
+    <form.Field name="value">
+      {(field) => (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Value</Label>
+            {field.state.value !== null && field.state.value !== undefined && (
+              <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
+                <X className="h-3 w-3 mr-1" />
+                Clear
+              </Button>
             )}
           </div>
 
-          {/* Value input */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Value</Label>
-              {currentValue !== null && currentValue !== undefined && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClear}
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Clear
-                </Button>
-              )}
-            </div>
-            {renderInput()}
-          </div>
-
-          {/* Constraints info */}
-          {(attribute.options?.min !== undefined || attribute.options?.max !== undefined) && (
-            <p className="text-xs text-muted-foreground">
-              {attribute.options.min !== undefined && `Min: ${attribute.options.min}`}
-              {attribute.options.min !== undefined && attribute.options.max !== undefined && " · "}
-              {attribute.options.max !== undefined && `Max: ${attribute.options.max}`}
-            </p>
+          {attribute.attributeType === "text" && (
+            <TextField
+              field={field as Parameters<typeof TextField>[0]["field"]}
+              label="Value"
+              placeholder={attribute.options?.placeholder ?? "Enter value..."}
+            />
           )}
 
-          {/* Error */}
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <span className="text-sm text-red-700">{error}</span>
+          {attribute.attributeType === "number" && (
+            <NumberField
+              field={field as Parameters<typeof NumberField>[0]["field"]}
+              label="Value"
+              placeholder={attribute.options?.placeholder ?? "Enter number..."}
+              min={attribute.options?.min}
+              max={attribute.options?.max}
+              step={attribute.options?.step ?? 1}
+            />
+          )}
+
+          {attribute.attributeType === "boolean" && (
+            <SwitchField
+              field={field as Parameters<typeof SwitchField>[0]["field"]}
+              label="Value"
+              description={
+                field.state.value === true
+                  ? "Yes"
+                  : field.state.value === false
+                    ? "No"
+                    : "Not set"
+              }
+            />
+          )}
+
+          {attribute.attributeType === "date" && (
+            <DateStringField
+              field={field as Parameters<typeof DateStringField>[0]["field"]}
+              label="Value"
+              placeholder="Select date"
+            />
+          )}
+
+          {attribute.attributeType === "select" && (
+            (attribute.options?.choices ?? []).length === 0 ? (
+              <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                No options available
+              </div>
+            ) : (
+              <SelectField
+                field={field as Parameters<typeof SelectField>[0]["field"]}
+                label="Value"
+                options={(attribute.options?.choices ?? []).map((c) => ({ value: c.value, label: c.label }))}
+                placeholder="Select an option..."
+              />
+            )
+          )}
+
+          {attribute.attributeType === "multiselect" && (
+            <div className="space-y-2">
+              {(attribute.options?.choices ?? []).map((choice) => {
+                const selectedValues = Array.isArray(field.state.value)
+                  ? field.state.value
+                  : [];
+                const toggleValue = (value: string) => {
+                  if (selectedValues.includes(value)) {
+                    field.handleChange(selectedValues.filter((v) => v !== value));
+                  } else {
+                    field.handleChange([...selectedValues, value]);
+                  }
+                };
+                return (
+                  <div key={choice.value} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`choice-${choice.value}`}
+                      checked={selectedValues.includes(choice.value)}
+                      onCheckedChange={() => toggleValue(choice.value)}
+                    />
+                    <Label htmlFor={`choice-${choice.value}`} className="cursor-pointer">
+                      {choice.label}
+                    </Label>
+                  </div>
+                );
+              })}
+              {Array.isArray(field.state.value) && field.state.value.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {field.state.value.map((v) => (
+                    <Badge key={v} variant="secondary">
+                      {attribute.options?.choices?.find((c) => c.value === v)?.label ?? v}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={setAttributeMutation.isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={setAttributeMutation.isPending}>
-              {setAttributeMutation.isPending ? (
-                "Saving..."
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          {!["text", "number", "boolean", "date", "select", "multiselect"].includes(
+            attribute.attributeType
+          ) && (
+            <TextField
+              field={field as Parameters<typeof TextField>[0]["field"]}
+              label="Value"
+              placeholder="Enter value..."
+            />
+          )}
+        </div>
+      )}
+    </form.Field>
+  );
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="Edit Attribute"
+      description="Update the value for this product attribute"
+      form={form}
+      submitLabel="Save"
+      submitError={setAttributeMutation.error?.message ?? null}
+      size="md"
+      className="max-w-md"
+    >
+      <div className="p-3 bg-muted rounded-lg">
+        <div className="flex items-center justify-between">
+          <span className="font-medium">{attribute.attributeName}</span>
+          <Badge variant={getTypeBadgeVariant()}>{attribute.attributeType}</Badge>
+        </div>
+        {attribute.isRequired && (
+          <span className="text-xs text-amber-600">Required</span>
+        )}
+      </div>
+
+      {valueField}
+
+      {(attribute.options?.min !== undefined || attribute.options?.max !== undefined) && (
+        <p className="text-xs text-muted-foreground">
+          {attribute.options.min !== undefined && `Min: ${attribute.options.min}`}
+          {attribute.options.min !== undefined &&
+            attribute.options.max !== undefined &&
+            " · "}
+          {attribute.options.max !== undefined && `Max: ${attribute.options.max}`}
+        </p>
+      )}
+    </FormDialog>
   );
 }

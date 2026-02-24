@@ -4,7 +4,7 @@
  * Extracted for code-splitting - see create.tsx for route definition.
  * Supports initialCustomerId from URL search (?customerId=) for customer-context entry points.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertDialog,
@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PageLayout } from "@/components/layout";
-import { OrderCreationWizard } from "@/components/domain/orders";
+import { OrderCreationWizard } from "@/components/domain/orders/creation/order-creation-wizard";
 import type { OrderSubmitData } from "@/lib/schemas/orders";
 import { useCreateOrder } from "@/hooks/orders/use-orders";
 
@@ -29,8 +29,6 @@ export default function OrderCreatePage({ initialCustomerId }: OrderCreatePagePr
   const navigate = useNavigate();
   const createMutation = useCreateOrder();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  /** Draft clear fn from wizard. Set via onDraftReady (useEffect). May be null if user cancels before wizard mounts. */
-  const draftClearRef = useRef<(() => void) | null>(null);
 
   const handleComplete = useCallback(
     (orderId: string) => {
@@ -48,7 +46,6 @@ export default function OrderCreatePage({ initialCustomerId }: OrderCreatePagePr
 
   const handleCancelConfirm = useCallback(() => {
     setCancelDialogOpen(false);
-    draftClearRef.current?.(); // No-op if wizard hasn't mounted yet (race is unlikely)
     navigate({ to: "/orders" });
   }, [navigate]);
 
@@ -98,7 +95,6 @@ export default function OrderCreatePage({ initialCustomerId }: OrderCreatePagePr
             onCancel={handleCancelClick}
             onSubmit={handleSubmit}
             isSubmitting={createMutation.isPending}
-            onDraftReady={(api) => { draftClearRef.current = api.clear; }}
           />
         </PageLayout.Content>
       </PageLayout>

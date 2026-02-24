@@ -11,6 +11,7 @@
 'use client';
 
 import * as React from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,10 @@ import {
   formatClaimCost,
 } from '@/lib/warranty/claims-utils';
 import { SlaCountdownBadge } from '../widgets/sla-countdown-badge';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 
 // ============================================================================
 // TYPES
@@ -80,6 +85,8 @@ export interface ClaimApprovalDialogProps {
   onApprove: (payload: { claimId: string; notes?: string }) => Promise<void>;
   /** From route container (deny mutation). */
   onDeny: (payload: { claimId: string; denialReason: string; notes?: string }) => Promise<void>;
+  /** From route container (status update mutation). */
+  onRequestInfo: (payload: { claimId: string; notes: string }) => Promise<void>;
   /** From route container (mutation). */
   isSubmitting?: boolean;
 }
@@ -101,31 +108,54 @@ export function ClaimApprovalDialog({
   onSuccess,
   onApprove,
   onDeny,
+  onRequestInfo,
   isSubmitting,
 }: ClaimApprovalDialogProps) {
   // State
   const [decision, setDecision] = React.useState<Decision>('approve');
   const [notes, setNotes] = React.useState('');
   const [denialReason, setDenialReason] = React.useState('');
+  const [fieldErrors, setFieldErrors] = React.useState<{ denialReason?: string; notes?: string }>(
+    {}
+  );
+  const denialReasonRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const notesRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   const isLoading = !!isSubmitting;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isLoading);
 
   // Reset form when dialog opens
   const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && isLoading) return;
     if (newOpen) {
       setDecision('approve');
       setNotes('');
       setDenialReason('');
+      setFieldErrors({});
     }
     onOpenChange(newOpen);
   };
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isLoading, handleOpenChange);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (decision === 'deny' && !denialReason.trim()) {
-      return; // Validation will show error
+    const nextErrors: { denialReason?: string; notes?: string } = {};
+    if (decision === 'deny' && denialReason.trim().length < 10) {
+      nextErrors.denialReason = 'Denial reason must be at least 10 characters.';
+    }
+    if (decision === 'request_info' && !notes.trim()) {
+      nextErrors.notes = 'Notes are required when requesting more information.';
+    }
+    setFieldErrors(nextErrors);
+    if (nextErrors.denialReason) {
+      denialReasonRef.current?.focus();
+      return;
+    }
+    if (nextErrors.notes) {
+      notesRef.current?.focus();
+      return;
     }
 
     try {
@@ -140,9 +170,12 @@ export function ClaimApprovalDialog({
           denialReason: denialReason.trim(),
           notes: notes.trim() || undefined,
         });
+      } else if (decision === 'request_info') {
+        await onRequestInfo({
+          claimId: claim.id,
+          notes: notes.trim(),
+        });
       }
-      // For request_info, we would update status to under_review with notes
-      // This would need a separate mutation
 
       onOpenChange(false);
       onSuccess?.();
@@ -159,8 +192,12 @@ export function ClaimApprovalDialog({
   const canDecide = claim.status === 'submitted' || claim.status === 'under_review';
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="sm:max-w-lg"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="size-5" />
@@ -195,7 +232,13 @@ export function ClaimApprovalDialog({
                   <Package className="size-4" />
                   <span>{claim.product.name}</span>
                   {claim.warranty.productSerial && (
-                    <span className="font-mono">({claim.warranty.productSerial})</span>
+                    <Link
+                      to="/inventory/browser"
+                      search={{ view: 'serialized', serializedSearch: claim.warranty.productSerial, page: 1 }}
+                      className="font-mono text-primary hover:underline"
+                    >
+                      ({claim.warranty.productSerial})
+                    </Link>
                   )}
                 </div>
 
@@ -282,13 +325,16 @@ export function ClaimApprovalDialog({
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="request_info" id="request_info" disabled />
+                  <RadioGroupItem value="request_info" id="request_info" />
                   <Label
                     htmlFor="request_info"
-                    className="text-muted-foreground flex cursor-not-allowed items-center gap-2 font-normal"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2 font-normal',
+                      decision === 'request_info' && 'font-medium text-amber-700'
+                    )}
                   >
                     <AlertCircle className="size-4" />
-                    Request More Info (coming soon)
+                    Request More Info
                   </Label>
                 </div>
               </RadioGroup>
@@ -300,36 +346,80 @@ export function ClaimApprovalDialog({
                 <Label htmlFor="denialReason">
                   Denial Reason <span className="text-destructive">*</span>
                 </Label>
-                <Textarea
+              <Textarea
+                  ref={denialReasonRef}
                   id="denialReason"
                   value={denialReason}
-                  onChange={(e) => setDenialReason(e.target.value)}
+                  onChange={(e) => {
+                    setDenialReason(e.target.value);
+                    if (fieldErrors.denialReason) {
+                      setFieldErrors((prev) => ({ ...prev, denialReason: undefined }));
+                    }
+                  }}
                   placeholder="Explain why this claim is being denied..."
                   minLength={10}
                   maxLength={2000}
                   rows={3}
                   required={decision === 'deny'}
-                  className={
-                    !denialReason.trim() && decision === 'deny' ? 'border-destructive' : ''
-                  }
+                  className={fieldErrors.denialReason ? 'border-destructive' : ''}
+                  aria-invalid={!!fieldErrors.denialReason}
+                  aria-describedby={fieldErrors.denialReason ? 'denialReason-error' : undefined}
                 />
-                <p className="text-muted-foreground text-xs">
+                {fieldErrors.denialReason ? (
+                  <p id="denialReason-error" className="text-destructive text-xs">
+                    {fieldErrors.denialReason}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground text-xs">
                   Minimum 10 characters. This reason will be visible to the customer.
-                </p>
+                  </p>
+                )}
               </div>
             )}
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Label htmlFor="notes">
+                {decision === 'request_info' ? (
+                  <>
+                    Notes <span className="text-destructive">*</span>
+                  </>
+                ) : (
+                  'Notes (Optional)'
+                )}
+              </Label>
               <Textarea
+                ref={notesRef}
                 id="notes"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any internal notes..."
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  if (fieldErrors.notes) {
+                    setFieldErrors((prev) => ({ ...prev, notes: undefined }));
+                  }
+                }}
+                placeholder={
+                  decision === 'request_info'
+                    ? 'Specify what additional information is required...'
+                    : 'Add any internal notes...'
+                }
                 maxLength={2000}
                 rows={2}
+                required={decision === 'request_info'}
+                className={fieldErrors.notes ? 'border-destructive' : undefined}
+                aria-invalid={!!fieldErrors.notes}
+                aria-describedby={fieldErrors.notes ? 'notes-error' : undefined}
               />
+              {fieldErrors.notes && (
+                <p id="notes-error" className="text-destructive text-xs">
+                  {fieldErrors.notes}
+                </p>
+              )}
+              {decision === 'request_info' && (
+                <p className="text-muted-foreground text-xs">
+                  This note explains the additional information needed before approval.
+                </p>
+              )}
             </div>
 
             <DialogFooter className="gap-2">
@@ -343,7 +433,11 @@ export function ClaimApprovalDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={isLoading || (decision === 'deny' && !denialReason.trim())}
+                disabled={
+                  isLoading ||
+                  (decision === 'deny' && !denialReason.trim()) ||
+                  (decision === 'request_info' && !notes.trim())
+                }
                 variant={decision === 'deny' ? 'destructive' : 'default'}
               >
                 {isLoading ? (
@@ -355,6 +449,11 @@ export function ClaimApprovalDialog({
                   <>
                     <CheckCircle2 className="mr-2 size-4" />
                     Approve Claim
+                  </>
+                ) : decision === 'request_info' ? (
+                  <>
+                    <AlertCircle className="mr-2 size-4" />
+                    Request Info
                   </>
                 ) : (
                   <>

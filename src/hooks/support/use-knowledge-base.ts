@@ -253,6 +253,7 @@ export function useRecordArticleFeedback() {
   return useMutation({
     mutationFn: (data: { articleId: string; helpful: boolean }) => recordArticleFeedback({ data }),
     onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.kbArticles() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.support.kbArticleDetail(variables.articleId),
       });

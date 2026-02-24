@@ -58,6 +58,8 @@ export interface ActivityMetadata {
   // ============================================
   /** Request ID for correlation/tracing */
   requestId?: string;
+  /** Idempotency key for status/destructive mutations */
+  idempotencyKey?: string;
   /** Reason for the action (if applicable) */
   reason?: string;
   /** Assigned to user ID */
@@ -82,6 +84,8 @@ export interface ActivityMetadata {
   orderId?: string;
   /** Order number (denormalized for display) */
   orderNumber?: string;
+  /** Shipment number (for order shipment activities) */
+  shipmentNumber?: string;
   /** Related opportunity ID */
   opportunityId?: string;
   /** Opportunity title (denormalized for display) */
@@ -268,6 +272,10 @@ export interface ActivityMetadata {
   referenceId?: string;
   /** Product ID for inventory movements */
   productId?: string;
+  /** Warehouse location ID for inventory movements */
+  locationId?: string;
+  /** Unit cost for inventory operations */
+  unitCost?: number;
   /** Quantity for inventory operations */
   quantity?: number;
 
@@ -370,6 +378,8 @@ export interface ActivityMetadata {
   claimType?: string;
   /** Claim status */
   claimStatus?: string;
+  /** Whether this activity was a request-for-info action */
+  requestInfoRequest?: boolean;
   /** Extension ID */
   extensionId?: string;
   /** Extension type */

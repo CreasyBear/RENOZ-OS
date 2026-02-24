@@ -26,6 +26,17 @@ export {
   type UseAvailableSerialsOptions,
 } from './use-inventory';
 
+// Canonical serialized lineage
+export {
+  useSerializedItems,
+  useSerializedItem,
+  useCreateSerializedItem,
+  useUpdateSerializedItem,
+  useDeleteSerializedItem,
+  useAddSerializedItemNote,
+  type UseSerializedItemsOptions,
+} from './use-serialized-items';
+
 // Location management
 export {
   useLocations,
@@ -65,11 +76,13 @@ export {
   useCostLayers,
   useInventoryCostLayers,
   useInventoryValuation,
+  useInventoryFinanceIntegrity,
   useCOGSPreview,
   useInventoryAging,
   useInventoryTurnover,
   useCreateCostLayer,
   useCalculateCOGS,
+  useReconcileInventoryFinance,
 } from './use-valuation';
 
 // Stock counts
@@ -127,7 +140,13 @@ export type { InventoryItem, InventoryFilters, MovementRecord } from '@/lib/sche
 export type { WarehouseLocation, LocationType, LocationFilters } from './use-locations';
 export type { AlertFilters, UseAlertsOptions } from './use-alerts';
 export type { ForecastFilters, UseForecastsOptions, ReorderFilters } from './use-forecasting';
-export type { CostLayerFilters, ValuationFilters, AgingFilters, TurnoverFilters } from './use-valuation';
+export type {
+  CostLayerFilters,
+  ValuationFilters,
+  AgingFilters,
+  TurnoverFilters,
+  FinanceIntegrityFilters,
+} from './use-valuation';
 export type { StockCountFilters, UseStockCountsOptions } from './use-stock-counts';
 export type {
   CategoryStock,

@@ -23,7 +23,7 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError, NotFoundError } from '@/lib/server/errors';
-import { GST_RATE } from '@/lib/order-calculations';
+import { GST_RATE, roundCurrency } from '@/lib/order-calculations';
 import { generateOrderNumber } from '@/server/functions/orders/orders';
 import {
   createTemplateSchema,
@@ -242,6 +242,9 @@ export const createTemplate = createServerFn({ method: 'POST' })
 
     // Wrap template creation and item insertion in a transaction for atomicity
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Create template
       const [template] = await tx
         .insert(orderTemplates)
@@ -429,6 +432,9 @@ export const saveOrderAsTemplate = createServerFn({ method: 'POST' })
 
     // Wrap template creation and item insertion in a transaction for atomicity
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Create template
       const [template] = await tx
         .insert(orderTemplates)
@@ -552,6 +558,9 @@ export const createOrderFromTemplate = createServerFn({ method: 'POST' })
 
     // Wrap order creation, line items, totals update, and template usage in a transaction
     const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Create order
       const [order] = await tx
         .insert(orders)
@@ -600,15 +609,16 @@ export const createOrderFromTemplate = createServerFn({ method: 'POST' })
 
         if (unitPrice === null) unitPrice = 0;
 
-        // Calculate line totals
-        const lineSubtotal = templateItem.defaultQuantity * unitPrice;
-        const discount =
+        // Calculate line totals (round to avoid floating-point drift)
+        const lineSubtotal = roundCurrency(templateItem.defaultQuantity * unitPrice);
+        const discount = roundCurrency(
           (templateItem.discountPercent ? lineSubtotal * (templateItem.discountPercent / 100) : 0) +
-          (templateItem.discountAmount ?? 0);
-        const afterDiscount = lineSubtotal - discount;
+            (templateItem.discountAmount ?? 0)
+        );
+        const afterDiscount = roundCurrency(lineSubtotal - discount);
         const taxRate = templateItem.taxType === 'gst' ? GST_RATE : 0;
-        const taxAmount = Math.round(afterDiscount * taxRate);
-        const lineTotal = afterDiscount + taxAmount;
+        const taxAmount = roundCurrency(afterDiscount * taxRate);
+        const lineTotal = roundCurrency(afterDiscount + taxAmount);
 
         lineItemValues.push({
           organizationId: ctx.organizationId,
@@ -639,17 +649,20 @@ export const createOrderFromTemplate = createServerFn({ method: 'POST' })
         await tx.insert(orderLineItems).values(lineItemValues);
       }
 
-      // Update order totals
-      const orderDiscount =
+      // Update order totals (round to avoid floating-point drift)
+      const orderDiscount = roundCurrency(
         (order.discountPercent ? subtotal * (order.discountPercent / 100) : 0) +
-        (order.discountAmount ?? 0);
-      const total = subtotal - orderDiscount + totalTax + (order.shippingAmount ?? 0);
+          (order.discountAmount ?? 0)
+      );
+      const total = roundCurrency(
+        subtotal - orderDiscount + totalTax + (order.shippingAmount ?? 0)
+      );
 
       await tx
         .update(orders)
         .set({
-          subtotal,
-          taxAmount: totalTax,
+          subtotal: roundCurrency(subtotal),
+          taxAmount: roundCurrency(totalTax),
           discountAmount: orderDiscount,
           total,
         })

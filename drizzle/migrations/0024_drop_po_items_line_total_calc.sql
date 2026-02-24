@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_order_items" DROP CONSTRAINT "purchase_order_items_line_total_calc";

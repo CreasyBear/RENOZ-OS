@@ -126,7 +126,7 @@ function generateOrderAlerts(order: OrderWithCustomer | undefined): OrderAlert[]
       message: `Balance of $${Number(order.balanceDue).toLocaleString()} is overdue`,
       action: {
         label: 'Record Payment',
-        href: `/orders/${order.id}?action=payment`,
+        href: `/orders/${order.id}?payment=true`,
       },
     });
   }
@@ -194,6 +194,8 @@ function generateOrderAlerts(order: OrderWithCustomer | undefined): OrderAlert[]
 export interface UseOrderDetailCompositeOptions {
   /** Called when user clicks "Ship Order" in status-update toast (e.g. after picking) */
   onOpenShipDialog?: () => void;
+  /** Controls background polling for detail refresh. */
+  refetchInterval?: number | false;
 }
 
 // ============================================================================
@@ -222,7 +224,10 @@ export function useOrderDetailComposite(
     isLoading,
     error,
     refetch,
-  } = useOrderWithCustomer({ orderId });
+  } = useOrderWithCustomer({
+    orderId,
+    refetchInterval: options?.refetchInterval ?? 30000,
+  });
 
   const {
     activities,
@@ -231,6 +236,7 @@ export function useOrderDetailComposite(
   } = useUnifiedActivities({
     entityType: 'order',
     entityId: orderId,
+    relatedCustomerId: order?.customerId ?? undefined,
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -243,10 +249,17 @@ export function useOrderDetailComposite(
   // ─────────────────────────────────────────────────────────────────────────
   // Derived State
   // ─────────────────────────────────────────────────────────────────────────
+  const hasShippedLineItems = useMemo(() => {
+    if (!order?.lineItems) return false;
+    return order.lineItems.some((item) => Number(item.qtyShipped ?? 0) > 0);
+  }, [order]);
+
   const nextStatusActions = useMemo(() => {
     if (!order) return [];
-    return STATUS_NEXT_ACTIONS[order.status as OrderStatus] ?? [];
-  }, [order]);
+    const actions = STATUS_NEXT_ACTIONS[order.status as OrderStatus] ?? [];
+    if (!hasShippedLineItems) return actions;
+    return actions.filter((status) => status !== 'cancelled');
+  }, [order, hasShippedLineItems]);
 
   const alerts = useMemo(() => generateOrderAlerts(order), [order]);
 

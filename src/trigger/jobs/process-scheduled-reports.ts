@@ -12,10 +12,11 @@
  */
 import { task, schedules, logger } from "@trigger.dev/sdk/v3";
 import { logger as appLogger } from "@/lib/logger";
-import { eq, and, lte, sql } from "drizzle-orm";
+import { eq, and, lte, sql, isNull, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { scheduledReports } from "drizzle/schema/reports";
 import { orders } from "drizzle/schema/orders/orders";
+import { orderPayments } from "drizzle/schema/orders/order-payments";
 import { customers } from "drizzle/schema/customers/customers";
 import { opportunities } from "drizzle/schema/pipeline";
 import { fetchOrganizationForDocument } from "@/server/functions/documents/organization-for-pdf";
@@ -95,6 +96,7 @@ export interface GenerateReportResult {
 
 interface MetricValues {
   revenue: number;
+  revenue_cash: number;
   orders_count: number;
   customer_count: number;
   pipeline_value: number;
@@ -154,6 +156,26 @@ async function calculateMetrics(
               )
             );
           results.revenue = Number(result?.total ?? 0);
+          break;
+        }
+
+        case "revenue_cash": {
+          const [result] = await db
+            .select({
+              total: sql<number>`COALESCE(SUM(CASE WHEN ${orderPayments.isRefund} THEN -${orderPayments.amount} ELSE ${orderPayments.amount} END), 0)`,
+            })
+            .from(orderPayments)
+            .innerJoin(orders, eq(orderPayments.orderId, orders.id))
+            .where(
+              and(
+                eq(orderPayments.organizationId, organizationId),
+                isNull(orderPayments.deletedAt),
+                isNull(orders.deletedAt),
+                gte(orderPayments.paymentDate, dateFromDate),
+                lte(orderPayments.paymentDate, dateToDate)
+              )
+            );
+          results.revenue_cash = Number(result?.total ?? 0);
           break;
         }
 
@@ -511,6 +533,7 @@ async function calculateMetrics(
 function formatMetricValue(metricId: string, value: number): string {
   switch (metricId) {
     case "revenue":
+    case "revenue_cash":
     case "pipeline_value":
     case "average_order_value":
     case "forecasted_revenue":
@@ -537,7 +560,8 @@ function formatMetricValue(metricId: string, value: number): string {
  */
 function getMetricLabel(metricId: string): string {
   const labels: Record<string, string> = {
-    revenue: "Revenue",
+    revenue: "Revenue (Invoiced)",
+    revenue_cash: "Revenue (Cash)",
     orders_count: "Orders",
     customer_count: "New Customers",
     pipeline_value: "Pipeline Value",

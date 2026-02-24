@@ -41,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards'
 import { CustomerTable, type CustomerTableData } from './customer-table'
 import { CustomerCard, CustomerCardSkeleton } from './customer-card'
 import {
@@ -580,7 +581,11 @@ export function CustomerDirectory({
 
       {/* Bulk Tag Assignment */}
       <Dialog open={showTagDialog} onOpenChange={setShowTagDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onEscapeKeyDown={createPendingDialogInteractionGuards(bulkAssignMutation.isPending).onEscapeKeyDown}
+          onInteractOutside={createPendingDialogInteractionGuards(bulkAssignMutation.isPending).onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>Assign Tags</DialogTitle>
             <DialogDescription>

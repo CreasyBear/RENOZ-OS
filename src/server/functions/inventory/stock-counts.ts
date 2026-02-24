@@ -19,10 +19,24 @@ import {
   inventoryMovements,
   warehouseLocations,
   products,
+  serializedItems,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
+import { inventoryFinanceMutationSuccess } from '@/lib/server/inventory-finance-mutation-contract';
+import {
+  assertSerializedInventoryCostIntegrity,
+  consumeLayersFIFO,
+  createReceiptLayersWithCostComponents,
+  recomputeInventoryValueFromLayers,
+} from '@/server/functions/_shared/inventory-finance';
+import {
+  addSerializedItemEvent,
+  isMissingSerializedInfraError,
+  upsertSerializedItemForInventory,
+} from '@/server/functions/_shared/serialized-lineage';
+import { normalizeSerial } from '@/lib/serials';
 import {
   createStockCountSchema,
   updateStockCountSchema,
@@ -33,7 +47,6 @@ import {
 // ============================================================================
 // TYPES
 // ============================================================================
-
 
 // ============================================================================
 // STOCK COUNT CRUD
@@ -331,6 +344,9 @@ export const startStockCount = createServerFn({ method: 'POST' })
     }
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Get inventory items to count
       const inventoryConditions = [eq(inventory.organizationId, ctx.organizationId)];
 
@@ -512,6 +528,9 @@ export const bulkUpdateCountItems = createServerFn({ method: 'POST' })
     }
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // OPTIMIZED: Use bulk update with CASE statement instead of loop
       // This reduces N sequential updates to a single update query
       if (data.items.length === 0) {
@@ -622,10 +641,24 @@ export const completeStockCount = createServerFn({ method: 'POST' })
     }
 
     return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
       // Find items with variance
       const varianceItems = items.filter((i) => i.countedQuantity !== i.expectedQuantity);
 
       const adjustments: (typeof inventoryMovements.$inferSelect)[] = [];
+      const affectedInventoryIds = new Set<string>();
+      let valuationBefore = 0;
+      let valuationAfter = 0;
+      let cogsImpact = 0;
+      const layerDeltas: Array<{
+        inventoryId?: string;
+        layerId?: string;
+        quantityDelta: number;
+        costDelta: number;
+        action: string;
+      }> = [];
 
       if (data.applyAdjustments && varianceItems.length > 0) {
         // OPTIMIZED: Fetch all inventory records in one query instead of N queries
@@ -647,80 +680,210 @@ export const completeStockCount = createServerFn({ method: 'POST' })
         const validVarianceItems = varianceItems.filter((item) => inventoryMap.has(item.inventoryId));
 
         if (validVarianceItems.length > 0) {
-          // OPTIMIZED: Bulk update inventory using CASE statements
-          const inventoryCaseStatements = {
-            quantityOnHand: sql`CASE ${inventory.id}
-              ${sql.join(
-                validVarianceItems.map((item) => {
-                  const inv = inventoryMap.get(item.inventoryId)!;
-                  const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
-                  const newQuantity = (inv.quantityOnHand ?? 0) + variance;
-                  return sql`WHEN ${item.inventoryId} THEN ${newQuantity}`;
-                }),
-                sql` `
-              )}
-              ELSE ${inventory.quantityOnHand}
-            END`,
-            totalValue: sql`CASE ${inventory.id}
-              ${sql.join(
-                validVarianceItems.map((item) => {
-                  const inv = inventoryMap.get(item.inventoryId)!;
-                  const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
-                  const newQuantity = (inv.quantityOnHand ?? 0) + variance;
-                  return sql`WHEN ${item.inventoryId} THEN ${newQuantity} * COALESCE(${inventory.unitCost}, 0)`;
-                }),
-                sql` `
-              )}
-              ELSE ${inventory.totalValue}
-            END`,
-          };
+          for (const item of validVarianceItems) {
+            const inv = inventoryMap.get(item.inventoryId);
+            if (!inv) continue;
 
-          await tx
-            .update(inventory)
-            .set({
-              quantityOnHand: inventoryCaseStatements.quantityOnHand,
-              totalValue: inventoryCaseStatements.totalValue,
-              updatedAt: new Date(),
-              updatedBy: ctx.user.id,
-            })
-            .where(
-              and(
-                eq(inventory.organizationId, ctx.organizationId),
-                inArray(inventory.id, validVarianceItems.map((item) => item.inventoryId))
-              )
-            );
-
-          // OPTIMIZED: Bulk insert movements
-          const movementValues = validVarianceItems.map((item) => {
-            const inv = inventoryMap.get(item.inventoryId)!;
             const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
-            const newQuantity = (inv.quantityOnHand ?? 0) + variance;
-            return {
+            if (variance === 0) continue;
+
+            const previousQuantity = Number(inv.quantityOnHand ?? 0);
+            const newQuantity = previousQuantity + variance;
+            const previousValue = Number(inv.totalValue ?? 0);
+            valuationBefore += previousValue;
+            affectedInventoryIds.add(inv.id);
+
+            if (newQuantity < 0) {
+              throw new ValidationError('Count adjustment would result in negative inventory', {
+                quantity: [`Inventory ${item.inventoryId} would become ${newQuantity}`],
+              });
+            }
+
+            const isSerializedRow = !!inv.serialNumber;
+            if (isSerializedRow && newQuantity !== 0 && newQuantity !== 1) {
+              throw new ValidationError('Serialized inventory quantity must remain 0 or 1', {
+                quantity: [`Serialized row ${item.inventoryId} would become ${newQuantity}`],
+                code: ['serialized_unit_violation'],
+              });
+            }
+
+            await tx
+              .update(inventory)
+              .set({
+                quantityOnHand: newQuantity,
+                updatedAt: new Date(),
+                updatedBy: ctx.user.id,
+              })
+              .where(eq(inventory.id, inv.id));
+
+            let movementUnitCost = Number(inv.unitCost ?? 0);
+            let movementTotalCost = movementUnitCost * variance;
+
+            if (variance < 0) {
+              const consumed = await consumeLayersFIFO(tx, {
+                organizationId: ctx.organizationId,
+                inventoryId: inv.id,
+                quantity: Math.abs(variance),
+              });
+              if (consumed.quantityUnfulfilled > 0) {
+                throw new ValidationError('Count adjustment cannot consume more than active cost layers', {
+                  quantity: [
+                    `Missing ${consumed.quantityUnfulfilled} layer units for inventory ${inv.id}`,
+                  ],
+                  code: ['insufficient_cost_layers'],
+                });
+              }
+              movementTotalCost = -Math.abs(consumed.totalCost);
+              movementUnitCost =
+                Math.abs(variance) > 0 ? consumed.totalCost / Math.abs(variance) : 0;
+              cogsImpact += Math.abs(consumed.totalCost);
+              layerDeltas.push(
+                ...consumed.layerDeltas.map((delta) => ({
+                  inventoryId: delta.inventoryId,
+                  layerId: delta.layerId,
+                  quantityDelta: -delta.quantity,
+                  costDelta: -(delta.quantity * delta.unitCost),
+                  action: 'consume_fifo',
+                }))
+              );
+            } else {
+              const createdLayerId = await createReceiptLayersWithCostComponents(tx, {
+                organizationId: ctx.organizationId,
+                inventoryId: inv.id,
+                quantity: variance,
+                receivedAt: new Date(),
+                unitCost: movementUnitCost,
+                referenceType: 'adjustment',
+                referenceId: data.id,
+                currency: 'AUD',
+                createdBy: ctx.user.id,
+                costComponents: [
+                  {
+                    componentType: 'base_unit_cost',
+                    costType: 'stock_count_adjustment',
+                    amountTotal: movementUnitCost * variance,
+                    amountPerUnit: movementUnitCost,
+                    quantityBasis: variance,
+                    metadata: { source: 'stock_count', countCode: count.countCode },
+                  },
+                ],
+              });
+              layerDeltas.push({
+                inventoryId: inv.id,
+                layerId: createdLayerId,
+                quantityDelta: variance,
+                costDelta: movementUnitCost * variance,
+                action: 'create_adjustment_layer',
+              });
+            }
+
+            const recomputed = await recomputeInventoryValueFromLayers(tx, {
               organizationId: ctx.organizationId,
-              inventoryId: item.inventoryId,
-              productId: inv.productId,
-              locationId: inv.locationId,
-              movementType: 'adjust' as const,
-              quantity: variance,
-              previousQuantity: inv.quantityOnHand ?? 0,
-              newQuantity,
-              referenceType: 'count' as const,
-              referenceId: data.id,
-              metadata: {
-                countCode: count.countCode,
-                varianceReason: item.varianceReason ?? undefined,
-              },
-              notes: item.varianceReason ?? `Count adjustment from ${count.countCode}`,
-              createdBy: ctx.user.id,
-            };
-          });
+              inventoryId: inv.id,
+              userId: ctx.user.id,
+            });
+            valuationAfter += Number(recomputed.totalValue ?? 0);
 
-          const insertedMovements = await tx
-            .insert(inventoryMovements)
-            .values(movementValues)
-            .returning();
+            if (isSerializedRow && inv.serialNumber) {
+              await assertSerializedInventoryCostIntegrity(tx, {
+                organizationId: ctx.organizationId,
+                inventoryId: inv.id,
+                serialNumber: inv.serialNumber,
+                expectedQuantityOnHand: newQuantity as 0 | 1,
+              });
+            }
 
-          adjustments.push(...insertedMovements);
+            const [movement] = await tx
+              .insert(inventoryMovements)
+              .values({
+                organizationId: ctx.organizationId,
+                inventoryId: inv.id,
+                productId: inv.productId,
+                locationId: inv.locationId,
+                movementType: 'adjust',
+                quantity: variance,
+                previousQuantity,
+                newQuantity,
+                unitCost: movementUnitCost,
+                totalCost: movementTotalCost,
+                referenceType: 'count',
+                referenceId: data.id,
+                metadata: {
+                  countCode: count.countCode,
+                  varianceReason: item.varianceReason ?? undefined,
+                  cogsUnitCost: movementUnitCost,
+                  cogsTotal: movementTotalCost,
+                },
+                notes: item.varianceReason ?? `Count adjustment from ${count.countCode}`,
+                createdBy: ctx.user.id,
+              })
+              .returning();
+
+            if (isSerializedRow && inv.serialNumber) {
+              const normalizedSerial = normalizeSerial(inv.serialNumber);
+              try {
+                if (newQuantity > 0) {
+                  const serializedItemId = await upsertSerializedItemForInventory(tx, {
+                    organizationId: ctx.organizationId,
+                    productId: inv.productId,
+                    serialNumber: normalizedSerial,
+                    inventoryId: inv.id,
+                    status: 'available',
+                    userId: ctx.user.id,
+                  });
+                  if (serializedItemId) {
+                    await addSerializedItemEvent(tx, {
+                      organizationId: ctx.organizationId,
+                      serializedItemId,
+                      eventType: 'status_changed',
+                      entityType: 'inventory_movement',
+                      entityId: movement.id,
+                      notes: `Count adjustment from ${count.countCode} (+${variance})`,
+                      userId: ctx.user.id,
+                    });
+                  }
+                } else {
+                  const [serializedItem] = await tx
+                    .select({ id: serializedItems.id })
+                    .from(serializedItems)
+                    .where(
+                      and(
+                        eq(serializedItems.organizationId, ctx.organizationId),
+                        eq(serializedItems.serialNumberNormalized, normalizedSerial)
+                      )
+                    )
+                    .limit(1);
+
+                  if (serializedItem) {
+                    await tx
+                      .update(serializedItems)
+                      .set({
+                        status: 'scrapped',
+                        currentInventoryId: null,
+                        updatedBy: ctx.user.id,
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(serializedItems.id, serializedItem.id));
+                    await addSerializedItemEvent(tx, {
+                      organizationId: ctx.organizationId,
+                      serializedItemId: serializedItem.id,
+                      eventType: 'status_changed',
+                      entityType: 'inventory_movement',
+                      entityId: movement.id,
+                      notes: `Count adjustment from ${count.countCode}`,
+                      userId: ctx.user.id,
+                    });
+                  }
+                }
+              } catch (error) {
+                if (!isMissingSerializedInfraError(error)) {
+                  throw error;
+                }
+              }
+            }
+
+            adjustments.push(movement);
+          }
 
           // OPTIMIZED: Bulk update stock count items
           await tx
@@ -757,15 +920,27 @@ export const completeStockCount = createServerFn({ method: 'POST' })
         .where(eq(stockCounts.id, data.id))
         .returning();
 
-      return {
-        count: completedCount,
-        adjustments,
-        summary: {
-          totalItems: items.length,
-          varianceItems: varianceItems.length,
-          adjustmentsMade: adjustments.length,
+      return inventoryFinanceMutationSuccess(
+        {
+          count: completedCount,
+          adjustments,
+          summary: {
+            totalItems: items.length,
+            varianceItems: varianceItems.length,
+            adjustmentsMade: adjustments.length,
+          },
         },
-      };
+        'Stock count completed successfully',
+        {
+          affectedInventoryIds: Array.from(affectedInventoryIds),
+          financeMetadata: {
+            valuationBefore,
+            valuationAfter,
+            cogsImpact,
+            layerDeltas,
+          },
+        },
+      );
     });
   });
 

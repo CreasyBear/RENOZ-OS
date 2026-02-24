@@ -19,16 +19,9 @@ import { AddressManager, type ManagedAddress } from '@/components/domain/custome
 import {
   useCustomer,
   useCustomerTags,
-  useUpdateCustomer,
-  useCreateContact,
-  useUpdateContact,
-  useDeleteContact,
-  useCreateAddress,
-  useUpdateAddress,
-  useDeleteAddress,
+  useCustomerEditSubmission,
+  type CustomerEditFormValues,
 } from '@/hooks/customers'
-import { logger } from '@/lib/logger'
-import { toast } from 'sonner'
 import { useState } from 'react'
 import type {
   CustomerWithRelations,
@@ -73,7 +66,7 @@ function EditCustomerFormContent({
   const navigate = useNavigate()
 
   const [contacts, setContacts] = useState<ManagedContact[]>(() =>
-    customer.contacts.map((c: CustomerDetailContact) => ({
+    (customer.contacts ?? []).map((c: CustomerDetailContact) => ({
       id: c.id,
       firstName: c.firstName,
       lastName: c.lastName,
@@ -88,7 +81,7 @@ function EditCustomerFormContent({
     }))
   )
   const [addresses, setAddresses] = useState<ManagedAddress[]>(() =>
-    customer.addresses.map((a: CustomerDetailAddress) => ({
+    (customer.addresses ?? []).map((a: CustomerDetailAddress) => ({
       id: a.id,
       type: a.type as 'billing' | 'shipping' | 'service' | 'headquarters',
       isPrimary: a.isPrimary,
@@ -101,163 +94,20 @@ function EditCustomerFormContent({
     }))
   )
 
-  // Update customer using centralized hook (handles cache invalidation)
-  const updateCustomerMutation = useUpdateCustomer()
+  const { submitEdit, isLoading } = useCustomerEditSubmission({
+    customerId,
+    existingContacts: customer.contacts ?? [],
+    existingAddresses: customer.addresses ?? [],
+  })
 
-  // Contact mutations using centralized hooks
-  const createContactMutation = useCreateContact()
-  const updateContactMutation = useUpdateContact()
-  const deleteContactMutation = useDeleteContact()
-
-  // Address mutations using centralized hooks
-  const createAddressMutation = useCreateAddress()
-  const updateAddressMutation = useUpdateAddress()
-  const deleteAddressMutation = useDeleteAddress()
-
-  const handleSubmit = async (formData: {
-    name: string
-    status: string
-    type: string
-    creditHold: boolean
-    tags: string[]
-    legalName?: string
-    email?: string
-    phone?: string
-    website?: string
-    size?: string
-    industry?: string
-    taxId?: string
-    registrationNumber?: string
-    creditLimit?: number
-    creditHoldReason?: string
-  }) => {
-    if (!customer) return
-
-    try {
-      // Update customer
-      await updateCustomerMutation.mutateAsync({
-        id: customerId,
-        name: formData.name,
-        status: formData.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
-        type: formData.type as 'individual' | 'business' | 'government' | 'non_profit',
-        creditHold: formData.creditHold,
-        tags: formData.tags,
-        legalName: formData.legalName,
-        email: formData.email,
-        phone: formData.phone,
-        website: formData.website,
-        size: formData.size as 'micro' | 'small' | 'medium' | 'large' | 'enterprise' | undefined,
-        industry: formData.industry,
-        taxId: formData.taxId,
-        registrationNumber: formData.registrationNumber,
-        creditLimit: formData.creditLimit,
-        creditHoldReason: formData.creditHoldReason,
-      })
-
-      // Handle contacts - sync with server
-      const existingContactIds = customer.contacts.map((c: CustomerDetailContact) => c.id)
-      const currentContactIds = contacts.filter((c) => !c.isNew).map((c) => c.id)
-
-      // Delete removed contacts
-      for (const id of existingContactIds) {
-        if (!currentContactIds.includes(id)) {
-          await deleteContactMutation.mutateAsync(id)
-        }
-      }
-
-      // Create or update contacts
-      for (const contact of contacts) {
-        if (contact.isNew) {
-          await createContactMutation.mutateAsync({
-            customerId,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            email: contact.email,
-            phone: contact.phone,
-            mobile: contact.mobile,
-            title: contact.title,
-            department: contact.department,
-            isPrimary: contact.isPrimary,
-            decisionMaker: contact.decisionMaker,
-            influencer: contact.influencer,
-          })
-        } else {
-          await updateContactMutation.mutateAsync({
-            id: contact.id,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            email: contact.email,
-            phone: contact.phone,
-            mobile: contact.mobile,
-            title: contact.title,
-            department: contact.department,
-            isPrimary: contact.isPrimary,
-            decisionMaker: contact.decisionMaker,
-            influencer: contact.influencer,
-          })
-        }
-      }
-
-      // Handle addresses - sync with server
-      const existingAddressIds = customer.addresses.map((a: CustomerDetailAddress) => a.id)
-      const currentAddressIds = addresses.filter((a) => !a.isNew).map((a) => a.id)
-
-      // Delete removed addresses
-      for (const id of existingAddressIds) {
-        if (!currentAddressIds.includes(id)) {
-          await deleteAddressMutation.mutateAsync(id)
-        }
-      }
-
-      // Create or update addresses
-      for (const address of addresses) {
-        if (address.isNew) {
-          await createAddressMutation.mutateAsync({
-            customerId,
-            type: address.type as 'billing' | 'shipping' | 'service' | 'headquarters',
-            isPrimary: address.isPrimary,
-            street1: address.street1,
-            street2: address.street2,
-            city: address.city,
-            state: address.state,
-            postcode: address.postcode,
-            country: address.country,
-          })
-        } else {
-          await updateAddressMutation.mutateAsync({
-            id: address.id,
-            type: address.type as 'billing' | 'shipping' | 'service' | 'headquarters',
-            isPrimary: address.isPrimary,
-            street1: address.street1,
-            street2: address.street2,
-            city: address.city,
-            state: address.state,
-            postcode: address.postcode,
-            country: address.country,
-          })
-        }
-      }
-
-      toast.success('Customer updated successfully')
-      onSuccess()
-    } catch (error) {
-      logger.error('Failed to update customer', error as Error, { context: 'customers-edit' })
-      toast.error('Failed to update customer')
-    }
+  const handleSubmit = async (formData: CustomerEditFormValues) => {
+    await submitEdit(formData, contacts, addresses)
+    onSuccess()
   }
 
   const handleCancel = () => {
     navigate({ to: '/customers/$customerId', params: { customerId }, search: {} })
   }
-
-  const isLoading =
-    updateCustomerMutation.isPending ||
-    createContactMutation.isPending ||
-    updateContactMutation.isPending ||
-    deleteContactMutation.isPending ||
-    createAddressMutation.isPending ||
-    updateAddressMutation.isPending ||
-    deleteAddressMutation.isPending
 
   return (
     <div className="space-y-6">

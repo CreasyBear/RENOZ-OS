@@ -155,7 +155,7 @@ const normalizeUrl = (value: unknown) => {
 };
 
 export const phoneSchema = z
-  .preprocess(emptyStringToUndefined, z
+  .preprocess(trimStringToUndefined, z
     .string()
     .min(6, 'Phone number too short')
     .max(20, 'Phone number too long')

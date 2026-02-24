@@ -231,10 +231,11 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<CursorPaginatedResponse<ActivityWithUser>> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
-    const { entityType, entityId, cursor, pageSize } = data;
+    const { entityType, entityId, relatedCustomerId, cursor, pageSize } = data;
 
     // Build where conditions
     // For customers, also include order activities where metadata.customerId matches
+    // For orders, when relatedCustomerId provided, also include customer activities (Quick Log, etc.)
     const conditions = [eq(activities.organizationId, ctx.organizationId)];
 
     if (entityType === 'customer') {
@@ -251,6 +252,20 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
           and(
             eq(activities.entityType, 'order'),
             eq(activities.customerIdFromMetadata, entityId)
+          )
+        )!
+      );
+    } else if (entityType === 'order' && relatedCustomerId) {
+      // Include both order activities and customer activities for the order's customer
+      conditions.push(
+        or(
+          and(
+            eq(activities.entityType, 'order'),
+            eq(activities.entityId, entityId)
+          ),
+          and(
+            eq(activities.entityType, 'customer'),
+            eq(activities.entityId, relatedCustomerId)
           )
         )!
       );

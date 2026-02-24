@@ -4,14 +4,12 @@
  * Manages customer-specific pricing overrides with search, add, and remove functionality.
  */
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import { z } from "zod";
-import { Plus, Trash2, User, Calendar, Percent, DollarSign } from "lucide-react";
+import { Plus, Trash2, User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -22,14 +20,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -39,13 +29,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  FormDialog,
+  NumberField,
+  DateField,
+} from "@/components/shared/forms";
 import { CustomerSelectorContainer } from "@/components/domain/orders/creation/customer-selector-container";
 import {
   useSetCustomerPrice,
@@ -57,12 +46,12 @@ import type { CustomerPrice } from "@/lib/schemas/products";
 const customerPriceFormSchema = z.object({
   customerId: z.string().uuid("Please select a customer"),
   customerName: z.string().optional(), // For display purposes
-  price: z.number().min(0, "Price cannot be negative").nullable(),
-  discountPercent: z.number().min(0).max(100).nullable(),
+  price: z.number().min(0, "Price cannot be negative").optional().nullable(),
+  discountPercent: z.number().min(0).max(100).optional().nullable(),
   validFrom: z.date(),
-  validTo: z.date().nullable(),
+  validTo: z.date().optional().nullable(),
 }).refine(
-  (data) => data.price !== null || data.discountPercent !== null,
+  (data) => data.price != null || data.discountPercent != null,
   { message: "Either price or discount percentage is required", path: ["price"] }
 ).refine(
   (data) => !data.validTo || data.validTo > data.validFrom,
@@ -122,31 +111,42 @@ export function CustomerPricing({
 
   const isSubmitting = setCustomerPriceMutation.isPending || deleteCustomerPriceMutation.isPending;
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<CustomerPriceFormValues>({
-    resolver: zodResolver(customerPriceFormSchema),
-    defaultValues: {
-      customerId: "",
-      price: null,
-      discountPercent: null,
-      validFrom: new Date(),
-      validTo: null,
-    },
+  const getDefaultValues = (): CustomerPriceFormValues => ({
+    customerId: "",
+    customerName: undefined,
+    price: null,
+    discountPercent: null,
+    validFrom: new Date(),
+    validTo: null,
   });
 
-  /* eslint-disable react-hooks/incompatible-library -- React Hook Form watch(); known limitation */
-  const watchPrice = watch("price");
-  const watchDiscount = watch("discountPercent");
-  const watchValidFrom = watch("validFrom");
-  const watchValidTo = watch("validTo");
-  const selectedCustomerId = watch("customerId") || null;
-  /* eslint-enable react-hooks/incompatible-library */
+  const form = useTanStackForm<CustomerPriceFormValues>({
+    schema: customerPriceFormSchema,
+    defaultValues: getDefaultValues(),
+    onSubmit: (data) => {
+      setCustomerPriceMutation.mutate(
+        {
+          productId,
+          customerId: data.customerId,
+          price: data.price ?? undefined,
+          discountPercent: data.discountPercent ?? undefined,
+          validFrom: data.validFrom,
+          validTo: data.validTo ?? undefined,
+        },
+        {
+          onSuccess: () => {
+            setIsDialogOpen(false);
+            onPricesChange?.();
+          },
+        }
+      );
+    },
+    onSubmitInvalid: () => {},
+  });
+
+  const watchPrice = form.useWatch("price");
+  const watchDiscount = form.useWatch("discountPercent");
+  const selectedCustomerId = form.useWatch("customerId") || null;
 
   // Sort prices: active first, then by customer name
   const sortedPrices = [...customerPrices].sort((a, b) => {
@@ -158,34 +158,8 @@ export function CustomerPricing({
 
   // Open dialog for new customer price
   const handleAdd = () => {
-    reset({
-      customerId: "",
-      price: null,
-      discountPercent: null,
-      validFrom: new Date(),
-      validTo: null,
-    });
+    form.reset(getDefaultValues());
     setIsDialogOpen(true);
-  };
-
-  // Submit form
-  const onSubmit = (data: CustomerPriceFormValues) => {
-    setCustomerPriceMutation.mutate(
-      {
-        productId,
-        customerId: data.customerId,
-        price: data.price ?? undefined,
-        discountPercent: data.discountPercent ?? undefined,
-        validFrom: data.validFrom,
-        validTo: data.validTo ?? undefined,
-      },
-      {
-        onSuccess: () => {
-          setIsDialogOpen(false);
-          onPricesChange?.();
-        },
-      }
-    );
   };
 
   // Delete customer price
@@ -311,161 +285,117 @@ export function CustomerPricing({
       </Card>
 
       {/* Add Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Customer Price</DialogTitle>
-            <DialogDescription>
-              Set a special price or discount for a specific customer
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Customer Selection */}
+      <FormDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title="Add Customer Price"
+        description="Set a special price or discount for a specific customer"
+        form={form}
+        submitLabel="Add Price"
+        cancelLabel="Cancel"
+        loadingLabel="Saving..."
+        submitError={setCustomerPriceMutation.error?.message ?? null}
+        submitDisabled={isSubmitting}
+        className="sm:max-w-[500px]"
+      >
+        {/* Customer Selection */}
+        <form.Field name="customerId">
+          {(field) => (
             <div className="space-y-2">
               <Label htmlFor="customerId">Customer</Label>
-              <input type="hidden" {...register("customerId")} />
               <CustomerSelectorContainer
                 selectedCustomerId={selectedCustomerId}
                 onSelect={(customer) => {
-                  setValue("customerId", customer?.id ?? "");
-                  setValue("customerName", customer?.name);
+                  form.setFieldValue("customerId", customer?.id ?? "");
+                  form.setFieldValue("customerName", customer?.name);
                 }}
               />
-              {errors.customerId && (
-                <p className="text-sm text-destructive">{errors.customerId.message}</p>
+              {field.state.meta.errors.length > 0 && (
+                <p className="text-sm text-destructive">
+                  {field.state.meta.errors.join(", ")}
+                </p>
               )}
             </div>
+          )}
+        </form.Field>
 
-            {/* Pricing Options */}
-            <div className="space-y-4">
+        {/* Pricing Options */}
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Set either a fixed price or a discount percentage
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <form.Field name="price">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Fixed Price"
+                  min={0}
+                  step={0.01}
+                  prefix="$"
+                  placeholder={formatPrice(basePrice)}
+                  disabled={watchDiscount != null && watchDiscount > 0}
+                />
+              )}
+            </form.Field>
+            <form.Field name="discountPercent">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Discount %"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  placeholder="e.g. 15"
+                  disabled={watchPrice != null && watchPrice > 0}
+                />
+              )}
+            </form.Field>
+          </div>
+
+          {/* Preview */}
+          {(watchPrice || watchDiscount) && (
+            <div className="p-3 bg-muted rounded-md">
               <p className="text-sm text-muted-foreground">
-                Set either a fixed price or a discount percentage
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price" className="flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" />
-                    Fixed Price
-                  </Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder={formatPrice(basePrice)}
-                    disabled={watchDiscount !== null && watchDiscount > 0}
-                    {...register("price", {
-                      setValueAs: (v) => (v === "" ? null : parseFloat(v)),
-                    })}
-                  />
-                  {errors.price && (
-                    <p className="text-sm text-destructive">{errors.price.message}</p>
+                Customer will pay:{" "}
+                <span className="font-medium text-foreground">
+                  {formatPrice(
+                    watchPrice ?? basePrice * (1 - (watchDiscount ?? 0) / 100)
                   )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="discountPercent" className="flex items-center gap-1">
-                    <Percent className="h-3 w-3" />
-                    Discount %
-                  </Label>
-                  <Input
-                    id="discountPercent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    placeholder="e.g. 15"
-                    disabled={watchPrice !== null && watchPrice > 0}
-                    {...register("discountPercent", {
-                      setValueAs: (v) => (v === "" ? null : parseFloat(v)),
-                    })}
-                  />
-                </div>
-              </div>
-
-              {/* Preview */}
-              {(watchPrice || watchDiscount) && (
-                <div className="p-3 bg-muted rounded-md">
-                  <p className="text-sm text-muted-foreground">
-                    Customer will pay:{" "}
-                    <span className="font-medium text-foreground">
-                      {formatPrice(
-                        watchPrice ?? basePrice * (1 - (watchDiscount ?? 0) / 100)
-                      )}
-                    </span>
-                    {watchDiscount && (
-                      <span className="text-green-600 ml-2">
-                        (saves {formatPrice(basePrice * ((watchDiscount ?? 0) / 100))})
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Validity Period */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Valid From
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      {watchValidFrom ? formatDate(watchValidFrom) : "Select date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={watchValidFrom}
-                      onSelect={(date) => date && setValue("validFrom", date)}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Valid To (optional)
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      {watchValidTo ? formatDate(watchValidTo) : "No end date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <CalendarComponent
-                      mode="single"
-                      selected={watchValidTo ?? undefined}
-                      onSelect={(date) => setValue("validTo", date ?? null)}
-                    />
-                  </PopoverContent>
-                </Popover>
-                {errors.validTo && (
-                  <p className="text-sm text-destructive">{errors.validTo.message}</p>
+                </span>
+                {watchDiscount && (
+                  <span className="text-green-600 ml-2">
+                    (saves {formatPrice(basePrice * ((watchDiscount ?? 0) / 100))})
+                  </span>
                 )}
-              </div>
+              </p>
             </div>
+          )}
+        </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Add Price"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        {/* Validity Period */}
+        <div className="grid grid-cols-2 gap-4">
+          <form.Field name="validFrom">
+            {(field) => (
+              <DateField
+                field={field}
+                label="Valid From"
+                placeholder="Select date"
+                required
+              />
+            )}
+          </form.Field>
+          <form.Field name="validTo">
+            {(field) => (
+              <DateField
+                field={field}
+                label="Valid To (optional)"
+                placeholder="No end date"
+              />
+            )}
+          </form.Field>
+        </div>
+      </FormDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingPrice} onOpenChange={() => setDeletingPrice(null)}>

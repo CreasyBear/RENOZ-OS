@@ -17,7 +17,7 @@ import {
   revokePortalAccessSchema,
 } from '@/lib/schemas/portal';
 import { AuthError, NotFoundError, ServerError } from '@/lib/server/errors';
-import { logAuditEvent } from '../_shared/audit-logs';
+import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 
 // ============================================================================

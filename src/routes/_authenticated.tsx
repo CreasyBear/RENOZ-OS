@@ -54,7 +54,6 @@ export const Route = createFileRoute('/_authenticated')({
 
     const { user, appUser } = await getAuthContext(location)
 
-    // Return user context for child routes
     authLogger.debug('[auth] beforeLoad ok', {
       path: location.pathname,
       userId: appUser.id,
@@ -68,10 +67,33 @@ export const Route = createFileRoute('/_authenticated')({
   component: AuthenticatedLayout,
 })
 
+/**
+ * Renders QuickLogDialog with customer/opportunity context from the route.
+ * Must be a child of OpenQuickLogProvider so useOpenQuickLog() returns the correct context.
+ * Previously, customerId was always undefined because the parent of the provider
+ * cannot read the provider's context.
+ */
+function GlobalQuickLogDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const openQuickLogContext = useOpenQuickLog()
+  return (
+    <QuickLogDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      customerId={openQuickLogContext?.context?.customerId}
+      opportunityId={openQuickLogContext?.context?.opportunityId}
+    />
+  )
+}
+
 function AuthenticatedLayout() {
   // Quick Log Dialog state
   const [quickLogOpen, setQuickLogOpen] = useState(false)
-  const openQuickLogContext = useOpenQuickLog()
 
   // Enable Cmd+L keyboard shortcut for quick log
   const handleOpenQuickLog = useCallback(() => {
@@ -98,12 +120,11 @@ function AuthenticatedLayout() {
             <Outlet />
 
             {/* Global Quick Log Dialog - accessible via Cmd+L or Command Palette.
-                Pre-fills customer/opportunity when on those pages. */}
-            <QuickLogDialog
+                Pre-fills customer/opportunity when on those pages.
+                Uses GlobalQuickLogDialog so context is read from inside the provider. */}
+            <GlobalQuickLogDialog
               open={quickLogOpen}
               onOpenChange={setQuickLogOpen}
-              customerId={openQuickLogContext?.context?.customerId}
-              opportunityId={openQuickLogContext?.context?.opportunityId}
             />
 
             {/* Global Confirmation Dialog - accessible from anywhere via useConfirmation hook */}
