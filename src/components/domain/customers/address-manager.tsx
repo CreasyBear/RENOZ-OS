@@ -293,7 +293,6 @@ function AddressFormDialog({
   }))
 
   const stateOptions = [
-    { value: '', label: 'Select state' },
     ...australianStates,
   ]
 

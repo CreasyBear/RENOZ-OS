@@ -15,10 +15,11 @@
  */
 
 import { useNavigate } from '@tanstack/react-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Plus, Trash2, CheckCircle, Ban } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { DomainFilterBar } from '@/components/shared/filters';
 import { BulkActionsBar } from '@/components/shared/data-table';
 import { toastSuccess, toastError, useConfirmation } from '@/hooks';
@@ -38,6 +39,7 @@ import {
   type SupplierTableItem,
   isSupplierSortField,
 } from '@/lib/schemas/suppliers';
+import { executeBulkAction, summarizeBulkFailures, type BulkActionFailure } from '@/lib/actions/bulk-action-results';
 
 type SupplierSearchParams = z.infer<typeof supplierSearchSchema>;
 
@@ -68,6 +70,7 @@ interface SuppliersPageProps {
 export default function SuppliersPage({ search }: SuppliersPageProps) {
   const navigate = useNavigate();
   const confirm = useConfirmation();
+  const [bulkFailures, setBulkFailures] = useState<BulkActionFailure[]>([]);
 
   // URL-synced filter state with transformations
   const { filters, setFilters } = useTransformedFilterUrlState({
@@ -137,6 +140,7 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
     handleShiftClickRange,
     clearSelection,
     isSelected,
+    setSelectedIds,
   } = useTableSelection({ items: suppliers });
 
   // Mutations
@@ -205,6 +209,7 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
 
       try {
         await deleteMutation.mutateAsync({ data: { id } });
+        setBulkFailures([]);
         toastSuccess('Supplier deleted successfully', {
           action: {
             label: 'Add Supplier',
@@ -232,47 +237,74 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
     });
     if (!confirmed) return;
 
-    try {
-      await Promise.all(
-        selectedItems.map((s) => deleteMutation.mutateAsync({ data: { id: s.id } }))
-      );
-      toastSuccess(`Deleted ${count} supplier${count > 1 ? 's' : ''}`, {
+    const result = await executeBulkAction({
+      items: selectedItems,
+      getId: (supplier) => supplier.id,
+      getLabel: (supplier) => supplier.name,
+      run: (supplier) => deleteMutation.mutateAsync({ data: { id: supplier.id } }),
+    });
+
+    if (result.succeededIds.length > 0) {
+      toastSuccess(`Deleted ${result.succeededIds.length} supplier${result.succeededIds.length > 1 ? 's' : ''}`, {
         action: {
           label: 'Add Supplier',
           onClick: () => navigate({ to: '/suppliers/create' }),
         },
       });
-      clearSelection();
-    } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : 'Failed to delete some suppliers'
-      );
     }
-  }, [selectedItems, confirm, deleteMutation, clearSelection, navigate]);
+
+    if (result.failed.length > 0) {
+      setBulkFailures(result.failed);
+      setSelectedIds(new Set(result.failed.map((failure) => failure.id)));
+      toastError(
+        `${result.failed.length} supplier delete${result.failed.length > 1 ? 's' : ''} failed`,
+        {
+          description: summarizeBulkFailures(result.failed),
+        }
+      );
+      return;
+    }
+
+    setBulkFailures([]);
+    clearSelection();
+  }, [selectedItems, confirm, deleteMutation, clearSelection, navigate, setSelectedIds]);
 
   const handleBulkStatusUpdate = useCallback(
     async (status: 'active' | 'inactive') => {
       if (selectedItems.length === 0) return;
 
-      try {
-        await Promise.all(
-          selectedItems.map((s) =>
-            updateMutation.mutateAsync({ data: { id: s.id, status } })
-          )
-        );
+      const result = await executeBulkAction({
+        items: selectedItems,
+        getId: (supplier) => supplier.id,
+        getLabel: (supplier) => supplier.name,
+        run: (supplier) =>
+          updateMutation.mutateAsync({ data: { id: supplier.id, status } }),
+      });
+
+      if (result.succeededIds.length > 0) {
         toastSuccess(
-          `${status === 'active' ? 'Activated' : 'Deactivated'} ${selectedItems.length} supplier${
-            selectedItems.length > 1 ? 's' : ''
+          `${status === 'active' ? 'Activated' : 'Deactivated'} ${result.succeededIds.length} supplier${
+            result.succeededIds.length > 1 ? 's' : ''
           }`
         );
-        clearSelection();
-      } catch (error) {
-        toastError(
-          error instanceof Error ? error.message : 'Failed to update supplier status'
-        );
       }
+
+      if (result.failed.length > 0) {
+        setBulkFailures(result.failed);
+        setSelectedIds(new Set(result.failed.map((failure) => failure.id)));
+        toastError(
+          `${result.failed.length} supplier update${result.failed.length > 1 ? 's' : ''} failed`,
+          {
+            description: summarizeBulkFailures(result.failed),
+          }
+        );
+        return;
+      }
+
+      setBulkFailures([]);
+      clearSelection();
     },
-    [selectedItems, updateMutation, clearSelection]
+    [selectedItems, updateMutation, clearSelection, setSelectedIds]
   );
 
   // Shift-click range handler that updates lastClickedIndex
@@ -312,6 +344,26 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
       />
       <PageLayout.Content>
         <div className="space-y-4">
+          {bulkFailures.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTitle>
+                {bulkFailures.length} supplier bulk failure{bulkFailures.length > 1 ? 's' : ''}
+              </AlertTitle>
+              <AlertDescription>
+                <div className="space-y-1">
+                  {bulkFailures.slice(0, 5).map((failure) => (
+                    <div key={failure.id}>
+                      {failure.label}: {failure.message}
+                    </div>
+                  ))}
+                  {bulkFailures.length > 5 && (
+                    <div>...and {bulkFailures.length - 5} more.</div>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <DomainFilterBar<SupplierFiltersState>
             config={SUPPLIER_FILTER_CONFIG}
             filters={filters}

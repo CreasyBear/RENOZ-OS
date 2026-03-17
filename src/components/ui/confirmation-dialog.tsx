@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ export function ConfirmationDialog({ children }: ConfirmationDialogProps) {
     requireReason,
     reasonLabel,
     reasonPlaceholder,
+    errorMessage,
     handleConfirm,
     handleCancel,
   } = useConfirmation();
@@ -79,6 +81,11 @@ export function ConfirmationDialog({ children }: ConfirmationDialogProps) {
               />
             </div>
           )}
+          {errorMessage && (
+            <Alert variant="destructive">
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelClick} disabled={isConfirming}>
               {cancelLabel}
@@ -102,4 +109,3 @@ export function ConfirmationDialog({ children }: ConfirmationDialogProps) {
     </>
   );
 }
-

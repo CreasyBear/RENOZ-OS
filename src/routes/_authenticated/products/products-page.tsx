@@ -12,10 +12,12 @@
 
 import { useState, useMemo } from "react";
 import { useNavigate, Link, useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { Plus, Download, Upload, X, Loader2, Trash2, Tag, Package, AlertTriangle, Layers, DollarSign, RefreshCw, FolderTree } from "lucide-react";
 
 import { PageLayout } from "@/components/layout";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,12 +25,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useConfirmation, toastError } from "@/hooks";
+import { useConfirmation, toastError, toastSuccess } from "@/hooks";
 import { logger } from "@/lib/logger";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
 import {
-  useBulkDeleteProducts,
-  useBulkUpdateProducts,
   useDeleteProduct,
   useDuplicateProduct,
   useExportProducts,
@@ -38,7 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchEmptyState } from "@/components/shared/search-empty-state";
 import { MetricCard } from "@/components/shared/metric-card";
-import { listProducts, getCategoryTree } from "@/server/functions/products/products";
+import { listProducts, getCategoryTree, updateProduct as updateProductServer, deleteProduct as deleteProductServer } from "@/server/functions/products/products";
 import { ProductTable } from "@/components/domain/products/product-table";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import { DomainFilterBar } from "@/components/shared/filters";
@@ -51,6 +51,7 @@ import { useTransformedFilterUrlState } from "@/hooks/filters/use-filter-url-sta
 import type { searchParamsSchema } from "./index";
 import type { z } from "zod";
 import { normalizeProductForTable } from "@/lib/schemas/products/normalize";
+import { executeBulkAction, summarizeBulkFailures, type BulkActionFailure } from "@/lib/actions/bulk-action-results";
 
 type SearchParams = z.infer<typeof searchParamsSchema>;
 
@@ -116,15 +117,17 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
   const navigate = useNavigate();
   const { formatCurrency } = useOrgFormat();
   const confirm = useConfirmation();
-  const bulkDeleteProducts = useBulkDeleteProducts();
-  const bulkUpdateProducts = useBulkUpdateProducts();
   const deleteProduct = useDeleteProduct();
   const duplicateProduct = useDuplicateProduct();
+  const updateProductAction = useServerFn(updateProductServer);
+  const deleteProductAction = useServerFn(deleteProductServer);
   const productsResult = useMemo(
     () => loaderData?.productsResult ?? { products: [], total: 0, page: 1, limit: 20, hasMore: false },
     [loaderData]
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isBulkActionPending, setIsBulkActionPending] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState<BulkActionFailure[]>([]);
 
   // URL-synced filter state with transformations
   const { filters, setFilters } = useTransformedFilterUrlState({
@@ -143,6 +146,10 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
 
   // Selected rows for bulk actions
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const selectedProducts = useMemo(
+    () => productsResult.products.filter((product) => selectedRows.includes(product.id)),
+    [productsResult.products, selectedRows]
+  );
 
   const flattenedCategories = useMemo(() => {
     const flatten = (
@@ -172,16 +179,37 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
       confirmLabel: "Update",
     });
     if (!confirmed) return;
+    setIsBulkActionPending(true);
+    try {
+      const result = await executeBulkAction({
+        items: selectedProducts,
+        getId: (product) => product.id,
+        getLabel: (product) => product.name,
+        run: (product) => updateProductAction({ data: { id: product.id, status } }),
+      });
 
-    bulkUpdateProducts.mutate(
-      {
-        productIds: selectedRows,
-        updates: { status },
-      },
-      {
-        onSuccess: () => setSelectedRows([]),
+      if (result.succeededIds.length > 0) {
+        await router.invalidate();
+        toastSuccess(
+          `Updated ${result.succeededIds.length} product${result.succeededIds.length === 1 ? "" : "s"}`
+        );
       }
-    );
+
+      if (result.failed.length > 0) {
+        setBulkFailures(result.failed);
+        setSelectedRows(result.failed.map((failure) => failure.id));
+        toastError(
+          `${result.failed.length} product update${result.failed.length === 1 ? "" : "s"} failed`,
+          { description: summarizeBulkFailures(result.failed) }
+        );
+        return;
+      }
+
+      setBulkFailures([]);
+      setSelectedRows([]);
+    } finally {
+      setIsBulkActionPending(false);
+    }
   };
 
   const handleBulkCategoryUpdate = async (categoryId: string | null) => {
@@ -194,16 +222,37 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
       confirmLabel: "Update",
     });
     if (!confirmed) return;
+    setIsBulkActionPending(true);
+    try {
+      const result = await executeBulkAction({
+        items: selectedProducts,
+        getId: (product) => product.id,
+        getLabel: (product) => product.name,
+        run: (product) => updateProductAction({ data: { id: product.id, categoryId } }),
+      });
 
-    bulkUpdateProducts.mutate(
-      {
-        productIds: selectedRows,
-        updates: { categoryId },
-      },
-      {
-        onSuccess: () => setSelectedRows([]),
+      if (result.succeededIds.length > 0) {
+        await router.invalidate();
+        toastSuccess(
+          `Updated ${result.succeededIds.length} product${result.succeededIds.length === 1 ? "" : "s"}`
+        );
       }
-    );
+
+      if (result.failed.length > 0) {
+        setBulkFailures(result.failed);
+        setSelectedRows(result.failed.map((failure) => failure.id));
+        toastError(
+          `${result.failed.length} product update${result.failed.length === 1 ? "" : "s"} failed`,
+          { description: summarizeBulkFailures(result.failed) }
+        );
+        return;
+      }
+
+      setBulkFailures([]);
+      setSelectedRows([]);
+    } finally {
+      setIsBulkActionPending(false);
+    }
   };
 
   // Update URL search params (for pagination, sort, category)
@@ -307,6 +356,26 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
 
       <PageLayout.Content>
         <div className="space-y-3">
+          {bulkFailures.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTitle>
+                {bulkFailures.length} product bulk failure{bulkFailures.length > 1 ? "s" : ""}
+              </AlertTitle>
+              <AlertDescription>
+                <div className="space-y-1">
+                  {bulkFailures.slice(0, 5).map((failure) => (
+                    <div key={failure.id}>
+                      {failure.label}: {failure.message}
+                    </div>
+                  ))}
+                  {bulkFailures.length > 5 && (
+                    <div>...and {bulkFailures.length - 5} more.</div>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Summary Stats */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {productStats.map((stat) => (
@@ -374,7 +443,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={bulkUpdateProducts.isPending}>
+                    <Button variant="outline" size="sm" disabled={isBulkActionPending}>
                       <Tag className="mr-2 h-4 w-4" />
                       Update Status
                     </Button>
@@ -393,7 +462,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={bulkUpdateProducts.isPending}>
+                    <Button variant="outline" size="sm" disabled={isBulkActionPending}>
                       <FolderTree className="mr-2 h-4 w-4" />
                       Update Category
                     </Button>
@@ -419,15 +488,40 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                     const { confirmed } = await confirm.confirm({
                       ...confirmations.bulkDelete(selectedRows.length, 'products'),
                     });
-                    if (confirmed) {
-                      bulkDeleteProducts.mutate(selectedRows, {
-                        onSuccess: () => {
-                          setSelectedRows([]);
-                        },
+                    if (!confirmed) return;
+                    setIsBulkActionPending(true);
+                    try {
+                      const result = await executeBulkAction({
+                        items: selectedProducts,
+                        getId: (product) => product.id,
+                        getLabel: (product) => product.name,
+                        run: (product) => deleteProductAction({ data: { id: product.id } }),
                       });
+
+                      if (result.succeededIds.length > 0) {
+                        await router.invalidate();
+                        toastSuccess(
+                          `Deleted ${result.succeededIds.length} product${result.succeededIds.length === 1 ? "" : "s"}`
+                        );
+                      }
+
+                      if (result.failed.length > 0) {
+                        setBulkFailures(result.failed);
+                        setSelectedRows(result.failed.map((failure) => failure.id));
+                        toastError(
+                          `${result.failed.length} product delete${result.failed.length === 1 ? "" : "s"} failed`,
+                          { description: summarizeBulkFailures(result.failed) }
+                        );
+                        return;
+                      }
+
+                      setBulkFailures([]);
+                      setSelectedRows([]);
+                    } finally {
+                      setIsBulkActionPending(false);
                     }
                   }}
-                  disabled={bulkDeleteProducts.isPending || bulkUpdateProducts.isPending}
+                  disabled={isBulkActionPending}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete

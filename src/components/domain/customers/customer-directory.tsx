@@ -5,9 +5,7 @@
  * Coordinates state between CustomerFilters and CustomerTable components.
  */
 import { useState, useCallback, useMemo } from 'react'
-import { useCustomerNavigation } from '@/hooks/customers'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useServerFn } from '@tanstack/react-start'
+import { useBulkAssignCustomerTags, useCustomerNavigation } from '@/hooks/customers'
 import { normalizeCustomerFilters } from '@/lib/utils/customer-filters'
 import {
   Download,
@@ -52,8 +50,6 @@ import {
 import { DomainFilterBar } from '@/components/shared/filters'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
-import { bulkAssignTags } from '@/server/customers'
-import { queryKeys } from '@/lib/query-keys'
 
 // ============================================================================
 // TYPES
@@ -298,26 +294,7 @@ export function CustomerDirectory({
   const [tagAssignError, setTagAssignError] = useState<string | null>(null)
   // TODO: Implement progress tracking for bulk operations
   // const [bulkProgress, setBulkProgress] = useState<number | null>(null)
-  const queryClient = useQueryClient()
-  const bulkAssignFn = useServerFn(bulkAssignTags)
-  const bulkAssignMutation = useMutation({
-    mutationFn: (tagIds: string[]) =>
-      bulkAssignFn({
-        data: { customerIds: Array.from(selectedIds), tagIds },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.tags.list() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.segments.lists() })
-      toastSuccess('Tags assigned to selected customers')
-      setSelectedTagIds([])
-      setShowTagDialog(false)
-    },
-    onError: () => {
-      toastError('Failed to assign tags')
-    },
-  })
+  const bulkAssignMutation = useBulkAssignCustomerTags()
 
   // Selection handlers
   const handleSelectAll = useCallback(
@@ -430,7 +407,13 @@ export function CustomerDirectory({
         setSelectedTagIds([])
         setShowTagDialog(false)
       } else {
-        await bulkAssignMutation.mutateAsync(selectedTagIds)
+        await bulkAssignMutation.mutateAsync({
+          customerIds: Array.from(selectedIds),
+          tagIds: selectedTagIds,
+        })
+        toastSuccess('Tags assigned to selected customers')
+        setSelectedTagIds([])
+        setShowTagDialog(false)
       }
     } catch (error) {
       logger.error('Failed to assign tags', error)

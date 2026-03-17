@@ -27,6 +27,7 @@ import {
   usePopulateCampaignRecipients,
   useSendCampaign,
 } from "@/hooks/communications/use-campaigns";
+import { useTemplates } from "@/hooks/communications/use-templates";
 import { RecipientFilterBuilder, type RecipientCriteria } from "./recipient-filter-builder";
 import { CampaignPreviewPanel } from "./campaign-preview-panel";
 import { DateTimePicker } from "../date-time-picker";
@@ -63,12 +64,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { CommunicationsErrorBoundary } from "../communications-error-boundary";
+import { SignatureSelector } from "../signatures/signature-selector";
 
 // ============================================================================
 // TYPES
@@ -86,9 +89,13 @@ interface CampaignFormData {
   description: string;
   templateType: string;
   templateData: {
+    templateId?: string;
+    templateVersion?: number;
     subjectOverride?: string;
     bodyOverride?: string;
     variables?: Record<string, string>;
+    signatureId?: string;
+    signatureContent?: string;
   };
   recipientCriteria: RecipientCriteria;
   scheduleEnabled: boolean;
@@ -165,6 +172,7 @@ const initialFormData: CampaignFormData = {
 
 function validateStep(step: WizardStep, data: CampaignFormData): string[] {
   const errors: string[] = [];
+  const usesStoredTemplate = Boolean(data.templateData.templateId);
 
   switch (step) {
     case "details":
@@ -173,10 +181,10 @@ function validateStep(step: WizardStep, data: CampaignFormData): string[] {
       }
       break;
     case "template":
-      if (!data.templateType) {
+      if (!data.templateType && !usesStoredTemplate) {
         errors.push("Template type is required");
       }
-      if (data.templateType === "custom") {
+      if (data.templateType === "custom" && !usesStoredTemplate) {
         if (!data.templateData.subjectOverride?.trim()) {
           errors.push("Subject line is required for custom templates");
         }
@@ -250,6 +258,7 @@ function CampaignWizardContent({
 
   const [formData, setFormData] = useState<CampaignFormData>(getInitialFormData());
   const [errors, setErrors] = useState<string[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [recipientCount, setRecipientCount] = useState(0);
@@ -257,6 +266,15 @@ function CampaignWizardContent({
   const updateCampaignMutation = useUpdateCampaign();
   const populateRecipientsMutation = usePopulateCampaignRecipients();
   const sendCampaignMutation = useSendCampaign();
+  const { data: templatesData } = useTemplates({ activeOnly: true });
+  const templates = templatesData ?? [];
+  const selectedTemplate = templates.find(
+    (template) => template.id === formData.templateData.templateId
+  );
+  const hasLoadedTemplates = templatesData !== undefined;
+  const hasInvalidTemplate = Boolean(
+    formData.templateData.templateId && hasLoadedTemplates && !selectedTemplate
+  );
 
   // Reset form when dialog closes or initialize from initialCampaign
   useEffect(() => {
@@ -264,6 +282,7 @@ function CampaignWizardContent({
       setCurrentStep("details");
       setFormData(initialFormData);
       setErrors([]);
+      setSubmitError(null);
       setIsSubmitting(false);
       setRecipientCount(0);
     } else if (initialCampaign) {
@@ -286,6 +305,10 @@ function CampaignWizardContent({
   );
 
   const handleNext = () => {
+    if (currentStep === "template" && hasInvalidTemplate) {
+      setSubmitError("The selected saved template is no longer available. Choose another template or detach it before continuing.");
+      return;
+    }
     const stepErrors = validateStep(currentStep, formData);
     if (stepErrors.length > 0) {
       setErrors(stepErrors);
@@ -298,6 +321,7 @@ function CampaignWizardContent({
     } else {
       setCurrentStep(STEPS[currentStepIndex + 1].id);
       setErrors([]);
+      setSubmitError(null);
     }
   };
 
@@ -311,8 +335,13 @@ function CampaignWizardContent({
   const handleSubmit = async () => {
     setConfirmDialogOpen(false);
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
+      if (hasInvalidTemplate) {
+        throw new Error("The selected saved template is no longer available. Choose another template or detach it before saving.");
+      }
+
       // Calculate scheduledAt with timezone
       let scheduledAt: Date | undefined;
       if (formData.scheduleEnabled && formData.scheduledAt) {
@@ -411,9 +440,7 @@ function CampaignWizardContent({
       onSuccess?.(campaign.id);
       onOpenChange(false);
     } catch (error) {
-      toast.error(isEditMode ? 'Failed to update campaign' : 'Failed to create campaign', {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      setSubmitError(getUserFriendlyMessage(error as Error));
     } finally {
       setIsSubmitting(false);
     }
@@ -516,8 +543,14 @@ function CampaignWizardContent({
 
               {/* Template Step */}
               <TabsContent value="template" className="space-y-4 mt-0">
+                {submitError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{submitError}</AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="space-y-2">
-                  <Label>Template Type *</Label>
+                  <Label>Fallback Template Type *</Label>
                   <Select
                     value={formData.templateType}
                     onValueChange={(v) => updateFormData("templateType", v)}
@@ -538,10 +571,55 @@ function CampaignWizardContent({
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Used when no saved template is attached to the campaign.
+                  </p>
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Saved Template</Label>
+                  <Select
+                    value={formData.templateData.templateId ?? "__none__"}
+                    onValueChange={(value) => {
+                      const templateId = value === "__none__" ? undefined : value;
+                      const template = templates.find((item) => item.id === templateId);
+                      setSubmitError(null);
+                      updateFormData("templateData", {
+                        ...formData.templateData,
+                        templateId,
+                        templateVersion: template?.version,
+                        subjectOverride: undefined,
+                        bodyOverride: undefined,
+                      });
+                    }}
+                  >
+                    <SelectTrigger aria-label="Select saved template">
+                      <SelectValue placeholder="No saved template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No saved template</SelectItem>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Saved templates route preview, test send, scheduling, and delivery through the same renderer.
+                  </p>
+                </div>
+
+                {hasInvalidTemplate && (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      This saved template is no longer available. Choose another template or detach it before sending.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {/* Custom Template Fields */}
-                {formData.templateType === "custom" && (
+                {formData.templateType === "custom" && !formData.templateData.templateId && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="subject-line">Subject Line *</Label>
@@ -584,9 +662,11 @@ function CampaignWizardContent({
                 )}
 
                 {/* Subject override for other templates */}
-                {formData.templateType !== "custom" && (
+                {(formData.templateType !== "custom" || formData.templateData.templateId) && (
                   <div className="space-y-2">
-                    <Label htmlFor="subject-override">Custom Subject (optional)</Label>
+                    <Label htmlFor="subject-override">
+                      {formData.templateData.templateId ? "Subject Override (optional)" : "Custom Subject (optional)"}
+                    </Label>
                     <Input
                       id="subject-override"
                       value={formData.templateData.subjectOverride || ""}
@@ -597,7 +677,41 @@ function CampaignWizardContent({
                         })
                       }
                       placeholder="Leave blank to use template default"
+                      aria-describedby={selectedTemplate ? "saved-template-subject-help" : undefined}
                     />
+                    {selectedTemplate && (
+                      <p id="saved-template-subject-help" className="text-xs text-muted-foreground">
+                        Default subject: {selectedTemplate.subject}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Email Signature</Label>
+                  <SignatureSelector
+                    value={formData.templateData.signatureId}
+                    onChange={(signatureId, signatureContent) =>
+                      updateFormData("templateData", {
+                        ...formData.templateData,
+                        signatureId: signatureId ?? undefined,
+                        signatureContent: signatureContent || undefined,
+                      })
+                    }
+                  />
+                </div>
+
+                {formData.templateData.templateId && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <div>
+                      Template source: <span className="font-medium">{selectedTemplate?.name ?? "Unavailable saved template"}</span>
+                    </div>
+                    <div>
+                      Subject source: <span className="font-medium">{formData.templateData.subjectOverride || selectedTemplate?.subject || "Unset"}</span>
+                    </div>
+                    <div>
+                      Signature: <span className="font-medium">{formData.templateData.signatureId ? "Attached" : "None"}</span>
+                    </div>
                   </div>
                 )}
               </TabsContent>
@@ -662,6 +776,12 @@ function CampaignWizardContent({
             </div>
 
             {/* Error Messages */}
+            {submitError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            )}
+
             {errors.length > 0 && (
               <div
                 className="bg-destructive/10 border border-destructive/30 rounded-md p-3 mb-4"

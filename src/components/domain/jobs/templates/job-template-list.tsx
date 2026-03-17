@@ -100,7 +100,7 @@ export function JobTemplateList({
 
   // Handle delete
   const handleDelete = useCallback(async (template: JobTemplateResponse) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Delete Job Template',
       description:
         'Are you sure you want to delete this job template? This action cannot be undone.',
@@ -108,7 +108,7 @@ export function JobTemplateList({
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         await deleteMutation.mutateAsync({ templateId: template.id });
       } catch {

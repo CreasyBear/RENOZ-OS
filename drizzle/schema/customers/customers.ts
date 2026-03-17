@@ -94,6 +94,7 @@ export const customers = pgTable(
     // Business identifiers
     taxId: text("tax_id"), // ABN for Australian businesses
     registrationNumber: text("registration_number"),
+    xeroContactId: text("xero_contact_id"),
 
     // Parent/child hierarchy
     parentId: uuid("parent_id").references((): any => customers.id, {

@@ -7,7 +7,7 @@
  * - Form state via TanStack Form
  * - Contact and address collections
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useTanStackForm, type TanStackFormApi } from '@/hooks/_shared/use-tanstack-form';
 import type { ManagedContact } from '../../contact-manager';
@@ -40,6 +40,11 @@ const defaultFormValues: CustomerWizardValues = {
 export interface UseCustomerWizardReturn {
   // Form
   form: TanStackFormApi<CustomerWizardValues>;
+  submitError: string | null;
+  serverFieldErrors: Partial<Record<keyof CustomerWizardValues, string>>;
+  setSubmitError: React.Dispatch<React.SetStateAction<string | null>>;
+  applyServerFieldErrors: (errors: Partial<Record<keyof CustomerWizardValues, string>>) => void;
+  clearServerErrors: () => void;
 
   // Step state
   currentStep: WizardStep;
@@ -72,6 +77,10 @@ export function useCustomerWizard(): UseCustomerWizardReturn {
   const [completedSteps, setCompletedSteps] = useState<Set<WizardStep>>(new Set());
   const [contacts, setContacts] = useState<ManagedContact[]>([]);
   const [addresses, setAddresses] = useState<ManagedAddress[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [serverFieldErrors, setServerFieldErrors] = useState<
+    Partial<Record<keyof CustomerWizardValues, string>>
+  >({});
   const validationPassedRef = useRef(false);
 
   const form = useTanStackForm<CustomerWizardValues>({
@@ -88,6 +97,16 @@ export function useCustomerWizard(): UseCustomerWizardReturn {
   const currentStepIndex = wizardSteps.indexOf(currentStep);
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === wizardSteps.length - 1;
+  const email = form.useWatch('email');
+
+  useEffect(() => {
+    setServerFieldErrors((prev) => {
+      if (!prev.email) return prev
+      const { email: _email, ...remaining } = prev
+      return remaining
+    })
+    setSubmitError((prev) => (prev === null ? prev : null))
+  }, [email]);
 
   const validateBasicStep = useCallback(async (): Promise<boolean> => {
     validationPassedRef.current = false;
@@ -124,6 +143,18 @@ export function useCustomerWizard(): UseCustomerWizardReturn {
     [currentStepIndex, currentStep]
   );
 
+  const applyServerFieldErrors = useCallback(
+    (errors: Partial<Record<keyof CustomerWizardValues, string>>) => {
+      setServerFieldErrors(errors)
+    },
+    []
+  );
+
+  const clearServerErrors = useCallback(() => {
+    setSubmitError(null)
+    setServerFieldErrors({})
+  }, []);
+
   const getWizardData = useCallback(
     (): CustomerWizardData => ({
       customer: form.state.values,
@@ -135,6 +166,11 @@ export function useCustomerWizard(): UseCustomerWizardReturn {
 
   return {
     form,
+    submitError,
+    serverFieldErrors,
+    setSubmitError,
+    applyServerFieldErrors,
+    clearServerErrors,
     currentStep,
     currentStepIndex,
     completedSteps,

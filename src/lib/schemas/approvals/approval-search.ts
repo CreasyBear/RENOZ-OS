@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 export const approvalsSearchSchema = z.object({
   tab: z.enum(['pending', 'approved', 'rejected']).default('pending'),
+  // Keep legacy values parsable so stale URLs can be normalized safely by the page.
   type: z.enum(['all', 'purchase_order', 'amendment']).default('all'),
   priority: z.enum(['all', 'low', 'medium', 'high', 'urgent']).default('all'),
   search: z.string().optional(),

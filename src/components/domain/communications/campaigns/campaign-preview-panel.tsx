@@ -173,7 +173,9 @@ export function CampaignPreviewPanel({
             <div>
               <dt className="text-muted-foreground">Template</dt>
               <dd className="font-medium">
-                {TEMPLATE_LABELS[templateType] || templateType}
+                {templateData?.templateId
+                  ? "Saved template"
+                  : TEMPLATE_LABELS[templateType] || templateType}
               </dd>
             </div>
             {Boolean(templateData?.subjectOverride) && (

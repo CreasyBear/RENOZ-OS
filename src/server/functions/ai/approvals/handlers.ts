@@ -10,10 +10,20 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
-import { orders, quotes, customers } from 'drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { Resend } from 'resend';
+import { orders, quotes, customers, organizations, emailHistory, type NewEmailHistory } from 'drizzle/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import type { HandlerContext, HandlerResult, ActionHandler } from '@/lib/ai/approvals/types';
+import { aiEmailDraftSchema } from '@/lib/ai/approvals/email-draft';
+import { db } from '@/lib/db';
+import type {
+  HandlerContext,
+  HandlerPostCommitEffect,
+  HandlerResult,
+  ActionHandler,
+} from '@/lib/ai/approvals/types';
+import { getEmailFrom, getEmailFromName, getResendApiKey } from '@/lib/email/config';
+import { createEmailSentActivity } from '@/lib/server/activity-bridge';
 import { generateOrderNumber } from '@/server/functions/orders/orders';
 
 // ============================================================================
@@ -39,13 +49,28 @@ const quoteDraftSchema = z.object({
   notes: z.string().optional(),
 });
 
-/** Schema for email draft data */
-const emailDraftSchema = z.object({
-  to: z.string().email(),
-  subject: z.string().min(1).max(200),
-  body: z.string().min(1),
-  customerId: z.string().uuid().optional(),
-});
+const emailSentStatuses = new Set([
+  'sent',
+  'delivered',
+  'opened',
+  'clicked',
+  'bounced',
+  'complained',
+]);
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function plainTextToHtml(body: string): string {
+  const escapedBody = escapeHtml(body).replace(/\n/g, '<br />');
+  return `<html><body><div>${escapedBody}</div></body></html>`;
+}
 
 /** Schema for delete action data */
 const deleteActionSchema = z.object({
@@ -165,15 +190,14 @@ async function createQuoteHandler(
 
 /**
  * Send email handler.
- * Queues an email for sending via Resend.
+ * Email sending is not yet wired into the AI approval execution path.
  */
 async function sendEmailHandler(
   actionData: Record<string, unknown>,
-  _context: HandlerContext
+  context: HandlerContext
 ): Promise<HandlerResult> {
   try {
-    // Validate draft data with Zod
-    const parseResult = emailDraftSchema.safeParse(actionData.draft);
+    const parseResult = aiEmailDraftSchema.safeParse(actionData.draft);
     if (!parseResult.success) {
       return {
         success: false,
@@ -182,29 +206,213 @@ async function sendEmailHandler(
     }
 
     const draft = parseResult.data;
+    const [customer] = await context.tx
+      .select({
+        id: customers.id,
+        name: customers.name,
+        organizationId: customers.organizationId,
+      })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.id, draft.customerId),
+          eq(customers.organizationId, context.organizationId),
+          sql`${customers.deletedAt} IS NULL`
+        )
+      )
+      .limit(1);
 
-    // TODO(PHASE12-005): Integrate with Resend email service
-    // For now, return success with a mock result
-    // The actual implementation will use the email library in src/lib/email/
+    if (!customer) {
+      return {
+        success: false,
+        error: 'Customer not found for this email draft',
+      };
+    }
 
-    const emailId = `email_${Date.now()}`;
+    const [organization] = await context.tx
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, context.organizationId))
+      .limit(1);
+
+    const [existingEmail] = await context.tx
+      .select({
+        id: emailHistory.id,
+        status: emailHistory.status,
+        resendMessageId: emailHistory.resendMessageId,
+        toAddress: emailHistory.toAddress,
+        subject: emailHistory.subject,
+      })
+      .from(emailHistory)
+      .where(
+        and(
+          eq(emailHistory.organizationId, context.organizationId),
+          sql`${emailHistory.metadata}->>'aiApprovalId' = ${context.approvalId}`
+        )
+      )
+      .limit(1);
+
+    if (
+      existingEmail &&
+      (emailSentStatuses.has(existingEmail.status) || existingEmail.resendMessageId)
+    ) {
+      return {
+        success: true,
+        data: {
+          emailHistoryId: existingEmail.id,
+          messageId: existingEmail.resendMessageId,
+          customerId: customer.id,
+          recipientEmail: existingEmail.toAddress,
+          subject: existingEmail.subject,
+        },
+        entityId: existingEmail.id,
+        entityType: 'email',
+      };
+    }
+
+    const fromEmail = getEmailFrom();
+    const fromName = getEmailFromName();
+    const fromAddress = `${fromName} <${fromEmail}>`;
+    const htmlBody = plainTextToHtml(draft.body);
+    const metadata = {
+      fromName,
+      source: 'ai_approval',
+      aiApprovalId: context.approvalId,
+      aiAction: 'send_email',
+      customerName: customer.name ?? undefined,
+      organizationName: organization?.name ?? undefined,
+    };
+
+    let emailRecordId = existingEmail?.id;
+    if (existingEmail) {
+      await context.tx
+        .update(emailHistory)
+        .set({
+          senderId: context.userId,
+          fromAddress,
+          toAddress: draft.to,
+          customerId: customer.id,
+          subject: draft.subject,
+          bodyHtml: htmlBody,
+          bodyText: draft.body,
+          status: 'pending',
+          metadata,
+        })
+        .where(eq(emailHistory.id, existingEmail.id));
+    } else {
+      const [createdEmail] = await context.tx
+        .insert(emailHistory)
+        .values({
+          organizationId: context.organizationId,
+          senderId: context.userId,
+          fromAddress,
+          toAddress: draft.to,
+          customerId: customer.id,
+          subject: draft.subject,
+          bodyHtml: htmlBody,
+          bodyText: draft.body,
+          status: 'pending',
+          metadata,
+        } as NewEmailHistory)
+        .returning({ id: emailHistory.id });
+
+      emailRecordId = createdEmail.id;
+    }
+
+    if (!emailRecordId) {
+      return {
+        success: false,
+        error: 'Unable to create email history for AI approval email',
+      };
+    }
+
     return {
       success: true,
       data: {
-        emailId,
-        status: 'queued',
-        to: draft.to,
+        emailHistoryId: emailRecordId,
+        customerId: customer.id,
+        recipientEmail: draft.to,
         subject: draft.subject,
+        deliveryStatus: 'pending',
       },
-      // Email doesn't create a database entity, but we track the ID for reference
-      entityId: draft.customerId,
-      entityType: draft.customerId ? 'customer' : undefined,
+      entityId: emailRecordId,
+      entityType: 'email',
+      postCommitEffect: {
+        kind: 'send_email',
+        payload: {
+          approvalId: context.approvalId,
+          emailHistoryId: emailRecordId,
+          organizationId: context.organizationId,
+          userId: context.userId,
+          customerId: customer.id,
+          customerName: customer.name,
+          fromAddress,
+          to: draft.to,
+          subject: draft.subject,
+          html: htmlBody,
+          text: draft.body,
+        },
+      },
     };
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to send email',
     };
+  }
+}
+
+export async function runHandlerPostCommitEffect(effect: HandlerPostCommitEffect): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  switch (effect.kind) {
+    case 'send_email': {
+      const resend = new Resend(getResendApiKey());
+      const { payload } = effect;
+      const { data: sendResult, error } = await resend.emails.send({
+        from: payload.fromAddress,
+        to: [payload.to],
+        subject: payload.subject,
+        html: payload.html,
+        text: payload.text,
+      });
+
+      if (error) {
+        await db
+          .update(emailHistory)
+          .set({
+            status: 'failed',
+          })
+          .where(eq(emailHistory.id, payload.emailHistoryId));
+
+        return {
+          success: false,
+          error: error.message || `Failed to send "${payload.subject}"`,
+        };
+      }
+
+      await db
+        .update(emailHistory)
+        .set({
+          status: 'sent',
+          sentAt: new Date(),
+          resendMessageId: sendResult?.id,
+        })
+        .where(eq(emailHistory.id, payload.emailHistoryId));
+
+      await createEmailSentActivity({
+        emailId: payload.emailHistoryId,
+        organizationId: payload.organizationId,
+        userId: payload.userId,
+        customerId: payload.customerId,
+        subject: payload.subject,
+        recipientEmail: payload.to,
+        recipientName: payload.customerName ?? undefined,
+      });
+
+      return { success: true };
+    }
   }
 }
 

@@ -18,6 +18,7 @@ import {
   getActivityLeaderboard,
   getActivity,
   logEntityActivity,
+  requestActivityExport,
 } from '@/server/functions/activities/activities';
 import type {
   ActivityStatsQuery,
@@ -30,6 +31,8 @@ import type {
   ActivityFeedResult,
   EntityActivitiesResult,
   ActivityFilter,
+  ActivityExportRequest,
+  ActivityExportResponse,
 } from '@/lib/schemas/activities';
 import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 
@@ -453,5 +456,15 @@ export function useLogEntityActivity() {
         queryKey: queryKeys.activities.feeds(),
       });
     },
+  });
+}
+
+/**
+ * Request an activity export artifact for the supplied filters.
+ */
+export function useRequestActivityExport() {
+  return useMutation({
+    mutationFn: (data: ActivityExportRequest): Promise<ActivityExportResponse> =>
+      requestActivityExport({ data }),
   });
 }

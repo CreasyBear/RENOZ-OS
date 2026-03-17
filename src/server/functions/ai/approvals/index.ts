@@ -10,12 +10,14 @@
 export {
   executeAction,
   rejectAction,
+  updateEmailApprovalDraft,
   getPendingApprovals,
   getStuckApprovals,
   getApprovalsForEntity,
   getEntitiesForApproval,
   type ExecuteActionResult,
   type RejectActionResult,
+  type UpdateApprovalDraftResult,
 } from './executor';
 
 export {

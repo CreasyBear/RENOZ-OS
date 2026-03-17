@@ -127,14 +127,14 @@ export function IssueBulkActions({
     setIsDeleteConfirming(true);
 
     try {
-      const confirmed = await confirm.confirm({
+      const { confirmed } = await confirm.confirm({
         title: 'Delete Issues',
         description: `Are you sure you want to delete ${selectedCount} selected issue${selectedCount === 1 ? '' : 's'}? This action cannot be undone.`,
         confirmLabel: 'Delete Issues',
         variant: 'destructive',
       });
 
-      if (confirmed.confirmed) {
+      if (confirmed) {
         await Promise.resolve(
           onAction({
             action: 'delete',

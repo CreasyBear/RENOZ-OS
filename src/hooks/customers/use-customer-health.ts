@@ -9,7 +9,10 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { getCustomerHealthMetrics, createCustomerHealthMetric } from '@/server/customers';
+import {
+  getCustomerHealthMetrics,
+  createCustomerHealthMetric,
+} from '@/server/functions/customers/customers';
 
 // ============================================================================
 // QUERY KEYS

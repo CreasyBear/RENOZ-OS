@@ -6,7 +6,7 @@
  * @see DOM-COMMS-002b
  */
 import { createServerFn } from '@tanstack/react-start'
-import { eq, and, desc, asc, lte, or, ilike, count } from 'drizzle-orm'
+import { eq, and, desc, asc, lte, or, ilike, count, sql } from 'drizzle-orm'
 import { containsPattern } from '@/lib/db/utils'
 import { db } from '@/lib/db'
 import {
@@ -49,7 +49,10 @@ export const scheduleEmail = createServerFn({ method: 'POST' })
         customerId: data.customerId,
         subject: data.subject,
         templateType: data.templateType as ScheduledEmailTemplateType,
-        templateData: (data.templateData || {}) as ScheduledEmailTemplateData,
+        templateData: {
+          ...((data.templateData || {}) as ScheduledEmailTemplateData),
+          validationError: undefined,
+        },
         scheduledAt: data.scheduledAt,
         timezone: data.timezone,
         status: 'pending',
@@ -218,7 +221,10 @@ export const updateScheduledEmail = createServerFn({ method: 'POST' })
         recipientEmail: data.recipientEmail,
         recipientName: data.recipientName,
         subject: data.subject,
-        templateData: data.templateData as ScheduledEmailTemplateData,
+        templateData: {
+          ...(data.templateData as ScheduledEmailTemplateData),
+          validationError: undefined,
+        },
         scheduledAt: data.scheduledAt,
         timezone: data.timezone,
       })
@@ -309,6 +315,7 @@ export async function getEmailsToSend(): Promise<
       and(
         eq(scheduledEmails.status, 'pending'),
         lte(scheduledEmails.scheduledAt, now),
+        sql`COALESCE(${scheduledEmails.templateData}->>'validationError', '') = ''`,
       ),
     )
     .limit(100)
@@ -326,6 +333,7 @@ export async function getDueScheduledEmails(
       and(
         eq(scheduledEmails.status, 'pending'),
         lte(scheduledEmails.scheduledAt, now),
+        sql`COALESCE(${scheduledEmails.templateData}->>'validationError', '') = ''`,
       ),
     )
     .orderBy(desc(scheduledEmails.scheduledAt))

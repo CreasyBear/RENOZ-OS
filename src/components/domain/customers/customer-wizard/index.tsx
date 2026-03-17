@@ -12,8 +12,16 @@
  * - Draft auto-save to localStorage
  * - TanStack Form with Zod validation
  */
-import { FormWizard, FormFieldDisplayProvider, DraftRestorePrompt, DraftSavingIndicator } from '@/components/shared/forms';
+import { useRef } from 'react';
+import {
+  FormWizard,
+  FormFieldDisplayProvider,
+  DraftRestorePrompt,
+  DraftSavingIndicator,
+  FormErrorSummary,
+} from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { ContactManager } from '../contact-manager';
 import { AddressManager } from '../address-manager';
 import { useCustomerWizard } from './hooks/use-customer-wizard';
@@ -22,6 +30,7 @@ import { BasicInfoStep } from './steps/basic-info-step';
 import { ReviewStep } from './steps/review-step';
 import { wizardSteps } from './types';
 import type { CustomerWizardProps } from './types';
+import { getCustomerCreateSubmissionState } from './submission-state';
 
 const WIZARD_STEPS = [
   { id: 'basic', label: 'Details', description: 'Basic information' },
@@ -49,7 +58,13 @@ export function CustomerWizard({
     setCurrentStepByIndex,
     getWizardData,
     validateBasicStep,
+    submitError,
+    serverFieldErrors,
+    setSubmitError,
+    applyServerFieldErrors,
+    clearServerErrors,
   } = useCustomerWizard();
+  const stepContentRef = useRef<HTMLDivElement>(null);
 
   const draft = useCustomerWizardDraft({
     form,
@@ -66,8 +81,29 @@ export function CustomerWizard({
   });
 
   const handleComplete = async () => {
-    await onSubmit(getWizardData());
-    draft.clear();
+    clearServerErrors();
+    const isValid = await validateBasicStep();
+    if (!isValid) return;
+
+    try {
+      await onSubmit(getWizardData());
+      draft.clear();
+    } catch (error) {
+      const submissionState = getCustomerCreateSubmissionState(error)
+      if (submissionState.preserveDraft) {
+        draft.flush()
+      }
+      if (submissionState.skipUiRecovery) {
+        return
+      }
+      applyServerFieldErrors(submissionState.fieldErrors)
+      setSubmitError(submissionState.submitError)
+      setCurrentStepByIndex(submissionState.targetStepIndex)
+      toast.error(submissionState.submitError)
+      setTimeout(() => {
+        stepContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
+    }
   };
 
   const validateStep = async (step: number): Promise<boolean> => {
@@ -87,7 +123,11 @@ export function CustomerWizard({
 
   const stepContent =
     currentStep === 'basic' ? (
-      <BasicInfoStep form={form} availableTags={availableTags} />
+      <BasicInfoStep
+        form={form}
+        availableTags={availableTags}
+        serverFieldErrors={serverFieldErrors}
+      />
     ) : currentStep === 'contacts' ? (
       <ContactManager contacts={contacts} onChange={setContacts} />
     ) : currentStep === 'addresses' ? (
@@ -112,7 +152,22 @@ export function CustomerWizard({
         </Button>
       </div>
 
-      <form onSubmit={(e) => e.preventDefault()}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (currentStepIndex === WIZARD_STEPS.length - 1) {
+            void handleComplete();
+          }
+        }}
+      >
+        <FormErrorSummary
+          form={form}
+          submitError={submitError}
+          fieldErrors={serverFieldErrors}
+          showFieldErrors={Object.keys(serverFieldErrors).length > 0}
+          onDismiss={clearServerErrors}
+          className="mb-4"
+        />
         <FormWizard
           steps={WIZARD_STEPS}
           currentStep={currentStepIndex}
@@ -121,6 +176,7 @@ export function CustomerWizard({
           validateStep={validateStep}
           canNavigateToStep={canNavigateToStep}
           isSubmitting={isLoading}
+          submitOnLastStep
           labels={{
             previous: 'Back',
             next: 'Next',
@@ -129,7 +185,9 @@ export function CustomerWizard({
           }}
         >
           <FormFieldDisplayProvider form={form}>
-            {stepContent}
+            <div ref={stepContentRef} className="scroll-mt-4">
+              {stepContent}
+            </div>
           </FormFieldDisplayProvider>
         </FormWizard>
       </form>

@@ -18,14 +18,24 @@ export interface OAuthConnectionForSync {
   id: string;
   organizationId: string;
   userId: string | null;
-  provider: 'google_workspace' | 'microsoft_365';
+  provider: 'google_workspace' | 'microsoft_365' | 'xero';
   externalAccountId: string | null;
   accessToken: string;
   refreshToken: string | null;
   tokenExpiresAt: Date | null;
   scopes: string[] | null;
+  serviceType?: 'calendar' | 'email' | 'contacts' | 'accounting';
   isActive: boolean;
   lastSyncedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface PendingXeroTenantSelection {
+  stateId: string;
+  redirectUrl: string;
+  tenants: Array<{
+    tenantId: string;
+    tenantType?: string;
+  }>;
 }

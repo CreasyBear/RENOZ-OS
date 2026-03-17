@@ -61,6 +61,9 @@ import {
   useOrderWithCustomer,
   useCreateShipment,
   useMarkShipped,
+  useRequestAmendment,
+  useApproveAmendment,
+  useApplyAmendment,
   type OrderWithCustomer,
 } from "@/hooks/orders";
 import { AddressPicker, type AddressOption } from "@/components/shared";
@@ -135,6 +138,11 @@ interface LineItemSelection {
   selectedSerials: string[];
   isSerialized?: boolean;
   productId?: string | null;
+}
+
+interface ShipmentWorkflowNotice {
+  title: string;
+  description: string;
 }
 
 // ============================================================================
@@ -265,6 +273,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const [addressExpanded, setAddressExpanded] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState<AddressOption | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [workflowNotice, setWorkflowNotice] = useState<ShipmentWorkflowNotice | null>(null);
   const performCreateShipmentRef = useRef<
     (values: ShipOrderFormData) => Promise<void>
   >(null!);
@@ -276,6 +285,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   });
   const createShipmentMutation = useCreateShipment();
   const markShippedMutation = useMarkShipped();
+  const requestAmendmentMutation = useRequestAmendment();
+  const approveAmendmentMutation = useApproveAmendment();
+  const applyAmendmentMutation = useApplyAmendment();
 
   const selectedItems = getSelectedItems(itemSelections);
   const totalQtyToShip = selectedItems.reduce((sum, i) => sum + i.selectedQty, 0);
@@ -328,6 +340,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         setInitialized(false);
         form.reset(getDefaultFormValues());
         setServerItemErrors({});
+        setWorkflowNotice(null);
       }
       onOpenChange(nextOpen);
     },
@@ -336,7 +349,15 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
   const performCreateShipment = useCallback(
     async (values: ShipOrderFormData) => {
-      if (createShipmentMutation.isPending || markShippedMutation.isPending) return;
+      if (
+        createShipmentMutation.isPending ||
+        markShippedMutation.isPending ||
+        requestAmendmentMutation.isPending ||
+        approveAmendmentMutation.isPending ||
+        applyAmendmentMutation.isPending
+      )
+        return;
+      setWorkflowNotice(null);
       const items = getSelectedItems(itemSelections);
       for (const item of items) {
         if (item.isSerialized && item.selectedSerials.length !== item.selectedQty) {
@@ -401,7 +422,50 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                 "Shipment created but could not be marked as shipped. " +
                 "You can mark it as shipped from the Fulfillment tab.",
             });
-            handleOpenChange(false);
+            setWorkflowNotice({
+              title: "Shipment created, shipping step incomplete",
+              description:
+                "The shipment was created and inventory was updated, but it could not be marked as shipped. Refreshing this dialog to the persisted state.",
+            });
+            setStep("form");
+            setInitialized(false);
+            onSuccess?.();
+            return;
+          }
+        }
+
+        // When shipping cost is set, update order totals via amendment flow (reuses existing logic)
+        if (shippingCostCents !== undefined) {
+          const shippingCostDollars =
+            typeof values.shippingCost === "number" ? values.shippingCost : 0;
+          try {
+            const amendment = await requestAmendmentMutation.mutateAsync({
+              orderId,
+              amendmentType: "shipping_change",
+              reason: "Shipping cost from shipment",
+              changes: {
+                type: "shipping_change",
+                description: "Shipping cost from shipment",
+                shippingAmount: shippingCostDollars,
+              },
+            });
+            await approveAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
+            await applyAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
+          } catch (err) {
+            ordersLogger.warn(
+              "Shipment created but order shipping amount could not be updated",
+              { orderId, err }
+            );
+            toastError("Order shipping amount could not be updated", {
+              description: err instanceof Error ? err.message : "Create a shipping amendment manually.",
+            });
+            setWorkflowNotice({
+              title: "Shipment created, shipping cost amendment failed",
+              description:
+                "The shipment was created, but the order totals were not updated with the shipping cost. Refreshing this dialog to the persisted shipment state.",
+            });
+            setStep("form");
+            setInitialized(false);
             onSuccess?.();
             return;
           }
@@ -430,6 +494,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             });
           }
         }
+        setWorkflowNotice(null);
         handleOpenChange(false);
         onSuccess?.();
       } catch (error) {
@@ -446,6 +511,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       itemSelections,
       createShipmentMutation,
       markShippedMutation,
+      requestAmendmentMutation,
+      approveAmendmentMutation,
+      applyAmendmentMutation,
       onSuccess,
       remainingUnfulfilled,
       handleOpenChange,
@@ -516,7 +584,12 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     }
   }, [orderData, initialized]);
 
-  const isPending = createShipmentMutation.isPending || markShippedMutation.isPending;
+  const isPending =
+    createShipmentMutation.isPending ||
+    markShippedMutation.isPending ||
+    requestAmendmentMutation.isPending ||
+    approveAmendmentMutation.isPending ||
+    applyAmendmentMutation.isPending;
 
   const handleAddressSelect = useCallback(
     (addr: AddressOption | null) => {
@@ -739,6 +812,15 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       {step === "form" ? (
           <div className="space-y-6">
             <FormFieldDisplayProvider form={form}>
+            {workflowNotice && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <span className="font-medium">{workflowNotice.title}</span>{" "}
+                  {workflowNotice.description}
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Item Selection */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">

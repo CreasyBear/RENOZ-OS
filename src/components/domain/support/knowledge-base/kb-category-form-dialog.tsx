@@ -171,7 +171,6 @@ export function KbCategoryFormDialog({
   });
 
   const parentOptions = [
-    { value: '', label: 'None (Top Level)' },
     ...availableParents.map((cat) => ({
       value: cat.id,
       label: cat.name,

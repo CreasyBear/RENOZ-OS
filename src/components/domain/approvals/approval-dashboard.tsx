@@ -1,7 +1,7 @@
 /**
  * ApprovalDashboard Component
  *
- * Dashboard for reviewing and approving purchase orders and amendments.
+ * Dashboard for reviewing and approving purchase orders.
  * Following the fulfillment dashboard pattern with queue-based workflow.
  *
  * @see _Initiation/_prd/2-domains/suppliers/suppliers.prd.json (SUPP-APPROVAL-WORKFLOW)
@@ -93,18 +93,6 @@ const APPROVAL_FILTER_CONFIG: FilterBarConfig<ApprovalFilters> = {
   },
   filters: [
     {
-      key: 'type',
-      label: 'Type',
-      type: 'select',
-      options: [
-        { value: 'all', label: 'All Types' },
-        { value: 'purchase_order', label: 'Purchase Orders' },
-        { value: 'amendment', label: 'Amendments' },
-      ],
-      primary: true,
-      allLabel: 'All Types',
-    },
-    {
       key: 'priority',
       label: 'Priority',
       type: 'select',
@@ -120,7 +108,6 @@ const APPROVAL_FILTER_CONFIG: FilterBarConfig<ApprovalFilters> = {
     },
   ],
   labels: {
-    type: 'Type',
     priority: 'Priority',
   },
 };
@@ -205,8 +192,8 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
 
   // Check if filters are active (excluding search and tab)
   const hasActiveFilters = useMemo(() => {
-    return filters.type !== 'all' || filters.priority !== 'all' || (filters.search?.trim() ?? '') !== '';
-  }, [filters.type, filters.priority, filters.search]);
+    return filters.priority !== 'all' || (filters.search?.trim() ?? '') !== '';
+  }, [filters.priority, filters.search]);
 
   // Build filter items for FilterEmptyState
   const filterItems = useMemo(() => {

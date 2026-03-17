@@ -15,7 +15,7 @@ import {
   transformOpportunityActivity,
 } from '@/lib/schemas/unified-activity';
 import { getEntityActivities } from '@/server/functions/activities/activities';
-import { getCustomerActivities } from '@/server/customers';
+import { getCustomerActivities } from '@/server/functions/customers/customers';
 import { getCustomerEmailActivities } from '@/server/functions/communications/customer-communications';
 import { getActivityTimeline } from '@/server/functions/pipeline/pipeline';
 import { queryKeys } from '@/lib/query-keys';

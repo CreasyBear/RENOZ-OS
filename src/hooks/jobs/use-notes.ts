@@ -147,7 +147,7 @@ export function useCreateAudioNote(projectId: string) {
 
   return useMutation({
     mutationFn: (data: Omit<CreateNoteInput, 'projectId' | 'noteType'>) =>
-      createNote({ data: { ...data, projectId, noteType: 'audio', status: 'processing' } }),
+      createNote({ data: { ...data, projectId, noteType: 'audio', status: 'completed' } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectNotes.byProject(projectId),

@@ -18,7 +18,16 @@ import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, isNull, ne, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { orders, orderLineItems, customers as customersTable, organizations } from 'drizzle/schema';
+import {
+  orders,
+  orderLineItems,
+  customers as customersTable,
+  organizations,
+  orderPayments,
+  oauthConnections,
+  xeroPaymentEvents,
+  users,
+} from '../../../../drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
 import {
@@ -35,10 +44,17 @@ import {
   type InvoiceWithSyncStatus,
   type ListInvoicesBySyncStatusResponse,
 } from '@/lib/schemas';
-import { getRequest } from '@tanstack/react-start/server';
-import { createHmac, timingSafeEqual } from 'crypto';
-import { AuthError, ServerError, ValidationError } from '@/lib/server/errors';
+import { xeroWebhookEventSchema, type XeroSyncIssue } from '@/lib/schemas/settings/xero-sync';
+import { ServerError, ValidationError } from '@/lib/server/errors';
 import { safeNumber } from '@/lib/numeric';
+import { updateOrderPaymentStatus } from '@/server/functions/orders/order-payments';
+import {
+  findInvoiceByReference,
+  getXeroPaymentById,
+  getXeroErrorMessage,
+  getXeroSyncReadiness,
+  syncInvoiceWithXero,
+} from './xero-adapter';
 
 // ============================================================================
 // CONSTANTS (fallback when org settings not set)
@@ -81,6 +97,197 @@ function formatXeroDate(date: Date): string {
  */
 function buildXeroInvoiceUrl(xeroInvoiceId: string): string {
   return `${XERO_BASE_URL}?InvoiceID=${xeroInvoiceId}`;
+}
+
+function extractRetryAfterSeconds(message: string | null | undefined): number | null {
+  if (!message) {
+    return null;
+  }
+
+  const match = message.match(/(\d+)\s*(seconds?|secs?|minutes?|mins?)/i);
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return /min/i.test(match[2]) ? value * 60 : value;
+}
+
+function normalizeXeroSyncIssue(params: {
+  readiness: Awaited<ReturnType<typeof getXeroSyncReadiness>>;
+  xeroSyncError?: string | null;
+  customerXeroContactId?: string | null;
+  xeroInvoiceId?: string | null;
+  orderId?: string;
+  customerId?: string;
+}): XeroSyncIssue | null {
+  const { readiness, xeroSyncError, customerXeroContactId, xeroInvoiceId, orderId, customerId } = params;
+  const relatedEntityIds = {
+    orderId,
+    customerId,
+    customerXeroContactId: customerXeroContactId ?? null,
+  };
+
+  if (!readiness.available) {
+    const message = readiness.message ?? 'Xero integration is unavailable for this organization.';
+    if (/no active xero accounting connection/i.test(message)) {
+      return {
+        code: 'connection_missing',
+        title: 'Connect Xero',
+        message,
+        severity: 'critical',
+        nextAction: 'connect_xero',
+        nextActionLabel: 'Connect Xero',
+        primaryAction: { action: 'connect_xero', label: 'Connect Xero' },
+        secondaryAction: null,
+        retryPolicy: 'blocked',
+        relatedEntityIds,
+      };
+    }
+
+    if (/oauth is not configured/i.test(message)) {
+      return {
+        code: 'configuration_unavailable',
+        title: 'Configure Xero',
+        message,
+        severity: 'critical',
+        nextAction: 'open_org_settings',
+        nextActionLabel: 'Open Org Settings',
+        primaryAction: { action: 'open_org_settings', label: 'Open Org Settings' },
+        secondaryAction: null,
+        retryPolicy: 'blocked',
+        relatedEntityIds,
+      };
+    }
+
+    return {
+      code: 'auth_failed',
+      title: 'Reconnect Xero',
+      message,
+      severity: 'critical',
+      nextAction: 'reconnect_xero',
+      nextActionLabel: 'Reconnect Xero',
+      primaryAction: { action: 'reconnect_xero', label: 'Reconnect Xero' },
+      secondaryAction: null,
+      retryPolicy: 'blocked',
+      relatedEntityIds,
+    };
+  }
+
+  if (!xeroSyncError) {
+    if (xeroInvoiceId) {
+      return {
+        code: 'reconciled_remote_exists',
+        title: 'Already linked in Xero',
+        message: 'This invoice is already linked to Xero.',
+        severity: 'info',
+        nextAction: 'view_reconciled_invoice',
+        nextActionLabel: 'View in Xero',
+        primaryAction: { action: 'view_reconciled_invoice', label: 'View in Xero' },
+        secondaryAction: null,
+        retryPolicy: 'blocked',
+        relatedEntityIds,
+      };
+    }
+
+    return null;
+  }
+
+  if (/trusted xero contact mapping|missing .*xero contact/i.test(xeroSyncError)) {
+    return {
+      code: 'missing_contact_mapping',
+      title: 'Customer mapping required',
+      message: xeroSyncError,
+      severity: 'warning',
+      nextAction: 'map_customer_contact',
+      nextActionLabel: customerXeroContactId ? 'Review Customer Mapping' : 'Map Customer Contact',
+      primaryAction: {
+        action: 'map_customer_contact',
+        label: customerXeroContactId ? 'Review Customer Mapping' : 'Map Customer Contact',
+      },
+      secondaryAction: { action: 'review_validation', label: 'Review invoice context' },
+      retryPolicy: 'blocked',
+      relatedEntityIds,
+    };
+  }
+
+  if (/rate limit|too many requests|retry after/i.test(xeroSyncError)) {
+    return {
+      code: 'rate_limited',
+      title: 'Retry later',
+      message: xeroSyncError,
+      severity: 'warning',
+      nextAction: 'retry_later',
+      nextActionLabel: 'Retry Later',
+      primaryAction: { action: 'retry_later', label: 'Retry Later' },
+      secondaryAction: { action: 'reconnect_xero', label: 'Check Xero connection' },
+      retryPolicy: 'retry_after',
+      retryAfterSeconds: extractRetryAfterSeconds(xeroSyncError),
+      relatedEntityIds,
+    };
+  }
+
+  if (/forbidden|tenant|scope|permission/i.test(xeroSyncError)) {
+    return {
+      code: 'forbidden',
+      title: 'Reconnect with the right tenant',
+      message: xeroSyncError,
+      severity: 'critical',
+      nextAction: 'reconnect_xero',
+      nextActionLabel: 'Reconnect Xero',
+      primaryAction: { action: 'reconnect_xero', label: 'Reconnect Xero' },
+      secondaryAction: null,
+      retryPolicy: 'blocked',
+      relatedEntityIds,
+    };
+  }
+
+  if (/auth|expired|refresh token|unauthor/i.test(xeroSyncError)) {
+    return {
+      code: 'auth_failed',
+      title: 'Reconnect Xero',
+      message: xeroSyncError,
+      severity: 'critical',
+      nextAction: 'reconnect_xero',
+      nextActionLabel: 'Reconnect Xero',
+      primaryAction: { action: 'reconnect_xero', label: 'Reconnect Xero' },
+      secondaryAction: null,
+      retryPolicy: 'blocked',
+      relatedEntityIds,
+    };
+  }
+
+  if (/revenue recognition.*account|deferred account|sales account/i.test(xeroSyncError)) {
+    return {
+      code: 'missing_revenue_accounts',
+      title: 'Finish Xero account setup',
+      message: xeroSyncError,
+      severity: 'warning',
+      nextAction: 'open_org_settings',
+      nextActionLabel: 'Open Org Settings',
+      primaryAction: { action: 'open_org_settings', label: 'Open Org Settings' },
+      secondaryAction: null,
+      retryPolicy: 'blocked',
+      relatedEntityIds,
+    };
+  }
+
+  return {
+    code: 'validation_failed',
+    title: 'Review invoice data',
+    message: xeroSyncError,
+    severity: 'warning',
+    nextAction: 'review_validation',
+    nextActionLabel: 'Review Data',
+    primaryAction: { action: 'review_validation', label: 'Review Data' },
+    secondaryAction: null,
+    retryPolicy: 'allowed',
+    relatedEntityIds,
+  };
 }
 
 /** Xero config from org settings with fallback to defaults */
@@ -155,82 +362,118 @@ function buildXeroInvoicePayload(
   };
 }
 
-/**
- * Verify Xero webhook signature using HMAC-SHA256.
- *
- * Xero sends an `x-xero-signature` header containing an HMAC-SHA256 hash
- * of the request body using the webhook signing key.
- *
- * @see https://developer.xero.com/documentation/guides/webhooks/overview
- */
-function verifyXeroWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  const expectedSignature = createHmac('sha256', secret).update(payload).digest('base64');
-
-  // Use timing-safe comparison to prevent timing attacks
-  const sigBuffer = Buffer.from(signature, 'base64');
-  const expectedBuffer = Buffer.from(expectedSignature, 'base64');
-
-  if (sigBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(sigBuffer, expectedBuffer);
-}
-
 /** Maximum single payment amount in AUD (10 million) */
 const MAX_PAYMENT_AMOUNT_AUD = 10_000_000;
 
 /** Maximum negative balance allowed (small tolerance for rounding) */
 const MIN_BALANCE_THRESHOLD_AUD = -0.01;
 
-// ============================================================================
-// XERO API INTEGRATION (STUB)
-// ============================================================================
+function buildXeroPaymentDedupeKey(payment: {
+  xeroInvoiceId: string;
+  paymentId?: string;
+  amountPaid: number;
+  paymentDate: string;
+  reference?: string;
+}): string {
+  return payment.paymentId?.trim()
+    ? `payment:${payment.paymentId.trim()}`
+    : `payment:${payment.xeroInvoiceId}:${payment.paymentDate}:${payment.amountPaid.toFixed(2)}:${payment.reference ?? ''}`;
+}
 
-/**
- * Send invoice to Xero API.
- *
- * TODO(PHASE12-003): Implement actual Xero API integration:
- * 1. Get OAuth access token from organization's integration settings
- * 2. Call Xero Invoices API: POST /api.xro/2.0/Invoices
- * 3. Handle rate limiting (60 calls/minute)
- * 4. Parse response for invoice ID
- *
- * @see https://developer.xero.com/documentation/api/invoices
- */
-async function sendToXeroApi(
-  _organizationId: string,
-  payload: XeroInvoicePayload
-): Promise<{ invoiceId: string; invoiceUrl: string }> {
-  // TODO(PHASE12-003): Replace with actual Xero API call
-  // For now, simulate successful sync with generated ID
-
-  // Check if Xero is configured (would check integrations table)
-  const xeroConfigured = true; // Placeholder
-
-  if (!xeroConfigured) {
-    throw new ServerError('Xero integration not configured for this organization');
-  }
-
-  // Simulate API latency
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  // Simulate validation errors for testing
-  if (!payload.contact.name) {
-    throw new ValidationError('Xero validation error: Contact name is required');
-  }
-
-  if (payload.lineItems.length === 0) {
-    throw new ValidationError('Xero validation error: At least one line item is required');
-  }
-
-  // Generate mock Xero invoice ID (in production, this comes from Xero response)
-  const mockInvoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
+function buildXeroPaymentEventPayload(input: {
+  xeroInvoiceId: string
+  paymentId: string
+  amountPaid: number
+  paymentDate: string
+  reference?: string
+}) {
   return {
-    invoiceId: mockInvoiceId,
-    invoiceUrl: buildXeroInvoiceUrl(mockInvoiceId),
-  };
+    xeroInvoiceId: input.xeroInvoiceId,
+    paymentId: input.paymentId,
+    amountPaid: input.amountPaid,
+    paymentDate: input.paymentDate,
+    reference: input.reference ?? null,
+  }
+}
+
+async function insertXeroPaymentEvent(params: {
+  organizationId: string
+  dedupeKey: string
+  xeroInvoiceId: string
+  paymentId: string
+  amountPaid: number
+  paymentDate: string
+  reference?: string
+  orderId?: string | null
+  resultState: 'processing' | 'unknown_invoice' | 'rejected' | 'applied'
+}) {
+  const inserted = await db
+    .insert(xeroPaymentEvents)
+    .values({
+      organizationId: params.organizationId,
+      orderId: params.orderId ?? null,
+      dedupeKey: params.dedupeKey,
+      xeroInvoiceId: params.xeroInvoiceId,
+      paymentId: params.paymentId,
+      amount: params.amountPaid.toFixed(2),
+      paymentDate: params.paymentDate,
+      reference: params.reference ?? null,
+      resultState: params.resultState,
+      payload: buildXeroPaymentEventPayload(params),
+    })
+    .onConflictDoNothing()
+    .returning({ id: xeroPaymentEvents.id })
+
+  return inserted.length > 0
+}
+
+async function updateXeroPaymentEventResult(params: {
+  organizationId: string
+  dedupeKey: string
+  orderId?: string | null
+  resultState: 'unknown_invoice' | 'rejected' | 'applied'
+}) {
+  await db
+    .update(xeroPaymentEvents)
+    .set({
+      orderId: params.orderId ?? null,
+      resultState: params.resultState,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(xeroPaymentEvents.organizationId, params.organizationId),
+        eq(xeroPaymentEvents.dedupeKey, params.dedupeKey)
+      )
+    )
+}
+
+async function resolveWebhookRecordedBy(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  organizationId: string,
+  order: { createdBy: string | null; updatedBy: string | null }
+) {
+  if (order.updatedBy) {
+    return order.updatedBy;
+  }
+
+  if (order.createdBy) {
+    return order.createdBy;
+  }
+
+  const [fallbackUser] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.organizationId, organizationId))
+    .limit(1);
+
+  if (!fallbackUser) {
+    throw new ServerError(
+      'Cannot record Xero payment because no organization user is available to own the payment record'
+    );
+  }
+
+  return fallbackUser.id;
 }
 
 // ============================================================================
@@ -251,6 +494,26 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<XeroSyncResult> => {
     const ctx = await withAuth();
     const { orderId, force } = data;
+    const readiness = await getXeroSyncReadiness(ctx.organizationId);
+
+    if (!readiness.available) {
+      await db
+        .update(orders)
+        .set({
+          xeroSyncStatus: 'error',
+          xeroSyncError: readiness.message ?? 'Xero integration unavailable',
+          lastXeroSyncAt: new Date().toISOString(),
+        })
+        .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+
+      return {
+        orderId,
+        success: false,
+        status: 'error',
+        error: readiness.message ?? 'Xero integration unavailable',
+        integrationAvailable: false,
+      };
+    }
 
     // Get order with customer and line items
     const [order] = await db
@@ -279,7 +542,9 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: false,
+        status: 'error',
         error: 'Order not found',
+        integrationAvailable: readiness.available,
       };
     }
 
@@ -288,9 +553,11 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: true,
+        status: 'synced',
         xeroInvoiceId: order.xeroInvoiceId,
         xeroInvoiceUrl: buildXeroInvoiceUrl(order.xeroInvoiceId),
         syncedAt: new Date().toISOString(),
+        integrationAvailable: readiness.available,
       };
     }
 
@@ -299,7 +566,9 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: false,
+        status: 'error',
         error: `Cannot sync ${order.status} orders to Xero`,
+        integrationAvailable: readiness.available,
       };
     }
 
@@ -308,6 +577,7 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       .select({
         name: customersTable.name,
         email: customersTable.email,
+        xeroContactId: customersTable.xeroContactId,
       })
       .from(customersTable)
       .where(
@@ -322,7 +592,39 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: false,
+        status: 'error',
         error: 'Customer not found',
+        integrationAvailable: readiness.available,
+      };
+    }
+
+    if (!customer.name?.trim()) {
+      return {
+        orderId,
+        success: false,
+        status: 'error',
+        error: 'Customer name is required before syncing to Xero',
+        integrationAvailable: readiness.available,
+      };
+    }
+
+    if (!customer.xeroContactId?.trim()) {
+      const error = 'Customer is missing a trusted Xero contact mapping. Set xeroContactId before syncing invoices.';
+      await db
+        .update(orders)
+        .set({
+          xeroSyncStatus: 'error',
+          xeroSyncError: error,
+          lastXeroSyncAt: new Date().toISOString(),
+        })
+        .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+
+      return {
+        orderId,
+        success: false,
+        status: 'error',
+        error,
+        integrationAvailable: readiness.available,
       };
     }
 
@@ -348,7 +650,9 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: false,
+        status: 'error',
         error: 'Order has no line items',
+        integrationAvailable: readiness.available,
       };
     }
 
@@ -382,6 +686,31 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
     try {
+      const existingInvoice = await findInvoiceByReference(ctx.organizationId, order.orderNumber);
+      if (existingInvoice) {
+        await db
+          .update(orders)
+          .set({
+            xeroInvoiceId: existingInvoice.invoiceId,
+            xeroSyncStatus: 'synced',
+            xeroSyncError: null,
+            xeroInvoiceUrl: existingInvoice.invoiceUrl ?? buildXeroInvoiceUrl(existingInvoice.invoiceId),
+            lastXeroSyncAt: new Date().toISOString(),
+          })
+          .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+
+        return {
+          orderId,
+          success: true,
+          status: 'synced',
+          xeroInvoiceId: existingInvoice.invoiceId,
+          xeroInvoiceUrl:
+            existingInvoice.invoiceUrl ?? buildXeroInvoiceUrl(existingInvoice.invoiceId),
+          syncedAt: new Date().toISOString(),
+          integrationAvailable: readiness.available,
+        };
+      }
+
       // Build Xero payload
       const xeroLineItems = mapToXeroLineItems(items, xeroConfig);
       const payload = buildXeroInvoicePayload(
@@ -398,7 +727,7 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       );
 
       // Send to Xero
-      const { invoiceId, invoiceUrl } = await sendToXeroApi(ctx.organizationId, payload);
+      const { invoiceId, invoiceUrl } = await syncInvoiceWithXero(ctx.organizationId, payload);
 
       // Update order with Xero details — orgId for defense-in-depth
       await db
@@ -415,12 +744,14 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: true,
+        status: 'synced',
         xeroInvoiceId: invoiceId,
         xeroInvoiceUrl: invoiceUrl,
         syncedAt: new Date().toISOString(),
+        integrationAvailable: readiness.available,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown sync error';
+      const errorMessage = getXeroErrorMessage(error);
 
       // Update order with error — orgId for defense-in-depth
       await db
@@ -435,7 +766,9 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       return {
         orderId,
         success: false,
+        status: 'error',
         error: errorMessage,
+        integrationAvailable: readiness.available,
       };
     }
   });
@@ -468,110 +801,313 @@ export const resyncInvoiceToXero = createServerFn({ method: 'POST' })
  */
 export const handleXeroPaymentUpdate = createServerFn({ method: 'POST' })
   .inputValidator(xeroPaymentUpdateSchema)
-  .handler(async ({ data }) => {
-    // SECURITY: Verify Xero webhook signature (HMAC-SHA256)
-    const webhookSecret = process.env.XERO_WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      throw new ServerError('Xero webhook secret not configured - set XERO_WEBHOOK_SECRET');
+  .handler(async ({ data }) => applyXeroPaymentUpdate(data));
+
+export async function applyXeroPaymentUpdate(data: {
+  organizationId?: string;
+  xeroInvoiceId: string;
+  paymentId: string;
+  amountPaid: number;
+  paymentDate: string;
+  reference?: string;
+}) {
+  const { organizationId, xeroInvoiceId, paymentId, amountPaid, paymentDate, reference } = data;
+
+  if (!organizationId) {
+    throw new ValidationError('Organization ID is required for Xero payment processing')
+  }
+
+  if (amountPaid <= 0) {
+    throw new ValidationError('Payment amount must be positive');
+  }
+  if (amountPaid > MAX_PAYMENT_AMOUNT_AUD) {
+    throw new ValidationError(
+      `Payment amount ${amountPaid} exceeds maximum allowed (${MAX_PAYMENT_AMOUNT_AUD} AUD)`
+    );
+  }
+
+  const dedupeKey = buildXeroPaymentDedupeKey({
+    xeroInvoiceId,
+    paymentId,
+    amountPaid,
+    paymentDate,
+    reference,
+  });
+
+  const inserted = await insertXeroPaymentEvent({
+    organizationId,
+    dedupeKey,
+    xeroInvoiceId,
+    paymentId,
+    amountPaid,
+    paymentDate,
+    reference,
+    resultState: 'processing',
+  })
+
+  if (!inserted) {
+    return {
+      success: true,
+      duplicate: true,
+      resultState: 'duplicate',
+      xeroInvoiceId,
     }
+  }
 
-    const request = getRequest();
-    const signature = request.headers.get('x-xero-signature');
-    if (!signature) {
-      throw new AuthError('Missing Xero webhook signature');
-    }
-
-    // Verify the HMAC-SHA256 signature against the raw request body
-    const rawBody = JSON.stringify(data);
-    if (!verifyXeroWebhookSignature(rawBody, signature, webhookSecret)) {
-      throw new AuthError('Invalid Xero webhook signature');
-    }
-
-    // Environment gate: Webhooks must be explicitly enabled
-    const XERO_WEBHOOKS_ENABLED = process.env.XERO_WEBHOOKS_ENABLED === 'true';
-    if (!XERO_WEBHOOKS_ENABLED) {
-      throw new ServerError('Xero webhooks not enabled - configure XERO_WEBHOOKS_ENABLED=true');
-    }
-
-    const { xeroInvoiceId, amountPaid, paymentDate, reference } = data;
-
-    // SECURITY: Bounds checking on payment amount
-    if (amountPaid <= 0) {
-      throw new ValidationError('Payment amount must be positive');
-    }
-    if (amountPaid > MAX_PAYMENT_AMOUNT_AUD) {
-      throw new ValidationError(
-        `Payment amount ${amountPaid} exceeds maximum allowed (${MAX_PAYMENT_AMOUNT_AUD} AUD)`
-      );
-    }
-
-    // Find order by Xero invoice ID
-    const [order] = await db
-      .select({
-        id: orders.id,
-        total: orders.total,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-        organizationId: orders.organizationId,
-      })
-      .from(orders)
-      .where(and(eq(orders.xeroInvoiceId, xeroInvoiceId), isNull(orders.deletedAt)));
-
-    if (!order) {
-      return {
-        success: false,
-        error: `Order not found for Xero invoice: ${xeroInvoiceId}`,
-      };
-    }
-
-    // Calculate new paid amount and balance (amounts are stored in dollars)
-    const newPaidAmount = (order.paidAmount ?? 0) + amountPaid;
-    const newBalanceDue = order.total - newPaidAmount;
-
-    // SECURITY: Bounds checking on resulting balance
-    if (newBalanceDue < MIN_BALANCE_THRESHOLD_AUD) {
-      throw new ValidationError(
-        `Payment would result in overpayment: balance due would be ${newBalanceDue.toFixed(2)} AUD`
-      );
-    }
-
-    // Determine payment status
-    const paymentStatus = newBalanceDue <= 0 ? 'paid' : newPaidAmount > 0 ? 'partial' : 'pending';
-
-    // Update order using atomic SQL increment to avoid race conditions on paidAmount.
-    // Scope by organizationId for defense-in-depth (webhook handler).
-    const [updatedOrder] = await db
-      .update(orders)
-      .set({
-        paidAmount: sql`COALESCE(${orders.paidAmount}, 0) + ${amountPaid}`,
-        balanceDue: sql`${orders.total} - (COALESCE(${orders.paidAmount}, 0) + ${amountPaid})`,
-        paymentStatus,
-        metadata: {
-          lastXeroPaymentAmount: amountPaid,
-          lastXeroPaymentDate: paymentDate,
-          lastXeroPaymentRef: reference ?? null,
-        },
-      })
-      .where(
-        and(
-          eq(orders.id, order.id),
-          eq(orders.organizationId, order.organizationId)
-        )
+  const [order] = await db
+    .select({
+      id: orders.id,
+      total: orders.total,
+      organizationId: orders.organizationId,
+      createdBy: orders.createdBy,
+      updatedBy: orders.updatedBy,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.organizationId, organizationId),
+        eq(orders.xeroInvoiceId, xeroInvoiceId),
+        isNull(orders.deletedAt)
       )
-      .returning();
+    )
+    .limit(1)
 
-    if (!updatedOrder) {
-      throw new ValidationError('Failed to update order payment status — order not found or already modified');
+  if (!order) {
+    await updateXeroPaymentEventResult({
+      organizationId,
+      dedupeKey,
+      resultState: 'unknown_invoice',
+    })
+
+    return {
+      success: false,
+      duplicate: false,
+      resultState: 'unknown_invoice',
+      error: `Order not found for Xero invoice: ${xeroInvoiceId}`,
+      xeroInvoiceId,
     }
+  }
+
+  try {
+    const applied = await db.transaction(async (tx) => {
+      const recordedBy = await resolveWebhookRecordedBy(tx, order.organizationId, order)
+      const normalizedPaymentDate = new Date(paymentDate).toISOString().split('T')[0]
+
+      await tx.insert(orderPayments).values({
+        organizationId: order.organizationId,
+        orderId: order.id,
+        amount: amountPaid,
+        paymentMethod: 'xero',
+        paymentDate: normalizedPaymentDate,
+        reference: reference ?? paymentId,
+        notes: `Imported from Xero payment webhook (${paymentId})`,
+        recordedBy,
+        createdBy: recordedBy,
+        updatedBy: recordedBy,
+      })
+
+      await updateOrderPaymentStatus(tx, order.id, order.organizationId, recordedBy)
+
+      const [updatedOrder] = await tx
+        .select({
+          paidAmount: orders.paidAmount,
+          balanceDue: orders.balanceDue,
+          paymentStatus: orders.paymentStatus,
+        })
+        .from(orders)
+        .where(and(eq(orders.id, order.id), eq(orders.organizationId, order.organizationId)))
+        .limit(1)
+
+      if (!updatedOrder) {
+        throw new ValidationError('Failed to refresh order payment status after Xero payment apply')
+      }
+
+      if (safeNumber(updatedOrder.balanceDue) < MIN_BALANCE_THRESHOLD_AUD) {
+        throw new ValidationError(
+          `Payment would result in overpayment: balance due would be ${safeNumber(updatedOrder.balanceDue).toFixed(2)} AUD`
+        )
+      }
+
+      return updatedOrder
+    })
+
+    await updateXeroPaymentEventResult({
+      organizationId,
+      dedupeKey,
+      orderId: order.id,
+      resultState: 'applied',
+    })
 
     return {
       success: true,
       orderId: order.id,
-      newPaidAmount: safeNumber(updatedOrder.paidAmount),
-      newBalanceDue: safeNumber(updatedOrder.balanceDue),
-      paymentStatus,
-    };
-  });
+      xeroInvoiceId,
+      newPaidAmount: safeNumber(applied.paidAmount),
+      newBalanceDue: safeNumber(applied.balanceDue),
+      paymentStatus: applied.paymentStatus,
+      duplicate: false,
+      resultState: 'applied',
+    }
+  } catch (error) {
+    if (!(error instanceof ValidationError)) {
+      throw error
+    }
+
+    await updateXeroPaymentEventResult({
+      organizationId,
+      dedupeKey,
+      orderId: order.id,
+      resultState: 'rejected',
+    })
+
+    return {
+      success: false,
+      duplicate: false,
+      resultState: 'rejected',
+      orderId: order.id,
+      xeroInvoiceId,
+      error: error.message,
+    }
+  }
+}
+
+export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
+  const event = xeroWebhookEventSchema.parse(rawEvent)
+  const tenantId = event.tenantId?.trim()
+
+  if (!tenantId) {
+    return {
+      success: false,
+      resultState: 'rejected',
+      retryable: false,
+      error: 'Webhook event is missing a tenantId',
+    }
+  }
+
+  if (event.eventCategory.toUpperCase() !== 'PAYMENT') {
+    return {
+      success: true,
+      resultState: 'ignored',
+      retryable: false,
+      eventId: event.id,
+    }
+  }
+
+  const paymentId = extractPaymentIdFromWebhookEvent(event)
+  if (!paymentId) {
+    return {
+      success: false,
+      resultState: 'rejected',
+      retryable: false,
+      error: 'Webhook payment event did not include a payment resource ID',
+      tenantId,
+    }
+  }
+
+  const organization = await resolveWebhookOrganizationByTenant(tenantId)
+  if (!organization.success) {
+    return {
+      success: false,
+      resultState: 'rejected',
+      retryable: false,
+      error: organization.error,
+      tenantId,
+      paymentId,
+    }
+  }
+
+  try {
+    const payment = await getXeroPaymentById(organization.organizationId, paymentId)
+    if (!payment) {
+      return {
+        success: false,
+        resultState: 'rejected',
+        retryable: false,
+        error: `Xero payment ${paymentId} could not be loaded`,
+        organizationId: organization.organizationId,
+        tenantId,
+        paymentId,
+      }
+    }
+
+    return applyXeroPaymentUpdate({
+      organizationId: organization.organizationId,
+      xeroInvoiceId: payment.xeroInvoiceId,
+      paymentId: payment.paymentId,
+      amountPaid: payment.amountPaid,
+      paymentDate: payment.paymentDate,
+      reference: payment.reference,
+    })
+  } catch (error) {
+    const errorMessage = getXeroErrorMessage(error)
+    const retryable =
+      !(
+        error instanceof ValidationError ||
+        /not be loaded|rejected/i.test(errorMessage)
+      )
+
+    return {
+      success: false,
+      resultState: retryable ? 'processing' : 'rejected',
+      retryable,
+      error: errorMessage,
+      organizationId: organization.organizationId,
+      tenantId,
+      paymentId,
+    }
+  }
+}
+
+async function resolveWebhookOrganizationByTenant(tenantId: string) {
+  const matches = await db
+    .select({
+      organizationId: oauthConnections.organizationId,
+    })
+    .from(oauthConnections)
+    .where(
+      and(
+        eq(oauthConnections.provider, 'xero'),
+        eq(oauthConnections.serviceType, 'accounting'),
+        eq(oauthConnections.externalAccountId, tenantId),
+        eq(oauthConnections.isActive, true)
+      )
+    )
+    .limit(2)
+
+  if (matches.length === 0) {
+    return {
+      success: false as const,
+      error: `No active Xero accounting connection matches tenant ${tenantId}`,
+    }
+  }
+
+  if (matches.length > 1) {
+    return {
+      success: false as const,
+      error: `Multiple active Xero accounting connections match tenant ${tenantId}`,
+    }
+  }
+
+  return {
+    success: true as const,
+    organizationId: matches[0].organizationId,
+  }
+}
+
+function extractPaymentIdFromWebhookEvent(
+  event: ReturnType<typeof xeroWebhookEventSchema.parse>
+) {
+  if (event.resourceId?.trim()) {
+    return event.resourceId.trim()
+  }
+
+  if (!event.resourceUrl) {
+    return null
+  }
+
+  const match = event.resourceUrl.match(/\/Payments\/([^/?]+)/i)
+  return match?.[1] ?? null
+}
 
 // ============================================================================
 // GET INVOICE XERO STATUS
@@ -584,18 +1120,22 @@ export const getInvoiceXeroStatus = createServerFn({ method: 'GET' })
   .inputValidator(getInvoiceXeroStatusSchema)
   .handler(async ({ data }): Promise<InvoiceXeroStatus> => {
     const ctx = await withAuth();
+    const readiness = await getXeroSyncReadiness(ctx.organizationId);
 
     const [order] = await db
       .select({
         orderId: orders.id,
         orderNumber: orders.orderNumber,
+        customerId: orders.customerId,
         xeroInvoiceId: orders.xeroInvoiceId,
         xeroSyncStatus: orders.xeroSyncStatus,
         xeroSyncError: orders.xeroSyncError,
         lastXeroSyncAt: orders.lastXeroSyncAt,
         xeroInvoiceUrl: orders.xeroInvoiceUrl,
+        customerXeroContactId: customersTable.xeroContactId,
       })
       .from(orders)
+      .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
       .where(
         and(
           eq(orders.id, data.orderId),
@@ -609,6 +1149,15 @@ export const getInvoiceXeroStatus = createServerFn({ method: 'GET' })
       throw new NotFoundError('Order not found', 'order');
     }
 
+    const issue = normalizeXeroSyncIssue({
+      readiness,
+      xeroSyncError: order.xeroSyncError,
+      customerXeroContactId: order.customerXeroContactId,
+      xeroInvoiceId: order.xeroInvoiceId,
+      orderId: order.orderId,
+      customerId: order.customerId,
+    });
+
     return {
       orderId: order.orderId,
       orderNumber: order.orderNumber,
@@ -617,6 +1166,11 @@ export const getInvoiceXeroStatus = createServerFn({ method: 'GET' })
       xeroSyncError: order.xeroSyncError,
       lastXeroSyncAt: order.lastXeroSyncAt,
       xeroInvoiceUrl: order.xeroInvoiceUrl,
+      integrationAvailable: readiness.available,
+      integrationMessage: readiness.message ?? null,
+      issue,
+      customerXeroContactId: order.customerXeroContactId,
+      customerId: order.customerId,
     };
   });
 
@@ -631,6 +1185,7 @@ export const listInvoicesBySyncStatus = createServerFn({ method: 'GET' })
   .inputValidator(listInvoicesBySyncStatusSchema)
   .handler(async ({ data }): Promise<ListInvoicesBySyncStatusResponse> => {
     const ctx = await withAuth();
+    const readiness = await getXeroSyncReadiness(ctx.organizationId);
     const { status, errorsOnly, page, pageSize } = data;
     const offset = (page - 1) * pageSize;
 
@@ -665,6 +1220,7 @@ export const listInvoicesBySyncStatus = createServerFn({ method: 'GET' })
           lastXeroSyncAt: orders.lastXeroSyncAt,
           xeroInvoiceUrl: orders.xeroInvoiceUrl,
           customerName: customersTable.name,
+          customerXeroContactId: customersTable.xeroContactId,
         })
         .from(orders)
         .innerJoin(customersTable, eq(orders.customerId, customersTable.id))
@@ -697,10 +1253,22 @@ export const listInvoicesBySyncStatus = createServerFn({ method: 'GET' })
           xeroSyncError: r.xeroSyncError,
           lastXeroSyncAt: r.lastXeroSyncAt ? new Date(r.lastXeroSyncAt) : null,
           xeroInvoiceUrl: r.xeroInvoiceUrl,
+          canResync: readiness.available && (syncStatus === 'error' || syncStatus === 'pending'),
+          issue: normalizeXeroSyncIssue({
+            readiness,
+            xeroSyncError: r.xeroSyncError,
+            customerXeroContactId: r.customerXeroContactId,
+            xeroInvoiceId: r.xeroInvoiceId,
+            orderId: r.orderId,
+            customerId: r.customerId,
+          }),
+          customerXeroContactId: r.customerXeroContactId,
         };
       }),
       total: totalCount,
       page,
       pageSize,
+      integrationAvailable: readiness.available,
+      integrationMessage: readiness.message ?? null,
     };
   });

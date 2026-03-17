@@ -89,10 +89,16 @@ function transformScheduledEmailToInboxItem(item: {
   templateData?: unknown;
   templateType?: string;
 }): InboxEmailItem {
-  // Extract preview from template data if available
-  const templateData = item.templateData && typeof item.templateData === 'object' ? (item.templateData as Record<string, unknown>) : null;
-  const preview = templateData && 'body' in templateData
-    ? String(templateData.body || '').substring(0, LIMITS.EMAIL_PREVIEW_LENGTH)
+  const templateData =
+    item.templateData && typeof item.templateData === "object"
+      ? (item.templateData as Record<string, unknown>)
+      : null;
+  const previewSource =
+    (typeof templateData?.validationError === "string" && templateData.validationError) ||
+    (typeof templateData?.previewText === "string" && templateData.previewText) ||
+    null;
+  const preview = previewSource
+    ? previewSource.substring(0, LIMITS.EMAIL_PREVIEW_LENGTH)
     : `Scheduled for ${item.scheduledAt.toLocaleDateString()}`;
 
   return {
@@ -116,7 +122,9 @@ function transformScheduledEmailToInboxItem(item: {
     createdAt: item.createdAt,
     customerId: item.customerId,
     campaignId: null,
-    templateId: null,
+    templateId:
+      typeof templateData?.templateId === "string" ? templateData.templateId : null,
+    metadata: templateData ? { ...templateData } : null,
   };
 }
 

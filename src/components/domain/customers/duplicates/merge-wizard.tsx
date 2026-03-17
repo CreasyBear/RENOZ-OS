@@ -460,7 +460,7 @@ export function MergeWizard({
             <li>All orders, quotes, and jobs will be reassigned to the primary customer</li>
             <li>Related contacts and addresses will be merged if selected</li>
             <li>Activity history from both customers will be combined</li>
-            <li>You can view merge history and undo if needed</li>
+            <li>Merge history is recorded for audit review and future recovery support</li>
           </ul>
         </AlertDescription>
       </Alert>

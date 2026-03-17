@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
   Mail,
@@ -234,6 +234,7 @@ export function CampaignsList({
   isBulkDeleting = false,
   isBulkPausing = false,
   isBulkResuming = false,
+  selectedIdsOverride,
   className,
 }: CampaignsListProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -247,6 +248,11 @@ export function CampaignsList({
   const selection = useTableSelection({
     items: campaigns,
   });
+
+  useEffect(() => {
+    if (!selectedIdsOverride) return;
+    selection.setSelectedIds(new Set(selectedIdsOverride));
+  }, [selectedIdsOverride, selection]);
 
   const selectedCampaigns = useMemo(
     () => campaigns.filter((c) => selection.selectedIds.has(c.id)),

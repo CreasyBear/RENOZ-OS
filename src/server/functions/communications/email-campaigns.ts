@@ -45,7 +45,8 @@ import { Resend } from 'resend'
 import { emailHistory, type NewEmailHistory } from '../../../../drizzle/schema/communications'
 import { getResendApiKey, getEmailFrom, getEmailFromName } from '@/lib/email/config'
 import { containsPattern } from '@/lib/db/utils'
-import { substituteTemplateVariables, getSampleTemplateData } from '@/lib/server/email-templates'
+import { getSampleTemplateData } from '@/lib/server/email-templates'
+import { renderOutboundEmail } from '@/lib/server/outbound-email'
 
 // Excluded fields for activity logging
 const CAMPAIGN_EXCLUDED_FIELDS: string[] = [
@@ -898,73 +899,6 @@ export const duplicateCampaign = createServerFn({ method: 'POST' })
   })
 
 /**
- * Get template content based on template type
- * Matches the template structure used in send-campaign.ts
- */
-function getTemplateContent(
-  templateType: string
-): { subject: string; body: string } {
-  const templates: Record<string, { subject: string; body: string }> = {
-    welcome: {
-      subject: "Welcome to {{company_name}}, {{first_name}}!",
-      body: `<html><body>
-        <h1>Welcome, {{first_name}}!</h1>
-        <p>Thank you for joining {{company_name}}. We're excited to have you!</p>
-        <p>If you have any questions, don't hesitate to reach out.</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-      </body></html>`,
-    },
-    follow_up: {
-      subject: "Following up on {{subject_context}}",
-      body: `<html><body>
-        <p>Hi {{first_name}},</p>
-        <p>I wanted to follow up on {{subject_context}}.</p>
-        <p>Please let me know if you have any questions.</p>
-        <p>Best regards,<br>{{sender_name}}</p>
-      </body></html>`,
-    },
-    newsletter: {
-      subject: "{{newsletter_title}}",
-      body: `<html><body>
-        <h1>{{newsletter_title}}</h1>
-        <p>{{newsletter_content}}</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-        <p><small><a href="{{unsubscribe_url}}">Unsubscribe</a></small></p>
-      </body></html>`,
-    },
-    promotion: {
-      subject: "{{promotion_title}} - {{discount_amount}} Off!",
-      body: `<html><body>
-        <h1>{{promotion_title}}</h1>
-        <p>Hi {{first_name}},</p>
-        <p>Don't miss out on our special offer: {{discount_amount}} off!</p>
-        <p>{{promotion_details}}</p>
-        <p><a href="{{promotion_url}}">Shop Now</a></p>
-        <p>Offer valid until {{expiry_date}}.</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-        <p><small><a href="{{unsubscribe_url}}">Unsubscribe</a></small></p>
-      </body></html>`,
-    },
-    announcement: {
-      subject: "Important Announcement: {{announcement_title}}",
-      body: `<html><body>
-        <h1>{{announcement_title}}</h1>
-        <p>Hi {{first_name}},</p>
-        <p>{{announcement_content}}</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-        <p><small><a href="{{unsubscribe_url}}">Unsubscribe</a></small></p>
-      </body></html>`,
-    },
-    custom: {
-      subject: "{{subject}}",
-      body: "{{body}}",
-    },
-  };
-
-  return templates[templateType] || templates.custom;
-}
-
-/**
  * Send a test email for a campaign
  * Sends to a single test email address without creating recipients
  */
@@ -992,8 +926,6 @@ export const testSendCampaign = createServerFn({ method: 'POST' })
     // Get Resend API key (throws ServerError if not configured)
     const resendApiKey = getResendApiKey();
 
-    // Get template content based on campaign template type
-    const template = getTemplateContent(campaign.templateType);
     const campaignData = (campaign.templateData ?? {}) as CampaignTemplateData;
     const campaignVariables = (campaignData.variables ?? {}) as Record<
       string,
@@ -1010,22 +942,16 @@ export const testSendCampaign = createServerFn({ method: 'POST' })
       ...campaignVariables,
     };
 
-    // Check for subject/body override in campaign data
-    const subject = campaignData.subjectOverride
-      ? `[TEST] ${substituteTemplateVariables(String(campaignData.subjectOverride), variables)}`
-      : `[TEST] ${substituteTemplateVariables(template.subject, variables)}`;
-    
-    const bodyHtml = campaignData.bodyOverride
-      ? substituteTemplateVariables(String(campaignData.bodyOverride), variables)
-      : substituteTemplateVariables(template.body, variables);
-    
-    // Convert HTML to plain text (simple conversion for email clients)
-    const bodyText = bodyHtml
-      .replace(/<style[^>]*>.*?<\/style>/gis, '')
-      .replace(/<script[^>]*>.*?<\/script>/gis, '')
-      .replace(/<[^>]+>/g, '')
-      .replace(/\n\s*\n/g, '\n')
-      .trim();
+    const rendered = await renderOutboundEmail({
+      organizationId: ctx.organizationId,
+      templateType: campaign.templateType,
+      templateData:
+        (campaign.templateData as Record<string, unknown> | null) ?? {},
+      subject: campaignData.subjectOverride ?? null,
+      variables,
+      userId: ctx.user.id,
+      testPrefix: '[TEST] ',
+    });
 
     // Get sender email from config
     const fromEmail = getEmailFrom();
@@ -1040,11 +966,19 @@ export const testSendCampaign = createServerFn({ method: 'POST' })
         senderId: ctx.user.id,
         fromAddress,
         toAddress: data.testEmail,
-        subject,
-        bodyHtml,
-        bodyText,
+        subject: rendered.subject,
+        bodyHtml: rendered.bodyHtml,
+        bodyText: rendered.bodyText,
         status: 'pending',
         campaignId: campaign.id,
+        templateId: rendered.templateId,
+        metadata: {
+          previewText: rendered.previewText ?? undefined,
+          priority: rendered.priority ?? undefined,
+          replyTo: rendered.replyTo ?? undefined,
+          templateId: rendered.templateId ?? undefined,
+          templateVersion: rendered.templateVersion ?? undefined,
+        },
       } as NewEmailHistory)
       .returning();
 
@@ -1053,9 +987,10 @@ export const testSendCampaign = createServerFn({ method: 'POST' })
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: fromAddress,
       to: [data.testEmail],
-      subject,
-      html: bodyHtml,
-      text: bodyText,
+      subject: rendered.subject,
+      html: rendered.bodyHtml,
+      text: rendered.bodyText,
+      ...(rendered.replyTo ? { replyTo: rendered.replyTo } : {}),
     });
 
     if (sendError) {

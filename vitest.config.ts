@@ -21,6 +21,7 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '~': fileURLToPath(new URL('./src', import.meta.url)),
+      drizzle: fileURLToPath(new URL('./drizzle', import.meta.url)),
     },
   },
 })

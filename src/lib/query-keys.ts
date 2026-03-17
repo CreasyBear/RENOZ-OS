@@ -1531,6 +1531,14 @@ export const queryKeys = {
       [...queryKeys.financial.xero(), 'status', orderId] as const,
     xeroSyncs: (status?: string) =>
       [...queryKeys.financial.xero(), 'syncs', status ?? ''] as const,
+    xeroIntegration: () =>
+      [...queryKeys.financial.xero(), 'integration'] as const,
+    xeroPaymentEvents: () =>
+      [...queryKeys.financial.xero(), 'payment-events'] as const,
+    xeroCustomerMapping: (customerId: string) =>
+      [...queryKeys.financial.xero(), 'customer-mapping', customerId] as const,
+    xeroContactSearch: (customerId: string, query: string) =>
+      [...queryKeys.financial.xero(), 'contact-search', customerId, query] as const,
 
     // Statements
     statements: (customerId?: string) =>

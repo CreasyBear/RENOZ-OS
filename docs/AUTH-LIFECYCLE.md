@@ -1,7 +1,7 @@
 # Auth Lifecycle Architecture
 
 > Intended architecture for TanStack Start + Supabase SSR auth.
-> Last verified: 2026-02-14
+> Last verified: 2026-02-24
 
 ---
 
@@ -288,6 +288,18 @@ src/components/auth/
     auth-error-boundary.tsx
     sign-up-success-card.tsx
 ```
+
+---
+
+## Supabase SSR Version Requirements (Critical)
+
+**Do not downgrade `@supabase/ssr` or `@supabase/supabase-js`.** Older versions have a race condition that breaks auth:
+
+- **Bug**: `createServerClient` fires a background `initialize()` that can complete *after* the HTTP response is sent. Token refresh then tries to set cookies too late → `Error: Cannot use cookies.set(...) after the response has been generated` → server-side auth checks return null, queries fail, "Auth session missing".
+
+- **Fix**: Use `@supabase/ssr@0.9.0-rc.6` (or later) with `@supabase/supabase-js@^2.97.0`. The fix uses `skipAutoInitialize: true` so session loading is controlled within the request lifecycle.
+
+- **References**: [supabase/ssr#131](https://github.com/supabase/ssr/pull/131), [supabase/supabase-js#2123](https://github.com/supabase/supabase-js/pull/2123)
 
 ---
 

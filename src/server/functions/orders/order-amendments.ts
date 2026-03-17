@@ -26,6 +26,7 @@ import {
   type ItemChange,
 } from '@/lib/schemas';
 import { calculateLineItemTotals, calculateOrderTotals } from '@/server/functions/orders/orders';
+import { updateOrderPaymentStatus } from '@/server/functions/orders/order-payments';
 
 interface ListAmendmentsResult {
   amendments: (typeof orderAmendments.$inferSelect)[];
@@ -604,7 +605,6 @@ export const applyAmendment = createServerFn({ method: 'POST' })
           subtotal: totals.subtotal,
           taxAmount: totals.taxAmount,
           total: totals.total,
-          balanceDue: totals.total - Number(order.paidAmount ?? 0),
           ...(existing.amendmentType === 'shipping_change' && { shippingAmount: newShippingAmount }),
           ...(existing.amendmentType === 'discount_change' && {
             discountPercent: newDiscountPercent,
@@ -614,6 +614,9 @@ export const applyAmendment = createServerFn({ method: 'POST' })
           updatedBy: ctx.user.id,
         })
         .where(eq(orders.id, order.id));
+
+      // Recompute paidAmount from order_payments and set balanceDue, paymentStatus, paidAt
+      await updateOrderPaymentStatus(tx, order.id, ctx.organizationId, ctx.user.id);
 
       // Update amendment status
       const [updatedAmendment] = await tx

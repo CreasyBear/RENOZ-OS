@@ -67,6 +67,10 @@ import {
   getInvoiceXeroStatus,
   resyncInvoiceToXero,
 } from '@/server/functions/financial/xero-invoice-sync';
+import {
+  getXeroIntegrationStatus,
+  listRecentXeroPaymentEvents,
+} from '@/server/functions/financial/xero-operations';
 
 // Credit Notes
 import {
@@ -491,10 +495,54 @@ export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
   const fn = useServerFn(listInvoicesBySyncStatus);
 
   return useQuery({
-    queryKey: queryKeys.financial.xeroSyncs(params.status),
+    queryKey: queryKeys.financial.xeroSyncs(
+      JSON.stringify({
+        status: params.status ?? null,
+        errorsOnly: params.errorsOnly ?? false,
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 50,
+      })
+    ),
     queryFn: async () => {
       const result = await fn({ data: params });
       if (result == null) throw new Error('Xero syncs returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useXeroIntegrationStatus(enabled = true) {
+  const fn = useServerFn(getXeroIntegrationStatus);
+
+  return useQuery({
+    queryKey: queryKeys.financial.xeroIntegration(),
+    queryFn: async () => {
+      const result = await fn({ data: undefined });
+      if (result == null) throw new Error('Xero integration status returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export interface UseXeroPaymentEventsOptions {
+  page?: number;
+  pageSize?: number;
+  enabled?: boolean;
+}
+
+export function useXeroPaymentEvents(options: UseXeroPaymentEventsOptions = {}) {
+  const { enabled = true, page = 1, pageSize = 20 } = options;
+  const fn = useServerFn(listRecentXeroPaymentEvents);
+
+  return useQuery({
+    queryKey: [...queryKeys.financial.xeroPaymentEvents(), { page, pageSize }],
+    queryFn: async () => {
+      const result = await fn({ data: { page, pageSize } });
+      if (result == null) throw new Error('Xero payment events returned no data');
       return result;
     },
     enabled,

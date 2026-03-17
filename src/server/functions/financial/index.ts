@@ -7,3 +7,4 @@ export * from './payment-schedules';
 export * from './revenue-recognition';
 export * from './statements';
 export * from './xero-invoice-sync';
+export * from './xero-operations';

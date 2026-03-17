@@ -325,6 +325,7 @@ function CreditManagementSection({ form }: SectionProps) {
               label="Credit Limit (AUD)"
               placeholder="e.g., 10000"
               min={0}
+              step={0.01}
               description="Maximum credit amount for this customer"
             />
           )}

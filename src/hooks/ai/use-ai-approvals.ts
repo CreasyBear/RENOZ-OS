@@ -11,6 +11,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { AIEmailDraft } from '@/lib/ai/approvals/email-draft';
 import { queryKeys, type AIApprovalFilters } from '@/lib/query-keys';
 
 // ============================================================================
@@ -22,6 +23,7 @@ export interface AIApproval {
   action: string;
   agent: string;
   actionData: Record<string, unknown>;
+  version: number;
   status: 'pending' | 'approved' | 'rejected' | 'expired';
   createdAt: string;
   expiresAt: string;
@@ -37,6 +39,7 @@ export interface ApproveActionInput {
   approvalId: string;
   action: 'approve' | 'reject';
   rejectionReason?: string;
+  expectedVersion?: number;
 }
 
 export interface ApproveActionResponse {
@@ -44,6 +47,19 @@ export interface ApproveActionResponse {
   result?: unknown;
   message?: string;
   error?: string;
+  code?: string;
+  retryAvailable?: boolean;
+}
+
+export interface UpdateAIEmailDraftInput {
+  approvalId: string;
+  draft: AIEmailDraft;
+  expectedVersion?: number;
+}
+
+export interface UpdateAIEmailDraftResponse {
+  success: boolean;
+  approval: AIApproval;
 }
 
 // ============================================================================
@@ -81,7 +97,36 @@ async function submitApprovalAction(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || 'Failed to process approval');
+    const error = Object.assign(
+      new Error(data.error || 'Failed to process approval'),
+      {
+        code: typeof data.code === 'string' ? data.code : undefined,
+        retryAvailable: data.retryAvailable === true,
+      }
+    );
+    throw error;
+  }
+
+  return data;
+}
+
+async function updateApprovalDraft(
+  input: UpdateAIEmailDraftInput
+): Promise<UpdateAIEmailDraftResponse> {
+  const response = await fetch(`/api/ai/approvals/${input.approvalId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      draft: input.draft,
+      expectedVersion: input.expectedVersion,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to update approval draft');
   }
 
   return data;
@@ -157,9 +202,17 @@ export function useApproveAction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (approvalId: string) =>
-      submitApprovalAction({ approvalId, action: 'approve' }),
-    onSuccess: () => {
+    mutationFn: (input: string | { approvalId: string; expectedVersion?: number }) =>
+      submitApprovalAction(
+        typeof input === 'string'
+          ? { approvalId: input, action: 'approve' }
+          : {
+              approvalId: input.approvalId,
+              action: 'approve',
+              expectedVersion: input.expectedVersion,
+            }
+      ),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.approvals.all() });
     },
   });
@@ -173,14 +226,30 @@ export function useRejectAction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { approvalId: string; rejectionReason?: string }) =>
+    mutationFn: (input: { approvalId: string; rejectionReason?: string; expectedVersion?: number }) =>
       submitApprovalAction({
         approvalId: input.approvalId,
         action: 'reject',
         rejectionReason: input.rejectionReason,
+        expectedVersion: input.expectedVersion,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.approvals.all() });
+    },
+  });
+}
+
+/**
+ * Update the draft payload for a pending AI email approval.
+ */
+export function useUpdateAIEmailDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UpdateAIEmailDraftInput) => updateApprovalDraft(input),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.ai.approvals.all() });
+      queryClient.setQueryData(queryKeys.ai.approvals.detail(result.approval.id), result.approval);
     },
   });
 }

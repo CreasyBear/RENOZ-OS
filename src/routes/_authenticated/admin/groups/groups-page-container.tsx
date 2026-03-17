@@ -91,14 +91,14 @@ export default function GroupsPageContainer() {
   }, [newGroupName, newGroupDescription, newGroupColor, createGroupMutation]);
 
   const handleDeleteGroup = useCallback(async (groupId: string, groupName: string) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Delete Group',
       description: `Are you sure you want to delete the group "${groupName}"? This will remove the group but users will remain.`,
       confirmLabel: 'Delete Group',
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         await deleteGroupMutation.mutateAsync(groupId);
         toast.success('Group deleted successfully');

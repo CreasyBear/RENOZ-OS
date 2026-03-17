@@ -27,6 +27,7 @@ import {
 } from '@/lib/oauth/health-types';
 import { ServerError } from '@/lib/server/errors';
 import { logger } from '@/lib/logger';
+import { OAUTH_PROVIDERS, isMessagingOAuthService, type OAuthServiceType } from '@/lib/oauth/constants';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -40,7 +41,7 @@ export const ValidateConnectionRequestSchema = z.object({
 
 export const BulkHealthCheckRequestSchema = z.object({
   organizationId: z.string().optional(),
-  provider: z.enum(['google_workspace', 'microsoft_365']).optional(),
+  provider: z.enum(OAUTH_PROVIDERS).optional(),
   maxConcurrency: z.number().min(1).max(10).default(3),
 });
 
@@ -157,22 +158,32 @@ export async function validateOAuthConnection(
 
     // Perform health checks for each service
     const serviceChecks: ServiceHealthCheck[] = [];
+    let hasSupportedHealthProbe = false;
 
     for (const service of servicesToCheck) {
+      if (!isMessagingOAuthService(service as OAuthServiceType)) {
+        continue;
+      }
+
+      hasSupportedHealthProbe = true;
       const serviceCheck = await checkServiceHealth(
         connection.provider as 'google_workspace' | 'microsoft_365',
-        service,
+        service as 'calendar' | 'email' | 'contacts',
         accessToken
       );
       serviceChecks.push(serviceCheck);
     }
 
     // Calculate overall health status
-    const overallStatus = calculateOverallHealthStatus(serviceChecks);
+    const overallStatus = hasSupportedHealthProbe
+      ? calculateOverallHealthStatus(serviceChecks)
+      : HealthStatus.UNKNOWN;
 
     // Update connection status and log health check in a single transaction
     await db.transaction(async (tx) => {
-      const newIsActive = overallStatus === HealthStatus.HEALTHY;
+      const newIsActive = hasSupportedHealthProbe
+        ? overallStatus === HealthStatus.HEALTHY
+        : connection.isActive;
       if (connection.isActive !== newIsActive) {
         await tx
           .update(oauthConnections)

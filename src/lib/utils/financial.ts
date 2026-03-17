@@ -43,6 +43,53 @@ export function roundCurrency(amount: number): number {
   return Math.round(amount * 100) / 100;
 }
 
+export interface OrderAmountBreakdownInput {
+  lineSubtotal: number;
+  shippingAmount?: number;
+  discountPercent?: number | null;
+  discountAmount?: number | null;
+}
+
+export interface OrderAmountBreakdown {
+  lineSubtotal: number;
+  percentDiscountAmount: number;
+  totalDiscountAmount: number;
+  subtotal: number;
+  shippingAmount: number;
+  taxableAmount: number;
+  taxAmount: number;
+  total: number;
+}
+
+export function calculateOrderAmountBreakdown(
+  input: OrderAmountBreakdownInput
+): OrderAmountBreakdown {
+  const lineSubtotal = roundCurrency(input.lineSubtotal);
+  const shippingAmount = roundCurrency(input.shippingAmount ?? 0);
+  const percentDiscountAmount = roundCurrency(
+    lineSubtotal * ((input.discountPercent ?? 0) / 100)
+  );
+  const fixedDiscountAmount = roundCurrency(input.discountAmount ?? 0);
+  const totalDiscountAmount = roundCurrency(
+    Math.min(lineSubtotal, percentDiscountAmount + fixedDiscountAmount)
+  );
+  const subtotal = roundCurrency(lineSubtotal - totalDiscountAmount);
+  const taxableAmount = roundCurrency(subtotal + shippingAmount);
+  const taxAmount = calculateGst(taxableAmount);
+  const total = roundCurrency(subtotal + shippingAmount + taxAmount);
+
+  return {
+    lineSubtotal,
+    percentDiscountAmount,
+    totalDiscountAmount,
+    subtotal,
+    shippingAmount,
+    taxableAmount,
+    taxAmount,
+    total,
+  };
+}
+
 /**
  * Add days to a date
  *

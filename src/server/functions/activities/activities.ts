@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, or, desc, gte, lte, inArray, count, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { MAX_EXPORT_SIZE_BYTES } from 'drizzle/schema';
 import { activities, customers, opportunities, orders, users } from 'drizzle/schema';
 import {
   activityFeedQuerySchema,
@@ -19,6 +20,7 @@ import {
   userActivitiesQuerySchema,
   activityStatsQuerySchema,
   activityExportRequestSchema,
+  type ActivityExportResponse,
   activityParamsSchema,
   logEntityActivitySchema,
   type ActivityStatsResult,
@@ -34,15 +36,145 @@ import {
   type CursorPaginatedResponse,
 } from '@/lib/db/pagination';
 import { withAuth } from '@/lib/server/protected';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
   verifyCustomerExists,
   verifyOrderExists,
   verifyOpportunityExists,
 } from '@/server/functions/_shared/entity-verification';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { logger } from '@/lib/logger';
 import { resolveMetadataUuids } from '@/lib/activities/activity-metadata';
+import { uploadFile, createSignedUrl } from '@/lib/storage';
+import {
+  ActivityExportPdfDocument,
+  renderPdfToBuffer,
+  type DocumentOrganization,
+} from '@/lib/documents';
+import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { TextEncoder } from 'util';
+import { randomUUID } from 'crypto';
+import { createElement } from 'react';
+import type { ReactElement } from 'react';
+import type { DocumentProps } from '@react-pdf/renderer';
+import {
+  MAX_ACTIVITY_EXPORT_ROWS,
+  MAX_ACTIVITY_PDF_EXPORT_ROWS,
+  buildActivityExportCsv,
+  buildFilterSummary,
+  bufferToArrayBuffer,
+  formatActivityExportFilename,
+  type ActivityExportFilters,
+} from './export-utils';
+
+function buildActivityExportConditions(
+  organizationId: string,
+  filters: ActivityExportFilters
+) {
+  const conditions = [eq(activities.organizationId, organizationId)];
+
+  if (filters.entityType) conditions.push(eq(activities.entityType, filters.entityType));
+  if (filters.entityId) conditions.push(eq(activities.entityId, filters.entityId));
+  if (filters.action) conditions.push(eq(activities.action, filters.action));
+  if (filters.userId) conditions.push(eq(activities.userId, filters.userId));
+  if (filters.dateFrom) conditions.push(gte(activities.createdAt, filters.dateFrom));
+  if (filters.dateTo) conditions.push(lte(activities.createdAt, filters.dateTo));
+
+  return conditions;
+}
+
+async function resolveActivitiesWithUsers(
+  organizationId: string,
+  rows: Array<{
+    activity: typeof activities.$inferSelect;
+    user: { id: string | null; name: string | null; email: string | null };
+  }>
+): Promise<ActivityWithUser[]> {
+  const allCustomerIds = new Set<string>();
+  const allOrderIds = new Set<string>();
+  const allOpportunityIds = new Set<string>();
+
+  rows.forEach((r) => {
+    const metadata = r.activity.metadata;
+    if (metadata && typeof metadata === 'object') {
+      if (metadata.customerId && typeof metadata.customerId === 'string') {
+        allCustomerIds.add(metadata.customerId);
+      }
+      if (metadata.orderId && typeof metadata.orderId === 'string') {
+        allOrderIds.add(metadata.orderId);
+      }
+      if (metadata.opportunityId && typeof metadata.opportunityId === 'string') {
+        allOpportunityIds.add(metadata.opportunityId);
+      }
+    }
+  });
+
+  const [customerNames, orderNumbers, opportunityTitles] = await Promise.all([
+    allCustomerIds.size > 0
+      ? db
+          .select({ id: customers.id, name: customers.name })
+          .from(customers)
+          .where(
+            and(
+              inArray(customers.id, Array.from(allCustomerIds)),
+              eq(customers.organizationId, organizationId)
+            )
+          )
+      : Promise.resolve([]),
+    allOrderIds.size > 0
+      ? db
+          .select({ id: orders.id, orderNumber: orders.orderNumber })
+          .from(orders)
+          .where(
+            and(
+              inArray(orders.id, Array.from(allOrderIds)),
+              eq(orders.organizationId, organizationId)
+            )
+          )
+      : Promise.resolve([]),
+    allOpportunityIds.size > 0
+      ? db
+          .select({ id: opportunities.id, title: opportunities.title })
+          .from(opportunities)
+          .where(
+            and(
+              inArray(opportunities.id, Array.from(allOpportunityIds)),
+              eq(opportunities.organizationId, organizationId)
+            )
+          )
+      : Promise.resolve([]),
+  ]);
+
+  const customerMap = new Map(customerNames.map((c) => [c.id, c.name]));
+  const orderMap = new Map(orderNumbers.map((o) => [o.id, o.orderNumber]));
+  const opportunityMap = new Map(opportunityTitles.map((o) => [o.id, o.title]));
+
+  return rows.map((r) => {
+    let resolvedMetadata = r.activity.metadata;
+    if (resolvedMetadata && typeof resolvedMetadata === 'object') {
+      resolvedMetadata = { ...resolvedMetadata };
+      if (resolvedMetadata.customerId && typeof resolvedMetadata.customerId === 'string') {
+        const customerName = customerMap.get(resolvedMetadata.customerId);
+        if (customerName) resolvedMetadata.customerName = customerName;
+      }
+      if (resolvedMetadata.orderId && typeof resolvedMetadata.orderId === 'string') {
+        const orderNumber = orderMap.get(resolvedMetadata.orderId);
+        if (orderNumber) resolvedMetadata.orderNumber = orderNumber;
+      }
+      if (resolvedMetadata.opportunityId && typeof resolvedMetadata.opportunityId === 'string') {
+        const opportunityTitle = opportunityMap.get(resolvedMetadata.opportunityId);
+        if (opportunityTitle) resolvedMetadata.opportunityTitle = opportunityTitle;
+      }
+    }
+
+    return {
+      ...r.activity,
+      metadata: resolvedMetadata,
+      user: r.user?.id && r.user.email ? { id: r.user.id, name: r.user.name, email: r.user.email } : null,
+      entityName: r.activity.entityName ?? null,
+    };
+  });
+}
 
 // ============================================================================
 // ACTIVITY FEED
@@ -60,30 +192,19 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
       data;
 
     // Build where conditions - ALWAYS include organizationId for isolation
-    const conditions = [eq(activities.organizationId, ctx.organizationId)];
+    const conditions = buildActivityExportConditions(ctx.organizationId, {
+      entityType,
+      entityId,
+      action,
+      userId,
+      dateFrom,
+      dateTo,
+    });
 
     // Apply filters
-    if (entityType) {
-      conditions.push(eq(activities.entityType, entityType));
-    }
-    if (entityId) {
-      conditions.push(eq(activities.entityId, entityId));
-    }
-    if (action) {
-      conditions.push(eq(activities.action, action));
-    }
-    if (userId) {
-      conditions.push(eq(activities.userId, userId));
-    }
     // COMMS-AUTO-002: Filter by source
     if (source) {
       conditions.push(eq(activities.source, source));
-    }
-    if (dateFrom) {
-      conditions.push(gte(activities.createdAt, dateFrom));
-    }
-    if (dateTo) {
-      conditions.push(lte(activities.createdAt, dateTo));
     }
 
     // Apply cursor if provided
@@ -115,105 +236,17 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
       .orderBy(desc(activities.createdAt), desc(activities.id))
       .limit(pageSize + 1);
 
-    // Collect all UUIDs from metadata across all activities for batch resolution
-    const allCustomerIds = new Set<string>();
-    const allOrderIds = new Set<string>();
-    const allOpportunityIds = new Set<string>();
-
-    results.forEach((r) => {
-      const metadata = r.activity.metadata;
-      if (metadata && typeof metadata === 'object') {
-        if (metadata.customerId && typeof metadata.customerId === 'string') {
-          allCustomerIds.add(metadata.customerId);
-        }
-        if (metadata.orderId && typeof metadata.orderId === 'string') {
-          allOrderIds.add(metadata.orderId);
-        }
-        if (metadata.opportunityId && typeof metadata.opportunityId === 'string') {
-          allOpportunityIds.add(metadata.opportunityId);
-        }
-      }
-    });
-
-    // Batch fetch all names at once (wrap empty arrays in Promise.resolve for Promise.all)
-    const [customerNames, orderNumbers, opportunityTitles] = await Promise.all([
-      allCustomerIds.size > 0
-        ? db
-            .select({ id: customers.id, name: customers.name })
-            .from(customers)
-            .where(
-              and(
-                inArray(customers.id, Array.from(allCustomerIds)),
-                eq(customers.organizationId, ctx.organizationId)
-              )
-            )
-        : Promise.resolve([]),
-      allOrderIds.size > 0
-        ? db
-            .select({ id: orders.id, orderNumber: orders.orderNumber })
-            .from(orders)
-            .where(
-              and(
-                inArray(orders.id, Array.from(allOrderIds)),
-                eq(orders.organizationId, ctx.organizationId)
-              )
-            )
-        : Promise.resolve([]),
-      allOpportunityIds.size > 0
-        ? db
-            .select({ id: opportunities.id, title: opportunities.title })
-            .from(opportunities)
-            .where(
-              and(
-                inArray(opportunities.id, Array.from(allOpportunityIds)),
-                eq(opportunities.organizationId, ctx.organizationId)
-              )
-            )
-        : Promise.resolve([]),
-    ]);
-
-    // Create lookup maps
-    const customerMap = new Map(customerNames.map((c) => [c.id, c.name]));
-    const orderMap = new Map(orderNumbers.map((o) => [o.id, o.orderNumber]));
-    const opportunityMap = new Map(opportunityTitles.map((o) => [o.id, o.title]));
-
-    // Transform results to include user data, entity name, and resolved metadata
-    // Use denormalized entity_name column (populated at write time) instead of joins
-    const items = results.map((r) => {
-      // Use denormalized entity_name column - avoids 6 unnecessary LEFT JOINs
-      const entityName = r.activity.entityName ?? null;
-
-      // Resolve UUIDs in metadata using the batch-fetched maps
-      let resolvedMetadata = r.activity.metadata;
-      if (resolvedMetadata && typeof resolvedMetadata === 'object') {
-        resolvedMetadata = { ...resolvedMetadata };
-        if (resolvedMetadata.customerId && typeof resolvedMetadata.customerId === 'string') {
-          const customerName = customerMap.get(resolvedMetadata.customerId);
-          if (customerName) {
-            resolvedMetadata.customerName = customerName;
-          }
-        }
-        if (resolvedMetadata.orderId && typeof resolvedMetadata.orderId === 'string') {
-          const orderNumber = orderMap.get(resolvedMetadata.orderId);
-          if (orderNumber) {
-            resolvedMetadata.orderNumber = orderNumber;
-          }
-        }
-        if (resolvedMetadata.opportunityId && typeof resolvedMetadata.opportunityId === 'string') {
-          const opportunityTitle = opportunityMap.get(resolvedMetadata.opportunityId);
-          if (opportunityTitle) {
-            resolvedMetadata.opportunityTitle = opportunityTitle;
-          }
-        }
-      }
-
-      return {
-        ...r.activity,
-        metadata: resolvedMetadata,
-        user: r.user?.id ? r.user : null,
-        entityName,
-      };
-    });
+    const items = await resolveActivitiesWithUsers(
+      ctx.organizationId,
+      results.map((r) => ({
+        activity: r.activity,
+        user: {
+          id: r.user?.id ?? null,
+          name: r.user?.name ?? null,
+          email: r.user?.email ?? null,
+        },
+      }))
+    );
 
     return buildStandardCursorResponse<ActivityWithUser>(items, pageSize);
   });
@@ -749,31 +782,158 @@ export const getActivityLeaderboard = createServerFn({ method: 'GET' })
  */
 export const requestActivityExport = createServerFn({ method: 'POST' })
   .inputValidator(activityExportRequestSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ActivityExportResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.report.export });
+    const filters: ActivityExportFilters = {
+      entityType: data.entityType,
+      entityId: data.entityId,
+      action: data.action,
+      userId: data.userId,
+      dateFrom: data.dateFrom,
+      dateTo: data.dateTo,
+    };
 
-    const { format } = data;
+    const exportLimit = data.format === 'pdf' ? MAX_ACTIVITY_PDF_EXPORT_ROWS : MAX_ACTIVITY_EXPORT_ROWS;
+    const conditions = buildActivityExportConditions(ctx.organizationId, filters);
 
-    // STUB: Export functionality not yet implemented
-    // When implementing:
-    // 1. Create jobs table if not exists
-    // 2. Create Trigger.dev task for async export
-    // 3. Stream activities to CSV/JSON/PDF based on format
-    // 4. Upload to S3/R2 and return signed URL
-    // 5. Add job status polling endpoint
+    const results = await db
+      .select({
+        activity: activities,
+        user: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        },
+      })
+      .from(activities)
+      .leftJoin(users, eq(activities.userId, users.id))
+      .where(and(...conditions))
+      .orderBy(desc(activities.createdAt), desc(activities.id))
+      .limit(exportLimit + 1);
 
-    logger.warn('[Activity Export] STUB: Export not implemented', {
-      format,
-      organizationId: ctx.organizationId,
-      requestedBy: ctx.user.id,
+    if (data.format === 'pdf' && results.length > MAX_ACTIVITY_PDF_EXPORT_ROWS) {
+      throw new ValidationError(
+        'PDF activity export exceeds the maximum row limit. Narrow the filters or use CSV/JSON for larger exports.'
+      );
+    }
+    if (results.length > MAX_ACTIVITY_EXPORT_ROWS) {
+      throw new ValidationError(
+        'Activity export exceeds the maximum row limit. Narrow the filters and try again.'
+      );
+    }
+
+    const items = await resolveActivitiesWithUsers(
+      ctx.organizationId,
+      results.map((r) => ({
+        activity: r.activity,
+        user: {
+          id: r.user?.id ?? null,
+          name: r.user?.name ?? null,
+          email: r.user?.email ?? null,
+        },
+      }))
+    );
+
+    const generatedAt = new Date();
+    const filename = formatActivityExportFilename(data.format);
+    const exportId = randomUUID();
+    const storagePath = `organizations/${ctx.organizationId}/activities/exports/${exportId}/${filename}`;
+
+    let contentType: string;
+    let fileBody: ArrayBuffer;
+
+    if (data.format === 'csv') {
+      const csv = buildActivityExportCsv(items);
+      const encoded = new TextEncoder().encode(csv);
+      if (encoded.byteLength > MAX_EXPORT_SIZE_BYTES) {
+        throw new ValidationError(
+          `Export exceeds maximum size (${MAX_EXPORT_SIZE_BYTES / 1024 / 1024}MB). Try narrowing the filters.`
+        );
+      }
+      contentType = 'text/csv';
+      fileBody = encoded.buffer;
+    } else if (data.format === 'json') {
+      const json = JSON.stringify(items, null, 2);
+      const encoded = new TextEncoder().encode(json);
+      if (encoded.byteLength > MAX_EXPORT_SIZE_BYTES) {
+        throw new ValidationError(
+          `Export exceeds maximum size (${MAX_EXPORT_SIZE_BYTES / 1024 / 1024}MB). Try narrowing the filters.`
+        );
+      }
+      contentType = 'application/json';
+      fileBody = encoded.buffer;
+    } else {
+      const organization = (await fetchOrganizationForDocument(
+        ctx.organizationId
+      )) as DocumentOrganization;
+      const pdfElement = createElement(ActivityExportPdfDocument, {
+        organization,
+        data: {
+          reportName: 'Activity Export',
+          generatedAt,
+          filterSummary: buildFilterSummary(filters),
+          totalCount: items.length,
+          activities: items.map((item) => ({
+            timestamp: item.createdAt,
+            action: item.action,
+            entity: item.entityName ?? `${item.entityType}:${item.entityId}`,
+            actor: item.user?.name ?? item.user?.email ?? 'System',
+            description: item.description ?? '',
+          })),
+        },
+      }) as unknown as ReactElement<DocumentProps>;
+      const pdfResult = await renderPdfToBuffer(pdfElement);
+      if (pdfResult.buffer.byteLength > MAX_EXPORT_SIZE_BYTES) {
+        throw new ValidationError(
+          `Export exceeds maximum size (${MAX_EXPORT_SIZE_BYTES / 1024 / 1024}MB). Try narrowing the filters.`
+        );
+      }
+      contentType = 'application/pdf';
+      fileBody = bufferToArrayBuffer(pdfResult.buffer);
+    }
+
+    await uploadFile({
+      path: storagePath,
+      fileBody,
+      contentType,
+      upsert: true,
     });
 
-    // Return explicit "not implemented" status instead of fake job
+    const signed = await createSignedUrl({
+      path: storagePath,
+      expiresIn: 24 * 60 * 60,
+      download: filename,
+    });
+
+    const activityLogger = createActivityLoggerWithContext(ctx);
+    activityLogger.logAsync({
+      entityType: data.entityType ?? 'user',
+      entityId: data.entityId ?? ctx.user.id,
+      action: 'exported',
+      description: `Exported ${items.length} activities as ${data.format.toUpperCase()}`,
+      metadata: {
+        format: data.format,
+        recordCount: items.length,
+        customerId: data.entityType === 'customer' ? data.entityId : undefined,
+        customFields: {
+          filterEntityType: data.entityType ?? null,
+          filterEntityId: data.entityId ?? null,
+          filterAction: data.action ?? null,
+          filterUserId: data.userId ?? null,
+          filterDateFrom: data.dateFrom?.toISOString() ?? null,
+          filterDateTo: data.dateTo?.toISOString() ?? null,
+        },
+      } as ActivityMetadata,
+    });
+
     return {
-      jobId: null,
-      status: 'not_implemented' as const,
-      message:
-        'Activity export is not yet available. This feature is planned for a future release.',
+      status: 'completed',
+      downloadUrl: signed.signedUrl,
+      filename,
+      expiresAt: signed.expiresAt,
+      format: data.format,
+      generatedAt,
+      recordCount: items.length,
     };
   });
 
@@ -873,4 +1033,3 @@ export const logEntityActivity = createServerFn({ method: 'POST' })
 
     return { activity };
   });
-

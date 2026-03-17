@@ -181,13 +181,13 @@ export default function UsersAdminPageContainer() {
     async (role: string, selectedUsers: Set<string>) => {
       if (selectedUsers.size === 0) return;
 
-      const confirmed = await confirm.confirm({
+      const { confirmed } = await confirm.confirm({
         title: 'Change User Roles',
         description: `Change role to ${role} for ${selectedUsers.size} user(s)? This will update their permissions.`,
         confirmLabel: 'Change Roles',
       });
 
-      if (!confirmed.confirmed) return;
+      if (!confirmed) return;
 
       bulkUpdateMutation.mutate(
         {

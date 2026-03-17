@@ -11,7 +11,7 @@ import {
   createAddress,
   updateAddress,
   deleteAddress,
-} from '@/server/customers';
+} from '@/server/functions/customers/customers';
 
 // ============================================================================
 // TYPES

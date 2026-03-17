@@ -8,8 +8,9 @@
 import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { oauthConnections, oauthSyncLogs, oauthServicePermissions } from 'drizzle/schema/oauth';
+import { oauthConnections, oauthSyncLogs, oauthServicePermissions } from '../../../../drizzle/schema/oauth';
 import { createOAuthConnections } from '@/lib/oauth/connections';
+import { OAUTH_PROVIDERS, OAUTH_SERVICE_TYPES, type OAuthProvider, type OAuthServiceType } from '@/lib/oauth/constants';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -18,8 +19,8 @@ import { createOAuthConnections } from '@/lib/oauth/connections';
 export const CreateOAuthConnectionSchema = z.object({
   organizationId: z.string().uuid(),
   userId: z.string().uuid(),
-  provider: z.enum(['google_workspace', 'microsoft_365']),
-  services: z.array(z.enum(['calendar', 'email', 'contacts'])).min(1).max(3),
+  provider: z.enum(OAUTH_PROVIDERS),
+  services: z.array(z.enum(OAUTH_SERVICE_TYPES)).min(1).max(3),
   accessToken: z.string().min(1),
   refreshToken: z.string().optional(),
   expiresAt: z.date(),
@@ -36,8 +37,8 @@ export const UpdateOAuthConnectionSchema = z.object({
 export const OAuthConnectionResponseSchema = z.object({
   id: z.string().uuid(),
   organizationId: z.string().uuid(),
-  provider: z.enum(['google_workspace', 'microsoft_365']),
-  serviceType: z.enum(['calendar', 'email', 'contacts']),
+  provider: z.enum(OAUTH_PROVIDERS),
+  serviceType: z.enum(OAUTH_SERVICE_TYPES),
   externalAccountId: z.string().optional(),
   scopes: z.array(z.string()),
   isActive: z.boolean(),
@@ -58,8 +59,8 @@ export const ListOAuthConnectionsResponseSchema = z.object({
 export interface CreateOAuthConnectionRequest {
   organizationId: string;
   userId: string;
-  provider: 'google_workspace' | 'microsoft_365';
-  services: ('calendar' | 'email' | 'contacts')[];
+  provider: OAuthProvider;
+  services: OAuthServiceType[];
   accessToken: string;
   refreshToken?: string;
   expiresAt: Date;
@@ -153,8 +154,8 @@ export interface GetOAuthConnectionResponseSuccess {
   connection: {
     id: string;
     organizationId: string;
-    provider: 'google_workspace' | 'microsoft_365';
-    serviceType: 'calendar' | 'email' | 'contacts';
+    provider: OAuthProvider;
+    serviceType: OAuthServiceType;
     externalAccountId?: string;
     scopes: string[];
     isActive: boolean;
@@ -225,8 +226,8 @@ export async function getOAuthConnection(
 
 export interface ListOAuthConnectionsRequest {
   organizationId: string;
-  provider?: 'google_workspace' | 'microsoft_365';
-  serviceType?: 'calendar' | 'email' | 'contacts';
+  provider?: OAuthProvider;
+  serviceType?: OAuthServiceType;
   isActive?: boolean;
   limit?: number;
   offset?: number;
@@ -237,8 +238,8 @@ export interface ListOAuthConnectionsResponseSuccess {
   connections: Array<{
     id: string;
     organizationId: string;
-    provider: 'google_workspace' | 'microsoft_365';
-    serviceType: 'calendar' | 'email' | 'contacts';
+    provider: OAuthProvider;
+    serviceType: OAuthServiceType;
     externalAccountId?: string;
     scopes: string[];
     isActive: boolean;
@@ -306,8 +307,8 @@ export async function listOAuthConnections(
       connections: connections.map((conn) => ({
         id: conn.id,
         organizationId: conn.organizationId,
-        provider: conn.provider as 'google_workspace' | 'microsoft_365',
-        serviceType: conn.serviceType as 'calendar' | 'email' | 'contacts',
+        provider: conn.provider as 'google_workspace' | 'microsoft_365' | 'xero',
+        serviceType: conn.serviceType as 'calendar' | 'email' | 'contacts' | 'accounting',
         externalAccountId: conn.externalAccountId || undefined,
         scopes: conn.scopes,
         isActive: conn.isActive,
@@ -389,6 +390,17 @@ export async function updateOAuthConnection(
     }
 
     if (validatedUpdates.externalAccountId !== undefined) {
+      if (
+        currentConnection.provider === 'xero' &&
+        currentConnection.serviceType === 'accounting' &&
+        validatedUpdates.externalAccountId !== currentConnection.externalAccountId
+      ) {
+        return {
+          success: false,
+          error: 'Xero tenant assignment can only be changed through the OAuth reconnect flow',
+        };
+      }
+
       updateData.externalAccountId = validatedUpdates.externalAccountId;
     }
 
@@ -500,10 +512,6 @@ export async function deleteOAuthConnection(
     }
 
     await db.transaction(async (tx) => {
-      await tx
-        .delete(oauthServicePermissions)
-        .where(eq(oauthServicePermissions.connectionId, request.connectionId));
-      await tx.delete(oauthConnections).where(eq(oauthConnections.id, request.connectionId));
       await tx.insert(oauthSyncLogs).values({
         organizationId: request.organizationId,
         connectionId: request.connectionId,
@@ -519,6 +527,23 @@ export async function deleteOAuthConnection(
         startedAt: new Date(),
         completedAt: new Date(),
       });
+
+      await tx
+        .update(oauthServicePermissions)
+        .set({
+          isGranted: false,
+          revokedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(oauthServicePermissions.connectionId, request.connectionId));
+
+      await tx
+        .update(oauthConnections)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(oauthConnections.id, request.connectionId));
     });
 
     return {

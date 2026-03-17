@@ -78,7 +78,8 @@ export type RemoveJobMaterialInput = z.infer<typeof removeJobMaterialSchema>;
 
 /**
  * Schema for reserving inventory for a job's materials.
- * This creates inventory reservations for the BOM items.
+ * Current server contract may return an explicit unavailable status until
+ * inventory reservations are integrated with the jobs domain.
  */
 export const reserveJobStockSchema = z.object({
   jobId: z.string().uuid('Invalid job ID format'),
@@ -87,6 +88,20 @@ export const reserveJobStockSchema = z.object({
 });
 
 export type ReserveJobStockInput = z.infer<typeof reserveJobStockSchema>;
+
+export interface ReserveJobStockResult {
+  jobId: string;
+  status: 'unavailable';
+  reservationCreated: false;
+  reservedCount: 0;
+  previewCount: number;
+  materials: Array<{
+    materialId: string;
+    productId: string;
+    quantityToReserve: number;
+  }>;
+  message: string;
+}
 
 // ============================================================================
 // CALCULATE JOB MATERIAL COST

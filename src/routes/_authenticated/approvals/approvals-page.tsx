@@ -12,7 +12,7 @@
  * @see src/routes/_authenticated/approvals/index.tsx - Route definition
  * @see _Initiation/_prd/2-domains/suppliers/suppliers.prd.json (SUPP-APPROVAL-WORKFLOW)
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageLayout } from '@/components/layout';
@@ -59,15 +59,34 @@ export default function ApprovalsPage() {
   const queryClient = useQueryClient();
   const [selectedItem, setSelectedItem] = useState<ApprovalItem | null>(null);
   const activeTab = search.tab ?? APPROVAL_TABS_WITH_ALL.PENDING;
+  const hasUnsupportedType = search.type === 'amendment';
   
   // Memoize filters with stable reference - only recreate when search values actually change
   const filters = useMemo<ApprovalFilters>(() => {
     return {
-      type: search.type ?? 'all',
+      type: 'all',
       priority: search.priority ?? 'all',
       search: search.search ?? '',
     };
-  }, [search.type, search.priority, search.search]);
+  }, [search.priority, search.search]);
+
+  useEffect(() => {
+    if (!hasUnsupportedType) return;
+
+    toast.warning('Approval type filter unavailable', {
+      description:
+        'Only purchase-order approvals are currently supported. The unsupported type filter has been cleared.',
+    });
+
+    navigate({
+      to: '/approvals',
+      search: (prev) => ({
+        ...prev,
+        type: undefined,
+      }),
+      replace: true,
+    });
+  }, [hasUnsupportedType, navigate]);
 
   // ============================================================================
   // DATA FETCHING
@@ -76,7 +95,6 @@ export default function ApprovalsPage() {
   const { data, isLoading, error } = usePendingApprovals({
     status: TAB_STATUS_MAP[activeTab],
     search: filters.search || undefined,
-    type: filters.type !== 'all' ? (filters.type as 'purchase_order' | 'amendment') : undefined,
     priority: filters.priority !== 'all' ? (filters.priority as 'low' | 'medium' | 'high' | 'urgent') : undefined,
   });
   const { data: usersData } = useUsers({
@@ -142,7 +160,7 @@ export default function ApprovalsPage() {
       navigate({
         search: (prev) => ({
           ...prev,
-          type: nextFilters.type as 'all' | 'purchase_order' | 'amendment',
+          type: undefined,
           priority: nextFilters.priority as 'all' | 'low' | 'medium' | 'high' | 'urgent',
           search: nextFilters.search || undefined,
         }),
@@ -250,7 +268,7 @@ export default function ApprovalsPage() {
     <PageLayout variant="full-width">
       <PageLayout.Header
         title="Approvals"
-        description="Review and approve purchase orders, amendments, and other procurement requests"
+        description="Review and approve purchase orders and other procurement requests"
       />
 
       <PageLayout.Content>
@@ -290,4 +308,3 @@ export default function ApprovalsPage() {
 // ============================================================================
 // HELPERS
 // ============================================================================
-

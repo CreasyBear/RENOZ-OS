@@ -30,12 +30,21 @@ export interface ConfirmationOptions {
   reasonLabel?: string;
   reasonPlaceholder?: string;
   onConfirm?: (reason?: string) => Promise<void> | void;
+  onError?: (error: unknown, reason?: string) => void;
+  getErrorMessage?: (error: unknown) => string;
+}
+
+export interface ConfirmationResult {
+  confirmed: boolean;
+  reason?: string;
+  status: "confirmed" | "cancelled";
 }
 
 export interface ConfirmationState extends ConfirmationOptions {
   isOpen: boolean;
   isConfirming?: boolean;
-  resolve?: (result: { confirmed: boolean; reason?: string }) => void;
+  errorMessage?: string;
+  resolve?: (result: ConfirmationResult) => void;
 }
 
 export interface ConfirmationContextValue {
@@ -49,7 +58,8 @@ export interface ConfirmationContextValue {
   requireReason: boolean;
   reasonLabel: string;
   reasonPlaceholder: string;
-  confirm: (options?: ConfirmationOptions) => Promise<{ confirmed: boolean; reason?: string }>;
+  errorMessage?: string;
+  confirm: (options?: ConfirmationOptions) => Promise<ConfirmationResult>;
   handleConfirm: (reason?: string) => Promise<boolean>;
   handleCancel: () => void;
   close: () => void;
@@ -63,12 +73,13 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
   });
 
   const confirm = useCallback(
-    (options: ConfirmationOptions = {}): Promise<{ confirmed: boolean; reason?: string }> => {
+    (options: ConfirmationOptions = {}): Promise<ConfirmationResult> => {
       return new Promise((resolve) => {
         setState({
           ...options,
           isOpen: true,
           isConfirming: false,
+          errorMessage: undefined,
           resolve,
         });
       });
@@ -79,16 +90,22 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
   const handleConfirm = useCallback(
     async (reason?: string): Promise<boolean> => {
       if (state.onConfirm) {
-        setState((prev) => ({ ...prev, isConfirming: true }));
+        setState((prev) => ({ ...prev, isConfirming: true, errorMessage: undefined }));
         try {
           await state.onConfirm(reason);
-        } catch {
-          setState((prev) => ({ ...prev, isConfirming: false }));
-          state.resolve?.({ confirmed: false });
+        } catch (error) {
+          state.onError?.(error, reason);
+          setState((prev) => ({
+            ...prev,
+            isConfirming: false,
+            errorMessage:
+              prev.getErrorMessage?.(error) ??
+              (error instanceof Error ? error.message : "Action failed. Please try again."),
+          }));
           return false;
         }
       }
-      state.resolve?.({ confirmed: true, reason });
+      state.resolve?.({ confirmed: true, reason, status: "confirmed" });
       setState({ isOpen: false });
       return true;
     },
@@ -96,12 +113,12 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
   );
 
   const handleCancel = useCallback(() => {
-    state.resolve?.({ confirmed: false });
+    state.resolve?.({ confirmed: false, status: "cancelled" });
     setState({ isOpen: false });
   }, [state]);
 
   const close = useCallback(() => {
-    state.resolve?.({ confirmed: false });
+    state.resolve?.({ confirmed: false, status: "cancelled" });
     setState({ isOpen: false });
   }, [state]);
 
@@ -117,6 +134,7 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
       requireReason: state.requireReason || false,
       reasonLabel: state.reasonLabel || "Reason",
       reasonPlaceholder: state.reasonPlaceholder || "Please provide a reason...",
+      errorMessage: state.errorMessage,
       confirm,
       handleConfirm,
       handleCancel,

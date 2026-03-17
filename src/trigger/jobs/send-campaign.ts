@@ -19,7 +19,6 @@ import {
   campaignRecipients,
   emailHistory,
   type NewEmailHistory,
-  type CampaignTemplateData,
 } from "drizzle/schema";
 import {
   prepareEmailForTracking,
@@ -32,7 +31,7 @@ import {
 import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
-import { substituteTemplateVariables } from "@/lib/email/sanitize";
+import { renderOutboundEmail, renderHtmlToText } from "@/lib/server/outbound-email";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -94,76 +93,6 @@ const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_BATCH_DELAY_MS = 5000; // 5 seconds between batches
 
 // ============================================================================
-// EMAIL TEMPLATES
-// ============================================================================
-
-/**
- * Get template content based on template type
- */
-function getTemplateContent(
-  templateType: string
-): { subject: string; body: string } {
-  const templates: Record<string, { subject: string; body: string }> = {
-    welcome: {
-      subject: "Welcome to {{company_name}}, {{first_name}}!",
-      body: `<html><body>
-        <h1>Welcome, {{first_name}}!</h1>
-        <p>Thank you for joining {{company_name}}. We're excited to have you!</p>
-        <p>If you have any questions, don't hesitate to reach out.</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-      </body></html>`,
-    },
-    follow_up: {
-      subject: "Following up on {{subject_context}}",
-      body: `<html><body>
-        <p>Hi {{first_name}},</p>
-        <p>I wanted to follow up on {{subject_context}}.</p>
-        <p>Please let me know if you have any questions.</p>
-        <p>Best regards,<br>{{sender_name}}</p>
-      </body></html>`,
-    },
-    newsletter: {
-      subject: "{{newsletter_title}}",
-      body: `<html><body>
-        <h1>{{newsletter_title}}</h1>
-        <p>{{newsletter_content}}</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-        <p><small><a href="{{unsubscribe_url}}">Unsubscribe</a></small></p>
-      </body></html>`,
-    },
-    promotion: {
-      subject: "{{promotion_title}} - {{discount_amount}} Off!",
-      body: `<html><body>
-        <h1>{{promotion_title}}</h1>
-        <p>Hi {{first_name}},</p>
-        <p>Don't miss out on our special offer: {{discount_amount}} off!</p>
-        <p>{{promotion_details}}</p>
-        <p><a href="{{promotion_url}}">Shop Now</a></p>
-        <p>Offer valid until {{expiry_date}}.</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-        <p><small><a href="{{unsubscribe_url}}">Unsubscribe</a></small></p>
-      </body></html>`,
-    },
-    announcement: {
-      subject: "Important Announcement: {{announcement_title}}",
-      body: `<html><body>
-        <h1>{{announcement_title}}</h1>
-        <p>Hi {{first_name}},</p>
-        <p>{{announcement_content}}</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-        <p><small><a href="{{unsubscribe_url}}">Unsubscribe</a></small></p>
-      </body></html>`,
-    },
-    custom: {
-      subject: "{{subject}}",
-      body: "{{body}}",
-    },
-  };
-
-  return templates[templateType] || templates.custom;
-}
-
-// ============================================================================
 // TASK DEFINITIONS
 // ============================================================================
 
@@ -216,13 +145,8 @@ export const sendCampaignTask = task({
       })
       .where(eq(emailCampaigns.id, campaignId));
 
-    // Get template content
-    const template = getTemplateContent(campaign.templateType);
-    const campaignData = (campaign.templateData ?? {}) as CampaignTemplateData;
-    const campaignVariables = (campaignData.variables ?? {}) as Record<
-      string,
-      string | number | boolean
-    >;
+    const campaignTemplateData =
+      (campaign.templateData as Record<string, unknown> | null) ?? {};
 
     // Track stats
     let totalSent = 0;
@@ -309,39 +233,23 @@ export const sendCampaignTask = task({
             organizationId: campaign.organizationId,
           });
 
-          // Merge recipient-specific data with campaign data
-          const recipientData = (recipient.recipientData ?? {}) as Record<
-            string,
-            unknown
-          >;
-          const variables: Record<string, string | number | boolean> = {
-            ...campaignVariables,
-            first_name: recipient.name?.split(" ")[0] || "there",
-            email: recipient.email,
-            unsubscribe_url: unsubscribeUrl, // INT-RES-007: Add unsubscribe URL to template variables
-            ...(Object.fromEntries(
-              Object.entries(recipientData).filter(
-                ([, v]) =>
-                  typeof v === "string" ||
-                  typeof v === "number" ||
-                  typeof v === "boolean"
-              )
-            ) as Record<string, string | number | boolean>),
-          };
-
-          // Check for subject/body override
-          const subject = campaignData.subjectOverride
-            ? substituteTemplateVariables(
-                String(campaignData.subjectOverride),
-                variables
-              )
-            : substituteTemplateVariables(template.subject, variables);
-          const bodyHtml = campaignData.bodyOverride
-            ? substituteTemplateVariables(
-                String(campaignData.bodyOverride),
-                variables
-              )
-            : substituteTemplateVariables(template.body, variables);
+          const recipientData = (recipient.recipientData ?? {}) as Record<string, unknown>;
+          const rendered = await renderOutboundEmail({
+            organizationId: campaign.organizationId,
+            templateType: campaign.templateType,
+            templateData: campaignTemplateData,
+            subject:
+              typeof campaignTemplateData.subjectOverride === "string"
+                ? campaignTemplateData.subjectOverride
+                : null,
+            variables: {
+              first_name: recipient.name?.split(" ")[0] || "there",
+              email: recipient.email,
+              unsubscribe_url: unsubscribeUrl,
+              ...recipientData,
+            },
+            userId: campaign.createdById,
+          });
 
           // Create email history record
           const [emailRecord] = await db
@@ -352,17 +260,29 @@ export const sendCampaignTask = task({
               fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
               toAddress: recipient.email,
               customerId: recipient.contactId, // Link to contact's customer if available
-              subject,
-              bodyHtml,
+              subject: rendered.subject,
+              bodyHtml: rendered.bodyHtml,
+              bodyText: rendered.bodyText,
               status: "pending",
+              campaignId: campaign.id,
+              templateId: rendered.templateId,
+              metadata: {
+                previewText: rendered.previewText ?? undefined,
+                priority: rendered.priority ?? undefined,
+                replyTo: rendered.replyTo ?? undefined,
+                templateId: rendered.templateId ?? undefined,
+                templateVersion: rendered.templateVersion ?? undefined,
+              },
             } as NewEmailHistory)
             .returning();
 
           // Prepare email with tracking
-          const { html: trackedHtml } = prepareEmailForTracking(
-            bodyHtml,
-            emailRecord.id
+          const { html: trackedHtml, linkMap } = prepareEmailForTracking(
+            rendered.bodyHtml,
+            emailRecord.id,
+            { trackOpens: rendered.trackOpens, trackClicks: rendered.trackClicks }
           );
+          const linkMapObject = Object.fromEntries(linkMap);
 
           // Update email history with tracked HTML
           await db
@@ -380,8 +300,10 @@ export const sendCampaignTask = task({
             await resend.emails.send({
               from: fromAddress,
               to: [recipient.email],
-              subject,
+              subject: rendered.subject,
               html: trackedHtml,
+              text: renderHtmlToText(trackedHtml),
+              ...(rendered.replyTo ? { replyTo: rendered.replyTo } : {}),
               headers: {
                 // INT-RES-007: CAN-SPAM compliant unsubscribe headers
                 "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -416,6 +338,14 @@ export const sendCampaignTask = task({
               status: "sent",
               sentAt: new Date(),
               resendMessageId: sendResult?.id,
+              metadata: {
+                previewText: rendered.previewText ?? undefined,
+                priority: rendered.priority ?? undefined,
+                replyTo: rendered.replyTo ?? undefined,
+                templateId: rendered.templateId ?? undefined,
+                templateVersion: rendered.templateVersion ?? undefined,
+                linkMap: linkMapObject,
+              },
             })
             .where(eq(emailHistory.id, emailRecord.id));
 
@@ -425,7 +355,7 @@ export const sendCampaignTask = task({
             organizationId: campaign.organizationId,
             userId: campaign.createdById,
             customerId: recipient.contactId, // Link to contact's customer if available
-            subject,
+            subject: rendered.subject,
             recipientEmail: recipient.email,
             recipientName: recipient.name,
           });

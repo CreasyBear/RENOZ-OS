@@ -289,7 +289,7 @@ function KnowledgeBasePage() {
   const handleDeleteArticle = async (article: KbArticleResponse) => {
     if (deleteArticleMutation.isPending) return;
 
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Delete Article',
       description:
         'Are you sure you want to delete this knowledge base article? This action cannot be undone.',
@@ -297,7 +297,7 @@ function KnowledgeBasePage() {
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         const result = await deleteArticleMutation.mutateAsync(article.id);
         toast.success(result.message ?? 'Article deleted successfully');

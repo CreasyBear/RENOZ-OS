@@ -10,14 +10,25 @@
 import crypto from 'node:crypto';
 import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { oauthSyncLogs } from 'drizzle/schema/oauth';
-import { encryptOAuthState, type OAuthStatePayload } from '@/lib/oauth/token-encryption';
+import {
+  decryptOAuthToken,
+  encryptOAuthState,
+  encryptOAuthToken,
+  type OAuthStatePayload,
+} from '@/lib/oauth/token-encryption';
 import {
   validateOAuthStateWithDatabase,
   createPersistentOAuthState,
+  getPersistentOAuthState,
+  updatePersistentOAuthState,
 } from '@/lib/oauth/state-management';
 import { createOAuthConnections } from '@/lib/oauth/connections';
 import { isAllowedExternalRedirect } from '@/lib/auth/redirects';
 import { logger } from '@/lib/logger';
+import {
+  type OAuthProvider,
+  type OAuthServiceType,
+} from '@/lib/oauth/constants';
 
 // ============================================================================
 // PKCE (Proof Key for Code Exchange) Implementation
@@ -67,8 +78,8 @@ export function validatePKCEVerifier(verifier: string, challenge: string): boole
 export interface InitiateOAuthFlowParams {
   organizationId: string;
   userId: string;
-  provider: 'google_workspace' | 'microsoft_365';
-  services: ('calendar' | 'email' | 'contacts')[];
+  provider: OAuthProvider;
+  services: OAuthServiceType[];
   redirectUrl: string;
   db: OAuthDatabase;
 }
@@ -140,6 +151,9 @@ export async function initiateOAuthFlow(params: InitiateOAuthFlowParams): Promis
     case 'microsoft_365':
       authorizationUrl = await generateMicrosoft365AuthUrl(encryptedState, pkce, services);
       break;
+    case 'xero':
+      authorizationUrl = await generateXeroAuthUrl(encryptedState, pkce, services);
+      break;
 
     default:
       throw new Error(`Unsupported OAuth provider: ${provider}`);
@@ -180,7 +194,80 @@ export interface OAuthCallbackResultError {
   errorDescription?: string;
 }
 
-export type OAuthCallbackResult = OAuthCallbackResultSuccess | OAuthCallbackResultError;
+export interface XeroTenantDescriptor {
+  tenantId: string;
+  tenantType?: string;
+}
+
+export interface OAuthCallbackResultTenantSelection {
+  success: false;
+  error: 'TENANT_SELECTION_REQUIRED';
+  errorDescription?: string;
+  redirectUrl: string;
+  stateId: string;
+  provider: 'xero';
+  tenants: XeroTenantDescriptor[];
+}
+
+export type OAuthCallbackResult =
+  | OAuthCallbackResultSuccess
+  | OAuthCallbackResultError
+  | OAuthCallbackResultTenantSelection;
+
+interface OAuthCallbackTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: Date;
+  scopes: string[];
+  externalAccountId?: string;
+}
+
+interface PendingXeroTenantSelectionMetadata {
+  kind: 'xero_tenant_selection';
+  encryptedAccessToken: string;
+  encryptedRefreshToken: string | null;
+  expiresAtIso: string;
+  scopes: string[];
+  tenants: XeroTenantDescriptor[];
+}
+
+function isPendingXeroTenantSelectionMetadata(
+  value: unknown
+): value is PendingXeroTenantSelectionMetadata {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as PendingXeroTenantSelectionMetadata;
+  return (
+    candidate.kind === 'xero_tenant_selection' &&
+    typeof candidate.encryptedAccessToken === 'string' &&
+    (typeof candidate.encryptedRefreshToken === 'string' || candidate.encryptedRefreshToken === null) &&
+    typeof candidate.expiresAtIso === 'string' &&
+    Array.isArray(candidate.scopes) &&
+    Array.isArray(candidate.tenants)
+  );
+}
+
+function buildPendingXeroTenantSelectionMetadata(params: {
+  organizationId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: Date;
+  scopes: string[];
+  tenants: XeroTenantDescriptor[];
+}): PendingXeroTenantSelectionMetadata {
+  return {
+    kind: 'xero_tenant_selection',
+    encryptedAccessToken: encryptOAuthToken(params.accessToken, params.organizationId),
+    encryptedRefreshToken: params.refreshToken
+      ? encryptOAuthToken(params.refreshToken, params.organizationId)
+      : null,
+    expiresAtIso: params.expiresAt.toISOString(),
+    scopes: params.scopes,
+    tenants: params.tenants,
+  };
+}
 
 /**
  * Handles OAuth callback from external providers.
@@ -244,12 +331,7 @@ export async function handleOAuthCallback(
 
   try {
     // Exchange code for tokens based on provider
-    let tokens: {
-      accessToken: string;
-      refreshToken?: string;
-      expiresAt: Date;
-      scopes: string[];
-    };
+    let tokens: OAuthCallbackTokens;
 
     switch (provider) {
       case 'google_workspace':
@@ -258,6 +340,17 @@ export async function handleOAuthCallback(
 
       case 'microsoft_365':
         tokens = await exchangeMicrosoft365Code(code, services, stateRecord.pkceVerifier);
+        break;
+      case 'xero':
+        tokens = await exchangeXeroCode(
+          code,
+          services,
+          stateRecord.pkceVerifier,
+          organizationId,
+          stateRecord.id,
+          redirectUrl,
+          db
+        );
         break;
 
       default:
@@ -271,6 +364,7 @@ export async function handleOAuthCallback(
       provider,
       services,
       tokens,
+      externalAccountId: tokens.externalAccountId,
     });
 
     // Log successful OAuth completion
@@ -301,6 +395,22 @@ export async function handleOAuthCallback(
       redirectUrl,
     };
   } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      (error as { code?: string }).code === 'TENANT_SELECTION_REQUIRED'
+    ) {
+      return {
+        success: false,
+        error: 'TENANT_SELECTION_REQUIRED',
+        errorDescription: 'Select which Xero tenant to connect before finishing OAuth setup',
+        redirectUrl,
+        stateId: (error as { stateId: string }).stateId,
+        provider: 'xero',
+        tenants: (error as { tenants: XeroTenantDescriptor[] }).tenants,
+      };
+    }
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Log failed OAuth completion
@@ -312,6 +422,117 @@ export async function handleOAuthCallback(
   }
 }
 
+export async function getPendingXeroTenantSelection(params: {
+  db: OAuthDatabase;
+  stateId: string;
+  organizationId: string;
+  userId: string;
+}) {
+  const state = await getPersistentOAuthState(params.db, params.stateId);
+  if (!state) {
+    throw new Error('OAuth tenant selection state was not found');
+  }
+
+  if (state.organizationId !== params.organizationId || state.userId !== params.userId) {
+    throw new Error('You are not authorized to access this OAuth tenant selection');
+  }
+
+  const metadata = state.metadata?.xeroTenantSelection;
+  if (!isPendingXeroTenantSelectionMetadata(metadata)) {
+    throw new Error('OAuth tenant selection is not available for this state');
+  }
+
+  return {
+    stateId: state.id,
+    redirectUrl: state.redirectUrl,
+    tenants: metadata.tenants,
+  };
+}
+
+export async function completePendingXeroTenantSelection(params: {
+  db: OAuthDatabase;
+  stateId: string;
+  organizationId: string;
+  userId: string;
+  tenantId: string;
+}): Promise<OAuthCallbackResultSuccess> {
+  const state = await getPersistentOAuthState(params.db, params.stateId);
+  if (!state) {
+    throw new Error('OAuth tenant selection state was not found');
+  }
+
+  if (state.organizationId !== params.organizationId || state.userId !== params.userId) {
+    throw new Error('You are not authorized to complete this OAuth tenant selection');
+  }
+
+  if (state.provider !== 'xero') {
+    throw new Error('OAuth tenant selection is only supported for Xero connections');
+  }
+
+  const metadata = state.metadata?.xeroTenantSelection;
+  if (!isPendingXeroTenantSelectionMetadata(metadata)) {
+    throw new Error('OAuth tenant selection metadata is missing or invalid');
+  }
+
+  const selectedTenant = metadata.tenants.find((tenant) => tenant.tenantId === params.tenantId);
+  if (!selectedTenant) {
+    throw new Error('Selected Xero tenant is not valid for this OAuth state');
+  }
+
+  const connectionIds = await createOAuthConnections(params.db, {
+    organizationId: params.organizationId,
+    userId: params.userId,
+    provider: 'xero',
+    services: state.services,
+    tokens: {
+      accessToken: decryptOAuthToken(metadata.encryptedAccessToken, params.organizationId),
+      refreshToken: metadata.encryptedRefreshToken
+        ? decryptOAuthToken(metadata.encryptedRefreshToken, params.organizationId)
+        : undefined,
+      expiresAt: new Date(metadata.expiresAtIso),
+      scopes: metadata.scopes,
+    },
+    externalAccountId: selectedTenant.tenantId,
+  });
+
+  await updatePersistentOAuthState(params.db, params.stateId, {
+    status: 'completed',
+    metadata: {
+      xeroTenantSelection: null,
+      selectedTenantId: selectedTenant.tenantId,
+      connectionIds,
+    },
+  });
+
+  await params.db.insert(oauthSyncLogs).values({
+    organizationId: params.organizationId,
+    connectionId: connectionIds[0],
+    serviceType: state.services[0],
+    operation: 'oauth_completion',
+    status: 'completed',
+    recordCount: connectionIds.length,
+    metadata: {
+      connectionIds,
+      provider: 'xero',
+      services: state.services,
+      scopes: metadata.scopes,
+      selectedTenantId: selectedTenant.tenantId,
+    },
+    startedAt: new Date(),
+    completedAt: new Date(),
+  });
+
+  return {
+    success: true,
+    connectionIds,
+    provider: 'xero',
+    services: state.services,
+    organizationId: params.organizationId,
+    userId: params.userId,
+    redirectUrl: state.redirectUrl,
+  };
+}
+
 // ============================================================================
 // Provider-Specific URL Generation
 // ============================================================================
@@ -319,7 +540,7 @@ export async function handleOAuthCallback(
 async function generateGoogleWorkspaceAuthUrl(
   state: string,
   pkce: PKCEChallenge,
-  services: ('calendar' | 'email' | 'contacts')[] = ['calendar', 'email', 'contacts']
+  services: OAuthServiceType[] = ['calendar', 'email', 'contacts']
 ): Promise<string> {
   const clientId = process.env.GOOGLE_WORKSPACE_CLIENT_ID;
   const redirectUri = process.env.GOOGLE_WORKSPACE_REDIRECT_URI;
@@ -348,7 +569,7 @@ async function generateGoogleWorkspaceAuthUrl(
 async function generateMicrosoft365AuthUrl(
   state: string,
   pkce: PKCEChallenge,
-  services: ('calendar' | 'email' | 'contacts')[] = ['calendar', 'email', 'contacts']
+  services: OAuthServiceType[] = ['calendar', 'email', 'contacts']
 ): Promise<string> {
   const clientId = process.env.MICROSOFT365_CLIENT_ID;
   const tenantId = process.env.MICROSOFT365_TENANT_ID || 'common';
@@ -381,7 +602,7 @@ async function generateMicrosoft365AuthUrl(
 
 async function exchangeGoogleWorkspaceCode(
   code: string,
-  services: ('calendar' | 'email' | 'contacts')[],
+  services: OAuthServiceType[],
   pkceVerifier?: string
 ): Promise<{
   accessToken: string;
@@ -434,7 +655,7 @@ async function exchangeGoogleWorkspaceCode(
 
 async function exchangeMicrosoft365Code(
   code: string,
-  services: ('calendar' | 'email' | 'contacts')[],
+  services: OAuthServiceType[],
   pkceVerifier?: string
 ): Promise<{
   accessToken: string;
@@ -491,7 +712,7 @@ async function exchangeMicrosoft365Code(
 // Scope Generation
 // ============================================================================
 
-function generateGoogleScopes(services: ('calendar' | 'email' | 'contacts')[]): string[] {
+function generateGoogleScopes(services: OAuthServiceType[]): string[] {
   const scopes = ['openid', 'email', 'profile'];
 
   if (services.includes('calendar')) {
@@ -509,7 +730,7 @@ function generateGoogleScopes(services: ('calendar' | 'email' | 'contacts')[]): 
   return scopes;
 }
 
-function generateMicrosoftScopes(services: ('calendar' | 'email' | 'contacts')[]): string[] {
+function generateMicrosoftScopes(services: OAuthServiceType[]): string[] {
   const scopes = ['openid', 'email', 'profile'];
 
   if (services.includes('calendar')) {
@@ -527,6 +748,48 @@ function generateMicrosoftScopes(services: ('calendar' | 'email' | 'contacts')[]
   return scopes;
 }
 
+function generateXeroScopes(services: OAuthServiceType[]): string[] {
+  const scopes = ['openid', 'profile', 'email', 'offline_access'];
+
+  if (services.includes('accounting')) {
+    scopes.push('accounting.transactions', 'accounting.contacts', 'accounting.settings');
+  }
+
+  return scopes;
+}
+
+async function fetchXeroTenants(accessToken: string): Promise<Array<{ tenantId: string; tenantType?: string }>> {
+  const response = await fetch('https://api.xero.com/connections', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Xero tenant lookup failed after token exchange');
+  }
+
+  const connections = (await response.json().catch(() => null)) as
+    | Array<{ tenantId?: string; tenantType?: string }>
+    | null;
+
+  const tenants = (connections ?? [])
+    .filter((connection): connection is { tenantId: string; tenantType?: string } =>
+      typeof connection.tenantId === 'string' && connection.tenantId.trim().length > 0
+    )
+    .map((connection) => ({
+      tenantId: connection.tenantId,
+      tenantType: connection.tenantType,
+    }));
+
+  if (tenants.length === 0) {
+    throw new Error('Xero OAuth completed but no tenant connection was returned');
+  }
+
+  return tenants;
+}
+
 // ============================================================================
 // Redirect URL validation
 // ============================================================================
@@ -542,4 +805,109 @@ export function isAllowedRedirectUrl(redirectUrl: string): boolean {
     appUrl: process.env.APP_URL,
     nodeEnv: process.env.NODE_ENV,
   });
+}
+async function generateXeroAuthUrl(
+  state: string,
+  pkce: PKCEChallenge,
+  services: OAuthServiceType[] = ['accounting']
+): Promise<string> {
+  const clientId = process.env.XERO_CLIENT_ID;
+  const redirectUri = process.env.XERO_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    throw new Error('Xero OAuth credentials not configured');
+  }
+
+  const scopes = generateXeroScopes(services);
+  const baseUrl = 'https://login.xero.com/identity/connect/authorize';
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: scopes.join(' '),
+    state,
+    code_challenge: pkce.codeChallenge,
+    code_challenge_method: pkce.codeChallengeMethod,
+  });
+
+  return `${baseUrl}?${params.toString()}`;
+}
+
+async function exchangeXeroCode(
+  code: string,
+  services: OAuthServiceType[],
+  pkceVerifier: string | undefined,
+  organizationId: string,
+  stateId: string,
+  redirectUrl: string,
+  db: OAuthDatabase
+): Promise<{
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt: Date;
+  scopes: string[];
+  externalAccountId?: string;
+}> {
+  const clientId = process.env.XERO_CLIENT_ID;
+  const clientSecret = process.env.XERO_CLIENT_SECRET;
+  const redirectUri = process.env.XERO_REDIRECT_URI;
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error('Xero OAuth credentials not configured');
+  }
+
+  const scopes = generateXeroScopes(services);
+  const response = await fetch('https://identity.xero.com/connect/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      code_verifier: pkceVerifier || '',
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(`Xero token exchange failed: ${errorData.error_description || response.statusText}`);
+  }
+
+  const tokenData = await response.json();
+  const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
+  const tenants = await fetchXeroTenants(tokenData.access_token);
+  if (tenants.length !== 1) {
+    await updatePersistentOAuthState(db, stateId, {
+      status: 'selection_required',
+      metadata: {
+        redirectUrl,
+        xeroTenantSelection: buildPendingXeroTenantSelectionMetadata({
+          organizationId,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt,
+          scopes,
+          tenants,
+        }),
+      },
+    });
+
+    throw Object.assign(new Error('Xero tenant selection required'), {
+      code: 'TENANT_SELECTION_REQUIRED',
+      stateId,
+      tenants,
+    });
+  }
+
+  return {
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    expiresAt,
+    scopes,
+    externalAccountId: tenants[0]?.tenantId,
+  };
 }

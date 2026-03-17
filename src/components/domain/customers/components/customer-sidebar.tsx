@@ -56,6 +56,7 @@ export interface CustomerSidebarProps {
   customerType: string;
   industry?: string | null;
   size?: string | null;
+  xeroContactId?: string | null;
   /** Key dates */
   firstOrderDate?: string | Date | null;
   lastOrderDate?: string | Date | null;
@@ -298,9 +299,17 @@ interface AccountDetailsProps {
   industry?: string | null;
   size?: string | null;
   website?: string | null;
+  xeroContactId?: string | null;
 }
 
-function AccountDetails({ customerCode, customerType, industry, size, website }: AccountDetailsProps) {
+function AccountDetails({
+  customerCode,
+  customerType,
+  industry,
+  size,
+  website,
+  xeroContactId,
+}: AccountDetailsProps) {
   return (
     <SidebarSection title="Account Details">
       <div className="space-y-2 text-sm">
@@ -338,6 +347,16 @@ function AccountDetails({ customerCode, customerType, industry, size, website }:
             </a>
           </div>
         )}
+        <div className="flex justify-between gap-3">
+          <span className="text-muted-foreground">Xero Contact</span>
+          <span className="text-right text-xs">
+            {xeroContactId ? (
+              <span className="font-mono rounded bg-muted px-1.5 py-0.5">{xeroContactId}</span>
+            ) : (
+              <span className="text-amber-700">Not linked</span>
+            )}
+          </span>
+        </div>
       </div>
     </SidebarSection>
   );
@@ -397,6 +416,7 @@ export const CustomerSidebar = memo(function CustomerSidebar({
   customerType,
   industry,
   size,
+  xeroContactId,
   firstOrderDate,
   lastOrderDate,
   createdAt,
@@ -423,6 +443,7 @@ export const CustomerSidebar = memo(function CustomerSidebar({
         industry={industry}
         size={size}
         website={website}
+        xeroContactId={xeroContactId}
       />
 
       <Separator />

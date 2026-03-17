@@ -11,7 +11,7 @@ import {
   createContact,
   updateContact,
   deleteContact,
-} from '@/server/customers';
+} from '@/server/functions/customers/customers';
 
 // ============================================================================
 // TYPES

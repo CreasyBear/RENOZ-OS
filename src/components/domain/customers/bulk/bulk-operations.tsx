@@ -86,8 +86,12 @@ interface BulkOperationsProps {
   onDelete: () => Promise<OperationResult>
   /** @source useCallback handler for export action in container */
   onExport: () => void
+  /** Whether bulk email is available for the selected customers */
+  canBulkEmail?: boolean
+  /** Explanation shown when bulk email is unavailable */
+  bulkEmailUnavailableReason?: string
   /** @source useCallback handler for bulk email action in container */
-  onBulkEmail: () => void
+  onBulkEmail?: () => void
   /** @source Combined isLoading state from all bulk operation mutations in container */
   isLoading?: boolean
   /** @source Progress percentage from mutation state in container (0-100) - optional, only if real progress available */
@@ -501,6 +505,8 @@ export function BulkOperations({
   onDelete,
   onExport,
   onBulkEmail,
+  canBulkEmail = false,
+  bulkEmailUnavailableReason,
   isLoading = false,
   progress,
   result = null,
@@ -566,11 +572,25 @@ export function BulkOperations({
             <Download className="h-4 w-4 mr-1.5" />
             Export
           </Button>
-          <Button variant="outline" size="sm" onClick={onBulkEmail} disabled={isDisabled}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBulkEmail}
+            disabled={isDisabled || !canBulkEmail || !onBulkEmail}
+            title={!canBulkEmail ? bulkEmailUnavailableReason : undefined}
+          >
             <Mail className="h-4 w-4 mr-1.5" />
             Send Email
           </Button>
         </div>
+
+        {!canBulkEmail && bulkEmailUnavailableReason ? (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Bulk email unavailable</AlertTitle>
+            <AlertDescription>{bulkEmailUnavailableReason}</AlertDescription>
+          </Alert>
+        ) : null}
 
         {/* Accordion for detailed operations - compact triggers */}
         <Accordion type="single" collapsible className="w-full">

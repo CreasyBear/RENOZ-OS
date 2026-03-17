@@ -17,7 +17,6 @@ import { cache } from 'react';
 import { eq, and, or, ilike, desc, asc, sql, inArray, gte, lte, isNull, count, sum, max, min, avg, notInArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
-import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
 import {
   customers,
   contacts,
@@ -28,11 +27,17 @@ import {
   customerHealthMetrics,
   customerPriorities,
   orders,
-} from 'drizzle/schema';
-import { auditLogs } from 'drizzle/schema/_shared/audit-logs';
+} from '../../../../drizzle/schema';
+import { auditLogs } from '../../../../drizzle/schema/_shared/audit-logs';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { customersLogger } from '@/lib/logger';
 import { computeChanges } from '@/lib/activity-logger';
+import {
+  normalizeCustomerMutationInput,
+  normalizeContactMutationInput,
+  normalizeAddressMutationInput,
+  enqueueCustomerSearchOutbox,
+} from './customer-write-helpers';
 import {
   createCustomerSchema,
   updateCustomerSchema,
@@ -79,6 +84,106 @@ import { NotFoundError, ValidationError, ConflictError, ServerError } from '@/li
  * Fields to exclude from activity change tracking (system-managed)
  */
 const CUSTOMER_EXCLUDED_FIELDS: string[] = ['updatedAt', 'updatedBy', 'createdAt', 'createdBy', 'deletedAt'];
+
+export const DUPLICATE_CUSTOMER_EMAIL_MESSAGE =
+  'A customer with this email already exists. Use a different email or edit the existing customer.'
+export const DUPLICATE_CUSTOMER_EMAIL_FIELD_MESSAGE =
+  'This email is already used by another customer.'
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type CustomerCreatePgError = {
+  code?: string
+  constraint?: string
+  constraint_name?: string
+  message?: string
+  cause?: {
+    constraint?: string
+    constraint_name?: string
+    message?: string
+  }
+}
+
+function getPgConstraintName(error: CustomerCreatePgError): string | undefined {
+  return error.constraint ?? error.constraint_name ?? error.cause?.constraint ?? error.cause?.constraint_name
+}
+
+export function getCustomerCreateConflictError(error: unknown): ValidationError | ConflictError | null {
+  const pgError = error as CustomerCreatePgError
+  if (pgError?.code !== '23505') return null
+
+  const constraintName = getPgConstraintName(pgError)
+  const rawMessage = [
+    pgError.message,
+    pgError.cause?.message,
+    constraintName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  if (
+    constraintName === 'idx_customers_email_org_unique' ||
+    rawMessage.includes('idx_customers_email_org_unique')
+  ) {
+    return new ValidationError(DUPLICATE_CUSTOMER_EMAIL_MESSAGE, {
+      email: [DUPLICATE_CUSTOMER_EMAIL_FIELD_MESSAGE],
+      code: ['duplicate_email'],
+    })
+  }
+
+  return new ConflictError('A customer with this email or identifier already exists')
+}
+
+function logCustomerActivitySafely(
+  action: 'created' | 'updated' | 'deleted',
+  customerId: string,
+  run: () => void
+) {
+  try {
+    run()
+  } catch (error) {
+    customersLogger.warn('Customer activity log enqueue failed', {
+      context: 'customers-activity-log',
+      customerId,
+      action,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+}
+
+async function runCustomerWriteTransaction<T>(
+  organizationId: string,
+  run: (tx: DbTransaction) => Promise<T>
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.organization_id', ${organizationId}, false)`)
+    return run(tx)
+  })
+}
+
+async function assertCustomerReferenceInOrg(
+  tx: DbTransaction,
+  organizationId: string,
+  customerId: string,
+  errorMessage: string
+) {
+  const [customer] = await tx
+    .select({ id: customers.id })
+    .from(customers)
+    .where(
+      and(
+        eq(customers.id, customerId),
+        eq(customers.organizationId, organizationId),
+        isNull(customers.deletedAt)
+      )
+    )
+    .limit(1)
+
+  if (!customer) {
+    throw new ValidationError(errorMessage)
+  }
+}
 
 // ============================================================================
 // CUSTOMER CRUD
@@ -472,56 +577,54 @@ export const createCustomer = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.create });
     const logger = createActivityLoggerWithContext(ctx);
+    const normalizedData = normalizeCustomerMutationInput(data);
 
     try {
-      const created = await db.transaction(async (tx) => {
-        const [newCustomer] = await tx
+      const created = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
+        if (normalizedData.parentId) {
+          await assertCustomerReferenceInOrg(
+            tx,
+            ctx.organizationId,
+            normalizedData.parentId,
+            'Parent customer must belong to your organization and cannot be deleted'
+          )
+        }
+
+        const [inserted] = await tx
           .insert(customers)
           .values({
-            ...data,
+            ...normalizedData,
             organizationId: ctx.organizationId,
             createdBy: ctx.user.id,
             updatedBy: ctx.user.id,
           })
           .returning();
 
-        await enqueueSearchIndexOutbox(
-        {
-          organizationId: ctx.organizationId,
+        await enqueueCustomerSearchOutbox(ctx.organizationId, inserted, 'upsert', tx)
+
+        return inserted;
+      });
+
+      logCustomerActivitySafely('created', created.id, () => {
+        logger.logAsync({
           entityType: 'customer',
-          entityId: newCustomer.id,
-          action: 'upsert',
-          payload: {
-            title: newCustomer.name,
-            subtitle: newCustomer.email ?? undefined,
-            description: newCustomer.phone ?? undefined,
-          },
-        },
-        tx
-      );
-
-      // Log customer creation (fire-and-forget after transaction)
-      logger.logAsync({
-        entityType: 'customer',
-        entityId: newCustomer.id,
-        action: 'created',
-        changes: computeChanges({
-          before: null,
-          after: newCustomer,
-          excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
-        }),
-        description: `Created customer: ${newCustomer.name}`,
-      });
-
-        return newCustomer;
-      });
+          entityId: created.id,
+          action: 'created',
+          changes: computeChanges({
+            before: null,
+            after: created,
+            excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+          }),
+          description: `Created customer: ${created.name}`,
+        })
+      })
 
       return created;
     } catch (error: unknown) {
-      const pgError = error as { code?: string };
-      if (pgError?.code === '23505') {
+      const conflictError = getCustomerCreateConflictError(error)
+      if (conflictError) {
         setResponseStatus(409);
-        throw new ConflictError('A customer with this email or identifier already exists');
+        throw conflictError;
       }
       if (error instanceof ValidationError) throw error;
       customersLogger.error('createCustomer DB error', error);
@@ -540,6 +643,7 @@ export const updateCustomer = createServerFn({ method: 'POST' })
     const logger = createActivityLoggerWithContext(ctx);
 
     const { id, ...updateData } = data;
+    const normalizedUpdateData = normalizeCustomerMutationInput(updateData);
 
     // Fetch before state for change tracking
     const before = await db.query.customers.findFirst({
@@ -554,11 +658,20 @@ export const updateCustomer = createServerFn({ method: 'POST' })
       throw new NotFoundError('Customer not found', 'customer');
     }
 
-    const updated = await db.transaction(async (tx) => {
-      const result = await tx
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
+      if (normalizedUpdateData.parentId) {
+        await assertCustomerReferenceInOrg(
+          tx,
+          ctx.organizationId,
+          normalizedUpdateData.parentId,
+          'Parent customer must belong to your organization and cannot be deleted'
+        )
+      }
+
+      const updatedRows = await tx
         .update(customers)
         .set({
-          ...updateData,
+          ...normalizedUpdateData,
           updatedBy: ctx.user.id,
         })
         .where(
@@ -568,47 +681,40 @@ export const updateCustomer = createServerFn({ method: 'POST' })
             isNull(customers.deletedAt)
           )
         )
-        .returning();
+        .returning()
 
-      if (result.length === 0) {
-        throw new NotFoundError('Customer not found', 'customer');
+      const updated = updatedRows[0]
+      if (updated) {
+        await enqueueCustomerSearchOutbox(ctx.organizationId, updated, 'upsert', tx)
       }
 
-      await enqueueSearchIndexOutbox(
-        {
-          organizationId: ctx.organizationId,
-          entityType: 'customer',
-          entityId: result[0].id,
-          action: 'upsert',
-          payload: {
-            title: result[0].name,
-            subtitle: result[0].email ?? undefined,
-            description: result[0].phone ?? undefined,
-          },
-        },
-        tx
-      );
-
-      return result[0] ?? null;
+      return updatedRows
     });
+
+    if (result.length === 0) {
+      throw new NotFoundError('Customer not found', 'customer');
+    }
+
+    const updated = result[0] ?? null;
 
     // Log customer update (fire-and-forget after transaction)
-    const changes = computeChanges({
-      before,
-      after: updated,
-      excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
-    });
+    logCustomerActivitySafely('updated', updated.id, () => {
+      const changes = computeChanges({
+        before,
+        after: updated,
+        excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+      })
 
-    // Only log if there are actual changes
-    if (changes.fields && changes.fields.length > 0) {
-      logger.logAsync({
-        entityType: 'customer',
-        entityId: updated.id,
-        action: 'updated',
-        changes,
-        description: `Updated customer: ${updated.name}`,
-      });
-    }
+      if (changes.fields && changes.fields.length > 0) {
+        logger.logAsync({
+          entityType: 'customer',
+          entityId: updated.id,
+          action: 'updated',
+          changes,
+          description: `Updated customer: ${updated.name}`,
+        })
+      }
+    })
 
     return updated;
   });
@@ -637,9 +743,7 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
       throw new NotFoundError('Customer not found', 'customer');
     }
 
-    // Wrap child count check + soft delete in a transaction to prevent TOCTOU race
-    const deleted = await db.transaction(async (tx) => {
-      // Business rule - prevent deleting customer with children (checked inside tx)
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
       const childrenCount = await tx
         .select({ count: count() })
         .from(customers)
@@ -649,15 +753,15 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
             eq(customers.organizationId, ctx.organizationId),
             isNull(customers.deletedAt)
           )
-        );
+        )
 
       if (childrenCount[0]?.count > 0) {
         throw new ConflictError(
           `Cannot delete customer "${customerToDelete.name}" because it has ${childrenCount[0].count} child customer(s). Please reassign or delete children first.`
-        );
+        )
       }
 
-      const result = await tx
+      const deletedRows = await tx
         .update(customers)
         .set({
           deletedAt: new Date(),
@@ -670,37 +774,36 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
             isNull(customers.deletedAt)
           )
         )
-        .returning();
+        .returning()
 
-      if (result.length === 0) {
-        throw new NotFoundError('Customer not found', 'customer');
+      const deleted = deletedRows[0]
+      if (deleted) {
+        await enqueueCustomerSearchOutbox(ctx.organizationId, deleted, 'delete', tx)
       }
 
-      await enqueueSearchIndexOutbox(
-        {
-          organizationId: ctx.organizationId,
-          entityType: 'customer',
-          entityId: result[0].id,
-          action: 'delete',
-        },
-        tx
-      );
-
-      return { success: true, id: result[0].id };
+      return deletedRows
     });
+
+    if (result.length === 0) {
+      throw new NotFoundError('Customer not found', 'customer');
+    }
+
+    const deleted = { success: true, id: result[0].id };
 
     // Log customer deletion (fire-and-forget after transaction)
-    logger.logAsync({
-      entityType: 'customer',
-      entityId: id,
-      action: 'deleted',
-      changes: computeChanges({
-        before: customerToDelete,
-        after: null,
-        excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
-      }),
-      description: `Deleted customer: ${customerToDelete.name}`,
-    });
+    logCustomerActivitySafely('deleted', id, () => {
+      logger.logAsync({
+        entityType: 'customer',
+        entityId: id,
+        action: 'deleted',
+        changes: computeChanges({
+          before: customerToDelete,
+          after: null,
+          excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+        }),
+        description: `Deleted customer: ${customerToDelete.name}`,
+      })
+    })
 
     return deleted;
   });
@@ -737,16 +840,26 @@ export const createContact = createServerFn({ method: 'POST' })
   .inputValidator(createContactSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
+    const normalizedData = normalizeContactMutationInput(data);
 
-    const result = await db
-      .insert(contacts)
-      .values({
-        ...data,
-        organizationId: ctx.organizationId,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
+      await assertCustomerReferenceInOrg(
+        tx,
+        ctx.organizationId,
+        normalizedData.customerId,
+        'Contact customer must belong to your organization and cannot be deleted'
+      )
+
+      return tx
+        .insert(contacts)
+        .values({
+          ...normalizedData,
+          organizationId: ctx.organizationId,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning()
+    });
 
     return result[0] ?? null;
   });
@@ -760,15 +873,18 @@ export const updateContact = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
     const { id, ...updateData } = data;
+    const normalizedUpdateData = normalizeContactMutationInput(updateData);
 
-    const result = await db
-      .update(contacts)
-      .set({
-        ...updateData,
-        updatedBy: ctx.user.id,
-      })
-      .where(and(eq(contacts.id, id), eq(contacts.organizationId, ctx.organizationId)))
-      .returning();
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) =>
+      tx
+        .update(contacts)
+        .set({
+          ...normalizedUpdateData,
+          updatedBy: ctx.user.id,
+        })
+        .where(and(eq(contacts.id, id), eq(contacts.organizationId, ctx.organizationId)))
+        .returning()
+    );
 
     if (result.length === 0) {
       throw new NotFoundError('Contact not found', 'contact');
@@ -787,10 +903,12 @@ export const deleteContact = createServerFn({ method: 'POST' })
 
     const { id } = data;
 
-    const result = await db
-      .delete(contacts)
-      .where(and(eq(contacts.id, id), eq(contacts.organizationId, ctx.organizationId)))
-      .returning();
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) =>
+      tx
+        .delete(contacts)
+        .where(and(eq(contacts.id, id), eq(contacts.organizationId, ctx.organizationId)))
+        .returning()
+    );
 
     if (result.length === 0) {
       throw new NotFoundError('Contact not found', 'contact');
@@ -831,14 +949,24 @@ export const createAddress = createServerFn({ method: 'POST' })
   .inputValidator(createAddressSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
+    const normalizedData = normalizeAddressMutationInput(data);
 
-    const result = await db
-      .insert(addresses)
-      .values({
-        ...data,
-        organizationId: ctx.organizationId,
-      })
-      .returning();
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
+      await assertCustomerReferenceInOrg(
+        tx,
+        ctx.organizationId,
+        normalizedData.customerId,
+        'Address customer must belong to your organization and cannot be deleted'
+      )
+
+      return tx
+        .insert(addresses)
+        .values({
+          ...normalizedData,
+          organizationId: ctx.organizationId,
+        })
+        .returning()
+    });
 
     return result[0] ?? null;
   });
@@ -852,12 +980,15 @@ export const updateAddress = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
     const { id, ...updateData } = data;
+    const normalizedUpdateData = normalizeAddressMutationInput(updateData);
 
-    const result = await db
-      .update(addresses)
-      .set(updateData)
-      .where(and(eq(addresses.id, id), eq(addresses.organizationId, ctx.organizationId)))
-      .returning();
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) =>
+      tx
+        .update(addresses)
+        .set(normalizedUpdateData)
+        .where(and(eq(addresses.id, id), eq(addresses.organizationId, ctx.organizationId)))
+        .returning()
+    );
 
     if (result.length === 0) {
       throw new NotFoundError('Address not found', 'address');
@@ -876,10 +1007,12 @@ export const deleteAddress = createServerFn({ method: 'POST' })
 
     const { id } = data;
 
-    const result = await db
-      .delete(addresses)
-      .where(and(eq(addresses.id, id), eq(addresses.organizationId, ctx.organizationId)))
-      .returning();
+    const result = await runCustomerWriteTransaction(ctx.organizationId, async (tx) =>
+      tx
+        .delete(addresses)
+        .where(and(eq(addresses.id, id), eq(addresses.organizationId, ctx.organizationId)))
+        .returning()
+    );
 
     if (result.length === 0) {
       throw new NotFoundError('Address not found', 'address');

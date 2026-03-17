@@ -24,7 +24,11 @@ import { NotFoundError, ValidationError } from "@/lib/server/errors";
 // HELPERS
 // ============================================================================
 
-async function updateOrderPaymentStatus(
+/**
+ * Recompute paidAmount from order_payments, then set balanceDue, paymentStatus, paidAt.
+ * Call after order total changes (e.g. amendment applied) to keep payment fields in sync.
+ */
+export async function updateOrderPaymentStatus(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   orderId: string,
   organizationId: string,

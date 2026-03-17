@@ -52,6 +52,10 @@ export interface OrganizationSettings {
   xeroSalesAccount?: string;
   /** Xero integration: tax type for GST (default OUTPUT) */
   xeroTaxType?: string;
+  /** Xero integration: revenue account code for revenue recognition journals */
+  xeroRevenueRecognitionRevenueAccount?: string;
+  /** Xero integration: deferred revenue/liability account code for revenue recognition journals */
+  xeroRevenueRecognitionDeferredAccount?: string;
 }
 
 export interface OrganizationBranding {

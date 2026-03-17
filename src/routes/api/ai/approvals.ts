@@ -47,6 +47,7 @@ export async function GET({ request }: { request: Request }) {
       action: approval.action,
       agent: approval.agent,
       actionData: approval.actionData,
+      version: approval.version,
       status: approval.status,
       createdAt: approval.createdAt.toISOString(),
       expiresAt: approval.expiresAt.toISOString(),

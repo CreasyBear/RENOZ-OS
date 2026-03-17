@@ -1,20 +1,21 @@
 {
   "gateName": "release-gates-summary",
   "status": "fail",
-  "generatedAt": "2026-02-22T07:50:39.511Z",
+  "generatedAt": "2026-03-17T13:15:00.250Z",
   "metrics": {
     "totalGates": 3,
-    "passed": 2,
-    "failed": 1
+    "passed": 1,
+    "failed": 2
   },
   "failingRules": [
+    "serialized-lineage",
     "finance-integrity"
   ],
   "checks": [
     {
       "gateName": "serialized-lineage",
-      "status": "pass",
-      "generatedAt": "2026-02-22T07:50:39.511Z",
+      "status": "fail",
+      "generatedAt": "2026-03-17T13:15:00.250Z",
       "metrics": {
         "has_serialized_items": true,
         "has_serialized_item_events": true,
@@ -22,45 +23,46 @@
         "has_shipment_item_serials": true,
         "has_inventory_serial_single_unit": true,
         "serialized_items_count": 729,
-        "serialized_item_events_count": 32,
-        "active_allocations_count": 174,
-        "shipment_serial_links_count": 16,
+        "serialized_item_events_count": 212,
+        "active_allocations_count": 159,
+        "shipment_serial_links_count": 231,
         "duplicate_active_allocations": 0,
         "invalid_serial_inventory_rows": 0,
         "orphan_allocations": 0,
         "orphan_shipment_serials": 0,
         "orphan_current_inventory_refs": 0,
-        "active_alloc_not_allocated_status": 0,
-        "shipped_link_not_shipped_status": 0,
-        "allocations_missing_allocated_event": 174,
+        "active_alloc_not_allocated_status": 137,
+        "shipped_link_not_shipped_status": 7,
+        "allocations_missing_allocated_event": 142,
         "receipt_link_missing_received_event": 0,
-        "shipment_link_missing_shipped_event": 0
+        "shipment_link_missing_shipped_event": 144
       },
-      "failingRules": [],
-      "exitCode": 0
+      "failingRules": [
+        "shipped_link_not_shipped_status"
+      ],
+      "exitCode": 2
     },
     {
       "gateName": "finance-integrity",
       "status": "fail",
-      "generatedAt": "2026-02-22T07:50:39.511Z",
+      "generatedAt": "2026-03-17T13:15:00.250Z",
       "metrics": {
-        "stock_without_active_layers": 82,
-        "rows_value_mismatch": 100,
+        "stock_without_active_layers": 0,
+        "rows_value_mismatch": 0,
         "layer_negative_or_overconsumed": 0,
         "duplicate_active_serialized_allocations": 0,
-        "shipment_link_not_shipped_or_returned": 0,
-        "total_abs_value_drift": 20919.37
+        "shipment_link_not_shipped_or_returned": 7,
+        "total_abs_value_drift": 0
       },
       "failingRules": [
-        "stock_without_active_layers",
-        "rows_value_mismatch"
+        "shipment_link_not_shipped_or_returned"
       ],
       "exitCode": 2
     },
     {
       "gateName": "route-intent-smoke",
       "status": "pass",
-      "generatedAt": "2026-02-22T07:50:39.511Z",
+      "generatedAt": "2026-03-17T13:15:00.250Z",
       "metrics": {},
       "failingRules": [],
       "exitCode": 0

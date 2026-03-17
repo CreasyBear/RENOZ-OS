@@ -42,6 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select,
   SelectContent,
@@ -101,6 +102,10 @@ interface MergeHistoryProps {
   onViewCustomer?: (customerId: string) => void
   /** Undo merge handler */
   onUndo?: (mergeId: string) => void
+  /** Whether merge undo is currently supported */
+  canUndo?: boolean
+  /** Explanation shown when undo remains unavailable */
+  undoUnavailableReason?: string
   className?: string
 }
 
@@ -158,6 +163,8 @@ interface MergeDetailDialogProps {
   onOpenChange: (open: boolean) => void
   onViewCustomer: (customerId: string) => void
   onUndo: () => void
+  canUndo: boolean
+  undoUnavailableReason?: string
 }
 
 function MergeDetailDialog({
@@ -166,6 +173,8 @@ function MergeDetailDialog({
   onOpenChange,
   onViewCustomer,
   onUndo,
+  canUndo,
+  undoUnavailableReason,
 }: MergeDetailDialogProps) {
   if (!merge) return null
 
@@ -299,13 +308,20 @@ function MergeDetailDialog({
 
         <DialogFooter>
           {merge.action === 'merged' && (
-            <Button variant="outline" onClick={onUndo}>
+            <Button variant="outline" onClick={onUndo} disabled={!canUndo}>
               <Undo2 className="h-4 w-4 mr-2" />
               Undo Merge
             </Button>
           )}
           <Button onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
+
+        {merge.action === 'merged' && !canUndo && undoUnavailableReason && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{undoUnavailableReason}</AlertDescription>
+          </Alert>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -320,6 +336,8 @@ export function MergeHistory({
   isLoading = false,
   onViewCustomer,
   onUndo,
+  canUndo = true,
+  undoUnavailableReason,
   className,
 }: MergeHistoryProps) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -591,6 +609,8 @@ export function MergeHistory({
           onViewCustomer?.(id)
         }}
         onUndo={() => selectedMerge && handleUndo(selectedMerge.id)}
+        canUndo={canUndo}
+        undoUnavailableReason={undoUnavailableReason}
       />
     </div>
   )

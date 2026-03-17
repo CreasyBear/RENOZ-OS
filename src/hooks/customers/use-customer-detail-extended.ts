@@ -15,7 +15,7 @@ import {
   getCustomerAlerts,
   getCustomerActiveItems,
   getCustomerOrderSummary,
-} from '@/server/functions/customers';
+} from '@/server/functions/customers/customer-detail-extended';
 import type { CustomerAlertsResponse } from '@/lib/schemas/customers/customer-detail-extended';
 // NOTE: Types (CustomerAlert, CustomerActiveItems, CustomerOrderSummary) must be
 // imported directly from @/lib/schemas/customers, not re-exported through hooks.

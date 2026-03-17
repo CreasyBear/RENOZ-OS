@@ -10,10 +10,11 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { initiateOAuthFlow } from '@/lib/oauth/flow';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS, RateLimitError } from '@/lib/server/rate-limit';
+import { OAUTH_PROVIDERS, OAUTH_SERVICE_TYPES } from '@/lib/oauth/constants';
 
 const requestSchema = z.object({
-  provider: z.enum(['google_workspace', 'microsoft_365']),
-  services: z.array(z.enum(['calendar', 'email', 'contacts'])).min(1).max(3),
+  provider: z.enum(OAUTH_PROVIDERS),
+  services: z.array(z.enum(OAUTH_SERVICE_TYPES)).min(1).max(3),
   redirectUrl: z.string().url().optional(),
 });
 

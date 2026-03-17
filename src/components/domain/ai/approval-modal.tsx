@@ -9,7 +9,7 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json (AI-INFRA-007)
  */
 
-import { memo, useState, useCallback } from 'react';
+import { memo, useState, useCallback, useMemo } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   CheckCircle,
@@ -29,12 +29,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { aiEmailDraftSchema, type AIEmailDraft } from '@/lib/ai/approvals/email-draft';
 import type { AIApproval } from '@/hooks/ai';
 
 // ============================================================================
@@ -49,9 +51,17 @@ export interface ApprovalModalProps {
   /** The approval to display */
   approval: AIApproval | null;
   /** Callback when user approves */
-  onApprove: (approvalId: string) => void;
+  onApprove: (
+    approvalId: string,
+    options?: { expectedVersion?: number; draft?: AIEmailDraft }
+  ) => void | Promise<void>;
   /** Callback when user rejects */
   onReject: (approvalId: string, reason?: string) => void;
+  /** Optional callback when the draft is explicitly saved before approval */
+  onUpdateDraft?: (
+    approvalId: string,
+    input: { draft: AIEmailDraft; expectedVersion?: number }
+  ) => Promise<{ approval?: Pick<AIApproval, 'version' | 'actionData'> } | void>;
   /** Whether an action is in progress */
   isSubmitting?: boolean;
   /** Optional className */
@@ -65,6 +75,7 @@ export interface ApprovalModalProps {
 const ACTION_LABELS: Record<string, string> = {
   createCustomer: 'Create Customer',
   updateCustomer: 'Update Customer',
+  send_email: 'Send Email',
   createOrder: 'Create Order',
   updateOrder: 'Update Order',
   sendEmail: 'Send Email',
@@ -141,6 +152,27 @@ function formatActionData(data: Record<string, unknown>): Array<{ key: string; v
   return entries;
 }
 
+function getEmailDraft(
+  approval: AIApproval | null
+): AIEmailDraft | null {
+  if (!approval || approval.action !== 'send_email') return null;
+  const actionData = approval.actionData as {
+    draft?: Record<string, unknown>;
+    availableActions?: unknown;
+  };
+
+  const parseResult = aiEmailDraftSchema.safeParse(actionData.draft);
+  return parseResult.success ? parseResult.data : null;
+}
+
+function supportsEdit(approval: AIApproval | null): boolean {
+  if (!approval || approval.action !== 'send_email') return false;
+  const actionData = approval.actionData as {
+    availableActions?: unknown;
+  };
+  return Array.isArray(actionData.availableActions) && actionData.availableActions.includes('edit');
+}
+
 // ============================================================================
 // LOADING STATE
 // ============================================================================
@@ -174,17 +206,38 @@ function ApprovalModalSkeleton() {
  * - Optional rejection reason input
  * - Double-click prevention during submission
  */
-export const ApprovalModal = memo(function ApprovalModal({
+interface ApprovalModalLoadedProps extends Omit<ApprovalModalProps, 'approval'> {
+  approval: AIApproval;
+}
+
+const ApprovalModalLoaded = memo(function ApprovalModalLoaded({
   open,
   onOpenChange,
   approval,
   onApprove,
   onReject,
+  onUpdateDraft,
   isSubmitting = false,
   className,
-}: ApprovalModalProps) {
+}: ApprovalModalLoadedProps) {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<AIEmailDraft | null>(() => getEmailDraft(approval));
+  const [currentVersion, setCurrentVersion] = useState<number | undefined>(approval.version);
+
+  const editableDraft = useMemo(() => getEmailDraft(approval), [approval]);
+  const canEditDraft = supportsEdit(approval) && emailDraft != null;
+  const isDraftDirty =
+    canEditDraft &&
+    emailDraft != null &&
+    editableDraft != null &&
+    JSON.stringify(emailDraft) !== JSON.stringify(editableDraft);
+  const draftValidation = canEditDraft && emailDraft ? aiEmailDraftSchema.safeParse(emailDraft) : null;
+  const isDraftValid = draftValidation == null || draftValidation.success;
+  const draftValidationMessage =
+    draftValidation && !draftValidation.success
+      ? draftValidation.error.issues[0]?.message ?? 'Invalid email draft'
+      : null;
 
   // Reset state when dialog closes
   const handleOpenChange = useCallback(
@@ -192,17 +245,49 @@ export const ApprovalModal = memo(function ApprovalModal({
       if (!newOpen) {
         setRejectionReason('');
         setShowRejectForm(false);
+        setEmailDraft(getEmailDraft(approval));
+        setCurrentVersion(approval?.version);
       }
       onOpenChange(newOpen);
     },
-    [onOpenChange]
+    [approval, onOpenChange]
   );
 
   // Handle approve action
-  const handleApprove = useCallback(() => {
+  const handleApprove = useCallback(async () => {
     if (!approval || isSubmitting) return;
-    onApprove(approval.id);
-  }, [approval, isSubmitting, onApprove]);
+
+    let expectedVersion = currentVersion;
+    let latestDraft = emailDraft ?? undefined;
+
+    if (canEditDraft && isDraftDirty && emailDraft && onUpdateDraft) {
+      const updateResult = await onUpdateDraft(approval.id, {
+        draft: emailDraft,
+        expectedVersion: currentVersion,
+      });
+
+      const nextVersion = updateResult?.approval?.version;
+      const nextActionData = updateResult?.approval?.actionData;
+      if (typeof nextVersion === 'number') {
+        expectedVersion = nextVersion;
+        setCurrentVersion(nextVersion);
+      }
+      if (nextActionData && typeof nextActionData === 'object') {
+        const updatedDraft = aiEmailDraftSchema.safeParse(
+          (nextActionData as { draft?: Record<string, unknown> }).draft
+        );
+        if (updatedDraft.success) {
+          latestDraft = updatedDraft.data;
+          setEmailDraft(updatedDraft.data);
+        }
+      }
+    }
+
+    await onApprove(approval.id, {
+      expectedVersion,
+      draft: latestDraft,
+    });
+  }, [approval, canEditDraft, currentVersion, emailDraft, isDraftDirty, isSubmitting, onApprove, onUpdateDraft]);
 
   // Handle reject action
   const handleReject = useCallback(() => {
@@ -221,16 +306,6 @@ export const ApprovalModal = memo(function ApprovalModal({
     setShowRejectForm(false);
     setRejectionReason('');
   }, []);
-
-  if (!approval) {
-    return (
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className={className}>
-          <ApprovalModalSkeleton />
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   const agentConfig = getAgentConfig(approval.agent);
   const actionLabel = getActionLabel(approval.action);
@@ -300,22 +375,75 @@ export const ApprovalModal = memo(function ApprovalModal({
               <CardTitle className="text-sm font-medium">Action Details</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                {actionEntries.map(({ key, value }) => (
-                  <div key={key} className="space-y-1">
-                    <dt className="text-muted-foreground">{key}</dt>
-                    <dd className="font-medium break-words">
-                      {value.includes('\n') ? (
-                        <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded">
-                          {value}
-                        </pre>
-                      ) : (
-                        value
-                      )}
-                    </dd>
+              {canEditDraft && emailDraft ? (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="approval-email-to">Recipient</Label>
+                    <Input
+                      id="approval-email-to"
+                      type="email"
+                      value={emailDraft.to}
+                      onChange={(e) =>
+                        setEmailDraft((current) =>
+                          current ? { ...current, to: e.target.value } : current
+                        )
+                      }
+                      disabled={isSubmitting}
+                    />
                   </div>
-                ))}
-              </dl>
+                  <div className="space-y-2">
+                    <Label htmlFor="approval-email-subject">Subject</Label>
+                    <Input
+                      id="approval-email-subject"
+                      value={emailDraft.subject}
+                      onChange={(e) =>
+                        setEmailDraft((current) =>
+                          current ? { ...current, subject: e.target.value } : current
+                        )
+                      }
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="approval-email-body">Body</Label>
+                    <Textarea
+                      id="approval-email-body"
+                      value={emailDraft.body}
+                      onChange={(e) =>
+                        setEmailDraft((current) =>
+                          current ? { ...current, body: e.target.value } : current
+                        )
+                      }
+                      rows={8}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {draftValidationMessage ? (
+                    <p className="text-sm text-destructive">{draftValidationMessage}</p>
+                  ) : isDraftDirty ? (
+                    <p className="text-sm text-muted-foreground">
+                      Your edits will be saved before the email is approved and sent.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  {actionEntries.map(({ key, value }) => (
+                    <div key={key} className="space-y-1">
+                      <dt className="text-muted-foreground">{key}</dt>
+                      <dd className="font-medium break-words">
+                        {value.includes('\n') ? (
+                          <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded">
+                            {value}
+                          </pre>
+                        ) : (
+                          value
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </CardContent>
           </Card>
 
@@ -388,11 +516,11 @@ export const ApprovalModal = memo(function ApprovalModal({
                 </Button>
                 <Button
                   onClick={handleApprove}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !isDraftValid}
                   className="bg-green-600 hover:bg-green-700"
                 >
                   <CheckCircle className="mr-2 h-4 w-4" />
-                  Approve
+                  {canEditDraft ? 'Approve & Send' : 'Approve'}
                 </Button>
               </>
             )}
@@ -400,5 +528,40 @@ export const ApprovalModal = memo(function ApprovalModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+});
+
+export const ApprovalModal = memo(function ApprovalModal({
+  approval,
+  open,
+  onOpenChange,
+  onApprove,
+  onReject,
+  onUpdateDraft,
+  isSubmitting = false,
+  className,
+}: ApprovalModalProps) {
+  if (!approval) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className={className}>
+          <ApprovalModalSkeleton />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <ApprovalModalLoaded
+      key={`${approval.id}:${approval.version}`}
+      open={open}
+      onOpenChange={onOpenChange}
+      approval={approval}
+      onApprove={onApprove}
+      onReject={onReject}
+      onUpdateDraft={onUpdateDraft}
+      isSubmitting={isSubmitting}
+      className={className}
+    />
   );
 });

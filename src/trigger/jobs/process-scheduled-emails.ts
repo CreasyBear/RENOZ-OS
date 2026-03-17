@@ -30,7 +30,11 @@ import { createEmailSentActivity } from "@/lib/server/activity-bridge";
 import { isEmailSuppressedDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
-import { substituteTemplateVariables } from "@/lib/email/sanitize";
+import {
+  renderOutboundEmail,
+  renderHtmlToText,
+  TemplateUnresolvedError,
+} from "@/lib/server/outbound-email";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -59,86 +63,6 @@ function hashEmail(email: string): string {
     .update(email.toLowerCase().trim())
     .digest("hex")
     .slice(0, 8);
-}
-
-// ============================================================================
-// EMAIL TEMPLATES
-// ============================================================================
-
-/**
- * Get template content based on template type
- * In production, this would load from a templates table
- */
-function getTemplateContent(
-  templateType: string
-): { subject: string; body: string } {
-  const templates: Record<string, { subject: string; body: string }> = {
-    welcome: {
-      subject: "Welcome to {{company_name}}, {{first_name}}!",
-      body: `<html><body>
-        <h1>Welcome, {{first_name}}!</h1>
-        <p>Thank you for joining {{company_name}}. We're excited to have you!</p>
-        <p>If you have any questions, don't hesitate to reach out.</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-      </body></html>`,
-    },
-    follow_up: {
-      subject: "Following up on {{subject_context}}",
-      body: `<html><body>
-        <p>Hi {{first_name}},</p>
-        <p>I wanted to follow up on {{subject_context}}.</p>
-        <p>Please let me know if you have any questions.</p>
-        <p>Best regards,<br>{{sender_name}}</p>
-      </body></html>`,
-    },
-    quote: {
-      subject: "Your Quote {{quote_number}} is Ready",
-      body: `<html><body>
-        <p>Hi {{first_name}},</p>
-        <p>Your quote {{quote_number}} is ready for review.</p>
-        <p><a href="{{quote_url}}">View Your Quote</a></p>
-        <p>The quote is valid until {{expiry_date}}.</p>
-        <p>Best regards,<br>{{sender_name}}</p>
-      </body></html>`,
-    },
-    order_confirmation: {
-      subject: "Order Confirmation - {{order_number}}",
-      body: `<html><body>
-        <h1>Order Confirmed!</h1>
-        <p>Hi {{first_name}},</p>
-        <p>Thank you for your order {{order_number}}.</p>
-        <p>Order Total: {{order_total}}</p>
-        <p>We'll notify you when your order ships.</p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-      </body></html>`,
-    },
-    shipping_notification: {
-      subject: "Your Order {{order_number}} Has Shipped!",
-      body: `<html><body>
-        <h1>Your Order is On Its Way!</h1>
-        <p>Hi {{first_name}},</p>
-        <p>Great news! Your order {{order_number}} has shipped.</p>
-        <p>Tracking Number: {{tracking_number}}</p>
-        <p><a href="{{tracking_url}}">Track Your Order</a></p>
-        <p>Best regards,<br>The {{company_name}} Team</p>
-      </body></html>`,
-    },
-    reminder: {
-      subject: "Reminder: {{reminder_subject}}",
-      body: `<html><body>
-        <p>Hi {{first_name}},</p>
-        <p>This is a friendly reminder about {{reminder_subject}}.</p>
-        <p>{{reminder_details}}</p>
-        <p>Best regards,<br>{{sender_name}}</p>
-      </body></html>`,
-    },
-    custom: {
-      subject: "{{subject}}",
-      body: "{{body}}",
-    },
-  };
-
-  return templates[templateType] || templates.custom;
 }
 
 // ============================================================================
@@ -214,24 +138,17 @@ export const processScheduledEmailsTask = schedules.task({
           organizationId: scheduledEmail.organizationId,
         });
 
-        // Get template content
-        const template = getTemplateContent(scheduledEmail.templateType);
-        const baseVariables = (scheduledEmail.templateData?.variables ||
-          {}) as Record<string, string | number | boolean>;
-        // INT-RES-007: Add unsubscribe URL to template variables
-        const variables: Record<string, string | number | boolean> = {
-          ...baseVariables,
-          unsubscribe_url: unsubscribeUrl,
-        };
-
-        // Check for subject/body override
-        const templateData = scheduledEmail.templateData || {};
-        const subject = templateData.subjectOverride
-          ? String(templateData.subjectOverride)
-          : substituteTemplateVariables(template.subject, variables);
-        const bodyHtml = templateData.bodyOverride
-          ? String(templateData.bodyOverride)
-          : substituteTemplateVariables(template.body, variables);
+        const rendered = await renderOutboundEmail({
+          organizationId: scheduledEmail.organizationId,
+          templateType: scheduledEmail.templateType,
+          templateData:
+            (scheduledEmail.templateData as Record<string, unknown> | null) ?? {},
+          subject: scheduledEmail.subject,
+          variables: {
+            unsubscribe_url: unsubscribeUrl,
+          },
+          userId: scheduledEmail.userId,
+        });
 
         // Create email history record
         const [emailRecord] = await db
@@ -242,17 +159,26 @@ export const processScheduledEmailsTask = schedules.task({
             fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
             toAddress: scheduledEmail.recipientEmail,
             customerId: scheduledEmail.customerId,
-            subject,
-            bodyHtml,
+            subject: rendered.subject,
+            bodyHtml: rendered.bodyHtml,
+            bodyText: rendered.bodyText,
             status: "pending",
+            templateId: rendered.templateId,
+            metadata: {
+              previewText: rendered.previewText ?? undefined,
+              priority: rendered.priority ?? undefined,
+              replyTo: rendered.replyTo ?? undefined,
+              templateId: rendered.templateId ?? undefined,
+              templateVersion: rendered.templateVersion ?? undefined,
+            },
           } as NewEmailHistory)
           .returning();
 
         // Prepare email with tracking (wrap links, add tracking pixel)
         const { html: trackedHtml, linkMap } = prepareEmailForTracking(
-          bodyHtml,
+          rendered.bodyHtml,
           emailRecord.id,
-          { trackOpens: true, trackClicks: true }
+          { trackOpens: rendered.trackOpens, trackClicks: rendered.trackClicks }
         );
 
         // Convert Map to plain object for JSON storage
@@ -264,29 +190,17 @@ export const processScheduledEmailsTask = schedules.task({
         const fromAddress = `${fromName} <${fromEmail}>`;
 
         // Convert HTML to plain text for email
-        const textContent = trackedHtml
-          .replace(/<br\s*\/?>/gi, "\n")
-          .replace(/<\/p>/gi, "\n\n")
-          .replace(/<\/div>/gi, "\n")
-          .replace(/<\/li>/gi, "\n")
-          .replace(/<[^>]+>/g, "")
-          .replace(/&nbsp;/g, " ")
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#039;/g, "'")
-          .replace(/\n{3,}/g, "\n\n")
-          .trim();
+        const textContent = renderHtmlToText(trackedHtml);
 
         // Send the email via Resend with List-Unsubscribe headers
         const { data: sendResult, error: sendError } = await resend.emails.send(
           {
             from: fromAddress,
             to: [scheduledEmail.recipientEmail],
-            subject,
+            subject: rendered.subject,
             html: trackedHtml,
             text: textContent,
+            ...(rendered.replyTo ? { replyTo: rendered.replyTo } : {}),
             headers: {
               // INT-RES-007: CAN-SPAM compliant unsubscribe headers
               "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -304,7 +218,7 @@ export const processScheduledEmailsTask = schedules.task({
         logger.info(
           `Sent scheduled email (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`,
           {
-            subject,
+            subject: rendered.subject,
             recipientName: scheduledEmail.recipientName,
           }
         );
@@ -318,6 +232,11 @@ export const processScheduledEmailsTask = schedules.task({
             bodyHtml: trackedHtml, // Save tracked version
             resendMessageId: sendResult?.id, // Store for webhook correlation
             metadata: {
+              previewText: rendered.previewText ?? undefined,
+              priority: rendered.priority ?? undefined,
+              replyTo: rendered.replyTo ?? undefined,
+              templateId: rendered.templateId ?? undefined,
+              templateVersion: rendered.templateVersion ?? undefined,
               linkMap: linkMapObject, // Store linkMap for URL validation
             },
           })
@@ -332,13 +251,26 @@ export const processScheduledEmailsTask = schedules.task({
           organizationId: scheduledEmail.organizationId,
           userId: scheduledEmail.userId,
           customerId: scheduledEmail.customerId,
-          subject,
+          subject: rendered.subject,
           recipientEmail: scheduledEmail.recipientEmail,
           recipientName: scheduledEmail.recipientName,
         });
 
         sent++;
       } catch (error) {
+        if (error instanceof TemplateUnresolvedError) {
+          const templateData = ((scheduledEmail.templateData as Record<string, unknown> | null) ?? {});
+          await db
+            .update(scheduledEmails)
+            .set({
+              templateData: {
+                ...templateData,
+                validationError: error.message,
+              },
+              updatedAt: new Date(),
+            })
+            .where(eq(scheduledEmails.id, scheduledEmail.id));
+        }
         logger.error(`Failed to send scheduled email ${scheduledEmail.id}`, {
           error: error instanceof Error ? error.message : String(error),
         });

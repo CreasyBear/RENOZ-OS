@@ -21,37 +21,17 @@ import {
   type SendTestEmailResult,
 } from "@/lib/schemas/communications/email-preview";
 import {
-  substituteTemplateVariables,
   getSampleTemplateData,
 } from "@/lib/server/email-templates";
 import { NotFoundError } from "@/lib/server/errors";
 import { getCustomerById } from "@/server/functions/customers/customers";
 import { logger } from "@/lib/logger";
 import { getResendApiKey, getEmailFrom, getEmailFromName } from "@/lib/email/config";
+import { renderOutboundEmail } from "@/lib/server/outbound-email";
 
 // ============================================================================
 // UTILITIES
 // ============================================================================
-
-/**
- * Convert HTML to plain text for email.
- */
-function htmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/div>/gi, "\n")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 /**
  * Find missing variables in template content.
@@ -156,17 +136,17 @@ export const renderEmailPreview = createServerFn({ method: "POST" })
       variables = { ...variables, ...data.variables };
     }
 
-    // Render subject and body with variable substitution
-    // Note: substituteTemplateVariables now sanitizes values to prevent XSS
-    const renderedSubject = substituteTemplateVariables(
-      template.subject,
-      variables
-    );
-    const renderedHtml = substituteTemplateVariables(
-      template.bodyHtml,
-      variables
-    );
-    const renderedText = htmlToText(renderedHtml);
+    const rendered = await renderOutboundEmail({
+      organizationId: ctx.organizationId,
+      directTemplate: {
+        id: template.id,
+        version: template.version,
+        subject: template.subject,
+        bodyHtml: template.bodyHtml,
+      },
+      subject: template.subject,
+      variables,
+    });
 
     // Find any missing variables in the rendered content
     const missingInSubject = findMissingVariables(
@@ -180,9 +160,9 @@ export const renderEmailPreview = createServerFn({ method: "POST" })
     const missingVariables = [...new Set([...missingInSubject, ...missingInBody])];
 
     return {
-      html: renderedHtml,
-      text: renderedText,
-      subject: renderedSubject,
+      html: rendered.bodyHtml,
+      text: rendered.bodyText,
+      subject: rendered.subject,
       missingVariables,
     };
   });
@@ -229,15 +209,19 @@ export const sendTestEmail = createServerFn({ method: "POST" })
       variables = { ...variables, ...data.variables };
     }
 
-    // Render subject and body
-    // Note: substituteTemplateVariables now sanitizes values to prevent XSS
-    const baseSubject = data.subject || template.subject;
-    const renderedSubject = `[TEST] ${substituteTemplateVariables(baseSubject, variables)}`;
-    const renderedHtml = substituteTemplateVariables(
-      template.bodyHtml,
-      variables
-    );
-    const renderedText = htmlToText(renderedHtml);
+    const rendered = await renderOutboundEmail({
+      organizationId: ctx.organizationId,
+      directTemplate: {
+        id: template.id,
+        version: template.version,
+        subject: template.subject,
+        bodyHtml: template.bodyHtml,
+      },
+      subject: data.subject || template.subject,
+      variables,
+      userId: ctx.user.id,
+      testPrefix: "[TEST] ",
+    });
 
     // Use current user's email as default, or the provided recipient
     const recipientEmail = data.recipientEmail || ctx.user.email;
@@ -252,9 +236,9 @@ export const sendTestEmail = createServerFn({ method: "POST" })
       const { data: sendResult, error } = await resend.emails.send({
         from: `${fromName} <${fromEmail}>`,
         to: [recipientEmail],
-        subject: renderedSubject,
-        html: renderedHtml,
-        text: renderedText,
+        subject: rendered.subject,
+        html: rendered.bodyHtml,
+        text: rendered.bodyText,
       });
 
       if (error) {

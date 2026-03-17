@@ -5,7 +5,7 @@
  * Provides a unified interface for connecting, disconnecting, and monitoring integrations.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { Button } from '@/components/ui/button';
@@ -23,14 +23,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmation } from '@/hooks';
+import type { PendingXeroTenantSelection } from '@/lib/schemas/oauth/connection';
 
 // Import OAuth server functions (would be implemented with tRPC or similar)
 interface OAuthConnection {
   id: string;
-  provider: 'google_workspace' | 'microsoft_365';
-  serviceType: 'calendar' | 'email' | 'contacts';
+  provider: 'google_workspace' | 'microsoft_365' | 'xero';
+  serviceType: 'calendar' | 'email' | 'contacts' | 'accounting';
   isActive: boolean;
   lastSyncedAt?: Date;
+  lastSyncAt?: Date;
+  externalAccountId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,9 +73,21 @@ export function OAuthConnectionManager({
   const queryClient = useQueryClient();
   const [initiatingConnection, setInitiatingConnection] = useState<string | null>(null);
   const [syncingConnection, setSyncingConnection] = useState<string | null>(null);
+  const [pendingSelectionStateId, setPendingSelectionStateId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('oauth') === 'select_tenant') {
+      const stateId = params.get('oauthStateId');
+      if (stateId) {
+        setPendingSelectionStateId(stateId);
+      }
+    }
+  }, []);
 
   // Query for existing connections
-  const {
+const {
     data: connections,
     isLoading,
     error,
@@ -86,7 +101,11 @@ export function OAuthConnectionManager({
       const data = await response.json();
       return (data.connections as OAuthConnection[]).map((connection) => ({
         ...connection,
-        lastSyncedAt: connection.lastSyncedAt ? new Date(connection.lastSyncedAt) : undefined,
+        lastSyncedAt: connection.lastSyncedAt
+          ? new Date(connection.lastSyncedAt)
+          : connection.lastSyncAt
+            ? new Date(connection.lastSyncAt)
+            : undefined,
         createdAt: new Date(connection.createdAt),
         updatedAt: new Date(connection.updatedAt),
       }));
@@ -108,6 +127,34 @@ export function OAuthConnectionManager({
     },
     staleTime: 60000, // Consider data fresh for 1 minute
     refetchInterval: 60000, // Refetch every minute
+  });
+
+  const clearPendingSelectionQueryParams = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('oauth');
+      url.searchParams.delete('oauthStateId');
+      url.searchParams.delete('provider');
+      url.searchParams.delete('error');
+      window.history.replaceState({}, '', url.toString());
+    }
+    setPendingSelectionStateId(null);
+  }, []);
+
+  const { data: pendingTenantSelection, isLoading: isLoadingPendingTenantSelection } = useQuery({
+    queryKey: ['oauth', 'pending-selection', pendingSelectionStateId],
+    enabled: pendingSelectionStateId != null,
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/oauth/pending-selection?stateId=${encodeURIComponent(pendingSelectionStateId ?? '')}`,
+        { credentials: 'include' }
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to load Xero tenant choices');
+      }
+      return response.json() as Promise<PendingXeroTenantSelection>;
+    },
   });
 
   // Mutation for initiating OAuth flow
@@ -168,6 +215,36 @@ export function OAuthConnectionManager({
     },
   });
 
+  const completeTenantSelectionMutation = useMutation({
+    mutationFn: async ({ stateId, tenantId }: { stateId: string; tenantId: string }) => {
+      const response = await fetch('/api/oauth/pending-selection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ stateId, tenantId }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to complete Xero tenant selection');
+      }
+
+      return data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.oauth.connections(organizationId) });
+      clearPendingSelectionQueryParams();
+      toast.success('Xero tenant connected', {
+        description: 'The selected Xero organization is now linked to this Renoz organization.',
+      });
+    },
+    onError: (error) => {
+      toast.error('Failed to complete Xero tenant selection', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    },
+  });
+
   // Mutation for syncing connection
   const syncMutation = useMutation({
     mutationFn: async ({
@@ -220,7 +297,7 @@ export function OAuthConnectionManager({
 
   const handleDisconnect = useCallback(
     async (connectionId: string) => {
-      const confirmed = await confirm.confirm({
+      const { confirmed } = await confirm.confirm({
         title: 'Disconnect Integration',
         description:
           'Are you sure you want to disconnect this integration? This will stop all data synchronization.',
@@ -228,7 +305,7 @@ export function OAuthConnectionManager({
         variant: 'destructive',
       });
 
-      if (confirmed.confirmed) {
+      if (confirmed) {
         await disconnectMutation.mutateAsync(connectionId);
       }
     },
@@ -272,6 +349,8 @@ export function OAuthConnectionManager({
         return 'Google Workspace';
       case 'microsoft_365':
         return 'Microsoft 365';
+      case 'xero':
+        return 'Xero';
       default:
         return provider;
     }
@@ -285,6 +364,8 @@ export function OAuthConnectionManager({
         return '📧 Email';
       case 'contacts':
         return '👥 Contacts';
+      case 'accounting':
+        return 'Accounting';
       default:
         return service;
     }
@@ -321,6 +402,62 @@ export function OAuthConnectionManager({
         </div>
       </div>
 
+      {pendingSelectionStateId && (
+        <Card className="border-amber-300">
+          <CardHeader>
+            <CardTitle>Select Xero Tenant</CardTitle>
+            <CardDescription>
+              This Xero login can access multiple organizations. Choose the tenant to connect to
+              this Renoz organization.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {isLoadingPendingTenantSelection ? (
+              <div className="text-sm text-muted-foreground">Loading Xero tenants...</div>
+            ) : pendingTenantSelection?.tenants?.length ? (
+              pendingTenantSelection.tenants.map((tenant) => (
+                <div
+                  key={tenant.tenantId}
+                  className="flex items-center justify-between rounded-md border p-3"
+                >
+                  <div>
+                    <div className="font-medium">{tenant.tenantId}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {tenant.tenantType || 'Xero organization'}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      completeTenantSelectionMutation.mutate({
+                        stateId: pendingSelectionStateId,
+                        tenantId: tenant.tenantId,
+                      })
+                    }
+                    disabled={completeTenantSelectionMutation.isPending}
+                  >
+                    {completeTenantSelectionMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      'Connect tenant'
+                    )}
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  No selectable Xero tenants were found for this OAuth session.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Existing Connections */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {connections?.map((connection) => (
@@ -334,10 +471,26 @@ export function OAuthConnectionManager({
                     getHealthIcon(healthStatuses[connection.id].status)}
                 </div>
               </div>
-              <CardDescription>{formatService(connection.serviceType)}</CardDescription>
+              <CardDescription>
+                {connection.provider === 'xero'
+                  ? 'Organization-scoped accounting connection'
+                  : formatService(connection.serviceType)}
+              </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-3">
+              {connection.provider === 'xero' && (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="font-medium">Active tenant</div>
+                  <div className="text-muted-foreground">
+                    {connection.externalAccountId || 'Tenant ID unavailable'}
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Invoices and journals fail closed until this accounting connection is healthy.
+                  </div>
+                </div>
+              )}
+
               {connection.lastSyncedAt && (
                 <div className="text-muted-foreground text-sm">
                   Last synced: {new Date(connection.lastSyncedAt).toLocaleString()}
@@ -352,43 +505,72 @@ export function OAuthConnectionManager({
                 </Alert>
               )}
 
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSync(connection.id)}
-                  disabled={syncingConnection === connection.id || !connection.isActive}
-                  className="flex-1"
-                >
-                  {syncingConnection === connection.id ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
+              {connection.provider === 'xero' ? (
+                <div className="flex space-x-2">
+                  <Button
+                    variant={connection.isActive ? 'outline' : 'default'}
+                    size="sm"
+                    onClick={() => handleInitiateConnection('xero', ['accounting'])}
+                    disabled={initiatingConnection === 'xero'}
+                    className="flex-1"
+                  >
+                    {initiatingConnection === 'xero' ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    {connection.isActive ? 'Reconnect Xero' : 'Connect Xero'}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDisconnect(connection.id)}
+                    disabled={disconnectMutation.isPending}
+                    aria-label="Disconnect integration"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSync(connection.id)}
+                    disabled={syncingConnection === connection.id || !connection.isActive}
+                    className="flex-1"
+                  >
+                    {syncingConnection === connection.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSync(connection.id, true)}
+                    disabled={syncingConnection === connection.id || !connection.isActive}
+                    className="flex-1"
+                  >
                     <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Sync
-                </Button>
+                    Full Sync
+                  </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSync(connection.id, true)}
-                  disabled={syncingConnection === connection.id || !connection.isActive}
-                  className="flex-1"
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Full Sync
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDisconnect(connection.id)}
-                  disabled={disconnectMutation.isPending}
-                  aria-label="Disconnect integration"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDisconnect(connection.id)}
+                    disabled={disconnectMutation.isPending}
+                    aria-label="Disconnect integration"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -419,7 +601,7 @@ export function OAuthConnectionManager({
         </CardHeader>
 
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             {/* Google Workspace */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
@@ -528,6 +710,42 @@ export function OAuthConnectionManager({
                   👥 People
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded bg-sky-100"
+                  role="img"
+                  aria-label="Xero logo"
+                >
+                  <span className="text-sm font-bold text-sky-700">X</span>
+                </div>
+                <div>
+                  <h4 className="font-medium">Xero</h4>
+                  <p className="text-muted-foreground text-sm">
+                    Organization-scoped accounting connection
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                Invoice and journal sync will fail closed until a single active Xero accounting
+                connection is configured for this organization. If the Xero login can see multiple
+                organizations, reconnect with the exact tenant you want to use.
+              </div>
+
+              <Button
+                onClick={() => handleInitiateConnection('xero', ['accounting'])}
+                disabled={initiatingConnection === 'xero'}
+                className="w-full"
+                variant="outline"
+              >
+                {initiatingConnection === 'xero' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Connect Xero
+              </Button>
             </div>
           </div>
         </CardContent>

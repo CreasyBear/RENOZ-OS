@@ -111,8 +111,14 @@ export type TemplateType = ScheduledEmailTemplateType
  * Extends Drizzle type to include additional fields used in UI
  */
 export interface ScheduledEmailTemplateData extends DrizzleScheduledEmailTemplateData {
+  /** Stored template reference for unified rendering */
+  templateId?: string;
+  /** Stored template version used when rendered */
+  templateVersion?: number;
   /** Custom body override (if not using template body) */
   bodyOverride?: string;
+  /** Persisted validation issue that blocks automatic send until repaired */
+  validationError?: string;
   /** Signature ID to attach */
   signatureId?: string;
   /** Signature content to attach */
@@ -163,6 +169,7 @@ export interface ScheduleEmailDialogProps {
   defaultCustomerId?: string
   /** Pre-fill template content for new email */
   defaultTemplate?: {
+    templateId?: string
     subject?: string
     body?: string
     templateType?: TemplateType

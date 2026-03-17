@@ -10,14 +10,23 @@
  */
 
 import { db } from '@/lib/db';
+import { aiEmailDraftSchema, type AIEmailDraft } from '@/lib/ai/approvals/email-draft';
+import { customers } from 'drizzle/schema';
 import { aiApprovals, aiApprovalEntities, type ExecutionResult } from 'drizzle/schema/_ai';
 import { eq, and, sql, desc } from 'drizzle-orm';
-import { getActionHandler } from './handlers';
+import { getActionHandler, runHandlerPostCommitEffect } from './handlers';
 import type { ExecuteActionResult, RejectActionResult } from '@/lib/ai/approvals/types';
 import { logger } from '@/lib/logger';
 
 // Re-export types
 export type { ExecuteActionResult, RejectActionResult } from '@/lib/ai/approvals/types';
+
+export interface UpdateApprovalDraftResult {
+  success: boolean;
+  approval?: typeof aiApprovals.$inferSelect;
+  error?: string;
+  code?: string;
+}
 
 // ============================================================================
 // CONSTANTS
@@ -53,6 +62,8 @@ export async function executeAction(
   expectedVersion?: number
 ): Promise<ExecuteActionResult> {
   try {
+    let shouldClearLastErrorAfterEffect = false;
+
     // Use transaction for atomicity
     const result = await db.transaction(async (tx) => {
       // Fetch approval with SELECT FOR UPDATE to prevent race conditions
@@ -76,8 +87,11 @@ export async function executeAction(
         };
       }
 
-      // Validate status is pending
-      if (approval.status !== 'pending') {
+      const isSendEmailDeliveryRetry =
+        approval.status === 'approved' && approval.action === 'send_email';
+
+      // Validate status is pending unless we are resuming delivery for an already approved email action
+      if (approval.status !== 'pending' && !isSendEmailDeliveryRetry) {
         return {
           success: false,
           error: `Approval is already ${approval.status}`,
@@ -154,18 +168,29 @@ export async function executeAction(
           details: handlerResult.data as Record<string, unknown> | undefined,
         };
 
-        // Increment version on successful status change
-        await tx
-          .update(aiApprovals)
-          .set({
-            status: 'approved',
-            approvedBy: userId,
-            approvedAt: new Date(),
-            executedAt: new Date(),
-            executionResult: successResult,
-            version: sql`${aiApprovals.version} + 1`,
-          })
-          .where(eq(aiApprovals.id, approvalId));
+        if (isSendEmailDeliveryRetry) {
+          await tx
+            .update(aiApprovals)
+            .set({
+              executionResult: successResult,
+              lastAttemptAt: new Date(),
+              version: sql`${aiApprovals.version} + 1`,
+            })
+            .where(eq(aiApprovals.id, approvalId));
+        } else {
+          // Increment version on successful status change
+          await tx
+            .update(aiApprovals)
+            .set({
+              status: 'approved',
+              approvedBy: userId,
+              approvedAt: new Date(),
+              executedAt: new Date(),
+              executionResult: successResult,
+              version: sql`${aiApprovals.version} + 1`,
+            })
+            .where(eq(aiApprovals.id, approvalId));
+        }
 
         // Record entity link for audit trail (if handler returned entity info)
         if (handlerResult.entityId && handlerResult.entityType) {
@@ -177,13 +202,18 @@ export async function executeAction(
               ? 'created'
               : approval.action.startsWith('delete')
                 ? 'deleted'
+                : approval.action === 'send_email'
+                  ? 'created'
                 : 'updated',
           });
         }
 
+        shouldClearLastErrorAfterEffect = true;
+
         return {
           success: true,
           result: handlerResult.data,
+          postCommitEffect: handlerResult.postCommitEffect,
         };
       } else {
         // Handler failed - record error, increment retry count, keep status as pending for retry
@@ -217,9 +247,180 @@ export async function executeAction(
       }
     });
 
+    if (result.success && result.postCommitEffect) {
+      const effectResult = await runHandlerPostCommitEffect(result.postCommitEffect);
+      if (!effectResult.success) {
+        const errorMessage =
+          effectResult.error ??
+          'Approval was recorded, but a post-commit side effect failed to complete';
+
+        await db
+          .update(aiApprovals)
+          .set({
+            lastError: errorMessage,
+            lastAttemptAt: new Date(),
+            retryCount: sql`${aiApprovals.retryCount} + 1`,
+            version: sql`${aiApprovals.version} + 1`,
+          })
+          .where(
+            and(
+              eq(aiApprovals.id, approvalId),
+              eq(aiApprovals.organizationId, organizationId)
+            )
+          );
+
+        return {
+          success: false,
+          error: `Approval was recorded, but email delivery failed: ${errorMessage}. Retry approval to resend email.`,
+          code: 'DELIVERY_RETRY_REQUIRED',
+          retryAvailable: true,
+        };
+      }
+
+      if (shouldClearLastErrorAfterEffect) {
+        await db
+          .update(aiApprovals)
+          .set({
+            lastError: null,
+          })
+          .where(
+            and(
+              eq(aiApprovals.id, approvalId),
+              eq(aiApprovals.organizationId, organizationId)
+            )
+          );
+      }
+    }
+
     return result;
   } catch (error) {
     logger.error('[AI Approval Executor] Error executing action', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      code: 'EXECUTION_ERROR',
+    };
+  }
+}
+
+/**
+ * Update the draft payload for a pending AI email approval.
+ */
+export async function updateEmailApprovalDraft(
+  approvalId: string,
+  userId: string,
+  organizationId: string,
+  draft: AIEmailDraft,
+  expectedVersion?: number
+): Promise<UpdateApprovalDraftResult> {
+  try {
+    const parsedDraft = aiEmailDraftSchema.safeParse(draft);
+    if (!parsedDraft.success) {
+      return {
+        success: false,
+        error: parsedDraft.error.issues[0]?.message ?? 'Invalid email draft',
+        code: 'VALIDATION_ERROR',
+      };
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [approval] = await tx
+        .select()
+        .from(aiApprovals)
+        .where(
+          and(
+            eq(aiApprovals.id, approvalId),
+            eq(aiApprovals.organizationId, organizationId)
+          )
+        )
+        .for('update');
+
+      if (!approval) {
+        return {
+          success: false,
+          error: 'Approval not found',
+          code: 'NOT_FOUND',
+        };
+      }
+
+      if (approval.userId !== userId) {
+        return {
+          success: false,
+          error: 'You are not authorized to edit this approval',
+          code: 'FORBIDDEN',
+        };
+      }
+
+      if (approval.status !== 'pending') {
+        return {
+          success: false,
+          error: `Approval is already ${approval.status}`,
+          code: 'INVALID_STATUS',
+        };
+      }
+
+      if (approval.action !== 'send_email') {
+        return {
+          success: false,
+          error: `Editing is not supported for action: ${approval.action}`,
+          code: 'UNSUPPORTED_ACTION',
+        };
+      }
+
+      if (expectedVersion !== undefined && approval.version !== expectedVersion) {
+        return {
+          success: false,
+          error: 'Approval draft changed before your edit was saved',
+          code: 'VERSION_CONFLICT',
+        };
+      }
+
+      const [customer] = await tx
+        .select({ id: customers.id })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.id, parsedDraft.data.customerId),
+            eq(customers.organizationId, organizationId),
+            sql`${customers.deletedAt} IS NULL`
+          )
+        )
+        .limit(1);
+
+      if (!customer) {
+        return {
+          success: false,
+          error: 'Customer not found for this email draft',
+          code: 'NOT_FOUND',
+        };
+      }
+
+      const nextActionData = {
+        ...((approval.actionData as unknown as Record<string, unknown>) ?? {}),
+        actionType: 'send_email',
+        availableActions: ['approve', 'edit', 'discard'] as Array<'approve' | 'edit' | 'discard'>,
+        draft: parsedDraft.data,
+      };
+
+      const [updatedApproval] = await tx
+        .update(aiApprovals)
+        .set({
+          actionData: nextActionData,
+          version: sql`${aiApprovals.version} + 1`,
+          lastError: null,
+        })
+        .where(eq(aiApprovals.id, approvalId))
+        .returning();
+
+      return {
+        success: true,
+        approval: updatedApproval,
+      };
+    });
+
+    return result;
+  } catch (error) {
+    logger.error('[AI Approval Executor] Error updating email draft', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -269,6 +470,7 @@ export async function rejectAction(
         return {
           success: false,
           error: 'Approval not found',
+          code: 'NOT_FOUND',
         };
       }
 
@@ -277,6 +479,7 @@ export async function rejectAction(
         return {
           success: false,
           error: `Approval is already ${approval.status}`,
+          code: 'INVALID_STATUS',
         };
       }
 
@@ -285,6 +488,7 @@ export async function rejectAction(
         return {
           success: false,
           error: 'Approval was modified by another request (version mismatch)',
+          code: 'VERSION_CONFLICT',
         };
       }
 
@@ -309,6 +513,7 @@ export async function rejectAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+      code: 'EXECUTION_ERROR',
     };
   }
 }

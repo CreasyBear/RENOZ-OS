@@ -196,7 +196,6 @@ export function KbArticleFormDialog({
   };
 
   const categoryOptions = [
-    { value: '', label: 'Uncategorized' },
     ...(categories ?? []).map((cat) => ({
       value: cat.id,
       label: cat.name,

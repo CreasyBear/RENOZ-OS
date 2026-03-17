@@ -26,9 +26,16 @@ export async function GET({ request }: { request: Request }) {
   const redirectUrl =
     result.success ? result.redirectUrl : `${url.origin}/integrations/oauth`;
   const redirect = new URL(redirectUrl);
-  redirect.searchParams.set('oauth', result.success ? 'success' : 'failed');
 
-  if (!result.success) {
+  if (!result.success && result.error === 'TENANT_SELECTION_REQUIRED' && 'stateId' in result) {
+    redirect.searchParams.set('oauth', 'select_tenant');
+    redirect.searchParams.set('oauthStateId', result.stateId);
+    redirect.searchParams.set('provider', 'xero');
+  } else {
+    redirect.searchParams.set('oauth', result.success ? 'success' : 'failed');
+  }
+
+  if (!result.success && result.error !== 'TENANT_SELECTION_REQUIRED') {
     redirect.searchParams.set('error', toAuthErrorCode(result.error));
   }
 

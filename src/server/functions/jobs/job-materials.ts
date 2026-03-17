@@ -438,9 +438,9 @@ export const removeJobMaterial = createServerFn({ method: 'POST' })
 /**
  * Reserve inventory for a job's materials.
  *
- * Note: This is a placeholder implementation. Full inventory reservation
- * requires integration with the inventory domain (DOM-INV).
- * For now, it validates the materials exist and returns success.
+ * Full inventory reservation requires integration with the inventory domain
+ * (DOM-INV). Until that exists, this endpoint returns an explicit unavailable
+ * contract instead of implying that inventory was reserved.
  */
 export const reserveJobStock = createServerFn({ method: 'POST' })
   .inputValidator(reserveJobStockSchema)
@@ -488,17 +488,20 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
     }
 
     // TODO(PHASE12-007): Integrate with inventory domain to create actual reservations
-    // For now, return the list of materials that would be reserved
 
     return {
       jobId: data.jobId,
-      reservedCount: materials.length,
+      status: 'unavailable' as const,
+      reservationCreated: false as const,
+      reservedCount: 0 as const,
+      previewCount: materials.length,
       materials: materials.map((m) => ({
         materialId: m.id,
         productId: m.productId,
         quantityToReserve: Number(m.quantityRequired),
       })),
-      message: 'Inventory reservation is pending integration with inventory domain',
+      message:
+        'Inventory reservation is not available yet. This preview shows which materials would be reserved once the inventory integration is implemented.',
     };
   });
 

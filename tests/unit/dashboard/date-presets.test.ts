@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { format } from 'date-fns';
 import {
   dateRangeFromSearchParams,
   dateRangeToSearchParams,
@@ -19,6 +20,7 @@ import {
 } from '@/lib/utils/date-presets';
 
 const fixedToday = new Date('2025-02-10T12:00:00.000Z');
+const formatLocalDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
 describe('date-presets', () => {
   describe('dateRangeFromSearchParams', () => {
@@ -36,8 +38,8 @@ describe('date-presets', () => {
         fixedToday
       );
       expect(preset).toBe('today');
-      expect(range.from.toISOString().split('T')[0]).toBe('2025-02-10');
-      expect(range.to.toISOString().split('T')[0]).toBe('2025-02-10');
+      expect(formatLocalDate(range.from)).toBe('2025-02-10');
+      expect(formatLocalDate(range.to)).toBe('2025-02-10');
     });
 
     it('parses custom range from start/end', () => {
@@ -50,8 +52,8 @@ describe('date-presets', () => {
         fixedToday
       );
       expect(preset).toBe('custom');
-      expect(range.from.toISOString().split('T')[0]).toBe('2025-01-01');
-      expect(range.to.toISOString().split('T')[0]).toBe('2025-01-31');
+      expect(formatLocalDate(range.from)).toBe('2025-01-01');
+      expect(formatLocalDate(range.to)).toBe('2025-01-31');
     });
 
     it('falls back to this-month for invalid custom range', () => {
@@ -91,6 +93,20 @@ describe('date-presets', () => {
       expect(params.dateRange).toBe('custom');
       expect(params.start).toBe('2025-01-15');
       expect(params.end).toBe('2025-01-20');
+    });
+
+    it('round-trips custom dates without UTC date drift', () => {
+      const original = {
+        dateRange: 'custom',
+        start: '2025-03-01',
+        end: '2025-03-31',
+      };
+
+      const { range, preset } = dateRangeFromSearchParams(original, fixedToday);
+      expect(preset).toBe('custom');
+
+      const params = dateRangeToSearchParams(range, preset);
+      expect(params).toEqual(original);
     });
   });
 

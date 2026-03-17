@@ -14,6 +14,7 @@ import {
   type RefreshResult,
   type BulkRefreshResult,
 } from '@/lib/oauth/token-refresh';
+import { OAUTH_PROVIDERS, type OAuthProvider } from '@/lib/oauth/constants';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -26,7 +27,7 @@ export const RefreshTokensRequestSchema = z.object({
 
 export const BulkRefreshTokensRequestSchema = z.object({
   organizationId: z.string().uuid().optional(),
-  provider: z.enum(['google_workspace', 'microsoft_365']).optional(),
+  provider: z.enum(OAUTH_PROVIDERS).optional(),
   maxConcurrency: z.number().min(1).max(10).default(3),
 });
 
@@ -115,7 +116,7 @@ export async function refreshTokens(
 
 export interface BulkRefreshTokensRequest {
   organizationId?: string;
-  provider?: 'google_workspace' | 'microsoft_365';
+  provider?: OAuthProvider;
   maxConcurrency?: number;
 }
 
@@ -210,7 +211,7 @@ export async function getTokenRefreshStatsServer(
 
 export interface GetConnectionsNeedingRefreshRequest {
   organizationId?: string;
-  provider?: 'google_workspace' | 'microsoft_365';
+  provider?: OAuthProvider;
 }
 
 export interface GetConnectionsNeedingRefreshResponseSuccess {
@@ -218,7 +219,7 @@ export interface GetConnectionsNeedingRefreshResponseSuccess {
   connections: Array<{
     connectionId: string;
     organizationId: string;
-    provider: 'google_workspace' | 'microsoft_365';
+    provider: OAuthProvider;
     services: string[];
     tokenExpiresAt: Date;
     priority: 'high' | 'medium' | 'low';

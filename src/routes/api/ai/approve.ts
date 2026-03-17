@@ -24,6 +24,7 @@ const approveRequestSchema = z.object({
     message: 'Action must be "approve" or "reject"',
   }),
   rejectionReason: z.string().max(1000).optional(),
+  expectedVersion: z.number().int().positive().optional(),
 });
 
 // ============================================================================
@@ -51,25 +52,34 @@ export async function POST({ request }: { request: Request }) {
       );
     }
 
-    const { approvalId, action, rejectionReason } = parseResult.data;
+    const { approvalId, action, rejectionReason, expectedVersion } = parseResult.data;
 
     // Execute or reject based on action
     if (action === 'approve') {
       const result = await executeAction(
         approvalId,
         ctx.user.id,
-        ctx.organizationId
+        ctx.organizationId,
+        expectedVersion
       );
 
       if (!result.success) {
-        const status = result.code === 'NOT_FOUND' ? 404 :
-                       result.code === 'EXPIRED' ? 410 :
-                       result.code === 'INVALID_STATUS' ? 409 : 400;
+        const status =
+          result.code === 'NOT_FOUND'
+            ? 404
+            : result.code === 'EXPIRED'
+              ? 410
+              : result.code === 'INVALID_STATUS' || result.code === 'VERSION_CONFLICT'
+                ? 409
+                : result.code === 'DELIVERY_RETRY_REQUIRED'
+                  ? 503
+                  : 400;
 
         return new Response(
           JSON.stringify({
             error: result.error,
             code: result.code,
+            retryAvailable: result.retryAvailable ?? false,
             success: false,
           }),
           { status, headers: { 'Content-Type': 'application/json' } }
@@ -89,16 +99,26 @@ export async function POST({ request }: { request: Request }) {
         approvalId,
         ctx.user.id,
         ctx.organizationId,
-        rejectionReason
+          rejectionReason
+          ,
+          expectedVersion
       );
 
       if (!result.success) {
+        const status =
+          result.code === 'NOT_FOUND'
+            ? 404
+            : result.code === 'INVALID_STATUS' || result.code === 'VERSION_CONFLICT'
+              ? 409
+              : 400;
+
         return new Response(
           JSON.stringify({
             error: result.error,
+            code: result.code,
             success: false,
           }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
+          { status, headers: { 'Content-Type': 'application/json' } }
         );
       }
 

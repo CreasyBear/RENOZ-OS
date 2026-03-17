@@ -269,6 +269,7 @@ export interface CampaignsListProps {
   isBulkDeleting?: boolean
   isBulkPausing?: boolean
   isBulkResuming?: boolean
+  selectedIdsOverride?: string[]
   className?: string
 }
 
@@ -303,7 +304,12 @@ export interface CampaignFormData {
   name: string
   description: string
   templateType: string
-  templateData?: Record<string, unknown>
+  templateData?: Record<string, unknown> & {
+    templateId?: string
+    templateVersion?: number
+    signatureId?: string
+    signatureContent?: string
+  }
   recipientCriteria?: RecipientCriteriaInput
   scheduledAt?: Date
 }

@@ -102,20 +102,36 @@ export function FinancialTriage({
     // 2. Failed Xero syncs (warning)
     if (failedSyncsData?.invoices && failedSyncsData.invoices.length > 0) {
       const failedCount = failedSyncsData.invoices.length;
+      const primaryIssue = failedSyncsData.invoices[0]?.issue;
+      const description =
+        primaryIssue?.code === 'missing_contact_mapping'
+          ? 'Some invoices are blocked until customer Xero contacts are mapped.'
+          : primaryIssue?.code === 'connection_missing' || primaryIssue?.code === 'auth_failed'
+            ? 'Xero needs to be connected or reconnected before failed invoices can be retried.'
+            : primaryIssue?.code === 'rate_limited'
+              ? 'Xero is rate limited right now. Retry once the wait window has passed.'
+              : 'Invoices need operator review before retrying sync.';
 
       items.push({
         id: 'failed-xero-syncs',
         type: 'warning',
         icon: RefreshCw,
         title: `${failedCount} Failed Sync${failedCount > 1 ? 's' : ''}`,
-        description: 'Invoices failed to sync to Xero. Retry sync to resolve.',
+        description,
         primaryAction: {
-          label: 'View Failed',
-          href: '/financial/xero-sync?status=error',
+          label:
+            primaryIssue?.nextActionLabel ??
+            (primaryIssue?.code === 'missing_contact_mapping' ? 'Map Contacts' : 'Review Issues'),
+          href:
+            primaryIssue?.code === 'connection_missing' || primaryIssue?.code === 'auth_failed'
+              ? '/?settingsOpen=integrations'
+              : primaryIssue?.code === 'missing_revenue_accounts'
+                ? '/settings/organization'
+                : `/financial/xero-sync?view=invoice_sync&status=error${primaryIssue?.code ? `&issue=${primaryIssue.code}` : ''}`,
         },
         viewAction: {
           label: 'View Sync Status',
-          href: '/financial/xero-sync?status=error',
+          href: `/financial/xero-sync?view=invoice_sync&status=error${primaryIssue?.code ? `&issue=${primaryIssue.code}` : ''}`,
         },
         dismissable: true,
       });

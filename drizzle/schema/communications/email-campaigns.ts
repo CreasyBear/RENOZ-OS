@@ -52,6 +52,10 @@ export type CampaignTemplateType =
  * Campaign template data for variable substitution
  */
 export interface CampaignTemplateData {
+  /** Stored template reference for unified rendering */
+  templateId?: string;
+  /** Stored template version used when rendered */
+  templateVersion?: number;
   /** Template variable values (merged with per-recipient data) */
   variables?: Record<string, string | number | boolean>;
   /** Custom subject (if not using template subject) */
@@ -70,6 +74,12 @@ export interface CampaignTemplateData {
   fromNameOverride?: string;
   /** Custom reply-to email */
   replyToOverride?: string;
+  /** Signature ID to append during rendering */
+  signatureId?: string;
+  /** Signature HTML snapshot to append during rendering */
+  signatureContent?: string;
+  /** Priority level */
+  priority?: "low" | "normal" | "high";
   /** UTM tracking parameters */
   trackingParams?: {
     utmSource?: string;

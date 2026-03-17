@@ -10,20 +10,35 @@
  * @see _Initiation/_prd/2-domains/financial/financial.prd.json (DOM-FIN-005)
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { z } from 'zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { XeroSyncStatus } from '@/components/domain/financial/xero-sync-status';
 import type { InvoiceWithSyncStatus } from '@/lib/schemas';
-import { useXeroSyncs, useResyncXeroInvoice } from '@/hooks/financial';
+import {
+  useXeroIntegrationStatus,
+  useXeroInvoiceStatus,
+  useXeroPaymentEvents,
+  useXeroSyncs,
+  useResyncXeroInvoice,
+} from '@/hooks/financial';
 import type { XeroSyncStatus as SyncStatus } from '@/lib/schemas';
 
-// ============================================================================
-// ROUTE
-// ============================================================================
+const searchSchema = z.object({
+  view: z.enum(['invoice_sync', 'payment_events']).catch('invoice_sync').default('invoice_sync'),
+  status: z.enum(['all', 'pending', 'syncing', 'synced', 'error']).catch('all').default('all'),
+  issue: z.string().optional().catch(undefined),
+  orderId: z.string().optional().catch(undefined),
+  eventId: z.string().optional().catch(undefined),
+  customerId: z.string().optional().catch(undefined),
+});
+
+type SearchParams = z.infer<typeof searchSchema>;
 
 export const Route = createFileRoute('/_authenticated/financial/xero-sync')({
+  validateSearch: (search: Record<string, unknown>): SearchParams => searchSchema.parse(search),
   component: XeroSyncStatusPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
@@ -41,28 +56,60 @@ export const Route = createFileRoute('/_authenticated/financial/xero-sync')({
   ),
 });
 
-// ============================================================================
-// PAGE COMPONENT (CONTAINER)
-// ============================================================================
-
 function XeroSyncStatusPage() {
-  // UI State
-  const [activeTab, setActiveTab] = useState<SyncStatus | 'all'>('all');
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [resyncingId, setResyncingId] = useState<string | null>(null);
 
-  // Data fetching via centralized hooks
+  const status = search.status;
+  const consoleView = search.view;
+
   const { data, isLoading, error } = useXeroSyncs({
-    status: activeTab === 'all' ? undefined : activeTab,
+    status: status === 'all' ? undefined : status,
     pageSize: 50,
   });
+  const { data: integration } = useXeroIntegrationStatus();
+  const { data: paymentEventsData, isLoading: paymentEventsLoading } = useXeroPaymentEvents({
+    page: 1,
+    pageSize: 25,
+  });
+  const { data: selectedInvoice, isLoading: selectedInvoiceLoading } = useXeroInvoiceStatus(
+    search.orderId ?? '',
+    Boolean(search.orderId)
+  );
 
-  // Resync mutation via centralized hook
   const resyncMutation = useResyncXeroInvoice();
 
-  // Handlers
-  const handleTabChange = useCallback((tab: SyncStatus | 'all') => {
-    setActiveTab(tab);
-  }, []);
+  const updateSearch = useCallback(
+    (updates: Partial<SearchParams>) => {
+      navigate({
+        to: '/financial/xero-sync',
+        search: (prev) => ({
+          ...prev,
+          ...updates,
+        }),
+      });
+    },
+    [navigate]
+  );
+
+  const handleConsoleViewChange = useCallback(
+    (view: 'invoice_sync' | 'payment_events') => {
+      updateSearch({
+        view,
+        eventId: view === 'payment_events' ? search.eventId : undefined,
+        orderId: view === 'invoice_sync' ? search.orderId : undefined,
+      });
+    },
+    [search.eventId, search.orderId, updateSearch]
+  );
+
+  const handleTabChange = useCallback(
+    (tab: SyncStatus | 'all') => {
+      updateSearch({ status: tab, orderId: search.orderId });
+    },
+    [search.orderId, updateSearch]
+  );
 
   const handleResync = useCallback(
     (orderId: string) => {
@@ -74,8 +121,21 @@ function XeroSyncStatusPage() {
     [resyncMutation]
   );
 
-  // Extract invoices from data
-  const invoices: InvoiceWithSyncStatus[] = data?.invoices ?? [];
+  const invoices: InvoiceWithSyncStatus[] = useMemo(() => {
+    const raw = data?.invoices ?? [];
+
+    return raw.filter((invoice) => {
+      if (search.issue && invoice.issue?.code !== search.issue) {
+        return false;
+      }
+
+      if (search.customerId && invoice.customerId !== search.customerId) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [data?.invoices, search.customerId, search.issue]);
 
   return (
     <PageLayout variant="full-width">
@@ -85,10 +145,33 @@ function XeroSyncStatusPage() {
           invoices={invoices}
           isLoading={isLoading}
           error={error}
-          activeTab={activeTab}
+          activeTab={status}
           onTabChange={handleTabChange}
+          consoleView={consoleView}
+          onConsoleViewChange={handleConsoleViewChange}
           onResync={handleResync}
           resyncingId={resyncingId}
+          integration={integration}
+          paymentEvents={paymentEventsData?.items ?? []}
+          paymentEventsLoading={paymentEventsLoading}
+          selectedOrderId={search.orderId}
+          selectedInvoice={selectedInvoice ?? null}
+          selectedInvoiceLoading={selectedInvoiceLoading}
+          onSelectInvoice={(orderId) =>
+            updateSearch({
+              view: 'invoice_sync',
+              orderId: orderId ?? undefined,
+              eventId: undefined,
+            })
+          }
+          selectedPaymentEventId={search.eventId}
+          onSelectPaymentEvent={(eventId) =>
+            updateSearch({
+              view: 'payment_events',
+              eventId: eventId ?? undefined,
+              orderId: undefined,
+            })
+          }
         />
       </PageLayout.Content>
     </PageLayout>

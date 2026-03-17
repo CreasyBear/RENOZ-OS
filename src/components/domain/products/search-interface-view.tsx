@@ -359,7 +359,7 @@ export function ProductSearchInterfaceView({
                         value={priceRange}
                         min={facets.priceRange.min}
                         max={facets.priceRange.max}
-                        step={1}
+                        step={0.01}
                         onValueChange={(value) => {
                           onPriceRangeChange(value as [number, number]);
                           onUpdateFilter("minPrice", value[0]);

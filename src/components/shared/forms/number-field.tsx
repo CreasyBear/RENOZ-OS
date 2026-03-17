@@ -45,6 +45,17 @@ import { useFormFieldDisplay } from "./form-field-display-context"
 import { cn } from "~/lib/utils"
 import { extractFieldError, type FormFieldWithType } from "./types"
 
+const EMPTY_NUMBER_TOKENS = new Set(["", "-", ".", "-."])
+
+function parseNumberInput(rawValue: string): number | undefined {
+  if (EMPTY_NUMBER_TOKENS.has(rawValue)) {
+    return undefined
+  }
+
+  const parsedValue = Number(rawValue)
+  return Number.isFinite(parsedValue) ? parsedValue : undefined
+}
+
 export interface NumberFieldProps {
   /** TanStack Form field instance for number values (supports null/undefined for empty) */
   field: FormFieldWithType<number | null | undefined>
@@ -109,7 +120,7 @@ export function NumberField({
   useEffect(() => {
     const val = field.state.value
     const newInternalValue = val != null ? String(val) : ""
-    if (newInternalValue !== internalValue && val !== parseFloat(internalValue)) {
+    if (newInternalValue !== internalValue) {
       startTransition(() => setInternalValue(newInternalValue))
     }
   }, [field.state.value]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -139,22 +150,31 @@ export function NumberField({
     const rawValue = e.target.value
     setInternalValue(rawValue)
 
-    // Empty value = null/undefined (NOT 0)
-    if (rawValue === '' || rawValue === '-') {
+    const parsedValue = parseNumberInput(rawValue)
+    if (parsedValue === undefined) {
       field.handleChange(undefined as number | null | undefined)
       return
     }
 
-    // Parse as number
-    const numValue = step === 1 || Number.isInteger(step)
-      ? parseInt(rawValue, 10)
-      : parseFloat(rawValue)
-
-    if (!isNaN(numValue)) {
-      field.handleChange(numValue)
-    }
-    // If NaN, keep the string in internal state but don't update form
+    field.handleChange(parsedValue)
   }
+
+  const handleBlur = useCallback(() => {
+    const parsedValue = parseNumberInput(internalValue)
+    const normalizedValue = parsedValue != null ? String(parsedValue) : ""
+
+    if (normalizedValue !== internalValue) {
+      setInternalValue(normalizedValue)
+    }
+
+    if (parsedValue === undefined) {
+      field.handleChange(undefined as number | null | undefined)
+    } else if (field.state.value !== parsedValue) {
+      field.handleChange(parsedValue)
+    }
+
+    field.handleBlur()
+  }, [field, internalValue])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -209,7 +229,7 @@ export function NumberField({
             placeholder={placeholder}
             value={internalValue}
             onChange={handleChange}
-            onBlur={field.handleBlur}
+            onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             min={min}
             max={max}
@@ -243,7 +263,7 @@ export function NumberField({
       placeholder={placeholder}
       value={internalValue}
       onChange={handleChange}
-      onBlur={field.handleBlur}
+      onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       min={min}
       max={max}

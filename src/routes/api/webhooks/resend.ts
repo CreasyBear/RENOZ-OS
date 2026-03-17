@@ -230,29 +230,35 @@ export async function POST({ request }: { request: Request }) {
     receivedAt,
   });
 
-  // Dispatch to Trigger.dev for async processing (fire-and-forget)
-  // This ensures we respond quickly without blocking on processing
+  // Dispatch to Trigger.dev for async processing.
+  // If the handoff fails, return a retriable response so the webhook event
+  // is not silently dropped.
   const payload: ResendWebhookPayload = {
     event,
     receivedAt,
   };
 
   try {
-    // Use sendEvent for async processing
     await client.sendEvent({
       name: resendWebhookEvent,
       payload,
     });
   } catch (error) {
-    // Log but don't fail the webhook - we've received the event
-    // The webhook can be retried by Resend if processing fails
     logger.error('[resend-webhook] Failed to dispatch to Trigger.dev', error as Error, {
       emailId: event.data.email_id,
       eventType: event.type,
     });
 
-    // Still return 200 - we received the webhook, processing will be retried
-    // This prevents Resend from retrying delivery of the same webhook
+    return new Response(
+      JSON.stringify({ error: 'Webhook processing unavailable' }),
+      {
+        status: 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': '60',
+        },
+      }
+    );
   }
 
   // -------------------------------------------------------------------------

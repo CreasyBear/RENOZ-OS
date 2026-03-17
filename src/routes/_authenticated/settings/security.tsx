@@ -131,7 +131,7 @@ function SecuritySettings() {
 
   // Handle session termination
   const handleTerminateSession = async (sessionId: string) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Terminate Session',
       description:
         'Are you sure you want to terminate this session? You will be logged out from that device.',
@@ -139,7 +139,7 @@ function SecuritySettings() {
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       setTerminatingSessionId(sessionId);
       terminateSessionMutation.mutate(
         { id: sessionId },
@@ -159,14 +159,14 @@ function SecuritySettings() {
 
   // Handle terminate all other sessions
   const handleTerminateAllOthers = async () => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Sign out of all other sessions?',
       description:
         "This will sign you out from all devices except this one. You'll need to sign in again on those devices.",
       confirmLabel: 'Sign out all',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       terminateAllMutation.mutate(undefined, {
         onSuccess: () => {
           toast.success('Other sessions terminated');

@@ -9,6 +9,7 @@
  */
 
 import {
+  format,
   startOfDay,
   endOfDay,
   startOfWeek,
@@ -28,6 +29,7 @@ import {
   isBefore,
   isAfter,
   differenceInDays,
+  parse,
 } from "date-fns";
 
 // ============================================================================
@@ -349,8 +351,8 @@ export function dateRangeToSearchParams(
 
   return {
     dateRange: "custom",
-    start: range.from.toISOString().split("T")[0],
-    end: range.to.toISOString().split("T")[0],
+    start: format(range.from, "yyyy-MM-dd"),
+    end: format(range.to, "yyyy-MM-dd"),
   };
 }
 
@@ -369,8 +371,8 @@ export function dateRangeFromSearchParams(
     const end = params.end;
 
     if (start && end) {
-      const from = new Date(start);
-      const to = new Date(end);
+      const from = parse(start, "yyyy-MM-dd", today);
+      const to = parse(end, "yyyy-MM-dd", today);
 
       // Validate the parsed dates
       if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {

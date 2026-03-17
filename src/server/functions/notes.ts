@@ -239,7 +239,9 @@ export const getProjectNotesStats = createServerFn({ method: 'GET' })
 
 /**
  * Process audio upload and generate transcript
- * This is a placeholder for AI transcription integration
+ * Until transcription is implemented, persist a completed audio note with an
+ * explicit unavailable summary instead of leaving the note in an indefinite
+ * processing state.
  */
 export const processAudioNote = createServerFn({ method: 'POST' })
   .inputValidator(
@@ -252,13 +254,12 @@ export const processAudioNote = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
     // TODO(PHASE12-009): Integrate with AI transcription service
-    // For now, just update the note with placeholder audio data
     const audioData: AudioNoteData = {
       fileUrl: data.audioFileUrl,
       fileName: 'audio-recording.mp3',
       duration: '00:00:00',
       transcript: [],
-      aiSummary: 'Transcription pending...',
+      aiSummary: 'Transcription is not available yet for audio notes in this workspace.',
       keyPoints: [],
       insights: [],
     };
@@ -267,7 +268,7 @@ export const processAudioNote = createServerFn({ method: 'POST' })
       .update(projectNotes)
       .set({
         audioData,
-        status: 'processing',
+        status: 'completed',
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
       })

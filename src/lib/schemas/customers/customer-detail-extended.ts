@@ -228,6 +228,7 @@ export interface CustomerDetailData {
   industry?: string | null;
   taxId?: string | null;
   registrationNumber?: string | null;
+  xeroContactId?: string | null;
   healthScore?: number | null;
   lifetimeValue?: string | number | null;
   totalOrders: number;

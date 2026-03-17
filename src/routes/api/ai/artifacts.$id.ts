@@ -11,9 +11,9 @@
 
 import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
-import { aiConversations, aiAgentTasks } from 'drizzle/schema/_ai';
 import { eq, and } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
+import { aiConversations, aiAgentTasks } from '../../../../drizzle/schema/_ai';
 
 // ============================================================================
 // TYPES
@@ -25,6 +25,38 @@ interface ArtifactEvent {
   stage: ArtifactStage;
   content?: unknown;
   message?: string;
+}
+
+interface TaskArtifactDescriptor {
+  type: string;
+  id: string;
+  url?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface TaskResultPayload {
+  success?: boolean;
+  data?: unknown;
+  artifacts?: TaskArtifactDescriptor[];
+  summary?: string;
+}
+
+function parseReportArtifactReference(artifactId: string): { taskId: string; artifactId: string } | null {
+  if (!artifactId.startsWith('report_')) {
+    return null;
+  }
+
+  const reportRef = artifactId.slice('report_'.length);
+  if (!reportRef) {
+    return null;
+  }
+
+  const [taskId] = reportRef.split(':');
+  if (!taskId) {
+    return null;
+  }
+
+  return { taskId, artifactId };
 }
 
 // ============================================================================
@@ -83,7 +115,7 @@ function createSSEStream(
  * Fetch artifact data based on ID prefix.
  * - conv_* -> from ai_conversations
  * - task_* -> from ai_agent_tasks
- * - report_* -> generated report data
+ * - report_* -> task-backed report artifacts from ai_agent_tasks
  */
 async function fetchArtifactData(
   artifactId: string,
@@ -163,14 +195,50 @@ async function fetchArtifactData(
 
   // Report artifact (inline data)
   if (artifactId.startsWith('report_')) {
-    // For report artifacts, the ID contains encoded data or references
-    // This is a placeholder - actual implementation depends on report storage
+    const reportRef = parseReportArtifactReference(artifactId);
+    if (!reportRef) {
+      return null;
+    }
+
+    const [task] = await db
+      .select()
+      .from(aiAgentTasks)
+      .where(
+        and(eq(aiAgentTasks.id, reportRef.taskId), eq(aiAgentTasks.organizationId, organizationId))
+      )
+      .limit(1);
+
+    if (!task) {
+      return null;
+    }
+
+    const result = (task.result as TaskResultPayload | null | undefined) ?? null;
+    const reportArtifact =
+      result?.artifacts?.find(
+        (artifact) =>
+          artifact.id === artifactId || (artifact.type === 'report' && artifact.id === artifactId)
+      ) ?? null;
+
+    if (!reportArtifact) {
+      return null;
+    }
+
     return {
       type: 'report',
       data: {
         id: artifactId,
-        status: 'pending',
-        message: 'Report data not yet available',
+        taskId: task.id,
+        taskType: task.taskType,
+        taskStatus: task.status,
+        progress: task.progress,
+        currentStep: task.currentStep,
+        summary: result?.summary ?? null,
+        artifact: reportArtifact,
+      },
+      metadata: {
+        queuedAt: task.queuedAt?.toISOString(),
+        startedAt: task.startedAt?.toISOString(),
+        completedAt: task.completedAt?.toISOString(),
       },
     };
   }
@@ -189,6 +257,10 @@ async function* generateArtifactStream(
   artifactId: string,
   organizationId: string
 ): AsyncGenerator<ArtifactEvent, void, unknown> {
+  const notFoundMessage = artifactId.startsWith('report_')
+    ? 'Report artifact not found for the referenced AI task'
+    : 'Artifact not found';
+
   // Stage 1: Loading
   yield { stage: 'loading', message: 'Fetching artifact data...' };
 
@@ -201,7 +273,7 @@ async function* generateArtifactStream(
   if (!artifact) {
     yield {
       stage: 'error',
-      message: 'Artifact not found',
+      message: notFoundMessage,
     };
     return;
   }

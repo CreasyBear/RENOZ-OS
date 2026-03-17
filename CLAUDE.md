@@ -57,7 +57,7 @@ If you just installed it, restart the dev server and refresh the browser.
 - **UI**: React 19, shadcn/ui (Radix), Tailwind CSS 4
 - **State**: TanStack Query (server), Zustand (UI)
 - **Database**: PostgreSQL via Supabase, Drizzle ORM
-- **Auth**: Supabase Auth with SSR
+- **Auth**: Supabase Auth with SSR. **Required**: `@supabase/ssr@0.9.0-rc.6` + `@supabase/supabase-js@^2.97.0` (older versions have an SSR race condition that breaks session loading). See `docs/AUTH-LIFECYCLE.md`.
 - **Background Jobs**: Trigger.dev
 - **Validation**: Zod
 

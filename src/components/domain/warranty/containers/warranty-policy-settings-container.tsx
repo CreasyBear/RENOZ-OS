@@ -59,7 +59,7 @@ export function WarrantyPolicySettingsContainer() {
   };
 
   const handleDeletePolicy = async (policy: WarrantyPolicy) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Delete Warranty Policy',
       description:
         'Are you sure you want to delete this warranty policy? This action cannot be undone.',
@@ -67,7 +67,7 @@ export function WarrantyPolicySettingsContainer() {
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         await deleteMutation.mutateAsync(policy.id);
       } catch {
@@ -77,13 +77,13 @@ export function WarrantyPolicySettingsContainer() {
   };
 
   const handleSetDefaultPolicy = async (policy: WarrantyPolicy) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Set Default Policy',
       description: `Are you sure you want to set "${policy.name}" as the default warranty policy? This will be used for new products without a specific policy.`,
       confirmLabel: WARRANTY_POLICY_LABELS.SET_AS_DEFAULT,
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       setPendingDefaultPolicyId(policy.id);
       try {
         await setDefaultMutation.mutateAsync(policy.id);

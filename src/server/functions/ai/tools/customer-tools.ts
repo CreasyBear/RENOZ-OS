@@ -15,6 +15,7 @@ import { db } from '@/lib/db';
 import { eq, and, sql, desc, isNull, or, ilike } from 'drizzle-orm';
 import { customers, customerActivities, orders } from 'drizzle/schema';
 import { aiApprovals } from 'drizzle/schema/_ai';
+import { aiEmailDraftSchema } from '@/lib/ai/approvals/email-draft';
 import {
   type CustomerWithMeta,
   filterSensitiveFields,
@@ -390,7 +391,7 @@ export const updateCustomerNotesTool = tool({
                 customerId,
                 customFields: { internalNotes: newNotes },
               },
-              availableActions: ['approve', 'edit', 'discard'],
+              availableActions: ['approve', 'discard'],
               diff: {
                 before: { internalNotes: existingNotes },
                 after: { internalNotes: newNotes },
@@ -425,6 +426,143 @@ export const updateCustomerNotesTool = tool({
 });
 
 // ============================================================================
+// SEND EMAIL DRAFT TOOL
+// ============================================================================
+
+/**
+ * Create a customer email draft that requires approval before sending.
+ */
+export const sendEmailDraftTool = tool({
+  description:
+    'Draft an outbound email to a customer. ' +
+    'This creates a draft that requires human approval before sending. ' +
+    'Use this when the user wants to email a customer.',
+  inputSchema: z.object({
+    customerId: z
+      .string()
+      .uuid()
+      .describe('The unique identifier (UUID) of the customer'),
+    to: z
+      .string()
+      .email()
+      .optional()
+      .describe('Optional recipient override. Defaults to the customer email on file'),
+    subject: z
+      .string()
+      .max(200)
+      .optional()
+      .describe('Optional subject line. A safe default is used when omitted'),
+    body: z
+      .string()
+      .max(10000)
+      .optional()
+      .describe('Optional plain-text email body. A greeting stub is used when omitted'),
+  }),
+  execute: async (
+    { customerId, to, subject, body },
+    { experimental_context }
+  ) => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId || !ctx?.userId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
+    try {
+      const [customer] = await db
+        .select({
+          id: customers.id,
+          name: customers.name,
+          email: customers.email,
+        })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.id, customerId),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!customer) {
+        return createErrorResult(
+          'Customer not found',
+          'Verify the customer ID is correct and belongs to your organization',
+          'NOT_FOUND'
+        );
+      }
+
+      const recipientEmail = to ?? customer.email ?? undefined;
+      if (!recipientEmail) {
+        return createErrorResult(
+          'Customer does not have an email address',
+          'Add an email address to the customer record or provide a recipient override',
+          'MISSING_EMAIL'
+        );
+      }
+
+      const customerName = customer.name?.trim() || 'there';
+      const draftResult = aiEmailDraftSchema.safeParse({
+        customerId,
+        to: recipientEmail,
+        subject: subject?.trim() || `Follow-up from Renoz`,
+        body: body?.trim() || `Hi ${customerName},\n\n`,
+      });
+
+      if (!draftResult.success) {
+        return createErrorResult(
+          draftResult.error.issues[0]?.message ?? 'Invalid email draft',
+          'Update the email recipient, subject, or body and try again',
+          'VALIDATION_ERROR'
+        );
+      }
+
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      const approval = await db.transaction(async (tx) => {
+        const [approvalRecord] = await tx
+          .insert(aiApprovals)
+          .values({
+            userId: ctx.userId,
+            organizationId: ctx.organizationId,
+            conversationId: ctx.conversationId || null,
+            action: 'send_email',
+            agent: 'customer',
+            actionData: {
+              actionType: 'send_email',
+              draft: draftResult.data,
+              availableActions: ['approve', 'edit', 'discard'],
+            },
+            expiresAt,
+          })
+          .returning({ id: aiApprovals.id });
+
+        return approvalRecord;
+      });
+
+      return createApprovalResult(
+        'send_email',
+        draftResult.data,
+        approval.id,
+        `Send email to "${customer.name || recipientEmail}"`,
+      );
+    } catch (error) {
+      customersLogger.error('Error in sendEmailDraftTool', error);
+      return createErrorResult(
+        'Failed to create email draft',
+        'Try again or contact support if the issue persists',
+        'INTERNAL_ERROR'
+      );
+    }
+  },
+});
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -435,6 +573,7 @@ export const customerTools = {
   get_customer: getCustomerTool,
   search_customers: searchCustomersTool,
   update_customer_notes: updateCustomerNotesTool,
+  send_email_draft: sendEmailDraftTool,
 } as const;
 
 export type CustomerTools = typeof customerTools;

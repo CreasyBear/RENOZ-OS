@@ -61,6 +61,7 @@ export interface UseCustomerWizardDraftReturn {
   isSaving: boolean;
   restore: () => void;
   clear: () => void;
+  flush: () => void;
 }
 
 export function useCustomerWizardDraft({
@@ -83,6 +84,19 @@ export function useCustomerWizardDraft({
   const isRestoringRef = useRef(false);
   const suppressAutosaveUntilChangeRef = useRef(false);
   const suppressedValuesSnapshotRef = useRef<string | null>(null);
+
+  const writeDraftSnapshot = useCallback(() => {
+    const state: CustomerWizardDraftState = {
+      customer: { ...form.state.values },
+      contacts: [...contacts],
+      addresses: [...addresses],
+      currentStep: currentStepIndex,
+      completedSteps: Array.from(completedSteps),
+    };
+    writeVersionedDraft(getDraftKey(), DRAFT_VERSION, state);
+    setHasDraft(true);
+    setSavedAt(new Date());
+  }, [form.state.values, contacts, addresses, currentStepIndex, completedSteps]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -127,16 +141,7 @@ export function useCustomerWizardDraft({
 
     debounceRef.current = setTimeout(() => {
       setIsSaving(true);
-      const state: CustomerWizardDraftState = {
-        customer: { ...customer },
-        contacts: [...contacts],
-        addresses: [...addresses],
-        currentStep: currentStepIndex,
-        completedSteps: Array.from(completedSteps),
-      };
-      writeVersionedDraft(getDraftKey(), DRAFT_VERSION, state);
-      setHasDraft(true);
-      setSavedAt(new Date());
+      writeDraftSnapshot();
       setIsSaving(false);
       debounceRef.current = null;
     }, debounceMs);
@@ -147,7 +152,7 @@ export function useCustomerWizardDraft({
         debounceRef.current = null;
       }
     };
-  }, [form.state.values, contacts, addresses, currentStepIndex, completedSteps, enabled, debounceMs]);
+  }, [form.state.values, contacts, addresses, currentStepIndex, completedSteps, enabled, debounceMs, writeDraftSnapshot]);
 
   const restore = useCallback(() => {
     const draft = readVersionedDraft<CustomerWizardDraftState>(getDraftKey(), DRAFT_VERSION);
@@ -205,5 +210,14 @@ export function useCustomerWizardDraft({
     });
   }, [form.state.values, contacts, addresses, currentStepIndex, completedSteps]);
 
-  return { hasDraft, savedAt, isSaving, restore, clear };
+  const flush = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setIsSaving(false);
+    writeDraftSnapshot();
+  }, [writeDraftSnapshot]);
+
+  return { hasDraft, savedAt, isSaving, restore, clear, flush };
 }

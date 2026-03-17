@@ -4,14 +4,19 @@
  * Bulk import and update functionality for supplier pricing.
  * Supports CSV import with validation and preview.
  */
-import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { priceLists } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { ValidationError } from "@/lib/server/errors";
 import { createPriceChangeRequest } from "./price-history";
+import {
+  calculateEffectivePrice,
+  resolveImportRow,
+} from "./price-resolution";
 
 // ============================================================================
 // IMPORT VALIDATION
@@ -43,6 +48,23 @@ export const agreementImportRowSchema = z.object({
   expiryDate: z.string().optional(),
   totalItems: z.string().default('0').transform(val => parseInt(val || '0')),
   status: z.enum(['draft', 'pending', 'approved']).default('draft'),
+});
+
+const priceImportResolutionSchema = z.object({
+  status: z.enum([
+    "resolved",
+    "unresolved_supplier",
+    "unresolved_product",
+    "ambiguous_product",
+    "duplicate_target",
+  ]),
+  supplierId: z.string().uuid().optional(),
+  supplierName: z.string().optional(),
+  productId: z.string().uuid().optional(),
+  productName: z.string().optional(),
+  productSku: z.string().nullable().optional(),
+  existingPriceListId: z.string().uuid().optional(),
+  message: z.string().optional(),
 });
 
 // ============================================================================
@@ -95,8 +117,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
     hasHeaders: z.boolean().default(true),
   }))
   .handler(async ({ data }) => {
-    // Auth check only - ctx not used for validation preview
-    await withAuth({ permission: PERMISSIONS.suppliers.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const rows = parseCSV(data.csvContent);
     const headers = data.hasHeaders ? rows[0] : null;
@@ -138,17 +159,27 @@ export const validatePriceImport = createServerFn({ method: "POST" })
         }
 
         const validatedRow = priceImportRowSchema.parse(rowData);
-        validRows.push({ rowNumber, data: validatedRow });
+        const effectiveDate = validatedRow.effectiveDate ?? new Date().toISOString().split('T')[0];
+        const resolution = await resolveImportRow({
+          organizationId: ctx.organizationId,
+          supplierCode: validatedRow.supplierCode,
+          productSku: validatedRow.productSku ?? null,
+          productName: validatedRow.productName,
+          effectiveDate,
+        });
+
+        validRows.push({ rowNumber, data: validatedRow, resolution });
         validationResults.push({
           rowNumber,
-          status: 'valid',
+          status: resolution.status === 'resolved' || resolution.status === 'duplicate_target' ? 'valid' : 'invalid',
           data: validatedRow,
+          resolution,
         });
       } catch (error) {
-        const validationError = error as z.ZodError;
-        const errorMessages = validationError.issues.map((err: z.ZodIssue) =>
-          `${err.path.join('.')}: ${err.message}`
-        );
+        const errorMessages =
+          error instanceof z.ZodError
+            ? error.issues.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)
+            : [error instanceof Error ? error.message : 'Unknown validation error'];
 
         errors.push({
           rowNumber,
@@ -173,6 +204,8 @@ export const validatePriceImport = createServerFn({ method: "POST" })
         errors: errors.slice(0, 10), // Show first 10 errors
         hasMoreErrors: errors.length > 10,
       },
+      resolvedRows: validRows.filter((row) => row.resolution.status === 'resolved').length,
+      duplicateRows: validRows.filter((row) => row.resolution.status === 'duplicate_target').length,
     };
   });
 
@@ -184,6 +217,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
     validatedRows: z.array(z.object({
       rowNumber: z.number(),
       data: priceImportRowSchema,
+      resolution: priceImportResolutionSchema,
     })),
     approvalRequired: z.boolean().default(false),
     importReason: z.string().optional(),
@@ -191,46 +225,81 @@ export const executePriceImport = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
+    const unresolvedRows = data.validatedRows.filter(
+      (row) => row.resolution.status !== "resolved" && row.resolution.status !== "duplicate_target"
+    );
+    if (unresolvedRows.length > 0) {
+      throw new ValidationError(
+        "Price import contains unresolved rows. Re-run validation and fix the identified supplier/product matches before import."
+      );
+    }
+
     const results = [];
     const changeRequests = [];
 
     for (const row of data.validatedRows) {
       try {
-        // Check if price already exists (by supplier + product)
-        // For now, we'll create new prices - in production you'd want upsert logic
-        // Generate a placeholder product ID - in production, this should be looked up from productSku
-        const productId = randomUUID();
+        const effectiveDate = row.data.effectiveDate ?? new Date().toISOString().split('T')[0];
+        const effectivePrice = calculateEffectivePrice({
+          basePrice: row.data.basePrice,
+          discountType: row.data.discountType,
+          discountValue: row.data.discountValue,
+        });
 
-        const [newPrice] = await db
-          .insert(priceLists)
-          .values({
-            organizationId: ctx.organizationId,
-            supplierId: `temp-${row.data.supplierCode}`, // You'd resolve to actual supplier ID
-            productId,
-            productName: row.data.productName,
-            productSku: row.data.productSku ?? null,
-            basePrice: row.data.basePrice, // numericCasted accepts number directly
-            currency: row.data.currency,
-            discountType: row.data.discountType,
-            discountValue: row.data.discountValue, // numericCasted accepts number directly
-            minOrderQty: row.data.minOrderQty,
-            maxOrderQty: row.data.maxOrderQty,
-            effectiveDate: row.data.effectiveDate ?? new Date().toISOString().split('T')[0],
-            expiryDate: row.data.expiryDate ?? null,
-            status: row.data.status,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          })
-          .returning();
+        const priceValues = {
+          organizationId: ctx.organizationId,
+          supplierId: row.resolution.supplierId!,
+          productId: row.resolution.productId!,
+          supplierName: row.resolution.supplierName ?? row.data.supplierName ?? null,
+          productName: row.resolution.productName ?? row.data.productName,
+          productSku: row.resolution.productSku ?? row.data.productSku ?? null,
+          basePrice: row.data.basePrice,
+          price: row.data.basePrice,
+          effectivePrice,
+          currency: row.data.currency,
+          discountType: row.data.discountType,
+          discountValue: row.data.discountValue,
+          minQuantity: row.data.minOrderQty ?? 1,
+          minOrderQty: row.data.minOrderQty,
+          maxOrderQty: row.data.maxOrderQty,
+          effectiveDate,
+          expiryDate: row.data.expiryDate ?? null,
+          status: row.data.status,
+          isActive: row.data.status === 'active',
+          lastUpdated: new Date(),
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        };
+
+        let persistedPrice;
+        if (row.resolution.existingPriceListId) {
+          const [updatedPrice] = await db
+            .update(priceLists)
+            .set({
+              ...priceValues,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(priceLists.id, row.resolution.existingPriceListId),
+                eq(priceLists.organizationId, ctx.organizationId)
+              )
+            )
+            .returning();
+          persistedPrice = updatedPrice;
+        } else {
+          const [newPrice] = await db.insert(priceLists).values(priceValues).returning();
+          persistedPrice = newPrice;
+        }
 
         // Create change request for audit trail
         if (data.approvalRequired) {
           const changeRequest = await createPriceChangeRequest({
             data: {
-              priceListId: newPrice.id,
+              priceListId: persistedPrice.id,
               newPrice: row.data.basePrice,
               changeReason: `Bulk import: ${data.importReason || 'CSV import'}`,
-              notes: `Created via CSV import for product: ${row.data.productName}`,
+              notes: `Imported via CSV for product: ${row.data.productName}`,
             }
           });
           changeRequests.push(changeRequest);
@@ -239,7 +308,8 @@ export const executePriceImport = createServerFn({ method: "POST" })
         results.push({
           rowNumber: row.rowNumber,
           status: 'success',
-          priceId: newPrice.id,
+          action: row.resolution.existingPriceListId ? 'updated' : 'created',
+          priceId: persistedPrice.id,
         });
       } catch (error) {
         results.push({

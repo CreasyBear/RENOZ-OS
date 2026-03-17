@@ -361,7 +361,7 @@ export function JobTimeTab({
 
   const handleDeleteEntry = React.useCallback(
     async (entryId: string) => {
-      const confirmed = await confirm.confirm({
+      const { confirmed } = await confirm.confirm({
         title: 'Delete Time Entry',
         description:
           'This action cannot be undone. The time entry and all associated data will be permanently deleted.',
@@ -369,7 +369,7 @@ export function JobTimeTab({
         variant: 'destructive',
       });
 
-      if (confirmed.confirmed) {
+      if (confirmed) {
         await onDeleteEntry(entryId);
       }
     },

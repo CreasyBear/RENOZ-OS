@@ -16,6 +16,8 @@ export interface ExecuteActionResult {
   error?: string;
   /** Error code for categorization */
   code?: string;
+  /** Whether the same approval can be retried/resumed */
+  retryAvailable?: boolean;
 }
 
 /**
@@ -26,6 +28,8 @@ export interface RejectActionResult {
   success: boolean;
   /** Error message if failed */
   error?: string;
+  /** Error code for categorization */
+  code?: string;
 }
 
 /**
@@ -52,6 +56,25 @@ export interface HandlerContext {
   tx: typeof db;
 }
 
+export interface SendEmailPostCommitEffect {
+  kind: 'send_email';
+  payload: {
+    approvalId: string;
+    emailHistoryId: string;
+    organizationId: string;
+    userId: string;
+    customerId: string;
+    customerName: string | null;
+    fromAddress: string;
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  };
+}
+
+export type HandlerPostCommitEffect = SendEmailPostCommitEffect;
+
 /**
  * Result from an action handler.
  */
@@ -66,4 +89,6 @@ export interface HandlerResult<T = unknown> {
   entityId?: string;
   /** Entity type affected by this action (for audit trail) */
   entityType?: string;
+  /** Optional side effect to run only after the transaction commits */
+  postCommitEffect?: HandlerPostCommitEffect;
 }

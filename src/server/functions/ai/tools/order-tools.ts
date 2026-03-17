@@ -446,7 +446,7 @@ export const createOrderDraftTool = tool({
             actionData: {
               actionType: 'create_order',
               draft,
-              availableActions: ['approve', 'edit', 'discard'],
+              availableActions: ['approve', 'discard'],
             },
             expiresAt,
           })
@@ -583,7 +583,7 @@ export const createQuoteDraftTool = tool({
             actionData: {
               actionType: 'create_quote',
               draft,
-              availableActions: ['approve', 'edit', 'discard'],
+              availableActions: ['approve', 'discard'],
             },
             expiresAt,
           })

@@ -176,14 +176,14 @@ function DelegationsPage() {
 
   const handleCancelDelegation = async (delegation: DelegationItem) => {
     const delegateName = delegation.delegate?.name ?? delegation.delegate?.email ?? 'this user';
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Cancel Delegation',
       description: `Are you sure you want to cancel the delegation to ${delegateName}? They will no longer be able to act on your behalf.`,
       confirmLabel: 'Cancel Delegation',
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         await cancelDelegationMutation.mutateAsync(delegation.id);
       } catch (err) {

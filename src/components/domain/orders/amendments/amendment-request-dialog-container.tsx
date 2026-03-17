@@ -26,6 +26,7 @@ import type { ProductSearchHit } from "@/lib/schemas/products";
 import type { AmendmentType, ItemChange, FinancialImpact, Amendment } from "@/lib/schemas/orders";
 import type { AmendmentFormLineItem, AmendmentRequestFormData } from "@/lib/schemas/orders/amendment-request-form";
 import { amendmentRequestFormSchema } from "@/lib/schemas/orders/amendment-request-form";
+import { calculateOrderAmountBreakdown, roundCurrency } from "@/lib/utils/financial";
 import { AmendmentRequestDialog } from "./amendment-request-dialog";
 
 // ============================================================================
@@ -273,40 +274,35 @@ export function AmendmentRequestDialogContainer({
       }
     }
 
-    const percentDiscountBefore = Math.round(lineSubtotalBefore * (discountPercentBefore / 100));
-    const percentDiscountAfter = Math.round(lineSubtotalAfter * (discountPercentAfter / 100));
-
-    const totalDiscountBefore = percentDiscountBefore + discountAmountBefore;
-    const totalDiscountAfter = percentDiscountAfter + discountAmountAfter;
-
-    const subtotalBefore = lineSubtotalBefore - totalDiscountBefore;
-    const subtotalAfter = lineSubtotalAfter - totalDiscountAfter;
-
-    const taxableBefore = subtotalBefore + shippingBefore;
-    const taxableAfter = subtotalAfter + shippingAfter;
-
-    const taxBefore = Math.round(taxableBefore * 0.1);
-    const taxAfter = Math.round(taxableAfter * 0.1);
-
-    const totalBefore = taxableBefore + taxBefore;
-    const totalAfter = taxableAfter + taxAfter;
-    const difference = totalAfter - totalBefore;
+    const before = calculateOrderAmountBreakdown({
+      lineSubtotal: lineSubtotalBefore,
+      shippingAmount: shippingBefore,
+      discountPercent: discountPercentBefore,
+      discountAmount: discountAmountBefore,
+    });
+    const after = calculateOrderAmountBreakdown({
+      lineSubtotal: lineSubtotalAfter,
+      shippingAmount: shippingAfter,
+      discountPercent: discountPercentAfter,
+      discountAmount: discountAmountAfter,
+    });
+    const difference = roundCurrency(after.total - before.total);
 
     return {
-      lineSubtotalBefore,
-      lineSubtotalAfter,
-      shippingBefore,
-      shippingAfter,
+      lineSubtotalBefore: before.lineSubtotal,
+      lineSubtotalAfter: after.lineSubtotal,
+      shippingBefore: before.shippingAmount,
+      shippingAfter: after.shippingAmount,
       discountPercentBefore,
       discountPercentAfter,
       discountAmountBefore,
       discountAmountAfter,
-      subtotalBefore,
-      subtotalAfter,
-      taxBefore,
-      taxAfter,
-      totalBefore,
-      totalAfter,
+      subtotalBefore: before.subtotal,
+      subtotalAfter: after.subtotal,
+      taxBefore: before.taxAmount,
+      taxAfter: after.taxAmount,
+      totalBefore: before.total,
+      totalAfter: after.total,
       difference,
     };
   }

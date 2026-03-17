@@ -19,8 +19,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Download, Settings, X } from "lucide-react";
 import { useCustomerNavigation } from "@/hooks/customers";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { normalizeCustomerFilters, buildCustomerQuery } from "@/lib/utils/customer-filters";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
@@ -41,6 +39,7 @@ import {
   useDeleteCustomer,
   useBulkDeleteCustomers,
   useBulkUpdateCustomers,
+  useBulkAssignCustomerTags,
   useBulkUpdateHealthScores,
   useSavedCustomerFilters,
   useRecentBulkOperations,
@@ -66,8 +65,6 @@ import {
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import type { CustomerListQuery, BulkAssignTagsDialogInput } from "@/lib/schemas/customers";
 import { bulkAssignTagsDialogSchema } from "@/lib/schemas/customers";
-import { bulkAssignTags } from "@/server/customers";
-import { queryKeys } from "@/lib/query-keys";
 import {
   createCustomerFilterConfig,
   DEFAULT_CUSTOMER_FILTERS,
@@ -119,8 +116,6 @@ export function CustomersListContainer({
   const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
   const [currentOperation, setCurrentOperation] = useState<string>("");
   const [operationResult, setOperationResult] = useState<OperationResult | null>(null);
-  const queryClient = useQueryClient();
-  const bulkAssignFn = useServerFn(bulkAssignTags);
 
   // Saved filters data fetching
   const {
@@ -130,24 +125,6 @@ export function CustomersListContainer({
     updateFilter,
     deleteFilter,
   } = useSavedCustomerFilters();
-  const bulkAssignMutation = useMutation({
-    mutationFn: (tagIds: string[]) =>
-      bulkAssignFn({
-        data: { customerIds: Array.from(selectedIds), tagIds },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.tags.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.segments.lists() });
-      toastSuccess("Tags assigned to selected customers");
-      setShowTagDialog(false);
-      form.reset();
-    },
-    onError: () => {
-      toastError("Failed to assign tags");
-    },
-  });
 
   const tagOptions = useMemo(
     () =>
@@ -164,7 +141,17 @@ export function CustomersListContainer({
       tagIds: [],
     },
     onSubmit: async (values) => {
-      await bulkAssignMutation.mutateAsync(values.tagIds);
+      try {
+        await bulkAssignMutation.mutateAsync({
+          customerIds: Array.from(selectedIds),
+          tagIds: values.tagIds,
+        });
+        toastSuccess("Tags assigned to selected customers");
+        setShowTagDialog(false);
+        form.reset();
+      } catch {
+        toastError("Failed to assign tags");
+      }
     },
   });
 
@@ -236,6 +223,7 @@ export function CustomersListContainer({
   const deleteMutation = useDeleteCustomer();
   const bulkDeleteMutation = useBulkDeleteCustomers();
   const bulkUpdateMutation = useBulkUpdateCustomers();
+  const bulkAssignMutation = useBulkAssignCustomerTags();
   const bulkHealthScoreMutation = useBulkUpdateHealthScores();
   const rollbackMutation = useRollbackBulkOperation();
   
@@ -363,7 +351,10 @@ export function CustomersListContainer({
     setCurrentOperation("tags");
     
     try {
-      await bulkAssignMutation.mutateAsync(tagIds);
+      await bulkAssignMutation.mutateAsync({
+        customerIds: Array.from(selectedIds),
+        tagIds,
+      });
       
       const operationResult: OperationResult = {
         success: Array.from(selectedIds).length,
@@ -487,10 +478,8 @@ export function CustomersListContainer({
     }
   }, [onExport, selectedIds]);
 
-  const handleBulkEmail = useCallback(() => {
-    // TODO: Implement bulk email functionality
-    toastError("Bulk email not yet implemented");
-  }, []);
+  const bulkEmailUnavailableReason =
+    "Bulk email is temporarily unavailable until the communications flow supports preselecting customers end-to-end.";
 
   const handleRollback = useCallback(async (auditLogId: string) => {
     try {
@@ -619,7 +608,8 @@ export function CustomersListContainer({
                     onUpdateHealthScore={handleBulkHealthScoreUpdate}
                     onDelete={handleBulkDelete}
                     onExport={handleBulkExport}
-                    onBulkEmail={handleBulkEmail}
+                    canBulkEmail={false}
+                    bulkEmailUnavailableReason={bulkEmailUnavailableReason}
                     isLoading={
                       bulkUpdateMutation.isPending ||
                       bulkAssignMutation.isPending ||

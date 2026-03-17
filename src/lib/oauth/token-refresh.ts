@@ -9,6 +9,7 @@ import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { eq, and, lt, gte, sql, inArray } from 'drizzle-orm';
 import { oauthConnections, oauthSyncLogs } from 'drizzle/schema/oauth';
 import { encryptOAuthToken, decryptOAuthToken } from './token-encryption';
+import type { OAuthProvider, OAuthServiceType } from './constants';
 
 // ============================================================================
 // REFRESH CONFIGURATION
@@ -46,7 +47,7 @@ export const DEFAULT_REFRESH_CONFIG: TokenRefreshConfig = {
 export interface RefreshCandidate {
   connectionId: string;
   organizationId: string;
-  provider: 'google_workspace' | 'microsoft_365';
+  provider: OAuthProvider;
   services: string[];
   tokenExpiresAt: Date;
   refreshToken: string;
@@ -139,7 +140,7 @@ export async function getConnectionsNeedingRefresh(
       return {
         connectionId: conn.id,
         organizationId: conn.organizationId,
-        provider: conn.provider as 'google_workspace' | 'microsoft_365',
+        provider: conn.provider as OAuthProvider,
         services: [conn.serviceType],
         tokenExpiresAt: new Date(conn.tokenExpiresAt as Date),
         refreshToken: conn.refreshToken!,
@@ -246,6 +247,9 @@ export async function refreshOAuthTokens(
       case 'microsoft_365':
         newTokens = await refreshMicrosoft365Tokens(decryptedRefreshToken);
         break;
+      case 'xero':
+        newTokens = await refreshXeroTokens(decryptedRefreshToken);
+        break;
       default:
         throw new Error(`Unsupported provider: ${connection.provider}`);
     }
@@ -278,7 +282,7 @@ export async function refreshOAuthTokens(
     await db.insert(oauthSyncLogs).values({
       organizationId: connection.organizationId,
       connectionId,
-      serviceType: connection.serviceType as 'calendar' | 'email' | 'contacts',
+      serviceType: connection.serviceType as OAuthServiceType,
       operation: 'token_refresh',
       status: 'completed',
       recordCount: 1,
@@ -299,12 +303,14 @@ export async function refreshOAuthTokens(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const requiresReconnect = errorMessage.includes('re-authentication required');
 
     // Update connection with failure metadata
     if (connection) {
       await db
         .update(oauthConnections)
         .set({
+          isActive: requiresReconnect ? false : undefined,
           updatedAt: new Date(),
         })
         .where(eq(oauthConnections.id, connectionId));
@@ -313,7 +319,7 @@ export async function refreshOAuthTokens(
       await db.insert(oauthSyncLogs).values({
         organizationId: connection.organizationId,
         connectionId,
-        serviceType: connection.serviceType as 'calendar' | 'email' | 'contacts',
+        serviceType: connection.serviceType as OAuthServiceType,
         operation: 'token_refresh',
         status: 'failed',
         errorMessage,
@@ -444,6 +450,49 @@ async function refreshMicrosoft365Tokens(refreshToken: string): Promise<{
   };
 }
 
+async function refreshXeroTokens(refreshToken: string): Promise<{
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+}> {
+  const clientId = process.env.XERO_CLIENT_ID;
+  const clientSecret = process.env.XERO_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Xero OAuth credentials not configured');
+  }
+
+  const response = await fetch('https://identity.xero.com/connect/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+
+    if (errorData.error === 'invalid_grant') {
+      throw new Error('Refresh token is invalid or expired - re-authentication required');
+    }
+
+    throw new Error(`Xero token refresh failed: ${errorData.error_description || response.statusText}`);
+  }
+
+  const tokenData = await response.json();
+  return {
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    expiresIn: tokenData.expires_in,
+  };
+}
+
 // ============================================================================
 // BULK REFRESH OPERATIONS
 // ============================================================================
@@ -463,7 +512,7 @@ export async function bulkRefreshTokens(
   db: OAuthDatabase,
   options: {
     organizationId?: string;
-    provider?: 'google_workspace' | 'microsoft_365';
+    provider?: OAuthProvider;
     maxConcurrency?: number;
     config?: TokenRefreshConfig;
   } = {}

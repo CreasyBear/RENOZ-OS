@@ -10,7 +10,6 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md (Zone 3: Alerts)
  */
 
-import { Link } from '@tanstack/react-router';
 import {
   AlertTriangle,
   AlertCircle,
@@ -24,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { DynamicLink } from '@/components/ui/dynamic-link';
 import { cn } from '@/lib/utils';
 import type { OrderAlert } from '@/hooks/orders/use-order-detail-composite';
 
@@ -63,6 +63,15 @@ const severityClasses: Record<string, string> = {
   warning: 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-500',
   info: 'border-blue-500/50 bg-blue-500/10 text-blue-700 dark:text-blue-400 [&>svg]:text-blue-500',
 };
+
+function parseSearchParams(href: string): Record<string, string> | undefined {
+  const url = new URL(href, 'http://dummy.local');
+  const params: Record<string, string> = {};
+  url.searchParams.forEach((value, key) => {
+    params[key] = value;
+  });
+  return Object.keys(params).length > 0 ? params : undefined;
+}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -107,8 +116,9 @@ export function OrderAlerts({
             </AlertDescription>
           </div>
           {alert.action && (
-            <Link
-              to={alert.action.href as '/orders'}
+            <DynamicLink
+              to={alert.action.href.split('?')[0]}
+              search={parseSearchParams(alert.action.href)}
               className={cn(
                 buttonVariants({ variant: 'ghost', size: 'sm' }),
                 'flex-shrink-0 gap-1 -mr-2'
@@ -116,7 +126,7 @@ export function OrderAlerts({
             >
               {alert.action.label}
               <ChevronRight className="h-3 w-3" />
-            </Link>
+            </DynamicLink>
           )}
           {onDismiss && (
             <Button

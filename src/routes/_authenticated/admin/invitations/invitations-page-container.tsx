@@ -129,26 +129,26 @@ export default function InvitationsPageContainer() {
   }, [newEmail, newRole, newMessage, sendInvitationMutation]);
 
   const handleCancelInvitation = useCallback(async (invitationId: string, invitationEmail: string) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Cancel Invitation',
       description: `Are you sure you want to cancel the invitation to ${invitationEmail}? They will no longer be able to accept this invitation.`,
       confirmLabel: 'Cancel Invitation',
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       cancelInvitationMutation.mutate({ id: invitationId });
     }
   }, [confirm, cancelInvitationMutation]);
 
   const handleResendInvitation = useCallback(async (invitationId: string, invitationEmail: string) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Resend Invitation',
       description: `Resend invitation email to ${invitationEmail}?`,
       confirmLabel: 'Resend Invitation',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       resendInvitationMutation.mutate({ id: invitationId });
     }
   }, [confirm, resendInvitationMutation]);

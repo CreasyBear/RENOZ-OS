@@ -20,6 +20,8 @@ export interface UseTableSelectionReturn<T extends { id: string }> {
   lastClickedIndex: number | null;
   /** Update last clicked index */
   setLastClickedIndex: (index: number | null) => void;
+  /** Replace the selected ID set */
+  setSelectedIds: (selection: Set<string>) => void;
   /** Handle single item selection */
   handleSelect: (id: string, checked: boolean) => void;
   /** Handle select all toggle */
@@ -146,6 +148,7 @@ export function useTableSelection<T extends { id: string }>({
     isPartiallySelected,
     lastClickedIndex,
     setLastClickedIndex,
+    setSelectedIds,
     handleSelect,
     handleSelectAll,
     handleShiftClickRange,

@@ -8,6 +8,7 @@ import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { and, eq, sql } from 'drizzle-orm';
 import { oauthConnections, oauthServicePermissions, oauthSyncLogs } from 'drizzle/schema/oauth';
 import { encryptOAuthToken } from './token-encryption';
+import type { OAuthProvider, OAuthServiceType } from './constants';
 
 export interface OAuthConnectionTokens {
   accessToken: string;
@@ -16,13 +17,47 @@ export interface OAuthConnectionTokens {
   scopes: string[];
 }
 
+async function assertActiveXeroTenantAvailable(
+  db: OAuthDatabase,
+  params: {
+    organizationId: string
+    externalAccountId?: string
+  }
+) {
+  if (!params.externalAccountId) {
+    return
+  }
+
+  const existing = await db
+    .select({
+      id: oauthConnections.id,
+      organizationId: oauthConnections.organizationId,
+    })
+    .from(oauthConnections)
+    .where(
+      and(
+        eq(oauthConnections.provider, 'xero'),
+        eq(oauthConnections.serviceType, 'accounting'),
+        eq(oauthConnections.externalAccountId, params.externalAccountId),
+        eq(oauthConnections.isActive, true)
+      )
+    )
+    .limit(1)
+
+  if (existing[0] && existing[0].organizationId !== params.organizationId) {
+    throw new Error(
+      'This Xero tenant is already connected to another organization and cannot be activated here'
+    )
+  }
+}
+
 export async function createOAuthConnections(
   db: OAuthDatabase,
   params: {
     organizationId: string;
     userId: string;
-    provider: 'google_workspace' | 'microsoft_365';
-    services: ('calendar' | 'email' | 'contacts')[];
+    provider: OAuthProvider;
+    services: OAuthServiceType[];
     tokens: OAuthConnectionTokens;
     externalAccountId?: string;
   }
@@ -34,58 +69,79 @@ export async function createOAuthConnections(
     ? encryptOAuthToken(tokens.refreshToken, organizationId)
     : null;
 
-  const connectionIds: string[] = [];
+  return db.transaction(async (tx) => {
+    const connectionIds: string[] = [];
 
-  for (const service of services) {
-    const [connection] = await db
-      .insert(oauthConnections)
-      .values({
-        organizationId,
-        userId,
-        provider,
-        serviceType: service,
-        externalAccountId,
-        accessToken: encryptedAccessToken,
-        refreshToken: encryptedRefreshToken,
-        tokenExpiresAt: tokens.expiresAt,
-        scopes: tokens.scopes,
-        isActive: true,
-        lastSyncedAt: null,
-        version: 1,
-      })
-      .returning({ id: oauthConnections.id });
+    for (const service of services) {
+      if (provider === 'xero' && service === 'accounting') {
+        await assertActiveXeroTenantAvailable(tx, { organizationId, externalAccountId })
 
-    connectionIds.push(connection.id);
+        await tx
+          .update(oauthConnections)
+          .set({
+            isActive: false,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(oauthConnections.organizationId, organizationId),
+              eq(oauthConnections.provider, provider),
+              eq(oauthConnections.serviceType, service),
+              eq(oauthConnections.isActive, true)
+            )
+          );
+      }
 
-    for (const scope of getScopesForService(service, tokens.scopes)) {
-      await db.insert(oauthServicePermissions).values({
+      const [connection] = await tx
+        .insert(oauthConnections)
+        .values({
+          organizationId,
+          userId,
+          provider,
+          serviceType: service,
+          externalAccountId,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          tokenExpiresAt: tokens.expiresAt,
+          scopes: tokens.scopes,
+          isActive: true,
+          lastSyncedAt: null,
+          version: 1,
+        })
+        .returning({ id: oauthConnections.id });
+
+      connectionIds.push(connection.id);
+
+      for (const scope of getScopesForService(service, tokens.scopes)) {
+        await tx.insert(oauthServicePermissions).values({
+          organizationId,
+          connectionId: connection.id,
+          serviceType: service,
+          scope,
+          isGranted: true,
+          grantedAt: new Date(),
+        });
+      }
+
+      await tx.insert(oauthSyncLogs).values({
         organizationId,
         connectionId: connection.id,
         serviceType: service,
-        scope,
-        isGranted: true,
-        grantedAt: new Date(),
+        operation: 'connection_create',
+        status: 'completed',
+        recordCount: 1,
+        metadata: {
+          provider,
+          scopes: tokens.scopes,
+          externalAccountId,
+        },
+        startedAt: new Date(),
+        completedAt: new Date(),
       });
     }
 
-    await db.insert(oauthSyncLogs).values({
-      organizationId,
-      connectionId: connection.id,
-      serviceType: service,
-      operation: 'connection_create',
-      status: 'completed',
-      recordCount: 1,
-      metadata: {
-        provider,
-        scopes: tokens.scopes,
-        externalAccountId,
-      },
-      startedAt: new Date(),
-      completedAt: new Date(),
-    });
-  }
-
-  return connectionIds;
+    return connectionIds;
+  });
 }
 
 export async function updateOAuthConnectionTokens(
@@ -101,27 +157,60 @@ export async function updateOAuthConnectionTokens(
     ? encryptOAuthToken(params.tokens.refreshToken, params.organizationId)
     : null;
 
-  await db
-    .update(oauthConnections)
-    .set({
-      accessToken: encryptedAccessToken,
-      refreshToken: encryptedRefreshToken,
-      tokenExpiresAt: params.tokens.expiresAt,
-      scopes: params.tokens.scopes,
-      isActive: true,
-      updatedAt: new Date(),
-      version: sql`${oauthConnections.version} + 1`,
-    })
-    .where(
-      and(
-        eq(oauthConnections.id, params.connectionId),
-        eq(oauthConnections.organizationId, params.organizationId)
+  await db.transaction(async (tx) => {
+    const [connection] = await tx
+      .select({
+        provider: oauthConnections.provider,
+        serviceType: oauthConnections.serviceType,
+      })
+      .from(oauthConnections)
+      .where(
+        and(
+          eq(oauthConnections.id, params.connectionId),
+          eq(oauthConnections.organizationId, params.organizationId)
+        )
       )
-    );
+      .limit(1);
+
+    if (connection?.provider === 'xero' && connection.serviceType === 'accounting') {
+      await tx
+        .update(oauthConnections)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(oauthConnections.organizationId, params.organizationId),
+            eq(oauthConnections.provider, 'xero'),
+            eq(oauthConnections.serviceType, 'accounting'),
+            eq(oauthConnections.isActive, true)
+          )
+        );
+    }
+
+    await tx
+      .update(oauthConnections)
+      .set({
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
+        tokenExpiresAt: params.tokens.expiresAt,
+        scopes: params.tokens.scopes,
+        isActive: true,
+        updatedAt: new Date(),
+        version: sql`${oauthConnections.version} + 1`,
+      })
+      .where(
+        and(
+          eq(oauthConnections.id, params.connectionId),
+          eq(oauthConnections.organizationId, params.organizationId)
+        )
+      );
+  });
 }
 
 function getScopesForService(
-  service: 'calendar' | 'email' | 'contacts',
+  service: OAuthServiceType,
   scopes: string[]
 ): string[] {
   const include = (pattern: string) => scopes.filter((scope) => scope.includes(pattern));
@@ -133,6 +222,8 @@ function getScopesForService(
       return include('gmail').concat(include('Mail'));
     case 'contacts':
       return include('contacts').concat(include('Contacts'));
+    case 'accounting':
+      return scopes.filter((scope) => scope.includes('accounting'));
     default:
       return [];
   }

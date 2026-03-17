@@ -23,6 +23,7 @@ import {
   type OrderWithCustomer,
 } from './use-order-detail';
 import { useUnifiedActivities } from '@/hooks/activities';
+import { useXeroInvoiceStatus } from '@/hooks/financial';
 import type { OrderStatus } from '@/lib/schemas/orders';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 
@@ -111,7 +112,77 @@ const STATUS_NEXT_ACTIONS: Record<OrderStatus, OrderStatus[]> = {
 // ALERT GENERATION
 // ============================================================================
 
-function generateOrderAlerts(order: OrderWithCustomer | undefined): OrderAlert[] {
+function buildXeroAlert(
+  order: OrderWithCustomer,
+  xeroIssue?: {
+    code: string;
+    title?: string;
+    message: string;
+    nextAction: string | null;
+    nextActionLabel: string | null;
+  } | null
+): OrderAlert | null {
+  if (order.xeroSyncStatus !== 'error') {
+    return null;
+  }
+
+  if (xeroIssue?.code === 'missing_contact_mapping') {
+    return {
+      id: 'xero-error',
+      type: 'xero_sync_error',
+      severity: 'warning',
+      title: 'Xero Contact Mapping Required',
+      message: xeroIssue.message,
+      action: {
+        label: xeroIssue.nextActionLabel ?? 'Map Customer Contact',
+        href: `/customers/${order.customerId}/edit`,
+      },
+    };
+  }
+
+  if (xeroIssue?.nextAction === 'connect_xero' || xeroIssue?.nextAction === 'reconnect_xero') {
+    return {
+      id: 'xero-error',
+      type: 'xero_sync_error',
+      severity: 'warning',
+      title: 'Reconnect Xero',
+      message: xeroIssue.message,
+      action: {
+        label: xeroIssue.nextActionLabel ?? 'Reconnect Xero',
+        href: '/?settingsOpen=integrations',
+      },
+    };
+  }
+
+  return {
+    id: 'xero-error',
+    type: 'xero_sync_error',
+    severity: 'warning',
+    title: 'Xero Sync Failed',
+    message: xeroIssue?.message ?? order.xeroSyncError ?? 'Invoice sync requires attention.',
+    action:
+      xeroIssue?.nextAction === 'open_org_settings'
+        ? {
+            label: xeroIssue.nextActionLabel ?? 'Open Org Settings',
+            href: '/settings/organization',
+          }
+        : {
+            label: xeroIssue?.title ? `Resolve: ${xeroIssue.title}` : 'Open Xero Sync',
+            href: `/financial/xero-sync?view=invoice_sync&status=error&orderId=${order.id}${xeroIssue?.code ? `&issue=${xeroIssue.code}` : ''}`,
+          },
+  };
+}
+
+function generateOrderAlerts(
+  order: OrderWithCustomer | undefined,
+  xeroIssue?: {
+    code: string;
+    title?: string;
+    message: string;
+    nextAction: string | null;
+    nextActionLabel: string | null;
+  } | null
+): OrderAlert[] {
   if (!order) return [];
 
   const alerts: OrderAlert[] = [];
@@ -156,15 +227,9 @@ function generateOrderAlerts(order: OrderWithCustomer | undefined): OrderAlert[]
     }
   }
 
-  // Xero sync error
-  if (order.xeroSyncStatus === 'error' && order.xeroSyncError) {
-    alerts.push({
-      id: 'xero-error',
-      type: 'xero_sync_error',
-      severity: 'warning',
-      title: 'Xero Sync Failed',
-      message: order.xeroSyncError,
-    });
+  const xeroAlert = buildXeroAlert(order, xeroIssue);
+  if (xeroAlert) {
+    alerts.push(xeroAlert);
   }
 
   // Backorder / partial fulfillment
@@ -238,6 +303,7 @@ export function useOrderDetailComposite(
     entityId: orderId,
     relatedCustomerId: order?.customerId ?? undefined,
   });
+  const { data: xeroStatus } = useXeroInvoiceStatus(orderId, Boolean(orderId));
 
   // ─────────────────────────────────────────────────────────────────────────
   // Mutations
@@ -261,7 +327,10 @@ export function useOrderDetailComposite(
     return actions.filter((status) => status !== 'cancelled');
   }, [order, hasShippedLineItems]);
 
-  const alerts = useMemo(() => generateOrderAlerts(order), [order]);
+  const alerts = useMemo(
+    () => generateOrderAlerts(order, xeroStatus?.issue ?? null),
+    [order, xeroStatus?.issue]
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // UI Handlers

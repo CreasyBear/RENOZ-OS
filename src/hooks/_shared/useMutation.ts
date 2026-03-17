@@ -11,11 +11,11 @@ export function useMutation<TVariables, TData, TError = Error>(opts: {
   const [status, setStatus] = React.useState<'idle' | 'pending' | 'success' | 'error'>('idle');
 
   const mutate = React.useCallback(
-    async (variables: TVariables): Promise<TData | undefined> => {
+    async (variables: TVariables): Promise<TData> => {
       setStatus('pending');
       setSubmittedAt(Date.now());
       setVariables(variables);
-      //
+      setError(undefined);
       try {
         const data = await opts.fn(variables);
         await opts.onSuccess?.({ data });
@@ -25,7 +25,9 @@ export function useMutation<TVariables, TData, TError = Error>(opts: {
         return data;
       } catch (err) {
         setStatus('error');
-        setError(err as TError);
+        const typedError = err as TError;
+        setError(typedError);
+        throw typedError;
       }
     },
     [opts]

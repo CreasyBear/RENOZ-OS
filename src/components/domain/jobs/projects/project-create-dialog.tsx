@@ -132,7 +132,6 @@ export function ProjectCreateDialog({
   const templates = useMemo(() => templatesData?.templates ?? [], [templatesData]);
   const templateOptions = useMemo(
     () => [
-      { value: '', label: 'No template' },
       ...templates.map((t) => ({ value: t.id, label: t.name })),
     ],
     [templates]

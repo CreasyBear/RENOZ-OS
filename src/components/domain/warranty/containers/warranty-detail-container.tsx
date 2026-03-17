@@ -184,7 +184,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       setCertificateError(null);
       setLastCertificateAction('regenerate');
       try {
@@ -349,7 +349,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         await deleteWarrantyMutation.mutateAsync(warranty.id);
         toast.success('Warranty deleted successfully');

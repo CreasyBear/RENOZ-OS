@@ -163,7 +163,9 @@ export type CreateProduct = z.infer<typeof createProductSchema>;
 // UPDATE PRODUCT
 // ============================================================================
 
-export const updateProductSchema = createProductSchema.partial();
+export const updateProductSchema = createProductSchema.partial().extend({
+  categoryId: z.string().uuid().optional().nullable(),
+});
 
 export type UpdateProduct = z.infer<typeof updateProductSchema>;
 

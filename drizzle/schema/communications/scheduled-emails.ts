@@ -46,6 +46,10 @@ export type ScheduledEmailTemplateType =
  * Template data structure for variable substitution
  */
 export interface ScheduledEmailTemplateData {
+  /** Stored template reference for unified rendering */
+  templateId?: string;
+  /** Stored template version used when rendered */
+  templateVersion?: number;
   /** Template variable values */
   variables?: Record<string, string | number | boolean>;
   /** Custom subject override (if not using template subject) */
@@ -60,8 +64,14 @@ export interface ScheduledEmailTemplateData {
   }>;
   /** Email preview text (shown in inbox before opening) */
   previewText?: string;
+  /** Persisted validation issue that blocks automatic send until repaired */
+  validationError?: string;
   /** Custom reply-to email */
   replyToOverride?: string;
+  /** Signature ID to append during rendering */
+  signatureId?: string;
+  /** Signature HTML snapshot to append during rendering */
+  signatureContent?: string;
   /** Priority level (affects send order) */
   priority?: "low" | "normal" | "high";
   /** Whether to track opens */

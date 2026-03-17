@@ -47,6 +47,12 @@ In Vercel Project Settings → Environment Variables, add all variables from `.e
 - `RESEND_API_KEY`, `EMAIL_FROM`, etc. for email
 - `UPSTASH_REDIS_*` for rate limiting
 - `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID` for background jobs (PDFs, reports, campaigns, etc.)
+- `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`, `XERO_REDIRECT_URI`, `XERO_WEBHOOK_SECRET`, `XERO_WEBHOOKS_ENABLED` for Xero
+
+**Xero note:**
+- Xero runtime auth is organization-scoped OAuth now, not global `XERO_ACCESS_TOKEN` / `XERO_TENANT_ID`
+- env vars above configure the app-level OAuth client and webhook verification only
+- see [docs/XERO-INTEGRATION.md](/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/continuous-claude/renoz-v3/docs/XERO-INTEGRATION.md) for setup and operational details
 
 ### 3. Deploy
 
@@ -97,6 +103,54 @@ DATABASE_URL="your-production-connection-string" npm run db:migrate
 ```
 
 Use the Supabase connection pooler URL for serverless (recommended for Vercel).
+
+For the Xero hardening rollout, deploy database changes before app code so `customers.xero_contact_id`,
+`xero_payment_events`, its RLS policies, and the single-active-Xero-connection index all exist before the
+runtime starts using them.
+
+For drifted production environments, do not blindly run both the Drizzle migration and the Supabase
+reconciliation script. Use one authoritative path:
+
+1. For normal Drizzle-managed environments, run `npm run db:migrate`.
+2. For already-drifted production environments that missed prior Xero/customer changes, run the
+   guarded reconciliation SQL in `supabase/migrations/0024_reconcile_purchase_order_xero_drift.sql`
+   first, verify the schema and data preflight checks below, then realign your migration bookkeeping
+   before future Drizzle migrations.
+
+Preflight before applying the new active-Xero unique indexes:
+
+```sql
+SELECT organization_id, COUNT(*)
+FROM oauth_connections
+WHERE is_active = true
+  AND provider = 'xero'
+  AND service_type = 'accounting'
+GROUP BY organization_id
+HAVING COUNT(*) > 1;
+
+SELECT external_account_id, COUNT(*)
+FROM oauth_connections
+WHERE is_active = true
+  AND provider = 'xero'
+  AND service_type = 'accounting'
+  AND external_account_id IS NOT NULL
+GROUP BY external_account_id
+HAVING COUNT(*) > 1;
+```
+
+Both queries must return zero rows before applying the index-creating migration.
+
+Preflight before enabling invoice sync for existing customers:
+
+```sql
+SELECT id, name, email
+FROM customers
+WHERE deleted_at IS NULL
+  AND xero_contact_id IS NULL;
+```
+
+Any customer that needs invoice sync must have `xero_contact_id` backfilled before operators expect
+invoice sync to succeed.
 
 ---
 

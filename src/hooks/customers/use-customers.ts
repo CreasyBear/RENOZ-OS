@@ -7,12 +7,15 @@
  * - Customer search
  * - Customer mutations (create, update, delete)
  *
- * Uses direct server function calls in queryFn (no useServerFn) per
- * tanstack-start-best-practices and working dashboard pattern.
+ * Follows the same hook/server-function contract as orders:
+ * - import server functions from the concrete module
+ * - wrap them with useServerFn inside hooks
+ * - return the mutation/query result directly to callers
  */
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeCustomerDetail } from '@/lib/schemas/customers/normalize';
 import {
   getCustomers,
   getCustomerById,
@@ -22,9 +25,17 @@ import {
   deleteCustomer,
   bulkDeleteCustomers,
   bulkUpdateCustomers,
+  bulkAssignTags,
   bulkUpdateHealthScores,
   deleteCustomerTag,
-} from '@/server/customers';
+} from '@/server/functions/customers/customers';
+import {
+  getCustomerXeroMappingStatus,
+  searchCustomerXeroContacts,
+  createCustomerXeroContact,
+  linkCustomerXeroContact,
+  unlinkCustomerXeroContact,
+} from '@/server/functions/financial/xero-operations';
 import type { CustomerListQuery, CreateCustomer, UpdateCustomer } from '@/lib/schemas/customers';
 
 type CustomerListResult = Awaited<ReturnType<typeof getCustomers>>;
@@ -42,11 +53,12 @@ export interface UseCustomersOptions extends Partial<CustomerListQuery> {
 
 export function useCustomers(options: UseCustomersOptions = {}) {
   const { enabled = true, ...filters } = options;
+  const listCustomersFn = useServerFn(getCustomers);
 
   return useQuery({
     queryKey: queryKeys.customers.list(filters),
     queryFn: async () => {
-      const result = await getCustomers({ data: filters as CustomerListQuery });
+      const result = await listCustomersFn({ data: filters as CustomerListQuery });
       if (result == null) throw new Error('Customers list returned no data');
       return result;
     },
@@ -59,10 +71,12 @@ export function useCustomers(options: UseCustomersOptions = {}) {
  * Infinite scroll customers list
  */
 export function useCustomersInfinite(filters: Partial<CustomerListQuery> = {}) {
+  const listCustomersFn = useServerFn(getCustomers);
+
   return useInfiniteQuery({
     queryKey: queryKeys.customers.list(filters), // Use list key for infinite queries too
     queryFn: async ({ pageParam }) => {
-      const result = await getCustomers({
+      const result = await listCustomersFn({
         data: {
           ...filters,
           page: pageParam,
@@ -91,12 +105,14 @@ export interface UseCustomerOptions {
 }
 
 export function useCustomer({ id, enabled = true }: UseCustomerOptions) {
+  const getCustomerFn = useServerFn(getCustomerById);
+
   return useQuery({
     queryKey: queryKeys.customers.detail(id),
     queryFn: async () => {
-      const result = await getCustomerById({ data: { id } });
+      const result = await getCustomerFn({ data: { id } });
       if (result == null) throw new Error('Customer not found');
-      return result;
+      return normalizeCustomerDetail(result) as CustomerDetail;
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000, // 1 minute
@@ -115,10 +131,12 @@ export interface UseCustomerTagsOptions {
  * Get all customer tags for the organization
  */
 export function useCustomerTags({ enabled = true }: UseCustomerTagsOptions = {}) {
+  const getCustomerTagsFn = useServerFn(getCustomerTags);
+
   return useQuery({
     queryKey: queryKeys.customers.tags.list(),
     queryFn: async () => {
-      const result = await getCustomerTags();
+      const result = await getCustomerTagsFn();
       if (result == null) throw new Error('Customer tags returned no data');
       return result;
     },
@@ -138,10 +156,12 @@ export interface UseCustomerSearchOptions {
 }
 
 export function useCustomerSearch({ query, limit = 10, enabled = true }: UseCustomerSearchOptions) {
+  const listCustomersFn = useServerFn(getCustomers);
+
   return useQuery({
     queryKey: queryKeys.customers.list({ search: query }),
     queryFn: async () => {
-      const result = await getCustomers({
+      const result = await listCustomersFn({
         data: {
           search: query,
           pageSize: limit,
@@ -155,6 +175,23 @@ export function useCustomerSearch({ query, limit = 10, enabled = true }: UseCust
     staleTime: 10 * 1000, // 10 seconds
     placeholderData: (previousData) => previousData,
   });
+}
+
+export function useCustomerLookup() {
+  const listCustomersFn = useServerFn(getCustomers);
+
+  return async (params: Partial<CustomerListQuery>) => {
+    const result = await listCustomersFn({
+      data: {
+        page: 1,
+        pageSize: 20,
+        sortOrder: 'desc',
+        ...params,
+      } as CustomerListQuery,
+    });
+    if (result == null) throw new Error('Customer lookup returned no data');
+    return result;
+  };
 }
 
 // ============================================================================
@@ -239,6 +276,80 @@ export function useUpdateCustomer() {
   });
 }
 
+export function useCustomerXeroMapping(customerId: string, enabled = true) {
+  const fn = useServerFn(getCustomerXeroMappingStatus);
+
+  return useQuery({
+    queryKey: queryKeys.financial.xeroCustomerMapping(customerId),
+    queryFn: async () => {
+      const result = await fn({ data: { customerId } });
+      if (result == null) throw new Error('Customer Xero mapping returned no data');
+      return result;
+    },
+    enabled: enabled && !!customerId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useSearchCustomerXeroContacts(customerId: string, query: string, enabled = true) {
+  const fn = useServerFn(searchCustomerXeroContacts);
+
+  return useQuery({
+    queryKey: queryKeys.financial.xeroContactSearch(customerId, query),
+    queryFn: async () => {
+      const result = await fn({ data: { customerId, query } });
+      return result ?? [];
+    },
+    enabled: enabled && !!customerId && query.trim().length >= 2,
+    staleTime: 15 * 1000,
+  });
+}
+
+function invalidateXeroCustomerState(queryClient: ReturnType<typeof useQueryClient>, customerId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.financial.xeroCustomerMapping(customerId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.financial.xeroContactSearch(customerId, '') });
+  queryClient.invalidateQueries({ queryKey: queryKeys.financial.xero() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(customerId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+}
+
+export function useCreateCustomerXeroContact() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(createCustomerXeroContact);
+
+  return useMutation({
+    mutationFn: (customerId: string) => fn({ data: { customerId } }),
+    onSuccess: (_, customerId) => {
+      invalidateXeroCustomerState(queryClient, customerId);
+    },
+  });
+}
+
+export function useLinkCustomerXeroContact() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(linkCustomerXeroContact);
+
+  return useMutation({
+    mutationFn: ({ customerId, xeroContactId }: { customerId: string; xeroContactId: string }) =>
+      fn({ data: { customerId, xeroContactId } }),
+    onSuccess: (_, variables) => {
+      invalidateXeroCustomerState(queryClient, variables.customerId);
+    },
+  });
+}
+
+export function useUnlinkCustomerXeroContact() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(unlinkCustomerXeroContact);
+
+  return useMutation({
+    mutationFn: (customerId: string) => fn({ data: { customerId } }),
+    onSuccess: (_, customerId) => {
+      invalidateXeroCustomerState(queryClient, customerId);
+    },
+  });
+}
+
 export function useDeleteCustomer() {
   const queryClient = useQueryClient();
   const deleteFn = useServerFn(deleteCustomer);
@@ -312,6 +423,22 @@ export function useBulkUpdateCustomers() {
   });
 }
 
+export function useBulkAssignCustomerTags() {
+  const queryClient = useQueryClient();
+  const bulkAssignFn = useServerFn(bulkAssignTags);
+
+  return useMutation({
+    mutationFn: (input: { customerIds: string[]; tagIds: string[] }) =>
+      bulkAssignFn({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.tags.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.segments.lists() });
+    },
+  });
+}
+
 export function useBulkUpdateHealthScores() {
   const queryClient = useQueryClient();
   const bulkUpdateHealthScoresFn = useServerFn(bulkUpdateHealthScores);
@@ -360,7 +487,7 @@ export function usePrefetchCustomer() {
       queryFn: async () => {
         const result = await getCustomerById({ data: { id } });
         if (result == null) throw new Error('Customer not found');
-        return result;
+        return normalizeCustomerDetail(result) as CustomerDetail;
       },
       staleTime: 60 * 1000,
     });

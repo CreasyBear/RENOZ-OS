@@ -24,6 +24,52 @@ interface RelatedCreateFailure {
   reason: string
 }
 
+type RecoverableCustomerCreateError = Error & {
+  code?: string
+  statusCode?: number
+  details?: {
+    validationErrors?: Record<string, string[]>
+    customerId?: string
+    redirectingToEdit?: boolean
+    relatedCreateFailures?: RelatedCreateFailure[]
+  }
+}
+
+const GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE =
+  'Customer couldn’t be created right now. Your entries are still here, so you can try again.'
+const PARTIAL_CUSTOMER_CREATE_ERROR_MESSAGE =
+  'Customer was created, but some related records still need attention.'
+
+function toRecoverableCustomerCreateError(error: unknown): RecoverableCustomerCreateError {
+  if (error instanceof Error) {
+    return error as RecoverableCustomerCreateError
+  }
+
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      message?: unknown
+      code?: string
+      statusCode?: number
+      details?: RecoverableCustomerCreateError['details']
+    }
+
+    return Object.assign(
+      new Error(
+        typeof candidate.message === 'string' && candidate.message.trim().length > 0
+          ? candidate.message
+          : GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE
+      ),
+      {
+        code: candidate.code,
+        statusCode: candidate.statusCode,
+        details: candidate.details,
+      }
+    )
+  }
+
+  return new Error(GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE) as RecoverableCustomerCreateError
+}
+
 // ============================================================================
 // ROUTE DEFINITION
 // ============================================================================
@@ -110,7 +156,6 @@ function NewCustomerPage() {
       country: string
     }>
   }) => {
-    let createdCustomerId: string | null = null
     const failures: RelatedCreateFailure[] = []
 
     const recordFailure = (
@@ -144,8 +189,6 @@ function NewCustomerPage() {
         registrationNumber: wizardData.customer.registrationNumber,
         warrantyExpiryAlertOptOut: false,
       })
-      createdCustomerId = customer.id
-
       // Create contacts
       for (const contact of wizardData.contacts) {
         const label = `${contact.firstName} ${contact.lastName}`.trim() || contact.id
@@ -204,18 +247,22 @@ function NewCustomerPage() {
           description: remaining > 0 ? `${preview} • +${remaining} more` : preview,
         })
         navigate({ to: '/customers/$customerId/edit', params: { customerId: customer.id }, search: {} })
-        return
+        throw Object.assign(new Error(PARTIAL_CUSTOMER_CREATE_ERROR_MESSAGE), {
+          code: 'PARTIAL_RELATED_CREATE_FAILURE',
+          details: {
+            customerId: customer.id,
+            redirectingToEdit: true,
+            relatedCreateFailures: failures,
+          },
+        } satisfies Omit<RecoverableCustomerCreateError, 'name' | 'message'>)
       }
 
       toast.success('Customer created successfully')
       navigate({ to: '/customers/$customerId', params: { customerId: customer.id }, search: {} })
     } catch (error) {
-      logger.error('Failed to create customer', error as Error, { context: 'customers-new' })
-      if (createdCustomerId) {
-        throw error
-      }
-      toast.error('Failed to create customer')
-      throw error
+      const recoverableError = toRecoverableCustomerCreateError(error)
+      logger.error('Failed to create customer', recoverableError, { context: 'customers-new' })
+      throw recoverableError
     }
   }
 

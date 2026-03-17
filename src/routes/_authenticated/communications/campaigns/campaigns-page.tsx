@@ -11,7 +11,7 @@
  * @see docs/plans/2026-01-24-refactor-communications-full-container-presenter-plan.md
  */
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCampaigns,
@@ -25,6 +25,7 @@ import { CampaignsList, type CampaignListItem } from "@/components/domain/commun
 import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
 import { ErrorState } from "@/components/shared";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { transformCampaignsToListItems } from "@/lib/communications/campaign-utils";
 import type { Campaign } from "@/lib/schemas/communications";
 import { DomainFilterBar } from "@/components/shared/filters";
@@ -37,6 +38,7 @@ import { useTransformedFilterUrlState } from "@/hooks/filters/use-filter-url-sta
 import { queryKeys } from "@/lib/query-keys";
 import { Route, searchParamsSchema } from "./index";
 import type { z } from "zod";
+import { executeBulkAction, summarizeBulkFailures, type BulkActionFailure } from "@/lib/actions/bulk-action-results";
 
 type SearchParams = z.infer<typeof searchParamsSchema>;
 
@@ -71,6 +73,8 @@ export default function CampaignsPage() {
   // CONFIRMATION
   // ============================================================================
   const confirm = useConfirmation();
+  const [bulkFailures, setBulkFailures] = useState<BulkActionFailure[]>([]);
+  const [bulkFailedIds, setBulkFailedIds] = useState<string[] | undefined>();
 
   // ============================================================================
   // URL-SYNCED FILTER STATE
@@ -102,6 +106,10 @@ export default function CampaignsPage() {
     offset: (search.page - 1) * search.pageSize,
   });
 
+  const campaigns: CampaignListItem[] = transformCampaignsToListItems(
+    (campaignsData as { items?: Campaign[] } | undefined)?.items ?? []
+  );
+
   // ============================================================================
   // MUTATIONS
   // ============================================================================
@@ -131,14 +139,16 @@ export default function CampaignsPage() {
     async (id: string) => {
       try {
         await cancelMutation.mutateAsync({ id });
+        setBulkFailures([]);
+        setBulkFailedIds(undefined);
         toastSuccess("Campaign paused", {
           action: {
             label: "View campaign",
             onClick: () => handleView(id),
           },
         });
-      } catch {
-        toastError("Failed to pause campaign");
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to pause campaign");
       }
     },
     [cancelMutation, handleView]
@@ -154,14 +164,16 @@ export default function CampaignsPage() {
 
       try {
         await deleteMutation.mutateAsync({ id });
+        setBulkFailures([]);
+        setBulkFailedIds(undefined);
         toastSuccess("Campaign deleted", {
           action: {
             label: "Create new",
             onClick: handleCreate,
           },
         });
-      } catch {
-        toastError("Failed to delete campaign");
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to delete campaign");
       }
     },
     [confirm, deleteMutation, handleCreate]
@@ -175,14 +187,16 @@ export default function CampaignsPage() {
     async (id: string) => {
       try {
         const result = await duplicateMutation.mutateAsync({ id });
+        setBulkFailures([]);
+        setBulkFailedIds(undefined);
         toastSuccess("Campaign duplicated", {
           action: {
             label: "View campaign",
             onClick: () => handleView((result as { id: string }).id),
           },
         });
-      } catch {
-        toastError("Failed to duplicate campaign");
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to duplicate campaign");
       }
     },
     [duplicateMutation, handleView]
@@ -192,11 +206,13 @@ export default function CampaignsPage() {
     async (campaignId: string, testEmail: string) => {
       try {
         await testSendMutation.mutateAsync({ campaignId, testEmail });
+        setBulkFailures([]);
+        setBulkFailedIds(undefined);
         toastSuccess("Test email sent", {
           description: `Sent to ${testEmail}`,
         });
-      } catch {
-        toastError("Failed to send test email");
+      } catch (error) {
+        toastError(error instanceof Error ? error.message : "Failed to send test email");
       }
     },
     [testSendMutation]
@@ -210,82 +226,106 @@ export default function CampaignsPage() {
 
       if (!confirmed) return;
 
-      try {
-        const results = await Promise.allSettled(
-          ids.map((id) => deleteMutation.mutateAsync({ id }))
+      const result = await executeBulkAction({
+        items: ids,
+        getId: (id) => id,
+        getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
+        run: (id) => deleteMutation.mutateAsync({ id }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+
+      if (result.succeededIds.length > 0) {
+        toastSuccess(
+          `${result.succeededIds.length} campaign${result.succeededIds.length === 1 ? "" : "s"} deleted`
         );
-        const succeeded = results.filter((r) => r.status === "fulfilled").length;
-        const failed = results.filter((r) => r.status === "rejected").length;
-        
-        // Invalidate queries after bulk delete
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communications.campaigns(),
-        });
-        
-        if (failed > 0) {
-          toastError(`${succeeded} deleted, ${failed} failed`);
-        } else {
-          toastSuccess(`${ids.length} campaign${ids.length === 1 ? "" : "s"} deleted`);
-        }
-      } catch {
-        toastError("Failed to delete campaigns");
       }
+
+      if (result.failed.length > 0) {
+        setBulkFailures(result.failed);
+        setBulkFailedIds(result.failed.map((failure) => failure.id));
+        toastError(`${result.failed.length} campaign delete${result.failed.length === 1 ? "" : "s"} failed`, {
+          description: summarizeBulkFailures(result.failed),
+        });
+        return;
+      }
+
+      setBulkFailures([]);
+      setBulkFailedIds(undefined);
     },
-    [confirm, deleteMutation, queryClient]
+    [campaigns, confirm, deleteMutation, queryClient]
   );
 
   const handleBulkPause = useCallback(
     async (ids: string[]) => {
-      try {
-        const results = await Promise.allSettled(
-          ids.map((id) => cancelMutation.mutateAsync({ id }))
+      const result = await executeBulkAction({
+        items: ids,
+        getId: (id) => id,
+        getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
+        run: (id) => cancelMutation.mutateAsync({ id }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+
+      if (result.succeededIds.length > 0) {
+        toastSuccess(
+          `${result.succeededIds.length} campaign${result.succeededIds.length === 1 ? "" : "s"} paused`
         );
-        const succeeded = results.filter((r) => r.status === "fulfilled").length;
-        const failed = results.filter((r) => r.status === "rejected").length;
-        
-        // Invalidate queries after bulk pause
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communications.campaigns(),
-        });
-        
-        if (failed > 0) {
-          toastError(`${succeeded} paused, ${failed} failed`);
-        } else {
-          toastSuccess(`${ids.length} campaign${ids.length === 1 ? "" : "s"} paused`);
-        }
-      } catch {
-        toastError("Failed to pause campaigns");
       }
+
+      if (result.failed.length > 0) {
+        setBulkFailures(result.failed);
+        setBulkFailedIds(result.failed.map((failure) => failure.id));
+        toastError(`${result.failed.length} campaign pause${result.failed.length === 1 ? "" : "s"} failed`, {
+          description: summarizeBulkFailures(result.failed),
+        });
+        return;
+      }
+
+      setBulkFailures([]);
+      setBulkFailedIds(undefined);
     },
-    [cancelMutation, queryClient]
+    [campaigns, cancelMutation, queryClient]
   );
 
   const resumeMutation = useResumeCampaign();
 
   const handleBulkResume = useCallback(
     async (ids: string[]) => {
-      try {
-        const results = await Promise.allSettled(
-          ids.map((id) => resumeMutation.mutateAsync({ id }))
+      const result = await executeBulkAction({
+        items: ids,
+        getId: (id) => id,
+        getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
+        run: (id) => resumeMutation.mutateAsync({ id }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.communications.campaigns(),
+      });
+
+      if (result.succeededIds.length > 0) {
+        toastSuccess(
+          `${result.succeededIds.length} campaign${result.succeededIds.length === 1 ? "" : "s"} resumed`
         );
-        const succeeded = results.filter((r) => r.status === "fulfilled").length;
-        const failed = results.filter((r) => r.status === "rejected").length;
-        
-        // Invalidate queries after bulk resume
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communications.campaigns(),
-        });
-        
-        if (failed > 0) {
-          toastError(`${succeeded} resumed, ${failed} failed`);
-        } else {
-          toastSuccess(`${ids.length} campaign${ids.length === 1 ? "" : "s"} resumed`);
-        }
-      } catch {
-        toastError("Failed to resume campaigns");
       }
+
+      if (result.failed.length > 0) {
+        setBulkFailures(result.failed);
+        setBulkFailedIds(result.failed.map((failure) => failure.id));
+        toastError(`${result.failed.length} campaign resume${result.failed.length === 1 ? "" : "s"} failed`, {
+          description: summarizeBulkFailures(result.failed),
+        });
+        return;
+      }
+
+      setBulkFailures([]);
+      setBulkFailedIds(undefined);
     },
-    [resumeMutation, queryClient]
+    [campaigns, resumeMutation, queryClient]
   );
 
   // ============================================================================
@@ -304,13 +344,27 @@ export default function CampaignsPage() {
   // ============================================================================
   // RENDER
   // ============================================================================
-  // Transform server response to CampaignListItem format using utility function
-  const campaigns: CampaignListItem[] = transformCampaignsToListItems(
-    (campaignsData as { items?: Campaign[] } | undefined)?.items ?? []
-  );
-
   return (
     <div className="space-y-4">
+      {bulkFailures.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTitle>
+            {bulkFailures.length} campaign bulk failure{bulkFailures.length > 1 ? "s" : ""}
+          </AlertTitle>
+          <AlertDescription>
+            <div className="space-y-1">
+              {bulkFailures.slice(0, 5).map((failure) => (
+                <div key={failure.id}>
+                  {failure.label}: {failure.message}
+                </div>
+              ))}
+              {bulkFailures.length > 5 && (
+                <div>...and {bulkFailures.length - 5} more.</div>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       <DomainFilterBar
         config={CAMPAIGN_FILTER_CONFIG}
         filters={filters}
@@ -336,6 +390,7 @@ export default function CampaignsPage() {
         isBulkDeleting={deleteMutation.isPending}
         isBulkPausing={cancelMutation.isPending}
         isBulkResuming={resumeMutation.isPending}
+        selectedIdsOverride={bulkFailedIds}
       />
     </div>
   );

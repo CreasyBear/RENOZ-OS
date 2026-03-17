@@ -6,12 +6,13 @@
 
 import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { initiateOAuthFlow } from '@/lib/oauth/flow';
+import type { OAuthProvider, OAuthServiceType } from '@/lib/oauth/constants';
 
 export interface InitiateOAuthFlowRequest {
   organizationId: string;
   userId: string;
-  provider: 'google_workspace' | 'microsoft_365';
-  services: ('calendar' | 'email' | 'contacts')[];
+  provider: OAuthProvider;
+  services: OAuthServiceType[];
   redirectUrl: string;
 }
 
@@ -60,10 +61,10 @@ export async function initiateOAuth(
     }
 
     // Validate provider
-    if (!['google_workspace', 'microsoft_365'].includes(request.provider)) {
+    if (!['google_workspace', 'microsoft_365', 'xero'].includes(request.provider)) {
       return {
         success: false,
-        error: 'Invalid provider: Must be google_workspace or microsoft_365',
+        error: 'Invalid provider: Must be google_workspace, microsoft_365, or xero',
       };
     }
 

@@ -464,10 +464,10 @@ export const bulkDeleteScheduledReports = createServerFn({ method: 'POST' })
 
 /**
  * Generate an on-demand report with specified metrics and date range.
- * Returns a URL to the generated report file.
+ * Renders the requested artifact inline, uploads it, and returns a signed URL.
  *
- * Note: Actual PDF/HTML generation will be handled by background jobs.
- * This function creates a placeholder response for the API contract.
+ * Deferred work in this area is limited to optional report enrichment such as
+ * richer chart/trend sections in background-generated report variants.
  */
 export const generateReport = createServerFn({ method: 'POST' })
   .inputValidator(generateReportSchema)
@@ -581,9 +581,12 @@ export const generateReport = createServerFn({ method: 'POST' })
     });
 
     return {
+      status: 'completed',
       reportUrl: signed.signedUrl,
+      filename,
       expiresAt: signed.expiresAt,
       format: data.format,
+      generatedAt: new Date(),
     };
   });
 

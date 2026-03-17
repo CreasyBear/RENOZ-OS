@@ -176,6 +176,13 @@
       "when": 1771382308931,
       "tag": "0024_drop_po_items_line_total_calc",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771996800000,
+      "tag": "0027_xero_foundation_hardening",
+      "breakpoints": true
     }
   ]
 }

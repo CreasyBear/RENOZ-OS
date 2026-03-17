@@ -2,7 +2,7 @@
 /**
  * Deploy with rollout guardrails (Release Gates A + B)
  *
- * 1. Run unit tests (redirect graph, auth policy)
+ * 1. Run focused hardening regressions
  * 2. Build fresh artifacts
  * 3. Deploy to production
  * 4. Run post-deploy probes
@@ -36,13 +36,7 @@ async function main() {
   const skipProbe = process.argv.includes('--skip-probe');
 
   console.log('--- Release Gate A: Tests ---');
-  await run('npx', [
-    'vitest',
-    'run',
-    'tests/unit/auth',
-    'tests/unit/routes',
-    'tests/unit/build-asset-paths.test.ts',
-  ]);
+  await run('npm', ['run', 'test:release-hardening']);
 
   console.log('--- Release Gate A: Reliability Gates ---');
   await run('node', ['scripts/run-release-gates.mjs']);

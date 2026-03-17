@@ -57,6 +57,14 @@ export interface TaskResult {
     type: string;
     id: string;
     url?: string;
+    metadata?: {
+      reportKind?: string;
+      status?: string;
+      fileName?: string;
+      createdAt?: string;
+      completedAt?: string;
+      [key: string]: unknown;
+    };
   }>;
   summary?: string;
 }

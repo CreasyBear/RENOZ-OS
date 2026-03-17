@@ -15,8 +15,11 @@ export {
   useAIPendingApprovalsCount,
   useApproveAction,
   useRejectAction,
+  useUpdateAIEmailDraft,
   type AIApproval,
   type AIApprovalsResponse,
+  type UpdateAIEmailDraftInput,
+  type UpdateAIEmailDraftResponse,
   type UseAIApprovalsOptions,
 } from './use-ai-approvals';
 

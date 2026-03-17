@@ -10,6 +10,7 @@ import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { and, eq, lt, sql } from 'drizzle-orm';
 import { oauthStates, type OAuthState as OAuthStateRecord } from 'drizzle/schema/oauth';
 import { decryptOAuthState, type OAuthStatePayload } from './token-encryption';
+import type { OAuthProvider, OAuthServiceType } from './constants';
 
 // ============================================================================
 // TYPES
@@ -26,8 +27,8 @@ export interface PersistentOAuthState {
   id: string;
   organizationId: string;
   userId: string;
-  provider: 'google_workspace' | 'microsoft_365';
-  services: ('calendar' | 'email' | 'contacts')[];
+  provider: OAuthProvider;
+  services: OAuthServiceType[];
   redirectUrl: string;
   encryptedState: string;
   pkceVerifier?: string;
@@ -136,8 +137,8 @@ export async function createPersistentOAuthState(
   params: {
     organizationId: string;
     userId: string;
-    provider: 'google_workspace' | 'microsoft_365';
-    services: ('calendar' | 'email' | 'contacts')[];
+    provider: OAuthProvider;
+    services: OAuthServiceType[];
     redirectUrl: string;
     encryptedState: string;
     pkceVerifier?: string;
@@ -220,7 +221,14 @@ export async function updatePersistentOAuthState(
   db: OAuthDatabase,
   stateId: string,
   updates: {
-    status?: 'pending' | 'active' | 'completed' | 'failed' | 'expired' | 'consumed';
+    status?:
+      | 'pending'
+      | 'active'
+      | 'completed'
+      | 'failed'
+      | 'expired'
+      | 'consumed'
+      | 'selection_required';
     metadata?: Record<string, unknown>;
   }
 ): Promise<PersistentOAuthState | null> {

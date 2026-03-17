@@ -104,14 +104,14 @@ export default function GroupDetailPageContainer() {
   }, [updateMemberRoleMutation]);
 
   const handleRemoveMember = useCallback(async (memberGroupId: string, memberUserId: string, memberName: string) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Remove Member',
       description: `Are you sure you want to remove ${memberName} from this group?`,
       confirmLabel: 'Remove Member',
       variant: 'destructive',
     });
 
-    if (!confirmed.confirmed) return;
+    if (!confirmed) return;
 
     try {
       await removeMemberMutation.mutateAsync({

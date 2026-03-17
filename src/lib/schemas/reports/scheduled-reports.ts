@@ -225,9 +225,12 @@ export const generateReportSchema = z.object({
 export type GenerateReportInput = z.infer<typeof generateReportSchema>;
 
 export const generateReportResponseSchema = z.object({
+  status: z.enum(['completed']),
   reportUrl: z.string().url(),
+  filename: z.string(),
   expiresAt: z.coerce.date(),
   format: reportFormatSchema,
+  generatedAt: z.coerce.date(),
 });
 
 export type GenerateReportResponse = z.infer<typeof generateReportResponseSchema>;

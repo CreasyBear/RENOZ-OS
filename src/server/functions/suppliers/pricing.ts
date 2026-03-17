@@ -7,7 +7,6 @@
  * @see drizzle/schema/suppliers/pricing.ts (when created)
  * @see src/lib/schemas/suppliers.ts
  */
-import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, ilike, desc, asc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -32,6 +31,7 @@ import {
   type UpdatePriceAgreementInput,
 } from "@/lib/schemas/suppliers";
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from "@/lib/db/pagination";
+import { calculateEffectivePrice, findExistingPriceList, resolveProductIdentity } from "./price-resolution";
 
 type PriceDiscountType = 'percentage' | 'fixed' | 'volume' | 'none';
 
@@ -164,43 +164,75 @@ export const createPriceList = createServerFn({ method: "POST" })
   .handler(async ({ data }: { data: CreatePriceListInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
-    // Calculate effective price based on discount
-    let effectivePrice = Number(data.basePrice);
-    if (data.discountType === "percentage") {
-      effectivePrice = Number(data.basePrice) * (1 - Number(data.discountValue ?? 0) / 100);
-    } else if (data.discountType === "fixed") {
-      effectivePrice = Number(data.basePrice) - Number(data.discountValue ?? 0);
-    } else if (data.discountType === "volume") {
-      // Volume discount requires min order qty and is applied at order level
-      effectivePrice = Number(data.basePrice);
+    const productResolution = await resolveProductIdentity({
+      organizationId: ctx.organizationId,
+      productId: data.productId ?? null,
+      productSku: data.productSku ?? null,
+      productName: data.productName,
+    });
+
+    if (productResolution.status !== "resolved" || !productResolution.productId) {
+      throw new NotFoundError(
+        productResolution.message ?? "Product could not be resolved for the price list",
+        "product"
+      );
     }
 
-    // productId is required in the DB schema - generate a placeholder UUID if not provided
-    // In production, this should either be required in the input or looked up from productSku
-    const productId = data.productId ?? randomUUID();
+    const effectiveDate = data.effectiveDate ?? new Date().toISOString().split('T')[0];
+    const effectivePrice = calculateEffectivePrice({
+      basePrice: Number(data.basePrice),
+      discountType: data.discountType,
+      discountValue: Number(data.discountValue ?? 0),
+    });
+    const existingPrice = await findExistingPriceList({
+      organizationId: ctx.organizationId,
+      supplierId: data.supplierId,
+      productId: productResolution.productId,
+      effectiveDate,
+    });
 
-    const [result] = await db
-      .insert(priceLists)
-      .values({
-        organizationId: ctx.organizationId,
-        supplierId: data.supplierId,
-        productId,
-        productName: data.productName ?? "",
-        productSku: data.productSku ?? "",
-        basePrice: data.basePrice, // numericCasted accepts number directly
-        currency: data.currency ?? "AUD",
-        discountType: data.discountType ?? "none",
-        discountValue: data.discountValue ?? 0, // numericCasted accepts number directly
-        effectivePrice: effectivePrice, // numericCasted accepts number directly
-        minOrderQty: data.minOrderQty ?? data.minimumOrderQty,
-        maxOrderQty: data.maxOrderQty,
-        effectiveDate: data.effectiveDate ?? new Date().toISOString().split('T')[0],
-        expiryDate: data.expiryDate ?? null,
-        status: "active",
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      })
-      .returning();
+    const priceValues = {
+      organizationId: ctx.organizationId,
+      supplierId: data.supplierId,
+      productId: productResolution.productId,
+      productName: productResolution.productName ?? data.productName ?? "",
+      productSku: productResolution.productSku ?? data.productSku ?? "",
+      basePrice: data.basePrice,
+      price: data.basePrice,
+      currency: data.currency ?? "AUD",
+      discountType: data.discountType ?? "none",
+      discountValue: data.discountValue ?? 0,
+      effectivePrice,
+      minOrderQty: data.minOrderQty ?? data.minimumOrderQty,
+      maxOrderQty: data.maxOrderQty,
+      effectiveDate,
+      expiryDate: data.expiryDate ?? null,
+      status: "active",
+      isActive: true,
+      lastUpdated: new Date(),
+      notes: data.notes ?? null,
+      createdBy: ctx.user.id,
+      updatedBy: ctx.user.id,
+    };
+
+    let result;
+    if (existingPrice) {
+      [result] = await db
+        .update(priceLists)
+        .set({
+          ...priceValues,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(priceLists.id, existingPrice.id),
+            eq(priceLists.organizationId, ctx.organizationId)
+          )
+        )
+        .returning();
+    } else {
+      [result] = await db.insert(priceLists).values(priceValues).returning();
+    }
 
     return result;
   });

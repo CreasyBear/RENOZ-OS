@@ -154,7 +154,7 @@ export function InboxDetail({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Reply</p>
+                <p>Reply in email app</p>
               </TooltipContent>
             </Tooltip>
 
@@ -170,7 +170,7 @@ export function InboxDetail({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Forward</p>
+                <p>Forward in email app</p>
               </TooltipContent>
             </Tooltip>
 
@@ -219,11 +219,11 @@ export function InboxDetail({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onReply?.(email.id)}>
                 <Reply className="h-4 w-4 mr-2" />
-                <span>Reply</span>
+                <span>Reply in email app</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onForward?.(email.id)}>
                 <Send className="h-4 w-4 mr-2" />
-                <span>Forward</span>
+                <span>Forward in email app</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {!email.read && onMarkAsRead && (

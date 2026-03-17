@@ -163,6 +163,9 @@ export function Inbox({
       `> ${quotedBody.replace(/\n/g, "\n> ")}`,
     ].join("\n");
 
+    toast.info("Opening your email app", {
+      description: "Reply is handled in your connected desktop or browser mail client.",
+    });
     openMailto(email.from.email, replySubject, body);
   }, [items, openMailto]);
 
@@ -187,6 +190,9 @@ export function Inbox({
       forwardedBody,
     ].join("\n");
 
+    toast.info("Opening your email app", {
+      description: "Forward is handled in your connected desktop or browser mail client.",
+    });
     openMailto("", forwardSubject, body);
   }, [items, openMailto]);
 
@@ -214,7 +220,7 @@ export function Inbox({
         e.preventDefault();
         handlePrevious();
       }
-      // r = reply, f = forward, a = archive, d = delete
+      // r = reply in email app, f = forward in email app, a = archive, d = delete
       else if (selectedEmail) {
         if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
           e.preventDefault();

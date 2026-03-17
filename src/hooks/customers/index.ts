@@ -10,15 +10,22 @@ export {
   useCustomer,
   useCustomerTags,
   useCustomerSearch,
+  useCustomerLookup,
   useCustomersInfinite,
   useCreateCustomer,
   useUpdateCustomer,
   useDeleteCustomer,
   useBulkDeleteCustomers,
   useBulkUpdateCustomers,
+  useBulkAssignCustomerTags,
   useBulkUpdateHealthScores,
   useDeleteCustomerTag,
   usePrefetchCustomer,
+  useCustomerXeroMapping,
+  useSearchCustomerXeroContacts,
+  useCreateCustomerXeroContact,
+  useLinkCustomerXeroContact,
+  useUnlinkCustomerXeroContact,
 } from './use-customers';
 export type { CustomerFilters } from '@/lib/query-keys';
 

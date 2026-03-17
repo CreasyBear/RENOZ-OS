@@ -10,6 +10,7 @@
  */
 
 import crypto from 'node:crypto';
+import { OAUTH_PROVIDERS, OAUTH_SERVICE_TYPES, type OAuthProvider, type OAuthServiceType } from './constants';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
@@ -135,8 +136,8 @@ export function decryptOAuthToken(encryptedPayload: string, organizationId: stri
 export interface OAuthStatePayload {
   organizationId: string;
   userId: string;
-  provider: 'google_workspace' | 'microsoft_365';
-  services: ('calendar' | 'email' | 'contacts')[];
+  provider: OAuthProvider;
+  services: OAuthServiceType[];
   redirectUrl: string;
   timestamp: number;
   nonce: string;
@@ -166,8 +167,9 @@ export function decryptOAuthState(
     if (
       typeof parsed.organizationId !== 'string' ||
       typeof parsed.userId !== 'string' ||
-      !['google_workspace', 'microsoft_365'].includes(parsed.provider) ||
+      !OAUTH_PROVIDERS.includes(parsed.provider) ||
       !Array.isArray(parsed.services) ||
+      !parsed.services.every((service: unknown) => OAUTH_SERVICE_TYPES.includes(service as OAuthServiceType)) ||
       typeof parsed.redirectUrl !== 'string' ||
       typeof parsed.timestamp !== 'number' ||
       typeof parsed.nonce !== 'string'

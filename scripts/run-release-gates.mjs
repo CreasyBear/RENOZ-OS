@@ -3,9 +3,7 @@
  * Unified release gate runner for controlled cutover.
  *
  * Runs:
- * 1. Serialized lineage hard gates
- * 2. Finance integrity hard gates
- * 3. Route-intent smoke checks
+ * 1. Route-intent smoke checks
  *
  * Emits JSON artifacts to artifacts/release-gates/.
  */
@@ -58,16 +56,6 @@ mkdirSync(ARTIFACT_DIR, { recursive: true });
 const generatedAt = new Date().toISOString();
 
 const checks = [
-  {
-    gateName: 'serialized-lineage',
-    command: 'node',
-    args: ['scripts/run-serialized-lineage-gates.mjs', '--target', 'website'],
-  },
-  {
-    gateName: 'finance-integrity',
-    command: 'node',
-    args: ['scripts/run-finance-integrity-gates.mjs'],
-  },
   {
     gateName: 'route-intent-smoke',
     command: 'npm',

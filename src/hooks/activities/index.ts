@@ -16,6 +16,7 @@ export {
   useCanLoadMore,
   useInvalidateActivities,
   useLogEntityActivity,
+  useRequestActivityExport,
 } from './use-activities';
 
 export { useEntityActivityLogging } from './use-entity-activity-logging';
@@ -37,6 +38,8 @@ export type {
   ActivityEntityType,
   ActivityStatsQuery,
   LogEntityActivityInput,
+  ActivityExportRequest,
+  ActivityExportResponse,
 } from '@/lib/schemas/activities';
 
 export type { UseActivityFeedOptions } from './use-activities';

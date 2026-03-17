@@ -12,6 +12,7 @@ import {
   useScheduleEmail,
   useUpdateScheduledEmail,
 } from "@/hooks/communications/use-scheduled-emails";
+import { useTemplates } from "@/hooks/communications/use-templates";
 import { addHours } from "date-fns";
 import { Send, Calendar, Clock, Loader2 } from "lucide-react";
 import {
@@ -38,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/lib/toast";
 import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { DateTimePicker } from "../date-time-picker";
@@ -84,6 +86,8 @@ export function ScheduleEmailDialog({
   const scheduleEmailMutation = useScheduleEmail();
   const updateEmailMutation = useUpdateScheduledEmail();
   const isEditing = !!initialData?.id;
+  const { data: templatesData } = useTemplates({ activeOnly: true });
+  const templates = templatesData ?? [];
 
   // Form state
   const [recipientEmail, setRecipientEmail] = useState(
@@ -108,9 +112,16 @@ export function ScheduleEmailDialog({
   const [signatureId, setSignatureId] = useState<string | undefined>(
     initialData?.templateData?.signatureId
   );
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(
+    initialData?.templateData?.templateId ?? defaultTemplate?.templateId
+  );
   const [signatureContent, setSignatureContent] = useState<string>(
     initialData?.templateData?.signatureContent ?? ""
   );
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const hasLoadedTemplates = templatesData !== undefined;
+  const hasInvalidTemplate = Boolean(selectedTemplateId && hasLoadedTemplates && !selectedTemplate);
 
   // Handle signature selection
   const handleSignatureChange = useCallback(
@@ -125,6 +136,7 @@ export function ScheduleEmailDialog({
   useEffect(() => {
     if (open) {
       startTransition(() => {
+        setSubmitError(null);
         setRecipientEmail(initialData?.recipientEmail ?? defaultRecipient?.email ?? "");
         setRecipientName(initialData?.recipientName ?? defaultRecipient?.name ?? "");
         setSubject(initialData?.subject ?? defaultTemplate?.subject ?? "");
@@ -140,6 +152,9 @@ export function ScheduleEmailDialog({
         );
         setScheduledAt(initialData?.scheduledAt ?? addHours(new Date(), 1));
         setTimezone(initialData?.timezone ?? getLocalTimezone());
+        setSelectedTemplateId(
+          initialData?.templateData?.templateId ?? defaultTemplate?.templateId
+        );
         setSignatureId(initialData?.templateData?.signatureId);
         setSignatureContent(initialData?.templateData?.signatureContent ?? "");
       });
@@ -150,10 +165,24 @@ export function ScheduleEmailDialog({
     if (!scheduledAt) {
       throw new Error("Please select a date and time");
     }
+    if (hasInvalidTemplate) {
+      throw new Error("The selected saved template is no longer available. Choose another template or detach it before saving.");
+    }
 
     const templateData: Record<string, unknown> = {};
+    if (selectedTemplateId) {
+      templateData.templateId = selectedTemplateId;
+      if (selectedTemplate?.version) {
+        templateData.templateVersion = selectedTemplate.version;
+      }
+    }
     if (templateType === "custom" && bodyOverride) {
       templateData.bodyOverride = bodyOverride;
+    }
+    if (selectedTemplate) {
+      templateData.previewText = `Saved template: ${selectedTemplate.name}`;
+    } else if (bodyOverride) {
+      templateData.previewText = bodyOverride.replace(/<[^>]+>/g, "").trim().slice(0, 160);
     }
     if (signatureId) {
       templateData.signatureId = signatureId;
@@ -172,50 +201,20 @@ export function ScheduleEmailDialog({
     };
 
     if (isEditing && initialData?.id) {
-      updateEmailMutation.mutate(
-        {
-          id: initialData.id,
-          ...payload,
-        },
-        {
-          onSuccess: () => {
-            toast.success("Email updated", {
-              description: "The scheduled email has been updated.",
-            });
-            onOpenChange(false);
-            onSuccess?.();
-          },
-          onError: (error) => {
-            toast.error("Failed to update email", {
-              description: getUserFriendlyMessage(error as Error),
-            });
-          },
-        }
-      );
-      return;
+      return updateEmailMutation.mutateAsync({
+        id: initialData.id,
+        ...payload,
+      });
     }
 
-    scheduleEmailMutation.mutate(
-      payload,
-      {
-        onSuccess: () => {
-          toast.success("Email scheduled", {
-            description: "Your email has been scheduled for delivery.",
-          });
-          onOpenChange(false);
-          onSuccess?.();
-        },
-        onError: (error) => {
-          toast.error("Failed to schedule email", {
-            description: getUserFriendlyMessage(error as Error),
-          });
-        },
-      }
-    );
+    return scheduleEmailMutation.mutateAsync(payload);
   }, [
     scheduledAt,
     templateType,
     bodyOverride,
+    selectedTemplateId,
+    selectedTemplate,
+    hasInvalidTemplate,
     signatureId,
     signatureContent,
     recipientEmail,
@@ -226,8 +225,6 @@ export function ScheduleEmailDialog({
     defaultCustomerId,
     isEditing,
     initialData,
-    onOpenChange,
-    onSuccess,
     updateEmailMutation,
     scheduleEmailMutation,
   ]);
@@ -254,12 +251,23 @@ export function ScheduleEmailDialog({
         return;
       }
 
+      setSubmitError(null);
       try {
-        submitScheduledEmail();
+        Promise.resolve(submitScheduledEmail())
+          .then(() => {
+            toast.success(isEditing ? "Email updated" : "Email scheduled", {
+              description: isEditing
+                ? "The scheduled email has been updated."
+                : "Your email has been scheduled for delivery.",
+            });
+            onOpenChange(false);
+            onSuccess?.();
+          })
+          .catch((error) => {
+            setSubmitError(getUserFriendlyMessage(error as Error));
+          });
       } catch (error) {
-        toast.error(isEditing ? "Failed to update email" : "Failed to schedule email", {
-          description: getUserFriendlyMessage(error as Error),
-        });
+        setSubmitError(getUserFriendlyMessage(error as Error));
       }
     },
     [
@@ -268,6 +276,8 @@ export function ScheduleEmailDialog({
       scheduledAt,
       submitScheduledEmail,
       isEditing,
+      onOpenChange,
+      onSuccess,
     ]
   );
 
@@ -297,6 +307,12 @@ export function ScheduleEmailDialog({
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {submitError && (
+              <Alert variant="destructive">
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            )}
+
             {/* Recipient */}
             <div className="grid gap-2">
               <Label htmlFor="recipient-email">Recipient Email</Label>
@@ -327,7 +343,7 @@ export function ScheduleEmailDialog({
 
             {/* Email Content */}
             <div className="grid gap-2">
-              <Label htmlFor="template-type">Template</Label>
+              <Label htmlFor="template-type">Fallback Template</Label>
               <Select
                 value={templateType}
                 onValueChange={(v) => setTemplateType(v as TemplateType)}
@@ -344,7 +360,53 @@ export function ScheduleEmailDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Used when no saved template is attached.
+              </p>
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="saved-template">Saved Template</Label>
+              <Select
+                value={selectedTemplateId ?? "__none__"}
+                onValueChange={(value) => {
+                  const nextTemplateId = value === "__none__" ? undefined : value;
+                  const nextTemplate = templates.find((template) => template.id === nextTemplateId);
+                  setSubmitError(null);
+                  setSelectedTemplateId(nextTemplateId);
+                  if (nextTemplate) {
+                    setSubject(nextTemplate.subject);
+                    setBodyOverride("");
+                  } else if (templateType === "custom") {
+                    setBodyOverride("");
+                  }
+                }}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger id="saved-template">
+                  <SelectValue placeholder="No saved template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No saved template</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Saved templates render through the shared outbound pipeline and stay consistent with preview and delivery.
+              </p>
+            </div>
+
+            {hasInvalidTemplate && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  This saved template is no longer available. Choose another template or detach it before saving.
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="grid gap-2">
               <Label htmlFor="subject">Subject</Label>
@@ -359,7 +421,7 @@ export function ScheduleEmailDialog({
               />
             </div>
 
-            {templateType === "custom" && (
+            {templateType === "custom" && !selectedTemplateId && (
               <div className="grid gap-2">
                 <Label htmlFor="body">Body</Label>
                 <Textarea
@@ -370,6 +432,20 @@ export function ScheduleEmailDialog({
                   rows={4}
                   disabled={isSubmitting}
                 />
+              </div>
+            )}
+
+            {selectedTemplateId && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <div>
+                  Template source: <span className="font-medium">{selectedTemplate?.name ?? "Unavailable saved template"}</span>
+                </div>
+                <div>
+                  Subject source: <span className="font-medium">{subject || selectedTemplate?.subject || "Unset"}</span>
+                </div>
+                <div>
+                  Signature: <span className="font-medium">{signatureId ? "Attached" : "None"}</span>
+                </div>
               </div>
             )}
 

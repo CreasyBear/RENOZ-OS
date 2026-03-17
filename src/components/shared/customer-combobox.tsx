@@ -9,8 +9,7 @@
 
 import { useCallback } from 'react';
 import { EntityCombobox } from '@/components/shared/entity-combobox';
-import { useServerFn } from '@tanstack/react-start';
-import { getCustomers } from '@/server/customers';
+import { useCustomerLookup } from '@/hooks/customers';
 import type { Customer } from '@/lib/schemas/customers';
 import { normalizeCustomerForCombobox } from '@/lib/schemas/customers/normalize';
 
@@ -37,23 +36,21 @@ export function CustomerCombobox({
   disabled,
   className,
 }: CustomerComboboxProps) {
-  const getCustomersFn = useServerFn(getCustomers);
+  const lookupCustomers = useCustomerLookup();
 
   const searchCustomers = useCallback(
     async (query: string): Promise<Customer[]> => {
-      const result = await getCustomersFn({
-        data: {
-          search: query,
-          status: 'active',
-          page: 1,
-          pageSize: 20,
-        },
+      const result = await lookupCustomers({
+        search: query,
+        status: 'active',
+        page: 1,
+        pageSize: 20,
       });
       return (result.items ?? []).map((item) =>
         normalizeCustomerForCombobox(item) as Customer
       );
     },
-    [getCustomersFn]
+    [lookupCustomers]
   );
 
   return (

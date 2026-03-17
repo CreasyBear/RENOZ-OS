@@ -23,10 +23,10 @@ export const oauthSyncStates = pgTable(
       .notNull()
       .references(() => oauthConnections.id, { onDelete: 'cascade' }),
     provider: text('provider', {
-      enum: ['google_workspace', 'microsoft_365'],
+      enum: ['google_workspace', 'microsoft_365', 'xero'],
     }).notNull(),
     serviceType: text('service_type', {
-      enum: ['calendar', 'email', 'contacts'],
+      enum: ['calendar', 'email', 'contacts', 'accounting'],
     }).notNull(),
     syncToken: text('sync_token'),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull(),

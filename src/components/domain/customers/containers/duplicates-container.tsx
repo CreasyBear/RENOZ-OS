@@ -13,6 +13,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useCustomerNavigation } from '@/hooks/customers';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -40,6 +41,8 @@ export function DuplicatesContainer({
   initialTab = 'detection',
   className,
 }: DuplicatesContainerProps) {
+  const undoUnavailableReason =
+    'Undo merge is not available yet. Merge history is preserved for audit review while recovery support is being implemented.';
   const { navigateToCustomer } = useCustomerNavigation();
   const [activeTab, setActiveTab] = useState<'detection' | 'history'>(initialTab);
   const [scanThreshold, setScanThreshold] = useState(0.4);
@@ -159,8 +162,12 @@ export function DuplicatesContainer({
               history={history.data?.history}
               isLoading={history.isLoading}
               onViewCustomer={handleViewCustomer}
+              canUndo={false}
+              undoUnavailableReason={undoUnavailableReason}
               onUndo={() => {
-                // TODO: Implement undo in production
+                toast.warning('Undo merge unavailable', {
+                  description: undoUnavailableReason,
+                });
               }}
             />
           )}

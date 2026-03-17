@@ -527,13 +527,16 @@ export const activityExportRequestSchema = z.object({
 export type ActivityExportRequest = z.infer<typeof activityExportRequestSchema>;
 
 /**
- * Export job response.
+ * Direct activity export response.
  */
 export const activityExportResponseSchema = z.object({
-  jobId: z.string().uuid(),
-  status: z.enum(['pending', 'processing', 'completed', 'failed']),
-  downloadUrl: z.string().url().optional(),
-  expiresAt: z.coerce.date().optional(),
+  status: z.enum(['completed']),
+  downloadUrl: z.string().url(),
+  filename: z.string(),
+  expiresAt: z.coerce.date(),
+  format: exportFormatSchema,
+  generatedAt: z.coerce.date(),
+  recordCount: z.number().int().nonnegative(),
 });
 
 export type ActivityExportResponse = z.infer<typeof activityExportResponseSchema>;

@@ -34,9 +34,9 @@ export const oauthStates = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
 
     provider: text('provider', {
-      enum: ['google_workspace', 'microsoft_365'],
+      enum: ['google_workspace', 'microsoft_365', 'xero'],
     }).notNull(),
-    services: jsonb('services').$type<('calendar' | 'email' | 'contacts')[]>().notNull(),
+    services: jsonb('services').$type<('calendar' | 'email' | 'contacts' | 'accounting')[]>().notNull(),
 
     redirectUrl: text('redirect_url').notNull(),
     state: text('state').notNull(),

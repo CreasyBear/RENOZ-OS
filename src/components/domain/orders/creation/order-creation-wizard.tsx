@@ -329,7 +329,7 @@ const StepPricing = memo(function StepPricing({ form }: StepPricingProps) {
                     field={field}
                     label="Fixed Discount ($)"
                     min={0}
-                    step={1}
+                    step={0.01}
                   />
                 )}
               </form.Field>
@@ -480,7 +480,8 @@ const StepShipping = memo(function StepShipping({ form }: StepShippingProps) {
                 field={field}
                 label="Shipping Amount"
                 min={0}
-                step={1}
+                step={0.01}
+                placeholder="0.00"
               />
             )}
           </form.Field>

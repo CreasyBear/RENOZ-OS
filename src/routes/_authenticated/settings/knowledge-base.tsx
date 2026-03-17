@@ -89,14 +89,14 @@ function KnowledgeBaseSettingsPage() {
         ? `${impactedCount} article${impactedCount === 1 ? '' : 's'} will be moved to the parent category.`
         : 'No articles are currently assigned to this category.';
 
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Delete Category',
       description: `Are you sure you want to delete this category? ${impactMessage}`,
       confirmLabel: 'Delete Category',
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         const result = await deleteCategoryMutation.mutateAsync(category.id);
         toast.success(result.message ?? 'Category deleted successfully');

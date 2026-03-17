@@ -16,7 +16,9 @@ import {
   timestamp,
   index,
   integer,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import {
   timestampColumns,
@@ -46,10 +48,10 @@ export const oauthConnections = pgTable(
 
     // OAuth provider and account details
     provider: text('provider', {
-      enum: ['google_workspace', 'microsoft_365'],
+      enum: ['google_workspace', 'microsoft_365', 'xero'],
     }).notNull(),
     serviceType: text('service_type', {
-      enum: ['calendar', 'email', 'contacts'],
+      enum: ['calendar', 'email', 'contacts', 'accounting'],
     }).notNull(),
     externalAccountId: text('external_account_id'), // Provider's account ID
 
@@ -77,6 +79,18 @@ export const oauthConnections = pgTable(
       table.userId,
       table.provider,
       table.serviceType
+    ),
+    orgActiveXeroAccountingUnique: uniqueIndex('uq_oauth_connections_active_xero_accounting_org').on(
+      table.organizationId,
+      table.provider,
+      table.serviceType
+    ).where(
+      sql`${table.isActive} = true and ${table.provider} = 'xero' and ${table.serviceType} = 'accounting'`
+    ),
+    activeXeroTenantUnique: uniqueIndex('uq_oauth_connections_active_xero_tenant').on(
+      table.externalAccountId
+    ).where(
+      sql`${table.isActive} = true and ${table.provider} = 'xero' and ${table.serviceType} = 'accounting' and ${table.externalAccountId} IS NOT NULL`
     ),
     // Performance indexes for sync operations
     lastSyncedIdx: index('idx_oauth_connections_last_synced').on(table.lastSyncedAt),
@@ -106,7 +120,7 @@ export const oauthSyncLogs = pgTable(
 
     // Sync operation details
     serviceType: text('service_type', {
-      enum: ['calendar', 'email', 'contacts'],
+      enum: ['calendar', 'email', 'contacts', 'accounting'],
     }).notNull(),
     operation: text('operation').notNull(),
     status: text('status').notNull(),
@@ -164,7 +178,7 @@ export const oauthServicePermissions = pgTable(
 
     // Permission details
     serviceType: text('service_type', {
-      enum: ['calendar', 'email', 'contacts'],
+      enum: ['calendar', 'email', 'contacts', 'accounting'],
     }).notNull(),
     scope: text('scope').notNull(), // OAuth scope value
 

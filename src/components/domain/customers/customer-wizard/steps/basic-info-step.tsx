@@ -17,12 +17,14 @@ import {
   SelectField,
   CheckboxField,
   MultiComboboxField,
+  SimpleError,
 } from '@/components/shared/forms';
 import {
   customerStatusValues,
   customerTypeValues,
   customerSizeValues,
 } from '@/lib/schemas/customers';
+import type { CustomerWizardValues } from '@/lib/schemas/customers';
 import { type BasicInfoStepProps, statusLabels, typeLabels, sizeLabels } from '../types';
 
 const typeOptions = customerTypeValues.map((type) => ({
@@ -40,7 +42,13 @@ const sizeOptions = customerSizeValues.map((size) => ({
   label: sizeLabels[size],
 }));
 
-export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
+export function BasicInfoStep({
+  form,
+  availableTags,
+  serverFieldErrors = {},
+}: BasicInfoStepProps & {
+  serverFieldErrors?: Partial<Record<keyof CustomerWizardValues, string>>
+}) {
   const tagOptions = (availableTags ?? []).map((t) => ({ value: t.name, label: t.name }));
 
   return (
@@ -150,11 +158,14 @@ export function BasicInfoStep({ form, availableTags }: BasicInfoStepProps) {
         <CardContent className="space-y-4">
           <form.Field name="email">
             {(field) => (
-              <EmailField
-                field={field}
-                label="Email"
-                placeholder="info@company.com"
-              />
+              <div className="space-y-2">
+                <EmailField
+                  field={field}
+                  label="Email"
+                  placeholder="info@company.com"
+                />
+                <SimpleError message={serverFieldErrors.email} />
+              </div>
             )}
           </form.Field>
 

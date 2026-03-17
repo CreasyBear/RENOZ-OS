@@ -268,7 +268,10 @@ export {
   type PackingSlipPdfTemplateProps,
   // Reports
   ReportSummaryPdfDocument,
+  ActivityExportPdfDocument,
   type ReportSummaryDocumentData,
   type ReportSummaryMetric,
   type ReportSummaryPdfDocumentProps,
+  type ActivityExportPdfDocumentProps,
+  type ActivityExportDocumentData,
 } from "./templates";

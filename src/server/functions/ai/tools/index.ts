@@ -15,6 +15,7 @@ export {
   getCustomerTool,
   searchCustomersTool,
   updateCustomerNotesTool,
+  sendEmailDraftTool,
   customerTools,
   type CustomerTools,
 } from './customer-tools';

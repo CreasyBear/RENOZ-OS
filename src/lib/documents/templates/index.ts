@@ -101,3 +101,9 @@ export {
   type ReportSummaryMetric,
   type ReportSummaryPdfDocumentProps,
 } from "./reports/report-summary";
+
+export {
+  ActivityExportPdfDocument,
+  type ActivityExportPdfDocumentProps,
+  type ActivityExportDocumentData,
+} from "./reports/activity-export";

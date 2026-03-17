@@ -8,3 +8,4 @@ export * from "./payment-reminders";
 export * from "./payment-schedules";
 export * from "./revenue-recognition";
 export * from "./statement-history";
+export * from "./xero-payment-events";

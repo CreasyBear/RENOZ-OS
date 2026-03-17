@@ -457,7 +457,7 @@ export const updateProduct = createServerFn({ method: 'POST' })
     }
 
     // Validate category if provided
-    if (updateData.categoryId) {
+    if (updateData.categoryId !== undefined && updateData.categoryId !== null) {
       const categoryExists = await db
         .select({ id: categories.id })
         .from(categories)

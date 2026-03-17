@@ -17,7 +17,6 @@ import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { CustomerDetailSkeleton } from '@/components/skeletons/customers';
 import { CustomerDetailContainer } from '@/components/domain/customers';
-import { getCustomerById } from '@/server/functions/customers/customers';
 import { customerDetailSearchSchema } from '@/lib/schemas/customers';
 
 // ============================================================================
@@ -26,10 +25,6 @@ import { customerDetailSearchSchema } from '@/lib/schemas/customers';
 
 export const Route = createFileRoute('/_authenticated/customers/$customerId')({
   validateSearch: customerDetailSearchSchema,
-  loader: async ({ params }) => {
-    const customer = await getCustomerById({ data: { id: params.customerId } });
-    return { customer };
-  },
   component: CustomerDetailPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/customers" />
@@ -50,13 +45,11 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId')({
 
 function CustomerDetailPage() {
   const { customerId } = Route.useParams();
-  const loaderData = Route.useLoaderData();
   const search = Route.useSearch();
 
   return (
     <CustomerDetailContainer
       customerId={customerId}
-      initialCustomer={loaderData?.customer}
       initialTab={search.tab}
     >
       {({ headerActions, content }) => (

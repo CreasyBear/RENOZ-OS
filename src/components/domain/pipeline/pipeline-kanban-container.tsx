@@ -444,14 +444,14 @@ export function PipelineKanbanContainer({
   // Handle delete opportunity (for list view)
   const handleDeleteOpportunity = useCallback(
     async (id: string) => {
-      const confirmed = await confirm.confirm({
+      const { confirmed } = await confirm.confirm({
         title: "Delete Opportunity",
         description: "Are you sure you want to delete this opportunity? This action cannot be undone.",
         confirmLabel: "Delete Opportunity",
         variant: "destructive",
       });
 
-      if (!confirmed.confirmed) return;
+      if (!confirmed) return;
 
       try {
         await deleteMutation.mutateAsync(id);

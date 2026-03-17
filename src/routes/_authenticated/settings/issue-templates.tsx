@@ -103,7 +103,7 @@ function IssueTemplatesSettingsPage() {
   };
 
   const handleDeleteTemplate = async (template: IssueTemplateResponse) => {
-    const confirmed = await confirm.confirm({
+    const { confirmed } = await confirm.confirm({
       title: 'Delete Issue Template',
       description:
         'Are you sure you want to delete this issue template? This action cannot be undone.',
@@ -111,7 +111,7 @@ function IssueTemplatesSettingsPage() {
       variant: 'destructive',
     });
 
-    if (confirmed.confirmed) {
+    if (confirmed) {
       try {
         await deleteMutation.mutateAsync(template.id);
         toast.success('Template deleted successfully.');

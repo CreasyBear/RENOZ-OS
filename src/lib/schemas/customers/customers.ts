@@ -101,6 +101,7 @@ const createCustomerBaseSchema = z.object({
   // Business identifiers
   taxId: z.string().max(20).optional(), // ABN for Australian businesses
   registrationNumber: z.string().max(50).optional(),
+  xeroContactId: z.string().max(255).nullable().optional(),
 
   // Hierarchy
   parentId: z.string().uuid().optional(),
@@ -157,7 +158,7 @@ export type UpdateCustomer = z.infer<typeof updateCustomerSchema>;
 /**
  * Customer output schema (includes computed/system fields)
  */
-export const customerSchema = createCustomerSchema.extend({
+export const customerSchema = createCustomerSchema.safeExtend({
   id: z.string().uuid(),
   customerCode: z.string(),
   organizationId: z.string().uuid(),

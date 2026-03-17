@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { CustomerForm } from '@/components/domain/customers/customer-form'
 import { ContactManager, type ManagedContact } from '@/components/domain/customers/contact-manager'
 import { AddressManager, type ManagedAddress } from '@/components/domain/customers/address-manager'
+import { XeroContactManager } from '@/components/domain/customers/components'
 import {
   useCustomer,
   useCustomerTags,
@@ -149,6 +150,14 @@ function EditCustomerFormContent({
           disabled={isLoading}
         />
       </div>
+
+      <XeroContactManager
+        customerId={customerId}
+        customerName={customer.name}
+        customerEmail={customer.email}
+        customerPhone={customer.phone}
+        legalName={customer.legalName}
+      />
     </div>
   )
 }
@@ -224,6 +233,8 @@ function EditCustomerPage() {
               parentId: customer.parentId ?? undefined,
               creditLimit: customer.creditLimit ?? undefined,
               creditHoldReason: customer.creditHoldReason ?? undefined,
+              firstOrderDate: customer.firstOrderDate ? new Date(customer.firstOrderDate) : null,
+              lastOrderDate: customer.lastOrderDate ? new Date(customer.lastOrderDate) : null,
               customFields: (customer.customFields ?? undefined) as Record<string, string | number | boolean | null> | undefined,
             }}
             customerId={customerId}
