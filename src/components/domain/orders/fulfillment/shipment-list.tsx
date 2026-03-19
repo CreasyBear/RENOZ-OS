@@ -206,16 +206,14 @@ export const ShipmentList = memo(function ShipmentList({
                           <Button
                             variant="outline"
                             size="sm"
-                            asChild
+                            onClick={() => {
+                              window.open(shipment.trackingUrl ?? undefined, "_blank", "noopener,noreferrer");
+                            }}
                           >
-                            <a
-                              href={shipment.trackingUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
+                            <>
                               Track
                               <ExternalLink className="h-3 w-3 ml-1" />
-                            </a>
+                            </>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
