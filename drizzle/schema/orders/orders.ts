@@ -134,6 +134,7 @@ export const orders = pgTable(
 
     // Metadata
     metadata: jsonb("metadata").$type<OrderMetadata>().default({}),
+    clientRequestId: text("client_request_id"),
     internalNotes: text("internal_notes"),
     customerNotes: text("customer_notes"),
 
@@ -159,6 +160,9 @@ export const orders = pgTable(
     orderNumberOrgUnique: uniqueIndex("idx_orders_number_org_unique")
       .on(table.organizationId, table.orderNumber)
       .where(sql`${table.deletedAt} IS NULL`),
+    clientRequestOrgUnique: uniqueIndex("idx_orders_client_request_org_unique")
+      .on(table.organizationId, table.clientRequestId)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.clientRequestId} IS NOT NULL`),
 
     // Multi-tenant queries
     orgStatusIdx: index("idx_orders_org_status").on(

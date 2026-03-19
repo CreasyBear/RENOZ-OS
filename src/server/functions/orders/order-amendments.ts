@@ -25,7 +25,7 @@ import {
   amendmentListCursorQuerySchema,
   type ItemChange,
 } from '@/lib/schemas';
-import { calculateLineItemTotals, calculateOrderTotals } from '@/server/functions/orders/orders';
+import { calculateLineItemTotals, calculateOrderTotals } from './order-pricing';
 import { updateOrderPaymentStatus } from '@/server/functions/orders/order-payments';
 
 interface ListAmendmentsResult {

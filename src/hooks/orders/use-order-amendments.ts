@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { AmendmentStatus, AmendmentType, AmendmentChanges, Amendment } from '@/lib/schemas/orders';
+import { expectOrderQueryData } from './order-mutation-client-errors';
 import {
   listAmendments,
   getAmendment,
@@ -86,8 +87,7 @@ export function useAmendments(options: UseAmendmentsOptions) {
     queryKey: queryKeys.orders.amendments(orderId),
     queryFn: async () => {
       const result = await listAmendmentsFn({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order amendments are unavailable.');
     },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
@@ -110,8 +110,7 @@ export function useAmendment({ amendmentId, enabled = true }: UseAmendmentOption
       const result = await getAmendmentFn({
         data: { id: amendmentId }
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order amendment is unavailable.');
     },
     enabled: enabled && !!amendmentId,
     staleTime: 60 * 1000,

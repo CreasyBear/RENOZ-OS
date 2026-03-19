@@ -22,6 +22,11 @@ import type {
   ListOrdersResult,
 } from '@/lib/schemas/orders';
 import { queryKeys } from '@/lib/query-keys';
+import { applyOptimisticOrderPatch } from './apply-optimistic-order-patch';
+import {
+  expectOrderQueryData,
+  normalizeOrderMutationError,
+} from './order-mutation-client-errors';
 import {
   listOrders,
   getOrder,
@@ -85,8 +90,7 @@ export function useOrdersInfinite(filters: Partial<OrderListQuery> = {}) {
           pageSize: filters.pageSize ?? 50,
         } as OrderListQuery,
       });
-      if (result == null) throw new Error('Orders list returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Orders list is unavailable.');
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -112,8 +116,7 @@ export function useOrder({ orderId, enabled = true }: UseOrderOptions) {
     queryKey: queryKeys.orders.detail(orderId),
     queryFn: async () => {
       const result = await getOrderFn({ data: { id: orderId } });
-      if (result == null) throw new Error('Order not found');
-      return result;
+      return expectOrderQueryData(result, 'Order not found.');
     },
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds for details
@@ -132,7 +135,13 @@ export function useCreateOrder() {
   const createFn = useServerFn(createOrder);
 
   return useMutation({
-    mutationFn: (input: CreateOrder) => createFn({ data: input }),
+    mutationFn: async (input: CreateOrder) => {
+      try {
+        return await createFn({ data: input });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to create order.');
+      }
+    },
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.orders.detail(result.id), result);
       // Invalidate order lists
@@ -153,12 +162,16 @@ export function useUpdateOrder() {
   const updateFn = useServerFn(updateOrder);
 
   return useMutation({
-    mutationFn: (input: UpdateOrder & { id: string }) => {
+    mutationFn: async (input: UpdateOrder & { id: string }) => {
       const { id, ...data } = input;
-      return updateFn({ data: { id, data } });
+      try {
+        return await updateFn({ data: { id, data } });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to update order.');
+      }
     },
     onMutate: async (variables) => {
-      const optimisticUpdate = variables as Partial<OrderDetail>;
+      const optimisticUpdate = variables as Record<string, unknown>;
       await queryClient.cancelQueries({ queryKey: queryKeys.orders.detail(variables.id) });
       await queryClient.cancelQueries({ queryKey: queryKeys.orders.lists() });
 
@@ -170,11 +183,13 @@ export function useUpdateOrder() {
       });
 
       if (previousDetail) {
-        queryClient.setQueryData<OrderDetail>(queryKeys.orders.detail(variables.id), {
-          ...previousDetail,
-          ...optimisticUpdate,
-          updatedAt: new Date(),
-        });
+        queryClient.setQueryData<OrderDetail>(
+          queryKeys.orders.detail(variables.id),
+          applyOptimisticOrderPatch(
+            previousDetail as unknown as Record<string, unknown>,
+            optimisticUpdate
+          ) as unknown as OrderDetail
+        );
       }
 
       queryClient.setQueriesData<ListOrdersResult>(
@@ -183,11 +198,10 @@ export function useUpdateOrder() {
           if (!old) return old;
           const updatedOrders = old.orders.map((order) =>
             order.id === variables.id
-              ? {
-                  ...order,
-                  ...optimisticUpdate,
-                  updatedAt: new Date(),
-                }
+              ? (applyOptimisticOrderPatch(
+                  order as unknown as Record<string, unknown>,
+                  optimisticUpdate
+                ) as unknown as typeof order)
               : order
           );
           return { ...old, orders: updatedOrders } as ListOrdersResult;
@@ -207,6 +221,8 @@ export function useUpdateOrder() {
       context.previousLists.forEach(([key, data]) => {
         queryClient.setQueryData(key as readonly unknown[], data);
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(_variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
     onSuccess: (result, variables) => {
       // Invalidate the specific order
@@ -229,7 +245,13 @@ export function useDeleteOrder() {
   const deleteFn = useServerFn(deleteOrder);
 
   return useMutation({
-    mutationFn: (orderId: string) => deleteFn({ data: { id: orderId } }),
+    mutationFn: async (orderId: string) => {
+      try {
+        return await deleteFn({ data: { id: orderId } });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to delete order.');
+      }
+    },
     onSuccess: (_result, orderId) => {
       // Remove the specific order from cache
       queryClient.removeQueries({ queryKey: queryKeys.orders.detail(orderId) });
@@ -245,7 +267,13 @@ export function useDuplicateOrder() {
   const duplicateFn = useServerFn(duplicateOrder);
 
   return useMutation({
-    mutationFn: (orderId: string) => duplicateFn({ data: { id: orderId } }),
+    mutationFn: async (orderId: string) => {
+      try {
+        return await duplicateFn({ data: { id: orderId } });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to duplicate order.');
+      }
+    },
     onSuccess: () => {
       // Invalidate order lists to show the new duplicated order
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
@@ -264,8 +292,7 @@ export function useOrderStats() {
     queryKey: queryKeys.orders.stats(),
     queryFn: async () => {
       const result = await statsFn();
-      if (result == null) throw new Error('Order stats returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order stats are unavailable.');
     },
     staleTime: 60 * 1000, // 1 minute
   });
@@ -281,7 +308,13 @@ export function useAddOrderLineItem() {
   const addFn = useServerFn(addOrderLineItem);
 
   return useMutation({
-    mutationFn: (input: AddOrderLineItemInput) => addFn({ data: input }),
+    mutationFn: async (input: AddOrderLineItemInput) => {
+      try {
+        return await addFn({ data: input });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to add order line item.');
+      }
+    },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
@@ -295,7 +328,13 @@ export function useUpdateOrderLineItem() {
   const updateLineItemFn = useServerFn(updateOrderLineItem);
 
   return useMutation({
-    mutationFn: (input: UpdateOrderLineItemInput) => updateLineItemFn({ data: input }),
+    mutationFn: async (input: UpdateOrderLineItemInput) => {
+      try {
+        return await updateLineItemFn({ data: input });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to update order line item.');
+      }
+    },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
@@ -309,7 +348,13 @@ export function useDeleteOrderLineItem() {
   const deleteLineItemFn = useServerFn(deleteOrderLineItem);
 
   return useMutation({
-    mutationFn: (input: DeleteOrderLineItemInput) => deleteLineItemFn({ data: input }),
+    mutationFn: async (input: DeleteOrderLineItemInput) => {
+      try {
+        return await deleteLineItemFn({ data: input });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to delete order line item.');
+      }
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });

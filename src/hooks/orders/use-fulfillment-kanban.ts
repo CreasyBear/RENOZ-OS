@@ -11,6 +11,7 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { expectOrderQueryData } from './order-mutation-client-errors';
 import {
   listFulfillmentKanbanOrders,
   updateOrderStatus,
@@ -74,8 +75,7 @@ export function useFulfillmentKanban(options: UseFulfillmentKanbanOptions = {}) 
     queryKey: queryKeys.fulfillment.list(filters),
     queryFn: async () => {
       const result = await listFn({ data: filters });
-      if (result == null) throw new Error('Fulfillment kanban returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Fulfillment kanban is unavailable.');
     },
     enabled,
     refetchInterval: 30000, // Poll every 30 seconds for live updates

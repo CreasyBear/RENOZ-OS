@@ -12,6 +12,10 @@ import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { ShipmentStatus } from '@/lib/schemas/orders';
 import {
+  expectShipmentQueryData,
+  normalizeShipmentMutationError,
+} from './order-mutation-client-errors';
+import {
   listShipments,
   getShipment,
   confirmDelivery,
@@ -87,8 +91,7 @@ export function useShipments(options: UseShipmentsOptions = {}) {
     queryKey: queryKeys.orders.shipments(filters),
     queryFn: async () => {
       const result = await listShipmentsFn({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectShipmentQueryData(result, 'Shipment list is unavailable.');
     },
     enabled,
     staleTime: 30 * 1000,
@@ -112,8 +115,7 @@ export function useShipment({ shipmentId, enabled = true }: UseShipmentOptions) 
       const result = await getShipmentFn({
         data: { id: shipmentId }
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectShipmentQueryData(result, 'Shipment detail is unavailable.');
     },
     enabled: enabled && !!shipmentId,
     staleTime: 60 * 1000,
@@ -133,8 +135,13 @@ export function useConfirmDelivery() {
   const confirmFn = useServerFn(confirmDelivery);
 
   return useMutation({
-    mutationFn: (input: { id: string; deliveredAt?: Date; signedBy?: string; signature?: string; photoUrl?: string; notes?: string }) =>
-      confirmFn({ data: input }),
+    mutationFn: async (input: { id: string; idempotencyKey: string; deliveredAt?: Date; signedBy?: string; signature?: string; photoUrl?: string; notes?: string }) => {
+      try {
+        return await confirmFn({ data: input });
+      } catch (error) {
+        throw normalizeShipmentMutationError(error, 'Unable to confirm delivery.');
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
@@ -151,8 +158,13 @@ export function useUpdateShipmentStatus() {
   const updateFn = useServerFn(updateShipmentStatus);
 
   return useMutation({
-    mutationFn: (input: { id: string; status: ShipmentStatus; trackingEvent?: { timestamp: string; status: string; location?: string; description?: string }; deliveryConfirmation?: { confirmedAt: string; signedBy?: string; signature?: string; photoUrl?: string; notes?: string } }) =>
-      updateFn({ data: input }),
+    mutationFn: async (input: { id: string; idempotencyKey: string; status: ShipmentStatus; trackingEvent?: { timestamp: string; status: string; location?: string; description?: string }; deliveryConfirmation?: { confirmedAt: string; signedBy?: string; signature?: string; photoUrl?: string; notes?: string } }) => {
+      try {
+        return await updateFn({ data: input });
+      } catch (error) {
+        throw normalizeShipmentMutationError(error, 'Unable to update shipment status.');
+      }
+    },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
@@ -176,8 +188,7 @@ export function useOrderShipments(orderId: string, enabled = true) {
       const result = await getOrderShipmentsFn({
         data: { orderId }
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectShipmentQueryData(result, 'Order shipments are unavailable.');
     },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
@@ -224,7 +235,13 @@ export function useCreateShipment() {
   const createFn = useServerFn(createShipment);
 
   return useMutation({
-    mutationFn: (input: CreateShipmentInput) => createFn({ data: input }),
+    mutationFn: async (input: CreateShipmentInput) => {
+      try {
+        return await createFn({ data: input });
+      } catch (error) {
+        throw normalizeShipmentMutationError(error, 'Unable to create shipment.');
+      }
+    },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
@@ -240,6 +257,7 @@ export function useCreateShipment() {
 
 export interface MarkShippedInput {
   id: string;
+  idempotencyKey: string;
   carrier: string;
   carrierService?: string;
   trackingNumber?: string;
@@ -257,7 +275,13 @@ export function useMarkShipped() {
   const markFn = useServerFn(markShipped);
 
   return useMutation({
-    mutationFn: (input: MarkShippedInput) => markFn({ data: input }),
+    mutationFn: async (input: MarkShippedInput) => {
+      try {
+        return await markFn({ data: input });
+      } catch (error) {
+        throw normalizeShipmentMutationError(error, 'Unable to mark shipment as shipped.');
+      }
+    },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
@@ -279,7 +303,13 @@ export function useDeleteShipment() {
   const deleteFn = useServerFn(deleteShipment);
 
   return useMutation({
-    mutationFn: (shipmentId: string) => deleteFn({ data: { id: shipmentId } }),
+    mutationFn: async (shipmentId: string) => {
+      try {
+        return await deleteFn({ data: { id: shipmentId } });
+      } catch (error) {
+        throw normalizeShipmentMutationError(error, 'Unable to delete shipment.');
+      }
+    },
     onSuccess: (_result, variables) => {
       // Invalidate both list and detail caches per STANDARDS.md
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });

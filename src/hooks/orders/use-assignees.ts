@@ -89,10 +89,14 @@ export function useAssignOrder() {
         assignedTo: input.assigneeId ?? null,
       };
 
+      if (!existing?.version) {
+        throw new Error('Order version is unavailable. Refresh and try again.');
+      }
+
       return updateOrderFn({
         data: {
           id: input.orderId,
-          data: { metadata },
+          data: { metadata, expectedVersion: existing.version },
         },
       });
     },

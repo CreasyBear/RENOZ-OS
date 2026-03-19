@@ -4,7 +4,7 @@
  * Extracted for code-splitting - see create.tsx for route definition.
  * Supports initialCustomerId from URL search (?customerId=) for customer-context entry points.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertDialog,
@@ -29,6 +29,7 @@ export default function OrderCreatePage({ initialCustomerId }: OrderCreatePagePr
   const navigate = useNavigate();
   const createMutation = useCreateOrder();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const clientRequestIdRef = useRef(`order-create:${crypto.randomUUID()}`);
 
   const handleComplete = useCallback(
     (orderId: string) => {
@@ -58,6 +59,7 @@ export default function OrderCreatePage({ initialCustomerId }: OrderCreatePagePr
       const formatDate = (d: Date | null | undefined) =>
         d ? d.toISOString().split('T')[0] : undefined;
       const result = await createMutation.mutateAsync({
+        clientRequestId: clientRequestIdRef.current,
         customerId: data.customerId,
         status: data.status,
         paymentStatus: data.paymentStatus,

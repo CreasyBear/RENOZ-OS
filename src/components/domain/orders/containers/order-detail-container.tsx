@@ -8,7 +8,7 @@
  * @see STANDARDS.md - Container/Presenter pattern
  */
 
-import { useMemo, useEffect, useRef, useCallback, useState } from 'react';
+import { useMemo, useCallback } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   Edit,
@@ -42,34 +42,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ErrorState } from '@/components/shared/error-state';
-import { ordersLogger } from '@/lib/logger';
 import { DisabledMenuItem } from '@/components/shared/disabled-with-tooltip';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { useOrderDetailComposite } from '@/hooks/orders/use-order-detail-composite';
-import {
-  useOrderPayments,
-  useOrderPaymentSummary,
-  useCreateOrderPayment,
-} from '@/hooks/orders/use-order-payments';
-import {
-  useApplyAmendment,
-} from '@/hooks/orders';
-import {
-  useGenerateOrderQuote,
-  useGenerateOrderInvoice,
-  useGenerateOrderPackingSlip,
-  useGenerateOrderDeliveryNote,
-} from '@/hooks/documents';
-import { toastSuccess, toastError } from '@/hooks';
+import { toastSuccess } from '@/hooks';
 import { cn } from '@/lib/utils';
-import { useCustomers } from '@/hooks/customers';
-import { useUpdateOrder } from '@/hooks/orders/use-orders';
 import { useTrackView } from '@/hooks/search';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 import { OrderDetailView } from '../views/order-detail-view';
 import { OrderEditDialog } from '../cards/order-edit-dialog';
-import type { EditOrderFormData } from '../cards/order-edit-dialog.schema';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
 import { ShipOrderDialog } from '../fulfillment/ship-order-dialog';
 import { ConfirmDeliveryDialog } from '../fulfillment/confirm-delivery-dialog';
@@ -79,6 +61,8 @@ import { ORDER_STATUS_DETAIL_CONFIG } from '../order-status-config';
 import { RmaCreateDialog } from '@/components/domain/support/rma/rma-create-dialog';
 import { useCreateRma } from '@/hooks/support';
 import { useOrderDetailDialogState } from './use-order-detail-dialog-state';
+import { useOrderDetailRouteIntents } from './use-order-detail-route-intents';
+import { useOrderDetailContainerActions } from './use-order-detail-container-actions';
 
 export interface OrderDetailContainerRenderProps {
   /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
@@ -338,9 +322,6 @@ export function OrderDetailContainer({
   className,
 }: OrderDetailContainerProps) {
   const navigate = useNavigate();
-  const blockedEditSearchHandledRef = useRef(false);
-  const blockedShipSearchHandledRef = useRef(false);
-  const [shipIntentBlocked, setShipIntentBlocked] = useState(false);
   const clearSearch = useCallback(() => {
     navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
   }, [navigate, orderId]);
@@ -384,140 +365,27 @@ export function OrderDetailContainer({
     detail.order ? (detail.order.orderNumber ?? detail.order.customer?.name ?? orderId) : undefined,
     !!detail.order
   );
-
-  // Document generation hooks
-  const generateQuote = useGenerateOrderQuote();
-  const generateInvoice = useGenerateOrderInvoice();
-  const generatePackingSlip = useGenerateOrderPackingSlip();
-  const generateDeliveryNote = useGenerateOrderDeliveryNote();
-
-  // Payment hooks
-  const {
-    data: payments = [],
-    refetch: refetchPayments,
-  } = useOrderPayments(orderId);
-  const {
-    data: paymentSummary,
-    refetch: refetchSummary,
-  } = useOrderPaymentSummary(orderId);
-  const createPaymentMutation = useCreateOrderPayment(orderId);
-  const applyAmendmentMutation = useApplyAmendment();
-
-  const handleApplyAmendment = useCallback(
-    async (amendmentId: string) => {
-      try {
-        await applyAmendmentMutation.mutateAsync({ amendmentId });
-        toastSuccess('Amendment applied');
-        detail.refetch();
-      } catch (e) {
-        toastError(e instanceof Error ? e.message : 'Failed to apply amendment');
-      }
-    },
-    [applyAmendmentMutation, detail]
-  );
-
-  // Edit order (for ?edit=true flow) - only fetch when order is draft (edit dialog can open)
-  const { data: customersData } = useCustomers({
-    pageSize: 100,
-    enabled: detail.order?.status === 'draft',
+  const containerActions = useOrderDetailContainerActions({
+    orderId,
+    orderStatus: detail.order?.status,
+    orderVersion: detail.order?.version,
+    refetch: detail.refetch,
   });
-  const customers = useMemo(
-    () => (customersData?.items ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })),
-    [customersData]
-  );
-  const updateOrderMutation = useUpdateOrder();
   const orderStatus = detail.order?.status;
-
-  useEffect(() => {
-    if (pickFromSearch) {
-      openPick();
-    }
-  }, [pickFromSearch, openPick]);
-
-  useEffect(() => {
-    if (
-      shipFromSearch &&
-      (orderStatus === 'picked' || orderStatus === 'partially_shipped') &&
-      dialogState.open !== 'ship'
-    ) {
-      blockedShipSearchHandledRef.current = false;
-      globalThis.queueMicrotask(() => setShipIntentBlocked(false));
-      openShip();
-    }
-  }, [shipFromSearch, orderStatus, dialogState.open, openShip]);
-
-  useEffect(() => {
-    if (!shipFromSearch) {
-      blockedShipSearchHandledRef.current = false;
-      globalThis.queueMicrotask(() => setShipIntentBlocked(false));
-      return;
-    }
-    if (!orderStatus) return;
-
-    const canShip = orderStatus === 'picked' || orderStatus === 'partially_shipped';
-    if (canShip) {
-      blockedShipSearchHandledRef.current = false;
-      globalThis.queueMicrotask(() => setShipIntentBlocked(false));
-      return;
-    }
-    if (blockedShipSearchHandledRef.current) return;
-
-    blockedShipSearchHandledRef.current = true;
-    globalThis.queueMicrotask(() => setShipIntentBlocked(true));
-    clearSearch();
-  }, [shipFromSearch, orderStatus, clearSearch]);
-
-  useEffect(() => {
-    if (paymentFromSearch && dialogState.open !== 'payment') {
-      openPayment();
-    }
-  }, [paymentFromSearch, dialogState.open, openPayment]);
-
-  useEffect(() => {
-    if (!editFromSearch) {
-      blockedEditSearchHandledRef.current = false;
-      return;
-    }
-    if (!orderStatus) return;
-
-    if (orderStatus === 'draft') {
-      blockedEditSearchHandledRef.current = false;
-      if (dialogState.open !== 'edit') {
-        openEdit();
-      }
-      return;
-    }
-    if (blockedEditSearchHandledRef.current) return;
-
-    blockedEditSearchHandledRef.current = true;
-    if (dialogState.open === 'edit') {
-      closeDialog();
-    }
-    toastError('Only draft orders can be edited');
-    clearSearch();
-  }, [
-    editFromSearch,
+  const { shipIntentBlocked } = useOrderDetailRouteIntents({
     orderStatus,
-    dialogState.open,
-    openEdit,
-    closeDialog,
+    dialogOpen: dialogState.open,
+    editFromSearch,
+    pickFromSearch,
+    shipFromSearch,
+    paymentFromSearch,
     clearSearch,
-  ]);
-
-  const handleEditSubmit = async (data: EditOrderFormData) => {
-    if (!detail.order) return;
-    await updateOrderMutation.mutateAsync({
-      id: detail.order.id,
-      customerId: data.customerId,
-      orderNumber: data.orderNumber,
-      status: data.status,
-      dueDate: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : undefined,
-      internalNotes: data.internalNotes || undefined,
-      customerNotes: data.customerNotes || undefined,
-    });
-    toastSuccess('Order updated');
-    detail.refetch();
-  };
+    openPick,
+    openEdit,
+    openShip,
+    openPayment,
+    closeDialog,
+  });
 
   // Map order line items to RmaCreateDialog format (must be before early returns - hooks rule)
   // @source detail.order.lineItems from useOrderDetailComposite (filtered to qtyShipped > 0)
@@ -554,53 +422,6 @@ export function OrderDetailContainer({
       };
     });
   }, [detail.order]);
-
-  // Document generation handlers
-  const documentActions = {
-    onGenerateQuote: async () => {
-      try {
-        await generateQuote.mutateAsync({ orderId });
-        toastSuccess('Quote PDF generated');
-      } catch (error) {
-        ordersLogger.error('[OrderDetail] Failed to generate quote', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate quote');
-      }
-    },
-    onGenerateInvoice: async () => {
-      try {
-        await generateInvoice.mutateAsync({ orderId });
-        toastSuccess('Invoice PDF generated');
-      } catch (error) {
-        ordersLogger.error('[OrderDetail] Failed to generate invoice', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate invoice');
-      }
-    },
-    onGeneratePackingSlip: async () => {
-      try {
-        await generatePackingSlip.mutateAsync({ orderId });
-        toastSuccess('Packing slip generated');
-      } catch (error) {
-        ordersLogger.error('[OrderDetail] Failed to generate packing slip', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate packing slip');
-      }
-    },
-    onGenerateDeliveryNote: async () => {
-      try {
-        await generateDeliveryNote.mutateAsync({ orderId });
-        toastSuccess('Delivery note generated');
-      } catch (error) {
-        ordersLogger.error('[OrderDetail] Failed to generate delivery note', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate delivery note');
-      }
-    },
-    isGeneratingQuote: generateQuote.isPending,
-    isGeneratingInvoice: generateInvoice.isPending,
-    isGeneratingPackingSlip: generatePackingSlip.isPending,
-    isGeneratingDeliveryNote: generateDeliveryNote.isPending,
-    // Generated URLs from mutations (for immediate download after generation)
-    packingSlipUrl: generatePackingSlip.data?.url,
-    deliveryNoteUrl: generateDeliveryNote.data?.url,
-  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Loading State
@@ -703,17 +524,17 @@ export function OrderDetailContainer({
         activities={detail.activities}
         activitiesLoading={detail.activitiesLoading}
         activitiesError={detail.activitiesError}
-        documentActions={documentActions}
+        documentActions={containerActions.documentActions}
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onScheduleFollowUp}
         fulfillmentActions={{
           onPickItems: openPick,
           onShipOrder: openShip,
           onConfirmDelivery: openConfirmDelivery,
-          onApplyAmendment: handleApplyAmendment,
+          onApplyAmendment: containerActions.handleApplyAmendment,
         }}
         paymentActions={{
-          payments: payments.map(p => ({
+          payments: containerActions.payments.map(p => ({
             id: p.id,
             amount: Number(p.amount),
             paymentMethod: p.paymentMethod,
@@ -724,7 +545,7 @@ export function OrderDetailContainer({
             relatedPaymentId: p.relatedPaymentId,
             createdAt: p.createdAt.toISOString(),
           })),
-          summary: paymentSummary ?? {
+          summary: containerActions.paymentSummary ?? {
             totalPayments: 0,
             totalPaid: 0,
             totalRefunds: 0,
@@ -820,12 +641,12 @@ export function OrderDetailContainer({
         orderNumber={detail.order.orderNumber}
         balanceDue={Number(detail.order.balanceDue || 0)}
         onSubmit={async (data) => {
-          await createPaymentMutation.mutateAsync(data);
+          await containerActions.createPaymentMutation.mutateAsync(data);
           toastSuccess('Payment recorded successfully');
-          refetchPayments();
-          refetchSummary();
+          containerActions.refetchPayments();
+          containerActions.refetchSummary();
         }}
-        isSubmitting={createPaymentMutation.isPending}
+        isSubmitting={containerActions.createPaymentMutation.isPending}
       />
 
       {/* Edit Order Dialog (from ?edit=true in URL) */}
@@ -844,11 +665,11 @@ export function OrderDetailContainer({
             internalNotes: detail.order.internalNotes ?? null,
             customerNotes: detail.order.customerNotes ?? null,
           }}
-          customers={customers}
-          isLoadingCustomers={!customersData}
-          onSubmit={handleEditSubmit}
-          isSubmitting={updateOrderMutation.isPending}
-          submitError={updateOrderMutation.error?.message}
+          customers={containerActions.customers}
+          isLoadingCustomers={false}
+          onSubmit={containerActions.handleEditSubmit}
+          isSubmitting={containerActions.updateOrderMutation.isPending}
+          submitError={containerActions.updateOrderMutation.error?.message}
         />
       )}
 

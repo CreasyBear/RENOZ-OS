@@ -12,6 +12,7 @@
     "test:unit": "vitest run tests/unit",
     "test:vitest": "vitest run",
     "test:release-hardening": "vitest run tests/unit/routes tests/unit/ai tests/unit/oauth tests/unit/communications/outbound-email.test.ts tests/unit/customers/customer-create-error-handling.test.ts tests/unit/financial/xero-invoice-sync.test.ts tests/unit/financial/xero-adapter.test.ts",
+    "test:unhappy-paths": "vitest run tests/unit/orders/order-create-page-idempotency.test.tsx tests/unit/orders/order-write-contracts.test.ts tests/unit/orders/order-client-contracts.test.ts tests/unit/orders/order-status-contract.test.ts tests/unit/orders/order-shipments-facade.test.ts tests/unit/routes/xero-webhook-route.test.ts tests/unit/financial/xero-webhook-batch-policy.test.ts",
     "typecheck": "NODE_OPTIONS=--max-old-space-size=12000 tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives",
     "lint:reliability": "node scripts/check-route-casts.mjs && node scripts/check-pending-dialog-guards.mjs",

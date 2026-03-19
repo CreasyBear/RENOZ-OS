@@ -1058,6 +1058,28 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
   }
 }
 
+export async function processXeroPaymentWebhookEvents(
+  events: unknown[],
+  applyFn: typeof applyXeroPaymentWebhookEvent = applyXeroPaymentWebhookEvent
+) {
+  const results = [];
+
+  for (const event of events) {
+    results.push(await applyFn(event));
+  }
+
+  const retryableFailure = results.find(
+    (result) => result.success === false && 'retryable' in result && result.retryable === true
+  );
+
+  return {
+    status: retryableFailure ? 'retry' : 'accepted',
+    httpStatus: retryableFailure ? 503 : 200,
+    results,
+    duplicateCount: results.filter((result) => 'duplicate' in result && result.duplicate === true).length,
+  };
+}
+
 async function resolveWebhookOrganizationByTenant(tenantId: string) {
   const matches = await db
     .select({

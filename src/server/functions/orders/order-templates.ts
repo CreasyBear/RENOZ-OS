@@ -24,7 +24,7 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError, NotFoundError } from '@/lib/server/errors';
 import { GST_RATE, roundCurrency } from '@/lib/order-calculations';
-import { generateOrderNumber } from '@/server/functions/orders/orders';
+import { generateOrderNumber } from './order-numbering';
 import {
   createTemplateSchema,
   updateTemplateSchema,

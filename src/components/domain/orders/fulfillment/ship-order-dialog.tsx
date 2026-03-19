@@ -411,6 +411,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           try {
             await markShippedMutation.mutateAsync({
               id: shipment.id,
+              idempotencyKey: `shipment-mark-shipped:${shipment.id}`,
               carrier: values.carrier,
               carrierService: values.carrierService || undefined,
               trackingNumber: values.trackingNumber || undefined,

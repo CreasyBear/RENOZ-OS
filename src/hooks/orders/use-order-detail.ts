@@ -18,6 +18,10 @@ import {
   duplicateOrder,
 } from '@/server/functions/orders/orders';
 import type { Address } from 'drizzle/schema';
+import {
+  expectOrderQueryData,
+  normalizeOrderMutationError,
+} from './order-mutation-client-errors';
 
 type BaseOrderWithCustomer = Awaited<ReturnType<typeof getOrderWithCustomer>>;
 
@@ -54,8 +58,7 @@ export function useOrderWithCustomer({
       const result = await getOrderWithCustomerFn({
         data: { id: orderId }
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result as OrderWithCustomer;
+      return expectOrderQueryData(result, 'Order detail is unavailable.') as OrderWithCustomer;
     },
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds
@@ -78,8 +81,13 @@ export function useOrderDetailStatusUpdate(orderId: string) {
   const updateStatusFn = useServerFn(updateOrderStatus);
 
   return useMutation({
-    mutationFn: (input: UpdateStatusInput) =>
-      updateStatusFn({ data: { id: orderId, data: input } }),
+    mutationFn: async (input: UpdateStatusInput) => {
+      try {
+        return await updateStatusFn({ data: { id: orderId, data: input } });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to update order status.');
+      }
+    },
     onSuccess: () => {
       // Invalidate both detail and list queries
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
@@ -99,7 +107,13 @@ export function useDeleteOrderWithConfirmation(orderId: string) {
   const deleteFn = useServerFn(deleteOrder);
 
   return useMutation({
-    mutationFn: () => deleteFn({ data: { id: orderId } }),
+    mutationFn: async () => {
+      try {
+        return await deleteFn({ data: { id: orderId } });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to delete order.');
+      }
+    },
     onSuccess: () => {
       // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
@@ -119,7 +133,13 @@ export function useDuplicateOrderById(orderId: string) {
   const duplicateFn = useServerFn(duplicateOrder);
 
   return useMutation({
-    mutationFn: () => duplicateFn({ data: { id: orderId } }),
+    mutationFn: async () => {
+      try {
+        return await duplicateFn({ data: { id: orderId } });
+      } catch (error) {
+        throw normalizeOrderMutationError(error, 'Unable to duplicate order.');
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },

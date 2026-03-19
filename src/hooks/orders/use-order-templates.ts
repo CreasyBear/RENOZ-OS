@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { expectOrderQueryData } from './order-mutation-client-errors';
 import {
   listTemplates,
   getTemplate,
@@ -76,8 +77,7 @@ export function useOrderTemplates(options: UseOrderTemplatesOptions = {}) {
     queryKey: queryKeys.orders.templates(search),
     queryFn: async () => {
       const result = await listTemplatesFn({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order templates are unavailable.');
     },
     enabled,
     staleTime: 60 * 1000,
@@ -100,8 +100,7 @@ export function useOrderTemplate({ templateId, enabled = true }: UseOrderTemplat
       const result = await getTemplateFn({
         data: { id: templateId }
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order template is unavailable.');
     },
     enabled: enabled && !!templateId,
     staleTime: 60 * 1000,

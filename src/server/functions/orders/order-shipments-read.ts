@@ -1,0 +1,199 @@
+'use server'
+
+import { and, asc, desc, eq, gte, ilike, inArray, lte, sql } from 'drizzle-orm';
+import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
+import { containsPattern } from '@/lib/db/utils';
+import { z } from 'zod';
+import { db } from '@/lib/db';
+import { NotFoundError } from '@/lib/server/errors';
+import { withAuth } from '@/lib/server/protected';
+import { orderShipments, orders, shipmentItems } from 'drizzle/schema';
+import {
+  shipmentListCursorQuerySchema,
+  shipmentListQuerySchema,
+  shipmentParamsSchema,
+} from '@/lib/schemas';
+import type { ShipmentWithItems, ListShipmentsResult } from './order-shipment-types';
+type ShipmentListQueryInput = z.infer<typeof shipmentListQuerySchema>;
+type ShipmentListCursorQueryInput = z.infer<typeof shipmentListCursorQuerySchema>;
+type ShipmentParamsInput = z.infer<typeof shipmentParamsSchema>;
+
+export async function listShipmentsHandler({
+  data,
+}: {
+  data: ShipmentListQueryInput;
+}): Promise<ListShipmentsResult> {
+  const ctx = await withAuth();
+  const { orderId, status, carrier, dateFrom, dateTo, page, pageSize, sortBy, sortOrder } = data;
+
+  const conditions = [eq(orderShipments.organizationId, ctx.organizationId)];
+
+  if (orderId) {
+    conditions.push(eq(orderShipments.orderId, orderId));
+  }
+  if (status) {
+    conditions.push(eq(orderShipments.status, status));
+  }
+  if (carrier) {
+    conditions.push(ilike(orderShipments.carrier, containsPattern(carrier)));
+  }
+  if (dateFrom) {
+    conditions.push(gte(orderShipments.createdAt, dateFrom));
+  }
+  if (dateTo) {
+    conditions.push(lte(orderShipments.createdAt, dateTo));
+  }
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(orderShipments)
+    .where(and(...conditions));
+
+  const total = count || 0;
+
+  const sortColumn = {
+    createdAt: orderShipments.createdAt,
+    shippedAt: orderShipments.shippedAt,
+    deliveredAt: orderShipments.deliveredAt,
+    status: orderShipments.status,
+  }[sortBy];
+
+  const orderFn = sortOrder === 'asc' ? asc : desc;
+
+  const shipments = await db
+    .select()
+    .from(orderShipments)
+    .where(and(...conditions))
+    .orderBy(orderFn(sortColumn))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return {
+    shipments,
+    total,
+    page,
+    pageSize,
+    hasMore: page * pageSize < total,
+  };
+}
+
+export async function listShipmentsCursorHandler({
+  data,
+}: {
+  data: ShipmentListCursorQueryInput;
+}) {
+  const ctx = await withAuth();
+  const { cursor, pageSize = 20, sortOrder = 'desc', orderId, status, carrier, dateFrom, dateTo } = data;
+
+  const conditions = [eq(orderShipments.organizationId, ctx.organizationId)];
+  if (orderId) conditions.push(eq(orderShipments.orderId, orderId));
+  if (status) conditions.push(eq(orderShipments.status, status));
+  if (carrier) conditions.push(ilike(orderShipments.carrier, containsPattern(carrier)));
+  if (dateFrom) conditions.push(gte(orderShipments.createdAt, dateFrom));
+  if (dateTo) conditions.push(lte(orderShipments.createdAt, dateTo));
+
+  if (cursor) {
+    const cursorPosition = decodeCursor(cursor);
+    if (cursorPosition) {
+      conditions.push(
+        buildCursorCondition(orderShipments.createdAt, orderShipments.id, cursorPosition, sortOrder)
+      );
+    }
+  }
+
+  const orderDir = sortOrder === 'asc' ? asc : desc;
+
+  const shipments = await db
+    .select()
+    .from(orderShipments)
+    .where(and(...conditions))
+    .orderBy(orderDir(orderShipments.createdAt), orderDir(orderShipments.id))
+    .limit(pageSize + 1);
+
+  return buildStandardCursorResponse(shipments, pageSize);
+}
+
+export async function getShipmentHandler({
+  data,
+}: {
+  data: ShipmentParamsInput;
+}): Promise<ShipmentWithItems> {
+  const ctx = await withAuth();
+
+  const [shipment] = await db
+    .select()
+    .from(orderShipments)
+    .where(
+      and(eq(orderShipments.id, data.id), eq(orderShipments.organizationId, ctx.organizationId))
+    )
+    .limit(1);
+
+  if (!shipment) {
+    throw new NotFoundError('Shipment not found');
+  }
+
+  const items = await db
+    .select()
+    .from(shipmentItems)
+    .where(eq(shipmentItems.shipmentId, data.id));
+
+  return {
+    ...shipment,
+    items,
+  };
+}
+
+export async function getOrderShipmentsHandler({
+  data,
+}: {
+  data: { orderId: string };
+}): Promise<ShipmentWithItems[]> {
+  const ctx = await withAuth();
+
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.id, data.orderId), eq(orders.organizationId, ctx.organizationId)))
+    .limit(1);
+
+  if (!order) {
+    throw new NotFoundError('Order not found');
+  }
+
+  const shipments = await db
+    .select()
+    .from(orderShipments)
+    .where(
+      and(
+        eq(orderShipments.orderId, data.orderId),
+        eq(orderShipments.organizationId, ctx.organizationId)
+      )
+    )
+    .orderBy(desc(orderShipments.createdAt))
+    .limit(100);
+
+  const shipmentIds = shipments.map((shipment) => shipment.id);
+  const allItems =
+    shipmentIds.length > 0
+      ? await db
+          .select()
+          .from(shipmentItems)
+          .where(inArray(shipmentItems.shipmentId, shipmentIds))
+      : [];
+
+  type ShipmentItemRecord = (typeof allItems)[number];
+  const itemsByShipment = allItems.reduce<Map<string, ShipmentItemRecord[]>>((acc, item) => {
+    const existing = acc.get(item.shipmentId);
+    if (existing) {
+      existing.push(item);
+    } else {
+      acc.set(item.shipmentId, [item]);
+    }
+    return acc;
+  }, new Map());
+
+  return shipments.map((shipment) => ({
+    ...shipment,
+    items: itemsByShipment.get(shipment.id) ?? [],
+  }));
+}

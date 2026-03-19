@@ -144,7 +144,7 @@ export const updateShipmentStatusSchema = z.object({
   status: shipmentStatusSchema,
   trackingEvent: trackingEventSchema.optional(),
   deliveryConfirmation: deliveryConfirmationSchema.optional(),
-  idempotencyKey: z.string().min(8).max(128).optional(),
+  idempotencyKey: z.string().min(8).max(128),
 });
 
 export type UpdateShipmentStatus = z.infer<typeof updateShipmentStatusSchema>;
@@ -155,6 +155,7 @@ export type UpdateShipmentStatus = z.infer<typeof updateShipmentStatusSchema>;
 
 export const markShippedSchema = z.object({
   id: z.string().uuid(),
+  idempotencyKey: z.string().min(8).max(128),
   carrier: z.string().min(1, 'Carrier is required').max(100),
   carrierService: z.string().max(100).optional(),
   trackingNumber: z.string().max(200).optional(),
@@ -171,6 +172,7 @@ export type MarkShipped = z.infer<typeof markShippedSchema>;
 
 export const confirmDeliverySchema = z.object({
   id: z.string().uuid(),
+  idempotencyKey: z.string().min(8).max(128),
   deliveredAt: z.coerce.date().optional(), // Defaults to now
   signedBy: z.string().max(200).optional(),
   signature: z.string().optional(),

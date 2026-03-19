@@ -4,6 +4,7 @@
  *
  * Runs:
  * 1. Route-intent smoke checks
+ * 2. Unhappy-path regression pack
  *
  * Emits JSON artifacts to artifacts/release-gates/.
  */
@@ -61,6 +62,11 @@ const checks = [
     command: 'npm',
     args: ['run', 'test:route-intent-smoke'],
   },
+  {
+    gateName: 'unhappy-path-regressions',
+    command: 'npm',
+    args: ['run', 'test:unhappy-paths'],
+  },
 ];
 
 const results = [];
@@ -107,4 +113,3 @@ writeFileSync(path.join(ARTIFACT_DIR, 'latest.json'), JSON.stringify(summary, nu
 console.log(JSON.stringify(summary, null, 2));
 
 if (hasFailure) process.exit(2);
-

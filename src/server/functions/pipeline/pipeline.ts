@@ -1416,6 +1416,7 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
  */
 function quoteToOrderPayload(
   opportunity: { id: string; customerId: string | null },
+  quoteVersionId: string,
   items: QuoteLineItem[]
 ): CreateOrder {
   if (!opportunity.customerId) {
@@ -1444,6 +1445,7 @@ function quoteToOrderPayload(
   });
 
   return {
+    clientRequestId: `opportunity-convert:${opportunity.id}:${quoteVersionId}`,
     customerId: opportunity.customerId,
     status: 'draft',
     paymentStatus: 'pending',
@@ -1514,6 +1516,7 @@ export const convertToOrder = createServerFn({ method: 'POST' })
 
     const payload = quoteToOrderPayload(
       { id: opportunity.id, customerId: opportunity.customerId },
+      latestQuote.id,
       latestQuote.items as QuoteLineItem[]
     );
 

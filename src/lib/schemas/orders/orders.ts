@@ -117,6 +117,7 @@ export type OrderLineItem = z.infer<typeof orderLineItemSchema>;
 // ============================================================================
 
 export const createOrderSchema = z.object({
+  clientRequestId: z.string().min(8, 'Client request ID is required').max(128),
   customerId: z.string().uuid('Customer is required'),
   orderNumber: z.string().min(1, 'Order number is required').max(50).optional(),
   status: orderStatusSchema.default('draft'),
@@ -146,7 +147,12 @@ export type CreateOrder = z.infer<typeof createOrderSchema>;
 // UPDATE ORDER
 // ============================================================================
 
-export const updateOrderSchema = createOrderSchema.partial().omit({ lineItems: true });
+export const updateOrderSchema = createOrderSchema
+  .partial()
+  .omit({ lineItems: true, clientRequestId: true })
+  .extend({
+    expectedVersion: z.number().int().positive('Expected version is required'),
+  });
 
 export type UpdateOrder = z.infer<typeof updateOrderSchema>;
 
@@ -176,6 +182,7 @@ export const orderSchema = z.object({
   paidAmount: currencySchema,
   balanceDue: currencySchema,
   metadata: orderMetadataSchema,
+  clientRequestId: z.string().nullable(),
   internalNotes: z.string().nullable(),
   customerNotes: z.string().nullable(),
   xeroInvoiceId: z.string().nullable(),
@@ -255,6 +262,7 @@ export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;
  */
 export const addOrderLineItemInputSchema = z.object({
   orderId: z.string().uuid(),
+  expectedOrderVersion: z.number().int().positive(),
   item: createOrderLineItemSchema,
 });
 
@@ -267,6 +275,7 @@ export type AddOrderLineItemInput = z.infer<typeof addOrderLineItemInputSchema>;
 export const updateOrderLineItemInputSchema = z.object({
   orderId: z.string().uuid(),
   itemId: z.string().uuid(),
+  expectedOrderVersion: z.number().int().positive(),
   data: createOrderLineItemSchema.partial(),
 });
 
@@ -279,6 +288,7 @@ export type UpdateOrderLineItemInput = z.infer<typeof updateOrderLineItemInputSc
 export const deleteOrderLineItemInputSchema = z.object({
   orderId: z.string().uuid(),
   itemId: z.string().uuid(),
+  expectedOrderVersion: z.number().int().positive(),
 });
 
 export type DeleteOrderLineItemInput = z.infer<typeof deleteOrderLineItemInputSchema>;

@@ -271,6 +271,7 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
     confirmDeliveryMutation.mutate(
       {
         id: shipmentId,
+        idempotencyKey: `shipment-confirm-delivery:${shipmentId}`,
         signedBy: signedBy || undefined,
         signature: signature || undefined,
         photoUrl: finalPhotoUrl || undefined,

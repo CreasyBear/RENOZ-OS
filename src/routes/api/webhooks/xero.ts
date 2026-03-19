@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger';
 import { xeroWebhookPayloadSchema } from '@/lib/schemas/settings/xero-sync';
 import { verifyXeroWebhookSignature } from '@/server/functions/financial/xero-webhook-signature';
 import {
-  applyXeroPaymentWebhookEvent,
+  processXeroPaymentWebhookEvents,
 } from '@/server/functions/financial/xero-invoice-sync';
 
 function parseWebhookPayload(payload: unknown) {
@@ -55,34 +55,26 @@ export async function POST({ request }: { request: Request }) {
     });
   }
 
-  const results = [];
-  for (const event of events) {
-    const result = await applyXeroPaymentWebhookEvent(event);
-    results.push(result);
-  }
+  const processed = await processXeroPaymentWebhookEvents(events);
 
-  const retryableFailure = results.find(
-    (result) => result.success === false && 'retryable' in result && result.retryable === true
-  );
-
-  if (retryableFailure) {
+  if (processed.httpStatus === 503) {
     logger.warn('[xero-webhook] payment apply rejected', {
-      result: retryableFailure,
+      results: processed.results,
     });
 
-    return new Response(JSON.stringify({ status: 'retry', results }), {
-      status: 503,
+    return new Response(JSON.stringify({ status: processed.status, results: processed.results }), {
+      status: processed.httpStatus,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
   logger.info('[xero-webhook] processed payments', {
-    count: results.length,
-    duplicates: results.filter((result) => 'duplicate' in result && result.duplicate === true).length,
+    count: processed.results.length,
+    duplicates: processed.duplicateCount,
   });
 
-  return new Response(JSON.stringify({ status: 'accepted', results }), {
-    status: 200,
+  return new Response(JSON.stringify({ status: processed.status, results: processed.results }), {
+    status: processed.httpStatus,
     headers: { 'Content-Type': 'application/json' },
   });
 }

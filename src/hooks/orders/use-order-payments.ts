@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { queryKeys } from "@/lib/query-keys";
+import { expectOrderQueryData } from "./order-mutation-client-errors";
 import {
   getOrderPayments,
   getOrderPayment,
@@ -50,8 +51,7 @@ export function useOrderPayments(
       const result = await getPaymentsFn({
         data: { orderId } 
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order payments are unavailable.');
     },
     enabled: !!orderId,
     ...options,
@@ -76,8 +76,7 @@ export function useOrderPayment(
       const result = await getPaymentFn({
         data: { paymentId } 
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order payment is unavailable.');
     },
     enabled: !!paymentId,
     ...options,
@@ -102,8 +101,7 @@ export function useOrderPaymentSummary(
       const result = await getSummaryFn({
         data: { orderId } 
       });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      return expectOrderQueryData(result, 'Order payment summary is unavailable.');
     },
     enabled: !!orderId,
     ...options,
