@@ -9,6 +9,7 @@ CRM application built with TanStack Start, React, Supabase, and Drizzle.
 - Node.js 20+ or [Bun](https://bun.sh)
 - Supabase project
 - Copy `.env.example` to `.env` and fill in values
+- Copy `.claude/mcp.example.json` to `.claude/mcp.json` for local MCP tooling, then add your own tokens locally
 
 ### Development
 

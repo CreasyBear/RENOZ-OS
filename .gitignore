@@ -16,3 +16,6 @@ build-output.log
 .vercel
 .output
 .env*.local
+
+# Local Claude MCP credentials
+.claude/mcp.json
