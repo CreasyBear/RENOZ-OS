@@ -58,7 +58,7 @@ SignUpForm --> supabase.auth.signUp (emailRedirectTo: /auth/confirm)
          --> Email sent with confirmation link
          --> User clicks link --> /auth/confirm?token_hash=...&type=signup
          --> Server: verifyOtp --> completeSignup (create org + user) --> redirect /
-         --> / --> getAuthContext --> /dashboard
+         --> / --> /login --> client auth bounce --> /dashboard
 ```
 
 **Key files:**
@@ -84,13 +84,13 @@ LoginForm --> supabase.auth.signInWithPassword
 - `src/components/auth/login-form.tsx` -- `signInWithPassword` then `runLogin` (validates against `users` table)
 - `src/routes/login.tsx` -- `beforeLoad` checks if already authenticated; redirects to dashboard if so
 
-**Intended pattern for login route `beforeLoad`:**
+**Current pattern for login route `beforeLoad`:**
 - Server (`typeof window === 'undefined'`): no redirect -- avoid SSR redirect loops
-- Client with `reason` param (`invalid_user`, `session_expired`, etc.): stay on login, show message
-- Client without reason: check `getUser()` -- if authenticated, redirect to post-login target
+- Client with `reason` param (`invalid_user`, `session_expired`, `logged_out`, etc.): stay on login, show message only when the reason is actually an error
+- Client without reason: check `getAuthContext()` -- if fully authenticated, redirect to post-login target
 
-**Why `getUser()` and not `getAuthContext()` on the login route:**
-The login route only needs to know "does a Supabase session exist?" to bounce already-authenticated users. The full `getAuthContext` check (users table, active status) happens inside the login form's `runLogin` and in `_authenticated.beforeLoad`. This keeps the login page fast and avoids unnecessary DB queries for unauthenticated visitors.
+**Why `getAuthContext()` on the login route:**
+The login route only redirects when the user is fully valid for the authenticated app shell. This avoids the stale-session loop where Supabase has a browser session but the app-level user lookup would still fail in `_authenticated.beforeLoad`.
 
 ### Session Persistence and Refresh
 
@@ -133,13 +133,22 @@ _authenticated.beforeLoad:
 - The client check runs once per navigation and is cached for 30 seconds.
 - If a user is deactivated, they'll be caught on the next client-side navigation (within 30s of the cache expiring).
 
+### Router Lifecycle Requirement
+
+TanStack Start calls `getRouter()` during each SSR request. The router instance must therefore be:
+
+- **per-request on the server**
+- **singleton in the browser**
+
+Reusing one module-level router singleton during SSR can leak redirect and location state between requests. In practice, that showed up as `/login` becoming poisoned with a previous protected-route redirect after one anonymous request to a protected page.
+
 ### Logout
 
 ```
 useSignOut mutation --> supabase.auth.signOut()
                    --> invalidateAuthCache()
                    --> queryClient.clear()
-                   --> Navigate to /login
+                   --> Navigate to /login?reason=logged_out
 ```
 
 **Key files:**
@@ -196,15 +205,15 @@ Supabase invite email --> User clicks link --> Supabase verify
 
 | Route | Server `beforeLoad` | Client `beforeLoad` | Notes |
 |-------|--------------------|--------------------|-------|
-| `/` (index) | No redirect | `?code=` → /update-password; else `getAuthContext()` → dashboard | `?code=` redirect client-only (307 loop prevention) |
-| `/login` | No redirect | `getUser()` bounce if authenticated | `ssr: false` |
+| `/` (index) | No redirect | `?code=` → /update-password; else → /login | `?code=` redirect client-only (307 loop prevention) |
+| `/login` | No redirect | `getAuthContext()` bounce if fully authenticated | `ssr: false` |
 | `/_authenticated/*` | `getUser()` gate | `getAuthContext()` full check | Intentional asymmetry (see above) |
 | `/auth/confirm` | `verifyOtp` + `completeSignup` | N/A (server loader) | |
 | `/update-password` | N/A (`ssr: false`) | `exchangeCodeForSession(code)` + `useExchangeHashForSession` | Auth callback route; client-only |
 | `/forgot-password` | None | None | Public page |
 | `/sign-up` | None | None | `ssr: false` |
 | `/accept-invitation` | N/A (`ssr: false`) | Token validation, useExchangeHashForSession | Auth callback route; client-only |
-| `/logout` | None | `signOut` | Standalone logout |
+| `/logout` | None | `useSignOut()` then `/login?reason=logged_out` | Standalone logout |
 
 ---
 
@@ -220,6 +229,7 @@ When `getAuthContext` fails, it redirects to `/login` with a `reason` param:
 | `session_expired` | Invalid refresh token, JWT errors | Sign out first, then redirect |
 | `offline` | `navigator.onLine` is false and no valid cached context | Redirect only |
 | `auth_check_failed` | Transient errors (network, 500s) after retries exhausted | Redirect only |
+| `logged_out` | Intentional user sign-out | Redirect only; render login without error copy |
 
 ### Auth Error Page
 

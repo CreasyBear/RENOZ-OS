@@ -11,34 +11,21 @@ import { Button } from '@/components/ui/button'
 import { CustomerWizard } from '@/components/domain/customers/customer-wizard'
 import {
   useCustomerTags,
-  useCreateCustomer,
-  useCreateContact,
-  useCreateAddress,
+  useCreateCustomerBundle,
 } from '@/hooks/customers'
 import { logger } from '@/lib/logger'
 import { toast } from 'sonner'
-
-interface RelatedCreateFailure {
-  scope: 'contact' | 'address'
-  label: string
-  reason: string
-}
 
 type RecoverableCustomerCreateError = Error & {
   code?: string
   statusCode?: number
   details?: {
     validationErrors?: Record<string, string[]>
-    customerId?: string
-    redirectingToEdit?: boolean
-    relatedCreateFailures?: RelatedCreateFailure[]
   }
 }
 
 const GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE =
   'Customer couldn’t be created right now. Your entries are still here, so you can try again.'
-const PARTIAL_CUSTOMER_CREATE_ERROR_MESSAGE =
-  'Customer was created, but some related records still need attention.'
 
 function toRecoverableCustomerCreateError(error: unknown): RecoverableCustomerCreateError {
   if (error instanceof Error) {
@@ -105,14 +92,7 @@ function NewCustomerPage() {
     color: t.color,
   })) ?? []
 
-  // Create customer using centralized hook (handles cache invalidation)
-  const createCustomerMutation = useCreateCustomer()
-
-  // Create contact using centralized hook
-  const createContactMutation = useCreateContact()
-
-  // Create address using centralized hook
-  const createAddressMutation = useCreateAddress()
+  const createCustomerMutation = useCreateCustomerBundle()
 
   const handleSubmit = async (wizardData: {
     customer: {
@@ -156,106 +136,50 @@ function NewCustomerPage() {
       country: string
     }>
   }) => {
-    const failures: RelatedCreateFailure[] = []
-
-    const recordFailure = (
-      scope: RelatedCreateFailure['scope'],
-      label: string,
-      error: unknown
-    ) => {
-      failures.push({
-        scope,
-        label,
-        reason: error instanceof Error ? error.message : 'Unknown error',
-      })
-    }
-
     try {
-      // Create customer first
       const customer = await createCustomerMutation.mutateAsync({
-        name: wizardData.customer.name,
-        status: wizardData.customer.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
-        type: wizardData.customer.type as 'individual' | 'business' | 'government' | 'non_profit',
-        creditHold: wizardData.customer.creditHold,
-        creditHoldReason: wizardData.customer.creditHoldReason,
-        tags: wizardData.customer.tags,
-        legalName: wizardData.customer.legalName,
-        email: wizardData.customer.email,
-        phone: wizardData.customer.phone,
-        website: wizardData.customer.website,
-        size: wizardData.customer.size as 'micro' | 'small' | 'medium' | 'large' | 'enterprise' | undefined,
-        industry: wizardData.customer.industry,
-        taxId: wizardData.customer.taxId,
-        registrationNumber: wizardData.customer.registrationNumber,
-        warrantyExpiryAlertOptOut: false,
+        customer: {
+          name: wizardData.customer.name,
+          status: wizardData.customer.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
+          type: wizardData.customer.type as 'individual' | 'business' | 'government' | 'non_profit',
+          creditHold: wizardData.customer.creditHold,
+          creditHoldReason: wizardData.customer.creditHoldReason,
+          tags: wizardData.customer.tags,
+          legalName: wizardData.customer.legalName,
+          email: wizardData.customer.email,
+          phone: wizardData.customer.phone,
+          website: wizardData.customer.website,
+          size: wizardData.customer.size as 'micro' | 'small' | 'medium' | 'large' | 'enterprise' | undefined,
+          industry: wizardData.customer.industry,
+          taxId: wizardData.customer.taxId,
+          registrationNumber: wizardData.customer.registrationNumber,
+          warrantyExpiryAlertOptOut: false,
+        },
+        contacts: wizardData.contacts.map((contact) => ({
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          phone: contact.phone,
+          mobile: contact.mobile,
+          title: contact.title,
+          department: contact.department,
+          isPrimary: contact.isPrimary,
+          decisionMaker: contact.decisionMaker,
+          influencer: contact.influencer,
+          emailOptIn: true,
+          smsOptIn: false,
+        })),
+        addresses: wizardData.addresses.map((address) => ({
+          type: address.type as 'billing' | 'shipping' | 'service' | 'headquarters',
+          isPrimary: address.isPrimary,
+          street1: address.street1,
+          street2: address.street2,
+          city: address.city,
+          state: address.state,
+          postcode: address.postcode,
+          country: address.country,
+        })),
       })
-      // Create contacts
-      for (const contact of wizardData.contacts) {
-        const label = `${contact.firstName} ${contact.lastName}`.trim() || contact.id
-        try {
-          await createContactMutation.mutateAsync({
-            customerId: customer.id,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            email: contact.email,
-            phone: contact.phone,
-            mobile: contact.mobile,
-            title: contact.title,
-            department: contact.department,
-            isPrimary: contact.isPrimary,
-            decisionMaker: contact.decisionMaker,
-            influencer: contact.influencer,
-          })
-        } catch (error) {
-          recordFailure('contact', label, error)
-        }
-      }
-
-      // Create addresses
-      for (const address of wizardData.addresses) {
-        const label = address.street1 || address.id
-        try {
-          await createAddressMutation.mutateAsync({
-            customerId: customer.id,
-            type: address.type as 'billing' | 'shipping' | 'service' | 'headquarters',
-            isPrimary: address.isPrimary,
-            street1: address.street1,
-            street2: address.street2,
-            city: address.city,
-            state: address.state,
-            postcode: address.postcode,
-            country: address.country,
-          })
-        } catch (error) {
-          recordFailure('address', label, error)
-        }
-      }
-
-      if (failures.length > 0) {
-        const preview = failures
-          .slice(0, 3)
-          .map((f) => `${f.scope} "${f.label}"`)
-          .join(' • ')
-        const remaining = failures.length - 3
-        logger.warn('Customer created with related creation failures', {
-          context: 'customers-new',
-          customerId: customer.id,
-          failureCount: failures.length,
-          failures,
-        })
-        toast.error('Customer created, but some related records failed', {
-          description: remaining > 0 ? `${preview} • +${remaining} more` : preview,
-        })
-        navigate({ to: '/customers/$customerId/edit', params: { customerId: customer.id }, search: {} })
-        throw Object.assign(new Error(PARTIAL_CUSTOMER_CREATE_ERROR_MESSAGE), {
-          code: 'PARTIAL_RELATED_CREATE_FAILURE',
-          details: {
-            customerId: customer.id,
-            redirectingToEdit: true,
-            relatedCreateFailures: failures,
-          },
-        } satisfies Omit<RecoverableCustomerCreateError, 'name' | 'message'>)
-      }
 
       toast.success('Customer created successfully')
       navigate({ to: '/customers/$customerId', params: { customerId: customer.id }, search: {} })
@@ -271,9 +195,7 @@ function NewCustomerPage() {
   }
 
   const isLoading =
-    createCustomerMutation.isPending ||
-    createContactMutation.isPending ||
-    createAddressMutation.isPending
+    createCustomerMutation.isPending
 
   return (
     <PageLayout variant="full-width">

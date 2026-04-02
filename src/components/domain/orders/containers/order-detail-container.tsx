@@ -8,7 +8,7 @@
  * @see STANDARDS.md - Container/Presenter pattern
  */
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   Edit,
@@ -27,7 +27,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -46,23 +50,28 @@ import { DisabledMenuItem } from '@/components/shared/disabled-with-tooltip';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { useOrderDetailComposite } from '@/hooks/orders/use-order-detail-composite';
-import { toastSuccess } from '@/hooks';
+import { toastError, toastSuccess } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { useTrackView } from '@/hooks/search';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
+import type { OrderWorkflowAction } from '@/lib/schemas/orders';
 import { OrderDetailView } from '../views/order-detail-view';
 import { OrderEditDialog } from '../cards/order-edit-dialog';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
 import { ShipOrderDialog } from '../fulfillment/ship-order-dialog';
 import { ConfirmDeliveryDialog } from '../fulfillment/confirm-delivery-dialog';
-import { AmendmentRequestDialogContainer } from '../amendments';
+import { AmendmentRequestDialogContainer, AmendmentReviewDialog } from '../amendments';
 import { RecordPaymentDialog } from '../dialogs/record-payment-dialog';
-import { ORDER_STATUS_DETAIL_CONFIG } from '../order-status-config';
+import { RefundPaymentDialog } from '../dialogs/refund-payment-dialog';
 import { RmaCreateDialog } from '@/components/domain/support/rma/rma-create-dialog';
 import { useCreateRma } from '@/hooks/support';
 import { useOrderDetailDialogState } from './use-order-detail-dialog-state';
 import { useOrderDetailRouteIntents } from './use-order-detail-route-intents';
 import { useOrderDetailContainerActions } from './use-order-detail-container-actions';
+import {
+  useOrderWorkflowOptions,
+  useUpdateOrderStatus,
+} from '@/hooks/orders/use-order-status';
 
 export interface OrderDetailContainerRenderProps {
   /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
@@ -121,16 +130,18 @@ interface HeaderActionsProps {
   orderStatus: string;
   paymentStatus?: string;
   balanceDue: number;
-  nextStatusActions: string[];
-  isUpdatingStatus: boolean;
+  workflowActions?: OrderWorkflowAction[];
+  isRunningWorkflowAction: boolean;
   isDuplicating: boolean;
   isDeleting: boolean;
-  onUpdateStatus: (status: string) => void;
+  onWorkflowAction: (action: OrderWorkflowAction) => void;
   onDuplicate: () => void;
   onPrint: () => void;
   onDeleteClick: () => void;
   onRequestAmendment?: () => void;
   onRecordPayment?: () => void;
+  onCreateRma?: () => void;
+  canCreateRma?: boolean;
   /** When creating RMA from issue - preserve in Back link */
   backLinkSearch?: Record<string, string>;
   /** When false, Back button is omitted (route provides it in leading) */
@@ -142,16 +153,18 @@ function HeaderActions({
   orderStatus,
   paymentStatus,
   balanceDue,
-  nextStatusActions,
-  isUpdatingStatus,
+  workflowActions = [],
+  isRunningWorkflowAction,
   isDuplicating,
   isDeleting,
-  onUpdateStatus,
+  onWorkflowAction,
   onDuplicate,
   onPrint,
   onDeleteClick,
   onRequestAmendment,
   onRecordPayment,
+  onCreateRma,
+  canCreateRma,
   backLinkSearch,
   includeBack = true,
 }: HeaderActionsProps) {
@@ -179,27 +192,6 @@ function HeaderActions({
         </Button>
       )}
 
-      {/* Status Actions */}
-      {nextStatusActions.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button disabled={isUpdatingStatus}>
-              {isUpdatingStatus ? 'Updating...' : 'Update Status'}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {nextStatusActions.map((nextStatus) => (
-              <DropdownMenuItem
-                key={nextStatus}
-                onClick={() => onUpdateStatus(nextStatus)}
-              >
-                Mark as {ORDER_STATUS_DETAIL_CONFIG[nextStatus as keyof typeof ORDER_STATUS_DETAIL_CONFIG]?.label || nextStatus}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-
       {/* More Actions */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -209,6 +201,82 @@ function HeaderActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={isRunningWorkflowAction}>
+              {isRunningWorkflowAction ? 'Working...' : 'Workflow'}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-72">
+              <DropdownMenuLabel>Current: {orderStatus}</DropdownMenuLabel>
+              {workflowActions.filter((action) => action.category === 'next').length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Next Steps</DropdownMenuLabel>
+                  {workflowActions
+                    .filter((action) => action.category === 'next')
+                    .map((action) => (
+                      <DropdownMenuItem
+                        key={`next-${action.key}-${action.shipmentId ?? 'none'}`}
+                        onClick={() => onWorkflowAction(action)}
+                      >
+                        <div className="flex flex-col">
+                          <span>{action.label}</span>
+                          {action.description && (
+                            <span className="text-xs text-muted-foreground">
+                              {action.description}
+                            </span>
+                          )}
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                </>
+              )}
+              {workflowActions.filter((action) => action.category === 'recovery').length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Recovery</DropdownMenuLabel>
+                  {workflowActions
+                    .filter((action) => action.category === 'recovery')
+                    .map((action) => (
+                      <DropdownMenuItem
+                        key={`recovery-${action.key}-${action.shipmentId ?? 'none'}`}
+                        onClick={() => onWorkflowAction(action)}
+                      >
+                        <div className="flex flex-col">
+                          <span>{action.label}</span>
+                          {action.description && (
+                            <span className="text-xs text-muted-foreground">
+                              {action.description}
+                            </span>
+                          )}
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                </>
+              )}
+              {workflowActions.filter((action) => action.category === 'blocked').length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Unavailable</DropdownMenuLabel>
+                  {workflowActions
+                    .filter((action) => action.category === 'blocked')
+                    .map((action) => (
+                      <DisabledMenuItem
+                        key={`blocked-${action.key}-${action.shipmentId ?? 'none'}`}
+                        disabledReason={action.disabledReason}
+                      >
+                        {action.label}
+                      </DisabledMenuItem>
+                    ))}
+                </>
+              )}
+              {workflowActions.length === 0 && (
+                <DisabledMenuItem disabledReason="No workflow actions are available right now.">
+                  No workflow actions available
+                </DisabledMenuItem>
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           {/* Edit - always visible, disabled when not draft */}
           {orderStatus === 'draft' ? (
             <DropdownMenuItem className="p-0">
@@ -257,6 +325,19 @@ function HeaderActions({
                 </span>
               )}
             </DropdownMenuItem>
+          )}
+          {onCreateRma && (
+            canCreateRma ? (
+              <DropdownMenuItem onClick={onCreateRma}>
+                <Package className="h-4 w-4 mr-2" />
+                Create RMA
+              </DropdownMenuItem>
+            ) : (
+              <DisabledMenuItem disabledReason="RMAs can be created once items have been shipped.">
+                <Package className="h-4 w-4 mr-2" />
+                Create RMA
+              </DisabledMenuItem>
+            )
           )}
           <DropdownMenuSeparator />
           {/* Request Amendment - only for non-draft orders; disabled when cancelled or delivered+paid */}
@@ -322,6 +403,8 @@ export function OrderDetailContainer({
   className,
 }: OrderDetailContainerProps) {
   const navigate = useNavigate();
+  const [reviewAmendmentId, setReviewAmendmentId] = useState<string | null>(null);
+  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const clearSearch = useCallback(() => {
     navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
   }, [navigate, orderId]);
@@ -370,6 +453,33 @@ export function OrderDetailContainer({
     orderStatus: detail.order?.status,
     orderVersion: detail.order?.version,
     refetch: detail.refetch,
+  });
+  const refundPayment = useMemo(
+    () =>
+      refundPaymentId
+        ? containerActions.payments.find((payment) => payment.id === refundPaymentId) ?? null
+        : null,
+    [containerActions.payments, refundPaymentId]
+  );
+  const refundableAmount = useMemo(() => {
+    if (!refundPayment) return 0;
+    const refundedSoFar = containerActions.payments
+      .filter(
+        (payment) => payment.isRefund && payment.relatedPaymentId === refundPayment.id
+      )
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    return Math.max(0, Number(refundPayment.amount) - refundedSoFar);
+  }, [containerActions.payments, refundPayment]);
+  const workflowOptionsQuery = useOrderWorkflowOptions(orderId, !!detail.order);
+  const cancelOrderMutation = useUpdateOrderStatus({
+    onSuccess: () => {
+      toastSuccess('Order cancelled');
+      detail.refetch();
+    },
+    onError: (error) => {
+      toastError(error.message || 'Unable to cancel order.');
+      detail.refetch();
+    },
   });
   const orderStatus = detail.order?.status;
   const { shipIntentBlocked } = useOrderDetailRouteIntents({
@@ -422,6 +532,7 @@ export function OrderDetailContainer({
       };
     });
   }, [detail.order]);
+  const canCreateGenericRma = rmaOrderLineItems.length > 0;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Loading State
@@ -490,18 +601,49 @@ export function OrderDetailContainer({
       orderStatus={detail.order.status}
       paymentStatus={detail.order.paymentStatus}
       balanceDue={Number(detail.order.balanceDue || 0)}
-      nextStatusActions={detail.nextStatusActions}
-      isUpdatingStatus={detail.isUpdatingStatus}
+      workflowActions={workflowOptionsQuery.data?.actions}
+      isRunningWorkflowAction={cancelOrderMutation.isPending}
       isDuplicating={detail.isDuplicating}
       isDeleting={detail.isDeleting}
-      onUpdateStatus={(status) => {
-        detail.actions.onUpdateStatus(status as import('@/lib/schemas/orders').OrderStatus);
+      onWorkflowAction={(action) => {
+        switch (action.key) {
+          case 'open_pick':
+            openPick();
+            return;
+          case 'open_ship':
+            openShip();
+            return;
+          case 'open_shipments':
+            detail.onTabChange('fulfillment');
+            return;
+          case 'confirm_delivery':
+            if (action.shipmentId) {
+              openConfirmDelivery(action.shipmentId);
+            } else {
+              detail.onTabChange('fulfillment');
+            }
+            return;
+          case 'cancel_order':
+            if (!window.confirm('Cancel this order? This stops operational work before anything ships.')) {
+              return;
+            }
+            cancelOrderMutation.mutate({
+              id: orderId,
+              status: 'cancelled',
+              notes: 'Cancelled from order workflow control',
+            });
+            return;
+          default:
+            return;
+        }
       }}
       onDuplicate={() => detail.actions.onDuplicate()}
       onPrint={detail.actions.onPrint}
       onDeleteClick={() => detail.setDeleteDialogOpen(true)}
       onRequestAmendment={openAmendment}
       onRecordPayment={openPayment}
+      onCreateRma={openRma}
+      canCreateRma={canCreateGenericRma}
       backLinkSearch={
         fromIssueId && detail.order?.customerId
           ? { customerId: detail.order.customerId, fromIssueId }
@@ -527,11 +669,13 @@ export function OrderDetailContainer({
         documentActions={containerActions.documentActions}
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onScheduleFollowUp}
+        onOrderUpdated={detail.refetch}
         fulfillmentActions={{
           onPickItems: openPick,
           onShipOrder: openShip,
           onConfirmDelivery: openConfirmDelivery,
           onApplyAmendment: containerActions.handleApplyAmendment,
+          onReviewAmendment: (amendmentId) => setReviewAmendmentId(amendmentId),
         }}
         paymentActions={{
           payments: containerActions.payments.map(p => ({
@@ -552,9 +696,29 @@ export function OrderDetailContainer({
             netAmount: 0,
           },
           onRecordPayment: openPayment,
+          onRefundPayment: (paymentId: string) => {
+            const payment = containerActions.payments.find((item) => item.id === paymentId);
+            if (!payment) {
+              toastError('Payment not found for refund.');
+              return;
+            }
+            setRefundPaymentId(paymentId);
+          },
         }}
         headerActions={children ? null : headerActionsEl}
         className={className}
+      />
+
+      <AmendmentReviewDialog
+        open={reviewAmendmentId !== null}
+        onOpenChange={(open) => {
+          if (!open) setReviewAmendmentId(null);
+        }}
+        amendmentId={reviewAmendmentId ?? ''}
+        onSuccess={() => {
+          setReviewAmendmentId(null);
+          detail.refetch();
+        }}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -649,6 +813,31 @@ export function OrderDetailContainer({
         isSubmitting={containerActions.createPaymentMutation.isPending}
       />
 
+      {refundPayment && (
+        <RefundPaymentDialog
+          open={refundPaymentId !== null}
+          onOpenChange={(open) => {
+            if (!open) setRefundPaymentId(null);
+          }}
+          orderNumber={detail.order.orderNumber}
+          originalPaymentAmount={Number(refundPayment.amount)}
+          refundableAmount={refundableAmount}
+          onSubmit={async ({ amount, notes }) => {
+            await containerActions.createRefundMutation.mutateAsync({
+              originalPaymentId: refundPayment.id,
+              amount,
+              notes,
+            });
+            toastSuccess('Refund recorded successfully');
+            containerActions.refetchPayments();
+            containerActions.refetchSummary();
+            detail.refetch();
+            setRefundPaymentId(null);
+          }}
+          isSubmitting={containerActions.createRefundMutation.isPending}
+        />
+      )}
+
       {/* Edit Order Dialog (from ?edit=true in URL) */}
       {detail.order.status === 'draft' && (
         <OrderEditDialog
@@ -673,8 +862,8 @@ export function OrderDetailContainer({
         />
       )}
 
-      {/* RMA Create Dialog (from issue flow) */}
-      {fromIssueId && (
+      {/* RMA Create Dialog */}
+      {(fromIssueId || canCreateGenericRma) && (
         <RmaCreateDialog
           open={dialogState.open === 'rma'}
           onOpenChange={(open) => {

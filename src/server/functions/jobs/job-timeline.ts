@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, gte, lte, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobAssignments, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
@@ -87,7 +88,7 @@ function calculateTimelineSpan(
  * Returns jobs with timeline span calculations for visualization.
  */
 export const listTimelineJobs = createServerFn({ method: 'GET' })
-  .inputValidator(listTimelineJobsSchema)
+  .inputValidator(normalizeObjectInput(listTimelineJobsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -177,7 +178,7 @@ export const listTimelineJobs = createServerFn({ method: 'GET' })
  * Get timeline statistics for a date range.
  */
 export const getTimelineStats = createServerFn({ method: 'GET' })
-  .inputValidator(listTimelineJobsSchema)
+  .inputValidator(normalizeObjectInput(listTimelineJobsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

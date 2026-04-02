@@ -177,7 +177,7 @@ function PricingTable({
     <DataTable
       data={items as PricingTableItem[]}
       columns={columns}
-      enableSorting
+      enableSorting={false}
       pagination={{ pageSize: 20 }}
       emptyMessage="No price lists found."
     />

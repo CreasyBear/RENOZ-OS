@@ -20,6 +20,10 @@ Related standards:
 5. `docs/reliability/sql/finance-cost-layer-invariants.sql`
 6. `docs/reliability/sql/serialized-lineage-invariants.sql`
 
+Operator workflow guide:
+
+1. `docs/inventory/OPERATOR-STOCK-IN-WORKFLOWS.md`
+
 ## Canonical Source of Truth
 
 ### Finance / valuation

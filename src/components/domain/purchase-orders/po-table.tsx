@@ -2,7 +2,7 @@
  * Purchase Order Table Component
  *
  * Data table displaying purchase orders using TanStack Table with
- * selection support, server-side sorting, and shared cell components.
+ * selection support and local/manual sorting for legacy embedded usage.
  *
  * @see TABLE-STANDARDS for pattern documentation
  */
@@ -31,7 +31,7 @@ import { createPOColumns } from "./po-columns";
 // ============================================================================
 // TYPES
 // ============================================================================
-// Server sort fields + client-only (supplierName). Used for client-side table sorting.
+// Local-only sort fields for this legacy table variant.
 const POTABLE_SORT_FIELDS = [
   'poNumber',
   'supplierName',
@@ -72,7 +72,7 @@ export const POTable = memo(function POTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastSelectedIndexRef = useRef<number | null>(null);
 
-  // Sort state (client-side for backward compatibility)
+  // Sort state (local/manual for legacy compatibility)
   const [sort, setSort] = useState<{ field: POTableSortField; direction: SortDirection }>({
     field: "orderDate",
     direction: "desc",
@@ -141,7 +141,7 @@ export const POTable = memo(function POTable({
     lastSelectedIndexRef.current = targetIndex;
   }, [orders]);
 
-  // Sort orders (client-side)
+  // Sort the current in-memory rows locally for this legacy variant.
   const sortedOrders = useMemo(() => {
     const sorted = [...orders];
     sorted.sort((a, b) => {
@@ -180,11 +180,13 @@ export const POTable = memo(function POTable({
   }, [orders, sort]);
 
   // Handle sort changes
-  const handleSort = useCallback((field: string) => {
+  const handleSort = useCallback((field: string, direction?: "asc" | "desc") => {
     if (!isPOTableSortField(field)) return;
     setSort((current) => ({
       field,
-      direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+      direction:
+        direction ??
+        (current.field === field && current.direction === "asc" ? "desc" : "asc"),
     }));
   }, []);
 
@@ -228,7 +230,7 @@ export const POTable = memo(function POTable({
     (updater: SortingState | ((prev: SortingState) => SortingState)) => {
       const newSorting = typeof updater === "function" ? updater(sorting) : updater;
       if (newSorting.length > 0) {
-        handleSort(newSorting[0].id);
+        handleSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
       }
     },
     [sorting, handleSort]
@@ -239,7 +241,7 @@ export const POTable = memo(function POTable({
     data: sortedOrders,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    manualSorting: false, // Client-side sorting for backward compatibility
+    manualSorting: true, // Local/manual sorting; do not let TanStack re-sort the current page
     state: { sorting },
     onSortingChange: handleSortingChange,
   });

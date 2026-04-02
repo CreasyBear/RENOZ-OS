@@ -156,6 +156,21 @@ export const getCustomers = createServerFn({ method: 'GET' })
   });
 ```
 
+### GET `inputValidator` and object query schemas
+
+TanStack Start may pass **`undefined`** into GET server functions when the client omits the payload. A bare `z.object({...})` then fails at **`path: []`** with `expected: "object"`, and **field `.default()` values never run**.
+
+**Do this:**
+
+1. Wrap the object schema with **`normalizeObjectInput`** from `src/lib/schemas/_shared/patterns.ts` (it preprocesses `value ?? {}` before parsing).
+2. If any code under `src/` must call **`.pick()`**, **`.shape`**, or **`.extend()`** on the exported schema, export a plain **`FooBaseSchema`** (`z.object(...)`) and set **`FooSchema = normalizeObjectInput(FooBaseSchema)`**. Use **`FooBaseSchema.pick(...)`** in server functions — **never** `.pick` on the normalized export (it is a `ZodEffects` wrapper, so **`pick` is not a function** at runtime).
+3. Do **not** slap **`.default({})`** on the root of schemas built from **`paginationSchema.merge` / `.extend` / chained `.transform`** when you need inner pagination defaults; prefer **`normalizeObjectInput`** around the whole chain instead.
+4. For broad validation-boundary sweeps, work **domain by domain** instead of brute-forcing all of `src/server/functions`. Inventory one bounded domain, harden it, add/adjust tests for that domain, verify it, then move on.
+
+**Regression tests:** Add cases to `tests/unit/root-input-normalization-sweep.test.ts` (or the domain-specific unit file) asserting `parse(undefined)` matches `parse({})` where defaults apply, and that required fields still fail with a **non-root** path (not only `path: []`).
+
+**TanStack `createServerFn` typing:** Wrapping the validator in `z.preprocess` / `normalizeObjectInput` can change inferred client options (e.g. `getX({ data })` no longer type-checks). Prefer exporting a normalized schema from **`src/lib/schemas/...`** when possible. If a hook relies on `Parameters<typeof getX>[0]['data']`, keep that endpoint’s `inputValidator` on a **plain `z.object`** (skip normalization for that call site) until Start’s types align with preprocess wrappers — see **`getPurchaseOrder`** in supplier purchase-order server functions.
+
 ### Database Conventions
 
 - **Casing**: snake_case for all tables and columns
@@ -315,3 +330,6 @@ Key commands:
 - **Typecheck fixes must follow SCHEMA-TRACE.md and STANDARDS.md**: When fixing TypeScript errors, do NOT use type assertions (`as X`, `as unknown as X`), `params: {} as never`, or ad-hoc `?? null`/`?? undefined` scattered in views. Fix at boundaries: (1) schema types in `lib/schemas/`, (2) server fn return types, (3) normalize at a single boundary per SCHEMA-TRACE §8. Use proper route types instead of `as never`. See [docs/remediation/typecheck-phase3-debt.md](./docs/remediation/typecheck-phase3-debt.md) for remediation patterns.
 - **No unused props**: When adding props to a component, ensure they are used. Do not add props "for future use" or as placeholders. Remove dead props during implementation.
 - **Do not name files after external products**: Use generic, descriptive names (e.g. `document-constants.ts`, `document-fixed-header.tsx`) rather than product names (e.g. `midday-constants.ts`). Same for exported identifiers: prefer `DOCUMENT_*`, `DocumentFixedHeader` over `MIDDAY_*`, `MiddayFixedHeader`.
+- **For manual production DB patching in this project, prefer Supabase MCP `execute_sql`** when the user explicitly wants a quick direct fix instead of migration bookkeeping.
+- **Page-specific UI crashes**: Prefer fixing at the route or domain boundary (normalize props / defaultValues for that screen) rather than changing shared primitives (e.g. `SelectField`) unless the fix is clearly needed app-wide and the user agrees.
+- **Code traces** (`docs/code-traces/`): Must meet [docs/code-traces/TRACE-STANDARD.md](./docs/code-traces/TRACE-STANDARD.md) — not shallow file lists. Include trust boundary, canonical Zod vs UI schemas, sequence/saga, persistence, failure matrix, cache invalidation, and drift. Use [trace-template.md](./docs/code-traces/trace-template.md); mark DRAFT vs COMPLETE in the trace header. Prefer numbered filenames (`NN-topic.md`) and register order in [docs/code-traces/README.md](./docs/code-traces/README.md).

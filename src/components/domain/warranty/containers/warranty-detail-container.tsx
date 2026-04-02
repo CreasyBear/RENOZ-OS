@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import {
   useWarranty,
   useWarrantyClaimsByWarranty,
+  useWarrantyClaimSummary,
   useCreateWarrantyClaim,
   useApproveClaim,
   useDenyClaim,
@@ -40,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { useUnifiedActivities } from '@/hooks/activities';
+import { getSummaryState } from '@/lib/metrics/summary-health';
 import type { WarrantyExtensionTypeValue } from '@/lib/schemas/warranty/extensions';
 import type {
   WarrantyClaimListItem,
@@ -68,6 +70,16 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     isLoading: claimsLoading,
     refetch: refetchClaims,
   } = useWarrantyClaimsByWarranty(warrantyId);
+  const {
+    data: claimSummary,
+    isLoading: claimSummaryLoading,
+    error: claimSummaryError,
+  } = useWarrantyClaimSummary(warrantyId);
+  const claimSummaryState = getSummaryState({
+    data: claimSummary,
+    error: claimSummaryError,
+    isLoading: claimSummaryLoading,
+  });
   
   // Server function returns ListWarrantyClaimsResult with productId at source (SCHEMA-TRACE.md)
   const claims = useMemo<WarrantyClaimListItem[]>(
@@ -413,9 +425,12 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         }}
         headerActionsInLayout={!!children}
         claims={claims}
+        claimSummary={claimSummary}
+        claimSummaryState={claimSummaryState}
         extensions={extensionsData?.extensions ?? []}
         certificateStatus={certificateStatus ?? undefined}
         isClaimsLoading={claimsLoading}
+        isClaimSummaryLoading={claimSummaryLoading}
         isExtensionsLoading={extensionsLoading}
         isExtensionsError={extensionsError}
         isCertificateLoading={certificateLoading}

@@ -10,20 +10,12 @@ describe('route-auth retry behavior', () => {
     expect(isRetryableAuthError({ status: 403 })).toBe(true)
   })
 
-  it('treats AUTH_USER_MISSING as retryable during auth bootstrap', () => {
-    expect(isRetryableAuthError(new Error('AUTH_USER_MISSING'))).toBe(true)
+  it('treats AUTH_USER_MISSING as terminal anonymous state', () => {
+    expect(isRetryableAuthError(new Error('AUTH_USER_MISSING'))).toBe(false)
   })
 
-  it('retries transient AUTH_USER_MISSING and eventually resolves', async () => {
-    const fn = vi
-      .fn<() => Promise<string>>()
-      .mockRejectedValueOnce(new Error('AUTH_USER_MISSING'))
-      .mockResolvedValueOnce('ok')
-
-    const result = await withAuthRetry(fn, 1, 1)
-
-    expect(result).toBe('ok')
-    expect(fn).toHaveBeenCalledTimes(2)
+  it('treats Supabase auth session missing as terminal anonymous state', () => {
+    expect(isRetryableAuthError(new Error('Auth session missing!'))).toBe(false)
   })
 
   it('retries transient 403 and eventually resolves', async () => {

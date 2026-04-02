@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { normalizeObjectInput } from "../_shared/patterns";
 
 // ============================================================================
 // ENUM SCHEMAS
@@ -181,28 +182,44 @@ export const updateProjectSchema = z.object({
   estimatedTotalValue: z.number().positive().optional(),
 });
 
-export const projectListQuerySchema = z.object({
-  page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(20),
-  sortBy: z.enum(["createdAt", "title", "status", "priority", "targetCompletionDate"]).default("createdAt"),
-  sortOrder: z.enum(["asc", "desc"]).default("desc"),
-  search: z.string().optional(),
-  status: projectStatusSchema.optional(),
-  projectType: projectTypeSchema.optional(),
-  priority: projectPrioritySchema.optional(),
-  customerId: z.string().uuid().optional(),
-});
+export const PROJECT_SORT_FIELDS = [
+  "createdAt",
+  "title",
+  "status",
+  "priority",
+  "targetCompletionDate",
+] as const;
 
-export const projectCursorQuerySchema = z.object({
-  cursor: z.string().optional(),
-  pageSize: z.number().int().positive().max(100).default(20),
-  sortOrder: z.enum(["asc", "desc"]).default("desc"),
-  search: z.string().optional(),
-  status: projectStatusSchema.optional(),
-  projectType: projectTypeSchema.optional(),
-  priority: projectPrioritySchema.optional(),
-  customerId: z.string().uuid().optional(),
-});
+export const projectSortFieldSchema = z.enum(PROJECT_SORT_FIELDS);
+
+export type ProjectSortField = z.infer<typeof projectSortFieldSchema>;
+
+export const projectListQuerySchema = normalizeObjectInput(
+  z.object({
+    page: z.number().int().positive().default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    sortBy: projectSortFieldSchema.default("createdAt"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+    search: z.string().optional(),
+    status: projectStatusSchema.optional(),
+    projectType: projectTypeSchema.optional(),
+    priority: projectPrioritySchema.optional(),
+    customerId: z.string().uuid().optional(),
+  })
+);
+
+export const projectCursorQuerySchema = normalizeObjectInput(
+  z.object({
+    cursor: z.string().optional(),
+    pageSize: z.number().int().positive().max(100).default(20),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+    search: z.string().optional(),
+    status: projectStatusSchema.optional(),
+    projectType: projectTypeSchema.optional(),
+    priority: projectPrioritySchema.optional(),
+    customerId: z.string().uuid().optional(),
+  })
+);
 
 // ============================================================================
 // PROJECT COMPLETION SCHEMAS

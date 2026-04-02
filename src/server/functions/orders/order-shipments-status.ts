@@ -25,8 +25,9 @@ import {
 import { normalizeSerial } from '@/lib/serials';
 import { serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
 import { validateShipmentStatusTransition } from './order-shipments-validation';
+import { recomputeOrderFulfillmentStatus } from './order-fulfillment-status';
 
-const addTrackingEventInputSchema = z.object({
+const _addTrackingEventInputSchema = z.object({
   shipmentId: z.string().uuid(),
   event: z.object({
     timestamp: z.string().datetime(),
@@ -377,10 +378,11 @@ export async function confirmDeliveryHandler({
         .where(eq(orderLineItems.id, item.orderLineItemId));
     }
 
-    await bumpOrderAggregateVersion(tx, {
-      orderId: existing.orderId,
+    await recomputeOrderFulfillmentStatus(tx, {
       organizationId: ctx.organizationId,
+      orderId: existing.orderId,
       userId: ctx.user.id,
+      deliveredAt,
     });
 
     await tx.insert(activities).values({
@@ -406,7 +408,7 @@ export async function confirmDeliveryHandler({
 export async function addTrackingEventHandler({
   data,
 }: {
-  data: z.infer<typeof addTrackingEventInputSchema>;
+  data: z.infer<typeof _addTrackingEventInputSchema>;
 }) {
   const ctx = await withAuth();
 

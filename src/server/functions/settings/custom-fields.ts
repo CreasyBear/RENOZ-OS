@@ -23,7 +23,7 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs-internal';
-import { idParamSchema } from '@/lib/schemas';
+import { idParamQuerySchema, idParamSchema, normalizeObjectInput } from '@/lib/schemas';
 import { NotFoundError, ConflictError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -110,10 +110,12 @@ const updateCustomFieldSchema = z.object({
   metadata: metadataSchema.optional(),
 });
 
-const listCustomFieldsSchema = z.object({
+const listCustomFieldsSchema = normalizeObjectInput(
+  z.object({
   entityType: entityTypeSchema,
   includeInactive: z.boolean().optional().default(false),
-});
+  })
+);
 
 const setFieldValueSchema = z.object({
   customFieldId: z.string().uuid(),
@@ -121,10 +123,12 @@ const setFieldValueSchema = z.object({
   value: z.unknown(),
 });
 
-const getFieldValuesSchema = z.object({
+const getFieldValuesSchema = normalizeObjectInput(
+  z.object({
   entityType: entityTypeSchema,
   entityId: z.string().uuid(),
-});
+  })
+);
 
 const reorderFieldsSchema = z.object({
   entityType: entityTypeSchema,
@@ -186,7 +190,7 @@ export const listCustomFields = createServerFn({ method: 'GET' })
  * Get a single custom field by ID.
  */
 export const getCustomField = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   // @ts-expect-error - TanStack Start type inference limitation with complex returns
   .handler(async ({ data }) => {
     const ctx = await withAuth();

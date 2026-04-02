@@ -8,6 +8,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern, escapeLike } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { products, categories, productAttributes, productAttributeValues } from 'drizzle/schema';
 import { eq, and, or, isNull, ilike, sql, desc, asc, inArray, gte, lte } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
@@ -27,28 +28,30 @@ import {
  */
 export const searchProducts = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      query: z.string().min(1).max(200),
-      categoryId: z.string().uuid().optional(),
-      status: z.enum(['active', 'inactive', 'discontinued']).optional(),
-      type: z.enum(['physical', 'service', 'digital', 'bundle']).optional(),
-      minPrice: z.number().min(0).optional(),
-      maxPrice: z.number().min(0).optional(),
-      attributes: z
-        .array(
-          z.object({
-            attributeId: z.string().uuid(),
-            value: z.union([z.string(), z.number(), z.boolean()]),
-            operator: z.enum(['eq', 'gt', 'lt', 'gte', 'lte', 'contains']).default('eq'),
-          })
-        )
-        .optional(),
-      sortBy: z
-        .enum(['relevance', 'name', 'price_asc', 'price_desc', 'created'])
-        .default('relevance'),
-      page: z.number().int().min(1).default(1),
-      limit: z.number().int().min(1).max(100).default(20),
-    })
+    normalizeObjectInput(
+      z.object({
+        query: z.string().min(1).max(200),
+        categoryId: z.string().uuid().optional(),
+        status: z.enum(['active', 'inactive', 'discontinued']).optional(),
+        type: z.enum(['physical', 'service', 'digital', 'bundle']).optional(),
+        minPrice: z.number().min(0).optional(),
+        maxPrice: z.number().min(0).optional(),
+        attributes: z
+          .array(
+            z.object({
+              attributeId: z.string().uuid(),
+              value: z.union([z.string(), z.number(), z.boolean()]),
+              operator: z.enum(['eq', 'gt', 'lt', 'gte', 'lte', 'contains']).default('eq'),
+            })
+          )
+          .optional(),
+        sortBy: z
+          .enum(['relevance', 'name', 'price_asc', 'price_desc', 'created'])
+          .default('relevance'),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(20),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -305,10 +308,12 @@ function matchesFilter(
  */
 export const getSearchSuggestions = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      query: z.string().min(1).max(100),
-      limit: z.number().int().min(1).max(20).default(10),
-    })
+    normalizeObjectInput(
+      z.object({
+        query: z.string().min(1).max(100),
+        limit: z.number().int().min(1).max(20).default(10),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -384,9 +389,11 @@ export const getSearchSuggestions = createServerFn({ method: 'GET' })
  */
 export const getPopularSearchTerms = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      limit: z.number().int().min(1).max(20).default(10),
-    })
+    normalizeObjectInput(
+      z.object({
+        limit: z.number().int().min(1).max(20).default(10),
+      })
+    )
   )
   .handler(async ({ data }) => {
     await withAuth();
@@ -404,10 +411,12 @@ export const getPopularSearchTerms = createServerFn({ method: 'GET' })
  */
 export const getSearchFacets = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      query: z.string().optional(),
-      categoryId: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        query: z.string().optional(),
+        categoryId: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -543,9 +552,11 @@ export const recordSearchEvent = createServerFn({ method: 'POST' })
  */
 export const getSearchAnalytics = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      period: z.enum(['day', 'week', 'month']).default('week'),
-    })
+    normalizeObjectInput(
+      z.object({
+        period: z.enum(['day', 'week', 'month']).default('week'),
+      })
+    )
   )
   .handler(async ({ data }) => {
     await withAuth();
@@ -570,10 +581,12 @@ export const getSearchAnalytics = createServerFn({ method: 'GET' })
  */
 export const getRelatedProducts = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      limit: z.number().int().min(1).max(20).default(6),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        limit: z.number().int().min(1).max(20).default(6),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();

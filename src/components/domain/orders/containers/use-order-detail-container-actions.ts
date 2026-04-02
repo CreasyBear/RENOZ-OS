@@ -9,13 +9,12 @@ import {
   useOrderPayments,
   useOrderPaymentSummary,
   useCreateOrderPayment,
+  useCreateRefundPayment,
 } from '@/hooks/orders/use-order-payments';
 import { useApplyAmendment } from '@/hooks/orders';
 import {
   useGenerateOrderQuote,
   useGenerateOrderInvoice,
-  useGenerateOrderPackingSlip,
-  useGenerateOrderDeliveryNote,
 } from '@/hooks/documents';
 import type { EditOrderFormData } from '../cards/order-edit-dialog.schema';
 
@@ -31,8 +30,6 @@ export function useOrderDetailContainerActions(
 ) {
   const generateQuote = useGenerateOrderQuote();
   const generateInvoice = useGenerateOrderInvoice();
-  const generatePackingSlip = useGenerateOrderPackingSlip();
-  const generateDeliveryNote = useGenerateOrderDeliveryNote();
   const updateOrderMutation = useUpdateOrder();
   const applyAmendmentMutation = useApplyAmendment();
 
@@ -45,6 +42,7 @@ export function useOrderDetailContainerActions(
     refetch: refetchSummary,
   } = useOrderPaymentSummary(options.orderId);
   const createPaymentMutation = useCreateOrderPayment(options.orderId);
+  const createRefundMutation = useCreateRefundPayment(options.orderId);
 
   const { data: customersData } = useCustomers({
     pageSize: 100,
@@ -112,30 +110,8 @@ export function useOrderDetailContainerActions(
         toastError(error instanceof Error ? error.message : 'Failed to generate invoice');
       }
     },
-    onGeneratePackingSlip: async () => {
-      try {
-        await generatePackingSlip.mutateAsync({ orderId: options.orderId });
-        toastSuccess('Packing slip generated');
-      } catch (error) {
-        ordersLogger.error('[OrderDetail] Failed to generate packing slip', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate packing slip');
-      }
-    },
-    onGenerateDeliveryNote: async () => {
-      try {
-        await generateDeliveryNote.mutateAsync({ orderId: options.orderId });
-        toastSuccess('Delivery note generated');
-      } catch (error) {
-        ordersLogger.error('[OrderDetail] Failed to generate delivery note', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate delivery note');
-      }
-    },
     isGeneratingQuote: generateQuote.isPending,
     isGeneratingInvoice: generateInvoice.isPending,
-    isGeneratingPackingSlip: generatePackingSlip.isPending,
-    isGeneratingDeliveryNote: generateDeliveryNote.isPending,
-    packingSlipUrl: generatePackingSlip.data?.url,
-    deliveryNoteUrl: generateDeliveryNote.data?.url,
   };
 
   return {
@@ -145,6 +121,7 @@ export function useOrderDetailContainerActions(
     refetchPayments,
     refetchSummary,
     createPaymentMutation,
+    createRefundMutation,
     updateOrderMutation,
     handleApplyAmendment,
     handleEditSubmit,

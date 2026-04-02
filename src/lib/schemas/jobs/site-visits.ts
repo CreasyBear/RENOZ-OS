@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { normalizeObjectInput } from "../_shared/patterns";
 
 // ============================================================================
 // ENUM SCHEMAS
@@ -120,18 +121,20 @@ export const rescheduleSiteVisitSchema = z.object({
 
 export type RescheduleSiteVisitInput = z.infer<typeof rescheduleSiteVisitSchema>;
 
-export const siteVisitListQuerySchema = z.object({
-  page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(20),
-  sortBy: z.enum(["createdAt", "scheduledDate", "status"]).default("scheduledDate"),
-  sortOrder: z.enum(["asc", "desc"]).default("asc"),
-  projectId: z.string().uuid().optional(),
-  installerId: z.string().uuid().optional(),
-  status: siteVisitStatusSchema.optional(),
-  visitType: siteVisitTypeSchema.optional(),
-  dateFrom: z.string().date().optional(),
-  dateTo: z.string().date().optional(),
-});
+export const siteVisitListQuerySchema = normalizeObjectInput(
+  z.object({
+    page: z.number().int().positive().default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    sortBy: z.enum(["createdAt", "scheduledDate", "status"]).default("scheduledDate"),
+    sortOrder: z.enum(["asc", "desc"]).default("asc"),
+    projectId: z.string().uuid().optional(),
+    installerId: z.string().uuid().optional(),
+    status: siteVisitStatusSchema.optional(),
+    visitType: siteVisitTypeSchema.optional(),
+    dateFrom: z.string().date().optional(),
+    dateTo: z.string().date().optional(),
+  })
+);
 
 // ============================================================================
 // CHECK-IN/CHECK-OUT SCHEMAS

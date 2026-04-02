@@ -12,6 +12,15 @@ import {
 } from '@/server/functions/orders/order-picking';
 import type { PickOrderItems, UnpickOrderItems } from '@/lib/schemas/orders/picking';
 
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.orders.lists(),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.orders.infiniteLists(),
+  });
+}
+
 /**
  * Mutation hook for picking order items.
  * Invalidates order detail and list caches on success.
@@ -28,9 +37,7 @@ export function usePickOrderItems() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.withCustomer(variables.orderId),
       });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.lists(),
-      });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.fulfillment.lists(),
       });
@@ -58,9 +65,7 @@ export function useUnpickOrderItems() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.withCustomer(variables.orderId),
       });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.lists(),
-      });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.fulfillment.lists(),
       });

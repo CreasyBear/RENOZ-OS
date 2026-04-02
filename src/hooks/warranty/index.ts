@@ -24,6 +24,7 @@ export {
 export {
   useWarrantyClaims,
   useWarrantyClaimsByWarranty,
+  useWarrantyClaimSummary,
   useWarrantyClaimsByCustomer,
   useWarrantyClaim,
   useCreateWarrantyClaim,

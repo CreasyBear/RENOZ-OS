@@ -28,6 +28,13 @@ export interface ErrorContext {
   metadata?: Record<string, unknown>;
 }
 
+export interface QueryClientError extends Error {
+  code?: string;
+  statusCode?: number;
+  raw: unknown;
+  details?: Record<string, unknown>;
+}
+
 // ============================================================================
 // ERROR CREATION
 // ============================================================================
@@ -43,6 +50,79 @@ export function createAppError(message: string, code?: string, context?: ErrorCo
     context: context?.component,
     details: context?.metadata,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isValidationIssue(value: unknown): value is { code: string; message: string; path?: unknown } {
+  return (
+    isRecord(value) &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
+function extractValidationIssues(error: unknown): Array<{ code: string; message: string; path?: unknown }> | undefined {
+  if (Array.isArray(error) && error.every(isValidationIssue)) {
+    return error;
+  }
+
+  if (isRecord(error) && Array.isArray(error.issues) && error.issues.every(isValidationIssue)) {
+    return error.issues;
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message.startsWith('[') && message.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(message);
+        if (Array.isArray(parsed) && parsed.every(isValidationIssue)) {
+          return parsed;
+        }
+      } catch {
+        return undefined;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function createQueryClientError(
+  message: string,
+  raw: unknown,
+  options: { code?: string; statusCode?: number; details?: Record<string, unknown> } = {}
+): QueryClientError {
+  return Object.assign(new Error(message), {
+    name: 'QueryClientError',
+    code: options.code,
+    statusCode: options.statusCode,
+    raw,
+    details: options.details,
+  });
+}
+
+export function normalizeQueryError(
+  error: unknown,
+  fallbackMessage = 'Unable to load data. Please refresh and try again.'
+): QueryClientError {
+  const validationIssues = extractValidationIssues(error);
+  if (validationIssues) {
+    return createQueryClientError(fallbackMessage, error, {
+      code: 'VALIDATION_ERROR',
+      statusCode: 400,
+      details: { validationIssues },
+    });
+  }
+
+  const normalized = normalizeError(error);
+  return createQueryClientError(getUserFriendlyMessage(normalized), error, {
+    code: normalized.code,
+    statusCode: normalized.statusCode,
+    details: normalized.details,
+  });
 }
 
 /**

@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, asc, inArray, isNull, gt } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   purchaseOrders,
   purchaseOrderItems,
@@ -79,9 +80,11 @@ const receiveGoodsSchema = z.object({
   items: z.array(receiveGoodsItemSchema).min(1),
 });
 
-const listReceiptsSchema = z.object({
-  purchaseOrderId: z.string().uuid(),
-});
+const listReceiptsSchema = normalizeObjectInput(
+  z.object({
+    purchaseOrderId: z.string().uuid(),
+  })
+);
 
 interface ReceiveGoodsMutationPayload {
   receipt: typeof purchaseOrderReceipts.$inferSelect;

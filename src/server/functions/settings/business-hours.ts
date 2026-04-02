@@ -17,6 +17,7 @@ import { db } from '@/lib/db';
 import { businessHoursConfig, type WeeklySchedule, type DaySchedule } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { normalizeObjectInput } from '@/lib/schemas';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
@@ -62,6 +63,7 @@ const updateBusinessHoursSchema = z.object({
 const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+const idParamQuerySchema = normalizeObjectInput(idParamSchema);
 
 // ============================================================================
 // LIST BUSINESS HOURS CONFIGS
@@ -127,7 +129,7 @@ const _getBusinessHoursCached = cache(async (id: string, organizationId: string)
  * Get a single business hours configuration.
  */
 export const getBusinessHours = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const config = await _getBusinessHoursCached(data.id, ctx.organizationId);

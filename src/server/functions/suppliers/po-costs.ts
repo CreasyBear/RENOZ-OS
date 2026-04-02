@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrderCosts, purchaseOrders, purchaseOrderItems } from 'drizzle/schema/suppliers';
 import { organizations } from 'drizzle/schema/settings/organizations';
 import { withAuth } from '@/lib/server/protected';
@@ -57,7 +58,7 @@ const updatePurchaseOrderCostSchema = z.object({
  * List all costs for a purchase order.
  */
 export const getPurchaseOrderCosts = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ purchaseOrderId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ purchaseOrderId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -82,7 +83,7 @@ export const getPurchaseOrderCosts = createServerFn({ method: 'GET' })
  * When PO currency differs from org currency, unitPrice is converted to org currency for landed cost.
  */
 export const calculateAllocatedCosts = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ purchaseOrderId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ purchaseOrderId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 

@@ -12,6 +12,7 @@
  * @see src/lib/schemas/dashboard/comparison.ts
  */
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getDashboardMetrics,
@@ -52,11 +53,15 @@ export interface UseEnhancedComparisonOptions extends EnhancedComparisonInput {
  */
 export function useDashboardMetrics(options: UseDashboardMetricsOptions = {}) {
   const { enabled = true, ...filters } = options;
+  const getDashboardMetricsFn = useServerFn(getDashboardMetrics);
 
   return useQuery({
     queryKey: queryKeys.dashboard.metrics.summary(filters as Record<string, unknown>),
     queryFn: async () => {
-      const result = await getDashboardMetrics({ data: filters });
+      const result = await getDashboardMetricsFn({ data: filters });
+      if (import.meta.env.DEV) {
+        console.debug('[useDashboardMetrics] raw-result', result);
+      }
       if (result == null) throw new Error('Dashboard metrics returned no data');
       // Normalize dateRange and lastUpdated from ISO strings (RPC serialization) to Date objects
       const dr = result.dateRange;
@@ -88,6 +93,8 @@ export function useMetricsComparison({
   comparisonType,
   enabled = true,
 }: UseMetricsComparisonOptions) {
+  const getMetricsComparisonFn = useServerFn(getMetricsComparison);
+
   return useQuery({
     queryKey: queryKeys.dashboard.metrics.comparison({
       startDate: dateFrom,
@@ -95,9 +102,12 @@ export function useMetricsComparison({
       comparisonType: comparisonType === 'none' ? 'previous_period' : comparisonType,
     }),
     queryFn: async () => {
-      const result = await getMetricsComparison({
+      const result = await getMetricsComparisonFn({
         data: { dateFrom, dateTo, comparisonType },
       });
+      if (import.meta.env.DEV) {
+        console.debug('[useMetricsComparison] raw-result', result);
+      }
       if (result == null) throw new Error('Metrics comparison returned no data');
       return result;
     },
@@ -124,6 +134,8 @@ export function useEnhancedComparison({
   includeInsights = true,
   enabled = true,
 }: UseEnhancedComparisonOptions) {
+  const getEnhancedComparisonFn = useServerFn(getEnhancedComparison);
+
   return useQuery({
     queryKey: queryKeys.dashboard.metrics.enhanced({
       startDate: dateFrom,
@@ -134,7 +146,7 @@ export function useEnhancedComparison({
       includeInsights,
     }),
     queryFn: async () => {
-      const result = await getEnhancedComparison({
+      const result = await getEnhancedComparisonFn({
         data: {
           dateFrom,
           dateTo,
@@ -147,6 +159,9 @@ export function useEnhancedComparison({
           includeInsights,
         },
       });
+      if (import.meta.env.DEV) {
+        console.debug('[useEnhancedComparison] raw-result', result);
+      }
       if (result == null) throw new Error('Enhanced comparison returned no data');
       return result;
     },

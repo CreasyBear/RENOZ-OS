@@ -14,10 +14,12 @@ import { eq, and, or, desc, gte, lte, inArray, count, isNotNull, sql } from 'dri
 import { db } from '@/lib/db';
 import { MAX_EXPORT_SIZE_BYTES } from 'drizzle/schema';
 import { activities, customers, opportunities, orders, users } from 'drizzle/schema';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   activityFeedQuerySchema,
   entityActivitiesQuerySchema,
   userActivitiesQuerySchema,
+  activityStatsQueryBaseSchema,
   activityStatsQuerySchema,
   activityExportRequestSchema,
   type ActivityExportResponse,
@@ -945,7 +947,7 @@ export const requestActivityExport = createServerFn({ method: 'POST' })
  * Get recent activity count for dashboard widgets.
  */
 export const getRecentActivityCount = createServerFn({ method: 'GET' })
-  .inputValidator(activityStatsQuerySchema.pick({ dateFrom: true, dateTo: true }).optional())
+  .inputValidator(normalizeObjectInput(activityStatsQueryBaseSchema.pick({ dateFrom: true, dateTo: true })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 

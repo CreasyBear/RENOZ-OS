@@ -101,11 +101,15 @@ export function useTarget({ id, enabled = true }: UseTargetOptions) {
  */
 export function useTargetProgress(options: UseTargetProgressOptions = {}) {
   const { enabled = true, ...filters } = options;
+  const getTargetProgressFn = useServerFn(getTargetProgress);
 
   return useQuery({
     queryKey: queryKeys.reports.targets.progress(filters),
     queryFn: async () => {
-      const result = await getTargetProgress({ data: filters });
+      const result = await getTargetProgressFn({ data: filters });
+      if (import.meta.env.DEV) {
+        console.debug('[useTargetProgress] raw-result', result);
+      }
       if (result == null) throw new Error('Target progress returned no data');
       return result;
     },

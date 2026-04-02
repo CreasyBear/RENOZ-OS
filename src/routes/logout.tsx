@@ -1,15 +1,14 @@
 /**
  * Logout Route
  *
- * Handles session destruction via Supabase Auth.
+ * Handles session destruction via the shared auth sign-out contract.
  * Automatically signs out the user and redirects to login.
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import { PageLayout } from '@/components/layout/page-layout'
-import { invalidateAuthCache } from '@/lib/auth/route-auth'
 import { getLoginRedirectSearch } from '@/lib/auth/route-policy'
+import { useSignOut } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/logout')({
   component: LogoutPage,
@@ -17,23 +16,19 @@ export const Route = createFileRoute('/logout')({
 
 function LogoutPage() {
   const navigate = useNavigate()
+  const signOut = useSignOut()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const performLogout = async () => {
       try {
-        const { error: signOutError } = await supabase.auth.signOut()
-
-        if (signOutError) {
-          setError(signOutError.message)
-          setIsLoading(false)
-          return
-        }
-
-        invalidateAuthCache()
-        // Redirect to login page after successful logout
-        navigate({ to: '/login', search: getLoginRedirectSearch(), replace: true })
+        await signOut.mutateAsync()
+        navigate({
+          to: '/login',
+          search: getLoginRedirectSearch(undefined, 'logged_out'),
+          replace: true,
+        })
       } catch {
         setError('An unexpected error occurred during logout.')
         setIsLoading(false)
@@ -41,7 +36,7 @@ function LogoutPage() {
     }
 
     performLogout()
-  }, [navigate])
+  }, [navigate, signOut])
 
   if (error) {
     return (
@@ -54,7 +49,7 @@ function LogoutPage() {
             </div>
             <div className="text-center">
               <button
-                onClick={() => navigate({ to: '/login', search: getLoginRedirectSearch(), replace: true })}
+                onClick={() => navigate({ to: '/login', replace: true })}
                 className="font-medium text-primary hover:text-primary/80"
               >
                 Go to Login

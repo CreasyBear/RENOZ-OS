@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, ilike, desc, asc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { containsPattern } from "@/lib/db/utils";
 import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
@@ -50,7 +51,9 @@ export const listPriceLists = createServerFn({ method: "GET" })
     const {
       search,
       supplierId,
+      productId,
       status,
+      isPreferred,
       sortBy = "productName",
       sortOrder = "asc",
       page = 1,
@@ -64,8 +67,16 @@ export const listPriceLists = createServerFn({ method: "GET" })
       conditions.push(eq(priceLists.supplierId, supplierId));
     }
 
+    if (productId) {
+      conditions.push(eq(priceLists.productId, productId));
+    }
+
     if (status) {
       conditions.push(eq(priceLists.status, status));
+    }
+
+    if (isPreferred !== undefined) {
+      conditions.push(eq(priceLists.isPreferredPrice, isPreferred));
     }
 
     if (search) {
@@ -131,11 +142,22 @@ export const listPriceListsCursor = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
-    const { cursor, pageSize = 20, sortOrder = "desc", search, supplierId, status } = data;
+    const {
+      cursor,
+      pageSize = 20,
+      sortOrder = "desc",
+      search,
+      supplierId,
+      productId,
+      status,
+      isPreferred,
+    } = data;
 
     const conditions = [eq(priceLists.organizationId, ctx.organizationId)];
     if (supplierId) conditions.push(eq(priceLists.supplierId, supplierId));
+    if (productId) conditions.push(eq(priceLists.productId, productId));
     if (status) conditions.push(eq(priceLists.status, status));
+    if (isPreferred !== undefined) conditions.push(eq(priceLists.isPreferredPrice, isPreferred));
     if (search) conditions.push(ilike(priceLists.productName, containsPattern(search)));
 
     if (cursor) {
@@ -241,7 +263,7 @@ export const createPriceList = createServerFn({ method: "POST" })
  * Get a specific price list item
  */
 export const getPriceList = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ id: z.string() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -602,7 +624,7 @@ export const createPriceAgreement = createServerFn({ method: "POST" })
  * Get a specific price agreement
  */
 export const getPriceAgreement = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ id: z.string() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 

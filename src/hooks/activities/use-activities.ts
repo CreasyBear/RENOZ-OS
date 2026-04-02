@@ -9,6 +9,7 @@
 
 import * as React from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getActivityFeed,
@@ -217,9 +218,16 @@ export function useActivity(id: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.activities.detail(id),
     queryFn: async (): Promise<ActivityWithUser> => {
-      const result = await getActivity({ data: { id } });
-      if (result == null) throw new Error('Activity not found');
-      return result;
+      try {
+        const result = await getActivity({ data: { id } });
+        if (result == null) throw new Error('Activity not found');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Activity details are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000, // 1 minute

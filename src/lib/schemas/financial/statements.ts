@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { idSchema, paginationSchema, currencySchema } from '../_shared/patterns';
+import { currencySchema, idSchema, normalizeObjectInput, paginationSchema } from '../_shared/patterns';
 
 // ============================================================================
 // GENERATE STATEMENT
@@ -83,13 +83,15 @@ export type MarkStatementSentInput = z.infer<typeof markStatementSentSchema>;
 /**
  * Query parameters for getting statement history for a customer.
  */
-export const statementHistoryQuerySchema = paginationSchema.extend({
-  customerId: idSchema,
+export const statementHistoryQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    customerId: idSchema,
 
-  // Filter by date range
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-});
+    // Filter by date range
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+  })
+);
 
 export type StatementHistoryQuery = z.infer<typeof statementHistoryQuerySchema>;
 
@@ -100,12 +102,14 @@ export type StatementHistoryQuery = z.infer<typeof statementHistoryQuerySchema>;
 /**
  * Query parameters for listing all statements (admin view).
  */
-export const statementListQuerySchema = paginationSchema.extend({
-  customerId: idSchema.optional(),
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-  onlySent: z.boolean().default(false),
-});
+export const statementListQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    customerId: idSchema.optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+    onlySent: z.boolean().default(false),
+  })
+);
 
 export type StatementListQuery = z.infer<typeof statementListQuerySchema>;
 

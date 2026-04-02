@@ -1,3 +1,3 @@
 {
-  "routeFileIgnorePattern": "((^|/)api/|/__fixtures__/|-(page|layout|nav|tab|types|container)|.*-(page|layout|nav|tab|types|container|presenter|columns|config|schema|helpers|utils))\\.(tsx|ts)$"
+  "routeFileIgnorePattern": "^((agent|approvals(\\.\\$approvalId)?|approve|artifacts\\.\\$id|callback|chat|connections(\\.\\$connectionId)?|cost|api\\/oauth\\/dashboard|debug-ping|debug-rls-clash|health|initiate|pending-selection|resend|unsubscribe\\.\\$token|xero)|.*-(page|layout|nav|tab|types|container|presenter|columns|config|schema|helpers|utils|sorting))\\.(tsx|ts)$"
 }

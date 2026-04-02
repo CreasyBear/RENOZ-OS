@@ -254,7 +254,7 @@ export const QuoteVersionHistoryPresenter = memo(function QuoteVersionHistoryPre
         {versions.length >= 2 && (
           <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
             <span className="text-sm font-medium">Compare:</span>
-            <Select value={compareFrom ?? ""} onValueChange={onCompareFromChange}>
+            <Select value={compareFrom ?? undefined} onValueChange={onCompareFromChange}>
               <SelectTrigger className="w-24">
                 <SelectValue placeholder="From" />
               </SelectTrigger>
@@ -267,7 +267,7 @@ export const QuoteVersionHistoryPresenter = memo(function QuoteVersionHistoryPre
               </SelectContent>
             </Select>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <Select value={compareTo ?? ""} onValueChange={onCompareToChange}>
+            <Select value={compareTo ?? undefined} onValueChange={onCompareToChange}>
               <SelectTrigger className="w-24">
                 <SelectValue placeholder="To" />
               </SelectTrigger>

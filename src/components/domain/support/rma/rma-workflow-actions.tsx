@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { toastError } from '@/hooks';
+import { useLocations } from '@/hooks/inventory';
 import type { RmaResponse, RmaResolution } from '@/lib/schemas/support/rma';
 import { CheckCircle, XCircle, Package, PackageCheck, Loader2 } from 'lucide-react';
 
@@ -51,7 +52,7 @@ interface RmaWorkflowActionsProps {
   /** From route container (reject mutation). */
   onReject: (reason: string) => Promise<void>;
   /** From route container (receive mutation). */
-  onReceive: (inspectionNotes?: { condition?: string; notes?: string }) => Promise<void>;
+  onReceive: (inspection?: { condition?: string; notes?: string; locationId?: string }) => Promise<void>;
   /** From route container (process mutation). */
   onProcess: (resolution: RmaResolution, details?: { refundAmount?: number; notes?: string }) => Promise<void>;
   /** From route container (mutation state). */
@@ -87,8 +88,13 @@ export function RmaWorkflowActions({
 }: RmaWorkflowActionsProps) {
   const { confirm } = useConfirmation();
   const canReceive = useHasPermission(PERMISSIONS.inventory.receive);
+  const showApprove = rma.status === 'requested';
+  const showReject = rma.status === 'requested';
+  const showReceive = rma.status === 'approved' && canReceive;
+  const showProcess = rma.status === 'received';
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
+  const { locations, isLoading: locationsLoading } = useLocations({ autoFetch: showReceive });
 
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
   const handleReceiveDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, setReceiveDialogOpen);
@@ -96,6 +102,7 @@ export function RmaWorkflowActions({
 
   const [inspectionCondition, setInspectionCondition] = useState('good');
   const [inspectionNotes, setInspectionNotes] = useState('');
+  const [receivingLocationId, setReceivingLocationId] = useState('');
   const [resolution, setResolution] = useState<RmaResolution>('refund');
   const [refundAmount, setRefundAmount] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
@@ -126,14 +133,21 @@ export function RmaWorkflowActions({
 
   // Handle receive
   const handleReceive = async () => {
+    if (!receivingLocationId) {
+      toastError('Choose a receiving location before marking the RMA as received');
+      return;
+    }
+
     try {
       await onReceive({
         condition: inspectionCondition,
         notes: inspectionNotes || undefined,
+        locationId: receivingLocationId,
       });
       setReceiveDialogOpen(false);
       setInspectionCondition('good');
       setInspectionNotes('');
+      setReceivingLocationId('');
       onSuccess?.();
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Failed to mark received');
@@ -165,12 +179,6 @@ export function RmaWorkflowActions({
       toastError(error instanceof Error ? error.message : 'Failed to process RMA');
     }
   };
-
-  // Determine available actions based on status and permissions
-  const showApprove = rma.status === 'requested';
-  const showReject = rma.status === 'requested';
-  const showReceive = rma.status === 'approved' && canReceive;
-  const showProcess = rma.status === 'received';
 
   if (!showApprove && !showReject && !showReceive && !showProcess) {
     return null;
@@ -281,6 +289,25 @@ export function RmaWorkflowActions({
                 </ul>
               </div>
             )}
+            <div className="space-y-2">
+              <Label htmlFor="receivingLocation">Receiving Location</Label>
+              <Select value={receivingLocationId} onValueChange={setReceivingLocationId}>
+                <SelectTrigger id="receivingLocation">
+                  <SelectValue
+                    placeholder={locationsLoading ? 'Loading locations...' : 'Select receiving location'}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations
+                    .filter((location) => location.isActive !== false)
+                    .map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.name} ({location.code})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="condition">Item Condition</Label>
               <Select value={inspectionCondition} onValueChange={setInspectionCondition}>

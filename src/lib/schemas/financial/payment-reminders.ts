@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { idSchema, paginationSchema, optionalEmailSchema } from '../_shared/patterns';
+import { idSchema, normalizeObjectInput, optionalEmailSchema, paginationSchema } from '../_shared/patterns';
 
 // ============================================================================
 // DELIVERY STATUS ENUM
@@ -64,9 +64,11 @@ export type UpdateReminderTemplateInput = z.infer<typeof updateReminderTemplateS
 /**
  * Query parameters for listing reminder templates.
  */
-export const reminderTemplateListQuerySchema = paginationSchema.extend({
-  includeInactive: z.boolean().default(false),
-});
+export const reminderTemplateListQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    includeInactive: z.boolean().default(false),
+  })
+);
 
 export type ReminderTemplateListQuery = z.infer<typeof reminderTemplateListQuerySchema>;
 
@@ -93,13 +95,15 @@ export type SendReminderInput = z.infer<typeof sendReminderSchema>;
 /**
  * Query parameters for listing reminder history.
  */
-export const reminderHistoryQuerySchema = paginationSchema.extend({
-  orderId: idSchema.optional(),
-  customerId: idSchema.optional(),
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-  deliveryStatus: deliveryStatusSchema.optional(),
-});
+export const reminderHistoryQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    orderId: idSchema.optional(),
+    customerId: idSchema.optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+    deliveryStatus: deliveryStatusSchema.optional(),
+  })
+);
 
 export type ReminderHistoryQuery = z.infer<typeof reminderHistoryQuerySchema>;
 
@@ -110,16 +114,18 @@ export type ReminderHistoryQuery = z.infer<typeof reminderHistoryQuerySchema>;
 /**
  * Query parameters for getting orders due for reminders.
  */
-export const overdueOrdersForRemindersQuerySchema = paginationSchema.extend({
-  // Minimum days overdue (default: 1)
-  minDaysOverdue: z.number().int().min(1).default(1),
+export const overdueOrdersForRemindersQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    // Minimum days overdue (default: 1)
+    minDaysOverdue: z.number().int().min(1).default(1),
 
-  // Only get orders matching a specific template's days
-  matchTemplateDays: z.boolean().default(false),
+    // Only get orders matching a specific template's days
+    matchTemplateDays: z.boolean().default(false),
 
-  // Exclude orders that already received a reminder at this tier
-  excludeAlreadyReminded: z.boolean().default(true),
-});
+    // Exclude orders that already received a reminder at this tier
+    excludeAlreadyReminded: z.boolean().default(true),
+  })
+);
 
 export type OverdueOrdersForRemindersQuery = z.infer<typeof overdueOrdersForRemindersQuerySchema>;
 

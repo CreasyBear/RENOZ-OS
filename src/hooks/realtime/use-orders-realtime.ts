@@ -139,6 +139,7 @@ export function useOrdersRealtime(
     queryKeys: [
       queryKeys.orders.all,
       queryKeys.orders.lists(),
+      queryKeys.orders.infiniteLists(),
       queryKeys.orders.recent,
       queryKeys.orders.list({}),
       queryKeys.dashboard.orders(),

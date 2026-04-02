@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
+  Truck,
   AlertTriangle,
   Package,
   ArrowRightLeft,
@@ -120,7 +121,9 @@ export interface ProductInventoryTabViewProps {
   showAdjustment: boolean;
   selectedLocationId: string | undefined;
   onShowAdjustmentChange: (open: boolean) => void;
-  onAddStock: (locationId?: string) => void;
+  onOpenReceiveInventory: () => void;
+  onOpenAdjustment: (locationId?: string) => void;
+  onOrderStock: () => void;
   onRefresh: () => void;
   onEnableTracking?: () => void;
   onAddSerial?: () => void;
@@ -142,7 +145,9 @@ export function ProductInventoryTabView({
   showAdjustment,
   selectedLocationId,
   onShowAdjustmentChange,
-  onAddStock,
+  onOpenReceiveInventory,
+  onOpenAdjustment,
+  onOrderStock,
   onRefresh,
   onEnableTracking,
   onAddSerial,
@@ -285,40 +290,55 @@ export function ProductInventoryTabView({
       {!summary || summary.locations.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <EmptyState
-              title="No stock records"
-              message="Add initial stock quantities for this product"
-              primaryAction={{
-                label: "Add Stock",
-                onClick: () => onAddStock(),
+          <EmptyState
+            title="No stock records"
+            message="Record non-PO inbound stock for this product, or create a purchase order for supplier-backed replenishment."
+            primaryAction={{
+                label: "Receive Inventory",
+                onClick: onOpenReceiveInventory,
+                icon: Plus,
               }}
-            />
-          </CardContent>
-        </Card>
+            secondaryAction={{
+              label: "Order Stock",
+              onClick: onOrderStock,
+            }}
+          />
+        </CardContent>
+      </Card>
       ) : (
         <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Warehouse className="h-4 w-4" />
-            <span className="font-medium text-foreground">
-              {summary.locations[0]?.locationName ?? "Warehouse"}
-            </span>
-            {summary.locations.length > 1 && (
-              <Badge variant="outline" className="text-[10px]">
-                +{summary.locations.length - 1} more
-              </Badge>
-            )}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Warehouse className="h-4 w-4" />
+              <span className="font-medium text-foreground">
+                {summary.locations[0]?.locationName ?? "Warehouse"}
+              </span>
+              {summary.locations.length > 1 && (
+                <Badge variant="outline" className="text-[10px]">
+                  +{summary.locations.length - 1} more
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receive Inventory for non-PO inbound stock, Order Stock for supplier replenishment,
+              and Adjust Stock for corrections.
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onAddStock(summary.locations[0]?.locationId)}
+              onClick={() => onOpenAdjustment(summary.locations[0]?.locationId)}
             >
               Adjust Stock
             </Button>
-            <Button size="sm" onClick={() => onAddStock()}>
+            <Button variant="outline" size="sm" onClick={onOrderStock}>
+              <Truck className="mr-2 h-4 w-4" />
+              Order Stock
+            </Button>
+            <Button size="sm" onClick={onOpenReceiveInventory}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Stock
+              Receive Inventory
             </Button>
           </div>
         </div>
@@ -620,9 +640,13 @@ function CostLayerReference({ referenceType, referenceId }: { referenceType: str
 
   return (
     <Badge variant="outline" className="text-[10px]">
-      {referenceType === "adjustment"
-        ? "Adjustment"
-        : referenceType ?? "Manual"}
+      {referenceType === "purchase_order"
+        ? "Purchase Order"
+        : referenceType === "adjustment"
+          ? "Adjustment"
+          : referenceType === "manual_receive"
+            ? "Manual Receipt"
+            : referenceType ?? "Manual"}
     </Badge>
   );
 }

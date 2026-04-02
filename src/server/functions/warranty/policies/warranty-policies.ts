@@ -28,9 +28,11 @@ import { withAuth } from '@/lib/server/protected';
 import { tasks } from '@trigger.dev/sdk/v3';
 import { NotFoundError, ConflictError, ValidationError } from '@/lib/server/errors';
 import type { WarrantyRegisteredPayload } from '@/trigger/client';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   createWarrantyPolicySchema,
   updateWarrantyPolicySchema,
+  getWarrantyPoliciesBaseSchema,
   getWarrantyPoliciesSchema,
   getWarrantyPolicyByIdSchema,
   resolveWarrantyPolicySchema,
@@ -244,7 +246,7 @@ const _getWarrantyPolicyCached = cache(async (policyId: string, organizationId: 
  * Get a single warranty policy by ID
  */
 export const getWarrantyPolicy = createServerFn({ method: 'GET' })
-  .inputValidator(getWarrantyPolicyByIdSchema)
+  .inputValidator(normalizeObjectInput(getWarrantyPolicyByIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const policy = await _getWarrantyPolicyCached(data.policyId, ctx.organizationId);
@@ -320,7 +322,7 @@ export const deleteWarrantyPolicy = createServerFn({ method: 'POST' })
  * Get the default policy for a specific type
  */
 export const getDefaultWarrantyPolicy = createServerFn({ method: 'GET' })
-  .inputValidator(getWarrantyPoliciesSchema.pick({ type: true }))
+  .inputValidator(normalizeObjectInput(getWarrantyPoliciesBaseSchema.pick({ type: true })))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -437,7 +439,7 @@ export const setDefaultWarrantyPolicy = createServerFn({ method: 'POST' })
  * Resolution hierarchy: product > category > org default
  */
 export const resolveWarrantyPolicy = createServerFn({ method: 'GET' })
-  .inputValidator(resolveWarrantyPolicySchema)
+  .inputValidator(normalizeObjectInput(resolveWarrantyPolicySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

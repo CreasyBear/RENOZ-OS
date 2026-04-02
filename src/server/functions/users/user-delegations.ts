@@ -20,8 +20,9 @@ import {
   updateDelegationSchema,
   type Delegation,
 } from '@/lib/schemas/users';
-import { idParamSchema, paginationSchema } from '@/lib/schemas';
-import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { idParamQuerySchema, idParamSchema, paginationQuerySchema, paginationSchema } from '@/lib/schemas';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
+import { cursorPaginationQuerySchema } from '@/lib/db/pagination';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
@@ -156,7 +157,7 @@ export const createDelegation = createServerFn({ method: 'POST' })
  * List delegations where current user is the delegator.
  */
 export const listMyDelegations = createServerFn({ method: 'GET' })
-  .inputValidator(paginationSchema)
+  .inputValidator(paginationQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -226,7 +227,7 @@ export const listMyDelegations = createServerFn({ method: 'GET' })
  * List my delegations with cursor pagination (recommended for large datasets).
  */
 export const listMyDelegationsCursor = createServerFn({ method: 'GET' })
-  .inputValidator(cursorPaginationSchema)
+  .inputValidator(cursorPaginationQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -292,7 +293,7 @@ export const listMyDelegationsCursor = createServerFn({ method: 'GET' })
  * List delegations where current user is the delegate.
  */
 export const listDelegationsToMe = createServerFn({ method: 'GET' })
-  .inputValidator(paginationSchema)
+  .inputValidator(paginationQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -370,7 +371,7 @@ export const listDelegationsToMe = createServerFn({ method: 'GET' })
  * List delegations to me with cursor pagination (recommended for large datasets).
  */
 export const listDelegationsToMeCursor = createServerFn({ method: 'GET' })
-  .inputValidator(cursorPaginationSchema)
+  .inputValidator(cursorPaginationQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -436,13 +437,14 @@ export const listDelegationsToMeCursor = createServerFn({ method: 'GET' })
 const listAllDelegationsSchema = paginationSchema.extend({
   activeOnly: z.boolean().optional().default(true),
 });
+const listAllDelegationsQuerySchema = normalizeObjectInput(listAllDelegationsSchema);
 
 /**
  * List all delegations in organization.
  * Requires: user.read permission
  */
 export const listAllDelegations = createServerFn({ method: 'GET' })
-  .inputValidator(listAllDelegationsSchema)
+  .inputValidator(listAllDelegationsQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.read });
 
@@ -711,7 +713,7 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
  * Useful for redirecting tasks/notifications.
  */
 export const getActiveDelegate = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

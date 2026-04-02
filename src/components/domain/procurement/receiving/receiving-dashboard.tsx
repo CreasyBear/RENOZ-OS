@@ -32,7 +32,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Package, RefreshCw } from 'lucide-react';
+import { Package, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/shared/error-state';
 import { BulkActionsBar, DataTableSkeleton, DataTableEmpty } from '@/components/shared/data-table';
@@ -42,9 +43,8 @@ import { CheckboxCell, DateCell, PriceCell, DataTableColumnHeader } from '@/comp
 import { TruncateTooltip } from '@/components/shared/truncate-tooltip';
 import { cn } from '@/lib/utils';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
-import type { ReceivingMetrics } from '@/lib/schemas/procurement/procurement-types';
 import { FALLBACK_SUPPLIER_NAME } from '@/lib/constants/procurement';
-import { ReceivingStats } from './receiving-stats';
+import { ReceivingStats, type ReceivingStatsProps } from './receiving-stats';
 
 // ============================================================================
 // TYPES
@@ -54,11 +54,16 @@ export interface ReceivingDashboardProps {
   /** Purchase orders awaiting receipt */
   orders: PurchaseOrderTableData[];
   /** Dashboard metrics */
-  metrics: ReceivingMetrics;
+  metrics: Pick<
+    ReceivingStatsProps,
+    'totalOrders' | 'totalValue' | 'supplierCount' | 'oldestOrderDate' | 'summaryState'
+  >;
   /** Loading state */
   isLoading?: boolean;
   /** Error state */
   error?: Error | null;
+  /** Warning when summary-backed metrics are unavailable */
+  summaryWarning?: string | null;
   /** Refetch function */
   onRefetch?: () => void;
   /** Selected PO IDs */
@@ -266,6 +271,7 @@ export const ReceivingDashboard = memo(function ReceivingDashboard({
   metrics,
   isLoading = false,
   error,
+  summaryWarning,
   onRefetch,
   selectedIds,
   isAllSelected,
@@ -394,11 +400,19 @@ export const ReceivingDashboard = memo(function ReceivingDashboard({
       </div>
 
       {/* Metrics */}
+      {summaryWarning ? (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{summaryWarning}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <ReceivingStats
         totalOrders={metrics.totalOrders}
         totalValue={metrics.totalValue}
         supplierCount={metrics.supplierCount}
         oldestOrderDate={metrics.oldestOrderDate}
+        summaryState={metrics.summaryState}
         isLoading={isLoading}
       />
 

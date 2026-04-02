@@ -12,6 +12,9 @@ import { lazy, Suspense } from 'react';
 import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { CustomerTableSkeleton } from '@/components/skeletons/customers';
+import {
+  CUSTOMER_SORT_FIELDS,
+} from '@/components/domain/customers/customer-sorting';
 
 // Search params schema for URL-based filtering
 export const searchParamsSchema = z.object({
@@ -25,8 +28,8 @@ export const searchParamsSchema = z.object({
   healthScoreMax: z.coerce.number().int().min(0).max(100).optional(),
   tag: z.string().uuid().optional(), // Single tag ID for filtering
   tags: z.string().optional(), // Comma-separated tag IDs for multi-tag filtering
-  sortBy: z.string().optional().default('name'),
-  sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
+  sortBy: z.enum(CUSTOMER_SORT_FIELDS).optional().default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
 export type SearchParams = z.infer<typeof searchParamsSchema>;

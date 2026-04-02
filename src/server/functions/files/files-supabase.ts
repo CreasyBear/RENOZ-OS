@@ -29,6 +29,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { attachments } from "../../../../drizzle/schema/files";
 import { withAuth } from "@/lib/server/protected";
 import { NotFoundError, ValidationError } from "@/lib/server/errors";
@@ -348,7 +349,7 @@ export const uploadFileServer = createServerFn({ method: "POST" })
  * URLs expire after 1 hour by default.
  */
 export const getPresignedDownloadUrl = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ attachmentId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ attachmentId: z.string().uuid() })))
   .handler(async ({ data }): Promise<PresignedDownloadResponse> => {
     const ctx = await withAuth();
 
@@ -435,14 +436,16 @@ export const getPresignedDownloadUrls = createServerFn({ method: "POST" })
  */
 export const getTransformedImageUrl = createServerFn({ method: "GET" })
   .inputValidator(
-    z.object({
-      attachmentId: z.string().uuid(),
-      width: z.number().int().positive().optional(),
-      height: z.number().int().positive().optional(),
-      resize: z.enum(["cover", "contain", "fill"]).optional(),
-      format: z.enum(["origin"]).optional(),
-      quality: z.number().int().min(1).max(100).optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        attachmentId: z.string().uuid(),
+        width: z.number().int().positive().optional(),
+        height: z.number().int().positive().optional(),
+        resize: z.enum(["cover", "contain", "fill"]).optional(),
+        format: z.enum(["origin"]).optional(),
+        quality: z.number().int().min(1).max(100).optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();

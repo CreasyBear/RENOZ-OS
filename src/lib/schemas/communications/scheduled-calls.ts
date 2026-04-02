@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import type React from 'react'
 import { cursorPaginationSchema } from '@/lib/db/pagination'
+import { normalizeObjectInput } from '../_shared/patterns'
 
 export const scheduleCallSchema = z.object({
   customerId: z.string().uuid(),
@@ -45,24 +46,28 @@ export const updateScheduledCallSchema = z.object({
   assigneeId: z.string().uuid().optional(),
 })
 
-export const getScheduledCallsSchema = z.object({
-  assigneeId: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
-  status: z.enum(['pending', 'completed', 'cancelled', 'rescheduled']).optional(),
-  fromDate: z.coerce.date().optional(),
-  toDate: z.coerce.date().optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-})
-
-export const getScheduledCallsCursorSchema = cursorPaginationSchema.merge(
+export const getScheduledCallsSchema = normalizeObjectInput(
   z.object({
     assigneeId: z.string().uuid().optional(),
     customerId: z.string().uuid().optional(),
     status: z.enum(['pending', 'completed', 'cancelled', 'rescheduled']).optional(),
     fromDate: z.coerce.date().optional(),
     toDate: z.coerce.date().optional(),
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
   })
+)
+
+export const getScheduledCallsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      assigneeId: z.string().uuid().optional(),
+      customerId: z.string().uuid().optional(),
+      status: z.enum(['pending', 'completed', 'cancelled', 'rescheduled']).optional(),
+      fromDate: z.coerce.date().optional(),
+      toDate: z.coerce.date().optional(),
+    })
+  )
 )
 
 export const getScheduledCallByIdSchema = z.object({

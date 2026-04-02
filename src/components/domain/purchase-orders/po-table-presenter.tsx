@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { PurchaseOrderTableData } from "@/lib/schemas/purchase-orders";
 import { createPOColumns } from "./po-columns";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 
 export interface POTablePresenterProps {
   /** Purchase orders to display */
@@ -45,7 +46,7 @@ export interface POTablePresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View PO handler */
   onViewPO: (id: string) => void;
   /** Edit PO handler */
@@ -121,7 +122,7 @@ export const POTablePresenter = memo(function POTablePresenter({
   ) => {
     const newSorting = typeof updater === "function" ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
     }
   };
 

@@ -9,6 +9,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { eq, and, desc, asc, lte, or, ilike, count, sql } from 'drizzle-orm'
 import { containsPattern } from '@/lib/db/utils'
 import { db } from '@/lib/db'
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns'
 import {
   scheduledEmails,
   type ScheduledEmailTemplateData,
@@ -168,7 +169,7 @@ export const getScheduledEmailsCursor = createServerFn({ method: 'GET' })
  * Get a scheduled email by ID
  */
 export const getScheduledEmailById = createServerFn({ method: 'GET' })
-  .inputValidator(getScheduledEmailByIdSchema)
+  .inputValidator(normalizeObjectInput(getScheduledEmailByIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 

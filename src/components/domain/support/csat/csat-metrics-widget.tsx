@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { StarRating, RatingBadge } from './star-rating';
 import type { CsatMetricsResponse } from '@/lib/schemas/support/csat-responses';
 import { TrendingUp, TrendingDown, Minus, Star, BarChart3 } from 'lucide-react';
+import { hasMetricValue } from '@/lib/metrics/metric-display';
 import { cn } from '@/lib/utils';
 
 interface CsatMetricsWidgetProps {
@@ -123,7 +124,7 @@ export function CsatMetricsWidget({
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <div className="text-3xl font-bold">
-              {averageRating > 0 ? averageRating.toFixed(1) : '—'}
+              {hasMetricValue(averageRating) ? averageRating.toFixed(1) : '—'}
             </div>
             <div className="flex items-center gap-1">
               <StarRating value={Math.round(averageRating)} size="sm" />

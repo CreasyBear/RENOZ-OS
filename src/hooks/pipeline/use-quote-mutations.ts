@@ -22,7 +22,11 @@ import {
   generateQuotePdf,
   sendQuote,
 } from '@/server/functions/pipeline/quote-versions';
-import type { QuoteLineItem } from '@/lib/schemas/pipeline';
+import type {
+  GenerateQuotePdfResult,
+  QuoteLineItem,
+  SendQuoteResult,
+} from '@/lib/schemas/pipeline';
 
 // ============================================================================
 // CREATE QUOTE VERSION MUTATION
@@ -48,6 +52,7 @@ export function useCreateQuoteVersion() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersions(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
     },
   });
 }
@@ -102,6 +107,7 @@ export function useUpdateQuoteExpiration() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiringQuotes(7) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
       queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
     },
   });
 }
@@ -131,6 +137,7 @@ export function useExtendQuoteValidity() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
     },
   });
 }
@@ -147,9 +154,18 @@ export interface GenerateQuotePdfInput {
  * Generate PDF for a quote version
  */
 export function useGenerateQuotePdf() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({ quoteVersionId }: GenerateQuotePdfInput) =>
       generateQuotePdf({ data: { id: quoteVersionId } }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pipeline.quoteVersion(variables.quoteVersionId),
+      });
+    },
   });
 }
 
@@ -176,10 +192,20 @@ export function useSendQuote() {
   return useMutation({
     mutationFn: (input: SendQuoteInput) =>
       sendQuote({ data: input }),
-    onSuccess: (_, variables) => {
-      // Invalidate quote version to update sent status
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.pipeline.quoteVersions(variables.opportunityId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pipeline.opportunity(variables.opportunityId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('opportunity', variables.opportunityId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.activities.byOpportunity(variables.opportunityId),
       });
     },
   });
@@ -190,3 +216,4 @@ export function useSendQuote() {
 // ============================================================================
 
 export type { QuoteLineItem };
+export type { GenerateQuotePdfResult, SendQuoteResult };

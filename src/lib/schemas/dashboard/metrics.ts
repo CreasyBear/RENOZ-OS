@@ -63,18 +63,20 @@ export type MetricKey = z.infer<typeof metricKeySchema>;
 // GET DASHBOARD METRICS
 // ============================================================================
 
-export const getDashboardMetricsSchema = z.object({
-  dateFrom: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-    .optional(),
-  dateTo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-    .optional(),
-  preset: dateRangePresetSchema.optional(),
-  comparePeriod: comparisonTypeSchema.optional(),
-});
+export const getDashboardMetricsSchema = z
+  .object({
+    dateFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+      .optional(),
+    dateTo: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+      .optional(),
+    preset: dateRangePresetSchema.optional(),
+    comparePeriod: comparisonTypeSchema.optional(),
+  })
+  .default({});
 
 export type GetDashboardMetricsInput = z.infer<typeof getDashboardMetricsSchema>;
 

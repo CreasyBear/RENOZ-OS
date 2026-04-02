@@ -25,7 +25,11 @@ import { useTableSelection, BulkActionsBar } from '@/components/shared/data-tabl
 import { InvoiceListPresenter } from './invoice-list-presenter';
 import { InvoiceListSkeleton } from '@/components/skeletons/invoices';
 import { ErrorState } from '@/components/shared/error-state';
-import type { InvoiceFilter, InvoiceSummaryData } from '@/lib/schemas/invoices';
+import type {
+  InvoiceFilter,
+  InvoiceSummaryData,
+  InvoiceSortField as SortField,
+} from '@/lib/schemas/invoices';
 import type { InvoiceStatus } from '@/lib/constants/invoice-status';
 import {
   DEFAULT_INVOICE_FILTERS,
@@ -38,16 +42,12 @@ import {
   type BulkOperationConfig,
   type InvoiceBulkOperation,
 } from '../bulk/invoice-bulk-operations-dialog';
-
-type SortField = 'createdAt' | 'dueDate' | 'total' | 'invoiceNumber' | 'customer';
-type SortDirection = 'asc' | 'desc';
-
-/**
- * Type guard for sort field validation
- */
-function isValidSortField(field: string): field is SortField {
-  return ['createdAt', 'dueDate', 'total', 'invoiceNumber', 'customer'].includes(field);
-}
+import {
+  DEFAULT_INVOICE_SORT_DIRECTION,
+  DEFAULT_INVOICE_SORT_FIELD,
+  isValidInvoiceSortField,
+  type SortDirection,
+} from './invoice-sorting';
 
 /**
  * Validate and normalize amount range
@@ -152,7 +152,7 @@ function convertToQueryFilters(
   );
 
   // Validate sortBy field
-  const validSortBy = sortBy && isValidSortField(sortBy) ? sortBy : undefined;
+  const validSortBy = sortBy && isValidInvoiceSortField(sortBy) ? sortBy : undefined;
   const validSortOrder = sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : undefined;
 
   // Normalize search (trim and convert empty to undefined)
@@ -186,11 +186,15 @@ export function InvoiceListContainer({
   const navigate = useNavigate();
   const [sortField, setSortField] = useState<SortField>(() => {
     const field = filterState?.sortBy;
-    return typeof field === 'string' && isValidSortField(field) ? field : 'createdAt';
+    return typeof field === 'string' && isValidInvoiceSortField(field)
+      ? field
+      : DEFAULT_INVOICE_SORT_FIELD;
   });
   const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
     const order = filterState?.sortOrder;
-    return typeof order === 'string' && (order === 'asc' || order === 'desc') ? order : 'desc';
+    return typeof order === 'string' && (order === 'asc' || order === 'desc')
+      ? order
+      : DEFAULT_INVOICE_SORT_DIRECTION;
   });
   const pageSize = 20;
 

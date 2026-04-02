@@ -14,9 +14,9 @@
 
 /**
  * All supported document types for order documents.
- * Includes both financial (quote, invoice) and operational (packing-slip, delivery-note) types.
+ * Includes both financial (quote, invoice) and operational (packing-slip, dispatch-note, delivery-note) types.
  */
-export const DOCUMENT_TYPES = ["quote", "invoice", "pro-forma", "packing-slip", "delivery-note"] as const;
+export const DOCUMENT_TYPES = ["quote", "invoice", "pro-forma", "packing-slip", "dispatch-note", "delivery-note"] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 /**
@@ -28,8 +28,11 @@ export type FinancialDocumentType = (typeof FINANCIAL_DOCUMENT_TYPES)[number];
 /**
  * Operational document types for logistics/shipping.
  */
-export const OPERATIONAL_DOCUMENT_TYPES = ["packing-slip", "delivery-note"] as const;
+export const OPERATIONAL_DOCUMENT_TYPES = ["packing-slip", "dispatch-note", "delivery-note"] as const;
 export type OperationalDocumentType = (typeof OPERATIONAL_DOCUMENT_TYPES)[number];
+
+export const DOCUMENT_ENTITY_TYPES = ['order', 'shipment', 'warranty'] as const;
+export type DocumentEntityType = (typeof DOCUMENT_ENTITY_TYPES)[number];
 
 // ============================================================================
 // ADDRESS DATA
@@ -285,7 +288,7 @@ export interface GeneratedDocument {
   id: string;
   organizationId: string;
   documentType: DocumentType;
-  entityType: "order" | "warranty";
+  entityType: DocumentEntityType;
   entityId: string;
   filename: string;
   storagePath: string;

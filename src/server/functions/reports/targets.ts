@@ -16,6 +16,7 @@ import { eq, and, ilike, desc, asc, gte, lte, sql, inArray } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { targets } from 'drizzle/schema/reports';
@@ -99,7 +100,7 @@ function determineTargetStatus(
  * List targets with filtering and pagination.
  */
 export const listTargets = createServerFn({ method: 'GET' })
-  .inputValidator(listTargetsSchema)
+  .inputValidator(normalizeObjectInput(listTargetsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
 
@@ -195,7 +196,7 @@ export const listTargetsCursor = createServerFn({ method: 'GET' })
  * Get a single target by ID.
  */
 export const getTarget = createServerFn({ method: 'GET' })
-  .inputValidator(getTargetSchema)
+  .inputValidator(normalizeObjectInput(getTargetSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
 

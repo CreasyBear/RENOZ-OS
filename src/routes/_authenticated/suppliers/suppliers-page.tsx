@@ -35,11 +35,12 @@ import { useSuppliers, useDeleteSupplier, useUpdateSupplier } from '@/hooks/supp
 import { useTransformedFilterUrlState } from '@/hooks/filters/use-filter-url-state';
 import type { supplierSearchSchema } from './index';
 import type { z } from 'zod';
-import {
-  type SupplierTableItem,
-  isSupplierSortField,
-} from '@/lib/schemas/suppliers';
+import { type SupplierTableItem } from '@/lib/schemas/suppliers';
 import { executeBulkAction, summarizeBulkFailures, type BulkActionFailure } from '@/lib/actions/bulk-action-results';
+import {
+  resolveSupplierSortState,
+  type SortDirection,
+} from '@/components/domain/suppliers/supplier-sorting';
 
 type SupplierSearchParams = z.infer<typeof supplierSearchSchema>;
 
@@ -167,13 +168,17 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
   );
 
   const handleSortChange = useCallback(
-    (field: string) => {
-      const safeField = isSupplierSortField(field) ? field : sortBy;
-      const newDirection =
-        safeField === sortBy && sortOrder === 'asc' ? 'desc' : 'asc';
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolveSupplierSortState(sortBy, sortOrder, field, direction);
+      if (!nextSort) return;
       navigate({
         to: '.',
-        search: { ...search, sortBy: safeField, sortOrder: newDirection, page: 1 },
+        search: {
+          ...search,
+          sortBy: nextSort.field,
+          sortOrder: nextSort.direction,
+          page: 1,
+        },
       });
     },
     [navigate, search, sortBy, sortOrder]

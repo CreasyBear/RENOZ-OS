@@ -1,10 +1,8 @@
 /**
  * Root Index Route
  *
- * Redirects authenticated users (with valid app user) to /dashboard, others to /login.
- * Uses getAuthContext so we only redirect to dashboard when the user would pass
- * _authenticated's check - avoids redirect loops when Supabase user exists but
- * app user is missing or inactive.
+ * Sends the exact "/" route through /login.
+ * Authenticated users can still bounce from /login to /dashboard client-side.
  *
  * Defensive: If Supabase redirects to /?code= (e.g. redirectTo didn't match allow list),
  * redirect to /update-password so PKCE exchange can complete. Code can be recovery,
@@ -12,7 +10,7 @@
  * would get wrong page if they hit this path - fix Supabase config to avoid.
  */
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { getAuthContext } from '@/lib/auth/route-auth'
+import { useEffect } from 'react'
 
 export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -36,10 +34,20 @@ export const Route = createFileRoute('/')({
       // which causes /login -> /login redirect loops.
       return
     }
-
-    // getAuthContext throws (redirect to login) if not authenticated or app user missing.
-    await getAuthContext(location)
-    throw redirect({ to: '/dashboard', search: { tab: 'overview' } })
+    throw redirect({ to: '/login', replace: true })
   },
-  component: () => null, // Never rendered due to redirect
+  component: RootIndexRedirect,
 })
+
+function RootIndexRedirect() {
+  const search = Route.useSearch()
+
+  useEffect(() => {
+    const target = search.code
+      ? `/update-password?code=${encodeURIComponent(search.code)}`
+      : '/login'
+    window.location.replace(target)
+  }, [search.code])
+
+  return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Redirecting...</div>
+}

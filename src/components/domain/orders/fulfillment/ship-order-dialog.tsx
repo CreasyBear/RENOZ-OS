@@ -132,6 +132,8 @@ interface LineItemSelection {
   productName: string;
   sku: string | null;
   availableQty: number;
+  pickedQty: number;
+  shippedQty: number;
   selectedQty: number;
   selected: boolean;
   allocatedSerialNumbers: string[];
@@ -165,6 +167,13 @@ function hasAnyAddress(
     values.addressState?.trim() ||
     values.addressPostcode?.trim()
   );
+}
+
+function getLineItemAvailableToShip(item: {
+  qtyPicked?: number | null;
+  qtyShipped?: number | null;
+}) {
+  return Math.max(0, Number(item.qtyPicked ?? 0) - Number(item.qtyShipped ?? 0));
 }
 
 /** Build address options for picker: customer addresses + order shipping (if present) */
@@ -274,6 +283,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const [selectedAddress, setSelectedAddress] = useState<AddressOption | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState<ShipmentWorkflowNotice | null>(null);
+  const [saveShipmentAddressToOrder, setSaveShipmentAddressToOrder] = useState(false);
   const performCreateShipmentRef = useRef<
     (values: ShipOrderFormData) => Promise<void>
   >(null!);
@@ -341,6 +351,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         form.reset(getDefaultFormValues());
         setServerItemErrors({});
         setWorkflowNotice(null);
+        setSaveShipmentAddressToOrder(false);
       }
       onOpenChange(nextOpen);
     },
@@ -387,6 +398,18 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         values.shippingCost >= 0
           ? toCents(values.shippingCost)
           : undefined;
+      const addressSource =
+        selectedAddress?.id === "order-shipping"
+          ? "order"
+          : selectedAddress
+            ? "customer"
+            : shippingAddress
+              ? "custom"
+              : "order";
+      const customerAddressId =
+        addressSource === "customer" && selectedAddress?.id !== "order-shipping"
+          ? selectedAddress?.id
+          : undefined;
 
       try {
         const shipment = await createShipmentMutation.mutateAsync({
@@ -396,7 +419,10 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           trackingNumber: values.trackingNumber || undefined,
           shippingCost: shippingCostCents,
           notes: values.notes || undefined,
+          addressSource,
+          customerAddressId,
           shippingAddress,
+          saveToOrderShippingAddress: saveShipmentAddressToOrder,
           items: items.map((item) => ({
             orderLineItemId: item.lineItemId,
             quantity: item.selectedQty,
@@ -457,6 +483,10 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               "Shipment created but order shipping amount could not be updated",
               { orderId, err }
             );
+            toastSuccess(values.shipNow ? "Shipment shipped" : "Shipment created", {
+              description:
+                "The shipment itself succeeded, but shipping cost still needs to be synced to the order totals.",
+            });
             toastError("Order shipping amount could not be updated", {
               description: err instanceof Error ? err.message : "Create a shipping amendment manually.",
             });
@@ -515,6 +545,8 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       requestAmendmentMutation,
       approveAmendmentMutation,
       applyAmendmentMutation,
+      selectedAddress,
+      saveShipmentAddressToOrder,
       onSuccess,
       remainingUnfulfilled,
       handleOpenChange,
@@ -539,18 +571,21 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     startTransition(() => {
       setSelectedAddress(null);
       setAddressExpanded(false);
+      setSaveShipmentAddressToOrder(false);
       setInitialized(true);
       if (orderData.lineItems) {
         setItemSelections(
           orderData.lineItems.map((item) => {
             const allocated = (item.allocatedSerialNumbers as string[] | null) ?? [];
-            const availableQty = item.quantity - item.qtyShipped;
+            const availableQty = getLineItemAvailableToShip(item);
             const initialQty = Math.max(0, availableQty);
             return {
               lineItemId: item.id,
               productName: item.description,
               sku: item.sku,
               availableQty,
+              pickedQty: Number(item.qtyPicked ?? 0),
+              shippedQty: Number(item.qtyShipped ?? 0),
               selectedQty: initialQty,
               selected: initialQty > 0,
               allocatedSerialNumbers: allocated,
@@ -572,7 +607,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     for (const item of orderData.lineItems) {
       availableQtyByLineItem.set(
         item.id,
-        Math.max(0, item.quantity - item.qtyShipped)
+        getLineItemAvailableToShip(item)
       );
     }
     const prev = prevAvailableQtyRef.current;
@@ -729,7 +764,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                 ? "Loading order..."
                 : itemSelections.length === 0
                   ? "This order has no line items."
-                  : "All items have been shipped."}
+                  : "No picked items are ready to ship yet."}
             </DialogDescription>
           </DialogHeader>
           {orderLoading ? (
@@ -741,7 +776,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               <p className="text-muted-foreground">
                 {itemSelections.length === 0
                   ? "This order has no line items."
-                  : "All items have been shipped. No items to ship."}
+                  : "No picked items are ready to ship yet. Pick items first or review existing shipments."}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {itemSelections.length > 0 && totalAvailableQty === 0 && onViewShipments && (
@@ -886,7 +921,13 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                         </TableCell>
                         <TableCell className="text-right">
                           {item.availableQty === 0 ? (
-                            <Badge variant="secondary">Shipped</Badge>
+                            item.pickedQty === 0 ? (
+                              <Badge variant="secondary">Pick First</Badge>
+                            ) : item.shippedQty >= item.pickedQty ? (
+                              <Badge variant="secondary">Shipped</Badge>
+                            ) : (
+                              <Badge variant="secondary">Unavailable</Badge>
+                            )
                           ) : (
                             item.availableQty
                           )}
@@ -1048,7 +1089,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                         placeholder="Choose shipping address"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Or enter manually below
+                        Choose the order default, a saved customer address, or enter a one-off shipment address below
                       </p>
                     </div>
                   )}
@@ -1138,6 +1179,31 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                       )}
                     </form.Field>
                   </div>
+
+                  {(form.state.values.addressStreet1 || form.state.values.addressCity) && (
+                    <div className="rounded-md border border-dashed p-3">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="save-shipment-address"
+                          checked={saveShipmentAddressToOrder}
+                          onCheckedChange={(checked) =>
+                            setSaveShipmentAddressToOrder(checked === true)
+                          }
+                        />
+                        <div className="space-y-1">
+                          <Label
+                            htmlFor="save-shipment-address"
+                            className="text-sm font-medium"
+                          >
+                            Save this as the order shipping address
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Leave this off to keep the shipment destination as a one-off override.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1161,7 +1227,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                       }
                     >
                       <Select
-                        value={field.state.value ?? ""}
+                        value={field.state.value || undefined}
                         onValueChange={(v) => {
                           field.handleChange(v);
                           form.setFieldValue("carrierService", "");

@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // TEMPLATE ITEM SCHEMA
@@ -34,9 +35,11 @@ export type ChecklistTemplateItemInput = z.infer<typeof checklistTemplateItemSch
 /**
  * Schema for listing checklist templates.
  */
-export const listChecklistTemplatesSchema = z.object({
-  includeInactive: z.boolean().default(false),
-});
+export const listChecklistTemplatesSchema = normalizeObjectInput(
+  z.object({
+    includeInactive: z.boolean().default(false),
+  })
+);
 
 export type ListChecklistTemplatesInput = z.infer<typeof listChecklistTemplatesSchema>;
 

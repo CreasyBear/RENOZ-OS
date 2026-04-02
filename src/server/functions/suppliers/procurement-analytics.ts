@@ -17,6 +17,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, sql, isNull, gte, lte, ne, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrders, suppliers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -130,7 +131,7 @@ export type SpendMetricsInput = z.infer<typeof spendMetricsQuerySchema>;
  * Returns totals, trends, and budget comparisons.
  */
 export const getSpendMetrics = createServerFn({ method: 'GET' })
-  .inputValidator(spendMetricsQuerySchema)
+  .inputValidator(normalizeObjectInput(spendMetricsQuerySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -253,7 +254,7 @@ export type OrderMetricsInput = z.infer<typeof orderMetricsQuerySchema>;
  * Get order metrics including counts by status, cycle times, and fulfillment rates.
  */
 export const getOrderMetrics = createServerFn({ method: 'GET' })
-  .inputValidator(orderMetricsQuerySchema)
+  .inputValidator(normalizeObjectInput(orderMetricsQuerySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -381,7 +382,7 @@ export type SupplierMetricsInput = z.infer<typeof supplierMetricsQuerySchema>;
  * Get top supplier performance metrics with rankings.
  */
 export const getSupplierMetrics = createServerFn({ method: 'GET' })
-  .inputValidator(supplierMetricsQuerySchema)
+  .inputValidator(normalizeObjectInput(supplierMetricsQuerySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -596,7 +597,7 @@ export type DashboardInput = z.infer<typeof dashboardQuerySchema>;
  * Fetches spend, orders, suppliers, and alerts in parallel for efficiency.
  */
 export const getProcurementDashboard = createServerFn({ method: 'GET' })
-  .inputValidator(dashboardQuerySchema)
+  .inputValidator(normalizeObjectInput(dashboardQuerySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 

@@ -19,7 +19,6 @@ import {
   buildCursorCondition,
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
-import { currencySchema, percentageSchema } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -27,6 +26,12 @@ import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 import { roundCurrency } from '@/lib/order-calculations';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
+import {
+  createPurchaseOrderSchema,
+  updatePurchaseOrderSchema,
+  purchaseOrderItemSchema,
+} from '@/lib/schemas/purchase-orders';
 
 // Excluded fields for activity logging (system-managed fields)
 const PO_EXCLUDED_FIELDS: string[] = [
@@ -54,24 +59,7 @@ const poStatusEnum = z.enum([
   'cancelled',
 ]);
 
-const listPurchaseOrdersSchema = z.object({
-  supplierId: z.string().uuid().optional(),
-  status: z.array(poStatusEnum).optional(),
-  search: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  valueMin: z.number().optional(),
-  valueMax: z.number().optional(),
-  requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  sortBy: z
-    .enum(['poNumber', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt'])
-    .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
-
-const listPurchaseOrdersCursorSchema = cursorPaginationSchema.merge(
+const listPurchaseOrdersSchema = normalizeObjectInput(
   z.object({
     supplierId: z.string().uuid().optional(),
     status: z.array(poStatusEnum).optional(),
@@ -81,84 +69,43 @@ const listPurchaseOrdersCursorSchema = cursorPaginationSchema.merge(
     valueMin: z.number().optional(),
     valueMax: z.number().optional(),
     requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    sortBy: z
+      .enum(['poNumber', 'supplierName', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt'])
+      .default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
   })
+);
+
+const listPurchaseOrdersCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      supplierId: z.string().uuid().optional(),
+      status: z.array(poStatusEnum).optional(),
+      search: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      valueMin: z.number().optional(),
+      valueMax: z.number().optional(),
+      requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+  )
 );
 
 const getPurchaseOrderSchema = z.object({
   id: z.string().uuid(),
 });
+const getPurchaseOrderQuerySchema = normalizeObjectInput(getPurchaseOrderSchema);
+
+const receivingDashboardSummarySchema = normalizeObjectInput(
+  z.object({
+    status: z.array(poStatusEnum).default(['ordered']),
+  })
+);
 
 const bulkDeletePurchaseOrdersSchema = z.object({
   purchaseOrderIds: z.array(z.string().uuid()).min(1),
-});
-
-const addressSchema = z.object({
-  street1: z.string(),
-  street2: z.string().optional(),
-  city: z.string(),
-  state: z.string().optional(),
-  postcode: z.string(),
-  country: z.string(),
-});
-
-const purchaseOrderItemSchema = z.object({
-  productId: z.string().uuid().optional(),
-  productName: z.string(),
-  productSku: z.string().optional(),
-  description: z.string().optional(),
-  quantity: z.number().int().min(1),
-  unitOfMeasure: z.string().default('each'),
-  unitPrice: currencySchema,
-  discountPercent: percentageSchema.default(0),
-  taxRate: percentageSchema.default(10), // GST default 10%
-  expectedDeliveryDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  notes: z.string().optional(),
-});
-
-const createPurchaseOrderSchema = z.object({
-  supplierId: z.string().uuid(),
-  requiredDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  expectedDeliveryDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  shipToAddress: addressSchema.optional(),
-  billToAddress: addressSchema.optional(),
-  paymentTerms: z.string().optional(),
-  currency: z.string().default('AUD'),
-  notes: z.string().optional(),
-  internalNotes: z.string().optional(),
-  internalReference: z.string().optional(),
-  items: z.array(purchaseOrderItemSchema).min(1),
-});
-
-const updatePurchaseOrderSchema = z.object({
-  id: z.string().uuid(),
-  requiredDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  expectedDeliveryDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  shipToAddress: addressSchema.optional(),
-  billToAddress: addressSchema.optional(),
-  paymentTerms: z.string().optional(),
-  exchangeRate: z.number().positive().optional(),
-  exchangeDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  notes: z.string().optional(),
-  internalNotes: z.string().optional(),
-  internalReference: z.string().optional(),
 });
 
 // ============================================================================
@@ -248,6 +195,9 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
     switch (sortBy) {
       case 'poNumber':
         orderColumn = purchaseOrders.poNumber;
+        break;
+      case 'supplierName':
+        orderColumn = suppliers.name;
         break;
       case 'orderDate':
         orderColumn = purchaseOrders.orderDate;
@@ -412,11 +362,40 @@ export const getPurchaseOrderStatusCounts = createServerFn({ method: 'GET' })
     };
   });
 
+export const getReceivingDashboardSummary = createServerFn({ method: 'GET' })
+  .inputValidator(receivingDashboardSummarySchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
+
+    const [summary] = await db
+      .select({
+        totalOrders: count(),
+        totalValue: sql<number>`COALESCE(SUM(${purchaseOrders.totalAmount}), 0)::numeric`,
+        supplierCount: sql<number>`COUNT(DISTINCT ${purchaseOrders.supplierId})::int`,
+        oldestOrderDate: sql<string | null>`MIN(${purchaseOrders.orderDate})`,
+      })
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          isNull(purchaseOrders.deletedAt),
+          inArray(purchaseOrders.status, data.status)
+        )
+      );
+
+    return {
+      totalOrders: summary?.totalOrders ?? 0,
+      totalValue: Number(summary?.totalValue ?? 0),
+      supplierCount: summary?.supplierCount ?? 0,
+      oldestOrderDate: summary?.oldestOrderDate ?? null,
+    };
+  });
+
 /**
  * Get a single purchase order with items
  */
 export const getPurchaseOrder = createServerFn({ method: 'GET' })
-  .inputValidator(getPurchaseOrderSchema)
+  .inputValidator(getPurchaseOrderQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 

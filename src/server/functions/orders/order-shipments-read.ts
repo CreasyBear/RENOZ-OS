@@ -7,13 +7,14 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { NotFoundError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
-import { orderShipments, orders, shipmentItems } from 'drizzle/schema';
+import { orderShipments, orders, shipmentItems, orderLineItems } from 'drizzle/schema';
 import {
   shipmentListCursorQuerySchema,
   shipmentListQuerySchema,
   shipmentParamsSchema,
 } from '@/lib/schemas';
 import type { ShipmentWithItems, ListShipmentsResult } from './order-shipment-types';
+import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
 type ShipmentListQueryInput = z.infer<typeof shipmentListQuerySchema>;
 type ShipmentListCursorQueryInput = z.infer<typeof shipmentListCursorQuerySchema>;
 type ShipmentParamsInput = z.infer<typeof shipmentParamsSchema>;
@@ -192,8 +193,54 @@ export async function getOrderShipmentsHandler({
     return acc;
   }, new Map());
 
-  return shipments.map((shipment) => ({
-    ...shipment,
-    items: itemsByShipment.get(shipment.id) ?? [],
-  }));
+  const lineItemIds = Array.from(new Set(allItems.map((item) => item.orderLineItemId)));
+  const lineItemQuantities =
+    lineItemIds.length > 0
+      ? await db
+          .select({
+            id: orderLineItems.id,
+            qtyPicked: orderLineItems.qtyPicked,
+            qtyShipped: orderLineItems.qtyShipped,
+          })
+          .from(orderLineItems)
+          .where(inArray(orderLineItems.id, lineItemIds))
+      : [];
+  const lineItemMap = new Map(
+    lineItemQuantities.map((item) => [
+      item.id,
+      {
+        qtyPicked: Number(item.qtyPicked ?? 0),
+        qtyShipped: Number(item.qtyShipped ?? 0),
+      },
+    ])
+  );
+  const pendingReservations = await getPendingShipmentReservations(db, {
+    organizationId: ctx.organizationId,
+    orderId: data.orderId,
+  });
+
+  return shipments.map((shipment) => {
+    const shipmentItemsForShipment = itemsByShipment.get(shipment.id) ?? [];
+    const canGenerateDispatchNote =
+      shipment.status !== 'pending'
+        ? true
+        : shipmentItemsForShipment.length > 0 &&
+          shipmentItemsForShipment.every((item) => {
+            const line = lineItemMap.get(item.orderLineItemId);
+            if (!line) return false;
+            const globallyReserved =
+              Number(pendingReservations.quantitiesByLineItem.get(item.orderLineItemId) ?? 0);
+            return line.qtyPicked - line.qtyShipped >= globallyReserved;
+          });
+
+    return {
+      ...shipment,
+      items: shipmentItemsForShipment,
+      canGenerateDispatchNote,
+      dispatchNoteBlockedReason: canGenerateDispatchNote
+        ? null
+        : 'Every item in this shipment draft must be fully picked before a dispatch note can be generated.',
+      canGenerateDeliveryNote: shipment.status === 'delivered',
+    };
+  });
 }

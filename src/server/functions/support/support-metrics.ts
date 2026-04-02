@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, count, sql, gte, isNull, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { issues } from 'drizzle/schema/support/issues';
 import { slaTracking } from 'drizzle/schema/support/sla-tracking';
 import { withAuth } from '@/lib/server/protected';
@@ -19,10 +20,12 @@ import { withAuth } from '@/lib/server/protected';
 // SCHEMAS
 // ============================================================================
 
-const getSupportMetricsSchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-});
+export const getSupportMetricsSchema = normalizeObjectInput(
+  z.object({
+    startDate: z.string().datetime().optional(),
+    endDate: z.string().datetime().optional(),
+  })
+);
 
 // ============================================================================
 // RESPONSE TYPES

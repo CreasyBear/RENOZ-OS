@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -190,11 +191,13 @@ export const recordResolutionSchema = z.object({
 // QUERY SCHEMAS
 // ============================================================================
 
-export const getSlaConfigurationsSchema = z.object({
+export const getSlaConfigurationsBaseSchema = z.object({
   domain: slaDomainSchema.optional(),
   isActive: z.boolean().optional(),
   includeDefaults: z.boolean().default(true),
 });
+
+export const getSlaConfigurationsSchema = normalizeObjectInput(getSlaConfigurationsBaseSchema);
 
 export const getSlaTrackingSchema = z.object({
   entityType: z.string().optional(),

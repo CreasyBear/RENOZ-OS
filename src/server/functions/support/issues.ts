@@ -14,6 +14,7 @@ import { decodeCursor, buildCursorCondition, buildStandardCursorResponse, encode
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   issues,
   slaConfigurations,
@@ -418,7 +419,7 @@ export const getIssuesCursor = createServerFn({ method: 'GET' })
  * Get a single issue by ID with SLA state
  */
 export const getIssueById = createServerFn({ method: 'GET' })
-  .inputValidator(getIssueByIdSchema)
+  .inputValidator(normalizeObjectInput(getIssueByIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

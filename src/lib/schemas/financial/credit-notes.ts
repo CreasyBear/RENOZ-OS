@@ -14,6 +14,7 @@ import {
   paginationSchema,
   filterSchema,
   currencySchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 
 // ============================================================================
@@ -126,13 +127,26 @@ export type VoidCreditNoteInput = z.infer<typeof voidCreditNoteSchema>;
 /**
  * Query parameters for listing credit notes.
  */
-export const creditNoteListQuerySchema = paginationSchema.merge(filterSchema).extend({
-  status: creditNoteStatusSchema.optional(),
-  customerId: idSchema.optional(),
-  orderId: idSchema.optional(),
-});
+export const creditNoteListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(filterSchema).extend({
+    status: creditNoteStatusSchema.optional(),
+    customerId: idSchema.optional(),
+    orderId: idSchema.optional(),
+    sortBy: z.enum(['createdAt', 'amount', 'status', 'customer']).default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+);
 
 export type CreditNoteListQuery = z.infer<typeof creditNoteListQuerySchema>;
+
+export type CreditNoteSortField = CreditNoteListQuery['sortBy'];
+
+export const CREDIT_NOTE_SORT_FIELDS = [
+  'createdAt',
+  'amount',
+  'status',
+  'customer',
+] as const satisfies readonly CreditNoteSortField[];
 
 // ============================================================================
 // CREDIT NOTE BY CUSTOMER QUERY
@@ -141,10 +155,12 @@ export type CreditNoteListQuery = z.infer<typeof creditNoteListQuerySchema>;
 /**
  * Query parameters for getting credit notes by customer.
  */
-export const creditNotesByCustomerQuerySchema = paginationSchema.extend({
-  customerId: idSchema,
-  includeApplied: z.boolean().default(false),
-});
+export const creditNotesByCustomerQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    customerId: idSchema,
+    includeApplied: z.boolean().default(false),
+  })
+);
 
 export type CreditNotesByCustomerQuery = z.infer<typeof creditNotesByCustomerQuerySchema>;
 

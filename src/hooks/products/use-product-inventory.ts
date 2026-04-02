@@ -17,7 +17,6 @@ import {
   getLowStockAlerts,
   getProductMovements,
   adjustStock,
-  receiveStock,
   listLocations,
   getAggregatedProductMovements,
 } from '@/server/functions/products/product-inventory';
@@ -328,10 +327,22 @@ export function useAdjustStock() {
     onSuccess: (result, variables) => {
       toast.success(result.message || 'Stock adjusted successfully');
       queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
         queryKey: queryKeys.products.inventory(variables.productId),
       });
       queryClient.invalidateQueries({
+        queryKey: queryKeys.products.inventoryStats(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.stockAlerts(variables.productId),
+      });
+      queryClient.invalidateQueries({
         queryKey: queryKeys.products.movements(variables.productId, {}),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.movementsAggregated(variables.productId, {}),
       });
     },
     onError: (error: Error) => {
@@ -366,29 +377,5 @@ export function useProductCostLayers(options: UseProductInventorySummaryOptions)
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000,
-  });
-}
-
-/**
- * Receive stock for a product.
- */
-export function useReceiveStock() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: Parameters<typeof receiveStock>[0]['data']) =>
-      receiveStock({ data }),
-    onSuccess: (result, variables) => {
-      toast.success(result.message || 'Stock received successfully');
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.inventory(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.movements(variables.productId, {}),
-      });
-    },
-    onError: (error: Error) => {
-      toast.error(mapInventoryMutationError(error));
-    },
   });
 }

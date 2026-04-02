@@ -14,14 +14,17 @@
  */
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { queryKeys } from '@/lib/query-keys';
+import { queryKeys, type CustomerFilters } from '@/lib/query-keys';
 import { normalizeCustomerDetail } from '@/lib/schemas/customers/normalize';
+import { isValidCustomerSortField } from '@/components/domain/customers/customer-sorting';
 import {
   getCustomers,
   getCustomerById,
   getCustomerTags,
   createCustomer,
+  createCustomerBundle,
   updateCustomer,
+  updateCustomerBundle,
   deleteCustomer,
   bulkDeleteCustomers,
   bulkUpdateCustomers,
@@ -36,7 +39,13 @@ import {
   linkCustomerXeroContact,
   unlinkCustomerXeroContact,
 } from '@/server/functions/financial/xero-operations';
-import type { CustomerListQuery, CreateCustomer, UpdateCustomer } from '@/lib/schemas/customers';
+import type {
+  CustomerListQuery,
+  CreateCustomer,
+  CreateCustomerBundle,
+  UpdateCustomer,
+  UpdateCustomerBundle,
+} from '@/lib/schemas/customers';
 
 type CustomerListResult = Awaited<ReturnType<typeof getCustomers>>;
 type CustomerDetail = Awaited<ReturnType<typeof getCustomerById>>;
@@ -51,14 +60,30 @@ export interface UseCustomersOptions extends Partial<CustomerListQuery> {
   enabled?: boolean;
 }
 
+function normalizeCustomerListFilters(filters: Partial<CustomerListQuery>): CustomerFilters {
+  return {
+    ...filters,
+    sortBy:
+      typeof filters.sortBy === 'string' && isValidCustomerSortField(filters.sortBy)
+        ? filters.sortBy
+        : undefined,
+  };
+}
+
+function invalidateCustomerListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.infiniteLists() });
+}
+
 export function useCustomers(options: UseCustomersOptions = {}) {
   const { enabled = true, ...filters } = options;
   const listCustomersFn = useServerFn(getCustomers);
+  const normalizedFilters = normalizeCustomerListFilters(filters);
 
   return useQuery({
-    queryKey: queryKeys.customers.list(filters),
+    queryKey: queryKeys.customers.list(normalizedFilters),
     queryFn: async () => {
-      const result = await listCustomersFn({ data: filters as CustomerListQuery });
+      const result = await listCustomersFn({ data: normalizedFilters as CustomerListQuery });
       if (result == null) throw new Error('Customers list returned no data');
       return result;
     },
@@ -72,15 +97,16 @@ export function useCustomers(options: UseCustomersOptions = {}) {
  */
 export function useCustomersInfinite(filters: Partial<CustomerListQuery> = {}) {
   const listCustomersFn = useServerFn(getCustomers);
+  const normalizedFilters = normalizeCustomerListFilters(filters);
 
   return useInfiniteQuery({
-    queryKey: queryKeys.customers.list(filters), // Use list key for infinite queries too
+    queryKey: queryKeys.customers.infiniteList(normalizedFilters),
     queryFn: async ({ pageParam }) => {
       const result = await listCustomersFn({
         data: {
-          ...filters,
+          ...normalizedFilters,
           page: pageParam,
-          pageSize: filters.pageSize ?? 50,
+          pageSize: normalizedFilters.pageSize ?? 50,
         } as CustomerListQuery,
       });
       if (result == null) throw new Error('Customers list returned no data');
@@ -155,18 +181,23 @@ export interface UseCustomerSearchOptions {
   enabled?: boolean;
 }
 
+function normalizeCustomerSearchFilters(query: string, limit: number): CustomerFilters {
+  return {
+    search: query,
+    page: 1,
+    pageSize: limit,
+  };
+}
+
 export function useCustomerSearch({ query, limit = 10, enabled = true }: UseCustomerSearchOptions) {
   const listCustomersFn = useServerFn(getCustomers);
+  const normalizedFilters = normalizeCustomerSearchFilters(query, limit);
 
   return useQuery({
-    queryKey: queryKeys.customers.list({ search: query }),
+    queryKey: queryKeys.customers.list(normalizedFilters),
     queryFn: async () => {
       const result = await listCustomersFn({
-        data: {
-          search: query,
-          pageSize: limit,
-          page: 1,
-        } as CustomerListQuery,
+        data: normalizedFilters as CustomerListQuery,
       });
       if (result == null) throw new Error('Customer search returned no data');
       return result;
@@ -205,8 +236,19 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: (input: CreateCustomer) => createFn({ data: input }),
     onSuccess: () => {
-      // Invalidate customer lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
+    },
+  });
+}
+
+export function useCreateCustomerBundle() {
+  const queryClient = useQueryClient();
+  const createFn = useServerFn(createCustomerBundle);
+
+  return useMutation({
+    mutationFn: (input: CreateCustomerBundle) => createFn({ data: input }),
+    onSuccess: () => {
+      invalidateCustomerListQueries(queryClient);
     },
   });
 }
@@ -221,6 +263,7 @@ export function useUpdateCustomer() {
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.customers.detail(variables.id) });
       await queryClient.cancelQueries({ queryKey: queryKeys.customers.lists() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.customers.infiniteLists() });
 
       const previousDetail = queryClient.getQueryData<CustomerDetail>(
         queryKeys.customers.detail(variables.id)
@@ -271,7 +314,23 @@ export function useUpdateCustomer() {
     onSuccess: (_, variables) => {
       // Invalidate specific customer and lists
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
+    },
+  });
+}
+
+export function useUpdateCustomerBundle() {
+  const queryClient = useQueryClient();
+  const updateFn = useServerFn(updateCustomerBundle);
+
+  return useMutation({
+    mutationFn: ({ id, ...data }: UpdateCustomerBundle & { id: string }) =>
+      updateFn({ data: { id, ...data } }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(variables.id) });
+      invalidateCustomerListQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
     },
   });
 }
@@ -310,7 +369,7 @@ function invalidateXeroCustomerState(queryClient: ReturnType<typeof useQueryClie
   queryClient.invalidateQueries({ queryKey: queryKeys.financial.xeroContactSearch(customerId, '') });
   queryClient.invalidateQueries({ queryKey: queryKeys.financial.xero() });
   queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(customerId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+  invalidateCustomerListQueries(queryClient);
 }
 
 export function useCreateCustomerXeroContact() {
@@ -359,7 +418,7 @@ export function useDeleteCustomer() {
     onSuccess: (_, id) => {
       // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: queryKeys.customers.detail(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
     },
   });
 }
@@ -375,7 +434,7 @@ export function useBulkDeleteCustomers() {
       customerIds.forEach((id) => {
         queryClient.removeQueries({ queryKey: queryKeys.customers.detail(id) });
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
     },
   });
 }
@@ -390,6 +449,7 @@ export function useBulkUpdateCustomers() {
     onMutate: async (variables) => {
       // Optimistically update each affected customer in cache
       await queryClient.cancelQueries({ queryKey: queryKeys.customers.lists() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.customers.infiniteLists() });
       const previousLists = queryClient.getQueriesData<CustomerListResult>({
         queryKey: queryKeys.customers.lists(),
       });
@@ -418,7 +478,7 @@ export function useBulkUpdateCustomers() {
       variables.customerIds.forEach((id) => {
         queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(id) });
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
     },
   });
 }
@@ -431,7 +491,7 @@ export function useBulkAssignCustomerTags() {
     mutationFn: (input: { customerIds: string[]; tagIds: string[] }) =>
       bulkAssignFn({ data: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.tags.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.segments.lists() });
@@ -448,7 +508,7 @@ export function useBulkUpdateHealthScores() {
       bulkUpdateHealthScoresFn({ data: input }),
     onSuccess: (result) => {
       // Invalidate customer lists and details
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.lists() });
+      invalidateCustomerListQueries(queryClient);
       result.results?.forEach((r) => {
         if (r.success) {
           queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(r.customerId) });

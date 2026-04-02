@@ -1,13 +1,13 @@
 /**
  * Receiving Form Component
  *
- * Form for receiving inventory with cost tracking and lot/serial support.
+ * Form for receiving non-PO inventory with cost tracking and lot/serial support.
  *
  * Features:
  * - Product/location selector
  * - Quantity and unit cost input
  * - Lot/batch/serial tracking
- * - Reference linking (PO, supplier)
+ * - Explicit non-PO receipt reason
  *
  * Accessibility:
  * - Form validation with clear error messages
@@ -36,6 +36,10 @@ import {
   TextareaField,
   DateStringField,
 } from "@/components/shared/forms";
+import {
+  manualReceiptReasonSchema,
+  manualReceiptReasonValues,
+} from "@/lib/schemas/inventory";
 
 // ============================================================================
 // TYPES
@@ -46,12 +50,11 @@ const receivingFormBaseSchema = z.object({
   locationId: z.string().uuid("Location is required"),
   quantity: z.coerce.number().int().positive("Quantity must be positive"),
   unitCost: z.coerce.number().min(0, "Cost must be zero or positive"),
+  receiptReason: manualReceiptReasonSchema,
   serialNumber: z.string().optional(),
   batchNumber: z.string().optional(),
   lotNumber: z.string().optional(),
   expiryDate: z.string().optional(),
-  referenceType: z.string().optional(),
-  referenceId: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -76,6 +79,13 @@ function createReceivingFormSchema(products: { id: string; isSerialized?: boolea
         });
       }
     }
+    if (data.receiptReason === "other_exception" && !data.notes?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["notes"],
+        message: "Notes are required when using Other Exception.",
+      });
+    }
   });
 }
 
@@ -99,8 +109,11 @@ interface ReceivingFormProps {
   isLoadingProducts?: boolean;
   isLoadingLocations?: boolean;
   onSubmit: (data: ReceivingFormValues) => Promise<void>;
+  onCancel?: () => void;
   onProductSearch?: (query: string) => void;
   defaultLocationId?: string;
+  defaultProductId?: string;
+  lockProductSelection?: boolean;
   submitError?: string | null;
   className?: string;
 }
@@ -115,8 +128,11 @@ export const ReceivingForm = memo(function ReceivingForm({
   isLoadingProducts,
   isLoadingLocations,
   onSubmit,
+  onCancel,
   onProductSearch,
   defaultLocationId,
+  defaultProductId,
+  lockProductSelection = false,
   submitError,
   className,
 }: ReceivingFormProps) {
@@ -127,31 +143,29 @@ export const ReceivingForm = memo(function ReceivingForm({
   const form = useTanStackForm<ReceivingFormValues>({
     schema: createReceivingFormSchema(products),
     defaultValues: {
-      productId: "",
+      productId: defaultProductId ?? "",
       locationId: defaultLocationId ?? "",
       quantity: 1,
       unitCost: 0,
+      receiptReason: "initial_stock",
       serialNumber: "",
       batchNumber: "",
       lotNumber: "",
       expiryDate: "",
-      referenceType: "",
-      referenceId: "",
       notes: "",
     },
     onSubmit: async (values) => {
       await onSubmit(values);
       form.reset({
-        productId: "",
+        productId: defaultProductId ?? "",
         locationId: defaultLocationId ?? "",
         quantity: 1,
         unitCost: 0,
+        receiptReason: "initial_stock",
         serialNumber: "",
         batchNumber: "",
         lotNumber: "",
         expiryDate: "",
-        referenceType: "",
-        referenceId: "",
         notes: "",
       });
     },
@@ -213,10 +227,18 @@ export const ReceivingForm = memo(function ReceivingForm({
                   emptyText="No products found"
                   onSearchChange={onProductSearch}
                   isLoading={isLoadingProducts}
+                  disabled={lockProductSelection}
                   required
                 />
               )}
             </form.Field>
+
+            <Alert>
+              <AlertDescription>
+                Use this workflow only for non-PO inbound stock such as initial setup, found stock,
+                samples, or other approved exceptions. Supplier deliveries should go through Receive Goods.
+              </AlertDescription>
+            </Alert>
 
             {isSerializedProduct ? (
               <Alert>
@@ -333,40 +355,36 @@ export const ReceivingForm = memo(function ReceivingForm({
               </div>
             </div>
 
-            {/* Reference Fields */}
+            {/* Receipt reason */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <FileText className="h-4 w-4" aria-hidden="true" />
-                Reference (Optional)
+                Non-PO Receipt Reason
               </h4>
 
-              <div className="grid grid-cols-2 gap-4">
-                <form.Field name="referenceType">
-                  {(field) => (
-                    <SelectField
-                      field={field}
-                      label="Reference Type"
-                      placeholder="Select type..."
-                      options={[
-                        { value: "purchase_order", label: "Purchase Order" },
-                        { value: "transfer", label: "Transfer" },
-                        { value: "return", label: "Return" },
-                        { value: "adjustment", label: "Adjustment" },
-                      ]}
-                    />
-                  )}
-                </form.Field>
-
-                <form.Field name="referenceId">
-                  {(field) => (
-                    <TextField
-                      field={field}
-                      label="Reference ID"
-                      placeholder="PO-001"
-                    />
-                  )}
-                </form.Field>
-              </div>
+              <form.Field name="receiptReason">
+                {(field) => (
+                  <SelectField
+                    field={field}
+                    label="Receipt Reason"
+                    placeholder="Select reason..."
+                    options={manualReceiptReasonValues.map((value) => ({
+                      value,
+                      label:
+                        value === "initial_stock"
+                          ? "Initial Stock"
+                          : value === "found_stock"
+                            ? "Found Stock"
+                            : value === "sample_or_promo"
+                              ? "Sample or Promo"
+                              : value === "non_supplier_inbound"
+                                ? "Non-Supplier Inbound"
+                                : "Other Exception",
+                    }))}
+                    required
+                  />
+                )}
+              </form.Field>
             </div>
 
             {/* Notes */}
@@ -375,27 +393,38 @@ export const ReceivingForm = memo(function ReceivingForm({
                 <TextareaField
                   field={field}
                   label="Notes"
-                  placeholder="Additional notes about this receipt..."
+                  placeholder="Add context for this non-PO receipt. Notes are required for Other Exception."
                   rows={3}
                 />
               )}
             </form.Field>
           </FormFieldDisplayProvider>
 
-          {/* Submit */}
-          <Button type="submit" className="w-full" disabled={form.state.isSubmitting}>
-            {form.state.isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                Receiving...
-              </>
-            ) : (
-              <>
-                <Package className="mr-2 h-4 w-4" aria-hidden="true" />
-                Receive Inventory
-              </>
-            )}
-          </Button>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            {onCancel ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                disabled={form.state.isSubmitting}
+              >
+                Cancel
+              </Button>
+            ) : null}
+            <Button type="submit" className="sm:min-w-40" disabled={form.state.isSubmitting}>
+              {form.state.isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  Receiving...
+                </>
+              ) : (
+                <>
+                  <Package className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Receive Inventory
+                </>
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

@@ -64,7 +64,7 @@ const QUICK_ACTIONS: (Omit<QuickAction, 'href'> & {
     label: "Receive Inventory",
     icon: PackagePlus,
     href: "/inventory/receiving",
-    description: "Record goods receipt",
+    description: "Record non-PO inbound stock",
   },
   {
     id: "count",

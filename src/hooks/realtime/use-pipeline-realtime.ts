@@ -154,6 +154,7 @@ export function usePipelineRealtime(
     queryKeys: [
       queryKeys.opportunities.all,
       queryKeys.opportunities.lists(),
+      queryKeys.opportunities.infiniteLists(),
       queryKeys.opportunities.list({}),
       queryKeys.quotes.all,
       queryKeys.dashboard.pipeline(),

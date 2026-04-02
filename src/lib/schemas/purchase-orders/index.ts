@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { currencySchema } from '../_shared/patterns';
+import { currencySchema, normalizeObjectInput, percentageSchema } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -58,23 +58,25 @@ export const defaultPurchaseOrderFilters: PurchaseOrderFiltersState = {
 // LIST SCHEMA
 // ============================================================================
 
-export const listPurchaseOrdersSchema = z.object({
-  page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(20),
-  sortBy: z
-    .enum(['poNumber', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt'])
-    .default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  search: z.string().optional(),
-  status: z.array(purchaseOrderStatusEnum).optional(),
-  supplierId: z.string().uuid().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  valueMin: z.number().optional(),
-  valueMax: z.number().optional(),
-  /** Filter overdue: requiredDate < today, status in approved/ordered/partial_received */
-  requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-});
+export const listPurchaseOrdersSchema = normalizeObjectInput(
+  z.object({
+    page: z.number().int().positive().default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    sortBy: z
+      .enum(['poNumber', 'supplierName', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt'])
+      .default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    search: z.string().optional(),
+    status: z.array(purchaseOrderStatusEnum).optional(),
+    supplierId: z.string().uuid().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    valueMin: z.number().optional(),
+    valueMax: z.number().optional(),
+    /** Filter overdue: requiredDate < today, status in approved/ordered/partial_received */
+    requiredBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+);
 
 export type ListPurchaseOrdersInput = z.infer<typeof listPurchaseOrdersSchema>;
 
@@ -84,6 +86,7 @@ export type PurchaseOrderSortField = ListPurchaseOrdersInput['sortBy'];
 /** Type guard for sort field validation (avoids `as PurchaseOrderSortField` assertions) */
 export const PO_SORT_FIELDS = [
   'poNumber',
+  'supplierName',
   'orderDate',
   'requiredDate',
   'totalAmount',
@@ -117,42 +120,79 @@ export interface PurchaseOrderTableData {
 // CRUD SCHEMAS
 // ============================================================================
 
-export const createPurchaseOrderSchema = z.object({
-  supplierId: z.string().uuid(),
+export const purchaseOrderAddressSchema = z.object({
+  street1: z.string(),
+  street2: z.string().optional(),
+  city: z.string(),
+  state: z.string().optional(),
+  postcode: z.string(),
+  country: z.string(),
+});
+
+export type PurchaseOrderAddress = z.infer<typeof purchaseOrderAddressSchema>;
+
+export const purchaseOrderItemSchema = z.object({
+  productId: z.string().uuid().optional(),
+  productName: z.string().min(1),
+  productSku: z.string().optional(),
+  description: z.string().optional(),
+  quantity: z.number().int().min(1),
+  unitOfMeasure: z.string().default('each'),
+  unitPrice: currencySchema,
+  discountPercent: percentageSchema.default(0),
+  taxRate: percentageSchema.default(10),
   expectedDeliveryDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  paymentTerms: z.string().optional(),
-  shippingMethod: z.string().optional(),
-  deliveryAddress: z.string().optional(),
+    .optional(),
   notes: z.string().optional(),
-  items: z
-    .array(
-      z.object({
-        productId: z.string().uuid().optional(),
-        productName: z.string().min(1),
-        productSku: z.string().optional(),
-        quantity: z.number().int().positive(),
-        unitPrice: currencySchema,
-        notes: z.string().optional(),
-      })
-    )
-    .min(1),
+});
+
+export type PurchaseOrderItemInput = z.infer<typeof purchaseOrderItemSchema>;
+
+export const createPurchaseOrderSchema = z.object({
+  supplierId: z.string().uuid(),
+  requiredDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  expectedDeliveryDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  shipToAddress: purchaseOrderAddressSchema.optional(),
+  billToAddress: purchaseOrderAddressSchema.optional(),
+  paymentTerms: z.string().optional(),
+  currency: z.string().default('AUD'),
+  notes: z.string().optional(),
+  internalNotes: z.string().optional(),
+  internalReference: z.string().optional(),
+  items: z.array(purchaseOrderItemSchema).min(1),
 });
 
 export type CreatePurchaseOrderInput = z.infer<typeof createPurchaseOrderSchema>;
 
 export const updatePurchaseOrderSchema = z.object({
   id: z.string().uuid(),
+  requiredDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   expectedDeliveryDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
+    .optional(),
   paymentTerms: z.string().optional(),
-  shippingMethod: z.string().optional(),
-  deliveryAddress: z.string().optional(),
+  shipToAddress: purchaseOrderAddressSchema.optional(),
+  billToAddress: purchaseOrderAddressSchema.optional(),
+  exchangeRate: z.number().positive().optional(),
+  exchangeDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   notes: z.string().optional(),
+  internalNotes: z.string().optional(),
+  internalReference: z.string().optional(),
 });
 
 export type UpdatePurchaseOrderInput = z.infer<typeof updatePurchaseOrderSchema>;

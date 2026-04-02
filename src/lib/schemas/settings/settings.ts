@@ -14,7 +14,7 @@
  */
 
 import { z } from "zod";
-import { paginationSchema } from "../_shared/patterns";
+import { normalizeObjectInput, paginationSchema } from "../_shared/patterns";
 
 // ============================================================================
 // ORGANIZATION SETTINGS
@@ -462,10 +462,12 @@ export const updateCustomFieldSchema = z.object({
 
 export type UpdateCustomField = z.infer<typeof updateCustomFieldSchema>;
 
-export const listCustomFieldsSchema = z.object({
-  entityType: customFieldEntityTypeSchema,
-  includeInactive: z.boolean().optional().default(false),
-});
+export const listCustomFieldsSchema = normalizeObjectInput(
+  z.object({
+    entityType: customFieldEntityTypeSchema,
+    includeInactive: z.boolean().optional().default(false),
+  })
+);
 
 export type ListCustomFieldsQuery = z.infer<typeof listCustomFieldsSchema>;
 

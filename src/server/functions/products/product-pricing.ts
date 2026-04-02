@@ -12,6 +12,7 @@ import { eq, and, lte, gte, or, isNull, asc, desc, sql, inArray } from 'drizzle-
 import { z } from 'zod';
 import { cache } from 'react';
 import { db, type Database } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { products, productPriceTiers, customerProductPrices, priceHistory } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -170,11 +171,13 @@ const _resolvePrice = cache(
 
 export const resolvePrice = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      customerId: z.string().uuid().optional(),
-      quantity: z.number().int().positive().default(1),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        customerId: z.string().uuid().optional(),
+        quantity: z.number().int().positive().default(1),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -189,7 +192,7 @@ export const resolvePrice = createServerFn({ method: 'GET' })
  * List price tiers for a product.
  */
 export const listPriceTiers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(async ({ data }): Promise<ProductPriceTier[]> => {
     const ctx = await withAuth();
 
@@ -392,10 +395,12 @@ export const setPriceTiers = createServerFn({ method: 'POST' })
  */
 export const listCustomerPrices = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid().optional(),
-      customerId: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid().optional(),
+        customerId: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }): Promise<CustomerProductPrice[]> => {
     const ctx = await withAuth();
@@ -564,11 +569,13 @@ export async function recordPriceChange(params: {
  */
 export const getPriceHistory = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      limit: z.number().int().positive().max(100).default(50),
-      offset: z.number().int().min(0).default(0),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        limit: z.number().int().positive().max(100).default(50),
+        offset: z.number().int().min(0).default(0),
+      })
+    )
   )
   .handler(async ({ data }): Promise<{ history: PriceHistory[]; total: number }> => {
     const ctx = await withAuth();

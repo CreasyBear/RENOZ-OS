@@ -17,7 +17,13 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useCustomerNavigation } from './use-customer-navigation';
 import { useCustomer, useDeleteCustomer } from './use-customers';
-import { useCustomerAlerts, useCustomerActiveItems } from './use-customer-detail-extended';
+import { mergeCustomerDetailWithOrderSummary } from './customer-detail-metrics';
+import { getSummaryState } from '@/lib/metrics/summary-health';
+import {
+  useCustomerAlerts,
+  useCustomerActiveItems,
+  useCustomerOrderSummary,
+} from './use-customer-detail-extended';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { toastSuccess, toastError } from '@/hooks';
 import type { ActivityType } from '@/components/shared/activity';
@@ -67,6 +73,7 @@ export interface UseCustomerDetailReturn {
   activitiesError: Error | null;
   alertsLoading: boolean;
   activeItemsLoading: boolean;
+  extendedDataWarning: string | null;
 
   // UI State
   activeTab: string;
@@ -171,6 +178,33 @@ export function useCustomerDetail(
     isLoading: activeItemsLoading,
   } = useCustomerActiveItems({ customerId });
 
+  const {
+    data: orderSummaryData,
+    isLoading: orderSummaryLoading,
+    error: orderSummaryError,
+  } = useCustomerOrderSummary({ customerId });
+
+  const mergedCustomer = useMemo<CustomerDetailData | undefined>(() => {
+    return mergeCustomerDetailWithOrderSummary(
+      customer as CustomerDetailData | undefined,
+      orderSummaryData
+    );
+  }, [customer, orderSummaryData]);
+
+  const extendedDataWarning = useMemo(() => {
+    const orderSummaryState = getSummaryState({
+      data: orderSummaryData,
+      error: orderSummaryError,
+      isLoading: orderSummaryLoading,
+    });
+
+    if (orderSummaryState !== 'unavailable') {
+      return null;
+    }
+
+    return 'Customer order metrics are temporarily unavailable. Headline values may be incomplete until the summary query recovers.';
+  }, [orderSummaryData, orderSummaryError, orderSummaryLoading]);
+
   // ─────────────────────────────────────────────────────────────────────────
   // Mutations
   // ─────────────────────────────────────────────────────────────────────────
@@ -252,18 +286,19 @@ export function useCustomerDetail(
   // ─────────────────────────────────────────────────────────────────────────
   return {
     // Data
-    customer,
+    customer: mergedCustomer,
     activities: activities ?? [],
     alerts: alertsData?.alerts ?? [],
     activeItems: activeItemsData,
 
     // Loading states
-    isLoading,
+    isLoading: isLoading || orderSummaryLoading,
     error: error as Error | null,
     activitiesLoading,
     activitiesError: activitiesError as Error | null,
     alertsLoading,
     activeItemsLoading,
+    extendedDataWarning,
 
     // UI State
     activeTab,

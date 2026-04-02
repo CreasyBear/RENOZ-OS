@@ -17,6 +17,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, gte, lte, ne, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -130,7 +131,7 @@ export const listCustomReportsCursor = createServerFn({ method: 'GET' })
  * Get a single custom report by ID.
  */
 export const getCustomReport = createServerFn({ method: 'GET' })
-  .inputValidator(getCustomReportSchema)
+  .inputValidator(normalizeObjectInput(getCustomReportSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.report.viewOperations });
 

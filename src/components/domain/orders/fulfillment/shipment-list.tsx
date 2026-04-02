@@ -42,6 +42,12 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useOrderShipments } from "@/hooks/orders";
+import {
+  useGenerateShipmentDispatchNote,
+  useGenerateShipmentDeliveryNote,
+  useGenerateShipmentPackingSlip,
+} from "@/hooks/documents";
+import { toastError, toastSuccess } from "@/hooks";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
 import { SerialNumbersList } from "../components/serial-numbers-list";
 
@@ -110,6 +116,9 @@ export const ShipmentList = memo(function ShipmentList({
 }: ShipmentListProps) {
   // Fetch shipments using hook
   const { data: shipments, isLoading, error } = useOrderShipments(orderId);
+  const generatePackingSlip = useGenerateShipmentPackingSlip();
+  const generateDispatchNote = useGenerateShipmentDispatchNote();
+  const generateDeliveryNote = useGenerateShipmentDeliveryNote();
 
   if (isLoading) {
     return (
@@ -165,6 +174,15 @@ export const ShipmentList = memo(function ShipmentList({
         const canConfirmDelivery =
           shipment.status === "in_transit" ||
           shipment.status === "out_for_delivery";
+        const isGeneratingPackingSlip =
+          generatePackingSlip.isPending &&
+          generatePackingSlip.variables?.shipmentId === shipment.id;
+        const isGeneratingDispatchNote =
+          generateDispatchNote.isPending &&
+          generateDispatchNote.variables?.shipmentId === shipment.id;
+        const isGeneratingDeliveryNote =
+          generateDeliveryNote.isPending &&
+          generateDeliveryNote.variables?.shipmentId === shipment.id;
 
         return (
           <Card key={shipment.id}>
@@ -224,6 +242,85 @@ export const ShipmentList = memo(function ShipmentList({
                   )}
                 </div>
               )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingPackingSlip}
+                  onClick={async () => {
+                    try {
+                      const result = await generatePackingSlip.mutateAsync({
+                        shipmentId: shipment.id,
+                      });
+                      toastSuccess('Packing slip generated');
+                      window.open(result.url, "_blank", "noopener,noreferrer");
+                    } catch (error) {
+                      toastError(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to generate packing slip"
+                      );
+                    }
+                  }}
+                >
+                  {isGeneratingPackingSlip ? "Generating..." : "Packing Slip"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingDispatchNote || shipment.canGenerateDispatchNote === false}
+                  onClick={async () => {
+                    try {
+                      const result = await generateDispatchNote.mutateAsync({
+                        shipmentId: shipment.id,
+                      });
+                      toastSuccess('Dispatch note generated');
+                      window.open(result.url, "_blank", "noopener,noreferrer");
+                    } catch (error) {
+                      toastError(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to generate dispatch note"
+                      );
+                    }
+                  }}
+                >
+                  {isGeneratingDispatchNote ? "Generating..." : "Dispatch Note"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingDeliveryNote || shipment.canGenerateDeliveryNote === false}
+                  onClick={async () => {
+                    try {
+                      const result = await generateDeliveryNote.mutateAsync({
+                        shipmentId: shipment.id,
+                      });
+                      toastSuccess('Delivery note generated');
+                      window.open(result.url, "_blank", "noopener,noreferrer");
+                    } catch (error) {
+                      toastError(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to generate delivery note"
+                      );
+                    }
+                  }}
+                >
+                  {isGeneratingDeliveryNote ? "Generating..." : "Delivery Note"}
+                </Button>
+              </div>
+              {shipment.canGenerateDispatchNote === false && shipment.dispatchNoteBlockedReason ? (
+                <p className="text-xs text-muted-foreground">
+                  {shipment.dispatchNoteBlockedReason}
+                </p>
+              ) : null}
+              {shipment.canGenerateDeliveryNote === false ? (
+                <p className="text-xs text-muted-foreground">
+                  Delivery note becomes available after delivery is confirmed.
+                </p>
+              ) : null}
 
               {/* Dates */}
               <div className="grid grid-cols-3 gap-4 text-sm">

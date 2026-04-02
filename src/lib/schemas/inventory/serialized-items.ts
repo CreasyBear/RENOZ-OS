@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { paginationSchema } from '../_shared/patterns';
+import { paginationSchema, normalizeObjectInput } from '../_shared/patterns';
 
 export const serializedItemStatusValues = [
   'available',
@@ -79,7 +79,9 @@ export const serializedItemListFilterSchema = z.object({
   status: z.union([serializedItemStatusSchema, z.array(serializedItemStatusSchema)]).optional(),
 });
 
-export const serializedItemListQuerySchema = paginationSchema.merge(serializedItemListFilterSchema);
+export const serializedItemListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(serializedItemListFilterSchema)
+);
 
 export const createSerializedItemSchema = z.object({
   productId: z.string().uuid('Product is required'),

@@ -24,7 +24,11 @@ import { confirmations } from "@/hooks/_shared/use-confirmation";
 import { useOpportunities, useDeleteOpportunity, useBulkUpdateOpportunityStage } from "@/hooks/pipeline";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
 import { FormatAmount } from "@/components/shared/format";
-import type { OpportunityListQuery, OpportunityStage } from "@/lib/schemas/pipeline";
+import type {
+  OpportunityListQuery,
+  OpportunityStage,
+  OpportunitySortField as SortField,
+} from "@/lib/schemas/pipeline";
 import { OpportunitiesListPresenter } from "./opportunities-list-presenter";
 import type { OpportunityTableItem } from "@/lib/schemas/pipeline";
 import {
@@ -32,6 +36,12 @@ import {
   OPERATION_CONFIG,
   type OpportunityBulkOperation,
 } from "./opportunity-bulk-operations-dialog";
+import {
+  DEFAULT_OPPORTUNITY_SORT_DIRECTION,
+  DEFAULT_OPPORTUNITY_SORT_FIELD,
+  resolveOpportunitySortState,
+  type SortDirection,
+} from "./opportunity-sorting";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -51,9 +61,6 @@ export interface OpportunitiesListContainerProps {
   /** Callback for creating new opportunity */
   onCreateOpportunity?: () => void;
 }
-
-type SortField = "title" | "stage" | "value" | "probability" | "expectedCloseDate" | "daysInStage" | "createdAt";
-type SortDirection = "asc" | "desc";
 
 function buildOpportunityQuery(
   filters: OpportunitiesListFilters | undefined,
@@ -131,8 +138,10 @@ export function OpportunitiesListContainer({
   const navigate = useNavigate();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<SortField>(DEFAULT_OPPORTUNITY_SORT_FIELD);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_OPPORTUNITY_SORT_DIRECTION
+  );
 
   const queryFilters = useMemo(
     () => buildOpportunityQuery(filters, page, sortField, sortDirection),
@@ -193,23 +202,22 @@ export function OpportunitiesListContainer({
   );
 
   // Handle sort toggle
-  const handleSort = useCallback((field: string) => {
-    setSortField((currentField) => {
-      if (currentField === field) {
-        // Toggle direction
-        setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
-        return currentField;
-      }
-      // New field, default to descending for dates/numbers, ascending for text
-      setSortDirection(
-        ["expectedCloseDate", "value", "probability", "daysInStage", "createdAt"].includes(field)
-          ? "desc"
-          : "asc"
-      );
-      return field as SortField;
-    });
+  const handleSort = useCallback((field: string, direction?: SortDirection) => {
+    const nextSort = resolveOpportunitySortState(
+      sortField,
+      sortDirection,
+      field,
+      direction
+    );
+
+    if (!nextSort) {
+      return;
+    }
+
+    setSortField(nextSort.field);
+    setSortDirection(nextSort.direction);
     setPage(1); // Reset to first page on sort change
-  }, []);
+  }, [sortDirection, sortField]);
 
   // Shift-click range handler that updates lastClickedIndex
   const handleShiftClickRangeWithIndex = useCallback(

@@ -15,6 +15,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
+import { INVENTORY_SORT_FIELDS } from "@/lib/schemas/inventory/inventory";
 
 // ============================================================================
 // LAZY LOADED PAGE COMPONENT
@@ -61,7 +62,7 @@ export const searchParamsSchema = z.object({
   /** Value range - max */
   maxValue: z.coerce.number().nonnegative().optional(),
   lowStock: z.coerce.boolean().optional(),
-  sortBy: z.string().optional(),
+  sortBy: z.enum(INVENTORY_SORT_FIELDS).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
 });
 

@@ -13,6 +13,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt, notInArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { quoteVersions, opportunities, opportunityActivities, generatedDocuments } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -24,6 +25,8 @@ import {
   updateQuoteExpirationSchema,
   sendQuoteSchema,
   type QuoteLineItem,
+  type GenerateQuotePdfResult,
+  type SendQuoteResult,
 } from '@/lib/schemas';
 import { GST_RATE } from '@/lib/order-calculations';
 import { formatCurrency } from '@/lib/formatters';
@@ -186,7 +189,7 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
  * Get a single quote version by ID
  */
 export const getQuoteVersion = createServerFn({ method: 'GET' })
-  .inputValidator(quoteVersionParamsSchema)
+  .inputValidator(normalizeObjectInput(quoteVersionParamsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -214,7 +217,7 @@ export const getQuoteVersion = createServerFn({ method: 'GET' })
  * Returns in descending order (newest first)
  */
 export const listQuoteVersions = createServerFn({ method: 'GET' })
-  .inputValidator(quoteVersionFilterSchema)
+  .inputValidator(normalizeObjectInput(quoteVersionFilterSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -477,7 +480,7 @@ const QUOTE_VALIDITY_DAYS = 30;
  */
 export const generateQuotePdf = createServerFn({ method: 'POST' })
   .inputValidator(quoteVersionParamsSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<GenerateQuotePdfResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
     const { id } = data;
@@ -683,7 +686,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
     // Upload to storage
     const filename = generateFilename('quote', `${opp.title.slice(0, 20)}-V${quoteVersion.versionNumber}`);
     const storagePath = generateStoragePath(ctx.organizationId, 'quote', filename);
-    const checksum = calculateChecksum(buffer);
+    const checksum = await calculateChecksum(buffer);
 
     // Use admin client for storage (service role bypasses RLS)
     const supabase = createAdminSupabase();
@@ -797,7 +800,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  */
 export const sendQuote = createServerFn({ method: 'POST' })
   .inputValidator(sendQuoteSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<SendQuoteResult> => {
     const ctx = await withAuth({
       permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
     });
@@ -901,17 +904,39 @@ export const sendQuote = createServerFn({ method: 'POST' })
     const fromName = organization?.name || 'Renoz';
     const fromAddress = `${fromName} <${fromEmail}>`;
 
-    // Generate PDF
+    const failedStageResult = (error: string, stages: SendQuoteResult['stages']): SendQuoteResult => ({
+      quoteVersionId,
+      recipientEmail,
+      recipientName,
+      subject: subject || `Quote for ${opp.title}`,
+      message: message || `Please find attached our quote for ${opp.title}.`,
+      ccEmails,
+      success: false,
+      status: 'failed',
+      error,
+      stages,
+    });
+
     const pdfResult = await generateQuotePdf({ data: { id: quoteVersionId } });
 
     if (pdfResult.status !== 'completed' || !pdfResult.pdfUrl) {
-      throw new Error('Failed to generate quote PDF');
+      return failedStageResult('Failed to generate quote PDF', {
+        pdf: { status: 'failed', message: 'Quote PDF could not be generated.' },
+        emailHistory: { status: 'skipped', message: 'Email history was not created.' },
+        email: { status: 'skipped', message: 'Email was not attempted.' },
+        stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
+      });
     }
 
     // Download PDF from storage to get buffer
     const pdfResponse = await fetch(pdfResult.pdfUrl);
     if (!pdfResponse.ok) {
-      throw new Error('Failed to download PDF for attachment');
+      return failedStageResult('Failed to download quote PDF for attachment', {
+        pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+        emailHistory: { status: 'skipped', message: 'Email history was not created.' },
+        email: { status: 'skipped', message: 'Email was not attempted.' },
+        stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
+      });
     }
     const pdfBuffer = await pdfResponse.arrayBuffer();
 
@@ -999,48 +1024,90 @@ ${fromName} Team
         .set({ status: 'failed' })
         .where(eq(emailHistory.id, emailRecord.id));
 
-      throw new Error(`Failed to send email: ${sendError.message}`);
+      return failedStageResult(`Failed to send email: ${sendError.message}`, {
+        pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+        emailHistory: { status: 'completed', message: 'Email history recorded the send attempt.' },
+        email: { status: 'failed', message: sendError.message },
+        stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
+      });
     }
 
-    // Wrap post-send DB updates in a transaction for atomicity
-    await db.transaction(async (tx) => {
-      // Update email history with success
-      await tx
-        .update(emailHistory)
-        .set({
-          status: 'sent',
-          sentAt: new Date(),
-          resendMessageId: sendResult?.id,
-        })
-        .where(eq(emailHistory.id, emailRecord.id));
+    await db
+      .update(emailHistory)
+      .set({
+        status: 'sent',
+        sentAt: new Date(),
+        resendMessageId: sendResult?.id,
+      })
+      .where(eq(emailHistory.id, emailRecord.id));
 
-      // Log activity on opportunity
-      await tx.insert(opportunityActivities).values({
-        organizationId: ctx.organizationId,
-        opportunityId,
-        type: 'email',
-        description: `Quote V${quoteVersion.versionNumber} sent to ${recipientEmail}`,
-        createdBy: ctx.user.id,
+    let stageBumpStage: SendQuoteResult['stages']['stageBump'] = {
+      status: 'skipped',
+      message: 'Opportunity stage did not need to change.',
+    };
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(opportunityActivities).values({
+          organizationId: ctx.organizationId,
+          opportunityId,
+          type: 'email',
+          description: `Quote V${quoteVersion.versionNumber} sent to ${recipientEmail}`,
+          createdBy: ctx.user.id,
+        });
+
+        if (opp.stage === 'new' || opp.stage === 'qualified') {
+          await tx
+            .update(opportunities)
+            .set({
+              stage: 'proposal',
+              updatedAt: new Date(),
+              version: sql`${opportunities.version} + 1`,
+            })
+            .where(
+              and(
+                eq(opportunities.id, opportunityId),
+                eq(opportunities.stage, opp.stage)
+              )
+            );
+
+          stageBumpStage = {
+            status: 'completed',
+            message: 'Opportunity advanced to proposal.',
+          };
+          return;
+        }
+
+        stageBumpStage = {
+          status: 'skipped',
+          message: 'Opportunity stage was already beyond proposal.',
+        };
       });
-
-      // Update opportunity stage to 'proposal' if currently earlier
-      // Use current stage in WHERE clause for optimistic locking (prevents stale overwrites)
-      if (opp.stage === 'new' || opp.stage === 'qualified') {
-        await tx
-          .update(opportunities)
-          .set({
-            stage: 'proposal',
-            updatedAt: new Date(),
-            version: sql`${opportunities.version} + 1`,
-          })
-          .where(
-            and(
-              eq(opportunities.id, opportunityId),
-              eq(opportunities.stage, opp.stage) // Only update if stage hasn't changed concurrently
-            )
-          );
-      }
-    });
+    } catch (error) {
+      return {
+        quoteVersionId,
+        recipientEmail,
+        recipientName,
+        subject: emailSubject,
+        message: emailMessage,
+        ccEmails,
+        pdfUrl: pdfResult.pdfUrl,
+        emailHistoryId: emailRecord.id,
+        resendMessageId: sendResult?.id,
+        success: true,
+        status: 'sent',
+        error: error instanceof Error ? error.message : 'Quote email sent, but follow-up updates failed.',
+        stages: {
+          pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+          emailHistory: { status: 'completed', message: 'Email history recorded the sent email.' },
+          email: { status: 'completed', message: 'Quote email was sent successfully.' },
+          stageBump: {
+            status: 'failed',
+            message: error instanceof Error ? error.message : 'Activity or stage follow-up failed.',
+          },
+        },
+      };
+    }
 
     return {
       quoteVersionId,
@@ -1050,9 +1117,16 @@ ${fromName} Team
       message: emailMessage,
       ccEmails,
       pdfUrl: pdfResult.pdfUrl,
+      success: true,
       status: 'sent' as const,
       emailHistoryId: emailRecord.id,
       resendMessageId: sendResult?.id,
+      stages: {
+        pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+        emailHistory: { status: 'completed', message: 'Email history recorded the sent email.' },
+        email: { status: 'completed', message: 'Quote email was sent successfully.' },
+        stageBump: stageBumpStage,
+      },
     };
   });
 
@@ -1066,10 +1140,12 @@ ${fromName} Team
  */
 export const compareQuoteVersions = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      version1Id: z.string().uuid(),
-      version2Id: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        version1Id: z.string().uuid(),
+        version2Id: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
@@ -1138,10 +1214,12 @@ export const compareQuoteVersions = createServerFn({ method: 'GET' })
  */
 export const getExpiringQuotes = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      warningDays: z.coerce.number().int().positive().default(7),
-      limit: z.coerce.number().int().positive().max(50).default(10),
-    })
+    normalizeObjectInput(
+      z.object({
+        warningDays: z.coerce.number().int().positive().default(7),
+        limit: z.coerce.number().int().positive().max(50).default(10),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
@@ -1193,9 +1271,11 @@ export const getExpiringQuotes = createServerFn({ method: 'GET' })
  */
 export const getExpiredQuotes = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      limit: z.coerce.number().int().positive().max(50).default(10),
-    })
+    normalizeObjectInput(
+      z.object({
+        limit: z.coerce.number().int().positive().max(50).default(10),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const { limit } = data;
@@ -1325,9 +1405,11 @@ export const extendQuoteValidity = createServerFn({ method: 'POST' })
  */
 export const validateQuoteForConversion = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      opportunityId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        opportunityId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
@@ -1417,8 +1499,10 @@ export const validateQuoteForConversion = createServerFn({ method: 'GET' })
 /**
  * Get quote validity statistics for dashboard.
  */
+export const getQuoteValidityStatsSchema = normalizeObjectInput(z.object({}));
+
 export const getQuoteValidityStats = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(getQuoteValidityStatsSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 

@@ -90,12 +90,7 @@ export function CustomerWizard({
       draft.clear();
     } catch (error) {
       const submissionState = getCustomerCreateSubmissionState(error)
-      if (submissionState.preserveDraft) {
-        draft.flush()
-      }
-      if (submissionState.skipUiRecovery) {
-        return
-      }
+      draft.flush()
       applyServerFieldErrors(submissionState.fieldErrors)
       setSubmitError(submissionState.submitError)
       setCurrentStepByIndex(submissionState.targetStepIndex)

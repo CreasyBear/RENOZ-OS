@@ -13,29 +13,37 @@
  * @source ordersData from useOrders hook
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { useNavigate } from '@tanstack/react-router';
+import { endOfMonth, startOfMonth } from 'date-fns';
 import { DollarSign, TrendingUp, ShoppingCart, Users } from 'lucide-react';
 
 // Data hooks
 import { useRevenueByPeriod } from '@/hooks/financial/use-financial';
-import { usePipelineMetrics } from '@/hooks/pipeline/use-pipeline-metrics';
-import { useOrders } from '@/hooks/orders/use-orders';
+import { useOrders, useOrderStats } from '@/hooks/orders/use-orders';
 import { useActiveProjects } from '@/hooks/jobs/use-active-projects';
 import { useInventoryDashboard } from '@/hooks/inventory/use-inventory';
 import { useDashboardMetrics, useTargetProgress, useTrackedProducts } from '@/hooks/dashboard';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { useDashboardDateRange } from '@/components/domain/dashboard/dashboard-context';
 import { serializeDateForUrl } from '@/hooks/filters/use-filter-url-state';
+import { getRevenueAttribution } from '@/server/functions/pipeline/pipeline';
+import { getSummaryState } from '@/lib/metrics/summary-health';
 
 // Presenter
 import { OverviewDashboard } from './overview-dashboard';
-import type { OverviewStatsData } from './overview-stats';
 import type { CashFlowDataPoint } from './cash-flow-chart';
 import type { ProjectSummary } from './projects-table';
 import type { OrderSummary } from './orders-table';
 import { projectStatusSchema } from '@/lib/schemas/jobs/projects';
 import { orderStatusSchema } from '@/lib/schemas/orders';
+import {
+  buildOverviewStats,
+  getOverviewSummaryWarning,
+  type OverviewStatsData,
+} from './overview-metrics';
 
 // ============================================================================
 // TYPES
@@ -58,11 +66,8 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
   // DATA FETCHING
   // -------------------------------------------------------------------------
 
-  // Pipeline metrics for stats
-  const pipelineQuery = usePipelineMetrics();
-
   // Orders for "Orders Pending" stat + recent orders table
-  const pendingOrdersQuery = useOrders({ status: 'confirmed', pageSize: 10 });
+  const orderStatsQuery = useOrderStats();
   const recentOrdersQuery = useOrders({ pageSize: 10 });
 
   // Inventory for "Low Stock Items"
@@ -101,6 +106,42 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
   });
 
   const targetProgressQuery = useTargetProgress();
+  const getRevenueAttributionFn = useServerFn(getRevenueAttribution);
+
+  const { currentMonthStartParam, currentMonthEndParam } = useMemo(() => {
+    const now = new Date();
+    const currentMonthStart = startOfMonth(now);
+    const currentMonthEnd = endOfMonth(now);
+
+    return {
+      currentMonthStartParam:
+        serializeDateForUrl(currentMonthStart) ?? currentMonthStart.toISOString().slice(0, 10),
+      currentMonthEndParam:
+        serializeDateForUrl(currentMonthEnd) ?? currentMonthEnd.toISOString().slice(0, 10),
+    };
+  }, []);
+
+  const wonThisMonthQuery = useQuery({
+    queryKey: [
+      'dashboard',
+      'overview',
+      'wonThisMonth',
+      currentMonthStartParam,
+      currentMonthEndParam,
+    ],
+    queryFn: async () => {
+      const result = await getRevenueAttributionFn({
+        data: {
+          dateFrom: currentMonthStartParam,
+          dateTo: currentMonthEndParam,
+          groupBy: 'month',
+        },
+      });
+      if (result == null) throw new Error('Won this month metrics are unavailable.');
+      return result;
+    },
+    staleTime: 60 * 1000,
+  });
 
 
   // -------------------------------------------------------------------------
@@ -108,27 +149,58 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
   // -------------------------------------------------------------------------
 
   // Transform stats data
-  // Note: Using pipeline weightedValue as "won" proxy since we don't have wonThisMonth
-  const statsData: OverviewStatsData | null = useMemo(() => {
-    const pipelineValue = pipelineQuery.data?.weightedValue ?? 0;
-    const opportunityCount = pipelineQuery.data?.opportunityCount ?? 0;
+  const statsData: OverviewStatsData = useMemo(() => {
+    const wonTotals = wonThisMonthQuery.data?.totals;
+    const wonSummaryState = getSummaryState({
+      data: wonThisMonthQuery.data,
+      error: wonThisMonthQuery.error,
+      isLoading: wonThisMonthQuery.isLoading,
+    });
+    const ordersSummaryState = getSummaryState({
+      data: orderStatsQuery.data,
+      error: orderStatsQuery.error,
+      isLoading: orderStatsQuery.isLoading,
+    });
+    const inventorySummaryState = getSummaryState({
+      data: inventoryQuery.data,
+      error: inventoryQuery.error,
+      isLoading: inventoryQuery.isLoading,
+    });
 
-    return {
+    return buildOverviewStats({
       wonThisMonth: {
-        count: opportunityCount,
-        value: pipelineValue,
+        wonCount: wonTotals?.wonCount ?? 0,
+        wonValue: wonTotals?.wonValue ?? 0,
         changePercent: undefined,
+        summaryState: wonSummaryState,
       },
       ordersPending: {
-        count: pendingOrdersQuery.data?.total ?? 0,
+        count: orderStatsQuery.data?.pendingOrders ?? 0,
         oldestDays: undefined,
+        summaryState: ordersSummaryState,
       },
       lowStockItems: {
         count: inventoryQuery.data?.metrics?.lowStockCount ?? 0,
         criticalCount: inventoryQuery.data?.metrics?.outOfStockCount ?? 0,
+        summaryState: inventorySummaryState,
       },
-    };
-  }, [pipelineQuery.data, pendingOrdersQuery.data, inventoryQuery.data]);
+    });
+  }, [
+    inventoryQuery.data,
+    inventoryQuery.error,
+    inventoryQuery.isLoading,
+    orderStatsQuery.data,
+    orderStatsQuery.error,
+    orderStatsQuery.isLoading,
+    wonThisMonthQuery.data,
+    wonThisMonthQuery.error,
+    wonThisMonthQuery.isLoading,
+  ]);
+
+  const statsSummaryWarning = useMemo(
+    () => getOverviewSummaryWarning(statsData),
+    [statsData]
+  );
 
   const kpiWidgets = useMemo(() => {
     const summary = dashboardMetricsQuery.data?.summary;
@@ -227,11 +299,76 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
   // -------------------------------------------------------------------------
 
   const loadingStates = {
-    stats: pipelineQuery.isLoading || pendingOrdersQuery.isLoading || inventoryQuery.isLoading || trackedProductsLoading,
+    stats: trackedProductsLoading,
     cashFlow: revenueQuery.isLoading,
     projects: projectsQuery.isLoading,
     orders: recentOrdersQuery.isLoading,
   };
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    console.debug('[overview-container] query-state-json', JSON.stringify({
+      dashboardMetrics: {
+        status: dashboardMetricsQuery.status,
+        hasData: !!dashboardMetricsQuery.data,
+        error: dashboardMetricsQuery.error instanceof Error ? dashboardMetricsQuery.error.message : dashboardMetricsQuery.error,
+      },
+      targetProgress: {
+        status: targetProgressQuery.status,
+        hasData: !!targetProgressQuery.data,
+        error: targetProgressQuery.error instanceof Error ? targetProgressQuery.error.message : targetProgressQuery.error,
+        targetCount: targetProgressQuery.data?.targets?.length,
+      },
+      orderStats: {
+        status: orderStatsQuery.status,
+        hasData: !!orderStatsQuery.data,
+        error: orderStatsQuery.error instanceof Error ? orderStatsQuery.error.message : orderStatsQuery.error,
+      },
+      recentOrders: {
+        status: recentOrdersQuery.status,
+        hasData: !!recentOrdersQuery.data,
+        error: recentOrdersQuery.error instanceof Error ? recentOrdersQuery.error.message : recentOrdersQuery.error,
+        count: recentOrdersQuery.data?.orders?.length,
+      },
+      inventory: {
+        status: inventoryQuery.status,
+        hasData: !!inventoryQuery.data,
+        error: inventoryQuery.error instanceof Error ? inventoryQuery.error.message : inventoryQuery.error,
+      },
+      projects: {
+        status: projectsQuery.status,
+        hasData: !!projectsQuery.data,
+        error: projectsQuery.error instanceof Error ? projectsQuery.error.message : projectsQuery.error,
+      },
+      revenue: {
+        status: revenueQuery.status,
+        hasData: !!revenueQuery.data,
+        error: revenueQuery.error instanceof Error ? revenueQuery.error.message : revenueQuery.error,
+      },
+    }));
+  }, [
+    dashboardMetricsQuery.data,
+    dashboardMetricsQuery.error,
+    dashboardMetricsQuery.status,
+    inventoryQuery.data,
+    inventoryQuery.error,
+    inventoryQuery.status,
+    orderStatsQuery.data,
+    orderStatsQuery.error,
+    orderStatsQuery.status,
+    projectsQuery.data,
+    projectsQuery.error,
+    projectsQuery.status,
+    recentOrdersQuery.data,
+    recentOrdersQuery.error,
+    recentOrdersQuery.status,
+    revenueQuery.data,
+    revenueQuery.error,
+    revenueQuery.status,
+    targetProgressQuery.data,
+    targetProgressQuery.error,
+    targetProgressQuery.status,
+  ]);
 
   // -------------------------------------------------------------------------
   // RENDER
@@ -251,6 +388,7 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
       onTargetProgressRetry={() => targetProgressQuery.refetch()}
       onManageTargets={() => navigate({ to: '/settings/targets' })}
       stats={statsData}
+      statsSummaryWarning={statsSummaryWarning}
       trackedProducts={trackedProducts}
       onTrackedProductsChange={setTrackedProducts}
       maxTrackedProducts={maxProducts}

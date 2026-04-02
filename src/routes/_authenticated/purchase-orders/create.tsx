@@ -31,6 +31,9 @@ function PurchaseOrderCreateError({ error }: { error: Error }) {
 export const Route = createFileRoute("/_authenticated/purchase-orders/create")({
   validateSearch: z.object({
     supplierId: z.string().uuid().optional(),
+    productId: z.string().uuid().optional(),
+    source: z.enum(["product_detail", "inventory_alert", "supplier_detail"]).optional(),
+    returnToProductId: z.string().uuid().optional(),
   }),
   component: PurchaseOrderCreateRouteComponent,
   errorComponent: PurchaseOrderCreateError,

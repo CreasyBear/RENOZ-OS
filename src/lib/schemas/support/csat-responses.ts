@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -63,29 +64,9 @@ export type GetIssueFeedbackInput = z.infer<typeof getIssueFeedbackSchema>;
 // LIST FEEDBACK
 // ============================================================================
 
-export const listFeedbackSchema = z.object({
-  // Filters
-  issueId: z.string().uuid().optional(),
-  rating: z.number().int().min(1).max(5).optional(),
-  minRating: z.number().int().min(1).max(5).optional(),
-  maxRating: z.number().int().min(1).max(5).optional(),
-  source: csatSourceSchema.optional(),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-
-  // Pagination
-  page: z.number().int().min(1).optional().default(1),
-  pageSize: z.number().int().min(1).max(100).optional().default(20),
-
-  // Sorting
-  sortBy: z.enum(['submittedAt', 'rating', 'createdAt']).optional().default('submittedAt'),
-  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
-});
-export type ListFeedbackInput = z.infer<typeof listFeedbackSchema>;
-
-/** Cursor pagination for list feedback (uses createdAt + id for stable sort) */
-export const listFeedbackCursorSchema = cursorPaginationSchema.merge(
+export const listFeedbackSchema = normalizeObjectInput(
   z.object({
+    // Filters
     issueId: z.string().uuid().optional(),
     rating: z.number().int().min(1).max(5).optional(),
     minRating: z.number().int().min(1).max(5).optional(),
@@ -93,7 +74,31 @@ export const listFeedbackCursorSchema = cursorPaginationSchema.merge(
     source: csatSourceSchema.optional(),
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
+
+    // Pagination
+    page: z.number().int().min(1).optional().default(1),
+    pageSize: z.number().int().min(1).max(100).optional().default(20),
+
+    // Sorting
+    sortBy: z.enum(['submittedAt', 'rating', 'createdAt']).optional().default('submittedAt'),
+    sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
   })
+);
+export type ListFeedbackInput = z.infer<typeof listFeedbackSchema>;
+
+/** Cursor pagination for list feedback (uses createdAt + id for stable sort) */
+export const listFeedbackCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      issueId: z.string().uuid().optional(),
+      rating: z.number().int().min(1).max(5).optional(),
+      minRating: z.number().int().min(1).max(5).optional(),
+      maxRating: z.number().int().min(1).max(5).optional(),
+      source: csatSourceSchema.optional(),
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+    })
+  )
 );
 export type ListFeedbackCursorInput = z.infer<typeof listFeedbackCursorSchema>;
 
@@ -101,10 +106,12 @@ export type ListFeedbackCursorInput = z.infer<typeof listFeedbackCursorSchema>;
 // CSAT METRICS
 // ============================================================================
 
-export const getCsatMetricsSchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-});
+export const getCsatMetricsSchema = normalizeObjectInput(
+  z.object({
+    startDate: z.string().datetime().optional(),
+    endDate: z.string().datetime().optional(),
+  })
+);
 export type GetCsatMetricsInput = z.infer<typeof getCsatMetricsSchema>;
 
 // ============================================================================

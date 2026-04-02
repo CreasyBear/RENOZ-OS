@@ -15,20 +15,20 @@ import { useMemo, useCallback, useState } from "react";
 import { DataTable } from "@/components/shared/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { createProductColumns } from "./product-columns";
-import type { ProductTableItem } from "@/lib/schemas/products";
+import type { ProductSortField, ProductTableItem } from "@/lib/schemas/products";
 
 interface ProductTableProps {
   products: ProductTableItem[];
   total: number;
   page: number;
   pageSize: number;
-  sortBy?: string;
+  sortBy?: ProductSortField;
   sortOrder: "asc" | "desc";
   selectedRows: string[];
   onSelectionChange: (selectedIds: string[]) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  onSortChange: (sortBy: string, sortOrder: "asc" | "desc") => void;
+  onSortChange: (sortBy: ProductSortField, sortOrder: "asc" | "desc") => void;
   onRowClick: (product: ProductTableItem) => void;
   onEditProduct?: (id: string) => void;
   onDuplicateProduct?: (id: string) => void;
@@ -201,6 +201,9 @@ export function ProductTable({
         columns={columns}
         enableRowSelection
         enableSorting
+        manualSorting
+        sorting={_sortBy ? { field: _sortBy, direction: _sortOrder } : undefined}
+        onSortChange={(field, direction) => _onSortChange(field as ProductSortField, direction)}
         onRowClick={onRowClick}
         onSelectionChange={handleDataTableSelectionChange}
         className="border rounded-lg"

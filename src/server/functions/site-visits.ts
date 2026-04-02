@@ -14,6 +14,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and, gte, lte, lt, inArray, desc, asc, sql, count } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { siteVisits, projects } from "drizzle/schema";
 import {
   siteVisitIdSchema,
@@ -151,7 +152,7 @@ export const getSiteVisits = createServerFn({ method: "GET" })
  * Get site visit by ID
  */
 export const getSiteVisit = createServerFn({ method: "GET" })
-  .inputValidator(siteVisitIdSchema)
+  .inputValidator(normalizeObjectInput(siteVisitIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 

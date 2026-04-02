@@ -49,7 +49,6 @@ import { useBulkReceiveGoods } from '@/hooks/suppliers/use-bulk-receive-goods';
 import { useBulkApprove } from '@/hooks/suppliers/use-approvals';
 import { getApprovalIdsForPurchaseOrders } from '@/server/functions/suppliers/approvals';
 import {
-  isPurchaseOrderSortField,
   type PurchaseOrderTableData,
 } from '@/lib/schemas/purchase-orders';
 import type { BulkReceiptData } from '@/lib/schemas/procurement/procurement-types';
@@ -61,14 +60,17 @@ import {
 } from '@/hooks/filters/use-filter-url-state';
 import type { poSearchSchema } from './index';
 import type { z } from 'zod';
+import {
+  resolvePurchaseOrderSortState,
+  type SortDirection,
+} from '@/components/domain/purchase-orders/purchase-order-sorting';
+import { DEFAULT_CURRENCY } from '@/lib/constants/procurement';
 
 type POSearchParams = z.infer<typeof poSearchSchema>;
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-import { DEFAULT_CURRENCY } from '@/lib/constants/procurement';
 
 /** Transform URL search params to PurchaseOrderFiltersState */
 const fromUrlParams = (search: POSearchParams): PurchaseOrderFiltersState => ({
@@ -169,13 +171,22 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
   }, [setFilters]);
 
   const handleSortChange = useCallback(
-    (field: string) => {
-      const safeField = isPurchaseOrderSortField(field) ? field : search.sortBy;
-      const newDirection =
-        safeField === search.sortBy && search.sortOrder === 'asc' ? 'desc' : 'asc';
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolvePurchaseOrderSortState(
+        search.sortBy,
+        search.sortOrder,
+        field,
+        direction
+      );
+      if (!nextSort) return;
       navigate({
         to: '.',
-        search: { ...search, sortBy: safeField, sortOrder: newDirection, page: 1 },
+        search: {
+          ...search,
+          sortBy: nextSort.field,
+          sortOrder: nextSort.direction,
+          page: 1,
+        },
       });
     },
     [navigate, search]

@@ -13,6 +13,10 @@ import type {
   WarrantyClaimsListContainerProps,
 } from '@/lib/schemas/warranty';
 import { WarrantyClaimsListView } from '../views/warranty-claims-list-view';
+import {
+  DEFAULT_WARRANTY_CLAIM_SORT_DIRECTION,
+  DEFAULT_WARRANTY_CLAIM_SORT_FIELD,
+} from '../warranty-claim-sorting';
 
 export function WarrantyClaimsListContainer({
   search,
@@ -57,8 +61,8 @@ export function WarrantyClaimsListContainer({
           status: undefined,
           type: undefined,
           page: 1,
-          sortBy: 'submittedAt',
-          sortOrder: 'desc',
+          sortBy: DEFAULT_WARRANTY_CLAIM_SORT_FIELD,
+          sortOrder: DEFAULT_WARRANTY_CLAIM_SORT_DIRECTION,
         })
       }
       onPageChange={(page) => onSearchChange({ page })}

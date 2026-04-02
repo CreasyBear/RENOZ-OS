@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -69,27 +70,32 @@ export type UpdateActionPlanInput = z.infer<typeof updateActionPlanSchema>;
 // LIST SCHEMA
 // ============================================================================
 
-export const listActionPlansSchema = z.object({
-  customerId: z.string().uuid().optional(),
-  isCompleted: z.boolean().optional(),
-  priority: actionPlanPrioritySchema.optional(),
-  category: actionPlanCategorySchema.optional(),
-  page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(20),
-  sortBy: z.enum(['createdAt', 'dueDate', 'priority', 'title']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
-
-export type ListActionPlansInput = z.infer<typeof listActionPlansSchema>;
-
-/** Cursor pagination for list action plans (uses createdAt + id for stable sort) */
-export const listActionPlansCursorSchema = cursorPaginationSchema.merge(
-  z.object({
+export const listActionPlansSchema = normalizeObjectInput(
+  z
+  .object({
     customerId: z.string().uuid().optional(),
     isCompleted: z.boolean().optional(),
     priority: actionPlanPrioritySchema.optional(),
     category: actionPlanCategorySchema.optional(),
+    page: z.number().int().positive().default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    sortBy: z.enum(['createdAt', 'dueDate', 'priority', 'title']).default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
   })
+);
+
+export type ListActionPlansInput = z.infer<typeof listActionPlansSchema>;
+
+/** Cursor pagination for list action plans (uses createdAt + id for stable sort) */
+export const listActionPlansCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      customerId: z.string().uuid().optional(),
+      isCompleted: z.boolean().optional(),
+      priority: actionPlanPrioritySchema.optional(),
+      category: actionPlanCategorySchema.optional(),
+    })
+  )
 );
 export type ListActionPlansCursorInput = z.infer<typeof listActionPlansCursorSchema>;
 

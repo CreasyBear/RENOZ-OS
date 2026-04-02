@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import type { SortDirection } from '@/components/shared/data-table/server-sorting';
 import { createCreditNoteColumns, type CreditNoteTableItem } from './credit-note-columns';
 
 export interface CreditNotesTablePresenterProps {
@@ -44,7 +45,7 @@ export interface CreditNotesTablePresenterProps {
   /** Current sort direction */
   sortDirection: 'asc' | 'desc';
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** Issue credit note handler */
   onIssue: (id: string) => void;
   /** Apply credit note handler */
@@ -130,7 +131,7 @@ export const CreditNotesTablePresenter = memo(function CreditNotesTablePresenter
   ) => {
     const newSorting = typeof updater === 'function' ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? 'desc' : 'asc');
     }
   };
 

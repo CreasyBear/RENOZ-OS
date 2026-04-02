@@ -10,6 +10,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, isNull, lte, inArray, count, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { paymentSchedules, orders, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -373,7 +374,7 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
  * Get the payment schedule for an order.
  */
 export const getPaymentSchedule = createServerFn({ method: 'GET' })
-  .inputValidator(getPaymentScheduleSchema)
+  .inputValidator(normalizeObjectInput(getPaymentScheduleSchema))
   .handler(async ({ data }): Promise<PaymentScheduleResponse | null> => {
     const ctx = await withAuth();
 
@@ -630,7 +631,7 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
  * Get overdue installments for alerting.
  */
 export const getOverdueInstallments = createServerFn({ method: 'GET' })
-  .inputValidator(overdueInstallmentsQuerySchema)
+  .inputValidator(normalizeObjectInput(overdueInstallmentsQuerySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const { page = 1, pageSize = 20, customerId, minDaysOverdue = 1 } = data;

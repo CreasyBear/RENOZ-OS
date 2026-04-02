@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { idParamSchema, cursorPaginationSchema, timestampFieldsSchema } from '../_shared/patterns';
+import { idParamSchema, cursorPaginationSchema, timestampFieldsSchema, normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -92,7 +92,9 @@ export const NotificationFilterSchema = z.object({
   unreadOnly: z.coerce.boolean().optional(),
 });
 
-export const NotificationListQuerySchema = cursorPaginationSchema.merge(NotificationFilterSchema);
+export const NotificationListQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(NotificationFilterSchema)
+);
 
 export type NotificationListQuery = z.infer<typeof NotificationListQuerySchema>;
 

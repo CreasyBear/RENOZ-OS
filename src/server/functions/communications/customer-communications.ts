@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, or, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { emailHistory, users, customers } from 'drizzle/schema';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
@@ -22,11 +23,13 @@ import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 // SCHEMAS
 // ============================================================================
 
-const getCustomerCommunicationsSchema = z.object({
-  customerId: z.string().uuid(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-});
+const getCustomerCommunicationsSchema = normalizeObjectInput(
+  z.object({
+    customerId: z.string().uuid(),
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
+  })
+);
 
 // ============================================================================
 // TYPES
@@ -195,10 +198,12 @@ export const getCustomerCommunications = createServerFn({ method: 'GET' })
 // CUSTOMER EMAIL ACTIVITIES (Unified Timeline)
 // ============================================================================
 
-const getCustomerEmailActivitiesSchema = z.object({
-  customerId: z.string().uuid(),
-  limit: z.number().min(1).max(100).default(50),
-});
+const getCustomerEmailActivitiesSchema = normalizeObjectInput(
+  z.object({
+    customerId: z.string().uuid(),
+    limit: z.number().min(1).max(100).default(50),
+  })
+);
 
 /**
  * Get customer email history as UnifiedActivity[] for merging into the

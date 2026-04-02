@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   FormDialog,
@@ -70,6 +71,7 @@ import type { AmendmentFormLineItem, AmendmentRequestFormData } from "@/lib/sche
 import { PickItemsDialog } from "../fulfillment/pick-items-dialog";
 import type { OrderWithCustomer } from "@/hooks/orders/use-order-detail";
 import type { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
+import type { AmendmentSubmissionStage } from "./amendment-request-dialog-container";
 
 // ============================================================================
 // TYPES
@@ -85,6 +87,7 @@ export type AmendmentRequestDialogProps = {
   form: ReturnType<typeof useTanStackForm<AmendmentRequestFormData>>;
   formatCurrencyDisplay: (amount: number) => string;
   submitError: string | null;
+  submissionStage: AmendmentSubmissionStage;
   isSubmitting: boolean;
   showPickOverlay: boolean;
   setShowPickOverlay: (v: boolean) => void;
@@ -217,6 +220,96 @@ const AMENDMENT_TYPES: AmendmentTypeOption[] = [
   { value: "shipping_change", label: "Shipping Cost", description: "Adjust shipping charges", icon: Truck },
 ];
 
+const STAGE_LABELS = [
+  { key: "request", label: "Request" },
+  { key: "approve", label: "Approve" },
+  { key: "apply", label: "Apply" },
+] as const;
+
+function AmendmentStageStatus({
+  submissionStage,
+  submitError,
+}: {
+  submissionStage: AmendmentSubmissionStage;
+  submitError: string | null;
+}) {
+  if (submissionStage === "idle" && !submitError) return null;
+
+  const stageStates = {
+    request:
+      submissionStage === "requesting"
+        ? "active"
+        : submissionStage === "requested" ||
+            submissionStage === "approving" ||
+            submissionStage === "approved" ||
+            submissionStage === "applying" ||
+            submissionStage === "applied" ||
+            submissionStage === "failed_approval" ||
+            submissionStage === "failed_apply"
+          ? "done"
+          : submissionStage === "failed_request"
+            ? "failed"
+            : "idle",
+    approve:
+      submissionStage === "approving"
+        ? "active"
+        : submissionStage === "approved" ||
+            submissionStage === "applying" ||
+            submissionStage === "applied" ||
+            submissionStage === "failed_apply"
+          ? "done"
+          : submissionStage === "failed_approval"
+            ? "failed"
+            : "idle",
+    apply:
+      submissionStage === "applying"
+        ? "active"
+        : submissionStage === "applied"
+          ? "done"
+          : submissionStage === "failed_apply"
+            ? "failed"
+            : "idle",
+  } as const;
+
+  const description =
+    submissionStage === "requesting"
+      ? "Submitting the amendment request."
+      : submissionStage === "approving"
+        ? "Approving the amendment so it can be applied."
+        : submissionStage === "applying"
+          ? "Applying the approved amendment to the order."
+          : submissionStage === "failed_request"
+            ? "The request step failed. Your changes are still here, so you can retry."
+            : submissionStage === "failed_approval"
+              ? "The request succeeded, but approval failed. Review the error and retry."
+              : submissionStage === "failed_apply"
+                ? "The request and approval succeeded, but apply failed. Review the error and retry."
+                : submissionStage === "applied"
+                  ? "The amendment workflow completed successfully."
+                  : "The amendment workflow is ready.";
+
+  return (
+    <Alert className="border-border/80 bg-muted/30">
+      <AlertDescription className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {STAGE_LABELS.map((stage) => {
+            const state = stageStates[stage.key];
+            const variant =
+              state === "done" ? "default" : state === "failed" ? "destructive" : "outline";
+            return (
+              <Badge key={stage.key} variant={variant} className={cn(state === "active" && "border-primary")}>
+                {stage.label}
+                {state === "done" ? " complete" : state === "active" ? " in progress" : state === "failed" ? " failed" : ""}
+              </Badge>
+            );
+          })}
+        </div>
+        <p>{submitError ?? description}</p>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 // ============================================================================
 // PRESENTER
 // ============================================================================
@@ -231,6 +324,7 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
   form,
   formatCurrencyDisplay,
   submitError,
+  submissionStage,
   isSubmitting,
   showPickOverlay,
   setShowPickOverlay,
@@ -460,6 +554,8 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
                 handleRemoveAddedItem={handleRemoveAddedItem}
                 financialImpact={financialImpact}
                 amendmentTypes={AMENDMENT_TYPES}
+                submissionStage={submissionStage}
+                submitError={submitError}
               />
             </FormDialog>
           );
@@ -505,6 +601,8 @@ function AmendmentFormContent({
   handleRemoveAddedItem,
   financialImpact,
   amendmentTypes,
+  submissionStage,
+  submitError,
 }: {
   form: ReturnType<typeof useTanStackForm<AmendmentRequestFormData>>;
   orderData: OrderWithCustomer | undefined;
@@ -543,6 +641,8 @@ function AmendmentFormContent({
     difference: number;
   } | null;
   amendmentTypes: AmendmentTypeOption[];
+  submissionStage: AmendmentSubmissionStage;
+  submitError: string | null;
 }) {
   const newShippingAmount = form.state.values.newShippingAmount;
   const newDiscountPercent = form.state.values.newDiscountPercent;
@@ -550,6 +650,11 @@ function AmendmentFormContent({
 
   return (
     <div className="space-y-6">
+      <AmendmentStageStatus
+        submissionStage={submissionStage}
+        submitError={submitError}
+      />
+
       <form.Field name="amendmentType">
         {(field) => (
           <SelectField

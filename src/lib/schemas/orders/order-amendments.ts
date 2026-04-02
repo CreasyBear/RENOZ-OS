@@ -8,7 +8,13 @@
  */
 
 import { z } from 'zod';
-import { currencySchema, signedCurrencySchema, percentageSchema, flexibleJsonSchema } from '../_shared/patterns';
+import {
+  currencySchema,
+  signedCurrencySchema,
+  percentageSchema,
+  flexibleJsonSchema,
+  normalizeObjectInput,
+} from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
@@ -171,26 +177,31 @@ export const amendmentParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const amendmentListQuerySchema = z.object({
-  orderId: z.string().uuid().optional(),
-  status: amendmentStatusSchema.optional(),
-  amendmentType: amendmentTypeSchema.optional(),
-  requestedBy: z.string().uuid().optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['requestedAt', 'reviewedAt', 'appliedAt']).default('requestedAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
-
-export type AmendmentListQuery = z.infer<typeof amendmentListQuerySchema>;
-
-export const amendmentListCursorQuerySchema = cursorPaginationSchema.merge(
-  z.object({
+export const amendmentListQuerySchema = normalizeObjectInput(
+  z
+  .object({
     orderId: z.string().uuid().optional(),
     status: amendmentStatusSchema.optional(),
     amendmentType: amendmentTypeSchema.optional(),
     requestedBy: z.string().uuid().optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+    sortBy: z.enum(['requestedAt', 'reviewedAt', 'appliedAt']).default('requestedAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
   })
+);
+
+export type AmendmentListQuery = z.infer<typeof amendmentListQuerySchema>;
+
+export const amendmentListCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      orderId: z.string().uuid().optional(),
+      status: amendmentStatusSchema.optional(),
+      amendmentType: amendmentTypeSchema.optional(),
+      requestedBy: z.string().uuid().optional(),
+    })
+  )
 );
 
 export type AmendmentListCursorQuery = z.infer<typeof amendmentListCursorQuerySchema>;

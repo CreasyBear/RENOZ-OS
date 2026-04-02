@@ -255,7 +255,7 @@ export function WarrantyClaimFormDialog({
                       Claim Type <span className="text-destructive">*</span>
                     </Label>
                     <Select
-                      value={field.state.value ?? ''}
+                      value={field.state.value === '' ? undefined : field.state.value}
                       onValueChange={(value) =>
                         field.handleChange(isWarrantyClaimTypeValue(value) ? value : (field.state.value ?? ''))
                       }

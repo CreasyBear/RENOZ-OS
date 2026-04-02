@@ -46,7 +46,6 @@ export {
   useAggregatedProductMovements,
   useInventoryLocations,
   useAdjustStock,
-  useReceiveStock,
   type InventorySummary,
   type UseProductInventorySummaryOptions,
 } from './use-product-inventory';

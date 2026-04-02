@@ -25,6 +25,9 @@ export {
   generateOrderProFormaPdf,
   generateOrderPackingSlipPdf,
   generateOrderDeliveryNotePdf,
+  generateShipmentDocument,
+  generateShipmentPackingSlipPdf,
+  generateShipmentDeliveryNotePdf,
 } from "./generate-documents-sync";
 
 // Project Documents (Work Orders, Completion Certificates, Handover Pack)
@@ -66,6 +69,7 @@ export {
   getGeneratedDocuments,
   getGeneratedDocumentById,
   getDocumentCountsByType,
+  getOrderGeneratedDocuments,
   type GeneratedDocumentsQuery,
 } from "./get-generated-documents";
 

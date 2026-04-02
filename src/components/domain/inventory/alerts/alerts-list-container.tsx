@@ -27,9 +27,13 @@ import {
 import { AlertsListPresenter } from "./alerts-list-presenter";
 import { type AlertTableItem, getAlertDisplayName } from "./alert-columns";
 import type { AlertType } from "./alert-type-config";
-
-type SortField = "alertType" | "isActive" | "lastTriggeredAt" | "createdAt";
-type SortDirection = "asc" | "desc";
+import type { AlertSortField as SortField } from "./alert-sorting";
+import {
+  DEFAULT_ALERT_SORT_DIRECTION,
+  DEFAULT_ALERT_SORT_FIELD,
+  resolveAlertSortState,
+  type SortDirection,
+} from "./alert-sorting";
 
 export interface AlertsListContainerProps {
   /** Optional filter by alert type */
@@ -55,8 +59,10 @@ export function AlertsListContainer({
   className,
 }: AlertsListContainerProps) {
   const confirmation = useConfirmation();
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<SortField>(DEFAULT_ALERT_SORT_FIELD);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_ALERT_SORT_DIRECTION
+  );
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -94,28 +100,20 @@ export function AlertsListContainer({
   const toggleActiveMutation = useToggleAlertActive();
   const deleteMutation = useDeleteAlert();
 
-  // Type guard for sort fields
-  const isValidSortField = (field: string): field is SortField => {
-    return ["alertType", "isActive", "lastTriggeredAt", "createdAt"].includes(field);
-  };
-
   // Handle sort toggle
-  const handleSort = useCallback((field: string) => {
-    if (!isValidSortField(field)) return;
-    
-    setSortField((currentField) => {
-      if (currentField === field) {
-        // Toggle direction
-        setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
-        return currentField;
-      }
-      // New field, default to descending for dates, ascending for others
-      setSortDirection(
-        ["lastTriggeredAt", "createdAt"].includes(field) ? "desc" : "asc"
-      );
-      return field;
-    });
-  }, []);
+  const handleSort = useCallback((field: string, direction?: SortDirection) => {
+    const nextSort = resolveAlertSortState(
+      sortField,
+      sortDirection,
+      field,
+      direction
+    );
+
+    if (!nextSort) return;
+
+    setSortField(nextSort.field);
+    setSortDirection(nextSort.direction);
+  }, [sortDirection, sortField]);
 
   // Handle toggle active
   const handleToggleActive = useCallback(

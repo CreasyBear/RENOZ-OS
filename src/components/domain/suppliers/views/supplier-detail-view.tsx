@@ -56,6 +56,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { formatAmount } from '@/lib/currency';
+import { hasMetricValue } from '@/lib/metrics/metric-display';
 import { FormatAmount, MetricCard, EntityHeader } from '@/components/shared';
 import { StatusCell } from '@/components/shared/data-table';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
@@ -439,10 +440,7 @@ interface PerformanceMetricsSectionProps {
 }
 
 function PerformanceMetricsSection({ supplier }: PerformanceMetricsSectionProps) {
-  const totalSpend = supplier.performanceMetrics?.reduce(
-    (sum, m) => sum + (m.totalSpend ?? 0),
-    0
-  ) ?? supplier.totalPurchaseValue ?? 0;
+  const totalSpend = supplier.totalPurchaseValue ?? 0;
   const currency = toCurrency(supplier.currency);
 
   return (
@@ -458,7 +456,7 @@ function PerformanceMetricsSection({ supplier }: PerformanceMetricsSectionProps)
           icon={Package}
           title="Total Orders"
           value={supplier.totalPurchaseOrders ?? 0}
-          subtitle={supplier.averageOrderValue
+          subtitle={hasMetricValue(supplier.averageOrderValue)
             ? `Avg: ${formatAmount({ amount: supplier.averageOrderValue, currency })}`
             : undefined}
         />
@@ -1153,7 +1151,11 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                             title="On-Time Delivery"
                             value={(() => {
                               const latest = supplier.performanceMetrics[0];
-                              if (latest?.onTimeDeliveries && latest?.totalOrdersDelivered) {
+                              if (
+                                hasMetricValue(latest?.onTimeDeliveries) &&
+                                hasMetricValue(latest?.totalOrdersDelivered) &&
+                                latest.totalOrdersDelivered > 0
+                              ) {
                                 return `${Math.round((latest.onTimeDeliveries / latest.totalOrdersDelivered) * 100)}%`;
                               }
                               return 'N/A';
@@ -1162,14 +1164,14 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                           <MetricCard
                             icon={Percent}
                             title="Defect Rate"
-                            value={supplier.performanceMetrics[0]?.defectRate
+                            value={hasMetricValue(supplier.performanceMetrics[0]?.defectRate)
                               ? `${supplier.performanceMetrics[0].defectRate.toFixed(1)}%`
                               : 'N/A'}
                           />
                           <MetricCard
                             icon={Clock}
                             title="Avg Delivery Days"
-                            value={supplier.performanceMetrics[0]?.averageDeliveryDays
+                            value={hasMetricValue(supplier.performanceMetrics[0]?.averageDeliveryDays)
                               ? `${Math.round(supplier.performanceMetrics[0].averageDeliveryDays)}`
                               : 'N/A'}
                           />
@@ -1177,7 +1179,7 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                             icon={Package}
                             title="Items Received"
                             value={supplier.performanceMetrics[0]?.totalItemsReceived ?? 0}
-                            subtitle={supplier.performanceMetrics[0]?.rejectedItems
+                            subtitle={hasMetricValue(supplier.performanceMetrics[0]?.rejectedItems)
                               ? `${supplier.performanceMetrics[0].rejectedItems} rejected`
                               : undefined}
                           />

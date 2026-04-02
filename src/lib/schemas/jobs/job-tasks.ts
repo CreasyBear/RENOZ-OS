@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS (must match drizzle/schema/job-tasks.ts)
@@ -33,10 +34,12 @@ export type JobTaskPriority = z.infer<typeof jobTaskPrioritySchema>;
 /**
  * Schema for listing tasks for a job.
  */
-export const listJobTasksSchema = z.object({
-  jobId: z.string().uuid('Invalid job ID format'),
-  status: jobTaskStatusSchema.optional(),
-});
+export const listJobTasksSchema = normalizeObjectInput(
+  z.object({
+    jobId: z.string().uuid('Invalid job ID format'),
+    status: jobTaskStatusSchema.optional(),
+  })
+);
 
 export type ListJobTasksInput = z.infer<typeof listJobTasksSchema>;
 

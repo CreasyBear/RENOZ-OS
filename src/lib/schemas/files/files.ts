@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // CONSTANTS
@@ -203,12 +204,14 @@ export type PresignedDownloadResponse = z.infer<typeof presignedDownloadResponse
 /**
  * Query params for listing attachments
  */
-export const listAttachmentsQuerySchema = z.object({
-  entityType: z.string().optional(),
-  entityId: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-});
+export const listAttachmentsQuerySchema = normalizeObjectInput(
+  z.object({
+    entityType: z.string().optional(),
+    entityId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+);
 
 export type ListAttachmentsQuery = z.infer<typeof listAttachmentsQuerySchema>;
 

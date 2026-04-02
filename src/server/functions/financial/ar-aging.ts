@@ -59,7 +59,7 @@ const PAYMENT_TERMS_DAYS = 30;
  * Uses SQL aggregation for efficient bucket calculations instead of
  * in-memory processing.
  */
-export const getARAgingReport = createServerFn()
+export const getARAgingReport = createServerFn({ method: 'GET' })
   .inputValidator(arAgingReportQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -306,7 +306,7 @@ export const getARAgingReport = createServerFn()
  * Uses SQL aggregation for efficient summary calculation instead of
  * in-memory processing.
  */
-export const getARAgingCustomerDetail = createServerFn()
+export const getARAgingCustomerDetail = createServerFn({ method: 'GET' })
   .inputValidator(arAgingCustomerDetailQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();

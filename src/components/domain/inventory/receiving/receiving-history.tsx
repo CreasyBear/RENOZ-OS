@@ -90,6 +90,8 @@ export const ReceivingHistory = memo(function ReceivingHistory({
     switch (type) {
       case "purchase_order":
         return "PO";
+      case "manual_receive":
+        return "Manual Receipt";
       case "transfer":
         return "Transfer";
       case "return":

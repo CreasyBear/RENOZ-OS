@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, gt, desc, ne, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { userSessions } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -22,6 +23,9 @@ import { extractSessionToken } from '@/lib/server/session-utils';
 
 // Re-export for hook consumers
 export type { SessionInfo };
+
+export const emptySessionListInputSchema = normalizeObjectInput(z.object({}));
+export const emptySessionMutationInputSchema = z.object({}).default({});
 
 // ============================================================================
 // HELPERS
@@ -88,7 +92,7 @@ function parseUserAgent(userAgent: string | null): {
  * List all active sessions for the current user.
  */
 export const listMySessions = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptySessionListInputSchema)
   .handler(async (): Promise<SessionInfo[]> => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.read });
 
@@ -161,7 +165,7 @@ export const terminateSession = createServerFn({ method: 'POST' })
  * Terminate all sessions except the current one.
  */
 export const terminateAllOtherSessions = createServerFn({ method: 'POST' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptySessionMutationInputSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
@@ -193,7 +197,7 @@ export const terminateAllOtherSessions = createServerFn({ method: 'POST' })
  * Called periodically by the client.
  */
 export const recordSessionActivity = createServerFn({ method: 'POST' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptySessionMutationInputSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 

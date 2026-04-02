@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { and, eq, gte, lte, sql, desc, isNotNull, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   jobAssignments,
   jobMaterials,
@@ -72,7 +73,7 @@ function getProfitabilityStatus(marginPercent: number): 'profitable' | 'break_ev
  * Calculate total cost for a job (materials + labor).
  */
 export const calculateJobCost = createServerFn({ method: 'GET' })
-  .inputValidator(calculateJobCostSchema)
+  .inputValidator(normalizeObjectInput(calculateJobCostSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const laborRateCents = data.laborRateOverride
@@ -190,7 +191,7 @@ export const calculateJobCost = createServerFn({ method: 'GET' })
  * Get profitability analysis for a single job.
  */
 export const getJobProfitability = createServerFn({ method: 'GET' })
-  .inputValidator(getJobProfitabilitySchema)
+  .inputValidator(normalizeObjectInput(getJobProfitabilitySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -263,7 +264,7 @@ export const getJobProfitability = createServerFn({ method: 'GET' })
  * Get job costing report with list of jobs and summary statistics.
  */
 export const getJobCostingReport = createServerFn({ method: 'GET' })
-  .inputValidator(getJobCostingReportSchema)
+  .inputValidator(normalizeObjectInput(getJobCostingReportSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

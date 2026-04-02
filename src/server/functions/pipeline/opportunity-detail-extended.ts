@@ -16,6 +16,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, isNull, lt, gt, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   opportunities,
   opportunityActivities,
@@ -68,7 +69,7 @@ function generateAlertId(opportunityId: string, alertType: string): string {
  * - approaching_close: Expected close date is within threshold
  */
 export const getOpportunityAlerts = createServerFn({ method: 'GET' })
-  .inputValidator(opportunityAlertsQuerySchema)
+  .inputValidator(normalizeObjectInput(opportunityAlertsQuerySchema))
   .handler(async ({ data }): Promise<OpportunityAlertsResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -266,7 +267,7 @@ export const getOpportunityAlerts = createServerFn({ method: 'GET' })
  * for the opportunity detail view.
  */
 export const getOpportunityActiveItems = createServerFn({ method: 'GET' })
-  .inputValidator(opportunityActiveItemsQuerySchema)
+  .inputValidator(normalizeObjectInput(opportunityActiveItemsQuerySchema))
   .handler(async ({ data }): Promise<OpportunityActiveItems> => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 

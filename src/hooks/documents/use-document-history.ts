@@ -27,11 +27,20 @@ import { queryKeys } from '@/lib/query-keys';
 // TYPES
 // ============================================================================
 
-export type DocumentEntityType = 'order' | 'warranty' | 'job' | 'opportunity' | 'project';
+export type DocumentEntityType =
+  | 'order'
+  | 'shipment'
+  | 'warranty'
+  | 'job'
+  | 'opportunity'
+  | 'project';
 
 export type DocumentType =
   | 'quote'
   | 'invoice'
+  | 'pro-forma'
+  | 'packing-slip'
+  | 'dispatch-note'
   | 'delivery-note'
   | 'work-order'
   | 'warranty-certificate'
@@ -236,6 +245,9 @@ export function getDocumentTypeLabel(type: DocumentType): string {
   const labels: Record<DocumentType, string> = {
     quote: 'Quote',
     invoice: 'Invoice',
+    'pro-forma': 'Pro-Forma',
+    'packing-slip': 'Packing Slip',
+    'dispatch-note': 'Dispatch Note',
     'delivery-note': 'Delivery Note',
     'work-order': 'Work Order',
     'warranty-certificate': 'Warranty Certificate',

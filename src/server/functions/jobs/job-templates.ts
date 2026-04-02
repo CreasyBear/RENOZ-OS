@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, inArray, gte, lte } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   jobTemplates,
   jobAssignments,
@@ -144,7 +145,7 @@ type TemplateRow = Parameters<typeof toTemplateResponse>[0];
  * Get all job templates for the organization.
  */
 export const listJobTemplates = createServerFn({ method: 'GET' })
-  .inputValidator(listJobTemplatesSchema)
+  .inputValidator(normalizeObjectInput(listJobTemplatesSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -195,7 +196,7 @@ export const listJobTemplates = createServerFn({ method: 'GET' })
  * Get a single job template by ID.
  */
 export const getJobTemplate = createServerFn({ method: 'GET' })
-  .inputValidator(getJobTemplateSchema)
+  .inputValidator(normalizeObjectInput(getJobTemplateSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

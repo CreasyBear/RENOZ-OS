@@ -93,6 +93,10 @@ export interface POCreationWizardProps {
   products: ProductItem[];
   /** Optional supplier preselection intent from route/search */
   initialSupplierId?: string | null;
+  /** Optional seeded line items when launching from a product-aware surface */
+  initialItems?: PurchaseOrderItemFormData[];
+  /** Optional starting step for contextual launches */
+  initialStep?: 1 | 2;
   /** Loading state for submission */
   isSubmitting: boolean;
   /** Callback when PO is submitted */
@@ -736,14 +740,17 @@ export function POCreationWizard({
   suppliers,
   products,
   initialSupplierId = null,
+  initialItems = [],
+  initialStep = 1,
   isSubmitting,
   onSubmit,
   onCancel,
 }: POCreationWizardProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const startingStep = initialSupplierId && initialStep === 2 ? 2 : 1;
+  const [currentStep, setCurrentStep] = useState(startingStep);
   const [formData, setFormData] = useState<PurchaseOrderFormData>({
     supplierId: initialSupplierId ?? "",
-    items: [],
+    items: initialItems.map((item) => ({ ...item })),
   });
 
   useEffect(() => {

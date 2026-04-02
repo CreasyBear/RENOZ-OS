@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { currencySchema } from '../_shared/patterns';
+import { currencySchema, normalizeObjectInput } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
@@ -77,9 +77,11 @@ export type ExtendWarrantyInput = z.infer<typeof extendWarrantySchema>;
 /**
  * Schema for listing extensions for a specific warranty.
  */
-export const listWarrantyExtensionsSchema = z.object({
-  warrantyId: z.string().uuid('Invalid warranty ID'),
-});
+export const listWarrantyExtensionsSchema = normalizeObjectInput(
+  z.object({
+    warrantyId: z.string().uuid('Invalid warranty ID'),
+  })
+);
 
 export type ListWarrantyExtensionsInput = z.infer<typeof listWarrantyExtensionsSchema>;
 
@@ -91,7 +93,7 @@ export type ListWarrantyExtensionsInput = z.infer<typeof listWarrantyExtensionsS
  * Schema for getting all extensions with pagination.
  * Supports filtering by extension type and date range.
  */
-export const getExtensionHistorySchema = z.object({
+const getExtensionHistoryBaseSchema = z.object({
   extensionType: warrantyExtensionTypeSchema.optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
@@ -102,14 +104,18 @@ export const getExtensionHistorySchema = z.object({
     .default('created_at_desc'),
 });
 
-export type GetExtensionHistoryInput = z.input<typeof getExtensionHistorySchema>;
+export const getExtensionHistorySchema = normalizeObjectInput(getExtensionHistoryBaseSchema);
 
-export const getExtensionHistoryCursorSchema = cursorPaginationSchema.merge(
-  z.object({
-    extensionType: warrantyExtensionTypeSchema.optional(),
-    startDate: z.string().datetime().optional(),
-    endDate: z.string().datetime().optional(),
-  })
+export type GetExtensionHistoryInput = z.infer<typeof getExtensionHistoryBaseSchema>;
+
+export const getExtensionHistoryCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      extensionType: warrantyExtensionTypeSchema.optional(),
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+    })
+  )
 );
 
 export type GetExtensionHistoryCursorInput = z.infer<typeof getExtensionHistoryCursorSchema>;

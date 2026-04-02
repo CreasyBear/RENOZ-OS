@@ -26,6 +26,7 @@ import {
   DEFAULT_CUSTOMER_FILTERS,
   CUSTOMER_FILTER_CONFIG,
 } from "./customer-filter-config";
+import type { SortDirection } from "./customer-sorting";
 
 export interface CustomersListPresenterProps {
   /** Customers to display */
@@ -55,7 +56,7 @@ export interface CustomersListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View customer handler */
   onViewCustomer: (id: string) => void;
   /** Edit customer handler */

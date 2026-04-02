@@ -12,6 +12,7 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, sql, desc, asc, isNull, ilike, or, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { containsPattern } from '@/lib/db/utils';
 import {
   products,
@@ -344,7 +345,7 @@ const _getProductCached = cache(async (id: string, organizationId: string) => {
  * Get single product with all related data.
  */
 export const getProduct = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const result = await _getProductCached(data.id, ctx.organizationId);
@@ -794,11 +795,13 @@ export const duplicateProduct = createServerFn({ method: 'POST' })
  */
 export const quickSearchProducts = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      q: z.string().min(2),
-      categoryId: z.string().uuid().optional(),
-      limit: z.number().int().positive().default(20),
-    })
+    normalizeObjectInput(
+      z.object({
+        q: z.string().min(2),
+        categoryId: z.string().uuid().optional(),
+        limit: z.number().int().positive().default(20),
+      })
+    )
   )
   .handler(async ({ data }): Promise<{ products: Product[]; total: number }> => {
     const ctx = await withAuth();
@@ -845,10 +848,12 @@ export const quickSearchProducts = createServerFn({ method: 'GET' })
  */
 export const listCategories = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      parentId: z.string().uuid().nullable().optional(),
-      includeInactive: z.boolean().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        parentId: z.string().uuid().nullable().optional(),
+        includeInactive: z.boolean().optional(),
+      })
+    )
   )
   .handler(async ({ data }): Promise<Category[]> => {
     const ctx = await withAuth();

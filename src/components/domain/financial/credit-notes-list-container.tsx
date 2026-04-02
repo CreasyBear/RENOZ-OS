@@ -11,7 +11,6 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import { z } from 'zod';
 import { useNavigate } from '@tanstack/react-router';
 import { toastSuccess, toastError, useConfirmation } from '@/hooks';
 import {
@@ -31,11 +30,20 @@ import {
 } from './credit-note-filter-config';
 import type { CreditNoteFiltersState } from './credit-note-filter-config';
 import { useCustomers } from '@/hooks/customers';
-import type { CreditNoteListQuery } from '@/lib/schemas/financial/credit-notes';
+import type {
+  CreditNoteListQuery,
+  CreditNoteSortField as SortField,
+} from '@/lib/schemas/financial/credit-notes';
 import type { CreditNoteTableItem } from './credit-note-columns';
 import { queryKeys } from '@/lib/query-keys';
 import { useQueryClient } from '@tanstack/react-query';
 import type { OrderSummary } from '@/components/shared';
+import {
+  DEFAULT_CREDIT_NOTE_SORT_DIRECTION,
+  DEFAULT_CREDIT_NOTE_SORT_FIELD,
+  resolveCreditNoteSortState,
+  type SortDirection,
+} from './credit-note-sorting';
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -46,10 +54,6 @@ export interface CreditNotesListContainerProps {
   onCreateCreditNote?: () => void;
   onRefresh?: () => void;
 }
-
-const sortFieldValues = ['createdAt', 'amount', 'status'] as const; // Server doesn't support creditNoteNumber sorting
-const sortFieldSchema = z.enum(sortFieldValues);
-type SortField = z.infer<typeof sortFieldSchema>;
 
 export function buildCreditNoteQuery(
   filters: CreditNoteFiltersState
@@ -70,8 +74,10 @@ export function CreditNotesListContainer({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>('createdAt');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useState<SortField>(DEFAULT_CREDIT_NOTE_SORT_FIELD);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_CREDIT_NOTE_SORT_DIRECTION
+  );
   
   // Apply dialog state (moved from presenter per container/presenter pattern)
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
@@ -153,26 +159,21 @@ export function CreditNotesListContainer({
 
   // Handle sort toggle
   const handleSort = useCallback(
-    (field: string) => {
-      const parsed = sortFieldSchema.safeParse(field);
-      if (!parsed.success) return; // Ignore invalid sort fields
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolveCreditNoteSortState(
+        sortField,
+        sortDirection,
+        field,
+        direction
+      );
 
-      const validField = parsed.data;
-      setSortField((currentField) => {
-        if (currentField === validField) {
-          // Toggle direction
-          setSortDirection((dir) => (dir === 'asc' ? 'desc' : 'asc'));
-          return currentField;
-        }
-        // New field, default to descending for dates/numbers, ascending for text
-        setSortDirection(
-          ['createdAt', 'amount'].includes(validField) ? 'desc' : 'asc'
-        );
-        return validField;
-      });
+      if (!nextSort) return;
+
+      setSortField(nextSort.field);
+      setSortDirection(nextSort.direction);
       setPage(1); // Reset to first page on sort change
     },
-    []
+    [sortDirection, sortField]
   );
 
   // Handle issue credit note

@@ -30,7 +30,7 @@ import {
   type GroupMember,
 } from '@/lib/schemas/users';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
-import { idParamSchema, paginationSchema } from '@/lib/schemas';
+import { idParamQuerySchema, idParamSchema, normalizeObjectInput, paginationSchema } from '@/lib/schemas';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 
@@ -123,9 +123,11 @@ export const createGroup = createServerFn({ method: 'POST' })
 // LIST GROUPS
 // ============================================================================
 
-const listGroupsSchema = paginationSchema.extend({
+const listGroupsSchema = normalizeObjectInput(
+  paginationSchema.extend({
   includeInactive: z.boolean().optional().default(false),
-});
+  })
+);
 
 /**
  * List all groups in the organization.
@@ -245,7 +247,7 @@ export const listGroupsCursor = createServerFn({ method: 'GET' })
  * Requires: team.read permission
  */
 export const getGroup = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }): Promise<GroupWithMemberCount> => {
     const ctx = await withAuth({ permission: PERMISSIONS.team.read });
 
@@ -790,7 +792,7 @@ export const removeGroupMember = createServerFn({ method: 'POST' })
  * Requires: team.read permission
  */
 export const getUserGroups = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.team.read });
 

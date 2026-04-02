@@ -9,6 +9,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { eq, and, inArray, sql, desc, count, isNotNull, ne, notInArray, or, ilike, gte, lte } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns'
 import { sendCampaignTask, pauseCampaignTask } from '@/trigger/jobs'
 import {
   emailCampaigns,
@@ -327,7 +328,7 @@ export const getCampaigns = createServerFn({ method: 'GET' })
  * Get a single campaign by ID
  */
 export const getCampaignById = createServerFn({ method: 'GET' })
-  .inputValidator(getCampaignByIdSchema)
+  .inputValidator(normalizeObjectInput(getCampaignByIdSchema))
   .handler(async ({ data }): Promise<typeof emailCampaigns.$inferSelect | null> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 

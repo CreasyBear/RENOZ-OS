@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, or, sql, desc, asc, gt } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { inventoryAlerts, inventory, products, warehouseLocations } from 'drizzle/schema';
 import type { AlertThreshold } from '@/lib/schemas/inventory';
 import { withAuth } from '@/lib/server/protected';
@@ -131,7 +132,7 @@ export const listAlerts = createServerFn({ method: 'GET' })
  * Get single alert with details.
  */
 export const getAlert = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }): Promise<AlertWithDetails> => {
     const ctx = await withAuth();
 
@@ -649,9 +650,11 @@ export const acknowledgeAlert = createServerFn({ method: 'POST' })
  */
 export const getAlertAnalytics = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      days: z.coerce.number().int().min(7).max(365).default(30),
-    })
+    normalizeObjectInput(
+      z.object({
+        days: z.coerce.number().int().min(7).max(365).default(30),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();

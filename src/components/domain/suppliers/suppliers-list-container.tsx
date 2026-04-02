@@ -29,7 +29,6 @@ import {
   type ListSuppliersInput,
   type SupplierTableItem,
   type SupplierSortField,
-  isSupplierSortField,
 } from "@/lib/schemas/suppliers";
 import {
   SUPPLIER_FILTER_CONFIG,
@@ -37,6 +36,12 @@ import {
   type SupplierFiltersState as ConfigFiltersState,
 } from "./supplier-filter-config";
 import { SuppliersListPresenter } from "./suppliers-list-presenter";
+import {
+  DEFAULT_SUPPLIER_SORT_DIRECTION,
+  DEFAULT_SUPPLIER_SORT_FIELD,
+  resolveSupplierSortState,
+  type SortDirection,
+} from "./supplier-sorting";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -47,8 +52,6 @@ export interface SuppliersListContainerProps {
   onCreateSupplier?: () => void;
   onRefresh?: () => void;
 }
-
-type SortDirection = "asc" | "desc";
 
 function buildSupplierQuery(
   filters: SupplierFiltersState
@@ -69,8 +72,12 @@ export function SuppliersListContainer({
   const navigate = useNavigate();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SupplierSortField>("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortField, setSortField] = useState<SupplierSortField>(
+    DEFAULT_SUPPLIER_SORT_FIELD
+  );
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_SUPPLIER_SORT_DIRECTION
+  );
 
   const queryFilters = useMemo<Partial<ListSuppliersInput>>(
     () => ({
@@ -114,23 +121,23 @@ export function SuppliersListContainer({
   const updateMutation = useUpdateSupplier();
 
   // Handle sort toggle
-  const handleSort = useCallback((field: string) => {
-    setSortField((currentField) => {
-      if (currentField === field) {
-        // Toggle direction
-        setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
-        return currentField;
-      }
-      // New field, default to ascending for text, descending for dates/ratings
-      setSortDirection(
-        ["overallRating", "createdAt", "lastOrderDate"].includes(field)
-          ? "desc"
-          : "asc"
+  const handleSort = useCallback(
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolveSupplierSortState(
+        sortField,
+        sortDirection,
+        field,
+        direction
       );
-      return isSupplierSortField(field) ? field : currentField;
-    });
-    setPage(1); // Reset to first page on sort change
-  }, []);
+
+      if (!nextSort) return;
+
+      setSortField(nextSort.field);
+      setSortDirection(nextSort.direction);
+      setPage(1); // Reset to first page on sort change
+    },
+    [sortField, sortDirection]
+  );
 
   // Shift-click range handler that updates lastClickedIndex
   const handleShiftClickRangeWithIndex = useCallback(

@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import type { SortDirection } from '@/components/shared/data-table/server-sorting';
 import type { UserTableItem } from '@/lib/schemas/users';
 import { createUserColumns } from './users-columns';
 
@@ -34,7 +35,7 @@ export interface UsersTablePresenterProps {
   isSelected: (id: string) => boolean;
   sortField: string;
   sortDirection: 'asc' | 'desc';
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   onViewUser: (userId: string) => void;
   onDeactivate: (userId: string) => void;
   onReactivate: (userId: string) => void;
@@ -102,7 +103,7 @@ export const UsersTablePresenter = memo(function UsersTablePresenter({
   ) => {
     const newSorting = typeof updater === 'function' ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? 'desc' : 'asc');
     }
   };
 

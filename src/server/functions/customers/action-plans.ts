@@ -11,6 +11,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -284,7 +285,7 @@ export const listActionPlansCursor = createServerFn({ method: 'GET' })
  * Get a single action plan by ID
  */
 export const getActionPlan = createServerFn({ method: 'GET' })
-  .inputValidator(getActionPlanSchema)
+  .inputValidator(normalizeObjectInput(getActionPlanSchema))
   .handler(async ({ data }): Promise<typeof customerActionPlans.$inferSelect> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 

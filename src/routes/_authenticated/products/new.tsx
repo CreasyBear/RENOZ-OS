@@ -63,7 +63,7 @@ function NewProductPage() {
   const flatCategories = flattenCategories(categoryTree);
 
   const handleSubmit = async (data: ProductFormValues) => {
-    await createProduct.mutateAsync({
+    const newProduct = await createProduct.mutateAsync({
       ...data,
       categoryId: data.categoryId ?? undefined,
       costPrice: data.costPrice ?? undefined,
@@ -75,7 +75,7 @@ function NewProductPage() {
       warrantyPolicyId: data.warrantyPolicyId ?? undefined,
       specifications: (data.specifications ?? undefined) as Record<string, string> | undefined,
     });
-    navigate({ to: "/products" });
+    navigate({ to: "/products/$productId", params: { productId: newProduct.id } });
   };
 
   const handleCancel = () => {

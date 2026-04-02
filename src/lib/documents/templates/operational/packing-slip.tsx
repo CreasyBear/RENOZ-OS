@@ -46,6 +46,7 @@ export interface PackingSlipDocumentData {
   orderNumber: string;
   issueDate: Date;
   shipDate?: Date | null;
+  shipDateLabel?: string | null;
   customer: {
     id: string;
     name: string;
@@ -379,7 +380,9 @@ function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
             )}
             {data.shipDate && (
               <View style={styles.shippingItem}>
-                <Text style={styles.shippingLabel}>Ship Date</Text>
+                <Text style={styles.shippingLabel}>
+                  {data.shipDateLabel ?? "Ship Date"}
+                </Text>
                 <Text style={styles.shippingValue}>
                   {formatDateForPdf(data.shipDate, locale, "short")}
                 </Text>

@@ -22,6 +22,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc } from 'drizzle-orm';
 import * as React from 'react';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   warranties,
   warrantyItems,
@@ -336,7 +337,7 @@ export const generateWarrantyCertificate = createServerFn({ method: 'POST' })
  * Does NOT trigger generation - use generateWarrantyCertificate for that.
  */
 export const getWarrantyCertificate = createServerFn({ method: 'GET' })
-  .inputValidator(getWarrantyCertificateSchema)
+  .inputValidator(normalizeObjectInput(getWarrantyCertificateSchema))
   .handler(async ({ data }): Promise<GetCertificateResult> => {
     const ctx = await withAuth();
     const { warrantyId } = data;

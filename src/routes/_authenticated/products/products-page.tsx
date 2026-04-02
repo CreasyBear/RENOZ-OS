@@ -52,6 +52,10 @@ import type { searchParamsSchema } from "./index";
 import type { z } from "zod";
 import { normalizeProductForTable } from "@/lib/schemas/products/normalize";
 import { executeBulkAction, summarizeBulkFailures, type BulkActionFailure } from "@/lib/actions/bulk-action-results";
+import {
+  PRODUCT_SORT_FIELDS,
+  type ProductSortField,
+} from "@/lib/schemas/products";
 
 type SearchParams = z.infer<typeof searchParamsSchema>;
 
@@ -566,9 +570,12 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
               onSelectionChange={setSelectedRows}
               onPageChange={(page) => updateSearch({ page })}
               onPageSizeChange={(pageSize) => updateSearch({ pageSize })}
-              onSortChange={(sortBy, sortOrder) =>
-                updateSearch({ sortBy, sortOrder })
-              }
+              onSortChange={(sortBy, sortOrder) => {
+                const safeSortBy = PRODUCT_SORT_FIELDS.includes(sortBy as ProductSortField)
+                  ? (sortBy as ProductSortField)
+                  : undefined;
+                updateSearch({ sortBy: safeSortBy, sortOrder })
+              }}
               onRowClick={(product) =>
                 navigate({ to: "/products/$productId", params: { productId: product.id } })
               }

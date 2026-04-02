@@ -35,6 +35,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -88,6 +89,7 @@ export interface CustomerDetailViewProps {
   alertsLoading?: boolean;
   activeItems?: CustomerActiveItemsType;
   activeItemsLoading?: boolean;
+  extendedDataWarning?: string | null;
   headerActions?: React.ReactNode;
   /** Handler to open activity logging dialog */
   onLogActivity?: () => void;
@@ -257,6 +259,7 @@ export const CustomerDetailView = memo(function CustomerDetailView({
   alertsLoading = false,
   activeItems,
   activeItemsLoading = false,
+  extendedDataWarning,
   headerActions,
   onLogActivity,
   onScheduleFollowUp,
@@ -319,6 +322,13 @@ export const CustomerDetailView = memo(function CustomerDetailView({
 
   return (
     <div className={cn('space-y-6', className)}>
+      {extendedDataWarning ? (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{extendedDataWarning}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* ─────────────────────────────────────────────────────────────────────
           ZONE 1: Entity Header with actions and panel toggle
       ───────────────────────────────────────────────────────────────────── */}

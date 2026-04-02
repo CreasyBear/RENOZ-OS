@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { createOrderColumns } from "./order-columns";
 import type { OrderTableItem } from "@/lib/schemas/orders";
+import type { SortDirection } from "./order-sorting";
 
 export interface OrdersTablePresenterProps {
   /** Orders to display */
@@ -45,7 +46,7 @@ export interface OrdersTablePresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View order handler */
   onViewOrder: (id: string) => void;
   /** Duplicate order handler */
@@ -121,7 +122,7 @@ export const OrdersTablePresenter = memo(function OrdersTablePresenter({
   ) => {
     const newSorting = typeof updater === "function" ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
     }
   };
 

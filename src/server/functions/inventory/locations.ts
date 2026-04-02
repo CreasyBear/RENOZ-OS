@@ -14,6 +14,7 @@ import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from 
 import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   warehouseLocations as locations,
   warehouseLocations,
@@ -191,7 +192,7 @@ export const listLocationsCursor = createServerFn({ method: 'GET' })
  * Get single location with inventory contents.
  */
 export const getLocation = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -504,7 +505,7 @@ export const listWarehouseLocations = createServerFn({ method: 'GET' })
  * Get warehouse location hierarchy from a starting point.
  */
 export const getWarehouseLocationHierarchy = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid().optional() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid().optional() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

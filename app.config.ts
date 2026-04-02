@@ -5,7 +5,9 @@ export default defineConfig({
     preset: 'vercel',
   },
   router: {
-    // Exclude page/layout/nav/tab/type files from route tree (they're imported by route files, not routes)
-    routeFileIgnorePattern: '-(page|layout|nav|tab|types|container)\\.(tsx|ts)$',
+    // TanStack applies this pattern to the basename, not the full path.
+    // Ignore helper suffixes plus the known non-Route API handler basenames.
+    routeFileIgnorePattern:
+      '^((agent|approvals(\\.\\$approvalId)?|approve|artifacts\\.\\$id|callback|chat|connections(\\.\\$connectionId)?|cost|api\\/oauth\\/dashboard|debug-ping|debug-rls-clash|health|initiate|pending-selection|resend|unsubscribe\\.\\$token|xero)|.*-(page|layout|nav|tab|types|container|presenter|columns|config|schema|helpers|utils|sorting))\\.(tsx|ts)$',
   },
 })

@@ -171,7 +171,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
   const handlePageChange = useCallback((page: number) => {
     navigate({
       to: ".",
-      search: (prev) => ({ ...prev, page }),
+      search: (prev: SearchParams) => ({ ...prev, page }),
     });
   }, [navigate]);
 
@@ -186,7 +186,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
   const handleSerializedSearchChange = useCallback((nextSearch: string) => {
     navigate({
       to: ".",
-      search: (prev) => ({
+      search: (prev: SearchParams) => ({
         ...prev,
         serializedSearch: nextSearch.trim().length > 0 ? nextSearch : undefined,
         page: 1,
@@ -198,7 +198,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
     (nextSerializedId: string | null) => {
       navigate({
         to: '.',
-        search: (prev) => ({
+        search: (prev: SearchParams) => ({
           ...prev,
           serializedId: nextSerializedId ?? undefined,
         }),
@@ -226,7 +226,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
             onValueChange={(value) =>
               navigate({
                 to: ".",
-                search: (prev) => ({
+                search: (prev: SearchParams) => ({
                   ...prev,
                   view: value as SearchParams["view"],
                   page: 1,

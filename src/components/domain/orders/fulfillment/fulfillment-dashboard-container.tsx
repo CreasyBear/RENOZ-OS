@@ -2,23 +2,23 @@
  * FulfillmentDashboard Container
  *
  * Container responsibilities:
- * - Fetches confirmed orders via useOrders hook
+ * - Fetches confirmed and in-progress picking orders via useOrders hook
  * - Fetches picked orders via useOrders hook
  * - Fetches active shipments via useShipments hook
- * - Provides order status mutation
+ * - Provides workflow navigation callbacks and import mutation
  * - Passes data to presenter
  *
  * @see ./fulfillment-dashboard.tsx (presenter)
  * @see src/hooks/orders/use-orders.ts (hooks)
  * @see src/hooks/orders/use-shipments.ts (hooks)
- * @see src/hooks/orders/use-order-status.ts (mutations)
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { FulfillmentImport } from '@/lib/schemas/orders/shipments';
-import { useOrders, useShipments, useUpdateOrderStatus } from '@/hooks/orders';
+import { useFulfillmentDashboardSummary, useOrders, useShipments } from '@/hooks/orders';
+import { getSummaryState } from '@/lib/metrics/summary-health';
 import { importFulfillmentShipments } from '@/server/functions/orders/order-shipments';
 import { FulfillmentDashboardPresenter } from './fulfillment-dashboard';
 import type { FulfillmentDashboardContainerProps } from './fulfillment-dashboard';
@@ -34,6 +34,7 @@ const POLLING_INTERVAL = 30000; // 30 seconds
 // ============================================================================
 
 export function FulfillmentDashboardContainer({
+  onPickOrder,
   onShipOrder,
   onViewOrder,
   onConfirmDelivery,
@@ -44,7 +45,7 @@ export function FulfillmentDashboardContainer({
   // DATA FETCHING (Container responsibility via centralized hooks)
   // ===========================================================================
 
-  // Fetch orders in "confirmed" status (picking queue)
+  // Fetch orders waiting to enter or resume picking
   const {
     data: confirmedOrders,
     isLoading: loadingConfirmed,
@@ -52,6 +53,18 @@ export function FulfillmentDashboardContainer({
     page: 1,
     pageSize: 50,
     status: 'confirmed',
+    sortBy: 'createdAt',
+    sortOrder: 'asc',
+    refetchInterval: POLLING_INTERVAL,
+  } as Parameters<typeof useOrders>[0] & { refetchInterval?: number });
+
+  const {
+    data: pickingOrders,
+    isLoading: loadingPicking,
+  } = useOrders({
+    page: 1,
+    pageSize: 50,
+    status: 'picking',
     sortBy: 'createdAt',
     sortOrder: 'asc',
     refetchInterval: POLLING_INTERVAL,
@@ -70,24 +83,34 @@ export function FulfillmentDashboardContainer({
     refetchInterval: POLLING_INTERVAL,
   } as Parameters<typeof useOrders>[0] & { refetchInterval?: number });
 
-  // Fetch active shipments (in_transit)
+  // Fetch recovery-relevant shipments (pending through failed)
   const {
     data: activeShipments,
     isLoading: loadingShipments,
   } = useShipments({
     page: 1,
     pageSize: 50,
-    status: 'in_transit',
     sortBy: 'createdAt',
     sortOrder: 'desc',
     refetchInterval: POLLING_INTERVAL,
+  });
+
+  const {
+    data: fulfillmentSummary,
+    isLoading: loadingSummary,
+    error: fulfillmentSummaryError,
+  } = useFulfillmentDashboardSummary();
+
+  const summaryState = getSummaryState({
+    data: fulfillmentSummary,
+    error: fulfillmentSummaryError,
+    isLoading: loadingSummary,
   });
 
   // ===========================================================================
   // MUTATIONS (Container responsibility via centralized hooks)
   // ===========================================================================
 
-  const updateOrderStatusMutation = useUpdateOrderStatus();
   const queryClient = useQueryClient();
 
   const importFulfillmentFn = useServerFn(importFulfillmentShipments);
@@ -101,16 +124,44 @@ export function FulfillmentDashboardContainer({
     },
   });
 
+  const pickingQueue = (() => {
+    const confirmed = confirmedOrders?.orders ?? [];
+    const inProgress = pickingOrders?.orders ?? [];
+    const deduped = [...confirmed, ...inProgress].reduce<typeof confirmed>((acc, order) => {
+      if (!acc.some((item) => item.id === order.id)) {
+        acc.push(order);
+      }
+      return acc;
+    }, []);
+    deduped.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    return {
+      orders: deduped,
+      total: deduped.length,
+      page: 1,
+      pageSize: deduped.length || 50,
+      hasMore: false,
+    };
+  })();
+
   return (
     <FulfillmentDashboardPresenter
-      confirmedOrders={confirmedOrders ?? null}
+      confirmedOrders={pickingQueue}
       pickedOrders={pickedOrders ?? null}
       activeShipments={activeShipments ?? null}
-      loadingConfirmed={loadingConfirmed}
+      fulfillmentSummary={fulfillmentSummary ?? null}
+      summaryState={summaryState}
+      summaryWarning={
+        summaryState === 'unavailable'
+          ? 'Fulfillment summary metrics are temporarily unavailable. Headline cards are hidden to avoid falling back to incomplete page data.'
+          : null
+      }
+      loadingConfirmed={loadingConfirmed || loadingPicking}
       loadingPicked={loadingPicked}
       loadingShipments={loadingShipments}
-      updateOrderStatusMutation={updateOrderStatusMutation}
+      loadingSummary={loadingSummary}
       importFulfillmentMutation={importFulfillmentMutation}
+      onPickOrder={onPickOrder}
       onShipOrder={onShipOrder}
       onViewOrder={onViewOrder}
       onConfirmDelivery={onConfirmDelivery}

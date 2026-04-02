@@ -196,7 +196,7 @@ export function createProductColumns(
           typeConfig={PRODUCT_TYPE_CONFIG}
         />
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 100,
     },
 
@@ -214,7 +214,7 @@ export function createProductColumns(
           showIcon
         />
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 100,
     },
 

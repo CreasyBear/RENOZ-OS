@@ -72,6 +72,22 @@ export const cursorPaginationSchema = z.object({
 export type CursorPagination = z.infer<typeof cursorPaginationSchema>;
 
 /**
+ * Normalizes omitted object payloads so inner field defaults still apply.
+ * Use on GET `inputValidator` query objects when TanStack may pass `undefined`.
+ */
+export const normalizeObjectInput = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => value ?? {}, schema);
+
+export const idParamQuerySchema = normalizeObjectInput(idParamSchema);
+export type IdParamQuery = z.infer<typeof idParamSchema>;
+
+export const paginationQuerySchema = normalizeObjectInput(paginationSchema);
+export type PaginationQuery = z.infer<typeof paginationSchema>;
+
+export const cursorPaginationQuerySchema = normalizeObjectInput(cursorPaginationSchema);
+export type CursorPaginationQuery = z.infer<typeof cursorPaginationSchema>;
+
+/**
  * Paginated response wrapper.
  */
 export const paginatedResponseSchema = <T extends z.ZodType>(itemSchema: T) =>

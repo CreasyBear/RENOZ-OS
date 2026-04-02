@@ -13,6 +13,7 @@ import { lazy, Suspense } from 'react';
 import { z } from 'zod';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
+import { SUPPLIER_SORT_FIELDS } from '@/lib/schemas/suppliers';
 
 export const supplierSearchSchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
@@ -22,7 +23,7 @@ export const supplierSearchSchema = z.object({
   supplierType: z.string().optional(),
   ratingMin: z.coerce.number().optional(),
   ratingMax: z.coerce.number().optional(),
-  sortBy: z.enum(['name', 'status', 'overallRating', 'createdAt', 'lastOrderDate']).optional().default('name'),
+  sortBy: z.enum(SUPPLIER_SORT_FIELDS).optional().default('name'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
 });
 

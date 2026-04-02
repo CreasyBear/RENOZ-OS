@@ -14,6 +14,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, count, isNull, or, lt, gt, gte, lte, ilike, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   purchaseOrderApprovals,
   purchaseOrderApprovalRules,
@@ -64,6 +65,11 @@ const APPROVAL_STATUS = {
   ESCALATED: 'escalated',
 } as const;
 
+const ACTIONABLE_APPROVAL_STATUSES = [
+  APPROVAL_STATUS.PENDING,
+  APPROVAL_STATUS.ESCALATED,
+] as const;
+
 // Removed AUTO_ESCALATE_BATCH_SIZE - deprecated function removed
 
 // ============================================================================
@@ -99,7 +105,7 @@ async function checkAndUpdateFinalApprovalStatus(
     .where(
       and(
         eq(purchaseOrderApprovals.purchaseOrderId, purchaseOrderId),
-        eq(purchaseOrderApprovals.status, APPROVAL_STATUS.PENDING),
+        inArray(purchaseOrderApprovals.status, [...ACTIONABLE_APPROVAL_STATUSES]),
         gt(purchaseOrderApprovals.level, currentLevel)
       )
     )
@@ -113,6 +119,68 @@ async function checkAndUpdateFinalApprovalStatus(
     return true;
   }
   return false;
+}
+
+async function getActionableApprovalForUser(params: {
+  approvalId: string;
+  organizationId: string;
+  userId: string;
+  action: 'approve' | 'reject';
+}) {
+  const approval = await db
+    .select()
+    .from(purchaseOrderApprovals)
+    .where(
+      and(
+        eq(purchaseOrderApprovals.id, params.approvalId),
+        eq(purchaseOrderApprovals.organizationId, params.organizationId),
+        inArray(purchaseOrderApprovals.status, [...ACTIONABLE_APPROVAL_STATUSES])
+      )
+    )
+    .limit(1);
+
+  if (!approval[0]) {
+    throw new NotFoundError('Approval not found or already processed', 'approval');
+  }
+
+  verifyApproverAuthorization(approval[0], params.userId, params.action);
+  return approval[0];
+}
+
+async function approveApprovalRecord(params: {
+  approvalId: string;
+  organizationId: string;
+  userId: string;
+  comments?: string;
+}) {
+  const approval = await getActionableApprovalForUser({
+    approvalId: params.approvalId,
+    organizationId: params.organizationId,
+    userId: params.userId,
+    action: 'approve',
+  });
+
+  const [updatedApproval] = await db
+    .update(purchaseOrderApprovals)
+    .set({
+      status: APPROVAL_STATUS.APPROVED,
+      comments: params.comments,
+      approvedAt: new Date(),
+      updatedBy: params.userId,
+      escalatedTo: null,
+      escalationReason: null,
+      escalatedAt: null,
+    })
+    .where(eq(purchaseOrderApprovals.id, params.approvalId))
+    .returning();
+
+  await checkAndUpdateFinalApprovalStatus(
+    approval.purchaseOrderId,
+    approval.level,
+    params.userId
+  );
+
+  return { approval, updatedApproval };
 }
 
 /**
@@ -436,7 +504,7 @@ export const listPendingApprovalsCursor = createServerFn({ method: 'GET' })
  * Get detailed approval information including PO and approver details.
  */
 export const getApprovalDetails = createServerFn({ method: 'GET' })
-  .inputValidator(getApprovalDetailsSchema)
+  .inputValidator(normalizeObjectInput(getApprovalDetailsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -509,7 +577,7 @@ export const getApprovalDetails = createServerFn({ method: 'GET' })
  * Get approval history for a purchase order.
  */
 export const getApprovalHistory = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ purchaseOrderId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ purchaseOrderId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -621,45 +689,12 @@ export const approvePurchaseOrderAtLevel = createServerFn({ method: 'POST' })
   .inputValidator(approveRejectSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
-
-    // Get the approval record
-    const approval = await db
-      .select()
-      .from(purchaseOrderApprovals)
-      .where(
-        and(
-          eq(purchaseOrderApprovals.id, data.approvalId),
-          eq(purchaseOrderApprovals.organizationId, ctx.organizationId),
-          eq(purchaseOrderApprovals.status, APPROVAL_STATUS.PENDING)
-        )
-      )
-      .limit(1);
-
-    if (!approval[0]) {
-      throw new NotFoundError('Approval not found or already processed', 'approval');
-    }
-
-    // Verify user is the assigned approver or escalation target
-    verifyApproverAuthorization(approval[0], ctx.user.id, 'approve');
-
-    // Update approval record
-    const [updatedApproval] = await db
-      .update(purchaseOrderApprovals)
-      .set({
-        status: APPROVAL_STATUS.APPROVED,
-        comments: data.comments,
-        approvedAt: new Date(),
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(purchaseOrderApprovals.id, data.approvalId))
-      .returning();
-
-    // Check if there are more levels required and update PO status if final level
-    await checkAndUpdateFinalApprovalStatus(
-      approval[0].purchaseOrderId,
-      approval[0].level,
-      ctx.user.id
-    );
+    const { updatedApproval } = await approveApprovalRecord({
+      approvalId: data.approvalId,
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      comments: data.comments,
+    });
 
     return { approval: updatedApproval };
   });
@@ -672,25 +707,12 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
-    // Get the approval record
-    const approval = await db
-      .select()
-      .from(purchaseOrderApprovals)
-      .where(
-        and(
-          eq(purchaseOrderApprovals.id, data.approvalId),
-          eq(purchaseOrderApprovals.organizationId, ctx.organizationId),
-          eq(purchaseOrderApprovals.status, APPROVAL_STATUS.PENDING)
-        )
-      )
-      .limit(1);
-
-    if (!approval[0]) {
-      throw new NotFoundError('Approval not found or already processed', 'approval');
-    }
-
-    // Verify user is the assigned approver or escalation target
-    verifyApproverAuthorization(approval[0], ctx.user.id, 'reject');
+    const approval = await getActionableApprovalForUser({
+      approvalId: data.approvalId,
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: 'reject',
+    });
 
     // Update approval record with rejection reason
     const [updatedApproval] = await db
@@ -700,6 +722,9 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
         comments: `[${data.reason}] ${data.comments}`,
         rejectedAt: new Date(),
         updatedBy: ctx.user.id,
+        escalatedTo: null,
+        escalationReason: null,
+        escalatedAt: null,
       })
       .where(eq(purchaseOrderApprovals.id, data.approvalId))
       .returning();
@@ -711,7 +736,7 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
         status: 'draft',
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, approval[0].purchaseOrderId));
+      .where(eq(purchaseOrders.id, approval.purchaseOrderId));
 
     return { approval: updatedApproval };
   });
@@ -735,7 +760,7 @@ export const getApprovalIdsForPurchaseOrders = createServerFn({ method: 'POST' }
       .where(
         and(
           eq(purchaseOrderApprovals.organizationId, ctx.organizationId),
-          eq(purchaseOrderApprovals.status, APPROVAL_STATUS.PENDING),
+          inArray(purchaseOrderApprovals.status, [...ACTIONABLE_APPROVAL_STATUSES]),
           inArray(purchaseOrderApprovals.purchaseOrderId, data.purchaseOrderIds),
           or(
             eq(purchaseOrderApprovals.approverId, ctx.user.id),
@@ -765,46 +790,12 @@ export const bulkApproveApprovals = createServerFn({ method: 'POST' })
 
     for (const approvalId of data.approvalIds) {
       try {
-        // Get the approval record
-        const approval = await db
-          .select()
-          .from(purchaseOrderApprovals)
-          .where(
-            and(
-              eq(purchaseOrderApprovals.id, approvalId),
-              eq(purchaseOrderApprovals.organizationId, ctx.organizationId),
-              eq(purchaseOrderApprovals.status, APPROVAL_STATUS.PENDING),
-              or(
-                eq(purchaseOrderApprovals.approverId, ctx.user.id),
-                eq(purchaseOrderApprovals.escalatedTo, ctx.user.id)
-              )
-            )
-          )
-          .limit(1);
-
-        if (!approval[0]) {
-          results.failed.push({ id: approvalId, reason: 'Not found or not authorized' });
-          continue;
-        }
-
-        // Update approval
-        await db
-          .update(purchaseOrderApprovals)
-          .set({
-            status: APPROVAL_STATUS.APPROVED,
-            comments: data.comments,
-            approvedAt: new Date(),
-            updatedBy: ctx.user.id,
-          })
-          .where(eq(purchaseOrderApprovals.id, approvalId));
-
-        // Check if final level and update PO status if needed
-        await checkAndUpdateFinalApprovalStatus(
-          approval[0].purchaseOrderId,
-          approval[0].level,
-          ctx.user.id
-        );
-
+        await approveApprovalRecord({
+          approvalId,
+          organizationId: ctx.organizationId,
+          userId: ctx.user.id,
+          comments: data.comments,
+        });
         results.approved.push(approvalId);
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'Processing error';
@@ -837,7 +828,7 @@ export const escalateApproval = createServerFn({ method: 'POST' })
         and(
           eq(purchaseOrderApprovals.id, data.approvalId),
           eq(purchaseOrderApprovals.organizationId, ctx.organizationId),
-          eq(purchaseOrderApprovals.status, APPROVAL_STATUS.PENDING)
+          inArray(purchaseOrderApprovals.status, [...ACTIONABLE_APPROVAL_STATUSES])
         )
       )
       .limit(1);
@@ -894,6 +885,8 @@ export const delegateApproval = createServerFn({ method: 'POST' })
     if (!approval[0]) {
       throw new NotFoundError('Approval not found or you are not the assigned approver', 'approval');
     }
+
+    await validateApprover(data.delegateTo, ctx.organizationId);
 
     // Update approval with delegation
     const [updatedApproval] = await db

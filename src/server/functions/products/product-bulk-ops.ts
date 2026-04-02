@@ -10,6 +10,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { products, categories } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError } from '@/lib/server/errors';
@@ -715,12 +716,14 @@ export const bulkDeleteProducts = createServerFn({ method: 'POST' })
  */
 export const exportProducts = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      categoryId: z.string().uuid().optional(),
-      status: z.enum(['active', 'inactive', 'discontinued']).optional(),
-      type: z.enum(['physical', 'service', 'digital', 'bundle']).optional(),
-      productIds: z.array(z.string().uuid()).optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        categoryId: z.string().uuid().optional(),
+        status: z.enum(['active', 'inactive', 'discontinued']).optional(),
+        type: z.enum(['physical', 'service', 'digital', 'bundle']).optional(),
+        productIds: z.array(z.string().uuid()).optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -818,8 +821,10 @@ function escapeCSV(value: string): string {
 /**
  * Get import template CSV.
  */
+export const getImportTemplateSchema = normalizeObjectInput(z.object({}));
+
 export const getImportTemplate = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(getImportTemplateSchema)
   .handler(async () => {
     await withAuth();
 

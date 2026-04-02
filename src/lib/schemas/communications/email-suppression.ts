@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import { cursorPaginationSchema } from "@/lib/db/pagination";
+import { normalizeObjectInput } from "../_shared/patterns";
 
 // ============================================================================
 // ENUMS
@@ -42,28 +43,32 @@ export type SuppressionMetadata = z.infer<typeof suppressionMetadataSchema>;
 // LIST FILTERS
 // ============================================================================
 
-export const suppressionListFiltersSchema = z.object({
-  reason: suppressionReasonSchema.optional(),
-  search: z.string().optional(),
-  includeDeleted: z.boolean().optional().default(false),
-  page: z.number().int().positive().optional().default(1),
-  pageSize: z.number().int().positive().max(100).optional().default(20),
-  sortBy: z
-    .enum(["email", "reason", "createdAt"])
-    .optional()
-    .default("createdAt"),
-  sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
-});
-export type SuppressionListFilters = z.infer<
-  typeof suppressionListFiltersSchema
->;
-
-export const suppressionListCursorSchema = cursorPaginationSchema.merge(
+export const suppressionListFiltersSchema = normalizeObjectInput(
   z.object({
     reason: suppressionReasonSchema.optional(),
     search: z.string().optional(),
     includeDeleted: z.boolean().optional().default(false),
+    page: z.number().int().positive().optional().default(1),
+    pageSize: z.number().int().positive().max(100).optional().default(20),
+    sortBy: z
+      .enum(["email", "reason", "createdAt"])
+      .optional()
+      .default("createdAt"),
+    sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
   })
+);
+export type SuppressionListFilters = z.infer<
+  typeof suppressionListFiltersSchema
+>;
+
+export const suppressionListCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      reason: suppressionReasonSchema.optional(),
+      search: z.string().optional(),
+      includeDeleted: z.boolean().optional().default(false),
+    })
+  )
 );
 export type SuppressionListCursorInput = z.infer<typeof suppressionListCursorSchema>;
 

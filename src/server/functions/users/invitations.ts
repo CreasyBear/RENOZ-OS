@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { eq, and, desc, asc, sql, lt, count as drizzleCount } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { userInvitations, users, organizations, userPreferences } from 'drizzle/schema';
 import { withAuth, withInternalAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -377,7 +378,7 @@ const getInvitationByTokenSchema = z.object({
  * Rate limited: 20 requests per minute per IP.
  */
 export const getInvitationByToken = createServerFn({ method: 'GET' })
-  .inputValidator(getInvitationByTokenSchema)
+  .inputValidator(normalizeObjectInput(getInvitationByTokenSchema))
   .handler(async ({ data }) => {
     // Rate limit check
     const request = getRequest();

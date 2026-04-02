@@ -24,6 +24,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, sql, and, gte, lte, desc, count, isNull, inArray, not, notInArray, or, ilike } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
@@ -599,7 +600,7 @@ async function getMetricsHybrid(
  * 3. Cache the result for future requests
  */
 export const getDashboardMetrics = createServerFn({ method: 'GET' })
-  .inputValidator(getDashboardMetricsSchema)
+  .inputValidator(normalizeObjectInput(getDashboardMetricsSchema))
   // Type annotation removed to avoid Zod schema inference conflicts with metadata Record<string, unknown>
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
@@ -816,7 +817,7 @@ function mapActivityType(type: string | null): 'quote' | 'installation' | 'warra
  * Get detailed metrics comparison between two periods.
  */
 export const getMetricsComparison = createServerFn({ method: 'GET' })
-  .inputValidator(getMetricsComparisonSchema)
+  .inputValidator(normalizeObjectInput(getMetricsComparisonSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
 
@@ -932,7 +933,7 @@ export const getMetricsComparison = createServerFn({ method: 'GET' })
  * });
  */
 export const getInventoryCountsBySkus = createServerFn({ method: 'GET' })
-  .inputValidator(getInventoryCountsBySkusInputSchema)
+  .inputValidator(normalizeObjectInput(getInventoryCountsBySkusInputSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
@@ -1002,7 +1003,7 @@ export const getInventoryCountsBySkus = createServerFn({ method: 'GET' })
  * // Returns: { 'uuid-1': { totalQuantity: 10, ... }, 'uuid-2': { ... } }
  */
 export const getInventoryCountsByProductIds = createServerFn({ method: 'GET' })
-  .inputValidator(getInventoryCountsByProductIdsInputSchema)
+  .inputValidator(normalizeObjectInput(getInventoryCountsByProductIdsInputSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 

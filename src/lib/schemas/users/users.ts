@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import { paginationSchema, filterSchema } from '../_shared/patterns';
+import { paginationSchema, filterSchema, normalizeObjectInput } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
@@ -343,14 +343,18 @@ export const invitationSchema = z.object({
 export type Invitation = z.infer<typeof invitationSchema>;
 
 /** Invitation list filter */
-export const invitationFilterSchema = paginationSchema.extend({
-  status: invitationStatusSchema.optional(),
-});
+export const invitationFilterSchema = normalizeObjectInput(
+  paginationSchema.extend({
+    status: invitationStatusSchema.optional(),
+  })
+);
 
 export type InvitationFilter = z.infer<typeof invitationFilterSchema>;
 
-export const invitationCursorSchema = cursorPaginationSchema.merge(
-  z.object({ status: invitationStatusSchema.optional() })
+export const invitationCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({ status: invitationStatusSchema.optional() })
+  )
 );
 export type InvitationCursorQuery = z.infer<typeof invitationCursorSchema>;
 
@@ -453,16 +457,20 @@ export const setPreferencesSchema = z.object({
 export type SetPreferences = z.infer<typeof setPreferencesSchema>;
 
 /** Get preferences by category */
-export const getPreferencesSchema = z.object({
-  category: z.string().min(1).max(50).optional(),
-});
+export const getPreferencesSchema = normalizeObjectInput(
+  z.object({
+    category: z.string().min(1).max(50).optional(),
+  })
+);
 
 export type GetPreferences = z.infer<typeof getPreferencesSchema>;
 
 /** Reset preferences */
-export const resetPreferencesSchema = z.object({
-  category: z.string().min(1).max(50).optional(),
-});
+export const resetPreferencesSchema = z
+  .object({
+    category: z.string().min(1).max(50).optional(),
+  })
+  .default({});
 
 export type ResetPreferences = z.infer<typeof resetPreferencesSchema>;
 
@@ -484,7 +492,7 @@ export type Preference = z.infer<typeof preferenceSchema>;
 // ============================================================================
 
 /** Audit log filter */
-export const auditLogFilterSchema = paginationSchema.merge(filterSchema).extend({
+export const auditLogFilterBaseSchema = paginationSchema.merge(filterSchema).extend({
   userId: z.string().uuid().optional(),
   action: z.string().optional(),
   entityType: z.string().optional(),
@@ -492,6 +500,7 @@ export const auditLogFilterSchema = paginationSchema.merge(filterSchema).extend(
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
 });
+export const auditLogFilterSchema = normalizeObjectInput(auditLogFilterBaseSchema);
 
 export type AuditLogFilter = z.infer<typeof auditLogFilterSchema>;
 
@@ -529,14 +538,18 @@ export type AuditLog = z.infer<typeof auditLogSchema>;
 // ============================================================================
 
 /** List group members schema */
-export const listGroupMembersSchema = paginationSchema.extend({
-  groupId: z.string().uuid(),
-});
+export const listGroupMembersSchema = normalizeObjectInput(
+  paginationSchema.extend({
+    groupId: z.string().uuid(),
+  })
+);
 
 export type ListGroupMembersInput = z.infer<typeof listGroupMembersSchema>;
 
-export const listGroupsCursorSchema = cursorPaginationSchema.merge(
-  z.object({ includeInactive: z.boolean().optional().default(false) })
+export const listGroupsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({ includeInactive: z.boolean().optional().default(false) })
+  )
 );
 export type ListGroupsCursorQuery = z.infer<typeof listGroupsCursorSchema>;
 
@@ -545,9 +558,11 @@ export type ListGroupsCursorQuery = z.infer<typeof listGroupsCursorSchema>;
 // ============================================================================
 
 /** User activity filter */
-export const userActivityFilterSchema = paginationSchema.merge(filterSchema).extend({
-  action: z.string().optional(),
-});
+export const userActivityFilterSchema = normalizeObjectInput(
+  paginationSchema.merge(filterSchema).extend({
+    action: z.string().optional(),
+  })
+);
 
 export type UserActivityFilter = z.infer<typeof userActivityFilterSchema>;
 

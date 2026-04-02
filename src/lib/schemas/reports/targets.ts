@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import { currencySchema, idParamSchema, paginationSchema } from '../_shared/patterns';
+import { currencySchema, idParamSchema, normalizeObjectInput, paginationSchema } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
@@ -110,14 +110,16 @@ export const listTargetsSchema = paginationSchema.extend({
 
 export type ListTargetsInput = z.infer<typeof listTargetsSchema>;
 
-export const listTargetsCursorSchema = cursorPaginationSchema.merge(
-  z.object({
-    metric: targetMetricSchema.optional(),
-    period: targetPeriodSchema.optional(),
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    search: z.string().max(255).optional(),
-  })
+export const listTargetsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      metric: targetMetricSchema.optional(),
+      period: targetPeriodSchema.optional(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      search: z.string().max(255).optional(),
+    })
+  )
 );
 export type ListTargetsCursorInput = z.infer<typeof listTargetsCursorSchema>;
 
@@ -189,10 +191,12 @@ export type TargetProgress = z.infer<typeof targetProgressSchema>;
 // GET TARGET PROGRESS
 // ============================================================================
 
-export const getTargetProgressSchema = z.object({
-  metric: targetMetricSchema.optional(),
-  period: targetPeriodSchema.optional(),
-});
+export const getTargetProgressSchema = z
+  .object({
+    metric: targetMetricSchema.optional(),
+    period: targetPeriodSchema.optional(),
+  })
+  .default({});
 
 export type GetTargetProgressInput = z.infer<typeof getTargetProgressSchema>;
 

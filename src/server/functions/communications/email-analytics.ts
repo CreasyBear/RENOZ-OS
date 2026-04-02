@@ -9,6 +9,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, sql, gte, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { emailHistory } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -26,7 +27,7 @@ import {
  * Calculates sent, delivered, opened, clicked, bounced counts and rates.
  */
 export const getEmailMetrics = createServerFn({ method: "GET" })
-  .inputValidator(emailMetricsFiltersSchema)
+  .inputValidator(normalizeObjectInput(emailMetricsFiltersSchema))
   .handler(async ({ data }): Promise<EmailMetricsResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
 

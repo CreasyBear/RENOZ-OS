@@ -7,11 +7,19 @@
  * @see src/server/functions/orders/orders.ts for updateOrderStatus
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
-import type { OrderStatus } from '@/lib/schemas/orders';
+import type {
+  ChangeOrderStatusManagedInput,
+  OrderStatus,
+  OrderStatusOption,
+  OrderWorkflowAction,
+} from '@/lib/schemas/orders';
 import {
+  changeOrderStatusManaged,
+  getOrderWorkflowOptions,
+  getOrderStatusOptions,
   updateOrderStatus,
   bulkUpdateOrderStatus,
 } from '@/server/functions/orders/orders';
@@ -42,6 +50,23 @@ export interface UseBulkUpdateOrderStatusOptions {
   onError?: (error: Error) => void;
 }
 
+export interface ManagedOrderStatusOptionsResult {
+  orderId: string;
+  currentStatus: OrderStatus;
+  options: OrderStatusOption[];
+}
+
+export interface OrderWorkflowOptionsResult {
+  orderId: string;
+  currentStatus: OrderStatus;
+  actions: OrderWorkflowAction[];
+}
+
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
 // ============================================================================
 // MUTATION HOOK
 // ============================================================================
@@ -69,7 +94,7 @@ export function useUpdateOrderStatus(options: UseUpdateOrderStatusOptions = {}) 
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
       queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
       // Cancellation releases serial allocations — availableSerials must refresh
@@ -78,6 +103,53 @@ export function useUpdateOrderStatus(options: UseUpdateOrderStatusOptions = {}) 
           queryKey: [...queryKeys.inventory.all, 'availableSerials'],
         });
       }
+      options.onSuccess?.();
+    },
+    onError: (error) => {
+      options.onError?.(error);
+    },
+  });
+}
+
+export function useManagedOrderStatusOptions(orderId: string, enabled = true) {
+  const getOptionsFn = useServerFn(getOrderStatusOptions);
+
+  return useQuery<ManagedOrderStatusOptionsResult>({
+    queryKey: [...queryKeys.orders.detail(orderId), 'managed-status-options'],
+    queryFn: () => getOptionsFn({ data: { orderId } }),
+    enabled: enabled && !!orderId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useOrderWorkflowOptions(orderId: string, enabled = true) {
+  const getOptionsFn = useServerFn(getOrderWorkflowOptions);
+
+  return useQuery<OrderWorkflowOptionsResult>({
+    queryKey: [...queryKeys.orders.detail(orderId), 'workflow-options'],
+    queryFn: () => getOptionsFn({ data: { orderId } }),
+    enabled: enabled && !!orderId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useChangeOrderStatusManaged(options: UseUpdateOrderStatusOptions = {}) {
+  const queryClient = useQueryClient();
+  const changeFn = useServerFn(changeOrderStatusManaged);
+
+  return useMutation({
+    mutationFn: (input: ChangeOrderStatusManagedInput) => changeFn({ data: input }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.withCustomer(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.orders.detail(variables.orderId), 'managed-status-options'],
+      });
+      invalidateOrderCollectionQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
       options.onSuccess?.();
     },
     onError: (error) => {
@@ -101,7 +173,7 @@ export function useBulkUpdateOrderStatus(options: UseBulkUpdateOrderStatusOption
         data: input,
       }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
       queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });

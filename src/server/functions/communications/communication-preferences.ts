@@ -9,6 +9,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { eq, and, desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns'
 import { contacts, customerActivities } from 'drizzle/schema'
 import {
   updatePreferencesSchema,
@@ -27,7 +28,7 @@ import { NotFoundError } from '@/lib/server/errors'
  * Get communication preferences for a contact
  */
 export const getContactPreferences = createServerFn({ method: 'GET' })
-  .inputValidator(getPreferencesSchema)
+  .inputValidator(normalizeObjectInput(getPreferencesSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -164,7 +165,7 @@ export const updateContactPreferences = createServerFn({ method: 'POST' })
  * Get preference change history
  */
 export const getPreferenceHistory = createServerFn({ method: 'GET' })
-  .inputValidator(getPreferenceHistorySchema)
+  .inputValidator(normalizeObjectInput(getPreferenceHistorySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 

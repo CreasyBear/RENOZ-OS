@@ -12,44 +12,36 @@ import { useNavigate } from '@tanstack/react-router';
 import { Trophy, Package, AlertTriangle, Boxes, Settings2 } from 'lucide-react';
 import { MetricCard } from '@/components/shared/metric-card';
 import { FormatAmount } from '@/components/shared/format';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  METRIC_UNAVAILABLE_VALUE,
+  getSummaryMetricSubtitle,
+} from '@/lib/metrics/metric-display';
 import { TrackedProductsDialog } from './tracked-products-dialog';
 import type {
   TrackedProduct,
   TrackedProductWithInventory,
 } from '@/lib/schemas/dashboard/tracked-products';
+import type { OverviewStatsData } from './overview-metrics';
 
 // Re-export for convenience
 export type { TrackedProductWithInventory };
+export type { OverviewStatsData } from './overview-metrics';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface OverviewStatsData {
-  wonThisMonth: {
-    count: number;
-    value: number;
-    changePercent?: number;
-  };
-  ordersPending: {
-    count: number;
-    oldestDays?: number;
-  };
-  lowStockItems: {
-    count: number;
-    criticalCount?: number;
-  };
-}
-
 export interface OverviewStatsProps {
   data?: OverviewStatsData | null;
-  isLoading?: boolean;
+  trackedProductsLoading?: boolean;
+  summaryWarning?: string | null;
   // Tracked products from hook
   trackedProducts?: TrackedProductWithInventory[];
   onTrackedProductsChange?: (products: TrackedProduct[]) => void;
@@ -62,7 +54,8 @@ export interface OverviewStatsProps {
 
 export function OverviewStats({
   data,
-  isLoading,
+  trackedProductsLoading = false,
+  summaryWarning,
   trackedProducts = [],
   onTrackedProductsChange,
   maxTrackedProducts = 5,
@@ -70,24 +63,37 @@ export function OverviewStats({
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Build subtitle for won this month
-  const wonSubtitle = data?.wonThisMonth
-    ? `${data.wonThisMonth.count} deal${data.wonThisMonth.count !== 1 ? 's' : ''} closed`
-    : 'No deals yet';
+  const wonSummaryState = data?.wonThisMonth.summaryState ?? 'loading';
+  const ordersSummaryState = data?.ordersPending.summaryState ?? 'loading';
+  const lowStockSummaryState = data?.lowStockItems.summaryState ?? 'loading';
+
+  const wonSubtitle = getSummaryMetricSubtitle({
+    summaryState: wonSummaryState,
+    readySubtitle:
+      data?.wonThisMonth.count === 0
+        ? 'No deals yet'
+        : `${data?.wonThisMonth.count ?? 0} deal${data?.wonThisMonth.count !== 1 ? 's' : ''} closed`,
+  });
 
   // Build subtitle for orders pending
-  const ordersSubtitle = data?.ordersPending?.oldestDays
-    ? `Oldest: ${data.ordersPending.oldestDays} days ago`
-    : data?.ordersPending?.count === 0
-      ? 'All fulfilled'
-      : 'Ready to ship';
+  const ordersSubtitle = getSummaryMetricSubtitle({
+    summaryState: ordersSummaryState,
+    readySubtitle: data?.ordersPending?.oldestDays
+      ? `Oldest: ${data.ordersPending.oldestDays} days ago`
+      : data?.ordersPending?.count === 0
+        ? 'All fulfilled'
+        : 'Across fulfillment stages',
+  });
 
   // Build subtitle for low stock
-  const lowStockSubtitle = data?.lowStockItems?.criticalCount
-    ? `${data.lowStockItems.criticalCount} at zero stock`
-    : data?.lowStockItems?.count === 0
-      ? 'Stock levels healthy'
-      : 'Below reorder point';
+  const lowStockSubtitle = getSummaryMetricSubtitle({
+    summaryState: lowStockSummaryState,
+    readySubtitle: data?.lowStockItems?.criticalCount
+      ? `${data.lowStockItems.criticalCount} at zero stock`
+      : data?.lowStockItems?.count === 0
+        ? 'Stock levels healthy'
+        : 'Below reorder point',
+  });
 
   // Calculate total cards (3 core + tracked products)
   const totalCards = 3 + trackedProducts.length;
@@ -105,6 +111,13 @@ export function OverviewStats({
   return (
     <>
       <div className="space-y-2">
+        {summaryWarning ? (
+          <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{summaryWarning}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Header with configure button */}
         {onTrackedProductsChange && (
           <div className="flex justify-end">
@@ -134,31 +147,42 @@ export function OverviewStats({
           {/* Core metrics */}
           <MetricCard
             title="Won This Month"
-            value={<FormatAmount amount={data?.wonThisMonth?.value ?? 0} currency="AUD" />}
+            value={
+              data?.wonThisMonth?.value != null
+                ? <FormatAmount amount={data.wonThisMonth.value} currency="AUD" />
+                : METRIC_UNAVAILABLE_VALUE
+            }
             subtitle={wonSubtitle}
             icon={Trophy}
             iconClassName="text-emerald-600"
             delta={data?.wonThisMonth?.changePercent}
-            onClick={() => navigate({ to: '/pipeline', search: { status: 'won' } })}
-            isLoading={isLoading}
+            isLoading={wonSummaryState === 'loading'}
           />
           <MetricCard
             title="Orders Pending"
-            value={String(data?.ordersPending?.count ?? 0)}
+            value={
+              data?.ordersPending?.count != null
+                ? String(data.ordersPending.count)
+                : METRIC_UNAVAILABLE_VALUE
+            }
             subtitle={ordersSubtitle}
             icon={Package}
             alert={(data?.ordersPending?.count ?? 0) > 0}
-            onClick={() => navigate({ to: '/orders', search: { status: 'confirmed' } })}
-            isLoading={isLoading}
+            onClick={() => navigate({ to: '/orders/fulfillment' })}
+            isLoading={ordersSummaryState === 'loading'}
           />
           <MetricCard
             title="Low Stock"
-            value={String(data?.lowStockItems?.count ?? 0)}
+            value={
+              data?.lowStockItems?.count != null
+                ? String(data.lowStockItems.count)
+                : METRIC_UNAVAILABLE_VALUE
+            }
             subtitle={lowStockSubtitle}
             icon={AlertTriangle}
             alert={(data?.lowStockItems?.count ?? 0) > 0}
             onClick={() => navigate({ to: '/inventory/alerts' })}
-            isLoading={isLoading}
+            isLoading={lowStockSummaryState === 'loading'}
           />
 
           {/* User-tracked products */}
@@ -172,7 +196,7 @@ export function OverviewStats({
               iconClassName="text-blue-600"
               alert={product.quantity < 10}
               onClick={() => navigate({ to: '/products/$productId', params: { productId: product.id } })}
-              isLoading={isLoading}
+              isLoading={trackedProductsLoading}
             />
           ))}
         </div>

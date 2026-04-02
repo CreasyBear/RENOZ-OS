@@ -13,6 +13,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, desc, asc, gte, lte, count, avg, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { csatResponses } from 'drizzle/schema/support/csat-responses';
 import { issues } from 'drizzle/schema/support/issues';
 import { users } from 'drizzle/schema/users';
@@ -201,7 +202,7 @@ export const submitInternalFeedback = createServerFn({ method: 'POST' })
 // ============================================================================
 
 export const getIssueFeedback = createServerFn({ method: 'GET' })
-  .inputValidator(getIssueFeedbackSchema)
+  .inputValidator(normalizeObjectInput(getIssueFeedbackSchema))
   .handler(async ({ data }): Promise<CsatResponseResponse | null> => {
     const ctx = await withAuth({ permission: PERMISSIONS.support.read });
 
@@ -601,7 +602,7 @@ import {
 } from '@/lib/schemas/support/csat-responses';
 
 export const validateFeedbackToken = createServerFn({ method: 'GET' })
-  .inputValidator(validateFeedbackTokenSchema)
+  .inputValidator(normalizeObjectInput(validateFeedbackTokenSchema))
   .handler(async ({ data }): Promise<ValidateFeedbackTokenResponse> => {
     // No auth required - public endpoint
 

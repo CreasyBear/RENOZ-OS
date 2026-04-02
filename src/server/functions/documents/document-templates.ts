@@ -13,6 +13,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import {
   documentTemplates,
   DOCUMENT_TYPES,
@@ -34,6 +35,8 @@ import { logAuditEvent } from '../_shared/audit-logs-internal';
 const getDocumentTemplateSchema = z.object({
   documentType: z.enum(DOCUMENT_TYPES as unknown as [string, ...string[]]),
 });
+
+const getAllDocumentTemplatesSchema = normalizeObjectInput(z.object({}));
 
 /**
  * Schema for updating a document template.
@@ -125,7 +128,7 @@ const _getDocumentTemplateCached = cache(
  * Returns defaults if no template exists for the organization.
  */
 export const getDocumentTemplate = createServerFn({ method: "GET" })
-  .inputValidator(getDocumentTemplateSchema)
+  .inputValidator(normalizeObjectInput(getDocumentTemplateSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings?.read });
     return _getDocumentTemplateCached(data.documentType, ctx.organizationId);
@@ -269,7 +272,7 @@ export const updateDocumentTemplate = createServerFn({ method: "POST" })
  * Useful for settings pages that show all template configurations.
  */
 export const getAllDocumentTemplates = createServerFn({ method: "GET" })
-  .inputValidator(z.object({}).optional())
+  .inputValidator(getAllDocumentTemplatesSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings?.read });
 

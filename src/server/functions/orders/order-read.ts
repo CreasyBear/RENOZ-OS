@@ -21,6 +21,7 @@ import {
   addresses,
   customers,
   orderLineItems,
+  orderShipments,
   orders,
   products,
 } from 'drizzle/schema';
@@ -258,11 +259,15 @@ export const listOrders = createServerFn({ method: 'GET' })
     const orderColumn =
       sortBy === 'orderNumber'
         ? orders.orderNumber
-        : sortBy === 'total'
-          ? orders.total
-          : sortBy === 'status'
-            ? orders.status
-            : orders.createdAt;
+        : sortBy === 'customer'
+          ? customers.name
+          : sortBy === 'orderDate'
+            ? orders.orderDate
+            : sortBy === 'total'
+              ? orders.total
+              : sortBy === 'status'
+                ? orders.status
+                : orders.createdAt;
     const orderDir = sortOrder === 'asc' ? asc : desc;
 
     const offset = (page - 1) * limit;
@@ -297,7 +302,11 @@ export const listOrders = createServerFn({ method: 'GET' })
       .leftJoin(orderLineItems, eq(orders.id, orderLineItems.orderId))
       .where(and(...conditions))
       .groupBy(orders.id, customers.id, customers.name)
-      .orderBy(orderDir(orderColumn))
+      .orderBy(
+        orderDir(orderColumn),
+        orderDir(orders.createdAt),
+        orderDir(orders.id)
+      )
       .limit(limit)
       .offset(offset);
 
@@ -336,6 +345,54 @@ export const getOrderStats = createServerFn({ method: 'GET' }).handler(async () 
     pendingOrders: stats?.pendingOrders ?? 0,
     unpaidOrders: stats?.unpaidOrders ?? 0,
     draftOrders: stats?.draftOrders ?? 0,
+  };
+});
+
+export const getFulfillmentDashboardSummary = createServerFn({ method: 'GET' }).handler(async () => {
+  const ctx = await withAuth();
+
+  const [orderStats, shipmentStats] = await Promise.all([
+    db
+      .select({
+        toPick: sql<number>`count(
+          CASE
+            WHEN ${orders.status} IN ('confirmed', 'picking') THEN 1
+          END
+        )::int`,
+        readyToShip: sql<number>`count(CASE WHEN ${orders.status} = 'picked' THEN 1 END)::int`,
+        overdue: sql<number>`count(
+          CASE
+            WHEN ${orders.status} IN ('confirmed', 'picking', 'picked')
+              AND ${orders.orderDate} < CURRENT_DATE - INTERVAL '3 days'
+            THEN 1
+          END
+        )::int`,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      ),
+    db
+      .select({
+        inTransit: sql<number>`count(
+          CASE
+            WHEN ${orderShipments.status} IN ('pending', 'in_transit', 'out_for_delivery', 'failed')
+            THEN 1
+          END
+        )::int`,
+      })
+      .from(orderShipments)
+      .where(eq(orderShipments.organizationId, ctx.organizationId)),
+  ]);
+
+  return {
+    toPick: orderStats[0]?.toPick ?? 0,
+    readyToShip: orderStats[0]?.readyToShip ?? 0,
+    overdue: orderStats[0]?.overdue ?? 0,
+    inTransit: shipmentStats[0]?.inTransit ?? 0,
   };
 });
 

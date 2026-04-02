@@ -13,6 +13,7 @@ import { eq, and, sql, desc, asc, isNull, isNotNull, gte, lte, inArray, lt, ilik
 import { cache } from 'react';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   inventory,
   inventoryMovements,
@@ -38,6 +39,7 @@ import {
   stockTransferSchema,
   inventoryStatusSchema,
   DEFAULT_LOW_STOCK_THRESHOLD,
+  manualReceiptReasonSchema,
   type ListInventoryResult,
   type ListMovementsResult,
   type InventoryWithRelations,
@@ -379,10 +381,12 @@ export const listInventory = createServerFn({ method: 'GET' })
  */
 export const quickSearchInventory = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      q: z.string().min(2),
-      limit: z.number().int().positive().default(10),
-    })
+    normalizeObjectInput(
+      z.object({
+        q: z.string().min(2),
+        limit: z.number().int().positive().default(10),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
@@ -538,7 +542,7 @@ const _getInventoryItem = cache(
 );
 
 export const getInventoryItem = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     return _getInventoryItem(data.id, ctx.organizationId);
@@ -1703,13 +1707,22 @@ const receiveInventorySchema = z.object({
   locationId: z.string().uuid(),
   quantity: z.number().int().positive(),
   unitCost: z.number().min(0),
+  receiptReason: manualReceiptReasonSchema,
   serialNumber: z.string().optional(),
   batchNumber: z.string().optional(),
   lotNumber: z.string().optional(),
   expiryDate: z.string().optional(),
-  referenceId: z.string().uuid().optional(),
-  referenceType: z.string().optional(),
   notes: z.string().optional(),
+  referenceType: z.string().optional(),
+  referenceId: z.string().uuid().optional(),
+}).superRefine((data, ctx) => {
+  if (data.receiptReason === 'other_exception' && !data.notes?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['notes'],
+      message: 'Notes are required when using Other Exception.',
+    });
+  }
 });
 
 /**
@@ -1843,8 +1856,11 @@ export const receiveInventory = createServerFn({ method: 'POST' })
           newQuantity,
           unitCost: data.unitCost,
           totalCost: data.quantity * data.unitCost,
-          referenceType: data.referenceType,
+          referenceType: data.referenceType ?? 'manual_receive',
           referenceId: data.referenceId,
+          metadata: {
+            receiptReason: data.receiptReason,
+          },
           notes: data.notes,
           createdBy: ctx.user.id,
         })
@@ -1856,8 +1872,7 @@ export const receiveInventory = createServerFn({ method: 'POST' })
         quantity: data.quantity,
         receivedAt: new Date(),
         unitCost: data.unitCost,
-        referenceType: data.referenceType ?? 'adjustment',
-        referenceId: data.referenceId,
+        referenceType: 'manual_receive',
         currency: 'AUD',
         createdBy: ctx.user.id,
         costComponents: [
@@ -1867,7 +1882,10 @@ export const receiveInventory = createServerFn({ method: 'POST' })
             amountTotal: data.quantity * data.unitCost,
             amountPerUnit: data.unitCost,
             quantityBasis: data.quantity,
-            metadata: { source: 'inventory_receive' },
+            metadata: {
+              source: 'inventory_receive',
+              receiptReason: data.receiptReason,
+            },
           },
         ],
       });
@@ -1918,8 +1936,7 @@ export const receiveInventory = createServerFn({ method: 'POST' })
             locationId: data.locationId,
             quantity: data.quantity,
             unitCost: data.unitCost,
-            referenceType: data.referenceType,
-            referenceId: data.referenceId,
+            receiptReason: data.receiptReason,
           },
         });
       }
@@ -2318,7 +2335,9 @@ export const getStockByLocation = createServerFn({ method: 'GET' }).handler(asyn
  * Maps movement types to receipt/transfer/allocation for simpler UI.
  */
 export const getRecentMovementsTimeline = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ limit: z.number().int().min(1).max(50).default(10) }))
+  .inputValidator(
+    normalizeObjectInput(z.object({ limit: z.number().int().min(1).max(50).default(10) }))
+  )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
@@ -2801,10 +2820,12 @@ export interface GetAvailableSerialsResult {
  */
 export const getAvailableSerials = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      locationId: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        locationId: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });

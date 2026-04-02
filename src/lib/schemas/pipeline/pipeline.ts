@@ -14,6 +14,7 @@ import {
   filterSchema,
   idParamSchema,
   currencySchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
@@ -187,18 +188,39 @@ export const opportunityFilterSchema = filterSchema.extend({
 
 export type OpportunityFilter = z.infer<typeof opportunityFilterSchema>;
 
+export const OPPORTUNITY_SORT_FIELDS = [
+  'title',
+  'stage',
+  'value',
+  'probability',
+  'expectedCloseDate',
+  'daysInStage',
+  'createdAt',
+] as const;
+
+export const opportunitySortFieldSchema = z.enum(OPPORTUNITY_SORT_FIELDS);
+
+export type OpportunitySortField = z.infer<typeof opportunitySortFieldSchema>;
+
 // ============================================================================
 // OPPORTUNITY LIST QUERY
 // ============================================================================
 
-export const opportunityListQuerySchema = paginationSchema.merge(opportunityFilterSchema);
+export const opportunityListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(opportunityFilterSchema).extend({
+    sortBy: opportunitySortFieldSchema.optional(),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+);
 
 export type OpportunityListQuery = z.infer<typeof opportunityListQuerySchema>;
 
 /**
  * Cursor-based pagination query for opportunities (recommended for large datasets).
  */
-export const opportunityCursorQuerySchema = cursorPaginationSchema.merge(opportunityFilterSchema);
+export const opportunityCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(opportunityFilterSchema)
+);
 
 export type OpportunityCursorQuery = z.infer<typeof opportunityCursorQuerySchema>;
 
@@ -239,10 +261,12 @@ export const winLossReasonSchema = z.object({
 
 export type WinLossReason = z.infer<typeof winLossReasonSchema>;
 
-export const winLossReasonFilterSchema = z.object({
-  type: winLossReasonTypeSchema.optional(),
-  isActive: z.coerce.boolean().optional(),
-});
+export const winLossReasonFilterSchema = z
+  .object({
+    type: winLossReasonTypeSchema.optional(),
+    isActive: z.coerce.boolean().optional(),
+  })
+  .default({});
 
 export type WinLossReasonFilter = z.infer<typeof winLossReasonFilterSchema>;
 
@@ -299,6 +323,11 @@ export const opportunityActivityFilterSchema = z.object({
 });
 
 export type OpportunityActivityFilter = z.infer<typeof opportunityActivityFilterSchema>;
+
+/** GET list activities: pagination defaults must apply when input is omitted */
+export const listOpportunityActivitiesQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(opportunityActivityFilterSchema)
+);
 
 // ============================================================================
 // QUOTE LINE ITEM
@@ -380,6 +409,43 @@ export const sendQuoteSchema = z.object({
 
 export type SendQuote = z.infer<typeof sendQuoteSchema>;
 
+export type QuoteWorkflowStageStatus = 'completed' | 'failed' | 'skipped';
+
+export interface QuoteWorkflowStage {
+  status: QuoteWorkflowStageStatus;
+  message?: string;
+}
+
+export interface GenerateQuotePdfResult {
+  quoteVersionId: string;
+  pdfUrl?: string;
+  filename: string;
+  fileSize: number;
+  checksum: string;
+  status: 'completed';
+}
+
+export interface SendQuoteResult {
+  quoteVersionId: string;
+  recipientEmail: string;
+  recipientName?: string;
+  subject: string;
+  message: string;
+  ccEmails?: string[];
+  pdfUrl?: string;
+  emailHistoryId?: string;
+  resendMessageId?: string;
+  success: boolean;
+  status: 'sent' | 'failed';
+  error?: string;
+  stages: {
+    pdf: QuoteWorkflowStage;
+    emailHistory: QuoteWorkflowStage;
+    email: QuoteWorkflowStage;
+    stageBump: QuoteWorkflowStage;
+  };
+}
+
 // ============================================================================
 // QUOTES (Legacy)
 // ============================================================================
@@ -432,7 +498,9 @@ export const quoteFilterSchema = filterSchema.extend({
 
 export type QuoteFilter = z.infer<typeof quoteFilterSchema>;
 
-export const quoteListQuerySchema = paginationSchema.merge(quoteFilterSchema);
+export const quoteListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(quoteFilterSchema)
+);
 
 export type QuoteListQuery = z.infer<typeof quoteListQuerySchema>;
 
@@ -458,18 +526,20 @@ export const pipelineMetricsSchema = z.object({
 
 export type PipelineMetrics = z.infer<typeof pipelineMetricsSchema>;
 
-export const pipelineMetricsQuerySchema = z.object({
-  dateFrom: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  dateTo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  assignedTo: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
-});
+export const pipelineMetricsQuerySchema = normalizeObjectInput(
+  z.object({
+    dateFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // YYYY-MM-DD format
+    dateTo: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // YYYY-MM-DD format
+    assignedTo: z.string().uuid().optional(),
+    customerId: z.string().uuid().optional(),
+  })
+);
 
 export type PipelineMetricsQuery = z.infer<typeof pipelineMetricsQuerySchema>;
 
@@ -493,15 +563,17 @@ export const forecastGroupByValues = ['month', 'quarter', 'week', 'rep', 'custom
 export const forecastGroupBySchema = z.enum(forecastGroupByValues);
 export type ForecastGroupBy = z.infer<typeof forecastGroupBySchema>;
 
-export const forecastQuerySchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
-  groupBy: forecastGroupBySchema.default('month'),
-  includeWeighted: z.coerce.boolean().default(true),
-  assignedTo: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
-  stages: z.array(opportunityStageSchema).optional(),
-});
+export const forecastQuerySchema = normalizeObjectInput(
+  z.object({
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
+    groupBy: forecastGroupBySchema.default('month'),
+    includeWeighted: z.coerce.boolean().default(true),
+    assignedTo: z.string().uuid().optional(),
+    customerId: z.string().uuid().optional(),
+    stages: z.array(opportunityStageSchema).optional(),
+  })
+);
 
 export type ForecastQuery = z.infer<typeof forecastQuerySchema>;
 
@@ -519,17 +591,19 @@ export const forecastPeriodSchema = z.object({
 
 export type ForecastPeriod = z.infer<typeof forecastPeriodSchema>;
 
-export const velocityQuerySchema = z.object({
-  dateFrom: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  dateTo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD format
-  stages: z.array(opportunityStageSchema).optional(),
-});
+export const velocityQuerySchema = normalizeObjectInput(
+  z.object({
+    dateFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // YYYY-MM-DD format
+    dateTo: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // YYYY-MM-DD format
+    stages: z.array(opportunityStageSchema).optional(),
+  })
+);
 
 export type VelocityQuery = z.infer<typeof velocityQuerySchema>;
 
@@ -545,11 +619,13 @@ export const velocityMetricsSchema = z.object({
 
 export type VelocityMetrics = z.infer<typeof velocityMetricsSchema>;
 
-export const revenueAttributionQuerySchema = z.object({
-  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
-  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
-  groupBy: z.enum(['rep', 'customer', 'source', 'month']).default('rep'),
-});
+export const revenueAttributionQuerySchema = normalizeObjectInput(
+  z.object({
+    dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
+    dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
+    groupBy: z.enum(['rep', 'customer', 'source', 'month']).default('rep'),
+  })
+);
 
 export type RevenueAttributionQuery = z.infer<typeof revenueAttributionQuerySchema>;
 

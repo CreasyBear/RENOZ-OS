@@ -1,7 +1,7 @@
 /**
  * Receiving Page Component
  *
- * Goods receiving interface with form and history.
+ * Manual non-PO receiving interface with form and history.
  *
  * @source products from useProducts hook
  * @source locations from useLocations hook
@@ -10,9 +10,12 @@
  * @see src/routes/_authenticated/inventory/receiving.tsx - Route definition
  */
 import { useState, useCallback } from "react";
-import { History, Plus } from "lucide-react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { ArrowLeft, History, Plus, TriangleAlert } from "lucide-react";
 import { PageLayout } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ReceivingForm } from "@/components/domain/inventory/receiving/receiving-form";
 import { ReceivingHistory, type ReceivingRecord } from "@/components/domain/inventory/receiving/receiving-history";
 import {
@@ -20,7 +23,7 @@ import {
   useMovements,
   useReceiveInventory,
 } from "@/hooks/inventory";
-import { useProducts } from "@/hooks/products";
+import { useProduct, useProducts } from "@/hooks/products";
 import type { ProductWithInventory } from "@/lib/schemas/products";
 import type { HookWarehouseLocation } from "@/lib/schemas/inventory";
 import type { MovementWithRelations, ListMovementsResult } from "@/lib/schemas/inventory";
@@ -51,6 +54,8 @@ type ReceiveInventoryInput = Parameters<typeof receiveInventory>[0]['data'];
 // ============================================================================
 
 export default function ReceivingPage() {
+  const navigate = useNavigate();
+  const search = useSearch({ from: "/_authenticated/inventory/receiving" });
   const [activeTab, setActiveTab] = useState<"receive" | "history">("receive");
   const [productSearch, setProductSearch] = useState("");
 
@@ -59,6 +64,11 @@ export default function ReceivingPage() {
     data: productsData,
     isLoading: isLoadingProducts,
   } = useProducts({ search: productSearch, pageSize: 50 });
+  const {
+    data: selectedProductData,
+    error: selectedProductError,
+    isLoading: isLoadingSelectedProduct,
+  } = useProduct(search.productId ?? "", !!search.productId);
 
   const { locations: locationsData, isLoading: isLoadingLocations } = useLocations({
     autoFetch: true,
@@ -73,13 +83,30 @@ export default function ReceivingPage() {
   const receiveMutation = useReceiveInventory();
 
   // Transform data for components
-  const products: Product[] = (productsData?.products ?? []).map((p: ProductWithInventory) => ({
+  const productsFromSearch: Product[] = (productsData?.products ?? []).map((p: ProductWithInventory) => ({
     id: p.id,
     sku: p.sku,
     name: p.name,
     costPrice: p.costPrice,
     isSerialized: p.isSerialized,
   }));
+
+  const selectedProduct = selectedProductData?.product
+    ? {
+        id: selectedProductData.product.id,
+        sku: selectedProductData.product.sku,
+        name: selectedProductData.product.name,
+        costPrice: selectedProductData.product.costPrice,
+        isSerialized: selectedProductData.product.isSerialized,
+      }
+    : null;
+
+  const products: Product[] = selectedProduct && !productsFromSearch.some((item) => item.id === selectedProduct.id)
+    ? [selectedProduct, ...productsFromSearch]
+    : productsFromSearch;
+  const hasProductContext = search.source === "product_detail" && !!search.productId;
+  const hasContextFailure =
+    hasProductContext && !isLoadingSelectedProduct && (!!selectedProductError || !selectedProduct);
 
   const locations: Location[] = locationsData.map((l: HookWarehouseLocation) => ({
     id: l.id,
@@ -110,9 +137,37 @@ export default function ReceivingPage() {
   const handleReceive = useCallback(
     async (data: ReceiveInventoryInput) => {
       await receiveMutation.mutateAsync(data);
+      if (search.returnToProductId) {
+        navigate({
+          to: "/products/$productId",
+          params: { productId: search.returnToProductId },
+          replace: true,
+        });
+      }
     },
-    [receiveMutation]
+    [navigate, receiveMutation, search.returnToProductId]
   );
+
+  const handleCancel = useCallback(() => {
+    if (search.returnToProductId) {
+      navigate({
+        to: "/products/$productId",
+        params: { productId: search.returnToProductId },
+        replace: true,
+      });
+      return;
+    }
+
+    navigate({ to: "/inventory" });
+  }, [navigate, search.returnToProductId]);
+
+  const handleContinueGenericReceive = useCallback(() => {
+    navigate({
+      to: "/inventory/receiving",
+      search: {},
+      replace: true,
+    });
+  }, [navigate]);
 
   // Handle product search
   const handleProductSearch = useCallback((query: string) => {
@@ -121,16 +176,50 @@ export default function ReceivingPage() {
 
   // Get default location (first one or marked as default)
   const defaultLocation = locations.find((l) => l.code === "MAIN") ?? locations[0];
+  const headerTitle = hasProductContext && selectedProduct
+    ? `Receive Inventory for ${selectedProduct.name}`
+    : "Receive Inventory";
+  const headerDescription = hasProductContext && selectedProduct
+    ? `Record non-PO inbound stock for ${selectedProduct.sku ? `${selectedProduct.name} (${selectedProduct.sku})` : selectedProduct.name}`
+    : "Record non-PO inbound stock and update inventory levels";
 
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
-        title="Receive Inventory"
-        description="Record incoming goods and update stock levels"
+        title={headerTitle}
+        description={headerDescription}
+        actions={
+          search.returnToProductId ? (
+            <Button variant="outline" onClick={handleCancel}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Product
+            </Button>
+          ) : undefined
+        }
       />
 
       <PageLayout.Content>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        {hasContextFailure ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product context is no longer available</AlertTitle>
+            <AlertDescription>
+              The product you launched this receive flow from could not be loaded. You can return
+              to the product detail view or continue with a generic non-PO receipt.
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                {search.returnToProductId ? (
+                  <Button variant="outline" onClick={handleCancel}>
+                    Back to Product
+                  </Button>
+                ) : null}
+                <Button onClick={handleContinueGenericReceive}>Continue Without Product Context</Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!hasContextFailure ? (
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           <TabsList className="mb-6">
             <TabsTrigger value="receive">
               <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -150,8 +239,11 @@ export default function ReceivingPage() {
                 isLoadingProducts={isLoadingProducts}
                 isLoadingLocations={isLoadingLocations}
                 onSubmit={handleReceive}
+                onCancel={handleCancel}
                 onProductSearch={handleProductSearch}
                 defaultLocationId={defaultLocation?.id}
+                defaultProductId={search.productId}
+                lockProductSelection={hasProductContext && !!selectedProduct}
                 submitError={receiveMutation.error?.message ?? null}
               />
 
@@ -171,7 +263,8 @@ export default function ReceivingPage() {
               showTitle={false}
             />
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        ) : null}
       </PageLayout.Content>
     </PageLayout>
   );

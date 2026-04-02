@@ -23,6 +23,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
   const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || 'support@renoz.energy';
 
   React.useEffect(() => {
+    setAuthError(null);
+
     if (reason === 'invalid_user') {
       setAuthError('Your account is not fully set up. Please contact support.');
       return;

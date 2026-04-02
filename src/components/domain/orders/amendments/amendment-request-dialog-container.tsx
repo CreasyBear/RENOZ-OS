@@ -44,6 +44,18 @@ export interface AmendmentRequestDialogContainerProps {
   mode?: "request-and-apply" | "request-only";
 }
 
+export type AmendmentSubmissionStage =
+  | "idle"
+  | "requesting"
+  | "requested"
+  | "approving"
+  | "approved"
+  | "applying"
+  | "applied"
+  | "failed_request"
+  | "failed_approval"
+  | "failed_apply";
+
 const EMPTY_FORM_DEFAULTS: AmendmentRequestFormData = {
   amendmentType: "quantity_change",
   reason: "",
@@ -98,6 +110,7 @@ export function AmendmentRequestDialogContainer({
 
   const [showPickOverlay, setShowPickOverlay] = useState(false);
   const hasInitialized = useRef(false);
+  const [submissionStage, setSubmissionStage] = useState<AmendmentSubmissionStage>("idle");
 
   const requestAmendmentMutation = useRequestAmendment();
   const approveAmendmentMutation = useApproveAmendment();
@@ -126,6 +139,7 @@ export function AmendmentRequestDialogContainer({
     },
     onSubmit: async (values) => {
       setStepError(null);
+      setSubmissionStage("requesting");
       let amendment: Amendment;
       try {
         amendment = (await requestAmendmentMutation.mutateAsync({
@@ -141,9 +155,11 @@ export function AmendmentRequestDialogContainer({
           })),
         })) as Amendment;
       } catch (e) {
+        setSubmissionStage("failed_request");
         setStepError(`Request failed: ${e instanceof Error ? e.message : String(e)}`);
         return;
       }
+      setSubmissionStage("requested");
       if (mode === "request-only") {
         toastSuccess("Amendment requested and submitted for approval");
         onOpenChange(false);
@@ -151,17 +167,23 @@ export function AmendmentRequestDialogContainer({
         return;
       }
       try {
+        setSubmissionStage("approving");
         await approveAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
       } catch (e) {
+        setSubmissionStage("failed_approval");
         setStepError(`Approval failed: ${e instanceof Error ? e.message : String(e)}`);
         return;
       }
+      setSubmissionStage("approved");
       try {
+        setSubmissionStage("applying");
         await applyAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
       } catch (e) {
+        setSubmissionStage("failed_apply");
         setStepError(e instanceof Error ? e.message : `Apply failed: ${String(e)}`);
         return;
       }
+      setSubmissionStage("applied");
       toastSuccess("Amendment approved and applied");
       onOpenChange(false);
       onSuccess?.();
@@ -447,7 +469,10 @@ export function AmendmentRequestDialogContainer({
   useEffect(() => {
     if (!open) {
       hasInitialized.current = false;
-      const id = setTimeout(() => setStepError(null), 0);
+      const id = setTimeout(() => {
+        setSubmissionStage("idle");
+        setStepError(null);
+      }, 0);
       return () => clearTimeout(id);
     }
   }, [open]);
@@ -533,6 +558,7 @@ export function AmendmentRequestDialogContainer({
       form={form}
       formatCurrencyDisplay={formatCurrencyDisplay}
       submitError={submitError}
+      submissionStage={submissionStage}
       isSubmitting={isSubmitting}
       showPickOverlay={showPickOverlay}
       setShowPickOverlay={setShowPickOverlay}

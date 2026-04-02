@@ -13,6 +13,11 @@ import { z } from 'zod';
 import { lazy, Suspense } from 'react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
+import {
+  DEFAULT_WARRANTY_SORT_DIRECTION,
+  DEFAULT_WARRANTY_SORT_FIELD,
+  WARRANTY_SORT_FIELDS,
+} from '@/components/domain/warranty/warranty-sorting';
 
 const WarrantiesPage = lazy(() => import('./warranties-page'));
 
@@ -24,8 +29,12 @@ export const searchSchema = z.object({
     .optional(),
   page: z.coerce.number().min(1).default(1).catch(1),
   pageSize: z.coerce.number().min(10).max(100).default(20).catch(20),
-  sortBy: z.enum(['createdAt', 'expiryDate', 'status']).default('expiryDate').catch('expiryDate'),
-  sortOrder: z.enum(['asc', 'desc']).default('asc').catch('asc'),
+  sortBy: z.enum(WARRANTY_SORT_FIELDS)
+    .default(DEFAULT_WARRANTY_SORT_FIELD)
+    .catch(DEFAULT_WARRANTY_SORT_FIELD),
+  sortOrder: z.enum(['asc', 'desc'])
+    .default(DEFAULT_WARRANTY_SORT_DIRECTION)
+    .catch(DEFAULT_WARRANTY_SORT_DIRECTION),
 });
 
 export type SearchParams = z.infer<typeof searchSchema>;
@@ -37,7 +46,12 @@ export const Route = createFileRoute('/_authenticated/support/warranties/')({
     const search: SearchParams =
       rawSearch && typeof rawSearch === 'object' && 'page' in rawSearch
         ? rawSearch as SearchParams
-        : { page: 1, pageSize: 20, sortBy: 'expiryDate', sortOrder: 'asc' };
+        : {
+            page: 1,
+            pageSize: 20,
+            sortBy: DEFAULT_WARRANTY_SORT_FIELD,
+            sortOrder: DEFAULT_WARRANTY_SORT_DIRECTION,
+          };
     return (
       <Suspense fallback={
         <PageLayout variant="full-width">

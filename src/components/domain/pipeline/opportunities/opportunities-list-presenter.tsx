@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormatAmount } from "@/components/shared/format";
 import { cn } from "@/lib/utils";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 import { OpportunitiesTablePresenter } from "./opportunities-table-presenter";
 import { OpportunitiesMobileCards } from "./opportunities-mobile-cards";
 import type { OpportunityTableItem } from "@/lib/schemas/pipeline";
@@ -47,7 +48,7 @@ export interface OpportunitiesListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View opportunity handler */
   onViewOpportunity: (id: string) => void;
   /** Edit opportunity handler */

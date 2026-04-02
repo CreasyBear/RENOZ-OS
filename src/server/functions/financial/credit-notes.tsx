@@ -17,6 +17,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError, ConflictError, ServerError } from '@/lib/server/errors';
 import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
 import {
+  idParamQuerySchema,
   idParamSchema,
   createCreditNoteSchema,
   updateCreditNoteSchema,
@@ -228,7 +229,7 @@ export const createCreditNote = createServerFn({ method: 'POST' })
  * Get a single credit note by ID with relations.
  */
 export const getCreditNote = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }): Promise<CreditNoteWithRelations> => {
     const ctx = await withAuth();
 
@@ -329,6 +330,8 @@ export const listCreditNotes = createServerFn({ method: 'GET' })
         ? creditNotes.amount
         : sortBy === 'status'
           ? creditNotes.status
+          : sortBy === 'customer'
+            ? customers.name
           : creditNotes.createdAt;
 
     const items = await db

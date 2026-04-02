@@ -9,6 +9,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { sql, eq, and, desc, asc, isNull, gt } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { customerTags, customerTagAssignments, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -42,11 +43,11 @@ export interface SegmentWithStats {
  */
 export const getSegmentsWithStats = createServerFn({ method: 'GET' })
   .inputValidator(
-    z
-      .object({
+    normalizeObjectInput(
+      z.object({
         includeEmpty: z.boolean().default(false),
       })
-      .optional()
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
@@ -147,9 +148,11 @@ export interface SegmentAnalyticsData {
  */
 export const getSegmentAnalytics = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      segmentId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        segmentId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });

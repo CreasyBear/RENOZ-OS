@@ -10,30 +10,12 @@
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { FileWarning } from 'lucide-react';
-import { z } from 'zod';
 
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { WarrantyClaimsListContainer } from '@/components/domain/warranty/containers/warranty-claims-list-container';
 import type { WarrantyClaimsSearchParams } from '@/lib/schemas/warranty';
-
-// ============================================================================
-// ROUTE SEARCH PARAMS
-// ============================================================================
-
-const claimsSearchSchema = z.object({
-  quickFilter: z.enum(['submitted', 'at_risk_sla', 'awaiting_decision']).optional(),
-  status: z
-    .enum(['submitted', 'under_review', 'approved', 'denied', 'resolved', 'cancelled'])
-    .optional(),
-  type: z
-    .enum(['cell_degradation', 'bms_fault', 'inverter_failure', 'installation_defect', 'other'])
-    .optional(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().min(10).max(100).default(20),
-  sortBy: z.enum(['submittedAt', 'claimNumber', 'status', 'claimType']).default('submittedAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
+import { claimsSearchSchema } from './search-schema';
 
 export const Route = createFileRoute('/_authenticated/support/claims/')({
   validateSearch: claimsSearchSchema,

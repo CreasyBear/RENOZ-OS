@@ -44,6 +44,7 @@ import type {
   ListArticlesInput,
   ListArticlesResponse,
 } from '@/lib/schemas/support/knowledge-base';
+import { isValidKbArticleSortField } from './kb-article-sorting';
 
 // ============================================================================
 // TYPE GUARDS
@@ -51,10 +52,6 @@ import type {
 
 function isKbStatusOrAll(v: string): v is KbArticleStatus | 'all' {
   return ['all', 'draft', 'published', 'archived'].includes(v);
-}
-
-function isSortBy(v: string): v is ListArticlesInput['sortBy'] {
-  return ['updatedAt', 'createdAt', 'title', 'viewCount'].includes(v);
 }
 
 // ============================================================================
@@ -284,7 +281,7 @@ export function KbArticleList({
         <Select
           value={sortBy}
           onValueChange={(value) => {
-            if (isSortBy(value)) onSortByChange(value);
+            if (isValidKbArticleSortField(value)) onSortByChange(value);
           }}
         >
           <SelectTrigger className="w-[140px]">
@@ -295,6 +292,7 @@ export function KbArticleList({
             <SelectItem value="createdAt">Created Date</SelectItem>
             <SelectItem value="title">Title</SelectItem>
             <SelectItem value="viewCount">Most Viewed</SelectItem>
+            <SelectItem value="publishedAt">Published Date</SelectItem>
           </SelectContent>
         </Select>
 

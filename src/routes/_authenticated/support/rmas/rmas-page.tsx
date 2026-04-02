@@ -15,6 +15,7 @@ import { PageLayout } from '@/components/layout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RmasListContainer } from '@/components/domain/support/rma/rmas-list-container';
 import type { RmaStatus, RmaReason } from '@/lib/schemas/support/rma';
+import type { SortDirection } from '@/components/domain/support/rma/rma-sorting';
 import type { rmasSearchSchema } from './index';
 import type { z } from 'zod';
 
@@ -36,6 +37,10 @@ export default function RmasPage({ search }: RmasPageProps) {
         page: 'page' in updates ? updates.page : 1,
       },
     });
+  };
+
+  const handleSortChange = (sortBy: RmasSearch['sortBy'], sortOrder: SortDirection) => {
+    updateSearch({ sortBy, sortOrder, page: 1 });
   };
 
   return (
@@ -80,6 +85,7 @@ export default function RmasPage({ search }: RmasPageProps) {
           }
           onSearchChange={(value) => updateSearch({ search: value || undefined })}
           onPageChange={(page) => updateSearch({ page })}
+          onSortChange={handleSortChange}
         />
       </PageLayout.Content>
     </PageLayout>

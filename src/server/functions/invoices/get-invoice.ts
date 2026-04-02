@@ -23,7 +23,11 @@ import { db } from '@/lib/db';
 import { orders, orderLineItems, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
-import { idParamSchema, flexibleJsonSchema, type FlexibleJson } from '@/lib/schemas/_shared/patterns';
+import {
+  flexibleJsonSchema,
+  idParamQuerySchema,
+  type FlexibleJson,
+} from '@/lib/schemas/_shared/patterns';
 import type { InvoiceStatus } from '@/lib/constants/invoice-status';
 
 // ============================================================================
@@ -222,7 +226,7 @@ const _getInvoiceCached = cache(async (id: string, organizationId: string): Prom
  * Get a single invoice by ID with full details
  */
 export const getInvoice = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const result = await _getInvoiceCached(data.id, ctx.organizationId);

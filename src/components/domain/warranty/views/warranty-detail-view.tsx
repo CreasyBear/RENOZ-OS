@@ -69,6 +69,7 @@ import { isWarrantyClaimTypeValue } from '@/lib/schemas/warranty';
 import { useAlertDismissals, generateAlertIdWithValue } from '@/hooks/_shared/use-alert-dismissals';
 import { useWarrantyHeaderActions } from '@/hooks/warranty';
 import { formatDateAustralian, getDaysUntilExpiry, getWarrantyStatusConfigForEntityHeader } from '@/lib/warranty';
+import { getSummaryMetricSubtitle } from '@/lib/metrics/metric-display';
 
 // ============================================================================
 // TYPES
@@ -117,9 +118,12 @@ export function WarrantyDetailView({
   warranty,
   headerActionsInLayout = false,
   claims,
+  claimSummary,
+  claimSummaryState = 'loading',
   extensions,
   certificateStatus,
   isClaimsLoading,
+  isClaimSummaryLoading = false,
   isExtensionsLoading,
   isExtensionsError,
   isCertificateLoading,
@@ -491,10 +495,18 @@ export function WarrantyDetailView({
             <MetricCard
               variant="compact"
               title="Claims"
-              value={claims.length}
+              value={claimSummaryState === 'ready' ? claimSummary?.totalClaims ?? 0 : '—'}
               icon={TicketIcon}
               iconClassName="text-muted-foreground"
-              subtitle={claims.length > 0 ? `${claims.filter(c => c.status === 'submitted' || c.status === 'under_review').length} pending` : undefined}
+              isLoading={isClaimsLoading || isClaimSummaryLoading}
+              subtitle={getSummaryMetricSubtitle({
+                summaryState: claimSummaryState,
+                readySubtitle:
+                  claimSummaryState === 'ready' && (claimSummary?.pendingClaims ?? 0) > 0
+                    ? `${claimSummary?.pendingClaims ?? 0} pending`
+                    : undefined,
+                unavailableSubtitle: 'Claim summary unavailable',
+              })}
             />
             <MetricCard
               variant="compact"

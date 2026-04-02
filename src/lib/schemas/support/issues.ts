@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -94,33 +95,37 @@ export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
 // QUERY SCHEMAS
 // ============================================================================
 
-export const getIssuesSchema = z.object({
-  status: z.union([issueStatusSchema, z.array(issueStatusSchema)]).optional(),
-  priority: z.union([issuePrioritySchema, z.array(issuePrioritySchema)]).optional(),
-  type: issueTypeSchema.optional(),
-  customerId: z.string().uuid().optional(),
-  assignedToUserId: z.string().uuid().optional(),
-  /** Resolved client-side: 'me' = current user, 'unassigned' = null assignee */
-  assignedToFilter: z.enum(['me', 'unassigned']).optional(),
-  search: z.string().optional(),
-  slaStatus: z.enum(['breached', 'at_risk']).optional(),
-  escalated: z.boolean().optional(),
-  limit: z.number().int().min(1).max(100).default(50),
-  offset: z.number().int().min(0).default(0),
-});
-
-export const getIssuesCursorSchema = cursorPaginationSchema.merge(
+export const getIssuesSchema = normalizeObjectInput(
   z.object({
     status: z.union([issueStatusSchema, z.array(issueStatusSchema)]).optional(),
     priority: z.union([issuePrioritySchema, z.array(issuePrioritySchema)]).optional(),
     type: issueTypeSchema.optional(),
     customerId: z.string().uuid().optional(),
     assignedToUserId: z.string().uuid().optional(),
+    /** Resolved client-side: 'me' = current user, 'unassigned' = null assignee */
     assignedToFilter: z.enum(['me', 'unassigned']).optional(),
     search: z.string().optional(),
     slaStatus: z.enum(['breached', 'at_risk']).optional(),
     escalated: z.boolean().optional(),
+    limit: z.number().int().min(1).max(100).default(50),
+    offset: z.number().int().min(0).default(0),
   })
+);
+
+export const getIssuesCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      status: z.union([issueStatusSchema, z.array(issueStatusSchema)]).optional(),
+      priority: z.union([issuePrioritySchema, z.array(issuePrioritySchema)]).optional(),
+      type: issueTypeSchema.optional(),
+      customerId: z.string().uuid().optional(),
+      assignedToUserId: z.string().uuid().optional(),
+      assignedToFilter: z.enum(['me', 'unassigned']).optional(),
+      search: z.string().optional(),
+      slaStatus: z.enum(['breached', 'at_risk']).optional(),
+      escalated: z.boolean().optional(),
+    })
+  )
 );
 
 export type GetIssuesCursorInput = z.infer<typeof getIssuesCursorSchema>;

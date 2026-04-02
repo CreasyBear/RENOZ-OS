@@ -32,11 +32,11 @@ import {
   recomputeInventoryValueFromLayers,
 } from '@/server/functions/_shared/inventory-finance';
 import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
-import { bumpOrderAggregateVersion } from '@/server/functions/orders/_order-aggregate';
 import { fulfillmentImportSchema } from '@/lib/schemas/orders/shipments';
 import { markShippedSchema } from '@/lib/schemas';
 import { generateTrackingUrl } from './order-shipments-shared';
 import type { OrderShipment } from './order-shipment-types';
+import { recomputeOrderFulfillmentStatus } from './order-fulfillment-status';
 
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
 
@@ -325,43 +325,12 @@ export async function markShipmentAsShipped(
       }
     }
 
-    const [order] = await tx
-      .select()
-      .from(orders)
-      .where(eq(orders.id, existing.orderId))
-      .limit(1);
-
-    if (order) {
-      const lineItems = await tx
-        .select({
-          quantity: orderLineItems.quantity,
-          qtyShipped: orderLineItems.qtyShipped,
-        })
-        .from(orderLineItems)
-        .where(eq(orderLineItems.orderId, existing.orderId));
-
-      const totalOrdered = lineItems.reduce((sum, item) => sum + Number(item.quantity), 0);
-      const totalShipped = lineItems.reduce((sum, item) => sum + Number(item.qtyShipped), 0);
-
-      const newStatus = totalShipped >= totalOrdered ? 'shipped' : 'partially_shipped';
-
-      await tx
-        .update(orders)
-        .set({
-          status: newStatus,
-          ...(newStatus === 'shipped' && !order.shippedDate
-            ? { shippedDate: shippedAt.toISOString().slice(0, 10) }
-            : {}),
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(orders.id, existing.orderId));
-
-      await bumpOrderAggregateVersion(tx, {
-        orderId: existing.orderId,
-        organizationId: ctx.organizationId,
-        userId: ctx.user.id,
-      });
-    }
+    await recomputeOrderFulfillmentStatus(tx, {
+      organizationId: ctx.organizationId,
+      orderId: existing.orderId,
+      userId: ctx.user.id,
+      shippedAt,
+    });
 
     await tx.insert(activities).values({
       organizationId: ctx.organizationId,

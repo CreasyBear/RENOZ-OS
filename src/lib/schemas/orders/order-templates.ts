@@ -8,7 +8,12 @@
  */
 
 import { z } from 'zod';
-import { currencySchema, quantitySchema, percentageSchema } from '../_shared/patterns';
+import {
+  currencySchema,
+  quantitySchema,
+  percentageSchema,
+  normalizeObjectInput,
+} from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 import { taxTypeSchema } from '../products/products';
 
@@ -149,24 +154,29 @@ export const templateParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const templateListQuerySchema = z.object({
-  search: z.string().optional(),
-  isActive: z.boolean().optional(),
-  category: z.string().optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['name', 'createdAt', 'usageCount']).default('name'),
-  sortOrder: z.enum(['asc', 'desc']).default('asc'),
-});
-
-export type TemplateListQuery = z.infer<typeof templateListQuerySchema>;
-
-export const templateListCursorQuerySchema = cursorPaginationSchema.merge(
-  z.object({
+export const templateListQuerySchema = normalizeObjectInput(
+  z
+  .object({
     search: z.string().optional(),
     isActive: z.boolean().optional(),
     category: z.string().optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+    sortBy: z.enum(['name', 'createdAt', 'usageCount']).default('name'),
+    sortOrder: z.enum(['asc', 'desc']).default('asc'),
   })
+);
+
+export type TemplateListQuery = z.infer<typeof templateListQuerySchema>;
+
+export const templateListCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      search: z.string().optional(),
+      isActive: z.boolean().optional(),
+      category: z.string().optional(),
+    })
+  )
 );
 
 export type TemplateListCursorQuery = z.infer<typeof templateListCursorQuerySchema>;

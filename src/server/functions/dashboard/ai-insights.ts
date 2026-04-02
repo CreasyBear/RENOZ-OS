@@ -16,6 +16,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   GetInsightsRequestSchema,
   GenerateInsightsRequestSchema,
@@ -481,7 +482,7 @@ export const generateInsights = createServerFn({ method: 'POST' })
  * This returns previously generated insights rather than regenerating.
  */
 export const getInsights = createServerFn({ method: 'GET' })
-  .inputValidator(GetInsightsRequestSchema)
+  .inputValidator(normalizeObjectInput(GetInsightsRequestSchema))
   .handler(async ({ data }): Promise<GetInsightsResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
     const now = new Date();

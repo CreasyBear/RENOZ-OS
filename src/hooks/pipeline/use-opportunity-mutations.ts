@@ -35,6 +35,11 @@ import type {
 type OpportunityListResult = Awaited<ReturnType<typeof listOpportunities>>;
 type OpportunityItem = OpportunityListResult['items'][number];
 
+function invalidateOpportunityListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+}
+
 // ============================================================================
 // CREATE MUTATION
 // ============================================================================
@@ -51,7 +56,7 @@ export function useCreateOpportunity() {
       // Cache the new opportunity detail
       queryClient.setQueryData(queryKeys.pipeline.opportunity(result.opportunity.id), result);
       // Invalidate opportunity lists and metrics
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
     },
   });
@@ -73,7 +78,7 @@ export function useUpdateOpportunity() {
     onSuccess: (_, variables) => {
       // Invalidate specific opportunity and lists
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
     },
   });
@@ -94,7 +99,7 @@ export function useDeleteOpportunity() {
     onSuccess: (_, id) => {
       // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: queryKeys.pipeline.opportunity(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
     },
   });
@@ -134,6 +139,7 @@ export function useUpdateOpportunityStage() {
     onMutate: async ({ opportunityId, stage }) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.opportunities.lists() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
 
       // Snapshot previous values
       const previousLists = queryClient.getQueriesData({ queryKey: queryKeys.opportunities.lists() });
@@ -164,7 +170,7 @@ export function useUpdateOpportunityStage() {
     },
     onSettled: (_, __, { opportunityId }) => {
       // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
     },
@@ -204,7 +210,7 @@ export function useBulkUpdateOpportunityStage() {
       }),
     onSuccess: () => {
       // Invalidate all opportunity lists and metrics
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
       // Invalidate all opportunity details (they may have been updated)
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
@@ -236,7 +242,7 @@ export function useConvertToOrder() {
     onSuccess: (_, { opportunityId }) => {
       // Invalidate opportunity and order caches
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+      invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
     },

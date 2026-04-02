@@ -75,6 +75,7 @@ export type {
   AssignClaimInput,
   WarrantyClaimListItem,
   ListWarrantyClaimsResult,
+  WarrantyClaimSummary,
   WarrantyClaimPagination,
   WarrantyClaimsSearchParams,
   WarrantyClaimsListContainerProps,

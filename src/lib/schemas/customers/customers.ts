@@ -15,9 +15,11 @@ import {
   paginationSchema,
   filterSchema,
   idParamSchema,
+  idParamQuerySchema,
   percentageSchema,
   currencySchema,
   flexibleJsonSchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
@@ -216,14 +218,19 @@ export const customerFilterSchema = filterSchema.extend({
 
 export type CustomerFilter = z.infer<typeof customerFilterSchema>;
 
-export const customerListQuerySchema = paginationSchema.merge(customerFilterSchema);
+export const customerListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(customerFilterSchema)
+);
 export type CustomerListQuery = z.infer<typeof customerListQuerySchema>;
 
-export const customerCursorQuerySchema = cursorPaginationSchema.merge(customerFilterSchema);
+export const customerCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(customerFilterSchema)
+);
 export type CustomerCursorQuery = z.infer<typeof customerCursorQuerySchema>;
 
-export const customerParamsSchema = idParamSchema;
-export type CustomerParams = z.infer<typeof customerParamsSchema>;
+export const customerParamsBaseSchema = idParamSchema;
+export const customerParamsSchema = idParamQuerySchema;
+export type CustomerParams = z.infer<typeof customerParamsBaseSchema>;
 
 // ============================================================================
 // BULK OPERATIONS
@@ -321,6 +328,50 @@ export const addressParamsSchema = idParamSchema;
 export type AddressParams = z.infer<typeof addressParamsSchema>;
 
 // ============================================================================
+// NESTED CUSTOMER WRITE SCHEMAS
+// ============================================================================
+
+export const customerNestedContactSchema = createContactSchema.omit({
+  customerId: true,
+});
+
+export type CustomerNestedContact = z.infer<typeof customerNestedContactSchema>;
+
+export const customerNestedAddressSchema = createAddressSchema.omit({
+  customerId: true,
+});
+
+export type CustomerNestedAddress = z.infer<typeof customerNestedAddressSchema>;
+
+export const createCustomerBundleSchema = z.object({
+  customer: createCustomerSchema,
+  contacts: z.array(customerNestedContactSchema).default([]),
+  addresses: z.array(customerNestedAddressSchema).default([]),
+});
+
+export type CreateCustomerBundle = z.infer<typeof createCustomerBundleSchema>;
+
+export const updateCustomerBundleContactSchema = customerNestedContactSchema.extend({
+  id: z.string().uuid().optional(),
+});
+
+export type UpdateCustomerBundleContact = z.infer<typeof updateCustomerBundleContactSchema>;
+
+export const updateCustomerBundleAddressSchema = customerNestedAddressSchema.extend({
+  id: z.string().uuid().optional(),
+});
+
+export type UpdateCustomerBundleAddress = z.infer<typeof updateCustomerBundleAddressSchema>;
+
+export const updateCustomerBundleSchema = z.object({
+  customer: updateCustomerSchema,
+  contacts: z.array(updateCustomerBundleContactSchema).default([]),
+  addresses: z.array(updateCustomerBundleAddressSchema).default([]),
+});
+
+export type UpdateCustomerBundle = z.infer<typeof updateCustomerBundleSchema>;
+
+// ============================================================================
 // CUSTOMER ACTIVITY SCHEMAS
 // ============================================================================
 
@@ -355,15 +406,17 @@ export type CustomerActivity = z.infer<typeof customerActivitySchema>;
 export const customerActivityParamsSchema = idParamSchema;
 export type CustomerActivityParams = z.infer<typeof customerActivityParamsSchema>;
 
-export const customerActivityFilterSchema = filterSchema.extend({
-  customerId: z.string().uuid().optional(),
-  contactId: z.string().uuid().optional(),
-  activityType: customerActivityTypeSchema.optional(),
-  direction: activityDirectionSchema.optional(),
-  assignedTo: z.string().uuid().optional(),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-});
+export const customerActivityFilterSchema = normalizeObjectInput(
+  filterSchema.extend({
+    customerId: z.string().uuid().optional(),
+    contactId: z.string().uuid().optional(),
+    activityType: customerActivityTypeSchema.optional(),
+    direction: activityDirectionSchema.optional(),
+    assignedTo: z.string().uuid().optional(),
+    startDate: z.string().datetime().optional(),
+    endDate: z.string().datetime().optional(),
+  })
+);
 
 export type CustomerActivityFilter = z.infer<typeof customerActivityFilterSchema>;
 
@@ -455,17 +508,19 @@ export const customerHealthMetricSchema = createCustomerHealthMetricSchema.exten
 
 export type CustomerHealthMetric = z.infer<typeof customerHealthMetricSchema>;
 
-export const customerHealthMetricFilterSchema = z.object({
-  customerId: z.string().uuid(),
-  startDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  endDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-});
+export const customerHealthMetricFilterSchema = normalizeObjectInput(
+  z.object({
+    customerId: z.string().uuid(),
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+);
 
 export type CustomerHealthMetricFilter = z.infer<typeof customerHealthMetricFilterSchema>;
 
@@ -578,21 +633,25 @@ export const customerMergeAuditSchema = createCustomerMergeAuditSchema.extend({
 
 export type CustomerMergeAudit = z.infer<typeof customerMergeAuditSchema>;
 
-export const customerMergeAuditFilterSchema = z.object({
-  action: z.enum(['merged', 'dismissed', 'undone']).optional(),
-  primaryCustomerId: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-});
+export const customerMergeAuditFilterSchema = normalizeObjectInput(
+  z.object({
+    action: z.enum(['merged', 'dismissed', 'undone']).optional(),
+    primaryCustomerId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+);
 
 export type CustomerMergeAuditFilter = z.infer<typeof customerMergeAuditFilterSchema>;
 
 /** Cursor pagination for merge history (uses performedAt + id for stable sort) */
-export const customerMergeAuditCursorSchema = cursorPaginationSchema.merge(
-  z.object({
-    action: z.enum(['merged', 'dismissed', 'undone']).optional(),
-    primaryCustomerId: z.string().uuid().optional(),
-  })
+export const customerMergeAuditCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      action: z.enum(['merged', 'dismissed', 'undone']).optional(),
+      primaryCustomerId: z.string().uuid().optional(),
+    })
+  )
 );
 export type CustomerMergeAuditCursorInput = z.infer<typeof customerMergeAuditCursorSchema>;
 

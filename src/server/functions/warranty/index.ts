@@ -45,6 +45,7 @@ export {
   denyClaim,
   resolveClaim,
   listWarrantyClaims,
+  getWarrantyClaimSummary,
   getWarrantyClaim,
   assignClaim,
 } from './claims/warranty-claims';

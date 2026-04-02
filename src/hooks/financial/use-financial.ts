@@ -571,8 +571,11 @@ export function useResyncXeroInvoice() {
 
   return useMutation({
     mutationFn: (orderId: string) => fn({ data: { orderId } }),
-    onSuccess: () => {
+    onSuccess: (_result, orderId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.financial.xero() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.xeroStatus(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
   });
 }

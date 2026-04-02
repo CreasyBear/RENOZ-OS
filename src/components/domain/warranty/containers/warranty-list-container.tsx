@@ -26,13 +26,18 @@ import {
   DEFAULT_WARRANTY_FILTERS,
   type WarrantyFiltersState,
 } from '../warranty-filter-config';
+import {
+  resolveWarrantySortState,
+  type WarrantySortField,
+  type SortDirection,
+} from '../warranty-sorting';
 
 // Import types from schemas per SCHEMA-TRACE.md
 import type { WarrantyStatus } from '@/lib/schemas/warranty';
 import type { WarrantyPolicyTypeValue } from '@/lib/schemas/warranty/policies';
 
-export type WarrantyListSortField = 'createdAt' | 'expiryDate' | 'status';
-export type WarrantyListSortOrder = 'asc' | 'desc';
+export type WarrantyListSortField = WarrantySortField;
+export type WarrantyListSortOrder = SortDirection;
 export type WarrantyListStatus = WarrantyStatus;
 
 export interface WarrantyListSearchParams {
@@ -104,6 +109,28 @@ export function WarrantyListContainer({
       });
     },
     [onSearchChange]
+  );
+
+  const handleSort = useCallback(
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolveWarrantySortState(
+        search.sortBy,
+        search.sortOrder,
+        field,
+        direction
+      );
+
+      if (!nextSort) {
+        return;
+      }
+
+      onSearchChange({
+        sortBy: nextSort.field,
+        sortOrder: nextSort.direction,
+        page: 1,
+      });
+    },
+    [onSearchChange, search.sortBy, search.sortOrder]
   );
 
   // Handle void warranty
@@ -209,11 +236,14 @@ export function WarrantyListContainer({
           total={total}
           page={search.page}
           pageSize={search.pageSize}
+          sortField={search.sortBy}
+          sortDirection={search.sortOrder}
           isLoading={isLoading}
           error={error instanceof Error ? error : null}
           onRetry={refetch}
           onRowClick={onRowClick}
           onPageChange={(page) => onSearchChange({ page })}
+          onSortChange={handleSort}
           onVoidWarranty={handleVoidWarranty}
           onTransferWarranty={handleTransferWarranty}
           className={className}

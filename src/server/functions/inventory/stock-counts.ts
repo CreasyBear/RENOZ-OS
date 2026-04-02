@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, desc, asc, gte, ne, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   stockCounts,
   stockCountItems,
@@ -112,7 +113,7 @@ export const listStockCounts = createServerFn({ method: 'GET' })
  * Get single stock count with items and progress.
  */
 export const getStockCount = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
@@ -991,7 +992,7 @@ export const cancelStockCount = createServerFn({ method: 'POST' })
  * Get variance analysis for a stock count.
  */
 export const getCountVarianceAnalysis = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
@@ -1072,12 +1073,14 @@ export const getCountVarianceAnalysis = createServerFn({ method: 'GET' })
  */
 export const getCountHistory = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      locationId: z.string().uuid().optional(),
-      dateFrom: z.coerce.date().optional(),
-      dateTo: z.coerce.date().optional(),
-      limit: z.coerce.number().int().min(1).max(100).default(20),
-    })
+    normalizeObjectInput(
+      z.object({
+        locationId: z.string().uuid().optional(),
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });

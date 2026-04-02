@@ -50,7 +50,7 @@ export function UserMenu() {
     try {
       await signOut.mutateAsync()
       toast.success('Signed out successfully')
-      navigate({ to: '/login', search: getLoginRedirectSearch() })
+      navigate({ to: '/login', search: getLoginRedirectSearch(undefined, 'logged_out') })
     } catch {
       toast.error('Failed to sign out')
     }

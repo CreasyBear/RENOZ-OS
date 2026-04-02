@@ -18,6 +18,7 @@ import type {
   XeroCustomerMappingStatus,
   XeroIntegrationStatus,
 } from '@/lib/schemas/settings/xero-sync';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { safeNumber } from '@/lib/numeric';
 import { z } from 'zod';
 
@@ -99,7 +100,7 @@ export const getXeroIntegrationStatus = createServerFn({ method: 'GET' })
   });
 
 export const getCustomerXeroMappingStatus = createServerFn({ method: 'GET' })
-  .inputValidator(customerIdSchema)
+  .inputValidator(normalizeObjectInput(customerIdSchema))
   .handler(async ({ data }): Promise<XeroCustomerMappingStatus> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -250,7 +251,7 @@ export const unlinkCustomerXeroContact = createServerFn({ method: 'POST' })
   });
 
 export const listRecentXeroPaymentEvents = createServerFn({ method: 'GET' })
-  .inputValidator(listXeroPaymentEventsSchema)
+  .inputValidator(normalizeObjectInput(listXeroPaymentEventsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read });
     const offset = (data.page - 1) * data.pageSize;

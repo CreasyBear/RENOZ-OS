@@ -14,6 +14,7 @@ import { Users, UserCheck, Mail, UserX } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { MetricCard } from '@/components/shared';
 import { DataTableEmpty } from '@/components/shared/data-table';
+import type { SortDirection } from '@/components/shared/data-table/server-sorting';
 import { FilterEmptyState } from '@/components/shared/filter-empty-state';
 import {
   DomainFilterBar,
@@ -34,6 +35,12 @@ import {
   DEFAULT_USERS_FILTERS,
   type UsersFiltersState,
 } from './users-filter-config';
+import {
+  DEFAULT_USER_SORT_DIRECTION,
+  DEFAULT_USER_SORT_FIELD,
+  resolveUserSortState,
+} from './user-sorting';
+import type { UserSortField } from '@/lib/schemas/auth';
 
 // ============================================================================
 // PRESENTER PROPS INTERFACE
@@ -64,13 +71,13 @@ interface UsersAdminPagePresenterProps {
   search: {
     page: number;
     pageSize: number;
-    sortBy?: string;
+    sortBy?: UserSortField;
     sortOrder?: 'asc' | 'desc';
   };
   /** Loading state for mutations */
   isLoading: boolean;
   /** Update search params handler (pagination, sort) */
-  onUpdateSearch: (updates: Partial<{ page: number; sortBy?: string; sortOrder?: 'asc' | 'desc' }>) => void;
+  onUpdateSearch: (updates: Partial<{ page: number; sortBy?: UserSortField; sortOrder?: 'asc' | 'desc' }>) => void;
   /** Deactivate user handler */
   onDeactivate: (userId: string) => void;
   /** Reactivate user handler */
@@ -136,14 +143,15 @@ export default function UsersAdminPagePresenter({
   const [bulkRoleSelect, setBulkRoleSelect] = useState('');
 
   // Sort state for server-side sorting
-  const sortField = search.sortBy ?? 'name';
-  const sortDirection = search.sortOrder ?? 'asc';
+  const sortField = search.sortBy ?? DEFAULT_USER_SORT_FIELD;
+  const sortDirection = search.sortOrder ?? DEFAULT_USER_SORT_DIRECTION;
 
-  const handleSort = (field: string) => {
+  const handleSort = (field: string, direction?: SortDirection) => {
+    const nextSort = resolveUserSortState(sortField, sortDirection, field, direction);
+    if (!nextSort) return;
     onUpdateSearch({
-      sortBy: field,
-      sortOrder:
-        sortField === field && sortDirection === 'asc' ? 'desc' : 'asc',
+      sortBy: nextSort.field,
+      sortOrder: nextSort.direction,
     });
   };
 

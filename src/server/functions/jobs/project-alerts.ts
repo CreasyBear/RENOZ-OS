@@ -11,6 +11,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projects, jobTasks, projectBomItems } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -56,7 +57,7 @@ function daysAgo(days: number): Date {
  * - INFO: completion_pending
  */
 export const getProjectAlerts = createServerFn({ method: 'GET' })
-  .inputValidator(getProjectAlertsInputSchema)
+  .inputValidator(normalizeObjectInput(getProjectAlertsInputSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
     const { projectId } = data;

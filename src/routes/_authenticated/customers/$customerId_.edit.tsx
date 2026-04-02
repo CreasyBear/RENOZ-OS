@@ -24,11 +24,64 @@ import {
   type CustomerEditFormValues,
 } from '@/hooks/customers'
 import { useState } from 'react'
-import type {
-  CustomerWithRelations,
-  CustomerDetailContact,
-  CustomerDetailAddress,
+import {
+  customerStatusValues,
+  customerTypeValues,
+  customerSizeValues,
+  type CustomerWithRelations,
+  type CustomerDetailContact,
+  type CustomerDetailAddress,
 } from '@/lib/schemas/customers'
+
+type CustomerStatus = (typeof customerStatusValues)[number]
+type CustomerType = (typeof customerTypeValues)[number]
+type CustomerSize = (typeof customerSizeValues)[number]
+
+/**
+ * Radix Select (company size) requires `value` to match a SelectItem; empty string
+ * or unknown enum values from legacy JSON/DB must not reach CustomerForm defaults.
+ */
+function normalizeCustomerEditFormSelects(customer: CustomerWithRelations): {
+  status: CustomerStatus
+  type: CustomerType
+  size: CustomerSize | undefined
+  tags: string[]
+} {
+  const status = customerStatusValues.includes(customer.status as CustomerStatus)
+    ? (customer.status as CustomerStatus)
+    : 'prospect'
+  const type = customerTypeValues.includes(customer.type as CustomerType)
+    ? (customer.type as CustomerType)
+    : 'business'
+  const rawSize = customer.size as CustomerSize | null | undefined | ''
+  const size =
+    rawSize &&
+    customerSizeValues.includes(rawSize as CustomerSize)
+      ? (rawSize as CustomerSize)
+      : undefined
+
+  const tags = normalizeCustomerTagNames(customer.tags)
+
+  return { status, type, size, tags }
+}
+
+function normalizeCustomerTagNames(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return []
+  const out: string[] = []
+  for (const t of tags) {
+    if (typeof t === 'string' && t.length > 0) {
+      out.push(t)
+    } else if (
+      t &&
+      typeof t === 'object' &&
+      'name' in t &&
+      typeof (t as { name: unknown }).name === 'string'
+    ) {
+      out.push((t as { name: string }).name)
+    }
+  }
+  return out
+}
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -110,6 +163,8 @@ function EditCustomerFormContent({
     navigate({ to: '/customers/$customerId', params: { customerId }, search: {} })
   }
 
+  const coerced = normalizeCustomerEditFormSelects(customer)
+
   return (
     <div className="space-y-6">
       <CustomerForm
@@ -121,16 +176,16 @@ function EditCustomerFormContent({
                 email: customer.email ?? undefined,
                 phone: customer.phone ?? undefined,
                 website: customer.website ?? undefined,
-                status: customer.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
-                type: customer.type as 'individual' | 'business' | 'government' | 'non_profit',
-                size: (customer.size ?? undefined) as 'micro' | 'small' | 'medium' | 'large' | 'enterprise' | undefined,
+                status: coerced.status,
+                type: coerced.type,
+                size: coerced.size,
                 industry: customer.industry ?? undefined,
                 taxId: customer.taxId ?? undefined,
                 registrationNumber: customer.registrationNumber ?? undefined,
                 creditLimit: customer.creditLimit ? Number(customer.creditLimit) : undefined,
                 creditHold: customer.creditHold,
                 creditHoldReason: customer.creditHoldReason ?? undefined,
-                tags: customer.tags ?? [],
+                tags: coerced.tags,
               }}
               onSubmit={handleSubmit}
               onCancel={handleCancel}

@@ -349,14 +349,25 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
       }
 
       try {
-        await sendQuoteMutation.mutateAsync({
+        const result = await sendQuoteMutation.mutateAsync({
           opportunityId,
           quoteVersionId: currentVersion.id,
           recipientEmail: customerEmail,
           recipientName: oppCustomer?.name,
           subject: `Quote for ${opportunityData?.opportunity?.title ?? 'Opportunity'}`,
         });
-        toast.success('Quote sent successfully', {
+
+        if (!result.success) {
+          toastError(result.error ?? 'Failed to send quote');
+          return;
+        }
+
+        const successMessage =
+          result.stages.stageBump.status === 'failed'
+            ? 'Quote sent, but opportunity follow-up updates need attention'
+            : 'Quote sent successfully';
+
+        toast.success(successMessage, {
           action: {
             label: 'Schedule follow-up',
             onClick: () => setActivityDialogOpen(true),

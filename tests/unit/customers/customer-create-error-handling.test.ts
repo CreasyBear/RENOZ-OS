@@ -24,34 +24,40 @@ describe('customer create error handling', () => {
         email: DUPLICATE_CUSTOMER_EMAIL_FIELD_MESSAGE,
       },
       targetStepIndex: 0,
-      preserveDraft: false,
-      skipUiRecovery: false,
     })
   })
 
-  it('preserves the draft when related records partially fail after customer creation', () => {
+  it('routes nested contact validation failures back to the contacts step', () => {
     const submissionState = getCustomerCreateSubmissionState({
-      message: 'Customer was created, but some related records still need attention.',
-      code: 'PARTIAL_RELATED_CREATE_FAILURE',
+      message: 'Validation failed',
       details: {
-        customerId: 'customer-1',
-        redirectingToEdit: true,
-        relatedCreateFailures: [
-          {
-            scope: 'contact',
-            label: 'Ada Lovelace',
-            reason: 'Timed out',
-          },
-        ],
+        validationErrors: {
+          'contacts.0.email': ['Enter a valid email address'],
+        },
       },
     })
 
     expect(submissionState).toEqual({
-      submitError: 'Customer was created, but some related records still need attention.',
+      submitError: 'Validation failed',
       fieldErrors: {},
-      targetStepIndex: 3,
-      preserveDraft: true,
-      skipUiRecovery: true,
+      targetStepIndex: 1,
+    })
+  })
+
+  it('routes nested address validation failures back to the addresses step', () => {
+    const submissionState = getCustomerCreateSubmissionState({
+      message: 'Validation failed',
+      details: {
+        validationErrors: {
+          'addresses.0.street1': ['Street address is required'],
+        },
+      },
+    })
+
+    expect(submissionState).toEqual({
+      submitError: 'Validation failed',
+      fieldErrors: {},
+      targetStepIndex: 2,
     })
   })
 })

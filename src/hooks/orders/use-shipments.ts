@@ -50,6 +50,11 @@ export interface UseShipmentOptions {
   enabled?: boolean;
 }
 
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
 // ============================================================================
 // LIST HOOK
 // ============================================================================
@@ -144,7 +149,8 @@ export function useConfirmDelivery() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }
@@ -168,6 +174,8 @@ export function useUpdateShipmentStatus() {
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }
@@ -206,6 +214,8 @@ export interface CreateShipmentInput {
   trackingNumber?: string;
   shippingCost?: number; // Actual cost in cents
   notes?: string;
+  addressSource?: 'order' | 'customer' | 'custom';
+  customerAddressId?: string;
   shippingAddress?: {
     name: string;
     street1: string;
@@ -216,6 +226,7 @@ export interface CreateShipmentInput {
     country: string;
     phone?: string;
   };
+  saveToOrderShippingAddress?: boolean;
   items: Array<{
     orderLineItemId: string;
     quantity: number;
@@ -244,7 +255,7 @@ export function useCreateShipment() {
     },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(variables.orderId) });
     },
@@ -285,7 +296,8 @@ export function useMarkShipped() {
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
     },
   });
 }
@@ -314,6 +326,8 @@ export function useDeleteShipment() {
       // Invalidate both list and detail caches per STANDARDS.md
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables) });
+      invalidateOrderCollectionQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
     },
   });
 }

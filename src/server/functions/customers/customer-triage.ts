@@ -13,6 +13,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, lte, asc, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -33,7 +34,7 @@ import {
  * Server-side filtering ensures efficient queries.
  */
 export const getCustomerTriage = createServerFn({ method: 'GET' })
-  .inputValidator(getCustomerTriageInputSchema)
+  .inputValidator(normalizeObjectInput(getCustomerTriageInputSchema))
   .handler(async ({ data }): Promise<CustomerTriageResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 

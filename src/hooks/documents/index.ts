@@ -26,6 +26,9 @@ export {
   useGenerateOrderProForma,
   useGenerateOrderPackingSlip,
   useGenerateOrderDeliveryNote,
+  useGenerateShipmentPackingSlip,
+  useGenerateShipmentDispatchNote,
+  useGenerateShipmentDeliveryNote,
   type OrderDocumentType,
   type GenerateOrderDocumentResult,
   type GenerateOrderQuoteInput,
@@ -33,6 +36,7 @@ export {
   type GenerateOrderProFormaInput,
   type GenerateOrderPackingSlipInput,
   type GenerateOrderDeliveryNoteInput,
+  type GenerateShipmentDocumentInput,
 } from './use-generate-order-documents';
 
 // --- Generation (Sync - Project Documents) ---

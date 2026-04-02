@@ -10,6 +10,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, isNull, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { products, productBundles } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -54,7 +55,7 @@ interface ExpandedBundleItem {
  * Get all components of a bundle product.
  */
 export const getBundleComponents = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ bundleProductId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ bundleProductId: z.string().uuid() })))
   .handler(async ({ data }): Promise<BundleWithComponents> => {
     const ctx = await withAuth();
 
@@ -460,10 +461,12 @@ export const removeBundleComponent = createServerFn({ method: 'POST' })
  */
 export const calculateBundlePrice = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      bundleProductId: z.string().uuid(),
-      includeOptional: z.boolean().default(false),
-    })
+    normalizeObjectInput(
+      z.object({
+        bundleProductId: z.string().uuid(),
+        includeOptional: z.boolean().default(false),
+      })
+    )
   )
   .handler(
     async ({
@@ -579,11 +582,13 @@ export const calculateBundlePrice = createServerFn({ method: 'GET' })
  */
 export const expandBundle = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      bundleProductId: z.string().uuid(),
-      quantity: z.number().int().positive().default(1),
-      excludeOptional: z.boolean().default(true),
-    })
+    normalizeObjectInput(
+      z.object({
+        bundleProductId: z.string().uuid(),
+        quantity: z.number().int().positive().default(1),
+        excludeOptional: z.boolean().default(true),
+      })
+    )
   )
   .handler(async ({ data }): Promise<{ items: ExpandedBundleItem[]; totalItems: number }> => {
     const ctx = await withAuth();
@@ -657,7 +662,7 @@ export const expandBundle = createServerFn({ method: 'GET' })
  * Checks for circular references, missing products, inventory availability.
  */
 export const validateBundle = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ bundleProductId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ bundleProductId: z.string().uuid() })))
   .handler(
     async ({
       data,
@@ -758,7 +763,7 @@ export const validateBundle = createServerFn({ method: 'GET' })
  * Find all bundles that contain a specific product.
  */
 export const findBundlesContaining = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(
     async ({
       data,

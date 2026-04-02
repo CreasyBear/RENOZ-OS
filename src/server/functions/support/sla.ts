@@ -11,6 +11,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { eq, and, desc, asc, count, avg, sql, gte, lte } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -25,6 +26,7 @@ import { withAuth } from '@/lib/server/protected';
 import {
   createSlaConfigurationSchema,
   updateSlaConfigurationSchema,
+  getSlaConfigurationsBaseSchema,
   getSlaConfigurationsSchema,
   startSlaTrackingSchema,
   pauseSlaSchema,
@@ -52,6 +54,21 @@ import {
   toBusinessHoursConfig,
 } from '@/lib/sla';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+
+const getSlaConfigurationByIdSchema = normalizeObjectInput(
+  getSlaTrackingByIdSchema
+    .extend({ configurationId: getSlaTrackingByIdSchema.shape.trackingId })
+    .omit({ trackingId: true })
+    .extend({
+      configurationId: getSlaTrackingByIdSchema.shape.trackingId.describe('SLA configuration ID'),
+    })
+);
+
+const getDefaultSlaConfigurationSchema = normalizeObjectInput(
+  getSlaConfigurationsBaseSchema.pick({ domain: true })
+);
+
+const getSlaTrackingByIdQuerySchema = normalizeObjectInput(getSlaTrackingByIdSchema);
 
 // ============================================================================
 // SLA CONFIGURATION CRUD
@@ -120,14 +137,7 @@ export const getSlaConfigurations = createServerFn({ method: 'GET' })
  * Get a single SLA configuration by ID
  */
 export const getSlaConfiguration = createServerFn({ method: 'GET' })
-  .inputValidator(
-    getSlaTrackingByIdSchema
-      .extend({ configurationId: getSlaTrackingByIdSchema.shape.trackingId })
-      .omit({ trackingId: true })
-      .extend({
-        configurationId: getSlaTrackingByIdSchema.shape.trackingId.describe('SLA configuration ID'),
-      })
-  )
+  .inputValidator(getSlaConfigurationByIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -184,7 +194,7 @@ export const updateSlaConfiguration = createServerFn({ method: 'POST' })
  * Get default SLA configuration for a domain
  */
 export const getDefaultSlaConfiguration = createServerFn({ method: 'GET' })
-  .inputValidator(getSlaConfigurationsSchema.pick({ domain: true }))
+  .inputValidator(getDefaultSlaConfigurationSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -507,7 +517,7 @@ export const recordSlaResolution = createServerFn({ method: 'POST' })
  * Get SLA tracking state snapshot
  */
 export const getSlaState = createServerFn({ method: 'GET' })
-  .inputValidator(getSlaTrackingByIdSchema)
+  .inputValidator(getSlaTrackingByIdQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -548,7 +558,7 @@ export const getSlaState = createServerFn({ method: 'GET' })
  * Get SLA events for a tracking record
  */
 export const getSlaEvents = createServerFn({ method: 'GET' })
-  .inputValidator(getSlaTrackingByIdSchema)
+  .inputValidator(getSlaTrackingByIdQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -573,11 +583,13 @@ export const getSlaEvents = createServerFn({ method: 'GET' })
 /**
  * Dashboard metrics schema
  */
-const getSlaMetricsSchema = z.object({
-  domain: z.enum(['support', 'warranty', 'jobs']).optional(),
-  startDate: z.string().optional(), // ISO date
-  endDate: z.string().optional(), // ISO date
-});
+export const getSlaMetricsSchema = normalizeObjectInput(
+  z.object({
+    domain: z.enum(['support', 'warranty', 'jobs']).optional(),
+    startDate: z.string().optional(), // ISO date
+    endDate: z.string().optional(), // ISO date
+  })
+);
 
 /**
  * Get SLA dashboard metrics for the organization
@@ -647,10 +659,12 @@ export const getSlaMetrics = createServerFn({ method: 'GET' })
 /**
  * Schema for SLA report by issue type
  */
-const getSlaReportByIssueTypeSchema = z.object({
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-});
+export const getSlaReportByIssueTypeSchema = normalizeObjectInput(
+  z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+  })
+);
 
 /**
  * Get SLA metrics broken down by issue type
@@ -952,9 +966,11 @@ export const seedDefaultSlaConfigurations = createServerFn({ method: 'POST' })
  */
 export const hasSlsConfigurations = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      domain: z.enum(['support', 'warranty', 'jobs']).optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        domain: z.enum(['support', 'warranty', 'jobs']).optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();

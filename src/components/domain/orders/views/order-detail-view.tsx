@@ -74,15 +74,8 @@ const OrderPaymentsTab = lazy(() => import('../tabs/order-payments-tab'));
 export interface DocumentActions {
   onGenerateQuote: () => Promise<void>;
   onGenerateInvoice: () => Promise<void>;
-  onGeneratePackingSlip: () => Promise<void>;
-  onGenerateDeliveryNote: () => Promise<void>;
   isGeneratingQuote: boolean;
   isGeneratingInvoice: boolean;
-  isGeneratingPackingSlip: boolean;
-  isGeneratingDeliveryNote: boolean;
-  // Generated URLs (for immediate download after generation)
-  packingSlipUrl?: string;
-  deliveryNoteUrl?: string;
 }
 
 export interface OrderDetailViewProps {
@@ -103,6 +96,8 @@ export interface OrderDetailViewProps {
   onScheduleFollowUp?: () => void;
   /** Fulfillment workflow actions (pick, ship, deliver) */
   fulfillmentActions?: FulfillmentActions;
+  /** Refetch authoritative order detail after draft item edits. */
+  onOrderUpdated?: () => void;
   /** Payment handlers */
   paymentActions?: {
     payments: import('@/lib/schemas/orders').Payment[];
@@ -177,6 +172,7 @@ export const OrderDetailView = memo(function OrderDetailView({
   onLogActivity,
   onScheduleFollowUp,
   fulfillmentActions,
+  onOrderUpdated,
   paymentActions,
   fromIssueBanner,
   className,
@@ -577,7 +573,13 @@ export const OrderDetailView = memo(function OrderDetailView({
                   <TabsContent value="items" className="mt-0">
                     {activeTab === 'items' && (
                       <Suspense fallback={<TabSkeleton />}>
-                        <OrderItemsTab lineItems={order.lineItems} />
+                        <OrderItemsTab
+                          lineItems={order.lineItems}
+                          orderId={order.id}
+                          orderStatus={order.status}
+                          orderVersion={order.version}
+                          onOrderUpdated={onOrderUpdated}
+                        />
                       </Suspense>
                     )}
                   </TabsContent>
@@ -741,78 +743,6 @@ export const OrderDetailView = memo(function OrderDetailView({
                             isGenerating={documentActions?.isGeneratingInvoice}
                           />
                         </div>
-
-                        {/* Packing Slip */}
-                        {documentActions && (
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-2 text-sm">
-                              <Package className="h-4 w-4 text-muted-foreground" />
-                              Packing Slip
-                            </span>
-                            {documentActions.packingSlipUrl ? (
-                              <a
-                                href={documentActions.packingSlipUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-primary hover:underline flex items-center gap-1"
-                              >
-                                <Download className="h-3 w-3" />
-                                Download
-                              </a>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs"
-                                onClick={documentActions.onGeneratePackingSlip}
-                                disabled={documentActions.isGeneratingPackingSlip}
-                              >
-                                {documentActions.isGeneratingPackingSlip ? (
-                                  <>
-                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                    Generating...
-                                  </>
-                                ) : 'Generate'}
-                              </Button>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Delivery Note */}
-                        {documentActions && (
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                              Delivery Note
-                            </span>
-                            {documentActions.deliveryNoteUrl ? (
-                              <a
-                                href={documentActions.deliveryNoteUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-primary hover:underline flex items-center gap-1"
-                              >
-                                <Download className="h-3 w-3" />
-                                Download
-                              </a>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs"
-                                onClick={documentActions.onGenerateDeliveryNote}
-                                disabled={documentActions.isGeneratingDeliveryNote}
-                              >
-                                {documentActions.isGeneratingDeliveryNote ? (
-                                  <>
-                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                    Generating...
-                                  </>
-                                ) : 'Generate'}
-                              </Button>
-                            )}
-                          </div>
-                        )}
 
                         {/* Xero Link */}
                         {order.xeroInvoiceUrl && (

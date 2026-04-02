@@ -22,6 +22,7 @@ export type { UseSuppliersOptions, UsePriceListsOptions } from './use-suppliers'
 
 export {
   usePurchaseOrders,
+  useReceivingDashboardSummary,
   usePurchaseOrderStatusCounts,
   usePendingApprovals as usePendingPurchaseOrders, // Alias: POs pending approval
   usePurchaseOrder,

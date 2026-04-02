@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listPurchaseOrders,
+  getReceivingDashboardSummary,
   getPurchaseOrderStatusCounts,
   getPurchaseOrder,
   createPurchaseOrder,
@@ -84,6 +85,20 @@ export function usePendingApprovals() {
       
       });
       if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useReceivingDashboardSummary() {
+  return useQuery({
+    queryKey: queryKeys.suppliers.purchaseOrdersReceivingSummary(),
+    queryFn: async () => {
+      const result = await getReceivingDashboardSummary({
+        data: { status: ['ordered'] },
+      });
+      if (result == null) throw new Error('Receiving dashboard summary returned no data');
       return result;
     },
     staleTime: 30 * 1000,

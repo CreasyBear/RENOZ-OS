@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { quantitySchema, optionalEmailSchema } from '../_shared/patterns';
+import { quantitySchema, optionalEmailSchema, normalizeObjectInput } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
@@ -84,7 +84,10 @@ export const createShipmentSchema = z.object({
   carrierService: z.string().max(100).optional(),
   trackingNumber: z.string().max(200).optional(),
   trackingUrl: z.string().url().optional(),
+  addressSource: z.enum(['order', 'customer', 'custom']).optional().default('order'),
+  customerAddressId: z.string().uuid().optional(),
   shippingAddress: shipmentAddressSchema.optional(),
+  saveToOrderShippingAddress: z.boolean().optional().default(false),
   returnAddress: shipmentAddressSchema.optional(),
   weight: z.number().int().min(0).optional(), // grams
   length: z.number().int().min(0).optional(), // mm
@@ -212,28 +215,33 @@ export const shipmentParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const shipmentListQuerySchema = z.object({
-  orderId: z.string().uuid().optional(),
-  status: shipmentStatusSchema.optional(),
-  carrier: z.string().optional(),
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['createdAt', 'shippedAt', 'deliveredAt', 'status']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
-
-export type ShipmentListQuery = z.infer<typeof shipmentListQuerySchema>;
-
-export const shipmentListCursorQuerySchema = cursorPaginationSchema.merge(
-  z.object({
+export const shipmentListQuerySchema = normalizeObjectInput(
+  z
+  .object({
     orderId: z.string().uuid().optional(),
     status: shipmentStatusSchema.optional(),
     carrier: z.string().optional(),
     dateFrom: z.coerce.date().optional(),
     dateTo: z.coerce.date().optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+    sortBy: z.enum(['createdAt', 'shippedAt', 'deliveredAt', 'status']).default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
   })
+);
+
+export type ShipmentListQuery = z.infer<typeof shipmentListQuerySchema>;
+
+export const shipmentListCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      orderId: z.string().uuid().optional(),
+      status: shipmentStatusSchema.optional(),
+      carrier: z.string().optional(),
+      dateFrom: z.coerce.date().optional(),
+      dateTo: z.coerce.date().optional(),
+    })
+  )
 );
 
 export type ShipmentListCursorQuery = z.infer<typeof shipmentListCursorQuerySchema>;

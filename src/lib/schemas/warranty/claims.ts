@@ -9,7 +9,7 @@
 
 import type { ReactNode } from 'react';
 import { z } from 'zod';
-import { currencySchema } from '../_shared/patterns';
+import { currencySchema, normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -132,7 +132,7 @@ export type ResolveClaimInput = z.infer<typeof resolveClaimSchema>;
 // LIST WARRANTY CLAIMS
 // ============================================================================
 
-export const listWarrantyClaimsSchema = z.object({
+export const listWarrantyClaimsBaseSchema = z.object({
   warrantyId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
   status: warrantyClaimStatusSchema.optional(),
@@ -147,17 +147,22 @@ export const listWarrantyClaimsSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
-export type ListWarrantyClaimsInput = z.input<typeof listWarrantyClaimsSchema>;
+export const listWarrantyClaimsSchema = normalizeObjectInput(listWarrantyClaimsBaseSchema);
+
+/** Hook / client filter shape (plain object; matches parsed output of list schema). */
+export type ListWarrantyClaimsInput = z.infer<typeof listWarrantyClaimsBaseSchema>;
 
 // ============================================================================
 // GET WARRANTY CLAIM
 // ============================================================================
 
-export const getWarrantyClaimSchema = z.object({
+export const getWarrantyClaimBaseSchema = z.object({
   claimId: z.string().uuid('Invalid claim ID'),
 });
 
-export type GetWarrantyClaimInput = z.infer<typeof getWarrantyClaimSchema>;
+export const getWarrantyClaimSchema = normalizeObjectInput(getWarrantyClaimBaseSchema);
+
+export type GetWarrantyClaimInput = z.infer<typeof getWarrantyClaimBaseSchema>;
 
 // ============================================================================
 // ASSIGN CLAIM
@@ -225,6 +230,11 @@ export interface WarrantyClaimPagination {
 export interface ListWarrantyClaimsResult {
   items: WarrantyClaimListItem[];
   pagination: WarrantyClaimPagination;
+}
+
+export interface WarrantyClaimSummary {
+  totalClaims: number;
+  pendingClaims: number;
 }
 
 /** Search params for warranty claims list */

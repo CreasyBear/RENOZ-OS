@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import { idParamSchema, paginationSchema } from '../_shared/patterns';
+import { idParamSchema, paginationSchema, normalizeObjectInput } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
 // ============================================================================
@@ -110,22 +110,26 @@ export type UpdateScheduledReportInput = z.infer<typeof updateScheduledReportSch
 // LIST SCHEDULED REPORTS
 // ============================================================================
 
-export const listScheduledReportsSchema = paginationSchema.extend({
-  isActive: z.boolean().optional(),
-  frequency: reportFrequencySchema.optional(),
-  format: reportFormatSchema.optional(),
-  search: z.string().max(255).optional(),
-});
-
-export type ListScheduledReportsInput = z.infer<typeof listScheduledReportsSchema>;
-
-export const listScheduledReportsCursorSchema = cursorPaginationSchema.merge(
-  z.object({
+export const listScheduledReportsSchema = normalizeObjectInput(
+  paginationSchema.extend({
     isActive: z.boolean().optional(),
     frequency: reportFrequencySchema.optional(),
     format: reportFormatSchema.optional(),
     search: z.string().max(255).optional(),
   })
+);
+
+export type ListScheduledReportsInput = z.infer<typeof listScheduledReportsSchema>;
+
+export const listScheduledReportsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      isActive: z.boolean().optional(),
+      frequency: reportFrequencySchema.optional(),
+      format: reportFormatSchema.optional(),
+      search: z.string().max(255).optional(),
+    })
+  )
 );
 export type ListScheduledReportsCursorInput = z.infer<typeof listScheduledReportsCursorSchema>;
 

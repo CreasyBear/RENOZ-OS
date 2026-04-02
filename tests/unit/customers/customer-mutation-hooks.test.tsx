@@ -2,6 +2,7 @@ import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { queryKeys } from '@/lib/query-keys'
 
 const mockCreateCustomer = vi.fn()
 const mockCreateContact = vi.fn()
@@ -40,13 +41,12 @@ vi.mock('@/server/functions/financial/xero-operations', () => ({
   unlinkCustomerXeroContact: vi.fn(),
 }))
 
-function createWrapper() {
-  const queryClient = new QueryClient()
+function createWrapper(queryClient = new QueryClient()) {
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
   Wrapper.displayName = 'CustomerMutationHooksWrapper'
-  return Wrapper
+  return { Wrapper, queryClient }
 }
 
 describe('customer mutation hooks', () => {
@@ -54,7 +54,8 @@ describe('customer mutation hooks', () => {
     mockCreateCustomer.mockResolvedValue({ id: 'customer-1' })
 
     const { useCreateCustomer } = await import('@/hooks/customers/use-customers')
-    const { result } = renderHook(() => useCreateCustomer(), { wrapper: createWrapper() })
+    const { Wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateCustomer(), { wrapper: Wrapper })
 
     await act(async () => {
       await result.current.mutateAsync({
@@ -83,8 +84,9 @@ describe('customer mutation hooks', () => {
     const { useCreateContact } = await import('@/hooks/customers/use-customer-contacts')
     const { useCreateAddress } = await import('@/hooks/customers/use-customer-addresses')
 
-    const contactHook = renderHook(() => useCreateContact(), { wrapper: createWrapper() })
-    const addressHook = renderHook(() => useCreateAddress(), { wrapper: createWrapper() })
+    const { Wrapper } = createWrapper()
+    const contactHook = renderHook(() => useCreateContact(), { wrapper: Wrapper })
+    const addressHook = renderHook(() => useCreateAddress(), { wrapper: Wrapper })
 
     await act(async () => {
       await contactHook.result.current.mutateAsync({
@@ -108,6 +110,38 @@ describe('customer mutation hooks', () => {
     })
     expect(mockCreateAddress).toHaveBeenCalledWith({
       data: expect.objectContaining({ street1: '1 Main St' }),
+    })
+  })
+
+  it('useCreateCustomer invalidates finite and infinite customer lists together', async () => {
+    mockCreateCustomer.mockResolvedValue({ id: 'customer-2' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { Wrapper } = createWrapper(queryClient)
+
+    const { useCreateCustomer } = await import('@/hooks/customers/use-customers')
+    const { result } = renderHook(() => useCreateCustomer(), { wrapper: Wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        name: 'Globex',
+        status: 'prospect',
+        type: 'business',
+        creditHold: false,
+        tags: [],
+        email: '',
+        phone: '',
+        website: '',
+        warrantyExpiryAlertOptOut: false,
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.infiniteLists(),
     })
   })
 })

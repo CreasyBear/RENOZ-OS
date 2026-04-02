@@ -13,7 +13,7 @@
 import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table/data-table';
-import { CheckboxCell } from '@/components/shared/data-table';
+import { CheckboxCell, DataTableColumnHeader } from '@/components/shared/data-table';
 import { RmaStatusBadge, RmaReasonBadge } from './rma-status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { RMA_STATUS_OPTIONS, RMA_REASON_OPTIONS } from './rma-options';
+import type { RmaSortField, SortDirection } from './rma-sorting';
 
 interface RmaListProps {
   /** From route container (useRmas). */
@@ -57,6 +58,9 @@ interface RmaListProps {
   searchQuery: string;
   /** From route container (pagination state). */
   page: number;
+  /** From route container (sorting state). */
+  sortBy: RmaSortField;
+  sortOrder: SortDirection;
   /** From route container (filter handler). */
   onStatusFilterChange: (value: RmaStatus | 'all') => void;
   /** From route container (filter handler). */
@@ -65,6 +69,8 @@ interface RmaListProps {
   onSearchChange: (value: string) => void;
   /** From route container (pagination handler). */
   onPageChange: (page: number) => void;
+  /** From route container (sorting handler). */
+  onSortChange?: (sortBy: RmaSortField, sortOrder: SortDirection) => void;
   /** Callback to create new RMA */
   onCreateRma?: () => void;
   /** Callback when RMA is clicked */
@@ -100,10 +106,13 @@ export function RmaList({
   reasonFilter,
   searchQuery,
   page,
+  sortBy,
+  sortOrder,
   onStatusFilterChange,
   onReasonFilterChange,
   onSearchChange,
   onPageChange,
+  onSortChange,
   onCreateRma,
   onRmaClick,
   showCreateButton = true,
@@ -143,14 +152,18 @@ export function RmaList({
         : []),
       {
         accessorKey: 'rmaNumber',
-        header: 'RMA Number',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="RMA Number" />
+        ),
         cell: ({ row }) => (
           <span className="font-mono text-sm font-medium">{row.original.rmaNumber}</span>
         ),
       },
       {
         accessorKey: 'status',
-        header: 'Status',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
         cell: ({ row }) => <RmaStatusBadge status={row.original.status} />,
       },
       {
@@ -160,7 +173,9 @@ export function RmaList({
       },
       {
         accessorKey: 'createdAt',
-        header: 'Created',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Created" />
+        ),
         cell: ({ row }) => (
           <span className="text-muted-foreground text-sm">
             {formatDistanceToNow(new Date(row.original.createdAt), {
@@ -291,6 +306,9 @@ export function RmaList({
             pageIndex: page - 1,
           }}
           enableSorting
+          manualSorting
+          sorting={{ field: sortBy, direction: sortOrder }}
+          onSortChange={(field, direction) => onSortChange?.(field as RmaSortField, direction)}
         />
       )}
 

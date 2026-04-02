@@ -16,6 +16,7 @@ import { TextEncoder } from 'util';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import type { DocumentProps } from '@react-pdf/renderer';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   getFinancialDashboardMetrics,
   getRevenueByPeriod,
@@ -63,8 +64,8 @@ function generateFinancialSummaryCsv(report: FinancialSummaryReport): string {
  * Get financial summary report for a date range.
  * Aggregates KPIs, revenue trends, and cash flow.
  */
-export const getFinancialSummaryReport = createServerFn()
-  .inputValidator(getFinancialSummaryReportSchema)
+export const getFinancialSummaryReport = createServerFn({ method: 'GET' })
+  .inputValidator(normalizeObjectInput(getFinancialSummaryReportSchema))
   .handler(async ({ data }): Promise<FinancialSummaryReport> => {
     await withAuth({ permission: PERMISSIONS.report.viewFinancial });
 
@@ -127,8 +128,8 @@ export const getFinancialSummaryReport = createServerFn()
  * Export financial summary report as CSV or PDF.
  * Uses the same data as getFinancialSummaryReport so export matches on-screen.
  */
-export const generateFinancialSummaryReport = createServerFn()
-  .inputValidator(generateFinancialSummaryReportSchema)
+export const generateFinancialSummaryReport = createServerFn({ method: 'GET' })
+  .inputValidator(normalizeObjectInput(generateFinancialSummaryReportSchema))
   .handler(async ({ data }): Promise<{ reportUrl: string; expiresAt: Date; format: string }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.report.viewFinancial });
 

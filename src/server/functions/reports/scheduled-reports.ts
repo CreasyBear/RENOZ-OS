@@ -20,6 +20,7 @@ import { addDays, addWeeks, addMonths } from 'date-fns';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -163,7 +164,7 @@ export const listScheduledReportsCursor = createServerFn({ method: 'GET' })
  * Get a single scheduled report by ID.
  */
 export const getScheduledReport = createServerFn({ method: 'GET' })
-  .inputValidator(getScheduledReportSchema)
+  .inputValidator(normalizeObjectInput(getScheduledReportSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.read });
 
@@ -189,7 +190,7 @@ export const getScheduledReport = createServerFn({ method: 'GET' })
  * Get scheduled report status.
  */
 export const getScheduledReportStatus = createServerFn({ method: 'GET' })
-  .inputValidator(getScheduledReportSchema)
+  .inputValidator(normalizeObjectInput(getScheduledReportSchema))
   .handler(async ({ data }): Promise<ScheduledReportStatus> => {
     const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.read });
 

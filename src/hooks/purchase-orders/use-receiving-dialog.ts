@@ -95,8 +95,8 @@ export function useReceivingDialog(
 
     navigate({
       to: '.',
-      search: (prev) => {
-        const { [urlParamName]: _, ...rest } = prev as Record<string, unknown>;
+      search: (prev: Record<string, unknown>) => {
+        const { [urlParamName]: _, ...rest } = prev;
         return rest;
       },
       replace: true,
@@ -113,7 +113,7 @@ export function useReceivingDialog(
       if (syncWithUrl) {
         navigate({
           to: '.',
-          search: (prev) => ({
+          search: (prev: Record<string, unknown>) => ({
             ...prev,
             [urlParamName]: poId,
           }),

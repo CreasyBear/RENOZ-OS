@@ -13,12 +13,14 @@
  */
 
 import { useState, useCallback } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   useProductInventory,
   useProductInventoryStats,
   useProductCostLayers,
   useLowStockAlerts,
 } from "@/hooks/products";
+import { usePriceLists } from "@/hooks/suppliers";
 import { ProductInventoryTabView } from "./inventory-tab-view";
 
 // ============================================================================
@@ -40,6 +42,7 @@ export function ProductInventoryTabContainer({
   trackInventory,
   isSerialized,
 }: ProductInventoryTabContainerProps) {
+  const navigate = useNavigate();
   const [showAdjustment, setShowAdjustment] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<string | undefined>();
 
@@ -66,20 +69,51 @@ export function ProductInventoryTabContainer({
     productId,
     enabled: trackInventory,
   });
+  const { data: preferredSupplierPrices } = usePriceLists({
+    productId,
+    status: "active",
+    isPreferred: true,
+    page: 1,
+    pageSize: 1,
+    enabled: trackInventory,
+  });
 
   const isLoading = inventoryLoading || statsLoading;
   const isLowStock = lowStockAlerts?.some((alert) => alert.productId === productId) ?? false;
+  const preferredSupplierId = preferredSupplierPrices?.items?.[0]?.supplierId;
 
   // Refresh handler for after adjustments
   const handleRefresh = useCallback(() => {
     refetchInventory();
   }, [refetchInventory]);
 
-  // Handle add stock at specific location
-  const handleAddStock = useCallback((locationId?: string) => {
+  const handleOpenAdjustment = useCallback((locationId?: string) => {
     setSelectedLocationId(locationId);
     setShowAdjustment(true);
   }, []);
+
+  const handleOpenReceiveInventory = useCallback(() => {
+    navigate({
+      to: "/inventory/receiving",
+      search: {
+        productId,
+        source: "product_detail",
+        returnToProductId: productId,
+      },
+    });
+  }, [navigate, productId]);
+
+  const handleOrderStock = useCallback(() => {
+    navigate({
+      to: "/purchase-orders/create",
+      search: {
+        productId,
+        source: "product_detail",
+        returnToProductId: productId,
+        ...(preferredSupplierId ? { supplierId: preferredSupplierId } : {}),
+      },
+    });
+  }, [navigate, preferredSupplierId, productId]);
 
   return (
     <ProductInventoryTabView
@@ -95,7 +129,9 @@ export function ProductInventoryTabContainer({
       showAdjustment={showAdjustment}
       selectedLocationId={selectedLocationId}
       onShowAdjustmentChange={setShowAdjustment}
-      onAddStock={handleAddStock}
+      onOpenReceiveInventory={handleOpenReceiveInventory}
+      onOpenAdjustment={handleOpenAdjustment}
+      onOrderStock={handleOrderStock}
       onRefresh={handleRefresh}
     />
   );

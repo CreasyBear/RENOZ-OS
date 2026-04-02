@@ -5,16 +5,19 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // LIST RECENT BULK OPERATIONS SCHEMA
 // ============================================================================
 
-export const listRecentBulkOperationsSchema = z.object({
-  entityType: z.string().optional(),
-  limit: z.number().int().positive().max(50).default(10),
-  hours: z.number().int().positive().max(168).default(24), // Max 7 days
-});
+export const listRecentBulkOperationsSchema = normalizeObjectInput(
+  z.object({
+    entityType: z.string().optional(),
+    limit: z.number().int().positive().max(50).default(10),
+    hours: z.number().int().positive().max(168).default(24), // Max 7 days
+  })
+);
 
 export type ListRecentBulkOperationsInput = z.infer<typeof listRecentBulkOperationsSchema>;
 

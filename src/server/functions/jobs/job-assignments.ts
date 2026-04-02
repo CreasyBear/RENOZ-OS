@@ -16,6 +16,7 @@ import { eq, and, gte, lte, sql, desc, asc, inArray, or, ilike } from 'drizzle-o
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse, cursorPaginationSchema } from '@/lib/db/pagination';
 import { containsPattern } from '@/lib/db/utils';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobAssignments, jobPhotos, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, AuthError } from '@/lib/server/errors';
@@ -268,7 +269,7 @@ const _getJobAssignmentCached = cache(
 );
 
 export const getJobAssignment = createServerFn({ method: 'GET' })
-  .inputValidator(getJobAssignmentSchema)
+  .inputValidator(normalizeObjectInput(getJobAssignmentSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     try {
@@ -950,7 +951,7 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
   });
 
 export const getJobPhotos = createServerFn({ method: 'GET' })
-  .inputValidator(listJobPhotosSchema)
+  .inputValidator(normalizeObjectInput(listJobPhotosSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

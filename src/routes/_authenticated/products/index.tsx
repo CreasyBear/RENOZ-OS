@@ -15,6 +15,7 @@ import { z } from "zod";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { ProductTableSkeleton } from "@/components/skeletons/products/table-skeleton";
 import { listProducts, getCategoryTree } from "@/server/functions/products/products";
+import { PRODUCT_SORT_FIELDS } from "@/lib/schemas/products";
 
 // ============================================================================
 // LAZY LOADED PAGE COMPONENT
@@ -36,7 +37,7 @@ export const searchParamsSchema = z.object({
   minPrice: z.coerce.number().nonnegative().optional(),
   maxPrice: z.coerce.number().nonnegative().optional(),
   tag: z.string().uuid().optional(),
-  sortBy: z.string().optional(),
+  sortBy: z.enum(PRODUCT_SORT_FIELDS).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
 });
 

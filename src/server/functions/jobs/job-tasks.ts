@@ -560,7 +560,7 @@ export const reorderTasks = createServerFn({ method: 'POST' })
  * Get a single task by ID with assignee details.
  */
 export const getTask = createServerFn({ method: 'GET' })
-  .inputValidator(getTaskSchema)
+  .inputValidator(normalizeObjectInput(getTaskSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -620,15 +620,18 @@ export const getTask = createServerFn({ method: 'GET' })
 // ============================================================================
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 
 /**
  * Get tasks for a project (project-level tasks + tasks linked to site visits).
  */
 export const getProjectTasks = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      projectId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        projectId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });

@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectFiles } from 'drizzle/schema';
 import {
   createFileSchema,
@@ -84,7 +85,7 @@ export const listFiles = createServerFn({ method: 'GET' })
  * Get a single file by ID
  */
 export const getFile = createServerFn({ method: 'GET' })
-  .inputValidator(fileIdSchema)
+  .inputValidator(normalizeObjectInput(fileIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
@@ -242,9 +243,11 @@ export const deleteFile = createServerFn({ method: 'POST' })
  */
 export const getProjectFilesStats = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      projectId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        projectId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });

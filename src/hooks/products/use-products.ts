@@ -36,6 +36,7 @@ import {
   exportProducts,
   getImportTemplate,
 } from '@/server/functions/products/product-bulk-ops';
+import type { ProductSortField } from '@/lib/schemas/products';
 
 // ============================================================================
 // TYPES
@@ -49,7 +50,7 @@ export interface ProductFilters {
   status?: 'active' | 'draft' | 'discontinued' | 'archived';
   categoryId?: string;
   isActive?: boolean;
-  sortBy?: string;
+  sortBy?: ProductSortField;
   sortOrder?: 'asc' | 'desc';
 }
 

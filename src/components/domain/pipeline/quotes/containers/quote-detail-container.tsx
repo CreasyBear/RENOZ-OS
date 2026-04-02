@@ -210,13 +210,21 @@ export function QuoteDetailContainer({
     }
 
     try {
-      await sendQuoteMutation.mutateAsync({
+      const result = await sendQuoteMutation.mutateAsync({
         opportunityId: opportunityData.opportunity.id,
         quoteVersionId: quoteData.quoteVersion.id,
         recipientEmail: customer.email,
         subject: `Quote for ${opportunityData.opportunity.title}`,
       });
-      toastSuccess('Quote sent successfully');
+      if (!result.success) {
+        toastError(result.error ?? 'Failed to send quote');
+        return;
+      }
+      toastSuccess(
+        result.stages.stageBump.status === 'failed'
+          ? 'Quote sent, but opportunity follow-up updates need attention'
+          : 'Quote sent successfully'
+      );
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Failed to send quote');
     }

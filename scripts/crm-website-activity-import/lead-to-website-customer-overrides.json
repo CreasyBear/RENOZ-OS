@@ -1,0 +1,20 @@
+{
+  "description": "When CRM lead identity does not match website customers.id by email or safe name match, map crm_lead_id to website_customer_id after human review.",
+  "website_organization_id_env": "RENOZ_WEBSITE_ORG_ID",
+  "overrides": [
+    {
+      "crm_lead_id": "6958b15c-8d0c-4dd0-b571-059e02a2c25e",
+      "crm_label": "Volt Energy (CRM) / hello@voltaenergy.au",
+      "website_customer_id": "ba08a733-21fc-4fab-9fee-16ef613e6159",
+      "website_customer_name": "Volta Energy",
+      "reason": "CRM lead id differs from website customer; same account per sales (Trevor/Kevin narrative)."
+    },
+    {
+      "crm_lead_id": "a6fd6047-02d8-49c9-b228-a93b59fcb005",
+      "crm_label": "Get Greener NRG (legacy lead row)",
+      "website_customer_id": "386d7ce6-8087-464b-9776-23e5e155a55c",
+      "website_customer_name": "Get Greener NRG",
+      "reason": "Website canonical customer uses different primary key than CRM lead."
+    }
+  ]
+}

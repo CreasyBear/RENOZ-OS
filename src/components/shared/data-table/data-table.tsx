@@ -16,7 +16,7 @@
  * />
  * ```
  */
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import {
   useReactTable,
   getCoreRowModel,
@@ -56,12 +56,21 @@ export interface DataTableProps<TData> {
   enableRowSelection?: boolean
   /** Enable column sorting */
   enableSorting?: boolean
+  /** Use server-side/manual sorting instead of client-side row sorting */
+  manualSorting?: boolean
   /** Enable column filtering */
   enableFiltering?: boolean
   /** Callback when row is clicked */
   onRowClick?: (row: TData) => void
   /** Callback when selection changes */
   onSelectionChange?: (selectedRows: TData[]) => void
+  /** Controlled sorting state for server/manual sorting */
+  sorting?: {
+    field: string
+    direction: "asc" | "desc"
+  }
+  /** Callback when sorting changes */
+  onSortChange?: (field: string, direction: "asc" | "desc") => void
   /** Global filter value */
   globalFilter?: string
   /** Callback when global filter changes */
@@ -80,18 +89,46 @@ export function DataTable<TData>({
   pagination,
   enableRowSelection = false,
   enableSorting = true,
+  manualSorting = false,
   enableFiltering = false,
   onRowClick,
   onSelectionChange,
+  sorting,
+  onSortChange,
   globalFilter,
   onGlobalFilterChange,
   className,
   isLoading,
   emptyMessage = "No results found.",
 }: DataTableProps<TData>) {
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [internalSorting, setInternalSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+
+  const tableSorting = useMemo<SortingState>(
+    () =>
+      sorting
+        ? [{ id: sorting.field, desc: sorting.direction === "desc" }]
+        : internalSorting,
+    [internalSorting, sorting]
+  )
+
+  const handleSortingChange = useCallback(
+    (updater: SortingState | ((prev: SortingState) => SortingState)) => {
+      const nextSorting =
+        typeof updater === "function" ? updater(tableSorting) : updater
+
+      if (!sorting) {
+        setInternalSorting(nextSorting)
+      }
+
+      if (onSortChange && nextSorting.length > 0) {
+        const nextSort = nextSorting[0]
+        onSortChange(nextSort.id, nextSort.desc ? "desc" : "asc")
+      }
+    },
+    [onSortChange, sorting, tableSorting]
+  )
 
   // Memoize table options for performance
   const tableOptions = useMemo(
@@ -100,15 +137,17 @@ export function DataTable<TData>({
       columns,
       getCoreRowModel: getCoreRowModel(),
       getPaginationRowModel: getPaginationRowModel(),
-      getSortedRowModel: enableSorting ? getSortedRowModel() : undefined,
+      getSortedRowModel:
+        enableSorting && !manualSorting ? getSortedRowModel() : undefined,
       getFilteredRowModel: enableFiltering ? getFilteredRowModel() : undefined,
-      onSortingChange: enableSorting ? setSorting : undefined,
+      onSortingChange: enableSorting ? handleSortingChange : undefined,
       onColumnFiltersChange: enableFiltering ? setColumnFilters : undefined,
       onRowSelectionChange: enableRowSelection ? setRowSelection : undefined,
       onGlobalFilterChange: enableFiltering ? onGlobalFilterChange : undefined,
       enableRowSelection,
+      manualSorting,
       state: {
-        sorting,
+        sorting: tableSorting,
         columnFilters,
         rowSelection,
         globalFilter,
@@ -124,13 +163,15 @@ export function DataTable<TData>({
       data,
       columns,
       enableSorting,
+      manualSorting,
       enableFiltering,
       enableRowSelection,
-      sorting,
+      tableSorting,
       columnFilters,
       rowSelection,
       globalFilter,
       onGlobalFilterChange,
+      handleSortingChange,
       pagination,
     ]
   )
@@ -138,24 +179,17 @@ export function DataTable<TData>({
   // eslint-disable-next-line react-hooks/incompatible-library -- useReactTable returns functions that cannot be memoized; known TanStack Table limitation
   const table = useReactTable(tableOptions)
 
-  // Handle selection changes
-  const handleSelectionChange = useCallback(
-    (selection: RowSelectionState) => {
-      setRowSelection(selection)
-      if (onSelectionChange) {
-        const selectedRows = table
-          .getSelectedRowModel()
-          .rows.map((row) => row.original)
-        onSelectionChange(selectedRows)
-      }
-    },
-    [table, onSelectionChange]
-  )
+  useEffect(() => {
+    if (!enableRowSelection || !onSelectionChange) {
+      return
+    }
 
-  // Update selection callback
-  if (enableRowSelection && rowSelection !== table.getState().rowSelection) {
-    handleSelectionChange(table.getState().rowSelection)
-  }
+    const selectedRows = table
+      .getSelectedRowModel()
+      .rows.map((row) => row.original)
+
+    onSelectionChange(selectedRows)
+  }, [enableRowSelection, onSelectionChange, rowSelection, table])
 
   const handleRowClick = useCallback(
     (row: Row<TData>) => {

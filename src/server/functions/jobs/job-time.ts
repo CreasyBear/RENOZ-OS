@@ -13,6 +13,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobTimeEntries, users } from 'drizzle/schema';
 import { verifyJobExists } from '@/server/functions/_shared/entity-verification';
 import {
@@ -375,7 +376,7 @@ export const deleteTimeEntry = createServerFn({ method: 'POST' })
  * Get all time entries for a job with user details and summary.
  */
 export const getJobTimeEntries = createServerFn({ method: 'GET' })
-  .inputValidator(getJobTimeEntriesSchema)
+  .inputValidator(normalizeObjectInput(getJobTimeEntriesSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -457,7 +458,7 @@ export const getJobTimeEntries = createServerFn({ method: 'GET' })
  * Calculate total labor cost for a job based on hours worked and hourly rate.
  */
 export const calculateJobLaborCost = createServerFn({ method: 'GET' })
-  .inputValidator(calculateJobLaborCostSchema)
+  .inputValidator(normalizeObjectInput(calculateJobLaborCostSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -518,7 +519,7 @@ export const calculateJobLaborCost = createServerFn({ method: 'GET' })
  * Get a single time entry by ID.
  */
 export const getTimeEntry = createServerFn({ method: 'GET' })
-  .inputValidator(getTimeEntrySchema)
+  .inputValidator(normalizeObjectInput(getTimeEntrySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',

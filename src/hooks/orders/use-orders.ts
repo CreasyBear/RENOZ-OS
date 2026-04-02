@@ -21,7 +21,9 @@ import type {
   DeleteOrderLineItemInput,
   ListOrdersResult,
 } from '@/lib/schemas/orders';
-import { queryKeys } from '@/lib/query-keys';
+import { normalizeQueryError } from '@/lib/error-handling';
+import { queryKeys, type OrderFilters } from '@/lib/query-keys';
+import { isValidOrderSortField } from '@/components/domain/orders/order-sorting';
 import { applyOptimisticOrderPatch } from './apply-optimistic-order-patch';
 import {
   expectOrderQueryData,
@@ -35,6 +37,7 @@ import {
   deleteOrder,
   duplicateOrder,
   getOrderStats,
+  getFulfillmentDashboardSummary,
   addOrderLineItem,
   updateOrderLineItem,
   deleteOrderLineItem,
@@ -50,24 +53,50 @@ export interface UseOrdersOptions extends Partial<OrderListQuery> {
   enabled?: boolean;
 }
 
+function toOrderQueryKeyFilters(filters: Partial<OrderListQuery>): OrderFilters {
+  return {
+    ...filters,
+    sortBy:
+      typeof filters.sortBy === 'string' && isValidOrderSortField(filters.sortBy)
+        ? filters.sortBy
+        : undefined,
+  };
+}
+
+function invalidateOrderListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
 export function useOrders(options: UseOrdersOptions = {}) {
   const { enabled = true, ...filters } = options;
 
   const listOrdersFn = useServerFn(listOrders);
+  const normalizedFilters = toOrderQueryKeyFilters(filters);
 
   return useQuery<ListOrdersResult>({
-    queryKey: queryKeys.orders.list(filters),
+    queryKey: queryKeys.orders.list(normalizedFilters),
     queryFn: async () => {
-      const result = await listOrdersFn({ data: filters as OrderListQuery });
-      return (
-        (result as ListOrdersResult) ?? {
-          orders: [],
-          total: 0,
-          page: filters.page ?? 1,
-          pageSize: filters.pageSize ?? 10,
-          hasMore: false,
+      try {
+        const result = await listOrdersFn({ data: normalizedFilters as OrderListQuery });
+        if (import.meta.env.DEV) {
+          console.debug('[useOrders] raw-result', result);
         }
-      );
+        return (
+          (result as ListOrdersResult) ?? {
+            orders: [],
+            total: 0,
+            page: filters.page ?? 1,
+            pageSize: filters.pageSize ?? 10,
+            hasMore: false,
+          }
+        );
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Orders are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -79,18 +108,26 @@ export function useOrders(options: UseOrdersOptions = {}) {
  */
 export function useOrdersInfinite(filters: Partial<OrderListQuery> = {}) {
   const listOrdersFn = useServerFn(listOrders);
+  const normalizedFilters = toOrderQueryKeyFilters(filters);
 
   return useInfiniteQuery<ListOrdersResult>({
-    queryKey: queryKeys.orders.list(filters),
+    queryKey: queryKeys.orders.infiniteList(normalizedFilters),
     queryFn: async ({ pageParam }) => {
-      const result = await listOrdersFn({
-        data: {
-          ...filters,
-          page: pageParam,
-          pageSize: filters.pageSize ?? 50,
-        } as OrderListQuery,
-      });
-      return expectOrderQueryData(result, 'Orders list is unavailable.');
+      try {
+        const result = await listOrdersFn({
+          data: {
+            ...normalizedFilters,
+            page: pageParam,
+            pageSize: normalizedFilters.pageSize ?? 50,
+          } as OrderListQuery,
+        });
+        return expectOrderQueryData(result, 'Orders list is unavailable.');
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Orders are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -115,8 +152,15 @@ export function useOrder({ orderId, enabled = true }: UseOrderOptions) {
   return useQuery({
     queryKey: queryKeys.orders.detail(orderId),
     queryFn: async () => {
-      const result = await getOrderFn({ data: { id: orderId } });
-      return expectOrderQueryData(result, 'Order not found.');
+      try {
+        const result = await getOrderFn({ data: { id: orderId } });
+        return expectOrderQueryData(result, 'Order not found.');
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Order details are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds for details
@@ -145,7 +189,7 @@ export function useCreateOrder() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.orders.detail(result.id), result);
       // Invalidate order lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
       // Invalidate customer orders if customerId provided
       if (result.customerId) {
         queryClient.invalidateQueries({
@@ -174,6 +218,7 @@ export function useUpdateOrder() {
       const optimisticUpdate = variables as Record<string, unknown>;
       await queryClient.cancelQueries({ queryKey: queryKeys.orders.detail(variables.id) });
       await queryClient.cancelQueries({ queryKey: queryKeys.orders.lists() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.orders.infiniteLists() });
 
       const previousDetail = queryClient.getQueryData<OrderDetail>(
         queryKeys.orders.detail(variables.id)
@@ -222,13 +267,13 @@ export function useUpdateOrder() {
         queryClient.setQueryData(key as readonly unknown[], data);
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(_variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
     },
     onSuccess: (result, variables) => {
       // Invalidate the specific order
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.id) });
       // Invalidate order lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
       // Invalidate customer orders
       if (result.customerId) {
         queryClient.invalidateQueries({
@@ -256,7 +301,7 @@ export function useDeleteOrder() {
       // Remove the specific order from cache
       queryClient.removeQueries({ queryKey: queryKeys.orders.detail(orderId) });
       // Invalidate order lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
     },
   });
 }
@@ -276,7 +321,7 @@ export function useDuplicateOrder() {
     },
     onSuccess: () => {
       // Invalidate order lists to show the new duplicated order
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
     },
   });
 }
@@ -291,10 +336,41 @@ export function useOrderStats() {
   return useQuery({
     queryKey: queryKeys.orders.stats(),
     queryFn: async () => {
-      const result = await statsFn();
-      return expectOrderQueryData(result, 'Order stats are unavailable.');
+      try {
+        const result = await statsFn();
+        if (import.meta.env.DEV) {
+          console.debug('[useOrderStats] raw-result', result);
+        }
+        return expectOrderQueryData(result, 'Order stats are unavailable.');
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Order metrics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useFulfillmentDashboardSummary() {
+  const summaryFn = useServerFn(getFulfillmentDashboardSummary);
+
+  return useQuery({
+    queryKey: queryKeys.orders.fulfillmentSummary(),
+    queryFn: async () => {
+      try {
+        const result = await summaryFn();
+        if (result == null) throw new Error('Fulfillment summary is unavailable.');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Fulfillment metrics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
+    },
+    staleTime: 30 * 1000,
   });
 }
 
@@ -317,7 +393,7 @@ export function useAddOrderLineItem() {
     },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
     },
   });
 }
@@ -337,7 +413,7 @@ export function useUpdateOrderLineItem() {
     },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
     },
   });
 }
@@ -357,7 +433,7 @@ export function useDeleteOrderLineItem() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderListQueries(queryClient);
     },
   });
 }

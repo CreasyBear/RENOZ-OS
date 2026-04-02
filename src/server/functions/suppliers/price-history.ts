@@ -17,6 +17,7 @@ import {
 } from '@/lib/db/pagination';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { priceChangeHistory, supplierPriceLists } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -26,26 +27,30 @@ import { NotFoundError, ValidationError } from '@/lib/server/errors';
 // INPUT SCHEMAS
 // ============================================================================
 
-const listPriceChangeHistorySchema = z.object({
-  priceListId: z.string().uuid().optional(),
-  agreementId: z.string().uuid().optional(),
-  supplierId: z.string().uuid().optional(),
-  status: z.enum(['pending', 'approved', 'rejected', 'applied', 'cancelled']).optional(),
-  requestedBy: z.string().uuid().optional(),
-  sortBy: z.enum(['createdAt', 'requestedAt', 'effectiveDate', 'status']).default('requestedAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
-
-const listPriceChangeHistoryCursorSchema = cursorPaginationSchema.merge(
+const listPriceChangeHistorySchema = normalizeObjectInput(
   z.object({
     priceListId: z.string().uuid().optional(),
     agreementId: z.string().uuid().optional(),
     supplierId: z.string().uuid().optional(),
     status: z.enum(['pending', 'approved', 'rejected', 'applied', 'cancelled']).optional(),
     requestedBy: z.string().uuid().optional(),
+    sortBy: z.enum(['createdAt', 'requestedAt', 'effectiveDate', 'status']).default('requestedAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
   })
+);
+
+const listPriceChangeHistoryCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      priceListId: z.string().uuid().optional(),
+      agreementId: z.string().uuid().optional(),
+      supplierId: z.string().uuid().optional(),
+      status: z.enum(['pending', 'approved', 'rejected', 'applied', 'cancelled']).optional(),
+      requestedBy: z.string().uuid().optional(),
+    })
+  )
 );
 
 const createPriceChangeRequestSchema = z.object({
@@ -247,7 +252,7 @@ export const listPriceChangeHistoryCursor = createServerFn({ method: 'GET' })
  * Get a single price change record
  */
 export const getPriceChangeRecord = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -444,9 +449,11 @@ export const cancelPriceChangeRequest = createServerFn({ method: 'POST' })
  */
 export const getPendingApprovals = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      limit: z.number().int().min(1).max(100).default(50),
-    })
+    normalizeObjectInput(
+      z.object({
+        limit: z.number().int().min(1).max(100).default(50),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
@@ -485,11 +492,13 @@ export const getPendingApprovals = createServerFn({ method: 'GET' })
  */
 export const getSupplierPriceChangeStats = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      supplierId: z.string().uuid(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        supplierId: z.string().uuid(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });

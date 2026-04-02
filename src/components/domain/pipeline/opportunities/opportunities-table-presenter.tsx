@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 import {
   createOpportunityColumns,
   type OpportunityTableItem,
@@ -48,7 +49,7 @@ export interface OpportunitiesTablePresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View opportunity handler */
   onViewOpportunity: (id: string) => void;
   /** Edit opportunity handler */
@@ -127,7 +128,7 @@ export const OpportunitiesTablePresenter = memo(function OpportunitiesTablePrese
   ) => {
     const newSorting = typeof updater === "function" ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
     }
   };
 

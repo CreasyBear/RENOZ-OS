@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
 import {
   isWarrantyClaimStatusValue,
@@ -33,6 +34,7 @@ import {
 import { toast } from '../../_shared/use-toast';
 import {
   listWarrantyClaims,
+  getWarrantyClaimSummary,
   getWarrantyClaim,
   createWarrantyClaim,
   updateClaimStatus,
@@ -112,18 +114,24 @@ export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.list(options),
     queryFn: async () => {
-      const result = await listWarrantyClaims({
-        data: {
-          ...options,
-          page: options?.page ?? 1,
-          pageSize: options?.pageSize ?? 20,
-          sortBy: options?.sortBy ?? 'submittedAt',
-          sortOrder: options?.sortOrder ?? 'desc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listWarrantyClaims({
+          data: {
+            ...options,
+            page: options?.page ?? 1,
+            pageSize: options?.pageSize ?? 20,
+            sortBy: options?.sortBy ?? 'submittedAt',
+            sortOrder: options?.sortOrder ?? 'desc',
+          },
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Warranty claims are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: LIST_STALE_TIME,
   });
@@ -136,18 +144,46 @@ export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.byWarranty(warrantyId ?? ''),
     queryFn: async () => {
-      const result = await listWarrantyClaims({
-        data: {
-          warrantyId: warrantyId!,
-          page: 1,
-          pageSize: 100,
-          sortBy: 'submittedAt',
-          sortOrder: 'desc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listWarrantyClaims({
+          data: {
+            warrantyId: warrantyId!,
+            page: 1,
+            pageSize: 100,
+            sortBy: 'submittedAt',
+            sortOrder: 'desc',
+          },
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Warranty claims are temporarily unavailable. Please refresh and try again.'
+        );
+      }
+    },
+    enabled: !!warrantyId,
+    staleTime: LIST_STALE_TIME,
+  });
+}
+
+export function useWarrantyClaimSummary(warrantyId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.warrantyClaims.summary(warrantyId ?? ''),
+    queryFn: async () => {
+      try {
+        const result = await getWarrantyClaimSummary({
+          data: { warrantyId: warrantyId! },
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Warranty claim metrics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: !!warrantyId,
     staleTime: LIST_STALE_TIME,
@@ -161,18 +197,24 @@ export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.byCustomer(customerId ?? ''),
     queryFn: async () => {
-      const result = await listWarrantyClaims({
-        data: {
-          customerId: customerId!,
-          page: 1,
-          pageSize: 100,
-          sortBy: 'submittedAt',
-          sortOrder: 'desc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listWarrantyClaims({
+          data: {
+            customerId: customerId!,
+            page: 1,
+            pageSize: 100,
+            sortBy: 'submittedAt',
+            sortOrder: 'desc',
+          },
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Warranty claims are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: !!customerId,
     staleTime: LIST_STALE_TIME,
@@ -190,11 +232,18 @@ export function useWarrantyClaim(claimId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyClaims.detail(claimId ?? ''),
     queryFn: async () => {
-      const result = await getWarrantyClaim({
-        data: { claimId: claimId! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getWarrantyClaim({
+          data: { claimId: claimId! }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Warranty claim details are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: !!claimId,
     staleTime: DETAIL_STALE_TIME,

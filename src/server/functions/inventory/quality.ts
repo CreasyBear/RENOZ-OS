@@ -12,6 +12,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { qualityInspections } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -44,7 +45,7 @@ const createQualityInspectionSchema = z.object({
  * List quality inspections for an inventory item
  */
 export const listQualityInspections = createServerFn({ method: "GET" })
-  .inputValidator(listQualityInspectionsSchema)
+  .inputValidator(normalizeObjectInput(listQualityInspectionsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 

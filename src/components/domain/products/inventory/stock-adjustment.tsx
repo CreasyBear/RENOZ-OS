@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAdjustStock, useReceiveStock, useInventoryLocations } from "@/hooks/products";
+import { useAdjustStock, useInventoryLocations } from "@/hooks/products";
 
 interface StockAdjustmentProps {
   productId: string;
@@ -57,8 +57,6 @@ const reasonPresets = [
   { value: "cycle_count", label: "Cycle Count Adjustment" },
   { value: "damaged", label: "Damaged Goods" },
   { value: "theft", label: "Theft/Shrinkage" },
-  { value: "found", label: "Found Stock" },
-  { value: "return", label: "Customer Return" },
   { value: "correction", label: "Data Correction" },
   { value: "other", label: "Other" },
 ];
@@ -79,10 +77,9 @@ export function StockAdjustment({
     enabled: open,
   });
   const adjustStockMutation = useAdjustStock();
-  const receiveStockMutation = useReceiveStock();
 
   const locations = useMemo(() => locationsData?.locations ?? [], [locationsData]);
-  const isSaving = adjustStockMutation.isPending || receiveStockMutation.isPending;
+  const isSaving = adjustStockMutation.isPending;
 
   const defaultLocation = useMemo(() => {
     if (locations.length === 0) return undefined;
@@ -114,12 +111,13 @@ export function StockAdjustment({
 
       switch (data.adjustmentType) {
         case "add":
-          receiveStockMutation.mutate(
+          adjustStockMutation.mutate(
             {
               productId,
               locationId: data.locationId,
-              quantity: data.quantity,
-              notes: `${data.reason}${data.notes ? ` - ${data.notes}` : ""}`,
+              adjustmentQty: data.quantity,
+              reason: data.reason,
+              notes: data.notes,
             },
             { onSuccess, onError }
           );
@@ -247,7 +245,7 @@ export function StockAdjustment({
         <DialogHeader>
           <DialogTitle>Adjust Stock</DialogTitle>
           <DialogDescription>
-            Adjust inventory for {productName}
+            Record a stock correction for {productName}. Supplier deliveries should use Receive Inventory or Receive Goods instead.
           </DialogDescription>
         </DialogHeader>
 
@@ -307,7 +305,7 @@ export function StockAdjustment({
                       className="flex-1"
                     >
                       <Plus className="h-4 w-4 mr-1" />
-                      Add
+                      Increase
                     </Button>
                     <Button
                       type="button"
@@ -317,7 +315,7 @@ export function StockAdjustment({
                       className="flex-1"
                     >
                       <Minus className="h-4 w-4 mr-1" />
-                      Subtract
+                      Decrease
                     </Button>
                     <Button
                       type="button"
@@ -326,7 +324,7 @@ export function StockAdjustment({
                       onClick={() => field.handleChange("set")}
                       className="flex-1"
                     >
-                      Set To
+                      Set Exact
                     </Button>
                   </div>
                 </div>

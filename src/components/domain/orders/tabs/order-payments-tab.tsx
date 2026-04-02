@@ -183,10 +183,13 @@ function PaymentSummaryCard({
 function PaymentRow({
   payment,
   onRefund,
+  refundableAmount,
 }: {
   payment: Payment;
   onRefund?: (paymentId: string) => void;
+  refundableAmount?: number;
 }) {
+  const canRefund = !payment.isRefund && (refundableAmount ?? payment.amount) > 0;
   return (
     <TableRow className={cn(payment.isRefund && "bg-destructive/5")}>
       <TableCell>
@@ -248,9 +251,10 @@ function PaymentRow({
             size="sm"
             onClick={() => onRefund(payment.id)}
             className="text-destructive hover:text-destructive"
+            disabled={!canRefund}
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1" />
-            Refund
+            {canRefund ? "Refund" : "Refunded"}
           </Button>
         )}
       </TableCell>
@@ -272,6 +276,16 @@ export const OrderPaymentsTab = memo(function OrderPaymentsTab({
   canRecordPayment = true,
 }: OrderPaymentsTabProps) {
   const hasPayments = payments.length > 0;
+  const refundableByPaymentId = payments.reduce<Record<string, number>>((acc, payment) => {
+    if (payment.isRefund) return acc;
+    const refunded = payments
+      .filter(
+        (candidate) => candidate.isRefund && candidate.relatedPaymentId === payment.id
+      )
+      .reduce((sum, candidate) => sum + Number(candidate.amount), 0);
+    acc[payment.id] = Math.max(0, Number(payment.amount) - refunded);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6 pt-6">
@@ -314,6 +328,7 @@ export const OrderPaymentsTab = memo(function OrderPaymentsTab({
                     key={payment.id}
                     payment={payment}
                     onRefund={onRefundPayment}
+                    refundableAmount={refundableByPaymentId[payment.id]}
                   />
                 ))}
               </TableBody>

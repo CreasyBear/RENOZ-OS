@@ -3,6 +3,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { portalIdentities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -103,7 +104,7 @@ export const requestPortalLink = createServerFn({ method: 'POST' })
 // ============================================================================
 
 export const getPortalIdentity = createServerFn({ method: 'GET' })
-  .inputValidator(getPortalIdentitySchema)
+  .inputValidator(normalizeObjectInput(getPortalIdentitySchema))
   .handler(async () => {
     const request = getRequest();
     const authUser = await getServerUser(request);

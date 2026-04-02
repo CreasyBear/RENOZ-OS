@@ -161,6 +161,21 @@ export type RecordPaymentFormValues = z.infer<
   ReturnType<typeof createRecordPaymentFormSchema>
 >;
 
+export const createRefundPaymentFormSchema = (maxRefundable: number) =>
+  z.object({
+    amount: z
+      .number()
+      .positive("Amount must be greater than 0")
+      .refine((value) => value <= maxRefundable, {
+        message: `Amount cannot exceed refundable balance ($${maxRefundable.toFixed(2)})`,
+      }),
+    notes: z.string().optional(),
+  });
+
+export type RefundPaymentFormValues = z.infer<
+  ReturnType<typeof createRefundPaymentFormSchema>
+>;
+
 // ============================================================================
 // FORM DEFAULTS
 // ============================================================================

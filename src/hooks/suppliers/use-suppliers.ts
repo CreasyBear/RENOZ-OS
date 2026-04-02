@@ -66,8 +66,10 @@ export function useSuppliers(options: UseSuppliersOptions = {}) {
 // ============================================================================
 
 export interface UsePriceListsOptions {
-  supplierId: string;
+  supplierId?: string;
+  productId?: string;
   status?: 'active' | 'inactive' | 'pending' | 'expired';
+  isPreferred?: boolean;
   page?: number;
   pageSize?: number;
   sortBy?: 'basePrice' | 'unitPrice' | 'expiryDate' | 'productName' | 'effectivePrice' | 'effectiveDate';
@@ -76,12 +78,14 @@ export interface UsePriceListsOptions {
 }
 
 /**
- * Fetch price lists for a supplier.
+ * Fetch price lists filtered by supplier and/or product.
  */
 export function usePriceLists(options: UsePriceListsOptions) {
   const {
     supplierId,
+    productId,
     status = 'active',
+    isPreferred,
     page = 1,
     pageSize = 50,
     sortBy = 'productName',
@@ -92,7 +96,9 @@ export function usePriceLists(options: UsePriceListsOptions) {
   return useQuery({
     queryKey: queryKeys.suppliers.priceLists.list({
       supplierId,
+      productId,
       status,
+      isPreferred,
       page,
       pageSize,
       sortBy,
@@ -100,12 +106,12 @@ export function usePriceLists(options: UsePriceListsOptions) {
     }),
     queryFn: async () => {
       const result = await listPriceLists({
-        data: { supplierId, status, page, pageSize, sortBy, sortOrder },
+        data: { supplierId, productId, status, isPreferred, page, pageSize, sortBy, sortOrder },
       });
       if (result == null) throw new Error('Price lists returned no data');
       return result;
     },
-    enabled: enabled && !!supplierId,
+    enabled: enabled && (!!supplierId || !!productId),
     staleTime: 60 * 1000,
   });
 }

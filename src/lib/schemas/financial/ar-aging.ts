@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { idSchema, paginationSchema } from '../_shared/patterns';
+import { idSchema, normalizeObjectInput, paginationSchema } from '../_shared/patterns';
 
 // ============================================================================
 // AGING BUCKET ENUM
@@ -34,25 +34,27 @@ export type AgingBucket = z.infer<typeof agingBucketSchema>;
  * Query parameters for getting AR aging report.
  * Includes pagination to prevent loading all outstanding orders at once.
  */
-export const arAgingReportQuerySchema = paginationSchema
-  .extend({
-    // Filter by specific customer
-    customerId: idSchema.optional(),
+export const arAgingReportQuerySchema = normalizeObjectInput(
+  paginationSchema
+    .extend({
+      // Filter by specific customer
+      customerId: idSchema.optional(),
 
-    // Only show high-value commercial accounts ($50K+)
-    commercialOnly: z.boolean().default(false),
+      // Only show high-value commercial accounts ($50K+)
+      commercialOnly: z.boolean().default(false),
 
-    // Include zero-balance customers (paid in full)
-    includeZeroBalance: z.boolean().default(false),
+      // Include zero-balance customers (paid in full)
+      includeZeroBalance: z.boolean().default(false),
 
-    // As of date (defaults to today) - for historical aging snapshots
-    asOfDate: z.coerce.date().optional(),
-  })
-  .transform((data) => ({
-    ...data,
-    // Override default pageSize for AR reports (can be larger since it's a report)
-    pageSize: data.pageSize ?? 100,
-  }));
+      // As of date (defaults to today) - for historical aging snapshots
+      asOfDate: z.coerce.date().optional(),
+    })
+    .transform((data) => ({
+      ...data,
+      // Override default pageSize for AR reports (can be larger since it's a report)
+      pageSize: data.pageSize ?? 100,
+    }))
+);
 
 export type ARAgingReportQuery = z.infer<typeof arAgingReportQuerySchema>;
 
@@ -63,15 +65,17 @@ export type ARAgingReportQuery = z.infer<typeof arAgingReportQuerySchema>;
 /**
  * Query parameters for getting detailed AR aging for a specific customer.
  */
-export const arAgingCustomerDetailQuerySchema = paginationSchema.extend({
-  customerId: idSchema,
+export const arAgingCustomerDetailQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    customerId: idSchema,
 
-  // Filter by specific aging bucket
-  bucket: agingBucketSchema.optional(),
+    // Filter by specific aging bucket
+    bucket: agingBucketSchema.optional(),
 
-  // As of date (defaults to today)
-  asOfDate: z.coerce.date().optional(),
-});
+    // As of date (defaults to today)
+    asOfDate: z.coerce.date().optional(),
+  })
+);
 
 export type ARAgingCustomerDetailQuery = z.infer<typeof arAgingCustomerDetailQuerySchema>;
 

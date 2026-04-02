@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 import { flexibleJsonSchema, type FlexibleJson } from '../_shared/patterns';
 
 // ============================================================================
@@ -73,9 +74,11 @@ export interface NotificationItem {
 // LIST REQUEST / RESPONSE
 // ============================================================================
 
-export const listNotificationsInputSchema = z.object({
-  limit: z.number().min(1).max(50).default(20),
-});
+export const listNotificationsInputSchema = normalizeObjectInput(
+  z.object({
+    limit: z.number().min(1).max(50).default(20),
+  })
+);
 
 export type ListNotificationsInput = z.infer<typeof listNotificationsInputSchema>;
 

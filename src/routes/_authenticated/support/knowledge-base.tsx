@@ -12,7 +12,6 @@
 
 import { useMemo, useState } from 'react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { KnowledgeBaseSkeleton } from '@/components/skeletons/support';
 import { BookOpen, Settings } from 'lucide-react';
@@ -39,22 +38,20 @@ import {
 import { useDebounce } from '@/hooks/_shared';
 import { useConfirmation } from '@/hooks';
 import { toast } from 'sonner';
+import {
+  DEFAULT_KB_ARTICLE_SORT_FIELD,
+  isValidKbArticleSortField,
+} from '@/components/domain/support/knowledge-base/kb-article-sorting';
 import type {
   KbCategoryResponse,
   KbArticleResponse,
   KbArticleStatus,
   ListArticlesInput,
 } from '@/lib/schemas/support/knowledge-base';
+import { knowledgeBaseSearchSchema } from './knowledge-base-search-schema';
 
 export const Route = createFileRoute('/_authenticated/support/knowledge-base')({
-  validateSearch: z.object({
-    categoryId: z.string().uuid().optional(),
-    search: z.string().optional(),
-    status: z.enum(['all', 'draft', 'published', 'archived']).default('all').optional(),
-    tags: z.string().optional(),
-    page: z.coerce.number().int().positive().default(1).optional(),
-    sortBy: z.enum(['updatedAt', 'createdAt', 'title', 'viewCount', 'publishedAt']).default('updatedAt').optional(),
-  }),
+  validateSearch: knowledgeBaseSearchSchema,
   component: KnowledgeBasePage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/support" />
@@ -100,7 +97,9 @@ function KnowledgeBasePage() {
     .map((tag) => tag.trim())
     .filter(Boolean);
   const page = searchState.page ?? 1;
-  const sortBy = (searchState.sortBy ?? 'updatedAt') as ListArticlesInput['sortBy'];
+  const sortBy: ListArticlesInput['sortBy'] = isValidKbArticleSortField(searchState.sortBy ?? '')
+    ? searchState.sortBy ?? DEFAULT_KB_ARTICLE_SORT_FIELD
+    : DEFAULT_KB_ARTICLE_SORT_FIELD;
   const selectedCategory = (categories ?? []).find((category) => category.id === searchState.categoryId) ?? null;
 
   const updateSearchState = (updates: Partial<{

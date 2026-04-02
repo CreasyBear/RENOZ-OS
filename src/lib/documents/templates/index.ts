@@ -66,6 +66,13 @@ export {
 // ============================================================================
 
 export {
+  // Dispatch Note
+  DispatchNotePdfDocument,
+  DispatchNotePdfTemplate,
+  type DispatchNoteDocumentData,
+  type DispatchNoteLineItem,
+  type DispatchNotePdfDocumentProps,
+  type DispatchNotePdfTemplateProps,
   // Delivery Note
   DeliveryNotePdfDocument,
   DeliveryNotePdfTemplate,

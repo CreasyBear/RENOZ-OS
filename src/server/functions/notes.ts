@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectNotes, type AudioNoteData } from 'drizzle/schema';
 import {
   createNoteSchema,
@@ -84,7 +85,7 @@ export const listNotes = createServerFn({ method: 'GET' })
  * Get a single note by ID
  */
 export const getNote = createServerFn({ method: 'GET' })
-  .inputValidator(noteIdSchema)
+  .inputValidator(normalizeObjectInput(noteIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
@@ -201,9 +202,11 @@ export const deleteNote = createServerFn({ method: 'POST' })
  */
 export const getProjectNotesStats = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      projectId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        projectId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });

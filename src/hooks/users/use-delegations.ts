@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
 import {
   createDelegation,
@@ -44,11 +45,18 @@ export function useMyDelegations(filters?: DelegationFilters, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.delegations.myDelegations(filters),
     queryFn: async () => {
-      const result = await listMyDelegations({
-        data: filters ?? { page: 1, pageSize: 50 } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listMyDelegations({
+          data: filters ?? { page: 1, pageSize: 50 }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Delegations are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -62,11 +70,18 @@ export function useDelegationsToMe(filters?: DelegationFilters, enabled = true) 
   return useQuery({
     queryKey: queryKeys.users.delegations.delegationsToMe(filters),
     queryFn: async () => {
-      const result = await listDelegationsToMe({
-        data: filters ?? { page: 1, pageSize: 50 } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listDelegationsToMe({
+          data: filters ?? { page: 1, pageSize: 50 }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Delegations are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -80,11 +95,18 @@ export function useAllDelegations(filters?: AllDelegationsFilters, enabled = tru
   return useQuery({
     queryKey: queryKeys.users.delegations.allDelegations(filters),
     queryFn: async () => {
-      const result = await listAllDelegations({
-        data: filters ?? { page: 1, pageSize: 50, activeOnly: true } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listAllDelegations({
+          data: filters ?? { page: 1, pageSize: 50, activeOnly: true }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Delegations are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -98,11 +120,18 @@ export function useActiveDelegate(userId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.delegations.activeDelegate(userId),
     queryFn: async () => {
-      const result = await getActiveDelegate({
-        data: { id: userId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getActiveDelegate({
+          data: { id: userId }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Active delegation details are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!userId,
     staleTime: 60 * 1000,

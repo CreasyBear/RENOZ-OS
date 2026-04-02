@@ -40,10 +40,13 @@ import {
 } from './customer-write-helpers';
 import {
   createCustomerSchema,
+  createCustomerBundleSchema,
   updateCustomerSchema,
+  updateCustomerBundleSchema,
   customerListQuerySchema,
   customerCursorQuerySchema,
   customerParamsSchema,
+  customerParamsBaseSchema,
   createContactSchema,
   updateContactSchema,
   contactParamsSchema,
@@ -66,6 +69,10 @@ import {
   bulkAssignTagsSchema,
   bulkUpdateHealthScoresSchema,
   mergeCustomersSchema,
+  type CustomerNestedAddress,
+  type CustomerNestedContact,
+  type UpdateCustomerBundleAddress,
+  type UpdateCustomerBundleContact,
 } from '@/lib/schemas/customers';
 import {
   decodeCursor,
@@ -185,6 +192,149 @@ async function assertCustomerReferenceInOrg(
   }
 }
 
+async function insertCustomerContacts(
+  tx: DbTransaction,
+  organizationId: string,
+  userId: string,
+  customerId: string,
+  items: CustomerNestedContact[]
+) {
+  if (items.length === 0) return [];
+
+  return tx
+    .insert(contacts)
+    .values(
+      items.map((item) => ({
+        ...normalizeContactMutationInput(item),
+        customerId,
+        organizationId,
+        createdBy: userId,
+        updatedBy: userId,
+      }))
+    )
+    .returning();
+}
+
+async function insertCustomerAddresses(
+  tx: DbTransaction,
+  organizationId: string,
+  customerId: string,
+  items: CustomerNestedAddress[]
+) {
+  if (items.length === 0) return [];
+
+  return tx
+    .insert(addresses)
+    .values(
+      items.map((item) => ({
+        ...normalizeAddressMutationInput(item),
+        customerId,
+        organizationId,
+      }))
+    )
+    .returning();
+}
+
+async function syncCustomerContacts(
+  tx: DbTransaction,
+  organizationId: string,
+  userId: string,
+  customerId: string,
+  items: UpdateCustomerBundleContact[]
+) {
+  const existingRows = await tx
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.customerId, customerId), eq(contacts.organizationId, organizationId)));
+
+  const existingIds = new Set(existingRows.map((row) => row.id));
+  const retainedIds = new Set(items.flatMap((item) => (item.id ? [item.id] : [])));
+
+  for (const row of existingRows) {
+    if (!retainedIds.has(row.id)) {
+      await tx
+        .delete(contacts)
+        .where(and(eq(contacts.id, row.id), eq(contacts.organizationId, organizationId)));
+    }
+  }
+
+  for (const item of items) {
+    const normalized = normalizeContactMutationInput(item);
+    if (item.id) {
+      if (!existingIds.has(item.id)) {
+        throw new ValidationError('Contact does not belong to this customer', {
+          contacts: ['One or more contacts no longer belong to this customer. Refresh and try again.'],
+        });
+      }
+
+      const { id, ...updateData } = normalized;
+      await tx
+        .update(contacts)
+        .set({
+          ...updateData,
+          updatedBy: userId,
+        })
+        .where(and(eq(contacts.id, item.id), eq(contacts.organizationId, organizationId)));
+      continue;
+    }
+
+    await tx.insert(contacts).values({
+      ...normalized,
+      customerId,
+      organizationId,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+  }
+}
+
+async function syncCustomerAddresses(
+  tx: DbTransaction,
+  organizationId: string,
+  customerId: string,
+  items: UpdateCustomerBundleAddress[]
+) {
+  const existingRows = await tx
+    .select({ id: addresses.id })
+    .from(addresses)
+    .where(and(eq(addresses.customerId, customerId), eq(addresses.organizationId, organizationId)));
+
+  const existingIds = new Set(existingRows.map((row) => row.id));
+  const retainedIds = new Set(items.flatMap((item) => (item.id ? [item.id] : [])));
+
+  for (const row of existingRows) {
+    if (!retainedIds.has(row.id)) {
+      await tx
+        .delete(addresses)
+        .where(and(eq(addresses.id, row.id), eq(addresses.organizationId, organizationId)));
+    }
+  }
+
+  for (const item of items) {
+    const normalized = normalizeAddressMutationInput(item);
+    if (item.id) {
+      if (!existingIds.has(item.id)) {
+        throw new ValidationError('Address does not belong to this customer', {
+          addresses: ['One or more addresses no longer belong to this customer. Refresh and try again.'],
+        });
+      }
+
+      const { id, ...updateData } = normalized;
+      await tx
+        .update(addresses)
+        .set(updateData)
+        .where(and(eq(addresses.id, item.id), eq(addresses.organizationId, organizationId)));
+      continue;
+    }
+
+    await tx.insert(addresses).values({
+      ...normalized,
+      customerId,
+      organizationId,
+    });
+  }
+}
+
 // ============================================================================
 // CUSTOMER CRUD
 // ============================================================================
@@ -249,8 +399,41 @@ export const getCustomers = createServerFn({ method: 'GET' })
 
     // Pagination setup
     const offset = (page - 1) * pageSize;
-    const orderColumn = sortBy === 'name' ? customers.name : customers.createdAt;
     const orderDirection = sortOrder === 'asc' ? asc : desc;
+    const sortClauses =
+      sortBy === 'name'
+        ? [orderDirection(customers.name), asc(customers.id)]
+        : sortBy === 'status'
+          ? [orderDirection(customers.status), asc(customers.name), asc(customers.id)]
+          : sortBy === 'lifetimeValue'
+            ? [
+                orderDirection(sql<number>`COALESCE(SUM(${orders.total}), 0)`),
+                asc(customers.name),
+                asc(customers.id),
+              ]
+            : sortBy === 'totalOrders'
+              ? [
+                  orderDirection(sql<number>`COUNT(${orders.id})`),
+                  asc(customers.name),
+                  asc(customers.id),
+                ]
+              : sortBy === 'healthScore'
+                ? [
+                    sortOrder === 'asc'
+                      ? sql`${customers.healthScore} ASC NULLS LAST`
+                      : sql`${customers.healthScore} DESC NULLS LAST`,
+                    asc(customers.name),
+                    asc(customers.id),
+                  ]
+                : sortBy === 'lastOrderDate'
+                  ? [
+                      sortOrder === 'asc'
+                        ? sql`MAX(${orders.orderDate}) ASC NULLS LAST`
+                        : sql`MAX(${orders.orderDate}) DESC NULLS LAST`,
+                      asc(customers.name),
+                      asc(customers.id),
+                    ]
+                  : [orderDirection(customers.createdAt), orderDirection(customers.id)];
 
     // Build order aggregation conditions
     const validOrderCondition = and(
@@ -344,7 +527,7 @@ export const getCustomers = createServerFn({ method: 'GET' })
           customers.updatedBy,
           customers.deletedAt
         )
-        .orderBy(orderDirection(orderColumn))
+        .orderBy(...sortClauses)
         .limit(pageSize)
         .offset(offset),
     ]);
@@ -633,11 +816,74 @@ export const createCustomer = createServerFn({ method: 'POST' })
     }
   });
 
+export const createCustomerBundle = createServerFn({ method: 'POST' })
+  .inputValidator(createCustomerBundleSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.create });
+    const logger = createActivityLoggerWithContext(ctx);
+    const normalizedCustomer = normalizeCustomerMutationInput(data.customer);
+
+    try {
+      const created = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
+        if (normalizedCustomer.parentId) {
+          await assertCustomerReferenceInOrg(
+            tx,
+            ctx.organizationId,
+            normalizedCustomer.parentId,
+            'Parent customer must belong to your organization and cannot be deleted'
+          );
+        }
+
+        const [customer] = await tx
+          .insert(customers)
+          .values({
+            ...normalizedCustomer,
+            organizationId: ctx.organizationId,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          })
+          .returning();
+
+        await insertCustomerContacts(tx, ctx.organizationId, ctx.user.id, customer.id, data.contacts);
+        await insertCustomerAddresses(tx, ctx.organizationId, customer.id, data.addresses);
+        await enqueueCustomerSearchOutbox(ctx.organizationId, customer, 'upsert', tx);
+
+        return customer;
+      });
+
+      logCustomerActivitySafely('created', created.id, () => {
+        logger.logAsync({
+          entityType: 'customer',
+          entityId: created.id,
+          action: 'created',
+          changes: computeChanges({
+            before: null,
+            after: created,
+            excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+          }),
+          description: `Created customer: ${created.name}`,
+        });
+      });
+
+      return created;
+    } catch (error: unknown) {
+      const conflictError = getCustomerCreateConflictError(error);
+      if (conflictError) {
+        setResponseStatus(409);
+        throw conflictError;
+      }
+      if (error instanceof ValidationError) throw error;
+      customersLogger.error('createCustomerBundle DB error', error);
+      setResponseStatus(500);
+      throw new ServerError('Failed to create customer', 500, 'INTERNAL_ERROR');
+    }
+  });
+
 /**
  * Update an existing customer
  */
 export const updateCustomer = createServerFn({ method: 'POST' })
-  .inputValidator(customerParamsSchema.merge(updateCustomerSchema))
+  .inputValidator(customerParamsBaseSchema.merge(updateCustomerSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
     const logger = createActivityLoggerWithContext(ctx);
@@ -717,6 +963,96 @@ export const updateCustomer = createServerFn({ method: 'POST' })
     })
 
     return updated;
+  });
+
+export const updateCustomerBundle = createServerFn({ method: 'POST' })
+  .inputValidator(customerParamsBaseSchema.merge(updateCustomerBundleSchema))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
+    const logger = createActivityLoggerWithContext(ctx);
+    const { id, customer: customerData, contacts: contactData, addresses: addressData } = data;
+    const normalizedCustomer = normalizeCustomerMutationInput(customerData);
+
+    const before = await db.query.customers.findFirst({
+      where: and(
+        eq(customers.id, id),
+        eq(customers.organizationId, ctx.organizationId),
+        isNull(customers.deletedAt)
+      ),
+    });
+
+    if (!before) {
+      throw new NotFoundError('Customer not found', 'customer');
+    }
+
+    try {
+      const updated = await runCustomerWriteTransaction(ctx.organizationId, async (tx) => {
+        if (normalizedCustomer.parentId) {
+          await assertCustomerReferenceInOrg(
+            tx,
+            ctx.organizationId,
+            normalizedCustomer.parentId,
+            'Parent customer must belong to your organization and cannot be deleted'
+          );
+        }
+
+        const updatedRows = await tx
+          .update(customers)
+          .set({
+            ...normalizedCustomer,
+            updatedBy: ctx.user.id,
+          })
+          .where(
+            and(
+              eq(customers.id, id),
+              eq(customers.organizationId, ctx.organizationId),
+              isNull(customers.deletedAt)
+            )
+          )
+          .returning();
+
+        const customer = updatedRows[0];
+        if (!customer) {
+          throw new NotFoundError('Customer not found', 'customer');
+        }
+
+        await syncCustomerContacts(tx, ctx.organizationId, ctx.user.id, id, contactData);
+        await syncCustomerAddresses(tx, ctx.organizationId, id, addressData);
+        await enqueueCustomerSearchOutbox(ctx.organizationId, customer, 'upsert', tx);
+
+        return customer;
+      });
+
+      logCustomerActivitySafely('updated', updated.id, () => {
+        const changes = computeChanges({
+          before,
+          after: updated,
+          excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+        });
+
+        if (changes.fields && changes.fields.length > 0) {
+          logger.logAsync({
+            entityType: 'customer',
+            entityId: updated.id,
+            action: 'updated',
+            changes,
+            description: `Updated customer: ${updated.name}`,
+          });
+        }
+      });
+
+      return updated;
+    } catch (error: unknown) {
+      const conflictError = getCustomerCreateConflictError(error);
+      if (conflictError) {
+        setResponseStatus(409);
+        throw conflictError;
+      }
+      if (error instanceof ValidationError || error instanceof NotFoundError) throw error;
+      customersLogger.error('updateCustomerBundle DB error', error);
+      setResponseStatus(500);
+      throw new ServerError('Failed to update customer', 500, 'INTERNAL_ERROR');
+    }
   });
 
 /**
@@ -1440,7 +1776,7 @@ export const setCustomerPriority = createServerFn({ method: 'POST' })
  * Update customer priority settings
  */
 export const updateCustomerPriority = createServerFn({ method: 'POST' })
-  .inputValidator(customerParamsSchema.merge(updateCustomerPrioritySchema))
+  .inputValidator(customerParamsBaseSchema.merge(updateCustomerPrioritySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 

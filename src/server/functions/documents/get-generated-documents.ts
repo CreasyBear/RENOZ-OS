@@ -10,12 +10,13 @@
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { eq, and, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { generatedDocuments } from 'drizzle/schema';
+import { generatedDocuments, orders, orderShipments } from 'drizzle/schema';
 import {
   decodeCursor,
   buildCursorCondition,
@@ -29,29 +30,33 @@ import {
 /**
  * Query parameters for listing generated documents
  */
-const generatedDocumentsQuerySchema = z.object({
-  /** Entity type filter (e.g., 'order', 'warranty', 'job') */
-  entityType: z.string(),
-  /** Entity ID to get documents for */
-  entityId: z.string().uuid(),
-  /** Optional document type filter (e.g., 'quote', 'invoice', 'warranty_certificate') */
-  documentType: z.string().optional(),
-  /** Page size for cursor pagination (1-100, default 20) */
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  /** Cursor for pagination */
-  cursor: z.string().optional(),
-  /** Sort order (default desc = newest first) */
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
+const generatedDocumentsQuerySchema = normalizeObjectInput(
+  z.object({
+    /** Entity type filter (e.g., 'order', 'warranty', 'job') */
+    entityType: z.string(),
+    /** Entity ID to get documents for */
+    entityId: z.string().uuid(),
+    /** Optional document type filter (e.g., 'quote', 'invoice', 'warranty_certificate') */
+    documentType: z.string().optional(),
+    /** Page size for cursor pagination (1-100, default 20) */
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    /** Cursor for pagination */
+    cursor: z.string().optional(),
+    /** Sort order (default desc = newest first) */
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+);
 
 export type GeneratedDocumentsQuery = z.infer<typeof generatedDocumentsQuerySchema>;
 
 /**
  * Schema for getting a single document by ID
  */
-const getDocumentByIdSchema = z.object({
-  id: z.string().uuid(),
-});
+const getDocumentByIdSchema = normalizeObjectInput(
+  z.object({
+    id: z.string().uuid(),
+  })
+);
 
 // ============================================================================
 // GET GENERATED DOCUMENTS (LIST)
@@ -183,10 +188,18 @@ export const getGeneratedDocumentById = createServerFn({ method: 'GET' })
 /**
  * Schema for counting documents by type
  */
-const documentCountsSchema = z.object({
-  entityType: z.string(),
-  entityId: z.string().uuid(),
-});
+const documentCountsSchema = normalizeObjectInput(
+  z.object({
+    entityType: z.string(),
+    entityId: z.string().uuid(),
+  })
+);
+
+const orderDocumentAggregateSchema = normalizeObjectInput(
+  z.object({
+    orderId: z.string().uuid(),
+  })
+);
 
 /**
  * Get counts of documents by type for an entity
@@ -226,4 +239,94 @@ export const getDocumentCountsByType = createServerFn({ method: 'GET' })
       total: Object.values(countsByType).reduce((sum, count) => sum + count, 0),
       byType: countsByType,
     };
+  });
+
+export const getOrderGeneratedDocuments = createServerFn({ method: 'GET' })
+  .inputValidator(orderDocumentAggregateSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.order.read });
+
+    const [order] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, data.orderId),
+          eq(orders.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!order) {
+      throw new NotFoundError('Order not found', 'order');
+    }
+
+    const shipments = await db
+      .select({ id: orderShipments.id })
+      .from(orderShipments)
+      .where(
+        and(
+          eq(orderShipments.orderId, data.orderId),
+          eq(orderShipments.organizationId, ctx.organizationId)
+        )
+      );
+
+    const shipmentIds = shipments.map((shipment) => shipment.id);
+
+    const orderDocuments = await db
+      .select({
+        id: generatedDocuments.id,
+        organizationId: generatedDocuments.organizationId,
+        documentType: generatedDocuments.documentType,
+        entityType: generatedDocuments.entityType,
+        entityId: generatedDocuments.entityId,
+        filename: generatedDocuments.filename,
+        storageUrl: generatedDocuments.storageUrl,
+        fileSize: generatedDocuments.fileSize,
+        generatedAt: generatedDocuments.generatedAt,
+        generatedById: generatedDocuments.generatedById,
+        regenerationCount: generatedDocuments.regenerationCount,
+        createdAt: generatedDocuments.createdAt,
+      })
+      .from(generatedDocuments)
+      .where(
+        and(
+          eq(generatedDocuments.organizationId, ctx.organizationId),
+          eq(generatedDocuments.entityType, 'order'),
+          eq(generatedDocuments.entityId, data.orderId)
+        )
+      );
+
+    const shipmentDocuments =
+      shipmentIds.length === 0
+        ? []
+        : await db
+            .select({
+              id: generatedDocuments.id,
+              organizationId: generatedDocuments.organizationId,
+              documentType: generatedDocuments.documentType,
+              entityType: generatedDocuments.entityType,
+              entityId: generatedDocuments.entityId,
+              filename: generatedDocuments.filename,
+              storageUrl: generatedDocuments.storageUrl,
+              fileSize: generatedDocuments.fileSize,
+              generatedAt: generatedDocuments.generatedAt,
+              generatedById: generatedDocuments.generatedById,
+              regenerationCount: generatedDocuments.regenerationCount,
+              createdAt: generatedDocuments.createdAt,
+            })
+            .from(generatedDocuments)
+            .where(
+              and(
+                eq(generatedDocuments.organizationId, ctx.organizationId),
+                eq(generatedDocuments.entityType, 'shipment'),
+                inArray(generatedDocuments.entityId, shipmentIds)
+              )
+            );
+
+    return [...orderDocuments, ...shipmentDocuments].sort((a, b) => {
+      const left = new Date(a.createdAt).getTime();
+      const right = new Date(b.createdAt).getTime();
+      return right - left;
+    });
   });

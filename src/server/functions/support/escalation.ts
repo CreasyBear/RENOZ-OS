@@ -19,6 +19,7 @@ import type {
 } from 'drizzle/schema/support/escalation-rules';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError, ServerError } from '@/lib/server/errors';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
 import { logger } from '@/lib/logger';
@@ -77,13 +78,17 @@ const createEscalationRuleSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-const getEscalationHistorySchema = z.object({
-  issueId: z.string().uuid(),
-});
+const getEscalationHistorySchema = normalizeObjectInput(
+  z.object({
+    issueId: z.string().uuid(),
+  })
+);
 
-const listEscalationRulesSchema = z.object({
-  activeOnly: z.boolean().default(true),
-});
+const listEscalationRulesSchema = normalizeObjectInput(
+  z.object({
+    activeOnly: z.boolean().default(true),
+  })
+);
 
 // ============================================================================
 // ESCALATE ISSUE
@@ -706,8 +711,10 @@ export const processAutoEscalations = createServerFn({ method: 'POST' })
 /**
  * Get escalation summary for dashboard
  */
+export const getEscalationSummarySchema = normalizeObjectInput(z.object({}));
+
 export const getEscalationSummary = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(getEscalationSummarySchema)
   .handler(async () => {
     const ctx = await withAuth();
 

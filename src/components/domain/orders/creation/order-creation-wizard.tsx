@@ -868,52 +868,46 @@ function zodErrorToFieldErrors(error: z.ZodError): Record<string, string> {
   return out;
 }
 
-/** Fast local guard so final submit can jump back to the first blocking step. */
-function getBlockingStep(values: OrderCreationFormValues): number | null {
-  if (!values.customerId) return 0;
-  if ((values.lineItems?.length ?? 0) < 1) return 1;
+function mutationErrorToFieldErrors(error: unknown): Record<string, string> {
+  const validationErrors = (
+    error as {
+      fieldErrors?: Record<string, string[]>;
+      details?: { validationErrors?: Record<string, string[]> };
+    }
+  )?.fieldErrors ?? (
+    error as {
+      details?: { validationErrors?: Record<string, string[]> };
+    }
+  )?.details?.validationErrors;
 
-  const orderPct = values.discountPercent ?? 0;
-  const orderAmt = values.discountAmount ?? 0;
-  if (orderPct > 0 && orderAmt > 0) return 2;
+  if (!validationErrors) return {};
 
-  const subtotal = (values.lineItems ?? []).reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0
+  return Object.fromEntries(
+    Object.entries(validationErrors)
+      .filter(([, messages]) => Array.isArray(messages) && typeof messages[0] === "string")
+      .map(([key, messages]) => [key, messages[0] as string])
   );
-  const discountFromPercent = Math.round(subtotal * (orderPct / 100));
-  const totalDiscount = discountFromPercent + orderAmt;
-  if (totalDiscount > subtotal) return 2;
-
-  for (const item of values.lineItems ?? []) {
-    const pct = item.discountPercent ?? 0;
-    const amt = item.discountAmount ?? 0;
-    if (pct > 0 && amt > 0) return 2;
-    const lineTotal = item.quantity * item.unitPrice;
-    const lineDiscount = amt + (lineTotal * pct) / 100;
-    if (lineDiscount > lineTotal) return 2;
-  }
-
-  if (!values.useBillingAsShipping) {
-    const shipping = values.shippingAddress;
-    const hasRequiredAddress =
-      !!shipping?.street1?.trim() &&
-      !!shipping?.city?.trim() &&
-      !!shipping?.state?.trim() &&
-      !!shipping?.postcode?.trim() &&
-      !!shipping?.country?.trim();
-    if (!hasRequiredAddress) return 3;
-  }
-
-  return null;
 }
 
-function getStepBlockMessage(step: number): string {
-  if (step === 0) return "Select a customer to continue.";
-  if (step === 1) return "Add at least one product to continue.";
-  if (step === 2) return "Fix pricing and discount rules before continuing.";
-  if (step === 3) return "Complete shipping details before continuing.";
-  return "Please fix the errors below and try again.";
+function getStepFromFieldErrors(fieldErrors: Record<string, string>): number {
+  const keys = Object.keys(fieldErrors);
+  if (keys.some((key) => key === "customerId")) return 0;
+  if (keys.some((key) => key.startsWith("lineItems") || key === "lineItem")) return 1;
+  if (keys.some((key) => key === "discountPercent" || key === "discountAmount" || key === "total")) {
+    return 2;
+  }
+  if (
+    keys.some(
+      (key) =>
+        key.startsWith("shippingAddress") ||
+        key.startsWith("billingAddress") ||
+        key === "shippingAmount" ||
+        key === "dueDate"
+    )
+  ) {
+    return 3;
+  }
+  return 4;
 }
 
 export const OrderCreationWizard = memo(function OrderCreationWizard({
@@ -983,50 +977,34 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
   const currentStep = form.useWatch("currentStep") ?? 0;
 
   const validateStep = useCallback(
-    (step: number): boolean => {
-      const blockingStep = getBlockingStep(form.getValues());
-      if (blockingStep != null && blockingStep <= step) {
-        toast.error(getStepBlockMessage(blockingStep));
-        return false;
-      }
-      return true;
-    },
-    [form]
+    (_step: number): boolean => true,
+    []
   );
 
   const canNavigateToStep = useCallback(
     (stepIndex: number) => {
       const step = currentStep ?? 0;
       if (stepIndex <= step) return true;
-      if (stepIndex > step + 1) return false;
-
-      const blockingStep = getBlockingStep(form.getValues());
-      return blockingStep == null || blockingStep >= stepIndex;
+      return stepIndex <= step + 1;
     },
-    [currentStep, form]
+    [currentStep]
   );
 
   const handleComplete = useCallback(async () => {
     if (submitInFlightRef.current || isSubmitting) return;
-
-    const blockingStep = getBlockingStep(form.getValues());
-    if (blockingStep != null) {
-      toast.error(getStepBlockMessage(blockingStep));
-      form.setFieldValue("currentStep", blockingStep);
-      setTimeout(
-        () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-        50
-      );
-      return;
-    }
 
     submitInFlightRef.current = true;
     try {
       await form.handleSubmit();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create order";
+      const fieldErrors = mutationErrorToFieldErrors(error);
+      if (Object.keys(fieldErrors).length > 0) {
+        setValidationErrors(fieldErrors);
+      }
+      const targetStep =
+        Object.keys(fieldErrors).length > 0 ? getStepFromFieldErrors(fieldErrors) : getStepFromError(error);
       toast.error(message);
-      const targetStep = getStepFromError(error);
       form.setFieldValue("currentStep", targetStep);
       setTimeout(
         () => stepContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -1040,8 +1018,7 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
   const handleStepChange = useCallback(
     (step: number) => {
       if (!canNavigateToStep(step)) {
-        const blockingStep = getBlockingStep(form.getValues());
-        toast.error(getStepBlockMessage(blockingStep ?? step));
+        toast.error("Move through the order one step at a time.");
         return;
       }
       setValidationErrors({});

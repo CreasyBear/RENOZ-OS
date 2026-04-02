@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { paginationSchema } from '../_shared/patterns';
+import { normalizeObjectInput, paginationSchema } from '../_shared/patterns';
 
 // ============================================================================
 // PERIOD ENUM
@@ -27,14 +27,16 @@ export type PeriodType = z.infer<typeof periodTypeSchema>;
 /**
  * Query parameters for financial dashboard metrics.
  */
-export const financialDashboardQuerySchema = z.object({
-  // Date range for metrics (defaults to current month)
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
+export const financialDashboardQuerySchema = normalizeObjectInput(
+  z.object({
+    // Date range for metrics (defaults to current month)
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
 
-  // Compare to previous period
-  includePreviousPeriod: z.boolean().default(false),
-});
+    // Compare to previous period
+    includePreviousPeriod: z.boolean().default(false),
+  })
+);
 
 export type FinancialDashboardQuery = z.infer<typeof financialDashboardQuerySchema>;
 
@@ -45,14 +47,16 @@ export type FinancialDashboardQuery = z.infer<typeof financialDashboardQuerySche
 /**
  * Query parameters for revenue by period chart data.
  */
-export const revenueByPeriodQuerySchema = z.object({
-  dateFrom: z.coerce.date(),
-  dateTo: z.coerce.date(),
-  periodType: periodTypeSchema.default('monthly'),
+export const revenueByPeriodQuerySchema = normalizeObjectInput(
+  z.object({
+    dateFrom: z.coerce.date(),
+    dateTo: z.coerce.date(),
+    periodType: periodTypeSchema.default('monthly'),
 
-  // Optionally filter by customer type
-  customerType: z.enum(['residential', 'commercial', 'all']).default('all'),
-});
+    // Optionally filter by customer type
+    customerType: z.enum(['residential', 'commercial', 'all']).default('all'),
+  })
+);
 
 export type RevenueByPeriodQuery = z.infer<typeof revenueByPeriodQuerySchema>;
 
@@ -73,16 +77,18 @@ export type RevenueBasis = z.infer<typeof revenueBasisSchema>;
 /**
  * Query parameters for top customers by revenue.
  */
-export const topCustomersQuerySchema = paginationSchema.extend({
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
+export const topCustomersQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
 
-  // Only show commercial accounts ($50K+)
-  commercialOnly: z.boolean().default(false),
+    // Only show commercial accounts ($50K+)
+    commercialOnly: z.boolean().default(false),
 
-  // Revenue basis: invoiced (orders by orderDate) or cash (payments by paymentDate)
-  basis: revenueBasisSchema,
-});
+    // Revenue basis: invoiced (orders by orderDate) or cash (payments by paymentDate)
+    basis: revenueBasisSchema,
+  })
+);
 
 export type TopCustomersQuery = z.infer<typeof topCustomersQuerySchema>;
 
@@ -93,13 +99,15 @@ export type TopCustomersQuery = z.infer<typeof topCustomersQuerySchema>;
 /**
  * Query parameters for outstanding invoices summary.
  */
-export const outstandingInvoicesQuerySchema = paginationSchema.extend({
-  // Filter by overdue status
-  overdueOnly: z.boolean().default(false),
+export const outstandingInvoicesQuerySchema = normalizeObjectInput(
+  paginationSchema.extend({
+    // Filter by overdue status
+    overdueOnly: z.boolean().default(false),
 
-  // Filter by customer type
-  customerType: z.enum(['residential', 'commercial', 'all']).default('all'),
-});
+    // Filter by customer type
+    customerType: z.enum(['residential', 'commercial', 'all']).default('all'),
+  })
+);
 
 export type OutstandingInvoicesQuery = z.infer<typeof outstandingInvoicesQuerySchema>;
 

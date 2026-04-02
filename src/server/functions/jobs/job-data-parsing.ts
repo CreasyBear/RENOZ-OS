@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import { jobAssignments, customers, users } from 'drizzle/schema';
 import { eq, and, isNull, ilike } from 'drizzle-orm';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError } from '@/lib/server/errors';
 import { z } from 'zod';
@@ -430,10 +431,12 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
 // CUSTOMER / INSTALLER LOOKUP (PHASE12-008)
 // ============================================================================
 
-const lookupCandidatesSchema = z.object({
-  customerName: z.string().min(1),
-  installerName: z.string().optional(),
-});
+const lookupCandidatesSchema = normalizeObjectInput(
+  z.object({
+    customerName: z.string().min(1),
+    installerName: z.string().optional(),
+  })
+);
 
 /**
  * Lookup customer and installer candidates by name for disambiguation.

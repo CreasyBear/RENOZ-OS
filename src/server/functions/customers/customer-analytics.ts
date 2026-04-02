@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { sql, eq, and, gte, lte, count, ne, inArray, sum, avg, isNull, notInArray } from 'drizzle-orm';
 import { cache } from 'react';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { customers, customerTags, customerTagAssignments, orders, customerActivities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -21,22 +22,30 @@ import { NotFoundError } from '@/lib/server/errors';
 // SCHEMAS
 // ============================================================================
 
-export const dateRangeSchema = z.object({
-  range: z.enum(['7d', '30d', '90d', '365d', 'all']).default('30d'),
-});
+export const dateRangeSchema = normalizeObjectInput(
+  z.object({
+    range: z.enum(['7d', '30d', '90d', '365d', 'all']).default('30d'),
+  })
+);
 
 export const segmentAnalyticsSchema = z.object({
   segmentId: z.string().uuid().optional(),
   tagId: z.string().uuid().optional(),
 });
 
-export const valueRangeSchema = z.object({
-  range: z.enum(['3m', '6m', '1y']).default('6m'),
-});
+export const valueRangeSchema = normalizeObjectInput(
+  z.object({
+    range: z.enum(['3m', '6m', '1y']).default('6m'),
+  })
+);
 
-export const lifecycleRangeSchema = z.object({
-  range: z.enum(['3m', '6m', '1y']).default('6m'),
-});
+export const lifecycleRangeSchema = normalizeObjectInput(
+  z.object({
+    range: z.enum(['3m', '6m', '1y']).default('6m'),
+  })
+);
+
+export const emptyAnalyticsInputSchema = normalizeObjectInput(z.object({}));
 
 // ============================================================================
 // DASHBOARD KPIs
@@ -245,7 +254,7 @@ export const getCustomerKpis = createServerFn({ method: 'GET' })
  * Get customer health score distribution
  */
 export const getHealthDistribution = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptyAnalyticsInputSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -365,7 +374,7 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
  * Get segment (tag) performance metrics
  */
 export const getSegmentPerformance = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptyAnalyticsInputSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -426,7 +435,13 @@ export const getSegmentPerformance = createServerFn({ method: 'GET' })
  * Get analytics for a specific segment/tag
  */
 export const getSegmentAnalytics = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ tagId: z.string().uuid() }))
+  .inputValidator(
+    normalizeObjectInput(
+      z.object({
+        tagId: z.string().uuid(),
+      })
+    )
+  )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -565,7 +580,7 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
  * Get customer lifecycle stage distribution
  */
 export const getLifecycleStages = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptyAnalyticsInputSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -1056,7 +1071,7 @@ export const getValueKpis = createServerFn({ method: 'GET' })
  * Get value tier distribution (Platinum, Gold, Silver, Bronze)
  */
 export const getValueTiers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptyAnalyticsInputSchema)
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -1134,7 +1149,13 @@ export const getValueTiers = createServerFn({ method: 'GET' })
  * Get top customers by lifetime value
  */
 export const getTopCustomers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ limit: z.number().min(1).max(50).default(10) }))
+  .inputValidator(
+    normalizeObjectInput(
+      z.object({
+        limit: z.number().min(1).max(50).default(10),
+      })
+    )
+  )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 

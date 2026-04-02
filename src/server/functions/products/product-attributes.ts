@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   products,
   productAttributes,
@@ -187,7 +188,7 @@ export const listAttributes = createServerFn({ method: 'GET' })
  * Get a single attribute by ID.
  */
 export const getAttribute = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }): Promise<ProductAttribute> => {
     const ctx = await withAuth();
 
@@ -398,7 +399,7 @@ export const deleteAttribute = createServerFn({ method: 'POST' })
  * Get all attribute values for a product.
  */
 export const getProductAttributeValues = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(
     async ({
       data,
@@ -743,7 +744,7 @@ export const deleteProductAttribute = createServerFn({ method: 'POST' })
  * Check if a product has all required attributes filled.
  */
 export const checkRequiredAttributes = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(
     async ({
       data,

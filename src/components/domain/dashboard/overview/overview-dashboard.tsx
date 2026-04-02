@@ -43,6 +43,7 @@ export interface OverviewDashboardProps {
   onManageTargets?: () => void;
   onTargetProgressRetry?: () => void;
   stats?: OverviewStatsData | null;
+  statsSummaryWarning?: string | null;
   trackedProducts?: TrackedProductWithInventory[];
   onTrackedProductsChange?: (products: TrackedProduct[]) => void;
   maxTrackedProducts?: number;
@@ -73,6 +74,7 @@ export function OverviewDashboard({
   onManageTargets,
   onTargetProgressRetry,
   stats,
+  statsSummaryWarning,
   trackedProducts,
   onTrackedProductsChange,
   maxTrackedProducts,
@@ -118,7 +120,8 @@ export function OverviewDashboard({
       {/* Stats Cards Row */}
       <OverviewStats
         data={stats}
-        isLoading={loadingStates.stats}
+        trackedProductsLoading={loadingStates.stats}
+        summaryWarning={statsSummaryWarning}
         trackedProducts={trackedProducts}
         onTrackedProductsChange={onTrackedProductsChange}
         maxTrackedProducts={maxTrackedProducts}

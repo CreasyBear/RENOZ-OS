@@ -23,6 +23,7 @@ import { useSupportMetrics } from '@/hooks/support';
 import { useCsatMetrics } from '@/hooks/support';
 import { CsatMetricsWidget } from '@/components/domain/support/csat/csat-metrics-widget';
 import { CsatLowRatingAlerts } from '@/components/domain/support/csat/csat-low-rating-alerts';
+import { getMetricValueOrUnavailable, hasMetricValue } from '@/lib/metrics/metric-display';
 import {
   AlertCircle,
   Clock,
@@ -204,9 +205,11 @@ function SupportDashboardPage() {
         />
         <MetricCard
           title="Avg Resolution"
-          value={
-            metrics?.overview.avgResolutionHours ? `${metrics.overview.avgResolutionHours}h` : '—'
-          }
+          value={getMetricValueOrUnavailable(
+            hasMetricValue(metrics?.overview.avgResolutionHours)
+              ? `${metrics.overview.avgResolutionHours}h`
+              : null
+          )}
           subtitle="Time to resolve"
           icon={Clock}
           isLoading={isLoading}

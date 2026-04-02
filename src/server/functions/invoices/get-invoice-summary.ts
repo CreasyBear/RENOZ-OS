@@ -16,6 +16,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, isNull, inArray, gte, lte, count, sum } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { invoiceSummaryQuerySchema } from '@/lib/schemas/invoices';
@@ -65,7 +66,7 @@ export interface InvoiceSummaryResponse {
  * Get invoice summary aggregates for dashboard
  */
 export const getInvoiceSummary = createServerFn({ method: 'GET' })
-  .inputValidator(invoiceSummaryQuerySchema)
+  .inputValidator(normalizeObjectInput(invoiceSummaryQuerySchema))
   .handler(async ({ data: filters }): Promise<InvoiceSummaryResponse> => {
     const ctx = await withAuth();
     const { organizationId } = ctx;

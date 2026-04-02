@@ -28,9 +28,16 @@ import type {
   ProjectStatus,
   ProjectPriority,
   ProjectListItem,
+  ProjectSortField as SortField,
 } from "@/lib/schemas/jobs/projects";
 import { ProjectsListPresenter } from "./projects-list-presenter";
 import type { ProjectTableItem } from "./project-columns";
+import {
+  DEFAULT_PROJECT_SORT_DIRECTION,
+  DEFAULT_PROJECT_SORT_FIELD,
+  resolveProjectSortState,
+  type SortDirection,
+} from "./project-sorting";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -46,19 +53,6 @@ export interface ProjectsListContainerProps {
   onFiltersChange?: (filters: ProjectsListFilters) => void;
   /** Callback for creating new project */
   onCreateProject?: () => void;
-}
-
-type SortField = "title" | "status" | "priority" | "createdAt" | "targetCompletionDate";
-type SortDirection = "asc" | "desc";
-
-function isSortField(s: string): s is SortField {
-  return (
-    s === "title" ||
-    s === "status" ||
-    s === "priority" ||
-    s === "createdAt" ||
-    s === "targetCompletionDate"
-  );
 }
 
 function buildProjectQuery(
@@ -115,8 +109,10 @@ export function ProjectsListContainer({
   const navigate = useNavigate();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<SortField>(DEFAULT_PROJECT_SORT_FIELD);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_PROJECT_SORT_DIRECTION
+  );
 
   const queryFilters = useMemo(
     () => buildProjectQuery(filters, page, sortField, sortDirection),
@@ -154,21 +150,22 @@ export function ProjectsListContainer({
   const deleteMutation = useDeleteProject();
 
   // Handle sort toggle
-  const handleSort = useCallback((field: string) => {
-    setSortField((currentField) => {
-      if (currentField === field) {
-        // Toggle direction
-        setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
-        return currentField;
-      }
-      // New field, default to descending for dates, ascending for text
-      setSortDirection(
-        ["createdAt", "targetCompletionDate"].includes(field) ? "desc" : "asc"
-      );
-      return isSortField(field) ? field : currentField;
-    });
+  const handleSort = useCallback((field: string, direction?: SortDirection) => {
+    const nextSort = resolveProjectSortState(
+      sortField,
+      sortDirection,
+      field,
+      direction
+    );
+
+    if (!nextSort) {
+      return;
+    }
+
+    setSortField(nextSort.field);
+    setSortDirection(nextSort.direction);
     setPage(1); // Reset to first page on sort change
-  }, []);
+  }, [sortDirection, sortField]);
 
   // Shift-click range handler that updates lastClickedIndex
   const handleShiftClickRangeWithIndex = useCallback(

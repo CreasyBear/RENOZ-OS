@@ -7,6 +7,9 @@ export type ShipmentItem = typeof shipmentItems.$inferSelect;
 
 export interface ShipmentWithItems extends OrderShipment {
   items: ShipmentItem[];
+  canGenerateDispatchNote?: boolean;
+  dispatchNoteBlockedReason?: string | null;
+  canGenerateDeliveryNote?: boolean;
 }
 
 export interface ListShipmentsResult {

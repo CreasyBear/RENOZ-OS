@@ -16,6 +16,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, sql, and, gte, lte, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { orders, customers, opportunities } from 'drizzle/schema';
@@ -440,7 +441,7 @@ function formatMetricName(metric: MetricKey): string {
  * Get enhanced metrics comparison with trend analysis and insights.
  */
 export const getEnhancedComparison = createServerFn({ method: 'GET' })
-  .inputValidator(enhancedComparisonInputSchema)
+  .inputValidator(normalizeObjectInput(enhancedComparisonInputSchema))
   .handler(async ({ data }) => {
     const startTime = Date.now();
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });

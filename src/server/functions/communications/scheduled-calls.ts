@@ -10,6 +10,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { eq, and, desc, asc, gte, lte, count, isNotNull } from 'drizzle-orm'
 import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination'
 import { db } from '@/lib/db'
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns'
 import {
   scheduledCalls,
   customerActivities,
@@ -184,7 +185,7 @@ export const getScheduledCallsCursor = createServerFn({ method: 'GET' })
  * Get a single scheduled call by ID
  */
 export const getScheduledCallById = createServerFn({ method: 'GET' })
-  .inputValidator(getScheduledCallByIdSchema)
+  .inputValidator(normalizeObjectInput(getScheduledCallByIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 

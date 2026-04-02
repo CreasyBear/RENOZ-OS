@@ -25,8 +25,8 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
+import { idParamQuerySchema } from '@/lib/schemas/_shared/patterns';
 import {
-  idParamSchema,
   generateStatementSchema,
   saveStatementHistorySchema,
   markStatementSentSchema,
@@ -56,7 +56,7 @@ const PAYMENT_TERMS = 'Net 30 days';
  *
  * Note: This returns statement data - PDF generation is separate.
  */
-export const generateStatement = createServerFn()
+export const generateStatement = createServerFn({ method: 'POST' })
   .inputValidator(generateStatementSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -359,7 +359,7 @@ export const generateStatement = createServerFn()
  * Call this after generating a statement PDF.
  * Returns the created history record ID.
  */
-export const saveStatementHistory = createServerFn()
+export const saveStatementHistory = createServerFn({ method: 'POST' })
   .inputValidator(saveStatementHistorySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -413,7 +413,7 @@ export const saveStatementHistory = createServerFn()
 /**
  * Mark a statement as sent via email.
  */
-export const markStatementSent = createServerFn()
+export const markStatementSent = createServerFn({ method: 'POST' })
   .inputValidator(markStatementSentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -447,7 +447,7 @@ export const markStatementSent = createServerFn()
 /**
  * Get statement history for a specific customer.
  */
-export const getStatementHistory = createServerFn()
+export const getStatementHistory = createServerFn({ method: 'GET' })
   .inputValidator(statementHistoryQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -544,8 +544,8 @@ export const getStatementHistory = createServerFn()
 /**
  * Get a single statement by ID.
  */
-export const getStatement = createServerFn()
-  .inputValidator(idParamSchema)
+export const getStatement = createServerFn({ method: 'GET' })
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -616,7 +616,7 @@ export const getStatement = createServerFn()
 /**
  * List all statements across customers (admin view).
  */
-export const listStatements = createServerFn()
+export const listStatements = createServerFn({ method: 'GET' })
   .inputValidator(statementListQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();

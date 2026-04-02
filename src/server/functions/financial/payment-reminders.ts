@@ -21,6 +21,7 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { idParamQuerySchema } from '@/lib/schemas/_shared/patterns';
 import {
   idParamSchema,
   createReminderTemplateSchema,
@@ -68,7 +69,7 @@ function calculateDaysOverdue(dueDate: Date): number {
 /**
  * Create a new reminder template.
  */
-export const createReminderTemplate = createServerFn()
+export const createReminderTemplate = createServerFn({ method: 'POST' })
   .inputValidator(createReminderTemplateSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
@@ -93,7 +94,7 @@ export const createReminderTemplate = createServerFn()
 /**
  * Update a reminder template.
  */
-export const updateReminderTemplate = createServerFn()
+export const updateReminderTemplate = createServerFn({ method: 'POST' })
   .inputValidator(updateReminderTemplateSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
@@ -127,7 +128,7 @@ export const updateReminderTemplate = createServerFn()
 /**
  * Delete a reminder template.
  */
-export const deleteReminderTemplate = createServerFn()
+export const deleteReminderTemplate = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
@@ -152,8 +153,8 @@ export const deleteReminderTemplate = createServerFn()
 /**
  * Get a single reminder template.
  */
-export const getReminderTemplate = createServerFn()
-  .inputValidator(idParamSchema)
+export const getReminderTemplate = createServerFn({ method: 'GET' })
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -178,7 +179,7 @@ export const getReminderTemplate = createServerFn()
 /**
  * List reminder templates with usage stats.
  */
-export const listReminderTemplates = createServerFn()
+export const listReminderTemplates = createServerFn({ method: 'GET' })
   .inputValidator(reminderTemplateListQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -266,7 +267,7 @@ export const listReminderTemplates = createServerFn()
  * This records the reminder in history but does NOT actually send email.
  * Email sending would be handled by a separate email service.
  */
-export const sendReminder = createServerFn()
+export const sendReminder = createServerFn({ method: 'POST' })
   .inputValidator(sendReminderSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -408,7 +409,7 @@ export const sendReminder = createServerFn()
  * Filtering (minDaysOverdue, matchTemplateDays, excludeAlreadyReminded) is pushed
  * to SQL for proper database-level pagination (SCHEMA-TRACE.md).
  */
-export const getOrdersForReminders = createServerFn()
+export const getOrdersForReminders = createServerFn({ method: 'GET' })
   .inputValidator(overdueOrdersForRemindersQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -590,7 +591,7 @@ export const getOrdersForReminders = createServerFn()
 /**
  * Get reminder history with filtering.
  */
-export const getReminderHistory = createServerFn()
+export const getReminderHistory = createServerFn({ method: 'GET' })
   .inputValidator(reminderHistoryQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();

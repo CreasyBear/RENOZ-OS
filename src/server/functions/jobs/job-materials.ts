@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   jobMaterials,
   jobMaterialSerialNumbers,
@@ -69,7 +70,7 @@ const JOB_MATERIAL_EXCLUDED_FIELDS: string[] = [
  * Get all materials for a job assignment with product details.
  */
 export const listJobMaterials = createServerFn({ method: 'GET' })
-  .inputValidator(listJobMaterialsSchema)
+  .inputValidator(normalizeObjectInput(listJobMaterialsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -513,7 +514,7 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
  * Calculate total material cost for a job.
  */
 export const calculateJobMaterialCost = createServerFn({ method: 'GET' })
-  .inputValidator(calculateJobMaterialCostSchema)
+  .inputValidator(normalizeObjectInput(calculateJobMaterialCostSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -572,7 +573,7 @@ export const calculateJobMaterialCost = createServerFn({ method: 'GET' })
  * Get a single material entry by ID.
  */
 export const getJobMaterial = createServerFn({ method: 'GET' })
-  .inputValidator(getJobMaterialSchema)
+  .inputValidator(normalizeObjectInput(getJobMaterialSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',

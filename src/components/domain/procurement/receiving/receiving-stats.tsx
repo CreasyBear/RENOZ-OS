@@ -12,6 +12,8 @@ import { memo, useMemo } from 'react';
 import { Package, Building2, DollarSign, Calendar } from 'lucide-react';
 import { MetricCard } from '@/components/shared';
 import { FormatAmount } from '@/components/shared/format';
+import { getSummaryMetricSubtitle } from '@/lib/metrics/metric-display';
+import type { SummaryState } from '@/lib/metrics/summary-health';
 
 // ============================================================================
 // TYPES
@@ -21,11 +23,13 @@ export interface ReceivingStatsProps {
   /** Total orders awaiting receipt */
   totalOrders: number;
   /** Total value of orders awaiting receipt */
-  totalValue: number;
+  totalValue: number | null;
   /** Number of unique suppliers */
-  supplierCount: number;
+  supplierCount: number | null;
   /** Date of oldest order awaiting receipt */
   oldestOrderDate: string | null;
+  /** Authoritative summary state for headline metrics */
+  summaryState?: SummaryState;
   /** Loading state */
   isLoading?: boolean;
   /** Click handler for orders metric (navigate to filtered list) */
@@ -41,19 +45,20 @@ export const ReceivingStats = memo(function ReceivingStats({
   totalValue,
   supplierCount,
   oldestOrderDate,
+  summaryState = 'loading',
   isLoading = false,
   onOrdersClick,
 }: ReceivingStatsProps) {
   // Calculate days ago for oldest order
   const oldestOrderText = useMemo(() => {
-    if (!oldestOrderDate) return 'N/A';
+    if (!oldestOrderDate) return summaryState === 'unavailable' ? '—' : 'N/A';
     const date = new Date(oldestOrderDate);
     // eslint-disable-next-line react-hooks/purity -- Date.now() for relative time display; stable per mount
     const daysAgo = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
     if (daysAgo === 0) return 'Today';
     if (daysAgo === 1) return 'Yesterday';
     return `${daysAgo} days ago`;
-  }, [oldestOrderDate]);
+  }, [oldestOrderDate, summaryState]);
 
   // Determine if oldest order is overdue (alert state)
   const isOldestOverdue = useMemo(() => {
@@ -68,6 +73,10 @@ export const ReceivingStats = memo(function ReceivingStats({
       <MetricCard
         title="Orders Awaiting"
         value={totalOrders}
+        subtitle={getSummaryMetricSubtitle({
+          summaryState,
+          unavailableSubtitle: 'Summary partially unavailable',
+        })}
         icon={Package}
         isLoading={isLoading}
         onClick={onOrdersClick}
@@ -75,19 +84,22 @@ export const ReceivingStats = memo(function ReceivingStats({
       />
       <MetricCard
         title="Total Value"
-        value={<FormatAmount amount={totalValue} />}
+        value={totalValue != null ? <FormatAmount amount={totalValue} /> : '—'}
+        subtitle={getSummaryMetricSubtitle({ summaryState })}
         icon={DollarSign}
         isLoading={isLoading}
       />
       <MetricCard
         title="Suppliers"
-        value={supplierCount}
+        value={supplierCount ?? '—'}
+        subtitle={getSummaryMetricSubtitle({ summaryState })}
         icon={Building2}
         isLoading={isLoading}
       />
       <MetricCard
         title="Oldest Order"
         value={oldestOrderText}
+        subtitle={getSummaryMetricSubtitle({ summaryState })}
         icon={Calendar}
         isLoading={isLoading}
         alert={isOldestOverdue}

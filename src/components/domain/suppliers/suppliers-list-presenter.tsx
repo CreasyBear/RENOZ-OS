@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { SuppliersTablePresenter } from "./suppliers-table-presenter";
 import { SuppliersMobileCards } from "./suppliers-mobile-cards";
 import type { SupplierTableItem } from "./supplier-columns";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 
 export interface SuppliersListPresenterProps {
   /** Suppliers to display */
@@ -45,7 +46,7 @@ export interface SuppliersListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View supplier handler */
   onViewSupplier: (id: string) => void;
   /** Edit supplier handler */

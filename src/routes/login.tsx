@@ -22,11 +22,12 @@ export const Route = createFileRoute('/login')({
       return
     }
 
-    // For transient reasons, stay on login and show a prompt. Avoid forced signout loops.
+    // For transient or intentional reasons, stay on login and avoid forced signout loops.
     if (
       search.reason === 'session_expired' ||
       search.reason === 'offline' ||
-      search.reason === 'auth_check_failed'
+      search.reason === 'auth_check_failed' ||
+      search.reason === 'logged_out'
     ) {
       return
     }
@@ -34,6 +35,15 @@ export const Route = createFileRoute('/login')({
     // Never redirect from /login on server - avoids 307 loops when SSR path normalization
     // misclassifies requests. Authenticated-user bounce happens client-side only.
     if (typeof window === 'undefined') {
+      return
+    }
+
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession()
+
+    if (sessionError || !session?.user) {
       return
     }
 

@@ -10,11 +10,19 @@
  */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { orders, orderLineItems, customers, addresses, generatedDocuments } from 'drizzle/schema';
+import {
+  orders,
+  orderLineItems,
+  customers,
+  addresses,
+  generatedDocuments,
+  orderShipments,
+  shipmentItems,
+} from 'drizzle/schema';
 import { createActivityLogger } from '@/lib/activity-logger';
 import { createAdminSupabase } from '@/lib/supabase/server';
 import {
@@ -23,6 +31,7 @@ import {
   InvoicePdfDocument,
   ProFormaPdfDocument,
   PackingSlipPdfDocument,
+  DispatchNotePdfDocument,
   DeliveryNotePdfDocument,
   generateFilename,
   generateStoragePath,
@@ -35,6 +44,8 @@ import { buildDocumentOrderFromDb } from '@/lib/documents/builders';
 import type {
   PackingSlipDocumentData,
   PackingSlipLineItem,
+  DispatchNoteDocumentData,
+  DispatchNoteLineItem,
   DeliveryNoteDocumentData,
   DeliveryNoteLineItem,
 } from '@/lib/documents/templates/operational';
@@ -44,6 +55,7 @@ import {
   fetchAllocatedSerialsByOrderLineItem,
   fetchShipmentSerialsByOrderLineItem,
 } from './fetch-order-line-items-with-serials';
+import { getPendingShipmentReservations } from '@/server/functions/orders/order-pending-shipment-reservations';
 
 // ============================================================================
 // CONSTANTS
@@ -68,6 +80,12 @@ const generateOrderDocumentSchema = z.object({
   specialInstructions: z.string().optional(),
   packageCount: z.number().int().min(1).optional(),
   totalWeight: z.number().positive().optional(),
+});
+
+const generateShipmentDocumentSchema = z.object({
+  shipmentId: z.string().uuid(),
+  documentType: z.enum(['packing-slip', 'dispatch-note', 'delivery-note']),
+  regenerate: z.boolean().optional().default(false),
 });
 
 // ============================================================================
@@ -176,9 +194,11 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
     throw new NotFoundError('Customer not found', 'customer');
   }
 
-  // Fetch primary billing address
-  const [billingAddress] = await db
+  const addressRows = await db
     .select({
+      id: addresses.id,
+      type: addresses.type,
+      isPrimary: addresses.isPrimary,
       street1: addresses.street1,
       street2: addresses.street2,
       city: addresses.city,
@@ -190,49 +210,245 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
     .where(
       and(
         eq(addresses.customerId, customerId),
-        eq(addresses.organizationId, organizationId),
-        eq(addresses.type, 'billing'),
-        eq(addresses.isPrimary, true)
+        eq(addresses.organizationId, organizationId)
+      )
+    );
+
+  const toDocumentAddress = (
+    address:
+      | {
+          street1: string | null;
+          street2: string | null;
+          city: string | null;
+          state: string | null;
+          postcode: string | null;
+          country: string | null;
+        }
+      | undefined
+  ) =>
+    address?.street1 && address.city && address.postcode && address.country
+      ? {
+          addressLine1: address.street1,
+          addressLine2: address.street2,
+          city: address.city,
+          state: address.state,
+          postalCode: address.postcode,
+          country: address.country,
+        }
+      : undefined;
+
+  const shippingAddress =
+    addressRows.find((address) => address.type === 'shipping' && address.isPrimary) ??
+    addressRows.find((address) => address.type === 'shipping');
+  const billingAddress =
+    addressRows.find((address) => address.type === 'billing' && address.isPrimary) ??
+    addressRows.find((address) => address.type === 'billing');
+  const primaryAddress =
+    addressRows.find((address) => address.isPrimary) ?? addressRows[0];
+
+  return {
+    ...customer,
+    address: toDocumentAddress(shippingAddress ?? billingAddress ?? primaryAddress),
+    shippingAddress: toDocumentAddress(shippingAddress),
+    billingAddress: toDocumentAddress(billingAddress ?? primaryAddress),
+    primaryAddress: toDocumentAddress(primaryAddress),
+  };
+}
+
+function resolveOperationalShippingAddress(params: {
+  shipmentShippingAddress?: typeof orderShipments.$inferSelect['shippingAddress'] | null;
+  orderShippingAddress?: typeof orders.$inferSelect['shippingAddress'] | null;
+  customerShippingAddress?: {
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+    contactName?: string | null;
+    contactPhone?: string | null;
+  } | null;
+  customerBillingAddress?: {
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+    contactName?: string | null;
+    contactPhone?: string | null;
+  } | null;
+  customerName: string;
+}) {
+  const shipmentAddress = params.shipmentShippingAddress;
+  if (shipmentAddress?.street1) {
+    return {
+      name: shipmentAddress.name || params.customerName,
+      addressLine1: shipmentAddress.street1,
+      addressLine2: shipmentAddress.street2,
+      city: shipmentAddress.city,
+      state: shipmentAddress.state,
+      postalCode: shipmentAddress.postcode,
+      country: shipmentAddress.country,
+      contactName: shipmentAddress.name,
+      contactPhone: shipmentAddress.phone,
+    };
+  }
+
+  const orderAddress = params.orderShippingAddress;
+  if (orderAddress?.street1) {
+    return {
+      name: orderAddress.contactName || params.customerName,
+      addressLine1: orderAddress.street1,
+      addressLine2: orderAddress.street2,
+      city: orderAddress.city,
+      state: orderAddress.state,
+      postalCode: orderAddress.postalCode,
+      country: orderAddress.country,
+      contactName: orderAddress.contactName,
+      contactPhone: orderAddress.contactPhone,
+    };
+  }
+
+  const customerAddress = params.customerShippingAddress ?? params.customerBillingAddress;
+  if (customerAddress?.addressLine1) {
+    return {
+      name: params.customerName,
+      addressLine1: customerAddress.addressLine1,
+      addressLine2: customerAddress.addressLine2,
+      city: customerAddress.city,
+      state: customerAddress.state,
+      postalCode: customerAddress.postalCode,
+      country: customerAddress.country,
+      contactName: customerAddress.contactName,
+      contactPhone: customerAddress.contactPhone,
+    };
+  }
+
+  return null;
+}
+
+async function fetchShipmentDocumentData(
+  shipmentId: string,
+  organizationId: string
+) {
+  const [shipment] = await db
+    .select({
+      id: orderShipments.id,
+      orderId: orderShipments.orderId,
+      shipmentNumber: orderShipments.shipmentNumber,
+      status: orderShipments.status,
+      carrier: orderShipments.carrier,
+      carrierService: orderShipments.carrierService,
+      trackingNumber: orderShipments.trackingNumber,
+      createdAt: orderShipments.createdAt,
+      shippedAt: orderShipments.shippedAt,
+      deliveredAt: orderShipments.deliveredAt,
+      shippingAddress: orderShipments.shippingAddress,
+      notes: orderShipments.notes,
+    })
+    .from(orderShipments)
+    .where(
+      and(
+        eq(orderShipments.id, shipmentId),
+        eq(orderShipments.organizationId, organizationId)
       )
     )
     .limit(1);
 
-  // Fallback to any primary address
-  let customerAddress = billingAddress;
-  if (!customerAddress) {
-    const [anyPrimary] = await db
-      .select({
-        street1: addresses.street1,
-        street2: addresses.street2,
-        city: addresses.city,
-        state: addresses.state,
-        postcode: addresses.postcode,
-        country: addresses.country,
-      })
-      .from(addresses)
-      .where(
-        and(
-          eq(addresses.customerId, customerId),
-          eq(addresses.organizationId, organizationId),
-          eq(addresses.isPrimary, true)
-        )
-      )
-      .limit(1);
-    customerAddress = anyPrimary;
+  if (!shipment) {
+    throw new NotFoundError('Shipment not found', 'shipment');
   }
 
+  const orderData = await fetchOrderData(shipment.orderId, organizationId);
+  const customerData = await fetchCustomerData(orderData.customerId, organizationId);
+
+  const shipmentLineItems = await db
+    .select({
+      id: shipmentItems.id,
+      orderLineItemId: shipmentItems.orderLineItemId,
+      quantity: shipmentItems.quantity,
+      serialNumbers: shipmentItems.serialNumbers,
+      notes: shipmentItems.notes,
+      sku: orderLineItems.sku,
+      description: orderLineItems.description,
+    })
+    .from(shipmentItems)
+    .innerJoin(orderLineItems, eq(shipmentItems.orderLineItemId, orderLineItems.id))
+    .where(eq(shipmentItems.shipmentId, shipmentId))
+    .orderBy(shipmentItems.createdAt);
+
   return {
-    ...customer,
-    address: customerAddress
-      ? {
-          addressLine1: customerAddress.street1,
-          addressLine2: customerAddress.street2,
-          city: customerAddress.city,
-          state: customerAddress.state,
-          postalCode: customerAddress.postcode,
-          country: customerAddress.country,
-        }
-      : undefined,
+    shipment,
+    orderData,
+    customerData,
+    shipmentLineItems,
+    shippingAddress: resolveOperationalShippingAddress({
+      shipmentShippingAddress: shipment.shippingAddress,
+      orderShippingAddress: orderData.shippingAddress,
+      customerShippingAddress: customerData.shippingAddress,
+      customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
+      customerName: customerData.name,
+    }),
+  };
+}
+
+async function getShipmentDocumentCapabilities(params: {
+  organizationId: string;
+  orderId: string;
+  shipmentStatus: typeof orderShipments.$inferSelect['status'];
+  shipmentLineItems: Array<{
+    orderLineItemId: string;
+    quantity: number | string | null;
+  }>;
+}) {
+  const lineItemIds = Array.from(
+    new Set(params.shipmentLineItems.map((item) => item.orderLineItemId))
+  );
+
+  const lineItemQuantities =
+    lineItemIds.length > 0
+      ? await db
+          .select({
+            id: orderLineItems.id,
+            qtyPicked: orderLineItems.qtyPicked,
+            qtyShipped: orderLineItems.qtyShipped,
+          })
+          .from(orderLineItems)
+          .where(inArray(orderLineItems.id, lineItemIds))
+      : [];
+
+  const lineItemMap = new Map(
+    lineItemQuantities.map((item) => [
+      item.id,
+      {
+        qtyPicked: Number(item.qtyPicked ?? 0),
+        qtyShipped: Number(item.qtyShipped ?? 0),
+      },
+    ])
+  );
+
+  const pendingReservations = await getPendingShipmentReservations(db, {
+    organizationId: params.organizationId,
+    orderId: params.orderId,
+  });
+
+  const isDispatchReady =
+    params.shipmentStatus !== 'pending'
+      ? true
+      : params.shipmentLineItems.length > 0 &&
+        params.shipmentLineItems.every((item) => {
+          const line = lineItemMap.get(item.orderLineItemId);
+          if (!line) return false;
+          const globallyReserved = Number(
+            pendingReservations.quantitiesByLineItem.get(item.orderLineItemId) ?? 0
+          );
+          return line.qtyPicked - line.qtyShipped >= globallyReserved;
+        });
+
+  return {
+    canGenerateDispatchNote: isDispatchReady,
+    canGenerateDeliveryNote: params.shipmentStatus === 'delivered',
   };
 }
 
@@ -443,6 +659,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           orderNumber: orderData.orderNumber,
           issueDate: orderDate,
           shipDate: data.shipDate ? new Date(data.shipDate) : new Date(),
+          shipDateLabel: 'Ship Date',
           customer: {
             id: customerData.id,
             name: customerData.name,
@@ -633,6 +850,267 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       orderId,
       documentType,
       status: 'completed' as const,
+      entityType: 'order' as const,
+      entityId: orderId,
+      url,
+      filename,
+      storagePath,
+      fileSize,
+      checksum,
+    };
+  });
+
+export const generateShipmentDocument = createServerFn({ method: 'POST' })
+  .inputValidator(generateShipmentDocumentSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.order.read });
+    const { shipmentId, documentType, regenerate } = data;
+
+    const [{ shipment, orderData, customerData, shipmentLineItems, shippingAddress }, orgData] =
+      await Promise.all([
+        fetchShipmentDocumentData(shipmentId, ctx.organizationId),
+        fetchOrganizationForDocument(ctx.organizationId),
+      ]);
+
+    const capabilities = await getShipmentDocumentCapabilities({
+      organizationId: ctx.organizationId,
+      orderId: orderData.id,
+      shipmentStatus: shipment.status,
+      shipmentLineItems,
+    });
+
+    if (!regenerate) {
+      const existingFilename = generateFilename(documentType, shipment.shipmentNumber);
+      const [existingDocument] = await db
+        .select({
+          storageUrl: generatedDocuments.storageUrl,
+          filename: generatedDocuments.filename,
+          fileSize: generatedDocuments.fileSize,
+        })
+        .from(generatedDocuments)
+        .where(
+          and(
+            eq(generatedDocuments.organizationId, ctx.organizationId),
+            eq(generatedDocuments.entityType, 'shipment'),
+            eq(generatedDocuments.entityId, shipmentId),
+            eq(generatedDocuments.documentType, documentType)
+          )
+        )
+        .limit(1);
+
+      if (existingDocument?.storageUrl) {
+        return {
+          orderId: orderData.id,
+          shipmentId,
+          documentType,
+          status: 'completed' as const,
+          entityType: 'shipment' as const,
+          entityId: shipmentId,
+          url: existingDocument.storageUrl,
+          filename: existingDocument.filename ?? existingFilename,
+          storagePath: `/${ctx.organizationId}/shipments/${shipmentId}/${existingFilename}`,
+          fileSize: existingDocument.fileSize ?? 0,
+          checksum: '',
+        };
+      }
+    }
+
+    const issueDate = shipment.createdAt ? new Date(shipment.createdAt) : new Date();
+    let buffer: Buffer;
+    let filename: string;
+
+    if (documentType === 'packing-slip') {
+      const packingSlipData: PackingSlipDocumentData = {
+        documentNumber: `PS-${shipment.shipmentNumber}`,
+        orderNumber: orderData.orderNumber,
+        issueDate,
+        shipDate: shipment.shippedAt ? new Date(shipment.shippedAt) : issueDate,
+        shipDateLabel: shipment.shippedAt ? 'Ship Date' : 'Prepared',
+        customer: {
+          id: customerData.id,
+          name: customerData.name,
+          email: customerData.email,
+          phone: customerData.phone,
+        },
+        shippingAddress,
+        lineItems: shipmentLineItems.map((item, index) => ({
+          id: item.orderLineItemId,
+          lineNumber: String(index + 1),
+          sku: item.sku,
+          description: item.description,
+          quantity: Number(item.quantity),
+          notes: item.notes,
+          location: null,
+          isFragile: false,
+          weight: undefined,
+          serialNumbers:
+            item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
+        })),
+        carrier: shipment.carrier ?? undefined,
+        shippingMethod: shipment.carrierService ?? undefined,
+        notes: shipment.notes ?? orderData.customerNotes ?? orderData.internalNotes ?? undefined,
+      };
+
+      const result = await renderPdfToBuffer(
+        <PackingSlipPdfDocument organization={orgData} data={packingSlipData} />
+      );
+      buffer = result.buffer;
+      filename = generateFilename('packing-slip', shipment.shipmentNumber);
+    } else if (documentType === 'dispatch-note') {
+      if (!capabilities.canGenerateDispatchNote) {
+        throw new Error(
+          'Dispatch note is only available once every item in this shipment draft is fully picked.'
+        );
+      }
+
+      const dispatchNoteData: DispatchNoteDocumentData = {
+        documentNumber: `DS-${shipment.shipmentNumber}`,
+        orderNumber: orderData.orderNumber,
+        issueDate,
+        dispatchDate: shipment.shippedAt ? new Date(shipment.shippedAt) : issueDate,
+        customer: {
+          id: customerData.id,
+          name: customerData.name,
+          email: customerData.email,
+          phone: customerData.phone,
+        },
+        shippingAddress,
+        lineItems: shipmentLineItems.map<DispatchNoteLineItem>((item, index) => ({
+          id: item.orderLineItemId,
+          lineNumber: String(index + 1),
+          sku: item.sku,
+          description: item.description,
+          quantity: Number(item.quantity),
+          notes: item.notes,
+          isFragile: false,
+          weight: undefined,
+          dimensions: null,
+          serialNumbers:
+            item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
+        })),
+        carrier: shipment.carrier ?? undefined,
+        trackingNumber: shipment.trackingNumber ?? undefined,
+        notes: shipment.notes ?? orderData.customerNotes ?? orderData.internalNotes ?? undefined,
+      };
+
+      const result = await renderPdfToBuffer(
+        <DispatchNotePdfDocument organization={orgData} data={dispatchNoteData} />
+      );
+      buffer = result.buffer;
+      filename = generateFilename('dispatch-note', shipment.shipmentNumber);
+    } else {
+      if (!capabilities.canGenerateDeliveryNote || !shipment.deliveredAt) {
+        throw new Error('Delivery note is only available after delivery is confirmed.');
+      }
+
+      const deliveryNoteData: DeliveryNoteDocumentData = {
+        documentNumber: `DN-${shipment.shipmentNumber}`,
+        orderNumber: orderData.orderNumber,
+        issueDate: new Date(shipment.deliveredAt),
+        deliveryDate: new Date(shipment.deliveredAt),
+        customer: {
+          id: customerData.id,
+          name: customerData.name,
+          email: customerData.email,
+          phone: customerData.phone,
+        },
+        shippingAddress,
+        lineItems: shipmentLineItems.map((item, index) => ({
+          id: item.orderLineItemId,
+          lineNumber: String(index + 1),
+          sku: item.sku,
+          description: item.description,
+          quantity: Number(item.quantity),
+          notes: item.notes,
+          isFragile: false,
+          weight: undefined,
+          dimensions: null,
+          serialNumbers:
+            item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
+        })),
+        carrier: shipment.carrier ?? undefined,
+        trackingNumber: shipment.trackingNumber ?? undefined,
+        notes: shipment.notes ?? orderData.customerNotes ?? orderData.internalNotes ?? undefined,
+      };
+
+      const result = await renderPdfToBuffer(
+        <DeliveryNotePdfDocument organization={orgData} data={deliveryNoteData} />
+      );
+      buffer = result.buffer;
+      filename = generateFilename('delivery-note', shipment.shipmentNumber);
+    }
+
+    const { url, storagePath } = await uploadPdf(
+      buffer,
+      ctx.organizationId,
+      documentType,
+      shipment.shipmentNumber
+    );
+    const checksum = await calculateChecksum(buffer);
+    const fileSize = buffer.length;
+
+    const [upsertResult] = await db
+      .insert(generatedDocuments)
+      .values({
+        organizationId: ctx.organizationId,
+        documentType,
+        entityType: 'shipment',
+        entityId: shipmentId,
+        filename,
+        storageUrl: url,
+        fileSize,
+        generatedById: ctx.user.id,
+        regenerationCount: 0,
+      })
+      .onConflictDoUpdate({
+        target: [
+          generatedDocuments.organizationId,
+          generatedDocuments.entityType,
+          generatedDocuments.entityId,
+          generatedDocuments.documentType,
+        ],
+        set: {
+          filename,
+          storageUrl: url,
+          fileSize,
+          generatedById: ctx.user.id,
+          generatedAt: new Date(),
+          updatedAt: new Date(),
+          regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+        },
+      })
+      .returning({ regenerationCount: generatedDocuments.regenerationCount });
+
+    const activityLogger = createActivityLogger({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+    });
+    const isRegeneration = (upsertResult?.regenerationCount ?? 0) > 0;
+    activityLogger.logAsync({
+      entityType: 'shipment',
+      entityId: shipmentId,
+      action: 'exported',
+      entityName: shipment.shipmentNumber,
+      description: isRegeneration
+        ? `Regenerated ${documentType} PDF (version ${upsertResult?.regenerationCount ?? 1})`
+        : `Generated ${documentType} PDF`,
+      metadata: {
+        documentType,
+        filename,
+        fileSize,
+        orderId: orderData.id,
+        isRegeneration,
+        regenerationCount: upsertResult?.regenerationCount ?? 0,
+      },
+    });
+
+    return {
+      orderId: orderData.id,
+      shipmentId,
+      documentType,
+      status: 'completed' as const,
+      entityType: 'shipment' as const,
+      entityId: shipmentId,
       url,
       filename,
       storagePath,
@@ -718,6 +1196,45 @@ export const generateOrderDeliveryNotePdf = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     return generateOrderDocument({
+      data: { ...data, documentType: 'delivery-note' },
+    });
+  });
+
+export const generateShipmentPackingSlipPdf = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      shipmentId: z.string().uuid(),
+      regenerate: z.boolean().optional(),
+    })
+  )
+  .handler(async ({ data }) => {
+    return generateShipmentDocument({
+      data: { ...data, documentType: 'packing-slip' },
+    });
+  });
+
+export const generateShipmentDispatchNotePdf = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      shipmentId: z.string().uuid(),
+      regenerate: z.boolean().optional(),
+    })
+  )
+  .handler(async ({ data }) => {
+    return generateShipmentDocument({
+      data: { ...data, documentType: 'dispatch-note' },
+    });
+  });
+
+export const generateShipmentDeliveryNotePdf = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      shipmentId: z.string().uuid(),
+      regenerate: z.boolean().optional(),
+    })
+  )
+  .handler(async ({ data }) => {
+    return generateShipmentDocument({
       data: { ...data, documentType: 'delivery-note' },
     });
   });

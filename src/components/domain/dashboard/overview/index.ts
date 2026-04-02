@@ -25,10 +25,12 @@ export { OverviewDashboard, type OverviewDashboardProps } from './overview-dashb
 // ─────────────────────────────────────────────────────────────────────────────
 export {
   OverviewStats,
-  type OverviewStatsData,
   type OverviewStatsProps,
   type TrackedProductWithInventory,
 } from './overview-stats';
+export {
+  type OverviewStatsData,
+} from './overview-metrics';
 export { CashFlowChart, type CashFlowDataPoint, type CashFlowChartProps } from './cash-flow-chart';
 export { ProjectsTable, type ProjectSummary, type ProjectsTableProps } from './projects-table';
 export { OrdersTable, type OrderSummary, type OrdersTableProps } from './orders-table';

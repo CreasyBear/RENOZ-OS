@@ -9,10 +9,10 @@
  * - Use FulfillmentDashboardPresenter for storybook/testing
  *
  * Features:
- * - Summary cards: Orders to pick, Ready to ship, In transit, Overdue
+ * - Summary cards: Orders to pick, Ready to ship, shipment recovery queue, Overdue
  * - Picking queue table: Orders in "confirmed" status
  * - Shipping queue table: Orders in "picked" status
- * - Delivery tracking section: Active shipments
+ * - Delivery tracking section: recovery-focused shipment queue
  *
  * @see ./fulfillment-dashboard-container.tsx (container)
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-FULFILLMENT-DASHBOARD)
@@ -23,7 +23,6 @@ import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import type { UseMutationResult } from "@tanstack/react-query";
-import type { UpdateOrderStatusInput } from "@/hooks/orders/use-order-status";
 import {
   Package,
   Truck,
@@ -37,7 +36,7 @@ import {
   ExternalLink,
   Upload,
 } from "lucide-react";
-import { format, differenceInDays, parseISO } from "date-fns";
+import { format } from "date-fns";
 import {
   Card,
   CardContent,
@@ -81,10 +80,17 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { FormatAmount, MetricCard } from "@/components/shared";
-import { toastSuccess, toastError } from "@/hooks";
+import { toastSuccess } from "@/hooks";
 import type { OrderStatus, ShipmentStatus } from "@/lib/schemas/orders";
 import { fulfillmentImportRowSchema } from "@/lib/schemas/orders/shipments";
 import type { FulfillmentImport, FulfillmentImportRow } from "@/lib/schemas/orders/shipments";
+import { getSummaryMetricSubtitle } from '@/lib/metrics/metric-display';
+import type { SummaryState } from '@/lib/metrics/summary-health';
+import {
+  buildFulfillmentStats,
+  isOverdueOrder,
+  type FulfillmentStats,
+} from "./fulfillment-metrics";
 
 // ============================================================================
 // TYPES
@@ -99,6 +105,7 @@ interface OrderListResult {
     orderNumber: string;
     customerId: string;
     total: number | null;
+    orderDate: Date | string | null;
     createdAt: Date;
     status: string;
   }>;
@@ -139,6 +146,7 @@ interface FulfillmentImportResult {
  * Container props - what parent components pass
  */
 export interface FulfillmentDashboardContainerProps {
+  onPickOrder?: (orderId: string) => void;
   onShipOrder?: (orderId: string) => void;
   onViewOrder?: (orderId: string) => void;
   onConfirmDelivery?: (shipmentId: string) => void;
@@ -156,25 +164,24 @@ export interface FulfillmentDashboardPresenterProps
   confirmedOrders: OrderListResult | null;
   /** @source useOrders({ status: 'picked' }) hook */
   pickedOrders: OrderListResult | null;
-  /** @source useShipments({ status: 'in_transit' }) hook */
+  /** @source useShipments() hook */
   activeShipments: ShipmentListResult | null;
+  /** @source useFulfillmentDashboardSummary() hook */
+  fulfillmentSummary: FulfillmentStats | null;
+  /** Authoritative summary state for headline metrics */
+  summaryState: SummaryState;
+  /** Warning to show when summary metrics are unavailable */
+  summaryWarning?: string | null;
   /** Loading state for confirmed orders */
   loadingConfirmed: boolean;
   /** Loading state for picked orders */
   loadingPicked: boolean;
   /** Loading state for shipments */
   loadingShipments: boolean;
-  /** @source useUpdateOrderStatus hook */
-  updateOrderStatusMutation: UseMutationResult<unknown, Error, UpdateOrderStatusInput>;
+  /** Loading state for fulfillment summary metrics */
+  loadingSummary: boolean;
   /** @source useFulfillmentImport hook */
   importFulfillmentMutation: UseMutationResult<FulfillmentImportResult, Error, FulfillmentImport>;
-}
-
-interface FulfillmentStats {
-  toPick: number;
-  readyToShip: number;
-  inTransit: number;
-  overdue: number;
 }
 
 // ============================================================================
@@ -233,11 +240,6 @@ function getShipmentStatusBadge(status: ShipmentStatus) {
       {config.label}
     </span>
   );
-}
-
-function isOverdue(orderDate: string | Date): boolean {
-  const date = typeof orderDate === "string" ? parseISO(orderDate) : orderDate;
-  return differenceInDays(new Date(), date) > 3;
 }
 
 type FulfillmentImportPreviewRow = {
@@ -711,11 +713,15 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
   confirmedOrders,
   pickedOrders,
   activeShipments,
+  fulfillmentSummary,
+  summaryState,
+  summaryWarning,
   loadingConfirmed,
   loadingPicked,
   loadingShipments,
-  updateOrderStatusMutation,
+  loadingSummary,
   importFulfillmentMutation,
+  onPickOrder,
   onShipOrder,
   onViewOrder,
   onConfirmDelivery,
@@ -726,35 +732,14 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
-  // Mutation handlers with toast feedback
-  const handleStartPicking = useCallback((orderId: string) => {
-    updateOrderStatusMutation.mutate(
-      { id: orderId, status: 'picking' },
-      {
-        onSuccess: () => toastSuccess("Order moved to picking"),
-        onError: () => toastError("Failed to start picking"),
-      }
-    );
-  }, [updateOrderStatusMutation]);
+  const trackedShipments = (activeShipments?.shipments ?? []).filter(
+    (shipment) => shipment.status !== 'delivered' && shipment.status !== 'returned'
+  );
 
-  const handleCompletePicking = useCallback((orderId: string) => {
-    updateOrderStatusMutation.mutate(
-      { id: orderId, status: 'picked' },
-      {
-        onSuccess: () => toastSuccess("Order ready for shipping"),
-        onError: () => toastError("Failed to complete picking"),
-      }
-    );
-  }, [updateOrderStatusMutation]);
-
-  // Calculate stats
-  const stats: FulfillmentStats = {
-    toPick: confirmedOrders?.total ?? 0,
-    readyToShip: pickedOrders?.total ?? 0,
-    inTransit: activeShipments?.total ?? 0,
-    overdue: (confirmedOrders?.orders ?? []).filter((o) => isOverdue(o.createdAt)).length +
-             (pickedOrders?.orders ?? []).filter((o) => isOverdue(o.createdAt)).length,
-  };
+  const stats = buildFulfillmentStats({
+    fulfillmentSummary,
+    summaryState,
+  });
 
   // Refresh handler
   const handleRefresh = useCallback(async () => {
@@ -764,7 +749,7 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
     setIsRefreshing(false);
   }, [queryClient]);
 
-  const isLoading = loadingConfirmed || loadingPicked || loadingShipments;
+  const isLoading = loadingConfirmed || loadingPicked || loadingShipments || loadingSummary;
 
   return (
     <div className={cn("space-y-6", className)}>
@@ -811,11 +796,21 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
       </div>
 
       {/* Summary Stats */}
+      {summaryWarning ? (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{summaryWarning}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Orders to Pick"
-          value={stats.toPick}
-          subtitle="Awaiting fulfillment"
+          value={stats.toPick ?? '—'}
+          subtitle={getSummaryMetricSubtitle({
+            summaryState,
+            readySubtitle: 'Open or in progress',
+          })}
           icon={Package}
           className={STAT_CARD_STYLES.info.className}
           iconClassName={STAT_CARD_STYLES.info.iconClassName}
@@ -823,17 +818,23 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
         />
         <MetricCard
           title="Ready to Ship"
-          value={stats.readyToShip}
-          subtitle="Packed and waiting"
+          value={stats.readyToShip ?? '—'}
+          subtitle={getSummaryMetricSubtitle({
+            summaryState,
+            readySubtitle: 'Packed and waiting',
+          })}
           icon={Truck}
           className={STAT_CARD_STYLES.success.className}
           iconClassName={STAT_CARD_STYLES.success.iconClassName}
           isLoading={isLoading}
         />
         <MetricCard
-          title="In Transit"
-          value={stats.inTransit}
-          subtitle="Active shipments"
+          title="Shipment Queue"
+          value={stats.inTransit ?? '—'}
+          subtitle={getSummaryMetricSubtitle({
+            summaryState,
+            readySubtitle: 'Pending follow-up',
+          })}
           icon={MapPin}
           className={STAT_CARD_STYLES.default.className}
           iconClassName={STAT_CARD_STYLES.default.iconClassName}
@@ -841,11 +842,14 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
         />
         <MetricCard
           title="Overdue"
-          value={stats.overdue}
-          subtitle="Needs attention"
+          value={stats.overdue ?? '—'}
+          subtitle={getSummaryMetricSubtitle({
+            summaryState,
+            readySubtitle: 'Needs attention',
+          })}
           icon={AlertTriangle}
-          className={stats.overdue > 0 ? STAT_CARD_STYLES.warning.className : STAT_CARD_STYLES.default.className}
-          iconClassName={stats.overdue > 0 ? STAT_CARD_STYLES.warning.iconClassName : STAT_CARD_STYLES.default.iconClassName}
+          className={stats.overdue != null && stats.overdue > 0 ? STAT_CARD_STYLES.warning.className : STAT_CARD_STYLES.default.className}
+          iconClassName={stats.overdue != null && stats.overdue > 0 ? STAT_CARD_STYLES.warning.iconClassName : STAT_CARD_STYLES.default.iconClassName}
           isLoading={isLoading}
         />
       </div>
@@ -857,12 +861,11 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
             <div>
               <CardTitle className="text-base">Picking Queue</CardTitle>
               <CardDescription>
-                Orders confirmed and ready to be picked
+                Orders ready to start or resume picking
               </CardDescription>
             </div>
             <Link
               to="/orders"
-              search={{ status: "confirmed" }}
               className="text-sm text-primary hover:underline flex items-center gap-1"
             >
               View all <ArrowRight className="h-3 w-3" />
@@ -877,8 +880,7 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
               status: order.status as "draft" | "confirmed" | "picking" | "picked" | "shipped" | "delivered" | "cancelled"
             }))}
             isLoading={loadingConfirmed}
-            onStartPicking={handleStartPicking}
-            onCompletePicking={handleCompletePicking}
+            onOpenPicking={onPickOrder}
             onViewOrder={onViewOrder}
           />
         </CardContent>
@@ -923,21 +925,21 @@ export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardP
         importMutation={importFulfillmentMutation}
       />
 
-      {/* Active Shipments */}
+      {/* Shipment Recovery Queue */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Delivery Tracking</CardTitle>
+              <CardTitle className="text-base">Shipment Recovery Queue</CardTitle>
               <CardDescription>
-                Active shipments in transit
+                Pending, in transit, out for delivery, and failed shipments
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <DeliveryTrackingTable
-            shipments={activeShipments?.shipments ?? []}
+            shipments={trackedShipments}
             isLoading={loadingShipments}
             onConfirmDelivery={onConfirmDelivery}
           />
@@ -957,20 +959,19 @@ interface PickingQueueTableProps {
     orderNumber: string;
     customerId: string;
     total: number;
+    orderDate: Date | string | null;
     createdAt: Date;
     status: OrderStatus;
   }>;
   isLoading: boolean;
-  onStartPicking: (orderId: string) => void;
-  onCompletePicking: (orderId: string) => void;
+  onOpenPicking?: (orderId: string) => void;
   onViewOrder?: (orderId: string) => void;
 }
 
 function PickingQueueTable({
   orders,
   isLoading,
-  onStartPicking,
-  onCompletePicking,
+  onOpenPicking,
   onViewOrder,
 }: PickingQueueTableProps) {
   if (isLoading) {
@@ -1010,8 +1011,7 @@ function PickingQueueTable({
       </TableHeader>
       <TableBody>
         {orders.map((order) => {
-          const overdue = isOverdue(order.createdAt);
-          const isPicking = order.status === "picking";
+          const overdue = isOverdueOrder(order.orderDate);
 
           return (
             <TableRow key={order.id} className={cn(overdue && "bg-orange-50")}>
@@ -1047,24 +1047,14 @@ function PickingQueueTable({
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  {isPicking ? (
-                    <Button
-                      size="sm"
-                      onClick={() => onCompletePicking(order.id)}
-                    >
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Done
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onStartPicking(order.id)}
-                    >
-                      <Package className="h-4 w-4 mr-1" />
-                      Pick
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onOpenPicking?.(order.id)}
+                  >
+                    <Package className="h-4 w-4 mr-1" />
+                    {order.status === "picking" ? "Resume Picking" : "Open Picking"}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -1093,6 +1083,7 @@ interface ShippingQueueTableProps {
     orderNumber: string;
     customerId: string;
     total: number;
+    orderDate: Date | string | null;
     createdAt: Date;
     status: OrderStatus;
   }>;
@@ -1144,7 +1135,7 @@ function ShippingQueueTable({
       </TableHeader>
       <TableBody>
         {orders.map((order) => {
-          const overdue = isOverdue(order.createdAt);
+          const overdue = isOverdueOrder(order.orderDate);
 
           return (
             <TableRow key={order.id} className={cn(overdue && "bg-orange-50")}>

@@ -16,11 +16,13 @@
  */
 
 import { useMemo, useCallback, useState } from 'react';
-import { usePurchaseOrders } from '@/hooks/suppliers';
+import { usePurchaseOrders, useReceivingDashboardSummary } from '@/hooks/suppliers';
 import { useBulkReceiveGoods } from '@/hooks/suppliers/use-bulk-receive-goods';
 import { useTableSelection } from '@/components/shared/data-table';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
+import { getSummaryState } from '@/lib/metrics/summary-health';
 import { ReceivingDashboard } from './receiving-dashboard';
+import { buildReceivingMetrics } from './receiving-metrics';
 import { BulkReceivingDialogContainer } from './bulk-receiving-dialog-container';
 import type { BulkReceiptData } from '@/lib/schemas/procurement/procurement-types';
 
@@ -82,7 +84,11 @@ export function ReceivingDashboardContainer({
     [ordersData]
   );
 
-  const totalOrders = ordersData?.pagination?.totalItems ?? 0;
+  const {
+    data: receivingSummary,
+    isLoading: isLoadingSummary,
+    error: receivingSummaryError,
+  } = useReceivingDashboardSummary();
 
   // ===========================================================================
   // SELECTION STATE (for bulk operations)
@@ -104,26 +110,16 @@ export function ReceivingDashboardContainer({
   // METRICS CALCULATION
   // ===========================================================================
 
-  const metrics = useMemo(() => {
-    const totalValue = orders.reduce((sum, po) => sum + (po.totalAmount ?? 0), 0);
-    const supplierCount = new Set(orders.map((po) => po.supplierId)).size;
-    const oldestOrderDate = orders.length > 0
-      ? orders.reduce((oldest, po) => {
-          const poDate = po.orderDate ? new Date(po.orderDate) : null;
-          const oldestDate = oldest ? new Date(oldest) : null;
-          if (!poDate) return oldest;
-          if (!oldestDate) return po.orderDate;
-          return poDate < oldestDate ? po.orderDate : oldest;
-        }, orders[0].orderDate)
-      : null;
+  const summaryState = getSummaryState({
+    data: receivingSummary,
+    error: receivingSummaryError,
+    isLoading: isLoadingSummary,
+  });
 
-    return {
-      totalOrders,
-      totalValue,
-      supplierCount,
-      oldestOrderDate,
-    };
-  }, [orders, totalOrders]);
+  const metrics = useMemo(
+    () => buildReceivingMetrics({ receivingSummary, ordersData, summaryState }),
+    [ordersData, receivingSummary, summaryState]
+  );
 
   // ===========================================================================
   // HANDLERS
@@ -195,8 +191,13 @@ export function ReceivingDashboardContainer({
       <ReceivingDashboard
         orders={orders}
         metrics={metrics}
-        isLoading={isLoadingOrders}
+        isLoading={isLoadingOrders || isLoadingSummary}
         error={ordersError instanceof Error ? ordersError : null}
+        summaryWarning={
+          summaryState === 'unavailable'
+            ? 'Receiving summary metrics are temporarily unavailable. Headline cards are hidden where needed to avoid misleading values.'
+            : null
+        }
         onRefetch={handleRefetch}
         selectedIds={selectedIds}
         isAllSelected={isAllSelected}

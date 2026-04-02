@@ -71,6 +71,14 @@ function FulfillmentPage() {
     });
   }, [navigate]);
 
+  const handlePickOrder = useCallback((orderId: string) => {
+    navigate({
+      to: "/orders/$orderId",
+      params: { orderId },
+      search: { pick: true },
+    });
+  }, [navigate]);
+
   const handleConfirmDelivery = useCallback((shipmentId: string) => {
     setConfirmShipmentId(shipmentId);
     setConfirmDialogOpen(true);
@@ -89,6 +97,7 @@ function FulfillmentPage() {
       />
       <PageLayout.Content>
         <FulfillmentDashboardContainer
+          onPickOrder={handlePickOrder}
           onViewOrder={handleViewOrder}
           onShipOrder={handleShipOrder}
           onConfirmDelivery={handleConfirmDelivery}

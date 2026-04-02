@@ -9,8 +9,6 @@ export interface CustomerWizardSubmissionState {
   submitError: string
   fieldErrors: Partial<Record<keyof CustomerWizardValues, string>>
   targetStepIndex: number
-  preserveDraft?: boolean
-  skipUiRecovery?: boolean
 }
 
 export function getCustomerCreateSubmissionState(error: unknown): CustomerWizardSubmissionState {
@@ -33,6 +31,8 @@ export function getCustomerCreateSubmissionState(error: unknown): CustomerWizard
   )?.details?.validationErrors
 
   const fieldErrors: Partial<Record<keyof CustomerWizardValues, string>> = {}
+
+  let targetStepIndex = WIZARD_STEP_COUNT - 1
 
   if (validationErrors) {
     const knownFieldNames: Array<keyof CustomerWizardValues> = [
@@ -57,21 +57,22 @@ export function getCustomerCreateSubmissionState(error: unknown): CustomerWizard
         fieldErrors[fieldName] = fieldMessages[0]
       }
     }
+
+    const validationKeys = Object.keys(validationErrors)
+    if (validationKeys.some((key) => key.startsWith('contacts') || key === 'contacts')) {
+      targetStepIndex = 1
+    } else if (validationKeys.some((key) => key.startsWith('addresses') || key === 'addresses')) {
+      targetStepIndex = 2
+    } else if (Object.keys(fieldErrors).length > 0) {
+      targetStepIndex = 0
+    }
+  } else if ((error as { statusCode?: number })?.statusCode === 409) {
+    targetStepIndex = 0
   }
 
   return {
     submitError: message,
     fieldErrors,
-    targetStepIndex: Object.keys(fieldErrors).length > 0 ? 0 : WIZARD_STEP_COUNT - 1,
-    preserveDraft:
-      (error as { code?: string })?.code === 'PARTIAL_RELATED_CREATE_FAILURE',
-    skipUiRecovery:
-      (error as {
-        code?: string
-        details?: { redirectingToEdit?: boolean }
-      })?.code === 'PARTIAL_RELATED_CREATE_FAILURE' &&
-      (error as {
-        details?: { redirectingToEdit?: boolean }
-      })?.details?.redirectingToEdit === true,
+    targetStepIndex,
   }
 }

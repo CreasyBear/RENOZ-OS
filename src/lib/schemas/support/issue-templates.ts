@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -92,7 +93,7 @@ export const getIssueTemplateSchema = z.object({
 });
 export type GetIssueTemplateInput = z.infer<typeof getIssueTemplateSchema>;
 
-export const listIssueTemplatesSchema = z.object({
+export const listIssueTemplatesBaseSchema = z.object({
   // Filters
   type: issueTypeSchema.optional(),
   isActive: z.boolean().optional(),
@@ -108,6 +109,8 @@ export const listIssueTemplatesSchema = z.object({
   sortBy: z.enum(['name', 'usageCount', 'createdAt']).default('usageCount'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
+
+export const listIssueTemplatesSchema = normalizeObjectInput(listIssueTemplatesBaseSchema);
 export type ListIssueTemplatesInput = z.infer<typeof listIssueTemplatesSchema>;
 
 export const deleteIssueTemplateSchema = z.object({

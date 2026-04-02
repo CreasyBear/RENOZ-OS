@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 import { approvalsSearchSchema } from './approval-search';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // APPROVAL STATUS ENUM
@@ -144,26 +145,30 @@ export interface ApprovalRuleData extends ApprovalRuleInput {
 /**
  * Schema for listing pending approvals with filtering and pagination.
  */
-export const listPendingApprovalsSchema = z.object({
-  status: approvalStatusEnum.optional(),
-  search: z.string().optional(),
-  type: z.enum(['all', 'purchase_order', 'amendment']).optional(),
-  priority: z.enum(['all', 'low', 'medium', 'high', 'urgent']).optional(),
-  sortBy: z.enum(['createdAt', 'dueAt', 'level']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
-export type ListPendingApprovalsInput = z.infer<typeof listPendingApprovalsSchema>;
-
-/** Cursor pagination for list pending approvals */
-export const listPendingApprovalsCursorSchema = cursorPaginationSchema.merge(
+export const listPendingApprovalsSchema = normalizeObjectInput(
   z.object({
     status: approvalStatusEnum.optional(),
     search: z.string().optional(),
     type: z.enum(['all', 'purchase_order', 'amendment']).optional(),
     priority: z.enum(['all', 'low', 'medium', 'high', 'urgent']).optional(),
+    sortBy: z.enum(['createdAt', 'dueAt', 'level']).default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
   })
+);
+export type ListPendingApprovalsInput = z.infer<typeof listPendingApprovalsSchema>;
+
+/** Cursor pagination for list pending approvals */
+export const listPendingApprovalsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      status: approvalStatusEnum.optional(),
+      search: z.string().optional(),
+      type: z.enum(['all', 'purchase_order', 'amendment']).optional(),
+      priority: z.enum(['all', 'low', 'medium', 'high', 'urgent']).optional(),
+    })
+  )
 );
 export type ListPendingApprovalsCursorInput = z.infer<typeof listPendingApprovalsCursorSchema>;
 

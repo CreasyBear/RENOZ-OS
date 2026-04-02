@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // INTERFACES
@@ -64,17 +65,21 @@ export type UpdateCustomReportInput = z.infer<typeof updateCustomReportSchema>;
 // LIST CUSTOM REPORTS
 // ============================================================================
 
-export const listCustomReportsSchema = z.object({
-  isShared: z.boolean().optional(),
-  search: z.string().optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
+export const listCustomReportsSchema = normalizeObjectInput(
+  z.object({
+    isShared: z.boolean().optional(),
+    search: z.string().optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+  })
+);
 
 export type ListCustomReportsInput = z.infer<typeof listCustomReportsSchema>;
 
-export const listCustomReportsCursorSchema = cursorPaginationSchema.merge(
-  z.object({ isShared: z.boolean().optional(), search: z.string().optional() })
+export const listCustomReportsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({ isShared: z.boolean().optional(), search: z.string().optional() })
+  )
 );
 export type ListCustomReportsCursorInput = z.infer<typeof listCustomReportsCursorSchema>;
 

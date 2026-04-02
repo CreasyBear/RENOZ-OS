@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeQueryError } from '@/lib/error-handling';
 import type { OrderStatus } from '@/lib/schemas/orders';
 import {
   getOrderWithCustomer,
@@ -24,6 +25,11 @@ import {
 } from './order-mutation-client-errors';
 
 type BaseOrderWithCustomer = Awaited<ReturnType<typeof getOrderWithCustomer>>;
+
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
 
 /** Order with customer; customer includes addresses when present (from getOrderWithCustomer) */
 export type OrderWithCustomer = Omit<BaseOrderWithCustomer, 'customer'> & {
@@ -55,10 +61,17 @@ export function useOrderWithCustomer({
   return useQuery<OrderWithCustomer>({
     queryKey: queryKeys.orders.withCustomer(orderId),
     queryFn: async () => {
-      const result = await getOrderWithCustomerFn({
-        data: { id: orderId }
-      });
-      return expectOrderQueryData(result, 'Order detail is unavailable.') as OrderWithCustomer;
+      try {
+        const result = await getOrderWithCustomerFn({
+          data: { id: orderId }
+        });
+        return expectOrderQueryData(result, 'Order detail is unavailable.') as OrderWithCustomer;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Order details are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds
@@ -92,7 +105,7 @@ export function useOrderDetailStatusUpdate(orderId: string) {
       // Invalidate both detail and list queries
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }
@@ -118,7 +131,7 @@ export function useDeleteOrderWithConfirmation(orderId: string) {
       // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
       queryClient.removeQueries({ queryKey: queryKeys.orders.detail(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }
@@ -141,7 +154,7 @@ export function useDuplicateOrderById(orderId: string) {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }

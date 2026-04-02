@@ -118,7 +118,9 @@ export function createOrderColumns(
     {
       id: "customer",
       accessorFn: (row) => row.customer?.name ?? row.customerId,
-      header: "Customer",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Customer" />
+      ),
       cell: ({ row }) => {
         const customer = row.original.customer;
         if (customer?.id && customer?.name) {
@@ -140,7 +142,7 @@ export function createOrderColumns(
           </span>
         );
       },
-      enableSorting: false,
+      enableSorting: true,
       size: 160,
     },
 

@@ -24,11 +24,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useServerFn } from '@tanstack/react-start';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 import {
-  useDocumentHistory,
   formatFileSize,
   getDocumentTypeLabel,
 } from '@/hooks/documents';
+import { getOrderGeneratedDocuments } from '@/server/functions/documents';
 
 // ============================================================================
 // TYPES
@@ -47,6 +50,7 @@ const DOCUMENT_TYPE_ICONS: Record<string, React.ElementType> = {
   quote: FileText,
   invoice: Receipt,
   'packing-slip': Package,
+  'dispatch-note': Truck,
   'delivery-note': Truck,
 };
 
@@ -57,6 +61,7 @@ function getDocumentBadgeVariant(documentType: string) {
     case 'invoice':
       return 'default';
     case 'packing-slip':
+    case 'dispatch-note':
       return 'outline';
     case 'delivery-note':
       return 'outline';
@@ -73,6 +78,7 @@ interface DocumentCardProps {
   document: {
     id: string;
     documentType: string;
+    entityType: string;
     filename: string;
     storageUrl: string;
     fileSize: number | null;
@@ -106,6 +112,11 @@ function DocumentCard({ document }: DocumentCardProps) {
             >
               {getDocumentTypeLabel(document.documentType as 'quote')}
             </Badge>
+            {document.entityType === 'shipment' && (
+              <Badge variant="outline" className="text-xs">
+                Shipment
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
@@ -146,7 +157,7 @@ function EmptyState() {
       <FileQuestion className="h-12 w-12 text-muted-foreground/50 mb-4" />
       <p className="text-muted-foreground font-medium">No documents yet</p>
       <p className="text-sm text-muted-foreground mt-1">
-        Generate a quote, invoice, or packing slip to see it here
+        Generate a quote, invoice, packing slip, or shipment note to see it here
       </p>
     </div>
   );
@@ -181,18 +192,21 @@ export const OrderDocumentsTab = memo(function OrderDocumentsTab({
   orderId,
   className,
 }: OrderDocumentsTabProps) {
+  const getOrderDocumentsFn = useServerFn(getOrderGeneratedDocuments);
   const {
     data,
     isLoading,
     error,
     refetch,
     isRefetching,
-  } = useDocumentHistory({
-    entityType: 'order',
-    entityId: orderId,
+  } = useQuery({
+    queryKey: queryKeys.documents.history('order', orderId),
+    queryFn: () => getOrderDocumentsFn({ data: { orderId } }),
+    enabled: !!orderId,
+    staleTime: 60 * 1000,
   });
 
-  const documents = data?.documents ?? [];
+  const documents = data ?? [];
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -201,7 +215,7 @@ export const OrderDocumentsTab = memo(function OrderDocumentsTab({
         <div>
           <h2 className="text-base font-semibold text-foreground">Documents</h2>
           <p className="text-sm text-muted-foreground">
-            Quotes, invoices, packing slips, and delivery notes
+            Quotes, invoices, packing slips, dispatch notes, and delivery notes
           </p>
         </div>
         <Button

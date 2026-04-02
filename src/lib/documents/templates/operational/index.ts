@@ -6,6 +6,15 @@
  */
 
 export {
+  DispatchNotePdfDocument,
+  DispatchNotePdfTemplate,
+  type DispatchNoteDocumentData,
+  type DispatchNoteLineItem,
+  type DispatchNotePdfDocumentProps,
+  type DispatchNotePdfTemplateProps,
+} from "./dispatch-note";
+
+export {
   DeliveryNotePdfDocument,
   DeliveryNotePdfTemplate,
   type DeliveryNoteDocumentData,

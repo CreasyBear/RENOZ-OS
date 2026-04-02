@@ -168,4 +168,77 @@ describe('root index route server redirect behavior', () => {
       });
     }
   });
+
+  it('redirects exact client-side "/" to /login', async () => {
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      value: {},
+      writable: true,
+      configurable: true,
+    });
+
+    try {
+      const { Route } = await import('@/routes/index');
+      const beforeLoad = Route.options.beforeLoad;
+
+      if (!beforeLoad) {
+        throw new Error('Expected index route to define beforeLoad');
+      }
+
+      await expect(
+        beforeLoad({
+          location: { pathname: '/' },
+          search: {},
+        } as never)
+      ).rejects.toMatchObject({
+        options: {
+          to: '/login',
+          replace: true,
+        },
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        value: originalWindow,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
+  it('redirects exact client-side "/?code=" to /update-password', async () => {
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      value: {},
+      writable: true,
+      configurable: true,
+    });
+
+    try {
+      const { Route } = await import('@/routes/index');
+      const beforeLoad = Route.options.beforeLoad;
+
+      if (!beforeLoad) {
+        throw new Error('Expected index route to define beforeLoad');
+      }
+
+      await expect(
+        beforeLoad({
+          location: { pathname: '/' },
+          search: { code: 'abc123' },
+        } as never)
+      ).rejects.toMatchObject({
+        options: {
+          to: '/update-password',
+          search: { code: 'abc123' },
+          replace: true,
+        },
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        value: originalWindow,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
 });

@@ -18,7 +18,7 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { userListQuerySchema, userListCursorSchema, updateUserSchema } from '@/lib/schemas/auth';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
-import { idParamSchema } from '@/lib/schemas';
+import { idParamQuerySchema, idParamSchema } from '@/lib/schemas';
 import {
   transferOwnershipSchema,
   bulkUpdateServerSchema,
@@ -231,7 +231,7 @@ export const listUsersCursor = createServerFn({ method: 'GET' })
  * Requires: user.read permission
  */
 export const getUser = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.user.read });
 

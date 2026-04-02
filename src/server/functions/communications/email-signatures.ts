@@ -8,6 +8,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { eq, and, or, isNull } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns'
 import { emailSignatures } from '../../../../drizzle/schema/communications'
 import {
   createSignatureSchema,
@@ -72,7 +73,7 @@ export const createEmailSignature = createServerFn({ method: 'POST' })
  * Get all signatures for the current user (including company-wide)
  */
 export const getEmailSignatures = createServerFn({ method: 'GET' })
-  .inputValidator(getSignaturesSchema)
+  .inputValidator(normalizeObjectInput(getSignaturesSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read })
 
@@ -105,7 +106,7 @@ export const getEmailSignatures = createServerFn({ method: 'GET' })
  * Get a single signature by ID
  */
 export const getEmailSignature = createServerFn({ method: 'GET' })
-  .inputValidator(getSignatureSchema)
+  .inputValidator(normalizeObjectInput(getSignatureSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read })
 

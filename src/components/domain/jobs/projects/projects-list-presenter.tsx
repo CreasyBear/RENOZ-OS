@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 import { ProjectsTablePresenter } from "./projects-table-presenter";
 import { ProjectsMobileCards } from "./projects-mobile-cards";
 import type { ProjectTableItem } from "./project-columns";
@@ -45,7 +46,7 @@ export interface ProjectsListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View project handler */
   onViewProject: (id: string) => void;
   /** Edit project handler */

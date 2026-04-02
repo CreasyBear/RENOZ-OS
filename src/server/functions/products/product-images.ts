@@ -10,6 +10,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, isNull, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { products, productImages } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -59,7 +60,7 @@ function validateImageFile(mimeType: string, fileSize: number): { valid: boolean
  * List images for a product.
  */
 export const listProductImages = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(async ({ data }): Promise<ProductImage[]> => {
     const ctx = await withAuth();
 
@@ -79,7 +80,7 @@ export const listProductImages = createServerFn({ method: 'GET' })
  * Get the primary image for a product.
  */
 export const getPrimaryImage = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(async ({ data }): Promise<ProductImage | null> => {
     const ctx = await withAuth();
 
@@ -567,7 +568,7 @@ export const bulkUpdateAltText = createServerFn({ method: 'POST' })
  * Get image statistics for a product.
  */
 export const getImageStats = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(
     async ({
       data,

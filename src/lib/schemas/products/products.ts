@@ -15,6 +15,7 @@ import {
   paginationSchema,
   filterSchema,
   idParamSchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
@@ -217,18 +218,36 @@ export const productFilterSchema = filterSchema.extend({
 
 export type ProductFilter = z.infer<typeof productFilterSchema>;
 
+export const PRODUCT_SORT_FIELDS = [
+  'createdAt',
+  'name',
+  'sku',
+  'basePrice',
+] as const;
+
+export const productSortFieldSchema = z.enum(PRODUCT_SORT_FIELDS);
+
+export type ProductSortField = z.infer<typeof productSortFieldSchema>;
+
 // ============================================================================
 // PRODUCT LIST QUERY
 // ============================================================================
 
-export const productListQuerySchema = paginationSchema.merge(productFilterSchema);
+export const productListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(productFilterSchema).extend({
+    sortBy: productSortFieldSchema.default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+);
 
 export type ProductListQuery = z.infer<typeof productListQuerySchema>;
 
 /**
  * Cursor-based pagination query for products (recommended for large datasets).
  */
-export const productCursorQuerySchema = cursorPaginationSchema.merge(productFilterSchema);
+export const productCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(productFilterSchema)
+);
 
 export type ProductCursorQuery = z.infer<typeof productCursorQuerySchema>;
 
@@ -539,10 +558,12 @@ export type ProductRelation = z.infer<typeof productRelationSchema>;
 // PRICE RESOLUTION SCHEMAS
 // ============================================================================
 
-export const getPriceQuerySchema = z.object({
-  customerId: z.string().uuid().optional(),
-  quantity: z.number().int().positive().default(1),
-});
+export const getPriceQuerySchema = normalizeObjectInput(
+  z.object({
+    customerId: z.string().uuid().optional(),
+    quantity: z.number().int().positive().default(1),
+  })
+);
 
 export const priceResolutionResultSchema = z.object({
   basePrice: currencySchema,

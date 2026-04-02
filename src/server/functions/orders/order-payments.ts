@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { orderPayments, orders } from "drizzle/schema";
 import {
   insertOrderPaymentSchema,
@@ -87,7 +88,7 @@ export async function updateOrderPaymentStatus(
  * Get all payments for an order
  */
 export const getOrderPayments = createServerFn({ method: "GET" })
-  .inputValidator(insertOrderPaymentSchema.pick({ orderId: true }))
+  .inputValidator(normalizeObjectInput(insertOrderPaymentSchema.pick({ orderId: true })))
   .handler(async ({ data: { orderId } }) => {
     const ctx = await withAuth();
 
@@ -123,9 +124,13 @@ export const getOrderPayments = createServerFn({ method: "GET" })
  * Get a single payment by ID
  */
 export const getOrderPayment = createServerFn({ method: "GET" })
-  .inputValidator(z.object({
-    paymentId: z.string().uuid(),
-  }))
+  .inputValidator(
+    normalizeObjectInput(
+      z.object({
+        paymentId: z.string().uuid(),
+      })
+    )
+  )
   .handler(async ({ data: { paymentId } }) => {
     const ctx = await withAuth();
 
@@ -160,7 +165,7 @@ export const getOrderPayment = createServerFn({ method: "GET" })
  * Get payment summary for an order (total paid, refunds, etc.)
  */
 export const getOrderPaymentSummary = createServerFn({ method: "GET" })
-  .inputValidator(insertOrderPaymentSchema.pick({ orderId: true }))
+  .inputValidator(normalizeObjectInput(insertOrderPaymentSchema.pick({ orderId: true })))
   .handler(async ({ data: { orderId } }) => {
     const ctx = await withAuth();
 
@@ -363,7 +368,8 @@ export const createRefundPayment = createServerFn({ method: "POST" })
           eq(orderPayments.id, originalPaymentId),
           eq(orderPayments.orderId, orderId),
           eq(orderPayments.organizationId, ctx.organizationId),
-          eq(orderPayments.isRefund, false)
+          eq(orderPayments.isRefund, false),
+          isNull(orderPayments.deletedAt)
         )
       )
       .limit(1);
@@ -372,9 +378,30 @@ export const createRefundPayment = createServerFn({ method: "POST" })
       throw new NotFoundError("Original payment not found");
     }
 
-    if (amount > original.amount) {
-      throw new ValidationError("Refund amount cannot exceed original payment", {
-        amount: [`Refund amount (${amount}) exceeds original payment (${original.amount})`],
+    const [refundTotals] = await db
+      .select({
+        totalRefunded: sql<number>`coalesce(sum(${orderPayments.amount}), 0)::numeric`,
+      })
+      .from(orderPayments)
+      .where(
+        and(
+          eq(orderPayments.orderId, orderId),
+          eq(orderPayments.organizationId, ctx.organizationId),
+          eq(orderPayments.isRefund, true),
+          eq(orderPayments.relatedPaymentId, originalPaymentId),
+          isNull(orderPayments.deletedAt)
+        )
+      )
+      .limit(1);
+
+    const totalRefunded = Number(refundTotals?.totalRefunded ?? 0);
+    const remainingRefundable = Math.max(0, Number(original.amount) - totalRefunded);
+
+    if (amount > remainingRefundable) {
+      throw new ValidationError("Refund amount cannot exceed remaining refundable balance", {
+        amount: [
+          `Refund amount (${amount}) exceeds remaining refundable balance (${remainingRefundable})`,
+        ],
       });
     }
 

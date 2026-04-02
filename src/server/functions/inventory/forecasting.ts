@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, asc, gte, lte, inArray, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { inventoryForecasts, inventory, products, warehouseLocations } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -104,11 +105,13 @@ export const listForecasts = createServerFn({ method: 'GET' })
  */
 export const getProductForecast = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      period: forecastPeriodSchema.default('monthly'),
-      days: z.coerce.number().int().min(7).max(365).default(90),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        period: forecastPeriodSchema.default('monthly'),
+        days: z.coerce.number().int().min(7).max(365).default(90),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
@@ -332,11 +335,13 @@ export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
  */
 export const calculateSafetyStock = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      serviceLevel: z.coerce.number().min(0.5).max(0.999).default(0.95),
-      leadTimeDays: z.coerce.number().int().min(1).max(365).default(7),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        serviceLevel: z.coerce.number().min(0.5).max(0.999).default(0.95),
+        leadTimeDays: z.coerce.number().int().min(1).max(365).default(7),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
@@ -417,10 +422,12 @@ export const calculateSafetyStock = createServerFn({ method: 'GET' })
  */
 export const getReorderRecommendations = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      urgencyFilter: z.enum(['all', 'critical', 'high']).default('all'),
-      limit: z.coerce.number().int().min(1).max(100).default(50),
-    })
+    normalizeObjectInput(
+      z.object({
+        urgencyFilter: z.enum(['all', 'critical', 'high']).default('all'),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
@@ -662,11 +669,13 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
  */
 export const getForecastAccuracy = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid().optional(),
-      period: forecastPeriodSchema.default('monthly'),
-      lookbackDays: z.coerce.number().int().min(30).max(365).default(90),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid().optional(),
+        period: forecastPeriodSchema.default('monthly'),
+        lookbackDays: z.coerce.number().int().min(30).max(365).default(90),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });

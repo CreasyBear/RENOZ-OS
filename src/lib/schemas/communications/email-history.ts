@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { idParamSchema, cursorPaginationSchema, emailSchema, optionalEmailSchema } from '../_shared/patterns';
+import { idParamSchema, cursorPaginationSchema, emailSchema, optionalEmailSchema, normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -92,7 +92,7 @@ export type EmailHistory = z.infer<typeof EmailHistorySchema>;
 // QUERY SCHEMAS
 // ============================================================================
 
-export const EmailHistoryFilterSchema = z.object({
+const emailHistoryFilterBaseSchema = z.object({
   status: EmailStatusSchema.optional(),
   customerId: z.string().uuid().optional(),
   campaignId: z.string().uuid().optional(),
@@ -102,7 +102,11 @@ export const EmailHistoryFilterSchema = z.object({
   search: z.string().optional(), // Search in subject, bodyText, fromAddress, toAddress
 });
 
-export const EmailHistoryListQuerySchema = cursorPaginationSchema.merge(EmailHistoryFilterSchema);
+export const EmailHistoryFilterSchema = normalizeObjectInput(emailHistoryFilterBaseSchema);
+
+export const EmailHistoryListQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(emailHistoryFilterBaseSchema)
+);
 
 export type EmailHistoryListQuery = z.infer<typeof EmailHistoryListQuerySchema>;
 

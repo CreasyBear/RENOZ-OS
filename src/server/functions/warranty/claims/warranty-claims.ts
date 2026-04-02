@@ -22,6 +22,7 @@ import {
   cursorPaginationSchema,
 } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   warrantyClaims,
   warranties,
@@ -62,6 +63,7 @@ import {
   approveClaimSchema,
   denyClaimSchema,
   resolveClaimSchema,
+  listWarrantyClaimsBaseSchema,
   listWarrantyClaimsSchema,
   getWarrantyClaimSchema,
   assignClaimSchema,
@@ -1137,17 +1139,47 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
     };
   });
 
+export const getWarrantyClaimSummary = createServerFn({ method: 'GET' })
+  .inputValidator(normalizeObjectInput(z.object({ warrantyId: z.string().uuid() })))
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
+
+    const [summary] = await db
+      .select({
+        totalClaims: count(),
+        pendingClaims: sql<number>`count(
+          CASE
+            WHEN ${warrantyClaims.status} IN ('submitted', 'under_review') THEN 1
+          END
+        )::int`,
+      })
+      .from(warrantyClaims)
+      .where(
+        and(
+          eq(warrantyClaims.organizationId, ctx.organizationId),
+          eq(warrantyClaims.warrantyId, data.warrantyId)
+        )
+      );
+
+    return {
+      totalClaims: summary?.totalClaims ?? 0,
+      pendingClaims: summary?.pendingClaims ?? 0,
+    };
+  });
+
 /**
  * List warranty claims with cursor pagination (recommended for large datasets >10k rows)
  */
-const listWarrantyClaimsCursorSchema = cursorPaginationSchema.extend({
-  warrantyId: z.string().uuid().optional(),
-  customerId: z.string().uuid().optional(),
-  status: listWarrantyClaimsSchema.shape.status.optional(),
-  claimType: listWarrantyClaimsSchema.shape.claimType.optional(),
-  quickFilter: listWarrantyClaimsSchema.shape.quickFilter.optional(),
-  assignedUserId: z.string().uuid().optional(),
-});
+const listWarrantyClaimsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.extend({
+    warrantyId: z.string().uuid().optional(),
+    customerId: z.string().uuid().optional(),
+    status: listWarrantyClaimsBaseSchema.shape.status.optional(),
+    claimType: listWarrantyClaimsBaseSchema.shape.claimType.optional(),
+    quickFilter: listWarrantyClaimsBaseSchema.shape.quickFilter.optional(),
+    assignedUserId: z.string().uuid().optional(),
+  })
+);
 
 export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
   .inputValidator(listWarrantyClaimsCursorSchema)

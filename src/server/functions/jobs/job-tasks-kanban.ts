@@ -11,6 +11,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, inArray, asc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobTasks, jobAssignments, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -33,7 +34,7 @@ export type { KanbanTask, ListJobTasksForKanbanInput, GetMyTasksForKanbanInput }
  * Aggregates tasks with job assignment and customer context for overview.
  */
 export const listJobTasksForKanban = createServerFn({ method: 'GET' })
-  .inputValidator(listJobTasksForKanbanSchema)
+  .inputValidator(normalizeObjectInput(listJobTasksForKanbanSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -164,7 +165,7 @@ export const listJobTasksForKanban = createServerFn({ method: 'GET' })
  * Used by /my-tasks route for cross-project task view.
  */
 export const getMyTasksForKanban = createServerFn({ method: 'GET' })
-  .inputValidator(getMyTasksForKanbanSchema)
+  .inputValidator(normalizeObjectInput(getMyTasksForKanbanSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',

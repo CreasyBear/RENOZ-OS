@@ -42,6 +42,13 @@ import {
   type OrderBulkOperation,
 } from "./order-bulk-operations-dialog";
 import { ArrowRightFromLine } from "lucide-react";
+import {
+  DEFAULT_ORDER_SORT_DIRECTION,
+  DEFAULT_ORDER_SORT_FIELD,
+  resolveOrderSortState,
+  type OrderSortField,
+  type SortDirection,
+} from "./order-sorting";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -61,14 +68,6 @@ type OrderQueryFilters = Pick<
   OrderListQuery,
   "search" | "status" | "paymentStatus" | "dateFrom" | "dateTo" | "minTotal" | "maxTotal" | "customerId"
 >;
-
-type SortField = "orderNumber" | "orderDate" | "status" | "total" | "createdAt";
-
-// Type guard for sort field validation
-function isValidSortField(field: string): field is SortField {
-  return ["orderNumber", "orderDate", "status", "total", "createdAt"].includes(field);
-}
-type SortDirection = "asc" | "desc";
 
 export function buildOrderQuery(filters: OrderFiltersState): OrderQueryFilters {
   return {
@@ -92,8 +91,12 @@ export function OrdersListContainer({
   const navigate = useNavigate();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<OrderSortField>(
+    DEFAULT_ORDER_SORT_FIELD
+  );
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_ORDER_SORT_DIRECTION
+  );
 
   // Bulk operations dialog state
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -145,25 +148,26 @@ export function OrdersListContainer({
   const bulkUpdateStatusMutation = useBulkUpdateOrderStatus();
 
   // Handle sort toggle
-  const handleSort = useCallback((field: string) => {
-    if (!isValidSortField(field)) {
-      logger.warn('Invalid sort field', { field });
-      return;
-    }
-    setSortField((currentField) => {
-      if (currentField === field) {
-        // Toggle direction
-        setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
-        return currentField;
-      }
-      // New field, default to ascending for text, descending for dates/numbers
-      setSortDirection(
-        ["orderDate", "total", "createdAt"].includes(field) ? "desc" : "asc"
+  const handleSort = useCallback(
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolveOrderSortState(
+        sortField,
+        sortDirection,
+        field,
+        direction
       );
-      return field;
-    });
-    setPage(1); // Reset to first page on sort change
-  }, []);
+
+      if (!nextSort) {
+        logger.warn("Invalid sort field", { field });
+        return;
+      }
+
+      setSortField(nextSort.field);
+      setSortDirection(nextSort.direction);
+      setPage(1); // Reset to first page on sort change
+    },
+    [sortField, sortDirection]
+  );
 
   // Shift-click range handler that updates lastClickedIndex
   const handleShiftClickRangeWithIndex = useCallback(

@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS (must match drizzle schema)
@@ -152,10 +153,12 @@ export type JobAssignmentFilters = z.infer<typeof jobAssignmentFiltersSchema>;
 // LIST JOB ASSIGNMENTS
 // ============================================================================
 
-export const listJobAssignmentsSchema = z.object({
-  organizationId: z.string().uuid(),
-  filters: jobAssignmentFiltersSchema.optional(),
-});
+export const listJobAssignmentsSchema = normalizeObjectInput(
+  z.object({
+    organizationId: z.string().uuid(),
+    filters: jobAssignmentFiltersSchema.optional(),
+  })
+);
 
 export type ListJobAssignmentsInput = z.infer<typeof listJobAssignmentsSchema>;
 
@@ -163,10 +166,12 @@ export type ListJobAssignmentsInput = z.infer<typeof listJobAssignmentsSchema>;
  * Cursor-based list schema for job assignments (recommended for large datasets).
  */
 const jobAssignmentCursorFiltersSchema = jobAssignmentFiltersSchema.omit({ limit: true, offset: true });
-export const listJobAssignmentsCursorSchema = z.object({
-  organizationId: z.string().uuid(),
-  filters: cursorPaginationSchema.merge(jobAssignmentCursorFiltersSchema).optional(),
-});
+export const listJobAssignmentsCursorSchema = normalizeObjectInput(
+  z.object({
+    organizationId: z.string().uuid(),
+    filters: cursorPaginationSchema.merge(jobAssignmentCursorFiltersSchema).optional(),
+  })
+);
 
 export type ListJobAssignmentsCursorInput = z.infer<typeof listJobAssignmentsCursorSchema>;
 

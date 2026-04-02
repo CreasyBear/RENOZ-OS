@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, gte, lte, isNull, inArray, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobAssignments, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
@@ -78,7 +79,7 @@ function toCalendarEvent(
  * Get jobs for calendar view within a date range.
  */
 export const listCalendarJobs = createServerFn({ method: 'GET' })
-  .inputValidator(listCalendarJobsSchema)
+  .inputValidator(normalizeObjectInput(listCalendarJobsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -139,7 +140,7 @@ export const listCalendarJobs = createServerFn({ method: 'GET' })
  * These are jobs without a scheduledDate that can be dragged to the calendar.
  */
 export const listUnscheduledJobs = createServerFn({ method: 'GET' })
-  .inputValidator(listUnscheduledJobsSchema)
+  .inputValidator(normalizeObjectInput(listUnscheduledJobsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -284,7 +285,7 @@ export const rescheduleJob = createServerFn({ method: 'POST' })
  * Returns tasks grouped by time slots for calendar display.
  */
 export const listCalendarTasksForKanban = createServerFn({ method: 'GET' })
-  .inputValidator(listCalendarJobsSchema)
+  .inputValidator(normalizeObjectInput(listCalendarJobsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

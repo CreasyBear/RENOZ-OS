@@ -112,7 +112,7 @@ export function SupplierForm({
                 <div className="space-y-2">
                   <Label htmlFor="supplierType">Supplier Type</Label>
                   <Select
-                    value={field.state.value ?? ''}
+                    value={field.state.value ?? undefined}
                     onValueChange={(value) => {
                       const parsed = supplierTypeSchema.safeParse(value);
                       if (parsed.success) field.handleChange(parsed.data);
@@ -329,7 +329,7 @@ export function SupplierForm({
                 <div className="space-y-2">
                   <Label htmlFor="paymentTerms">Payment Terms</Label>
                   <Select
-                    value={field.state.value ?? ''}
+                    value={field.state.value ?? undefined}
                     onValueChange={(value) => {
                       const parsed = paymentTermsSchema.safeParse(value);
                       if (parsed.success) field.handleChange(parsed.data);

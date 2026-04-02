@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // WORKSTREAM SCHEMAS
@@ -108,13 +109,15 @@ export const noteIdSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const notesListQuerySchema = z.object({
-  projectId: z.string().uuid(),
-  siteVisitId: z.string().uuid().optional(),
-  noteType: noteTypeSchema.optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
+export const notesListQuerySchema = normalizeObjectInput(
+  z.object({
+    projectId: z.string().uuid(),
+    siteVisitId: z.string().uuid().optional(),
+    noteType: noteTypeSchema.optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+  })
+);
 
 export type CreateNoteInput = z.infer<typeof createNoteSchema>;
 export type UpdateNoteInput = z.infer<typeof updateNoteSchema>;
@@ -162,13 +165,15 @@ export const fileIdSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const filesListQuerySchema = z.object({
-  projectId: z.string().uuid(),
-  siteVisitId: z.string().uuid().optional(),
-  fileType: projectFileTypeSchema.optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-});
+export const filesListQuerySchema = normalizeObjectInput(
+  z.object({
+    projectId: z.string().uuid(),
+    siteVisitId: z.string().uuid().optional(),
+    fileType: projectFileTypeSchema.optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+  })
+);
 
 export type CreateFileInput = z.infer<typeof createFileSchema>;
 export type UpdateFileInput = z.infer<typeof updateFileSchema>;

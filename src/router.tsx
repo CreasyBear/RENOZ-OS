@@ -13,14 +13,24 @@ export function createRouter() {
   return router
 }
 
-// TanStack Start expects getRouter to get/create the singleton router
-let routerInstance: ReturnType<typeof createRouter> | undefined
+function isBrowser() {
+  return typeof window !== 'undefined'
+}
+
+// TanStack Start calls getRouter for each SSR request. Reusing one router
+// instance on the server leaks redirect/location state across requests.
+let browserRouterInstance: ReturnType<typeof createRouter> | undefined
 
 export function getRouter() {
-  if (!routerInstance) {
-    routerInstance = createRouter()
+  if (!isBrowser()) {
+    return createRouter()
   }
-  return routerInstance
+
+  if (!browserRouterInstance) {
+    browserRouterInstance = createRouter()
+  }
+
+  return browserRouterInstance
 }
 
 declare module '@tanstack/react-router' {

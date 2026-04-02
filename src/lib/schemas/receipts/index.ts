@@ -215,32 +215,6 @@ export type CompleteInspectionInput = z.infer<typeof completeInspectionSchema>;
 // ============================================================================
 
 /**
- * PO Item with receiving state for ReceiptCreationDialog
- */
-export interface POItemForReceipt {
-  id: string;
-  productName: string;
-  productSku?: string;
-  unit?: string;
-  quantityOrdered: number;
-  quantityAlreadyReceived: number;
-  quantityPending: number;
-}
-
-/**
- * Props for receipt creation dialog
- */
-export interface ReceiptCreationDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  purchaseOrderId: string;
-  poNumber: string;
-  supplierName: string | null;
-  items: POItemForReceipt[];
-  onSuccess?: () => void;
-}
-
-/**
  * Receipt list item for history display
  */
 export interface ReceiptHistoryItem {

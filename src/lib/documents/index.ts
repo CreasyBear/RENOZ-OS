@@ -244,6 +244,12 @@ export {
   type HandoverPackPdfDocumentProps,
   type HandoverPackPdfTemplateProps,
   // Delivery Note
+  DispatchNotePdfDocument,
+  DispatchNotePdfTemplate,
+  type DispatchNoteDocumentData,
+  type DispatchNoteLineItem,
+  type DispatchNotePdfDocumentProps,
+  type DispatchNotePdfTemplateProps,
   DeliveryNotePdfDocument,
   DeliveryNotePdfTemplate,
   type DeliveryNoteDocumentData,

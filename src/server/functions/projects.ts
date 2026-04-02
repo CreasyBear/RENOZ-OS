@@ -15,6 +15,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, ilike, desc, asc, sql, isNull, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { projects, projectMembers } from "drizzle/schema";
 import {
   projectIdSchema,
@@ -306,7 +307,7 @@ export const getProjectsCursor = createServerFn({ method: "GET" })
  * Get project by ID
  */
 export const getProject = createServerFn({ method: "GET" })
-  .inputValidator(projectIdSchema)
+  .inputValidator(normalizeObjectInput(projectIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 

@@ -14,6 +14,7 @@ import {
   paginationSchema,
   filterSchema,
   idParamSchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 
@@ -204,15 +205,34 @@ export const userFilterSchema = filterSchema.extend({
 
 export type UserFilter = z.infer<typeof userFilterSchema>;
 
+export const USER_SORT_FIELDS = [
+  'name',
+  'email',
+  'role',
+  'status',
+  'createdAt',
+] as const;
+
+export const userSortFieldSchema = z.enum(USER_SORT_FIELDS);
+
+export type UserSortField = z.infer<typeof userSortFieldSchema>;
+
 // ============================================================================
 // USER LIST QUERY
 // ============================================================================
 
-export const userListQuerySchema = paginationSchema.merge(userFilterSchema);
+export const userListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(userFilterSchema).extend({
+    sortBy: userSortFieldSchema.optional(),
+    sortOrder: z.enum(['asc', 'desc']).default('asc'),
+  })
+);
 
 export type UserListQuery = z.infer<typeof userListQuerySchema>;
 
-export const userListCursorSchema = cursorPaginationSchema.merge(userFilterSchema);
+export const userListCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(userFilterSchema)
+);
 
 export type UserListCursorQuery = z.infer<typeof userListCursorSchema>;
 

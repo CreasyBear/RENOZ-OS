@@ -6,7 +6,7 @@
  * @see DOM-COMMS-003b
  */
 import { z } from 'zod'
-import { filterSchema, flexibleJsonSchema } from '../_shared/patterns'
+import { filterSchema, flexibleJsonSchema, normalizeObjectInput } from '../_shared/patterns'
 
 export const recipientCriteriaSchema = z.object({
   tags: z.array(z.string()).optional(),
@@ -84,32 +84,36 @@ export const campaignFilterSchema = filterSchema.extend({
  * Campaign list query schema - combines filter + pagination
  * Uses campaignFilterSchema (which includes dateFrom/dateTo from base filterSchema)
  */
-export const getCampaignsSchema = campaignFilterSchema.extend({
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-})
+export const getCampaignsSchema = normalizeObjectInput(
+  campaignFilterSchema.extend({
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
+  })
+)
 
 export const getCampaignByIdSchema = z.object({
   id: z.string().uuid(),
 })
 
-export const getCampaignRecipientsSchema = z.object({
-  campaignId: z.string().uuid(),
-  status: z
-    .enum([
-      'pending',
-      'sent',
-      'delivered',
-      'opened',
-      'clicked',
-      'bounced',
-      'failed',
-      'unsubscribed',
-    ])
-    .optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-})
+export const getCampaignRecipientsSchema = normalizeObjectInput(
+  z.object({
+    campaignId: z.string().uuid(),
+    status: z
+      .enum([
+        'pending',
+        'sent',
+        'delivered',
+        'opened',
+        'clicked',
+        'bounced',
+        'failed',
+        'unsubscribed',
+      ])
+      .optional(),
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
+  })
+)
 
 export const previewRecipientsSchema = z.object({
   recipientCriteria: recipientCriteriaSchema,

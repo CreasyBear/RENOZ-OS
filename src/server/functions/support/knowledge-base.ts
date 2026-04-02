@@ -11,6 +11,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, sql, count, isNull, or, ilike } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { kbArticles, kbCategories } from 'drizzle/schema/support/knowledge-base';
 import { users } from 'drizzle/schema/users';
 import { containsPattern } from '@/lib/db/utils';
@@ -158,7 +159,7 @@ export const createCategory = createServerFn({ method: 'POST' })
   });
 
 export const getCategory = createServerFn({ method: 'GET' })
-  .inputValidator(getCategorySchema)
+  .inputValidator(normalizeObjectInput(getCategorySchema))
   .handler(async ({ data }): Promise<KbCategoryResponse> => {
     const ctx = await withAuth();
 
@@ -326,7 +327,7 @@ export const createArticle = createServerFn({ method: 'POST' })
   });
 
 export const getArticle = createServerFn({ method: 'GET' })
-  .inputValidator(getArticleSchema)
+  .inputValidator(normalizeObjectInput(getArticleSchema))
   .handler(async ({ data }): Promise<KbArticleResponse> => {
     const ctx = await withAuth();
 

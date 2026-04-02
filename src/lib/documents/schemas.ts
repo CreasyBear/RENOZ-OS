@@ -11,7 +11,14 @@ import { z } from "zod";
 // DOCUMENT TYPE SCHEMA
 // ============================================================================
 
-export const documentTypeSchema = z.enum(["quote", "invoice"]);
+export const documentTypeSchema = z.enum([
+  "quote",
+  "invoice",
+  "pro-forma",
+  "packing-slip",
+  "dispatch-note",
+  "delivery-note",
+]);
 export type DocumentTypeSchema = z.infer<typeof documentTypeSchema>;
 
 // ============================================================================
@@ -241,7 +248,7 @@ export const generatedDocumentSchema = z.object({
   id: z.string().uuid(),
   organizationId: z.string().uuid(),
   documentType: documentTypeSchema,
-  entityType: z.literal("order"),
+  entityType: z.enum(["order", "shipment", "warranty"]),
   entityId: z.string().uuid(),
   filename: z.string(),
   storagePath: z.string(),

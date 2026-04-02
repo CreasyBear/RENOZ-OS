@@ -12,7 +12,8 @@ import {
   percentageSchema,
   paginationSchema,
   filterSchema,
-  idParamSchema,
+  idParamQuerySchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 import type { FlexibleJson } from '../_shared/patterns';
 import { taxTypeSchema } from '../products/products';
@@ -221,7 +222,9 @@ export type OrderFilter = z.infer<typeof orderFilterSchema>;
 // ORDER LIST QUERY
 // ============================================================================
 
-export const orderListQuerySchema = paginationSchema.merge(orderFilterSchema);
+export const orderListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(orderFilterSchema)
+);
 
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
 
@@ -229,7 +232,9 @@ export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
  * Cursor-based pagination query for orders.
  * More efficient for large datasets than offset pagination.
  */
-export const orderCursorQuerySchema = cursorPaginationSchema.merge(orderFilterSchema);
+export const orderCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(orderFilterSchema)
+);
 
 export type OrderCursorQuery = z.infer<typeof orderCursorQuerySchema>;
 
@@ -237,7 +242,7 @@ export type OrderCursorQuery = z.infer<typeof orderCursorQuerySchema>;
 // ORDER PARAMS
 // ============================================================================
 
-export const orderParamsSchema = idParamSchema;
+export const orderParamsSchema = idParamQuerySchema;
 export type OrderParams = z.infer<typeof orderParamsSchema>;
 
 // ============================================================================
@@ -251,6 +256,79 @@ export const updateOrderStatusSchema = z.object({
 });
 
 export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;
+
+export const managedOrderStatusModeSchema = z.enum(['forward', 'rollback']);
+export type ManagedOrderStatusMode = z.infer<typeof managedOrderStatusModeSchema>;
+
+export const managedOrderStatusOptionCategorySchema = z.enum([
+  'recommended',
+  'rollback',
+  'blocked',
+]);
+export type ManagedOrderStatusOptionCategory = z.infer<
+  typeof managedOrderStatusOptionCategorySchema
+>;
+
+export const orderStatusOptionSchema = z.object({
+  status: orderStatusSchema,
+  label: z.string().min(1),
+  category: managedOrderStatusOptionCategorySchema,
+  mode: managedOrderStatusModeSchema.optional(),
+  description: z.string().optional(),
+  disabledReason: z.string().optional(),
+  warning: z.string().optional(),
+});
+
+export type OrderStatusOption = z.infer<typeof orderStatusOptionSchema>;
+
+export const getOrderStatusOptionsSchema = z.object({
+  orderId: z.string().uuid(),
+});
+
+export type GetOrderStatusOptionsInput = z.infer<typeof getOrderStatusOptionsSchema>;
+
+export const changeOrderStatusManagedSchema = z.object({
+  orderId: z.string().uuid(),
+  targetStatus: orderStatusSchema,
+  mode: managedOrderStatusModeSchema.optional(),
+  reason: z.string().max(500).optional(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
+});
+
+export type ChangeOrderStatusManagedInput = z.infer<
+  typeof changeOrderStatusManagedSchema
+>;
+
+export const orderWorkflowActionKeySchema = z.enum([
+  'open_pick',
+  'open_ship',
+  'open_shipments',
+  'confirm_delivery',
+  'cancel_order',
+]);
+export type OrderWorkflowActionKey = z.infer<typeof orderWorkflowActionKeySchema>;
+
+export const orderWorkflowActionCategorySchema = z.enum([
+  'next',
+  'recovery',
+  'blocked',
+]);
+export type OrderWorkflowActionCategory = z.infer<typeof orderWorkflowActionCategorySchema>;
+
+export const orderWorkflowActionSchema = z.object({
+  key: orderWorkflowActionKeySchema,
+  label: z.string().min(1),
+  category: orderWorkflowActionCategorySchema,
+  description: z.string().optional(),
+  disabledReason: z.string().optional(),
+  shipmentId: z.string().uuid().optional(),
+});
+export type OrderWorkflowAction = z.infer<typeof orderWorkflowActionSchema>;
+
+export const getOrderWorkflowOptionsSchema = z.object({
+  orderId: z.string().uuid(),
+});
+export type GetOrderWorkflowOptionsInput = z.infer<typeof getOrderWorkflowOptionsSchema>;
 
 // ============================================================================
 // ORDER LINE ITEM OPERATIONS

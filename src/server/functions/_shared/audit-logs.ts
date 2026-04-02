@@ -15,10 +15,10 @@ import { db } from '@/lib/db';
 import { auditLogs, users } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { auditLogFilterSchema } from '@/lib/schemas/users';
+import { auditLogFilterBaseSchema, auditLogFilterSchema } from '@/lib/schemas/users';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
-import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
+import { normalizeObjectInput, type FlexibleJson } from '@/lib/schemas/_shared/patterns';
 
 // ============================================================================
 // LIST AUDIT LOGS
@@ -111,12 +111,14 @@ export const listAuditLogs = createServerFn({ method: 'GET' })
 // GET ENTITY AUDIT TRAIL
 // ============================================================================
 
-const entityAuditTrailSchema = z.object({
-  entityType: z.string(),
-  entityId: z.string().uuid(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+const entityAuditTrailSchema = normalizeObjectInput(
+  z.object({
+    entityType: z.string(),
+    entityId: z.string().uuid(),
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+);
 
 /**
  * Get audit trail for a specific entity.
@@ -187,13 +189,15 @@ export const getEntityAuditTrail = createServerFn({ method: 'GET' })
 // GET USER ACTIVITY
 // ============================================================================
 
-const userActivitySchema = z.object({
-  userId: z.string().uuid(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-});
+const userActivitySchema = normalizeObjectInput(
+  z.object({
+    userId: z.string().uuid(),
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+  })
+);
 
 /**
  * Get all activity by a specific user.
@@ -260,10 +264,12 @@ export const getUserActivity = createServerFn({ method: 'GET' })
  */
 export const getMyActivity = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      page: z.coerce.number().int().positive().default(1),
-      pageSize: z.coerce.number().int().min(1).max(100).default(20),
-    })
+    normalizeObjectInput(
+      z.object({
+        page: z.coerce.number().int().positive().default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(20),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -306,10 +312,12 @@ export const getMyActivity = createServerFn({ method: 'GET' })
 // GET AUDIT STATS
 // ============================================================================
 
-const auditStatsSchema = z.object({
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-});
+export const auditStatsSchema = normalizeObjectInput(
+  z.object({
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+  })
+);
 
 /**
  * Get audit log statistics for dashboard.
@@ -412,7 +420,7 @@ export const getAuditEntityTypes = createServerFn({ method: 'GET' }).handler(asy
 // EXPORT AUDIT LOGS
 // ============================================================================
 
-const exportAuditLogsSchema = auditLogFilterSchema.extend({
+const exportAuditLogsSchema = auditLogFilterBaseSchema.extend({
   format: z.enum(['json', 'csv']).default('json'),
 });
 

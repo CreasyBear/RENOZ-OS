@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 import { AlertsTablePresenter } from "./alerts-table-presenter";
 import { AlertsMobileCards } from "./alerts-mobile-cards";
 import type { AlertTableItem } from "./alert-columns";
@@ -36,7 +37,7 @@ export interface AlertsListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** Selected alert IDs */
   selectedIds: Set<string>;
   /** Whether all items are selected */

@@ -15,6 +15,7 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, desc, asc, gte, lte, sql } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   warrantyExtensions,
   warranties,
@@ -475,7 +476,7 @@ export const getExtensionHistoryCursor = createServerFn({ method: 'GET' })
  * Get a single extension by ID with full details.
  */
 export const getExtensionById = createServerFn({ method: 'GET' })
-  .inputValidator(getExtensionByIdSchema)
+  .inputValidator(normalizeObjectInput(getExtensionByIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

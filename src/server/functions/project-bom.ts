@@ -9,6 +9,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, max, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectBom, projectBomItems, products, projects, orderLineItems } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -20,9 +21,11 @@ import type { BomItemWithProduct } from '@/lib/schemas/jobs/project-bom';
  */
 export const getProjectBom = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      projectId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        projectId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });

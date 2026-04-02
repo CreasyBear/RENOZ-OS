@@ -16,10 +16,12 @@ import { containsPattern } from '@/lib/db/utils';
 import { issueTemplates } from 'drizzle/schema/support/issue-templates';
 import { users } from 'drizzle/schema/users';
 import { withAuth } from '@/lib/server/protected';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   createIssueTemplateSchema,
   updateIssueTemplateSchema,
   getIssueTemplateSchema,
+  listIssueTemplatesBaseSchema,
   listIssueTemplatesSchema,
   deleteIssueTemplateSchema,
   incrementTemplateUsageSchema,
@@ -137,7 +139,7 @@ export const createIssueTemplate = createServerFn({ method: 'POST' })
 // ============================================================================
 
 export const getIssueTemplate = createServerFn({ method: 'GET' })
-  .inputValidator(getIssueTemplateSchema)
+  .inputValidator(normalizeObjectInput(getIssueTemplateSchema))
   .handler(async ({ data }): Promise<IssueTemplateResponse> => {
     const ctx = await withAuth();
 
@@ -407,7 +409,7 @@ export const incrementTemplateUsage = createServerFn({ method: 'POST' })
 // ============================================================================
 
 export const getPopularTemplates = createServerFn({ method: 'GET' })
-  .inputValidator(listIssueTemplatesSchema.pick({ pageSize: true }))
+  .inputValidator(normalizeObjectInput(listIssueTemplatesBaseSchema.pick({ pageSize: true })))
   .handler(async ({ data }): Promise<IssueTemplateResponse[]> => {
     const ctx = await withAuth();
 

@@ -46,7 +46,7 @@ export interface UseRmaDetailReturn {
   /** Reject RMA (requested/approved → rejected) */
   onReject: (reason: string) => Promise<void>;
   /** Receive RMA (approved → received); restores inventory */
-  onReceive: (inspectionNotes?: { condition?: string; notes?: string }) => Promise<void>;
+  onReceive: (inspection?: { condition?: string; notes?: string; locationId?: string }) => Promise<void>;
   /** Process RMA (received → processed) */
   onProcess: (
     resolution: RmaResolution,
@@ -100,15 +100,20 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
     }
   };
 
-  const handleReceive = async (inspectionNotes?: { condition?: string; notes?: string }) => {
+  const handleReceive = async (inspection?: { condition?: string; notes?: string; locationId?: string }) => {
     try {
-      const parsed = inspectionNotes
+      const parsed = inspection
         ? rmaInspectionNotesSchema
             .pick({ condition: true, notes: true })
-            .safeParse(inspectionNotes)
+            .safeParse(inspection)
         : { success: false as const, data: undefined };
+      if (!inspection?.locationId) {
+        toastError('Receiving location is required');
+        return;
+      }
       const result = await receiveMutation.mutateAsync({
         rmaId,
+        locationId: inspection.locationId,
         inspectionNotes: parsed.success ? parsed.data : undefined,
       });
       const units = result.unitsRestored ?? 0;
@@ -127,12 +132,12 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
     details?: { refundAmount?: number; notes?: string }
   ) => {
     try {
-      await processMutation.mutateAsync({
+      const result = await processMutation.mutateAsync({
         rmaId,
         resolution,
         resolutionDetails: details,
       });
-      toastSuccess('RMA processed successfully');
+      toastSuccess(result.followUpMessage ?? 'RMA processed successfully');
     } catch (err) {
       toastError(err instanceof Error ? err.message : 'Failed to process RMA');
     }

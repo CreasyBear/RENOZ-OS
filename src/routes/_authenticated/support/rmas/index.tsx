@@ -13,6 +13,11 @@ import { lazy, Suspense } from 'react';
 import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
+import {
+  DEFAULT_RMA_SORT_DIRECTION,
+  DEFAULT_RMA_SORT_FIELD,
+  RMA_SORT_FIELDS,
+} from '@/components/domain/support/rma/rma-sorting';
 
 export const rmasSearchSchema = z.object({
   status: z
@@ -32,8 +37,8 @@ export const rmasSearchSchema = z.object({
   search: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(20),
-  sortBy: z.enum(['createdAt', 'rmaNumber', 'status']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  sortBy: z.enum(RMA_SORT_FIELDS).default(DEFAULT_RMA_SORT_FIELD),
+  sortOrder: z.enum(['asc', 'desc']).default(DEFAULT_RMA_SORT_DIRECTION),
 });
 
 const RmasPage = lazy(() => import('./rmas-page'));

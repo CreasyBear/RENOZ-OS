@@ -23,6 +23,7 @@ import { OrdersMobileCards } from "./orders-mobile-cards";
 import type { OrderTableItem } from "@/lib/schemas/orders";
 import type { OrderFiltersState } from "./order-filter-config";
 import { ORDER_FILTER_CONFIG, DEFAULT_ORDER_FILTERS } from "./order-filter-config";
+import type { SortDirection } from "./order-sorting";
 
 export interface OrdersListPresenterProps {
   /** Orders to display */
@@ -60,7 +61,7 @@ export interface OrdersListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View order handler */
   onViewOrder: (id: string) => void;
   /** Duplicate order handler */

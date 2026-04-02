@@ -11,6 +11,7 @@ import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeSerial } from '@/lib/serials';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -254,7 +255,7 @@ export const listSerializedItems = createServerFn({ method: 'GET' })
   });
 
 export const getSerializedItem = createServerFn({ method: 'GET' })
-  .inputValidator(serializedItemParamsSchema)
+  .inputValidator(normalizeObjectInput(serializedItemParamsSchema))
   .handler(async ({ data }): Promise<SerializedItemDetailResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 

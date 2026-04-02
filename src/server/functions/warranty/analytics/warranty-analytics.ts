@@ -14,6 +14,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, gte, lte, sql, count, sum, avg, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   warranties,
   warrantyClaims,
@@ -334,7 +335,7 @@ export const getClaimsByProduct = createServerFn({ method: 'GET' })
  * Get monthly claims trend for line chart.
  */
 export const getClaimsTrend = createServerFn({ method: 'GET' })
-  .inputValidator(getClaimsTrendSchema)
+  .inputValidator(normalizeObjectInput(getClaimsTrendSchema))
   .handler(async ({ data }): Promise<ClaimsTrendResult> => {
     const ctx = await withAuth();
     const { months, claimType } = data;
@@ -713,7 +714,7 @@ export const getExtensionVsResolution = createServerFn({ method: 'GET' })
  * Export warranty analytics data to CSV.
  */
 export const exportWarrantyAnalytics = createServerFn({ method: 'GET' })
-  .inputValidator(exportWarrantyAnalyticsSchema)
+  .inputValidator(normalizeObjectInput(exportWarrantyAnalyticsSchema))
   .handler(async ({ data }): Promise<ExportWarrantyAnalyticsResult> => {
     await withAuth(); // Auth check only, no ctx needed
     const { startDate, endDate, warrantyType, claimType, format } = data;

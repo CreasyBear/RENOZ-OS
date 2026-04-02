@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RmaList } from './rma-list';
 import type { RmaStatus, RmaReason } from '@/lib/schemas/support/rma';
 import { CheckCircle, Package } from 'lucide-react';
+import type { RmaSortField, SortDirection } from './rma-sorting';
 
 export interface RmasListContainerProps {
   /** Filter state from URL */
@@ -30,8 +31,8 @@ export interface RmasListContainerProps {
   search?: string;
   page?: number;
   pageSize?: number;
-  sortBy?: 'createdAt' | 'rmaNumber' | 'status';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: RmaSortField;
+  sortOrder?: SortDirection;
   /** Callback to create new RMA */
   onCreateRma?: () => void;
   /** Called when filters/search/page change; parent updates URL */
@@ -39,6 +40,7 @@ export interface RmasListContainerProps {
   onReasonFilterChange?: (value: RmaReason | 'all') => void;
   onSearchChange?: (value: string) => void;
   onPageChange?: (page: number) => void;
+  onSortChange?: (sortBy: RmaSortField, sortOrder: SortDirection) => void;
 }
 
 export function RmasListContainer({
@@ -54,6 +56,7 @@ export function RmasListContainer({
   onReasonFilterChange,
   onSearchChange,
   onPageChange,
+  onSortChange,
 }: RmasListContainerProps) {
   const navigate = useNavigate();
 
@@ -306,10 +309,13 @@ export function RmasListContainer({
         reasonFilter={reason ?? 'all'}
         searchQuery={search ?? ''}
         page={page}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
         onStatusFilterChange={onStatusFilterChange ?? (() => {})}
         onReasonFilterChange={onReasonFilterChange ?? (() => {})}
         onSearchChange={onSearchChange ?? (() => {})}
         onPageChange={onPageChange ?? (() => {})}
+        onSortChange={onSortChange}
         onRmaClick={handleRmaClick}
         onCreateRma={onCreateRma}
         showCreateButton

@@ -1,18 +1,22 @@
 'use server'
 
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { type Database } from '@/lib/db';
 import { ValidationError } from '@/lib/server/errors';
 import { findDuplicateSerials, normalizeSerial } from '@/lib/serials';
 import { orderLineItems, orderLineSerialAllocations, serializedItems } from 'drizzle/schema';
 import { products } from 'drizzle/schema/products/products';
 import type { ShipmentStatus } from '@/lib/schemas';
+import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
 
 export interface ValidateShipmentItem {
   orderLineItemId: string;
   quantity: number;
   serialNumbers?: string[];
 }
+
+type OrderTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+type QueryExecutor = Database | OrderTransaction;
 
 const VALID_SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   pending: ['in_transit', 'failed'],
@@ -31,19 +35,24 @@ export function validateShipmentStatusTransition(
 }
 
 export async function validateShipmentItems(
+  executor: QueryExecutor,
   organizationId: string,
   orderId: string,
-  items: ValidateShipmentItem[]
+  items: ValidateShipmentItem[],
+  options?: {
+    excludeShipmentId?: string;
+  }
 ): Promise<void> {
   if (items.length === 0) return;
 
   const lineItemIds = items.map((i) => i.orderLineItemId);
 
-  const rows = await db
+  const rows = await executor
     .select({
       lineItemId: orderLineItems.id,
       productId: orderLineItems.productId,
       quantity: orderLineItems.quantity,
+      qtyPicked: orderLineItems.qtyPicked,
       qtyShipped: orderLineItems.qtyShipped,
       description: orderLineItems.description,
       allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
@@ -72,6 +81,7 @@ export async function validateShipmentItems(
       {
         productId: r.productId,
         quantity: r.quantity,
+        qtyPicked: r.qtyPicked,
         qtyShipped: r.qtyShipped,
         description: r.description,
         allocatedSerialNumbers: (r.allocatedSerialNumbers as string[] | null) ?? [],
@@ -79,9 +89,14 @@ export async function validateShipmentItems(
       },
     ])
   );
+  const pendingReservations = await getPendingShipmentReservations(executor, {
+    organizationId,
+    orderId,
+    excludeShipmentId: options?.excludeShipmentId,
+  });
   const canonicalAllocations =
     lineItemIds.length > 0
-      ? await db
+      ? await executor
           .select({
             lineItemId: orderLineSerialAllocations.orderLineItemId,
             serialNumber: serializedItems.serialNumberNormalized,
@@ -115,10 +130,16 @@ export async function validateShipmentItems(
       });
     }
 
-    const available = Number(lineData.quantity) - Number(lineData.qtyShipped ?? 0);
+    const pickedAvailable =
+      Number(lineData.qtyPicked ?? 0) -
+      Number(lineData.qtyShipped ?? 0) -
+      Number(pendingReservations.quantitiesByLineItem.get(item.orderLineItemId) ?? 0);
+    const available = Math.max(0, pickedAvailable);
     if (item.quantity > available) {
-      throw new ValidationError('Insufficient quantity available for shipment', {
-        [item.orderLineItemId]: [`Only ${available} units available, requested ${item.quantity}`],
+      throw new ValidationError('Insufficient picked quantity available for shipment', {
+        [item.orderLineItemId]: [
+          `Only ${available} picked unit${available !== 1 ? 's are' : ' is'} available for shipment, requested ${item.quantity}`,
+        ],
       });
     }
 
@@ -159,10 +180,19 @@ export async function validateShipmentItems(
           lineData.allocatedSerialNumbers.map((sn) => normalizeSerial(sn))
         ).map((sn) => normalizeSerial(sn))
       );
+      const pendingReservedSerials =
+        pendingReservations.reservedSerialsByLineItem.get(item.orderLineItemId) ?? new Set<string>();
       for (const sn of serials) {
         if (!allocatedSet.has(sn)) {
           throw new ValidationError('Serial number not allocated to this line item', {
             [item.orderLineItemId]: [`Serial number "${sn}" is not allocated to "${lineData.description}"`],
+          });
+        }
+        if (pendingReservedSerials.has(sn)) {
+          throw new ValidationError('Serial number already reserved by a pending shipment', {
+            [item.orderLineItemId]: [
+              `Serial number "${sn}" is already included in another pending shipment draft`,
+            ],
           });
         }
       }

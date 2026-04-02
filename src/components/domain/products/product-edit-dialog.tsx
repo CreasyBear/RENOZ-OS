@@ -10,7 +10,11 @@
 import { useState, useEffect, useMemo, startTransition } from "react";
 import { Package } from "lucide-react";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
-import { updateProductSchema } from "@/lib/schemas/products";
+import {
+  updateProductSchema,
+  productStatusSchema,
+  taxTypeSchema,
+} from "@/lib/schemas/products";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,7 +57,10 @@ export function ProductEditDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Use useMemo to properly handle defaults and avoid eslint-disable
-  const defaults = useMemo<UpdateProduct>(() => ({
+  const defaults = useMemo<UpdateProduct>(() => {
+    const statusParsed = productStatusSchema.safeParse(product.status);
+    const taxParsed = taxTypeSchema.safeParse(product.taxType);
+    return {
     name: product.name,
     sku: product.sku,
     description: product.description ?? undefined,
@@ -62,14 +69,15 @@ export function ProductEditDialog({
     costPrice: product.costPrice ?? undefined,
     reorderPoint: product.reorderPoint ?? 0,
     reorderQty: product.reorderQty ?? 0,
-    status: product.status,
-    taxType: product.taxType,
+    status: statusParsed.success ? statusParsed.data : "active",
+    taxType: taxParsed.success ? taxParsed.data : "gst",
     isActive: product.isActive,
     isSellable: product.isSellable,
     isPurchasable: product.isPurchasable,
     trackInventory: product.trackInventory,
     isSerialized: product.isSerialized,
-  }), [product]);
+    };
+  }, [product]);
 
   const form = useTanStackForm<UpdateProduct>({
     schema: updateProductSchema,

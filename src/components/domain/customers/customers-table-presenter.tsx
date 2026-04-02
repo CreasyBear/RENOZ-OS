@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { createCustomerColumns, type CustomerTableData } from "./customer-columns";
+import type { SortDirection } from "./customer-sorting";
 
 export interface CustomersTablePresenterProps {
   /** Customers to display */
@@ -44,7 +45,7 @@ export interface CustomersTablePresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View customer handler */
   onViewCustomer: (id: string) => void;
   /** Edit customer handler */
@@ -114,7 +115,7 @@ export const CustomersTablePresenter = memo(function CustomersTablePresenter({
     (updater: SortingState | ((prev: SortingState) => SortingState)) => {
       const newSorting = typeof updater === "function" ? updater(sorting) : updater;
       if (newSorting.length > 0) {
-        onSort(newSorting[0].id);
+        onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
       }
     },
     [sorting, onSort]

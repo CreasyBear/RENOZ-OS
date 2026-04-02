@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   checklistTemplates,
   jobChecklists,
@@ -170,7 +171,7 @@ export const listChecklistTemplates = createServerFn({ method: 'GET' })
  * Get a single checklist template by ID.
  */
 export const getChecklistTemplate = createServerFn({ method: 'GET' })
-  .inputValidator(getChecklistTemplateSchema)
+  .inputValidator(normalizeObjectInput(getChecklistTemplateSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -494,7 +495,7 @@ export const updateChecklistItem = createServerFn({ method: 'POST' })
  * Get a job's checklist with all items.
  */
 export const getJobChecklist = createServerFn({ method: 'GET' })
-  .inputValidator(getJobChecklistSchema)
+  .inputValidator(normalizeObjectInput(getJobChecklistSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',
@@ -641,7 +642,7 @@ async function getJobChecklistById(
  * Get a single checklist item by ID.
  */
 export const getChecklistItem = createServerFn({ method: 'GET' })
-  .inputValidator(getChecklistItemSchema)
+  .inputValidator(normalizeObjectInput(getChecklistItemSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.read ?? 'customer.read',

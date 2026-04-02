@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, isNull, sql, inArray } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { orderAmendments, orders, orderLineItems, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/server/errors';
@@ -190,7 +191,7 @@ export const listAmendmentsCursor = createServerFn({ method: 'GET' })
 // ============================================================================
 
 export const getAmendment = createServerFn({ method: 'GET' })
-  .inputValidator(amendmentParamsSchema)
+  .inputValidator(normalizeObjectInput(amendmentParamsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

@@ -13,6 +13,7 @@ import { lazy, Suspense } from 'react';
 import { z } from 'zod';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
+import { PO_SORT_FIELDS } from '@/lib/schemas/purchase-orders';
 
 function PurchaseOrdersListError({ error }: { error: Error }) {
   const router = useRouter();
@@ -36,7 +37,7 @@ export const poSearchSchema = z.object({
   minTotal: z.coerce.number().optional(),
   maxTotal: z.coerce.number().optional(),
   overdue: z.string().optional(),
-  sortBy: z.enum(['poNumber', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt']).optional().default('createdAt'),
+  sortBy: z.enum(PO_SORT_FIELDS).optional().default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
   receive: z.string().uuid().optional(), // PO ID to auto-open receiving dialog
 });

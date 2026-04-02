@@ -9,6 +9,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { eq, and, desc } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns'
 import {
   emailTemplates,
   emailTemplateVersions,
@@ -82,7 +83,7 @@ export const createEmailTemplate = createServerFn({ method: 'POST' })
  * Get all templates for the organization
  */
 export const getEmailTemplates = createServerFn({ method: 'GET' })
-  .inputValidator(getTemplatesSchema)
+  .inputValidator(normalizeObjectInput(getTemplatesSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read })
 
@@ -110,7 +111,7 @@ export const getEmailTemplates = createServerFn({ method: 'GET' })
  * Get a single template by ID
  */
 export const getEmailTemplate = createServerFn({ method: 'GET' })
-  .inputValidator(getTemplateSchema)
+  .inputValidator(normalizeObjectInput(getTemplateSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read })
 
@@ -293,7 +294,7 @@ export const cloneEmailTemplate = createServerFn({ method: 'POST' })
  * Get version history for a template
  */
 export const getTemplateVersionHistory = createServerFn({ method: 'GET' })
-  .inputValidator(getVersionHistorySchema)
+  .inputValidator(normalizeObjectInput(getVersionHistorySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read })
 

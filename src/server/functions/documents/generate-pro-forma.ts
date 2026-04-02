@@ -10,6 +10,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { orders, generatedDocuments } from "drizzle/schema";
@@ -130,7 +131,7 @@ const getProFormaStatusSchema = z.object({
  * No row = status "pending" (document not yet generated).
  */
 export const getProFormaStatus = createServerFn({ method: "GET" })
-  .inputValidator(getProFormaStatusSchema)
+  .inputValidator(normalizeObjectInput(getProFormaStatusSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
 

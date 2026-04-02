@@ -12,6 +12,7 @@ import {
   paginationSchema,
   filterSchema,
   idParamSchema,
+  normalizeObjectInput,
 } from '../_shared/patterns';
 import type { FlexibleJson, JsonValue } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
@@ -46,6 +47,17 @@ export const inventoryStatusSchema = z.enum(inventoryStatusValues);
 export const movementTypeSchema = z.enum(movementTypeValues);
 export const qualityStatusSchema = z.enum(qualityStatusValues);
 export type MovementType = z.infer<typeof movementTypeSchema>;
+
+export const manualReceiptReasonValues = [
+  'initial_stock',
+  'found_stock',
+  'sample_or_promo',
+  'non_supplier_inbound',
+  'other_exception',
+] as const;
+
+export const manualReceiptReasonSchema = z.enum(manualReceiptReasonValues);
+export type ManualReceiptReason = z.infer<typeof manualReceiptReasonSchema>;
 
 export function isValidMovementType(value: unknown): value is MovementType {
   return typeof value === 'string' && movementTypeValues.includes(value as MovementType);
@@ -112,11 +124,15 @@ export type LocationFilter = z.infer<typeof locationFilterSchema>;
 // LOCATION LIST QUERY
 // ============================================================================
 
-export const locationListQuerySchema = paginationSchema.merge(locationFilterSchema);
+export const locationListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(locationFilterSchema)
+);
 
 export type LocationListQuery = z.infer<typeof locationListQuerySchema>;
 
-export const locationListCursorQuerySchema = cursorPaginationSchema.merge(locationFilterSchema);
+export const locationListCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(locationFilterSchema)
+);
 
 export type LocationListCursorQuery = z.infer<typeof locationListCursorQuerySchema>;
 
@@ -176,11 +192,27 @@ export const inventoryFilterSchema = filterSchema.extend({
 
 export type InventoryFilter = z.infer<typeof inventoryFilterSchema>;
 
+export const INVENTORY_SORT_FIELDS = [
+  'createdAt',
+  'quantityOnHand',
+  'totalValue',
+  'status',
+] as const;
+
+export const inventorySortFieldSchema = z.enum(INVENTORY_SORT_FIELDS);
+
+export type InventorySortField = z.infer<typeof inventorySortFieldSchema>;
+
 // ============================================================================
 // INVENTORY LIST QUERY
 // ============================================================================
 
-export const inventoryListQuerySchema = paginationSchema.merge(inventoryFilterSchema);
+export const inventoryListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(inventoryFilterSchema).extend({
+    sortBy: inventorySortFieldSchema.default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+);
 
 export type InventoryListQuery = z.infer<typeof inventoryListQuerySchema>;
 
@@ -254,7 +286,9 @@ export type MovementFilter = z.infer<typeof movementFilterSchema>;
 // MOVEMENT LIST QUERY
 // ============================================================================
 
-export const movementListQuerySchema = paginationSchema.merge(movementFilterSchema);
+export const movementListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(movementFilterSchema)
+);
 
 export type MovementListQuery = z.infer<typeof movementListQuerySchema>;
 
@@ -401,7 +435,9 @@ export const stockCountFilterSchema = filterSchema.extend({
 
 export type StockCountFilter = z.infer<typeof stockCountFilterSchema>;
 
-export const stockCountListQuerySchema = paginationSchema.merge(stockCountFilterSchema);
+export const stockCountListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(stockCountFilterSchema)
+);
 export type StockCountListQuery = z.infer<typeof stockCountListQuerySchema>;
 
 // ============================================================================
@@ -563,7 +599,9 @@ export const forecastFilterSchema = filterSchema.extend({
 
 export type ForecastFilter = z.infer<typeof forecastFilterSchema>;
 
-export const forecastListQuerySchema = paginationSchema.merge(forecastFilterSchema);
+export const forecastListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(forecastFilterSchema)
+);
 export type ForecastListQuery = z.infer<typeof forecastListQuerySchema>;
 
 // ============================================================================
@@ -624,7 +662,9 @@ export const alertFilterSchema = filterSchema.extend({
 
 export type AlertFilter = z.infer<typeof alertFilterSchema>;
 
-export const alertListQuerySchema = paginationSchema.merge(alertFilterSchema);
+export const alertListQuerySchema = normalizeObjectInput(
+  paginationSchema.merge(alertFilterSchema)
+);
 export type AlertListQuery = z.infer<typeof alertListQuerySchema>;
 
 // ============================================================================
@@ -693,11 +733,13 @@ export type AlertParams = z.infer<typeof alertParamsSchema>;
 // INVENTORY VALUATION
 // ============================================================================
 
-export const inventoryValuationQuerySchema = z.object({
-  locationId: z.string().uuid().optional(),
-  productId: z.string().uuid().optional(),
-  valuationMethod: z.enum(['fifo', 'weighted_average']).default('fifo'),
-});
+export const inventoryValuationQuerySchema = normalizeObjectInput(
+  z.object({
+    locationId: z.string().uuid().optional(),
+    productId: z.string().uuid().optional(),
+    valuationMethod: z.enum(['fifo', 'weighted_average']).default('fifo'),
+  })
+);
 
 export type InventoryValuationQuery = z.infer<typeof inventoryValuationQuerySchema>;
 
@@ -709,31 +751,39 @@ export const cogsCalculationSchema = z.object({
 
 export type COGSCalculationInput = z.infer<typeof cogsCalculationSchema>;
 
-export const inventoryAgingQuerySchema = z.object({
-  locationId: z.string().uuid().optional(),
-  ageBuckets: z.array(z.number().int().positive()).default([30, 60, 90, 180, 365]),
-});
+export const inventoryAgingQuerySchema = normalizeObjectInput(
+  z.object({
+    locationId: z.string().uuid().optional(),
+    ageBuckets: z.array(z.number().int().positive()).default([30, 60, 90, 180, 365]),
+  })
+);
 
 export type InventoryAgingQuery = z.infer<typeof inventoryAgingQuerySchema>;
 
-export const inventoryTurnoverQuerySchema = z.object({
-  period: z.enum(['30d', '90d', '365d']).default('365d'),
-  productId: z.string().uuid().optional(),
-});
+export const inventoryTurnoverQuerySchema = normalizeObjectInput(
+  z.object({
+    period: z.enum(['30d', '90d', '365d']).default('365d'),
+    productId: z.string().uuid().optional(),
+  })
+);
 
 export type InventoryTurnoverQuery = z.infer<typeof inventoryTurnoverQuerySchema>;
 
-export const inventoryFinanceIntegrityQuerySchema = z.object({
-  valueDriftTolerance: z.coerce.number().nonnegative().default(0.01),
-  topDriftLimit: z.coerce.number().int().min(1).max(100).default(25),
-});
+export const inventoryFinanceIntegrityQuerySchema = normalizeObjectInput(
+  z.object({
+    valueDriftTolerance: z.coerce.number().nonnegative().default(0.01),
+    topDriftLimit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+);
 
 export type InventoryFinanceIntegrityQuery = z.infer<typeof inventoryFinanceIntegrityQuerySchema>;
 
-export const inventoryFinanceReconcileSchema = z.object({
-  dryRun: z.coerce.boolean().default(true),
-  limit: z.coerce.number().int().min(1).max(5000).default(1000),
-});
+export const inventoryFinanceReconcileSchema = normalizeObjectInput(
+  z.object({
+    dryRun: z.coerce.boolean().default(true),
+    limit: z.coerce.number().int().min(1).max(5000).default(1000),
+  })
+);
 
 export type InventoryFinanceReconcileInput = z.infer<typeof inventoryFinanceReconcileSchema>;
 
@@ -1089,12 +1139,14 @@ export const locationTypeSchema = z.enum(['warehouse', 'zone', 'aisle', 'rack', 
 
 export type LocationType = z.infer<typeof locationTypeSchema>;
 
-export const warehouseLocationListQuerySchema = z.object({
-  parentId: z.string().uuid().optional().nullable(),
-  locationType: locationTypeSchema.optional(),
-  isActive: z.coerce.boolean().optional(),
-  search: z.string().optional(),
-});
+export const warehouseLocationListQuerySchema = normalizeObjectInput(
+  z.object({
+    parentId: z.string().uuid().optional().nullable(),
+    locationType: locationTypeSchema.optional(),
+    isActive: z.coerce.boolean().optional(),
+    search: z.string().optional(),
+  })
+);
 
 export type WarehouseLocationListQuery = z.infer<typeof warehouseLocationListQuerySchema>;
 

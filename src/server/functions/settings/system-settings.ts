@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { systemSettings, SETTING_CATEGORIES, SETTING_KEYS } from 'drizzle/schema';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { withAuth } from '@/lib/server/protected';
@@ -25,14 +26,18 @@ import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 // VALIDATION SCHEMAS
 // ============================================================================
 
-const getSettingsSchema = z.object({
-  category: z.string().min(1).max(50).optional(),
-});
+const getSettingsSchema = normalizeObjectInput(
+  z.object({
+    category: z.string().min(1).max(50).optional(),
+  })
+);
 
-const getSettingSchema = z.object({
-  category: z.string().min(1).max(50),
-  key: z.string().min(1).max(100),
-});
+const getSettingSchema = normalizeObjectInput(
+  z.object({
+    category: z.string().min(1).max(50),
+    key: z.string().min(1).max(100),
+  })
+);
 
 const setSettingSchema = z.object({
   category: z.string().min(1).max(50),

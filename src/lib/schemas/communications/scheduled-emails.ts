@@ -6,7 +6,7 @@
  * @see DOM-COMMS-002b
  */
 import { z } from 'zod'
-import { optionalEmailSchema, flexibleJsonSchema } from '../_shared/patterns'
+import { optionalEmailSchema, flexibleJsonSchema, normalizeObjectInput } from '../_shared/patterns'
 import { cursorPaginationSchema } from '@/lib/db/pagination'
 
 export const scheduleEmailSchema = z.object({
@@ -43,31 +43,37 @@ export const cancelScheduledEmailSchema = z.object({
   reason: z.string().optional(),
 })
 
-export const getScheduledEmailsSchema = z.object({
-  status: z.enum(['pending', 'sent', 'cancelled']).optional(),
-  customerId: z.string().uuid().optional(),
-  search: z.string().optional(), // Empty string is valid (means no search)
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-})
-
-export const getScheduledEmailsCursorSchema = cursorPaginationSchema.merge(
+export const getScheduledEmailsSchema = normalizeObjectInput(
   z.object({
     status: z.enum(['pending', 'sent', 'cancelled']).optional(),
     customerId: z.string().uuid().optional(),
-    search: z.string().optional(),
+    search: z.string().optional(), // Empty string is valid (means no search)
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
   })
+)
+
+export const getScheduledEmailsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      status: z.enum(['pending', 'sent', 'cancelled']).optional(),
+      customerId: z.string().uuid().optional(),
+      search: z.string().optional(),
+    })
+  )
 )
 
 export const getScheduledEmailByIdSchema = z.object({
   id: z.string().uuid(),
 })
 
-export const scheduledEmailsSearchSchema = z.object({
-  search: z.string().optional().default(''),
-  status: z.enum(['all', 'pending', 'sent', 'cancelled']).default('all'),
-  customerId: z.string().uuid().optional(),
-})
+export const scheduledEmailsSearchSchema = normalizeObjectInput(
+  z.object({
+    search: z.string().optional().default(''),
+    status: z.enum(['all', 'pending', 'sent', 'cancelled']).default('all'),
+    customerId: z.string().uuid().optional(),
+  })
+)
 
 // ============================================================================
 // INPUT TYPES (from Zod schemas)

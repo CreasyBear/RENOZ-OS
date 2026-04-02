@@ -28,6 +28,7 @@ import {
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
   InventoryListQuery,
+  ManualReceiptReason,
   MovementListQuery,
   StockAdjustment,
   StockTransfer,
@@ -138,12 +139,11 @@ interface ReceiveInventoryInput {
   quantity: number;
   unitCost: number;
   locationId: string;
+  receiptReason: ManualReceiptReason;
   serialNumber?: string;
   batchNumber?: string;
   lotNumber?: string;
   expiryDate?: string;
-  referenceId?: string;
-  referenceType?: string;
   notes?: string;
 }
 
@@ -585,7 +585,25 @@ export function useReceiveInventory() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
     },
-    onSettled: () => {
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.inventory(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.inventoryStats(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.stockAlerts(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['products', 'movements', variables.productId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['products', 'movements', 'aggregated', variables.productId],
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
     },
   });
@@ -610,6 +628,9 @@ export function useInventoryDashboard(enabled = true) {
     queryKey: queryKeys.inventory.dashboard(),
     queryFn: async () => {
       const result = await getInventoryDashboard();
+      if (import.meta.env.DEV) {
+        console.debug('[useInventoryDashboard] raw-result', result);
+      }
       if (result == null) throw new Error('Inventory dashboard returned no data');
       return result;
     },

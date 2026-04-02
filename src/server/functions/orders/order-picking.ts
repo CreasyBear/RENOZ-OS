@@ -34,6 +34,7 @@ import {
   releaseSerializedItemAllocation,
   upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
+import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
 
 // ============================================================================
 // PICK ORDER ITEMS
@@ -128,7 +129,6 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
 
       const lineItemMap = new Map(allLineItems.map((li) => [li.lineItem.id, li]));
       const orderLineItemIds = allLineItems.map((li) => li.lineItem.id);
-
       const canonicalAllocations = orderLineItemIds.length > 0
         ? await tx
             .select({
@@ -536,6 +536,10 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
 
       const lineItemMap = new Map(allLineItems.map((li) => [li.lineItem.id, li]));
       const orderLineItemIds = allLineItems.map((li) => li.lineItem.id);
+      const pendingReservations = await getPendingShipmentReservations(tx, {
+        organizationId: ctx.organizationId,
+        orderId: data.orderId,
+      });
 
       const canonicalAllocations = orderLineItemIds.length > 0
         ? await tx
@@ -578,12 +582,16 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
         const isSerialized = product?.isSerialized ?? false;
         const currentPicked = Number(lineItem.qtyPicked) || 0;
         const currentShipped = Number(lineItem.qtyShipped) || 0;
-        const maxUnpickable = Math.max(0, currentPicked - currentShipped);
+        const pendingReserved =
+          Number(pendingReservations.quantitiesByLineItem.get(unpickItem.lineItemId) ?? 0);
+        const maxUnpickable = Math.max(0, currentPicked - currentShipped - pendingReserved);
 
         if (unpickItem.qtyToUnpick > maxUnpickable) {
-          throw new ValidationError('Cannot unpick already-shipped units', {
+          throw new ValidationError('Cannot unpick units reserved by shipment truth', {
             qtyToUnpick: [
-              `Cannot unpick ${unpickItem.qtyToUnpick} for '${lineItem.description}'. Picked: ${currentPicked}, shipped: ${currentShipped}, max unpickable: ${maxUnpickable}`,
+              pendingReserved > 0
+                ? `Cannot unpick ${unpickItem.qtyToUnpick} for '${lineItem.description}'. Pending shipment drafts already reserve ${pendingReserved} unit${pendingReserved !== 1 ? 's' : ''}; resolve those drafts first.`
+                : `Cannot unpick ${unpickItem.qtyToUnpick} for '${lineItem.description}'. Picked: ${currentPicked}, shipped: ${currentShipped}, max unpickable: ${maxUnpickable}`,
             ],
           });
         }

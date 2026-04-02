@@ -15,6 +15,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, ilike, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { dashboardLayouts } from 'drizzle/schema/dashboard';
@@ -146,7 +147,7 @@ const DEFAULT_WIDGETS: WidgetDefinition[] = [
  * List user's dashboard layouts.
  */
 export const listDashboardLayouts = createServerFn({ method: 'GET' })
-  .inputValidator(listDashboardLayoutsSchema)
+  .inputValidator(normalizeObjectInput(listDashboardLayoutsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
 
@@ -200,7 +201,7 @@ export const listDashboardLayouts = createServerFn({ method: 'GET' })
  * Get a single dashboard layout.
  */
 export const getDashboardLayout = createServerFn({ method: 'GET' })
-  .inputValidator(getDashboardLayoutSchema)
+  .inputValidator(normalizeObjectInput(getDashboardLayoutSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
 

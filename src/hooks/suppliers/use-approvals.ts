@@ -151,12 +151,15 @@ export function useApproveItem() {
 
   return useMutation({
     mutationFn: (data: ApproveRejectInput) => approvePurchaseOrderAtLevel({ data }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       // Invalidate approval queries
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.approvals.detail(variables.approvalId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.purchaseOrderDetail(result.approval.purchaseOrderId),
       });
       // Also invalidate purchase orders as status may have changed
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
@@ -173,11 +176,14 @@ export function useRejectItem() {
 
   return useMutation({
     mutationFn: (data: RejectInput) => rejectPurchaseOrderAtLevel({ data }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.approvals.detail(variables.approvalId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.purchaseOrderDetail(result.approval.purchaseOrderId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
     },
@@ -196,6 +202,7 @@ export function useBulkApprove() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.pendingApprovals() });
     },
   });
 }
@@ -248,12 +255,16 @@ export function useEscalateApproval() {
 
   return useMutation({
     mutationFn: (data: EscalateInput) => escalateApproval({ data }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.approvals.detail(variables.approvalId),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.purchaseOrderDetail(result.approval.purchaseOrderId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.pendingApprovals() });
     },
   });
 }
@@ -271,11 +282,16 @@ export function useDelegateApproval() {
 
   return useMutation({
     mutationFn: (data: DelegateInput) => delegateApproval({ data }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.approvals.detail(variables.approvalId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.purchaseOrderDetail(result.approval.purchaseOrderId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.pendingApprovals() });
     },
   });
 }
@@ -289,11 +305,16 @@ export function useRevokeDelegation() {
 
   return useMutation({
     mutationFn: (data: RevokeDelegationInput) => revokeDelegation({ data }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.approvals.detail(variables.approvalId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.purchaseOrderDetail(result.approval.purchaseOrderId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.pendingApprovals() });
     },
   });
 }

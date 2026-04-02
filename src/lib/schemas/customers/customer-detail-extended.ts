@@ -12,18 +12,20 @@
  */
 
 import { z } from 'zod';
-import type { JsonValue } from '../_shared/patterns';
+import { normalizeObjectInput, type JsonValue } from '../_shared/patterns';
 import type { Customer } from './customers';
 
 // ============================================================================
 // PARAMETER SCHEMAS
 // ============================================================================
 
-export const customerDetailParamsSchema = z.object({
+export const customerDetailParamsBaseSchema = z.object({
   customerId: z.string().uuid(),
 });
 
-export type CustomerDetailParams = z.infer<typeof customerDetailParamsSchema>;
+export const customerDetailParamsSchema = normalizeObjectInput(customerDetailParamsBaseSchema);
+
+export type CustomerDetailParams = z.infer<typeof customerDetailParamsBaseSchema>;
 
 // ============================================================================
 // ALERT TYPES
@@ -147,6 +149,10 @@ export interface CustomerDetailContact {
   decisionMaker: boolean;
   influencer?: boolean;
   department?: string | null;
+  emailOptIn: boolean;
+  smsOptIn: boolean;
+  emailOptInAt?: string | Date | null;
+  smsOptInAt?: string | Date | null;
 }
 
 /**

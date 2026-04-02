@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -55,11 +56,13 @@ export const getCategorySchema = z.object({
 });
 export type GetCategoryInput = z.infer<typeof getCategorySchema>;
 
-export const listCategoriesSchema = z.object({
-  parentId: z.string().uuid().nullable().optional(),
-  isActive: z.boolean().optional(),
-  includeArticleCount: z.boolean().optional().default(false),
-});
+export const listCategoriesSchema = normalizeObjectInput(
+  z.object({
+    parentId: z.string().uuid().nullable().optional(),
+    isActive: z.boolean().optional(),
+    includeArticleCount: z.boolean().optional().default(false),
+  })
+);
 export type ListCategoriesInput = z.infer<typeof listCategoriesSchema>;
 
 export const deleteCategorySchema = z.object({
@@ -113,24 +116,26 @@ export const getArticleSchema = z.object({
 });
 export type GetArticleInput = z.infer<typeof getArticleSchema>;
 
-export const listArticlesSchema = z.object({
-  // Filters
-  categoryId: z.string().uuid().optional(),
-  status: kbArticleStatusSchema.optional(),
-  tags: z.array(z.string()).optional(),
-  search: z.string().optional(),
+export const listArticlesSchema = normalizeObjectInput(
+  z.object({
+    // Filters
+    categoryId: z.string().uuid().optional(),
+    status: kbArticleStatusSchema.optional(),
+    tags: z.array(z.string()).optional(),
+    search: z.string().optional(),
 
-  // Pagination
-  page: z.number().int().min(1).optional().default(1),
-  pageSize: z.number().int().min(1).max(100).optional().default(20),
+    // Pagination
+    page: z.number().int().min(1).optional().default(1),
+    pageSize: z.number().int().min(1).max(100).optional().default(20),
 
-  // Sorting
-  sortBy: z
-    .enum(['title', 'createdAt', 'updatedAt', 'viewCount', 'publishedAt'])
-    .optional()
-    .default('updatedAt'),
-  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
-});
+    // Sorting
+    sortBy: z
+      .enum(['title', 'createdAt', 'updatedAt', 'viewCount', 'publishedAt'])
+      .optional()
+      .default('updatedAt'),
+    sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+  })
+);
 export type ListArticlesInput = z.infer<typeof listArticlesSchema>;
 
 export const deleteArticleSchema = z.object({

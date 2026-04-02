@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -61,16 +62,20 @@ export type CreateReportFavoriteInput = z.infer<typeof createReportFavoriteSchem
 // LIST REPORT FAVORITES
 // ============================================================================
 
-export const listReportFavoritesSchema = z.object({
-  reportType: reportTypeSchema.optional(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(50),
-});
+export const listReportFavoritesSchema = normalizeObjectInput(
+  z.object({
+    reportType: reportTypeSchema.optional(),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(50),
+  })
+);
 
 export type ListReportFavoritesInput = z.infer<typeof listReportFavoritesSchema>;
 
-export const listReportFavoritesCursorSchema = cursorPaginationSchema.merge(
-  z.object({ reportType: reportTypeSchema.optional() })
+export const listReportFavoritesCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({ reportType: reportTypeSchema.optional() })
+  )
 );
 export type ListReportFavoritesCursorInput = z.infer<typeof listReportFavoritesCursorSchema>;
 

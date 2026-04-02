@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, asc, sql, gte, lte, isNull, isNotNull, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { winLossReasons, opportunities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -32,7 +33,7 @@ import { NotFoundError, ConflictError } from '@/lib/server/errors';
  * Can filter by type (win or loss) and active status.
  */
 export const listWinLossReasons = createServerFn({ method: 'GET' })
-  .inputValidator(winLossReasonFilterSchema)
+  .inputValidator(normalizeObjectInput(winLossReasonFilterSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -68,7 +69,7 @@ export const listWinLossReasons = createServerFn({ method: 'GET' })
  * Get a single win/loss reason by ID.
  */
 export const getWinLossReason = createServerFn({ method: 'GET' })
-  .inputValidator(winLossReasonParamsSchema)
+  .inputValidator(normalizeObjectInput(winLossReasonParamsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -259,11 +260,13 @@ export const deleteWinLossReason = createServerFn({ method: 'POST' })
 // WIN/LOSS ANALYSIS
 // ============================================================================
 
-const winLossAnalysisQuerySchema = z.object({
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-  type: z.enum(['win', 'loss']).optional(),
-});
+export const winLossAnalysisQuerySchema = normalizeObjectInput(
+  z.object({
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+    type: z.enum(['win', 'loss']).optional(),
+  })
+);
 
 /**
  * Get win/loss analysis with trends.
@@ -403,10 +406,12 @@ export const getWinLossAnalysis = createServerFn({ method: 'GET' })
  */
 export const getCompetitors = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      dateFrom: z.coerce.date().optional(),
-      dateTo: z.coerce.date().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });

@@ -113,7 +113,7 @@ export function createWarrantyColumns(
           />
         </Link>
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 220,
       meta: {
         skeleton: { type: "icon-text", width: "w-44" },

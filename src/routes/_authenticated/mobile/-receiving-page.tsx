@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -41,6 +42,7 @@ import {
 import { useLocations, useReceiveInventory } from "@/hooks/inventory";
 import { useProductSearch } from "@/hooks/products";
 import type { ProductSearchResult } from "@/lib/schemas/products";
+import { manualReceiptReasonValues } from "@/lib/schemas/inventory";
 
 interface ReceiveEntry {
   id?: string;
@@ -48,8 +50,18 @@ interface ReceiveEntry {
   quantity: number;
   unitCost: number;
   locationId: string;
+  receiptReason: (typeof manualReceiptReasonValues)[number];
+  notes?: string;
   serialNumber?: string;
 }
+
+const receiptReasonLabels: Record<(typeof manualReceiptReasonValues)[number], string> = {
+  initial_stock: "Initial Stock",
+  found_stock: "Found Stock",
+  sample_or_promo: "Sample or Promo",
+  non_supplier_inbound: "Non-Supplier Inbound",
+  other_exception: "Other Exception",
+};
 
 export default function MobileReceivingPage() {
   const navigate = useNavigate();
@@ -58,6 +70,9 @@ export default function MobileReceivingPage() {
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState(0);
   const [serialNumber, setSerialNumber] = useState("");
+  const [receiptReason, setReceiptReason] =
+    useState<(typeof manualReceiptReasonValues)[number]>("initial_stock");
+  const [notes, setNotes] = useState("");
   const [locationId, setLocationId] = useState("");
   const [barcodeSearch, setBarcodeSearch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,6 +138,10 @@ export default function MobileReceivingPage() {
       toast.error("Please select a location");
       return;
     }
+    if (receiptReason === "other_exception" && !notes.trim()) {
+      toast.error("Notes are required for Other Exception");
+      return;
+    }
     if (scannedItem.isSerialized) {
       if (quantity !== 1) {
         toast.error("Serialized products must be received one unit per serial");
@@ -138,16 +157,20 @@ export default function MobileReceivingPage() {
       quantity,
       unitCost,
       locationId,
+      receiptReason,
+      notes: notes.trim() || undefined,
       serialNumber: serialNumber.trim() || undefined,
     });
     setScannedItem(null);
     setQuantity(1);
     setUnitCost(0);
     setSerialNumber("");
+    setReceiptReason("initial_stock");
+    setNotes("");
     toast.success("Added to queue", {
       description: `${quantity} x ${scannedItem.productName}`,
     });
-  }, [scannedItem, quantity, unitCost, locationId, addToQueue, serialNumber]);
+  }, [scannedItem, quantity, unitCost, locationId, addToQueue, notes, receiptReason, serialNumber]);
 
   const handleReceiveNowClick = useCallback(() => {
     if (!scannedItem?.productId) {
@@ -156,6 +179,10 @@ export default function MobileReceivingPage() {
     }
     if (!locationId) {
       toast.error("Please select a location");
+      return;
+    }
+    if (receiptReason === "other_exception" && !notes.trim()) {
+      toast.error("Notes are required for Other Exception");
       return;
     }
     if (scannedItem.isSerialized) {
@@ -169,7 +196,7 @@ export default function MobileReceivingPage() {
       }
     }
     setShowConfirmDialog(true);
-  }, [scannedItem, locationId, quantity, serialNumber]);
+  }, [scannedItem, locationId, notes, quantity, receiptReason, serialNumber]);
 
   const handleConfirmedReceive = useCallback(async () => {
     setShowConfirmDialog(false);
@@ -181,6 +208,8 @@ export default function MobileReceivingPage() {
         locationId,
         quantity,
         unitCost,
+        receiptReason,
+        notes: notes.trim() || undefined,
         serialNumber: serialNumber.trim() || undefined,
       });
       toast.success("Inventory received", {
@@ -190,13 +219,15 @@ export default function MobileReceivingPage() {
       setQuantity(1);
       setUnitCost(0);
       setSerialNumber("");
+      setReceiptReason("initial_stock");
+      setNotes("");
     } catch (error: unknown) {
       logger.error("Failed to receive", error);
       toast.error(error instanceof Error ? error.message : "Failed to receive inventory");
     } finally {
       setIsSubmitting(false);
     }
-  }, [scannedItem, quantity, unitCost, locationId, receiveMutation, serialNumber]);
+  }, [scannedItem, quantity, unitCost, locationId, notes, receiptReason, receiveMutation, serialNumber]);
 
   const handleSync = useCallback(async () => {
     const result = await syncQueue(async (item) => {
@@ -205,6 +236,8 @@ export default function MobileReceivingPage() {
         locationId: item.locationId,
         quantity: item.quantity,
         unitCost: item.unitCost,
+        receiptReason: item.receiptReason,
+        notes: item.notes,
         serialNumber: item.serialNumber,
       });
     });
@@ -219,7 +252,7 @@ export default function MobileReceivingPage() {
     <div className="min-h-dvh bg-muted/30">
       <MobilePageHeader
         title="Receive Inventory"
-        subtitle={scannedItem ? `Receiving: ${scannedItem.productName}` : "Scan a product barcode"}
+        subtitle={scannedItem ? `Receiving: ${scannedItem.productName}` : "Scan a product barcode for a non-PO receipt"}
         onBack={() => navigate({ to: "/mobile" })}
       />
       <div className="p-4 space-y-4">
@@ -245,7 +278,7 @@ export default function MobileReceivingPage() {
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold mb-2">Ready to Receive</h3>
               <p className="text-sm text-muted-foreground">
-                Scan a product barcode or enter SKU to begin receiving inventory.
+                Scan a product barcode or enter SKU to receive non-PO inbound stock.
               </p>
             </CardContent>
           </Card>
@@ -328,6 +361,33 @@ export default function MobileReceivingPage() {
                   inputMode="decimal"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="receipt-reason-select">Receipt Reason</Label>
+                <Select value={receiptReason} onValueChange={(value) => setReceiptReason(value as (typeof manualReceiptReasonValues)[number])}>
+                  <SelectTrigger id="receipt-reason-select" className="min-h-[44px] text-base">
+                    <SelectValue placeholder="Select reason..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {manualReceiptReasonValues.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {receiptReasonLabels[value]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="receipt-notes-input">
+                  Notes {receiptReason === "other_exception" ? "(Required)" : "(Optional)"}
+                </Label>
+                <Textarea
+                  id="receipt-notes-input"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Add context for this non-PO receipt"
+                  className="min-h-[88px] text-base"
+                />
+              </div>
               <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                 <span className="font-medium">Total Value</span>
                 <span className="text-xl font-bold tabular-nums">
@@ -387,6 +447,9 @@ export default function MobileReceivingPage() {
                     <div className="text-sm text-muted-foreground">
                       {item.quantity} x ${item.unitCost.toFixed(2)}
                     </div>
+                    <div className="text-xs text-muted-foreground">
+                      {receiptReasonLabels[item.receiptReason]}
+                    </div>
                     {item.serialNumber ? (
                       <div className="text-xs font-mono text-muted-foreground">
                         SN: {item.serialNumber}
@@ -410,6 +473,8 @@ export default function MobileReceivingPage() {
             <AlertDialogTitle>Confirm Receive</AlertDialogTitle>
             <AlertDialogDescription>
               Receive {quantity} x {scannedItem?.productName} at ${unitCost.toFixed(2)} each?
+              <br />
+              <span className="font-medium">Reason: {receiptReasonLabels[receiptReason]}</span>
               {scannedItem?.isSerialized && serialNumber.trim() ? (
                 <>
                   <br />

@@ -14,6 +14,11 @@ import { queryKeys } from '@/lib/query-keys';
 
 type OrderDetail = Awaited<ReturnType<typeof updateOrder>>;
 
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
 /**
  * Available assignee roles for order fulfillment
  */
@@ -103,6 +108,7 @@ export function useAssignOrder() {
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.orders.detail(input.orderId) });
       await queryClient.cancelQueries({ queryKey: queryKeys.orders.lists() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.orders.infiniteLists() });
 
       const previousDetail = queryClient.getQueryData<OrderDetail>(
         queryKeys.orders.detail(input.orderId)
@@ -164,7 +170,7 @@ export function useAssignOrder() {
     },
     onSuccess: (_result, input) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(input.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }

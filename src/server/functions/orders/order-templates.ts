@@ -13,6 +13,7 @@ import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from 
 import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   orderTemplates,
   orderTemplateItems,
@@ -177,7 +178,7 @@ export const listTemplatesCursor = createServerFn({ method: 'GET' })
 // ============================================================================
 
 export const getTemplate = createServerFn({ method: 'GET' })
-  .inputValidator(templateParamsSchema)
+  .inputValidator(normalizeObjectInput(templateParamsSchema))
   .handler(async ({ data }): Promise<TemplateWithItems> => {
     const ctx = await withAuth();
 

@@ -14,6 +14,7 @@ import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, desc, asc, sql, ilike, count, isNull, inArray, isNotNull } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { z } from 'zod';
 import { db, type TransactionExecutor } from '@/lib/db';
 import {
@@ -69,6 +70,7 @@ import {
   type RmaLineItemResponse,
   type ListRmasResponse,
   type BulkRmaResult,
+  type RmaProcessResult,
 } from '@/lib/schemas/support/rma';
 
 // ============================================================================
@@ -87,6 +89,13 @@ const rmaLineItemsProjection = {
   createdAt: rmaLineItems.createdAt,
   updatedAt: rmaLineItems.updatedAt,
 };
+
+const ACTIVE_RMA_STATUSES = ['requested', 'approved', 'received'] as const;
+const SHIPPED_RMA_ELIGIBLE_SHIPMENT_STATUSES = [
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+] as const;
 
 /**
  * Get next sequence number for RMA generation.
@@ -117,7 +126,7 @@ async function getNextRmaSequence(
 export const createRma = createServerFn({ method: 'POST' })
   .inputValidator(createRmaSchema)
   .handler(async ({ data }): Promise<SerializedMutationEnvelope<RmaResponse>> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.support.create });
 
     // Verify order exists and belongs to organization
     const [order] = await db
@@ -211,6 +220,116 @@ export const createRma = createServerFn({ method: 'POST' })
           throw new ValidationError(
             `Invalid line item IDs: ${invalidIds.join(', ')}. Items must belong to the specified order.`
           );
+        }
+
+        const requestedQuantityByLine = new Map<string, number>();
+        const requestedSerials = new Set<string>();
+
+        for (const item of data.lineItems) {
+          const isSerialized = lineItemProductMap.get(item.orderLineItemId) ?? false;
+          requestedQuantityByLine.set(
+            item.orderLineItemId,
+            (requestedQuantityByLine.get(item.orderLineItemId) ?? 0) + item.quantityReturned
+          );
+
+          if (isSerialized && item.quantityReturned !== 1) {
+            throw new ValidationError(
+              'Serialized RMA lines must return exactly one unit per serial number.'
+            );
+          }
+
+          if (item.serialNumber) {
+            const normalizedSerial = normalizeSerial(item.serialNumber);
+            if (requestedSerials.has(normalizedSerial)) {
+              throw new ValidationError(
+                `Serial "${normalizedSerial}" is listed more than once in this RMA request.`
+              );
+            }
+            requestedSerials.add(normalizedSerial);
+          }
+        }
+
+        const shippedQuantities = await tx
+          .select({
+            orderLineItemId: shipmentItems.orderLineItemId,
+            shippedQuantity: sql<number>`COALESCE(SUM(${shipmentItems.quantity}), 0)`,
+          })
+          .from(shipmentItems)
+          .innerJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
+          .where(
+            and(
+              eq(orderShipments.organizationId, ctx.organizationId),
+              eq(orderShipments.orderId, data.orderId),
+              inArray(shipmentItems.orderLineItemId, lineItemIds),
+              inArray(orderShipments.status, [...SHIPPED_RMA_ELIGIBLE_SHIPMENT_STATUSES])
+            )
+          )
+          .groupBy(shipmentItems.orderLineItemId);
+
+        const shippedQuantityByLine = new Map(
+          shippedQuantities.map((row) => [row.orderLineItemId, Number(row.shippedQuantity ?? 0)])
+        );
+
+        const activeClaimedQuantities = await tx
+          .select({
+            orderLineItemId: rmaLineItems.orderLineItemId,
+            activeQuantity: sql<number>`COALESCE(SUM(${rmaLineItems.quantityReturned}), 0)`,
+          })
+          .from(rmaLineItems)
+          .innerJoin(returnAuthorizations, eq(rmaLineItems.rmaId, returnAuthorizations.id))
+          .where(
+            and(
+              eq(returnAuthorizations.organizationId, ctx.organizationId),
+              eq(returnAuthorizations.orderId, data.orderId),
+              inArray(returnAuthorizations.status, [...ACTIVE_RMA_STATUSES]),
+              inArray(rmaLineItems.orderLineItemId, lineItemIds)
+            )
+          )
+          .groupBy(rmaLineItems.orderLineItemId);
+
+        const activeClaimedQuantityByLine = new Map(
+          activeClaimedQuantities.map((row) => [row.orderLineItemId, Number(row.activeQuantity ?? 0)])
+        );
+
+        for (const [orderLineItemId, requestedQuantity] of requestedQuantityByLine) {
+          const shippedQuantity = shippedQuantityByLine.get(orderLineItemId) ?? 0;
+          const activeClaimedQuantity = activeClaimedQuantityByLine.get(orderLineItemId) ?? 0;
+          const remainingReturnable = Math.max(shippedQuantity - activeClaimedQuantity, 0);
+
+          if (requestedQuantity > remainingReturnable) {
+            throw new ValidationError(
+              `Requested return quantity exceeds shipped quantity available for line ${orderLineItemId}. ${remainingReturnable} unit(s) remain returnable.`
+            );
+          }
+        }
+
+        if (requestedSerials.size > 0) {
+          const activeSerialClaims = await tx
+            .select({ serialNumber: rmaLineItems.serialNumber })
+            .from(rmaLineItems)
+            .innerJoin(returnAuthorizations, eq(rmaLineItems.rmaId, returnAuthorizations.id))
+            .where(
+              and(
+                eq(returnAuthorizations.organizationId, ctx.organizationId),
+                eq(returnAuthorizations.orderId, data.orderId),
+                inArray(returnAuthorizations.status, [...ACTIVE_RMA_STATUSES]),
+                inArray(
+                  rmaLineItems.serialNumber,
+                  Array.from(requestedSerials)
+                )
+              )
+            );
+
+          const alreadyClaimedSerial = activeSerialClaims
+            .map((row) => row.serialNumber)
+            .find((serial): serial is string => Boolean(serial));
+
+          if (alreadyClaimedSerial) {
+            throw createSerializedMutationError(
+              `Serial "${alreadyClaimedSerial}" is already attached to an active RMA.`,
+              'invalid_serial_state'
+            );
+          }
         }
 
         // Validate serialized products have serialNumber
@@ -319,7 +438,7 @@ export const createRma = createServerFn({ method: 'POST' })
  * Get a single RMA by ID
  */
 export const getRma = createServerFn({ method: 'GET' })
-  .inputValidator(getRmaSchema)
+  .inputValidator(normalizeObjectInput(getRmaSchema))
   .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth();
 
@@ -580,7 +699,7 @@ export const updateRma = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<RmaResponse> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.support.update });
 
     const { rmaId, ...updateData } = data;
 
@@ -616,10 +735,45 @@ export const updateRma = createServerFn({ method: 'POST' })
       .from(rmaLineItems)
       .where(eq(rmaLineItems.rmaId, rmaId));
 
+    const followUpMessage =
+      data.resolution === 'refund'
+        ? 'Refund decision recorded. Financial refund still requires follow-up action.'
+        : data.resolution === 'credit'
+          ? 'Credit decision recorded. Credit note issuance still requires follow-up action.'
+          : data.resolution === 'replacement'
+            ? 'Replacement decision recorded. Replacement order still requires follow-up action.'
+            : null;
+
     return {
       ...updated,
       lineItems: lineItems as RmaLineItemResponse[],
-    } as RmaResponse;
+      stages: {
+        resolutionRecorded: {
+          status: 'completed',
+          message: 'RMA resolution was recorded successfully.',
+        },
+        financialAction: {
+          status:
+            data.resolution === 'refund' || data.resolution === 'credit'
+              ? 'pending'
+              : 'not_required',
+          message:
+            data.resolution === 'refund'
+              ? 'Refund execution is still required.'
+              : data.resolution === 'credit'
+                ? 'Credit note execution is still required.'
+                : 'No financial follow-up is required.',
+        },
+        replacementAction: {
+          status: data.resolution === 'replacement' ? 'pending' : 'not_required',
+          message:
+            data.resolution === 'replacement'
+              ? 'Replacement order execution is still required.'
+              : 'No replacement follow-up is required.',
+        },
+      },
+      followUpMessage,
+    } as RmaProcessResult;
   });
 
 // ============================================================================
@@ -631,12 +785,14 @@ export const updateRma = createServerFn({ method: 'POST' })
  */
 export const getRmaByNumber = createServerFn({ method: 'GET' })
   .inputValidator(
-    getRmaSchema
-      .extend({
-        rmaId: getRmaSchema.shape.rmaId.optional(),
-        rmaNumber: createRmaSchema.shape.orderId.optional(), // Just reusing UUID pattern
-      })
-      .refine((data) => data.rmaId || data.rmaNumber, 'Either rmaId or rmaNumber is required')
+    normalizeObjectInput(
+      getRmaSchema
+        .extend({
+          rmaId: getRmaSchema.shape.rmaId.optional(),
+          rmaNumber: createRmaSchema.shape.orderId.optional(), // Just reusing UUID pattern
+        })
+        .refine((data) => data.rmaId || data.rmaNumber, 'Either rmaId or rmaNumber is required')
+    )
   )
   .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth();
@@ -682,10 +838,12 @@ const GET_RMAS_FOR_ISSUE_LIMIT = 100;
  */
 export const getRmasForIssue = createServerFn({ method: 'GET' })
   .inputValidator(
-    getRmaSchema.extend({
-      rmaId: getRmaSchema.shape.rmaId.optional(),
-      issueId: getRmaSchema.shape.rmaId,
-    })
+    normalizeObjectInput(
+      getRmaSchema.extend({
+        rmaId: getRmaSchema.shape.rmaId.optional(),
+        issueId: getRmaSchema.shape.rmaId,
+      })
+    )
   )
   .handler(async ({ data }): Promise<RmaResponse[]> => {
     const ctx = await withAuth();
@@ -736,7 +894,7 @@ export const getRmasForIssue = createServerFn({ method: 'GET' })
 export const approveRma = createServerFn({ method: 'POST' })
   .inputValidator(approveRmaSchema)
   .handler(async ({ data }): Promise<RmaResponse> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.support.update });
     const now = new Date().toISOString();
 
     // Get existing RMA
@@ -799,7 +957,7 @@ export const approveRma = createServerFn({ method: 'POST' })
 export const rejectRma = createServerFn({ method: 'POST' })
   .inputValidator(rejectRmaSchema)
   .handler(async ({ data }): Promise<RmaResponse> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.support.update });
     const now = new Date().toISOString();
 
     // Get existing RMA
@@ -1006,18 +1164,39 @@ export const receiveRma = createServerFn({ method: 'POST' })
           )
         );
 
-      // Resolve default location (first org warehouse)
-      const [firstLocation] = await tx
-        .select({ id: warehouseLocations.id })
+      // Resolve explicit receiving location so returns never silently land in an arbitrary bin
+      const requestedLocationRows = await tx
+        .select({ id: warehouseLocations.id, name: warehouseLocations.name })
         .from(warehouseLocations)
-        .where(eq(warehouseLocations.organizationId, ctx.organizationId))
-        .limit(1);
+        .where(
+          data.locationId
+            ? and(
+                eq(warehouseLocations.organizationId, ctx.organizationId),
+                eq(warehouseLocations.id, data.locationId)
+              )
+            : and(
+                eq(warehouseLocations.organizationId, ctx.organizationId),
+                eq(warehouseLocations.isActive, true)
+              )
+        )
+        .limit(data.locationId ? 1 : 2);
 
-      if (!firstLocation?.id && lineItemsWithProduct.length > 0) {
+      const receivingLocation =
+        data.locationId
+          ? requestedLocationRows[0]
+          : requestedLocationRows.length === 1
+            ? requestedLocationRows[0]
+            : null;
+
+      if (!receivingLocation?.id && lineItemsWithProduct.length > 0) {
         throw new ValidationError(
-          'No warehouse location found. Create a warehouse location before receiving returns.'
+          data.locationId
+            ? 'Selected receiving location was not found. Choose a valid warehouse location before receiving returns.'
+            : 'Receiving location is required when more than one active warehouse location exists.'
         );
       }
+
+      const receivingLocationId = receivingLocation?.id ?? null;
 
       const inspectionCondition = data.inspectionNotes?.condition;
       const targetStatus =
@@ -1189,7 +1368,11 @@ export const receiveRma = createServerFn({ method: 'POST' })
             });
           }
         } else {
-          const locationId = firstLocation!.id;
+          if (!receivingLocationId) {
+            throw new ValidationError('Receiving location is required before restoring inventory.');
+          }
+
+          const locationId = receivingLocationId;
           const [existingInv] = await tx
             .select()
             .from(inventory)
@@ -1369,6 +1552,7 @@ export const bulkReceiveRma = createServerFn({ method: 'POST' })
         await receiveRma({
           data: {
             rmaId,
+            locationId: data.locationId,
             inspectionNotes: data.inspectionNotes,
           },
         });
@@ -1393,8 +1577,8 @@ export const bulkReceiveRma = createServerFn({ method: 'POST' })
  */
 export const processRma = createServerFn({ method: 'POST' })
   .inputValidator(processRmaSchema)
-  .handler(async ({ data }): Promise<RmaResponse> => {
-    const ctx = await withAuth();
+  .handler(async ({ data }): Promise<RmaProcessResult> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.support.update });
     const now = new Date().toISOString();
 
     // Get existing RMA
@@ -1452,10 +1636,45 @@ export const processRma = createServerFn({ method: 'POST' })
       .from(rmaLineItems)
       .where(eq(rmaLineItems.rmaId, data.rmaId));
 
+    const followUpMessage =
+      data.resolution === 'refund'
+        ? 'Refund decision recorded. Financial refund still requires follow-up action.'
+        : data.resolution === 'credit'
+          ? 'Credit decision recorded. Credit note issuance still requires follow-up action.'
+          : data.resolution === 'replacement'
+            ? 'Replacement decision recorded. Replacement order still requires follow-up action.'
+            : null;
+
     return {
       ...updated,
       lineItems: lineItems as RmaLineItemResponse[],
-    } as RmaResponse;
+      stages: {
+        resolutionRecorded: {
+          status: 'completed',
+          message: 'RMA resolution was recorded successfully.',
+        },
+        financialAction: {
+          status:
+            data.resolution === 'refund' || data.resolution === 'credit'
+              ? 'pending'
+              : 'not_required',
+          message:
+            data.resolution === 'refund'
+              ? 'Refund execution is still required.'
+              : data.resolution === 'credit'
+                ? 'Credit note execution is still required.'
+                : 'No financial follow-up is required.',
+        },
+        replacementAction: {
+          status: data.resolution === 'replacement' ? 'pending' : 'not_required',
+          message:
+            data.resolution === 'replacement'
+              ? 'Replacement order execution is still required.'
+              : 'No replacement follow-up is required.',
+        },
+      },
+      followUpMessage,
+    } as RmaProcessResult;
   });
 
 // ============================================================================

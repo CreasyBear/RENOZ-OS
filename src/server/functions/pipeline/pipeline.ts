@@ -48,10 +48,9 @@ import {
   pipelineMetricsQuerySchema,
   STAGE_PROBABILITY_DEFAULTS,
   createOpportunityActivitySchema,
-  opportunityActivityFilterSchema,
+  listOpportunityActivitiesQuerySchema,
   opportunityActivityParamsSchema,
   type OpportunityStage,
-  paginationSchema,
   percentageSchema,
 } from '@/lib/schemas';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
@@ -60,6 +59,7 @@ import { withAuth } from '@/lib/server/protected';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/server/errors';
 import { verifyCustomerExists } from '@/server/functions/_shared/entity-verification';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 
@@ -432,6 +432,10 @@ export const listOpportunities = createServerFn({ method: 'GET' })
         ? opportunities.title
         : sortBy === 'value'
           ? opportunities.value
+          : sortBy === 'probability'
+            ? opportunities.probability
+            : sortBy === 'daysInStage'
+              ? opportunities.daysInStage
           : sortBy === 'expectedCloseDate'
             ? opportunities.expectedCloseDate
             : sortBy === 'stage'
@@ -669,7 +673,7 @@ const _getOpportunityCached = cache(
  * PERFORMANCE: Uses React.cache for request deduplication; Promise.all for parallel query execution.
  */
 export const getOpportunity = createServerFn({ method: 'GET' })
-  .inputValidator(opportunityParamsSchema)
+  .inputValidator(normalizeObjectInput(opportunityParamsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
     const result = await _getOpportunityCached(data.id, ctx.organizationId);
@@ -1538,7 +1542,7 @@ export const convertToOrder = createServerFn({ method: 'POST' })
  * Supports filtering by opportunity, type, date range, and completion status
  */
 export const listActivities = createServerFn({ method: 'GET' })
-  .inputValidator(paginationSchema.merge(opportunityActivityFilterSchema))
+  .inputValidator(listOpportunityActivitiesQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -1615,7 +1619,7 @@ export const listActivities = createServerFn({ method: 'GET' })
  * Get a single activity by ID
  */
 export const getActivity = createServerFn({ method: 'GET' })
-  .inputValidator(opportunityActivityParamsSchema)
+  .inputValidator(normalizeObjectInput(opportunityActivityParamsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
 
@@ -1807,10 +1811,12 @@ export const deleteActivity = createServerFn({ method: 'POST' })
  */
 export const getActivityTimeline = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      opportunityId: z.string().uuid(),
-      days: z.number().int().positive().default(30),
-    })
+    normalizeObjectInput(
+      z.object({
+        opportunityId: z.string().uuid(),
+        days: z.number().int().positive().default(30),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
@@ -1873,11 +1879,13 @@ export const getActivityTimeline = createServerFn({ method: 'GET' })
  */
 export const getUpcomingFollowUps = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      days: z.number().int().positive().default(7),
-      opportunityId: z.string().uuid().optional(),
-      assignedTo: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        days: z.number().int().positive().default(7),
+        opportunityId: z.string().uuid().optional(),
+        assignedTo: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
@@ -1949,11 +1957,13 @@ export const getUpcomingFollowUps = createServerFn({ method: 'GET' })
  */
 export const getActivityAnalytics = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      dateFrom: z.coerce.date().optional(),
-      dateTo: z.coerce.date().optional(),
-      opportunityId: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+        opportunityId: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });

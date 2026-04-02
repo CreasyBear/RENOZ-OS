@@ -173,7 +173,7 @@ export function createPricingColumns(
           {row.original.supplierName || "Unknown Supplier"}
         </Link>
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 150,
     },
 
@@ -229,7 +229,7 @@ export function createPricingColumns(
           {formatQuantityRange(row.original.minQuantity, row.original.maxQuantity)}
         </div>
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 90,
     },
 
@@ -254,7 +254,7 @@ export function createPricingColumns(
           </div>
         );
       },
-      enableSorting: true,
+      enableSorting: false,
       size: 90,
     },
 
@@ -304,7 +304,7 @@ export function createPricingColumns(
           />
         </div>
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 100,
     },
 

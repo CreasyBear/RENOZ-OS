@@ -223,7 +223,7 @@ export function createApprovalColumns(
     cell: ({ row }) => (
       <PoNumberCell poNumber={row.original.poNumber} isPendingTab={isPendingTab} />
     ),
-    enableSorting: true,
+    enableSorting: false,
     size: 120,
   });
 
@@ -241,7 +241,7 @@ export function createApprovalColumns(
         showIcon
       />
     ),
-    enableSorting: true,
+    enableSorting: false,
     size: 100,
   });
 
@@ -295,7 +295,7 @@ export function createApprovalColumns(
         className="font-medium"
       />
     ),
-    enableSorting: true,
+    enableSorting: false,
     size: 100,
   });
 
@@ -313,7 +313,7 @@ export function createApprovalColumns(
         showIcon
       />
     ),
-    enableSorting: true,
+    enableSorting: false,
     size: 100,
   });
 
@@ -324,7 +324,7 @@ export function createApprovalColumns(
       accessorFn: (row) => getDaysOverdue(row.dueDate),
       header: 'Days Overdue',
       cell: ({ row }) => <DaysOverdueCell dueDate={row.original.dueDate} />,
-      enableSorting: true,
+      enableSorting: false,
       size: 120,
     });
   }
@@ -349,7 +349,7 @@ export function createApprovalColumns(
     cell: ({ row }) => (
       <DateCell value={row.original.submittedAt} format="short" />
     ),
-    enableSorting: true,
+    enableSorting: false,
     size: 100,
   });
 
@@ -364,7 +364,7 @@ export function createApprovalColumns(
       cell: ({ row }) => (
         <DateCell value={row.original.dueDate || null} format="short" fallback="-" />
       ),
-      enableSorting: true,
+      enableSorting: false,
       size: 100,
     });
   }

@@ -75,6 +75,13 @@ import type { CustomerTableData } from "./customer-columns";
 import { SavedFilterPresets } from "./saved-filter-presets";
 import { MetricCard } from "@/components/shared/metric-card";
 import { Users, DollarSign, TrendingUp, AlertCircle } from "lucide-react";
+import {
+  DEFAULT_CUSTOMER_SORT_DIRECTION,
+  DEFAULT_CUSTOMER_SORT_FIELD,
+  resolveCustomerSortState,
+  type CustomerSortField,
+  type SortDirection,
+} from "./customer-sorting";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -90,16 +97,6 @@ export interface CustomersListContainerProps {
   availableTags?: Array<{ id: string; name: string; color: string }>;
 }
 
-type SortField =
-  | "name"
-  | "status"
-  | "lifetimeValue"
-  | "totalOrders"
-  | "healthScore"
-  | "lastOrderDate"
-  | "createdAt";
-type SortDirection = "asc" | "desc";
-
 export function CustomersListContainer({
   filters,
   onFiltersChange,
@@ -110,8 +107,12 @@ export function CustomersListContainer({
   const { navigateToCustomer, navigateToEdit } = useCustomerNavigation();
   const confirmation = useConfirmation();
   const [page, setPage] = useState(1);
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<CustomerSortField>(
+    DEFAULT_CUSTOMER_SORT_FIELD
+  );
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    DEFAULT_CUSTOMER_SORT_DIRECTION
+  );
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
   const [currentOperation, setCurrentOperation] = useState<string>("");
@@ -234,23 +235,25 @@ export function CustomersListContainer({
   });
 
   // Handle sort toggle
-  const handleSort = useCallback((field: string) => {
-    setSortField((currentField) => {
-      if (currentField === field) {
-        // Toggle direction
-        setSortDirection((dir) => (dir === "asc" ? "desc" : "asc"));
-        return currentField;
-      }
-      // New field, default to ascending for text, descending for dates/numbers
-      setSortDirection(
-        ["lifetimeValue", "totalOrders", "healthScore", "lastOrderDate", "createdAt"].includes(field)
-          ? "desc"
-          : "asc"
+  const handleSort = useCallback(
+    (field: string, direction?: SortDirection) => {
+      const nextSort = resolveCustomerSortState(
+        sortField,
+        sortDirection,
+        field,
+        direction
       );
-      return field as SortField;
-    });
-    setPage(1); // Reset to first page on sort change
-  }, []);
+
+      if (!nextSort) {
+        return;
+      }
+
+      setSortField(nextSort.field);
+      setSortDirection(nextSort.direction);
+      setPage(1); // Reset to first page on sort change
+    },
+    [sortField, sortDirection]
+  );
 
   // Shift-click range handler that updates lastClickedIndex
   const handleShiftClickRangeWithIndex = useCallback(

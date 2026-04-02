@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { userPreferences } from 'drizzle/schema';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { withAuth, withInternalAuth } from '@/lib/server/protected';
@@ -89,7 +90,7 @@ const getSinglePreferenceSchema = z.object({
  * Get a single preference by category and key.
  */
 export const getPreference = createServerFn({ method: 'GET' })
-  .inputValidator(getSinglePreferenceSchema)
+  .inputValidator(normalizeObjectInput(getSinglePreferenceSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

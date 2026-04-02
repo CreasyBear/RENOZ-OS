@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, desc, asc, gt, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   inventory,
   inventoryCostLayers,
@@ -331,10 +332,12 @@ async function getFinanceIntegritySummary(
  */
 export const listCostLayers = createServerFn({ method: 'GET' })
   .inputValidator(
-    costLayerFilterSchema.extend({
-      page: z.coerce.number().int().min(1).default(1),
-      pageSize: z.coerce.number().int().min(1).max(100).default(50),
-    })
+    normalizeObjectInput(
+      costLayerFilterSchema.extend({
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(50),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -380,7 +383,7 @@ export const listCostLayers = createServerFn({ method: 'GET' })
  * Get cost layers for a specific inventory item.
  */
 export const getInventoryCostLayers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ inventoryId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ inventoryId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -777,7 +780,7 @@ export const reconcileInventoryFinanceIntegrity = createServerFn({ method: 'POST
  * Calculate cost of goods sold using FIFO.
  */
 export const calculateCOGS = createServerFn({ method: 'GET' })
-  .inputValidator(cogsCalculationSchema)
+  .inputValidator(normalizeObjectInput(cogsCalculationSchema))
   .handler(async ({ data }): Promise<COGSResult> => {
     const ctx = await withAuth();
 
@@ -1424,7 +1427,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
  * Used in product detail view to show FIFO cost breakdown.
  */
 export const getProductCostLayers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ productId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 

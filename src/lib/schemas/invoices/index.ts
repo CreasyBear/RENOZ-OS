@@ -11,6 +11,8 @@
 // ============================================================================
 
 export {
+  INVOICE_SORT_FIELDS,
+  invoiceSortFieldSchema,
   invoiceStatusSchema,
   invoiceFilterSchema,
   invoiceListQuerySchema,
@@ -26,6 +28,7 @@ export {
 export type {
   InvoiceFilter,
   InvoiceListQuery,
+  InvoiceSortField,
   UpdateInvoiceStatusInput,
   InvoiceSummaryQuery,
 } from './invoice-filters';

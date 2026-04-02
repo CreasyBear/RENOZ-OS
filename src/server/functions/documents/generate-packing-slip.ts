@@ -10,6 +10,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { orders, generatedDocuments } from "drizzle/schema";
@@ -141,7 +142,7 @@ const getPackingSlipStatusSchema = z.object({
  * No row = status "pending" (document not yet generated).
  */
 export const getPackingSlipStatus = createServerFn({ method: "GET" })
-  .inputValidator(getPackingSlipStatusSchema)
+  .inputValidator(normalizeObjectInput(getPackingSlipStatusSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
 

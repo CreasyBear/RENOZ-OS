@@ -18,6 +18,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, isNull, ne, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   orders,
   orderLineItems,
@@ -30,6 +31,7 @@ import {
 } from '../../../../drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   syncInvoiceToXeroSchema,
   resyncInvoiceSchema,
@@ -492,9 +494,32 @@ async function resolveWebhookRecordedBy(
 export const syncInvoiceToXero = createServerFn({ method: 'POST' })
   .inputValidator(syncInvoiceToXeroSchema)
   .handler(async ({ data }): Promise<XeroSyncResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { orderId, force } = data;
     const readiness = await getXeroSyncReadiness(ctx.organizationId);
+
+    type WorkflowStages = NonNullable<XeroSyncResult['stages']>;
+    type XeroSyncResultPayload = Omit<XeroSyncResult, 'orderId' | 'stages'> & {
+      stages?: Partial<WorkflowStages>;
+    };
+
+    const defaultStages: WorkflowStages = {
+      readiness: { status: 'completed' },
+      validation: { status: 'completed' },
+      sync: { status: 'skipped' },
+      persist: { status: 'skipped' },
+    };
+
+    const buildResult = (result: XeroSyncResultPayload): XeroSyncResult => ({
+      ...result,
+      orderId,
+      stages: {
+        readiness: result.stages?.readiness ?? defaultStages.readiness,
+        validation: result.stages?.validation ?? defaultStages.validation,
+        sync: result.stages?.sync ?? defaultStages.sync,
+        persist: result.stages?.persist ?? defaultStages.persist,
+      },
+    });
 
     if (!readiness.available) {
       await db
@@ -506,13 +531,21 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
         })
         .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: readiness.message ?? 'Xero integration unavailable',
         integrationAvailable: false,
-      };
+        stages: {
+          readiness: {
+            status: 'failed',
+            message: readiness.message ?? 'Xero integration unavailable',
+          },
+          validation: { status: 'skipped', message: 'Invoice validation did not run.' },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'completed', message: 'Order sync error state was saved.' },
+        },
+      });
     }
 
     // Get order with customer and line items
@@ -539,37 +572,55 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       );
 
     if (!order) {
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: 'Order not found',
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: { status: 'failed', message: 'Order not found.' },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'skipped', message: 'No order state was updated.' },
+        },
+      });
     }
 
     // Check if already synced (unless force resync)
     if (order.xeroSyncStatus === 'synced' && order.xeroInvoiceId && !force) {
-      return {
-        orderId,
+      return buildResult({
         success: true,
         status: 'synced',
         xeroInvoiceId: order.xeroInvoiceId,
         xeroInvoiceUrl: buildXeroInvoiceUrl(order.xeroInvoiceId),
         syncedAt: new Date().toISOString(),
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: { status: 'completed', message: 'Order is already synced.' },
+          sync: { status: 'skipped', message: 'Existing Xero invoice was reused.' },
+          persist: { status: 'skipped', message: 'Order sync state was already current.' },
+        },
+      });
     }
 
     // Check order status - only sync confirmed/shipped orders
     if (order.status === 'draft' || order.status === 'cancelled') {
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: `Cannot sync ${order.status} orders to Xero`,
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: {
+            status: 'failed',
+            message: `Order status ${order.status} is not eligible for Xero sync.`,
+          },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'skipped', message: 'No order state was updated.' },
+        },
+      });
     }
 
     // Get customer details — scoped by organizationId for multi-tenant safety
@@ -589,23 +640,36 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       );
 
     if (!customer) {
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: 'Customer not found',
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: { status: 'failed', message: 'Customer not found.' },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'skipped', message: 'No order state was updated.' },
+        },
+      });
     }
 
     if (!customer.name?.trim()) {
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: 'Customer name is required before syncing to Xero',
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: {
+            status: 'failed',
+            message: 'Customer name is required before syncing to Xero.',
+          },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'skipped', message: 'No order state was updated.' },
+        },
+      });
     }
 
     if (!customer.xeroContactId?.trim()) {
@@ -619,13 +683,21 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
         })
         .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error,
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: {
+            status: 'failed',
+            message: 'Customer is missing a trusted Xero contact mapping.',
+          },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'completed', message: 'Order sync error state was saved.' },
+        },
+      });
     }
 
     // Get line items — scoped by organizationId for multi-tenant safety
@@ -647,13 +719,18 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
       );
 
     if (items.length === 0) {
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: 'Order has no line items',
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: { status: 'failed', message: 'Order has no line items.' },
+          sync: { status: 'skipped', message: 'External Xero sync did not run.' },
+          persist: { status: 'skipped', message: 'No order state was updated.' },
+        },
+      });
     }
 
     // Get org Xero config (settings or defaults)
@@ -699,8 +776,7 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
           })
           .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
-        return {
-          orderId,
+        return buildResult({
           success: true,
           status: 'synced',
           xeroInvoiceId: existingInvoice.invoiceId,
@@ -708,7 +784,16 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
             existingInvoice.invoiceUrl ?? buildXeroInvoiceUrl(existingInvoice.invoiceId),
           syncedAt: new Date().toISOString(),
           integrationAvailable: readiness.available,
-        };
+          stages: {
+            readiness: { status: 'completed', message: 'Xero integration is available.' },
+            validation: { status: 'completed', message: 'Order is eligible for sync.' },
+            sync: {
+              status: 'completed',
+              message: 'Existing Xero invoice was matched by reference.',
+            },
+            persist: { status: 'completed', message: 'Order sync state was saved.' },
+          },
+        });
       }
 
       // Build Xero payload
@@ -741,15 +826,20 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
         })
         .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
-      return {
-        orderId,
+      return buildResult({
         success: true,
         status: 'synced',
         xeroInvoiceId: invoiceId,
         xeroInvoiceUrl: invoiceUrl,
         syncedAt: new Date().toISOString(),
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: { status: 'completed', message: 'Order is eligible for sync.' },
+          sync: { status: 'completed', message: 'Invoice synced to Xero.' },
+          persist: { status: 'completed', message: 'Order sync state was saved.' },
+        },
+      });
     } catch (error) {
       const errorMessage = getXeroErrorMessage(error);
 
@@ -763,13 +853,18 @@ export const syncInvoiceToXero = createServerFn({ method: 'POST' })
         })
         .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
-      return {
-        orderId,
+      return buildResult({
         success: false,
         status: 'error',
         error: errorMessage,
         integrationAvailable: readiness.available,
-      };
+        stages: {
+          readiness: { status: 'completed', message: 'Xero integration is available.' },
+          validation: { status: 'completed', message: 'Order is eligible for sync.' },
+          sync: { status: 'failed', message: errorMessage },
+          persist: { status: 'completed', message: 'Order sync error state was saved.' },
+        },
+      });
     }
   });
 
@@ -1139,7 +1234,7 @@ function extractPaymentIdFromWebhookEvent(
  * Get the Xero sync status for an invoice.
  */
 export const getInvoiceXeroStatus = createServerFn({ method: 'GET' })
-  .inputValidator(getInvoiceXeroStatusSchema)
+  .inputValidator(normalizeObjectInput(getInvoiceXeroStatusSchema))
   .handler(async ({ data }): Promise<InvoiceXeroStatus> => {
     const ctx = await withAuth();
     const readiness = await getXeroSyncReadiness(ctx.organizationId);

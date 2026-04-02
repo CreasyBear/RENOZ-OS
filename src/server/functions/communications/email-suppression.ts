@@ -12,6 +12,7 @@ import { and, eq, ilike, isNull, sql, inArray, desc, asc, gte, count } from "dri
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from "@/lib/db/pagination";
 import { containsPattern } from "@/lib/db/utils";
 import { db } from "@/lib/db";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { emailSuppression } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -155,7 +156,7 @@ export const getSuppressionListCursor = createServerFn({ method: "GET" })
  * Returns suppression details if found.
  */
 export const isEmailSuppressed = createServerFn({ method: "GET" })
-  .inputValidator(checkSuppressionSchema)
+  .inputValidator(normalizeObjectInput(checkSuppressionSchema))
   .handler(async ({ data }): Promise<CheckSuppressionResult> => {
     const ctx = await withAuth();
 

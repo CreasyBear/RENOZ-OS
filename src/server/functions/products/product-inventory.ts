@@ -7,9 +7,10 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, asc, sql, isNull, lt, gte, or, inArray, ne, ilike, sum } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, isNull, lt, gte, or, ne, ilike, sum } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   products,
   inventory,
@@ -94,11 +95,13 @@ interface LowStockAlert {
  */
 export const listLocations = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      isActive: z.boolean().optional(),
-      page: z.number().int().min(1).default(1),
-      limit: z.number().int().min(1).max(100).default(50),
-    })
+    normalizeObjectInput(
+      z.object({
+        isActive: z.boolean().optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -137,7 +140,7 @@ export const listLocations = createServerFn({ method: 'GET' })
  * Get a single location by ID.
  */
 export const getLocation = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -452,13 +455,15 @@ export const getProductInventory = createServerFn({ method: 'POST' })
  */
 export const getLocationInventory = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      locationId: z.string().uuid(),
-      page: z.number().int().min(1).default(1),
-      limit: z.number().int().min(1).max(100).default(50),
-      status: z.enum(inventoryStatusValues).optional(),
-      search: z.string().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        locationId: z.string().uuid(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+        status: z.enum(inventoryStatusValues).optional(),
+        search: z.string().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -537,6 +542,7 @@ export const recordMovement = createServerFn({ method: 'POST' })
           quantity: data.quantity,
           unitCost: data.unitCost ?? 0,
           locationId: data.locationId,
+          receiptReason: 'initial_stock',
           referenceId: data.referenceId,
           referenceType: data.referenceType,
           notes: data.notes,
@@ -610,6 +616,7 @@ export const receiveStock = createServerFn({ method: 'POST' })
         locationId: data.locationId,
         quantity: data.quantity,
         unitCost: data.unitCost ?? 0,
+        receiptReason: 'initial_stock',
         referenceId: data.referenceId,
         referenceType: data.referenceType,
         notes: data.notes,
@@ -861,13 +868,15 @@ export const transferStock = createServerFn({ method: 'POST' })
  */
 export const getProductMovements = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      page: z.number().int().min(1).default(1),
-      limit: z.number().int().min(1).max(100).default(20),
-      movementType: z.enum(movementTypeValues).optional(),
-      locationId: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(20),
+        movementType: z.enum(movementTypeValues).optional(),
+        locationId: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -934,12 +943,14 @@ export const getProductMovements = createServerFn({ method: 'GET' })
  */
 export const getAggregatedProductMovements = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      page: z.number().int().min(1).default(1),
-      limit: z.number().int().min(1).max(100).default(20),
-      movementType: z.enum(movementTypeValues).optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        productId: z.string().uuid(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(20),
+        movementType: z.enum(movementTypeValues).optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -1035,12 +1046,14 @@ export const getAggregatedProductMovements = createServerFn({ method: 'GET' })
  */
 export const getLocationMovements = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      locationId: z.string().uuid(),
-      page: z.number().int().min(1).default(1),
-      limit: z.number().int().min(1).max(100).default(20),
-      movementType: z.enum(movementTypeValues).optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        locationId: z.string().uuid(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(20),
+        movementType: z.enum(movementTypeValues).optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
@@ -1106,11 +1119,13 @@ export const getLocationMovements = createServerFn({ method: 'GET' })
  */
 export const getLowStockAlerts = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      reorderPoint: z.number().int().min(0).default(10),
-      criticalThreshold: z.number().int().min(0).default(5),
-      locationId: z.string().uuid().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        reorderPoint: z.number().int().min(0).default(10),
+        criticalThreshold: z.number().int().min(0).default(5),
+        locationId: z.string().uuid().optional(),
+      })
+    )
   )
   .handler(async ({ data }): Promise<LowStockAlert[]> => {
     const ctx = await withAuth();
@@ -1226,247 +1241,13 @@ export const getInventoryStats = createServerFn({ method: 'POST' })
     };
   });
 
-// ============================================================================
-// BULK OPERATIONS
-// ============================================================================
-
-/**
- * Bulk receive stock for multiple products.
- * Optimized to avoid N+1 queries by batching operations.
- */
-export const bulkReceiveStock = createServerFn({ method: 'POST' })
-  .inputValidator(
-    z.object({
-      locationId: z.string().uuid(),
-      items: z.array(
-        z.object({
-          productId: z.string().uuid(),
-          quantity: z.number().positive(),
-          unitCost: z.number().min(0).optional(),
-        })
-      ),
-      referenceType: z.string().optional(),
-      referenceId: z.string().uuid().optional(),
-      notes: z.string().optional(),
-    })
-  )
-  .handler(async ({ data }) => {
-    const ctx = await withAuth();
-
-    return await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
-      );
-      const productIds = data.items.map((item) => item.productId);
-      const results: Array<{
-        productId: string;
-        success: boolean;
-        inventory?: Inventory;
-        movement?: InventoryMovement;
-        error?: string;
-      }> = [];
-
-      // Step 1: Validate all products exist (batch query)
-      const existingProducts = await tx
-        .select({ id: products.id })
-        .from(products)
-        .where(
-          and(inArray(products.id, productIds), eq(products.organizationId, ctx.organizationId))
-        );
-
-      const existingProductIds = new Set(existingProducts.map((p) => p.id));
-
-      // Step 2: Get existing inventory records (batch query)
-      const existingInventory = await tx
-        .select()
-        .from(inventory)
-        .where(
-          and(
-            inArray(inventory.productId, productIds),
-            eq(inventory.locationId, data.locationId),
-            eq(inventory.organizationId, ctx.organizationId)
-          )
-        );
-
-      const inventoryMap = new Map(existingInventory.map((inv) => [inv.productId, inv]));
-
-      // Step 3: Process each item and prepare batch operations
-      const inventoryToCreate: Array<typeof inventory.$inferInsert> = [];
-      const inventoryToUpdate: Array<{
-        id: string;
-        quantityOnHand: number;
-        unitCost: number;
-        totalValue: number;
-      }> = [];
-      const movementsToCreate: Array<typeof inventoryMovements.$inferInsert> = [];
-
-      for (const item of data.items) {
-        // Validate product exists
-        if (!existingProductIds.has(item.productId)) {
-          results.push({
-            productId: item.productId,
-            success: false,
-            error: 'Product not found',
-          });
-          continue;
-        }
-
-        const existingInv = inventoryMap.get(item.productId);
-        // Drizzle's numericCasted automatically converts to number, no Number() needed
-        const previousQuantity = existingInv?.quantityOnHand ?? 0;
-        const newQuantity = previousQuantity + item.quantity;
-        const unitCost = item.unitCost ?? existingInv?.unitCost ?? 0;
-
-        if (!existingInv) {
-          // Queue for creation
-          inventoryToCreate.push({
-            organizationId: ctx.organizationId,
-            productId: item.productId,
-            locationId: data.locationId,
-            status: 'available',
-            quantityOnHand: item.quantity,
-            quantityAllocated: 0,
-            unitCost: unitCost,
-            totalValue: unitCost * item.quantity,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          });
-        } else {
-          // Queue for update
-          // Note: existingInv.quantityAllocated available for future allocation tracking
-          inventoryToUpdate.push({
-            id: existingInv.id,
-            quantityOnHand: newQuantity,
-            unitCost: unitCost,
-            totalValue: unitCost * newQuantity,
-          });
-        }
-      }
-
-      // Step 4: Execute batch inserts for new inventory records
-      const createdInventory =
-        inventoryToCreate.length > 0
-          ? await tx.insert(inventory).values(inventoryToCreate).returning()
-          : [];
-
-      // Update inventory map with newly created records
-      createdInventory.forEach((inv) => {
-        inventoryMap.set(inv.productId, inv);
-      });
-
-      // Step 5: Execute batch updates for existing inventory records
-      // PERFORMANCE: Use CASE statements for bulk update instead of N sequential queries
-      if (inventoryToUpdate.length > 0) {
-        const updateIds = inventoryToUpdate.map((u) => u.id);
-        const caseStatements = {
-          quantityOnHand: sql`CASE ${inventory.id}
-            ${sql.join(
-              inventoryToUpdate.map((u) => sql`WHEN ${u.id} THEN ${u.quantityOnHand}`),
-              sql` `
-            )}
-            ELSE ${inventory.quantityOnHand}
-          END`,
-          unitCost: sql`CASE ${inventory.id}
-            ${sql.join(
-              inventoryToUpdate.map((u) => sql`WHEN ${u.id} THEN ${u.unitCost}`),
-              sql` `
-            )}
-            ELSE ${inventory.unitCost}
-          END`,
-          totalValue: sql`CASE ${inventory.id}
-            ${sql.join(
-              inventoryToUpdate.map((u) => sql`WHEN ${u.id} THEN ${u.totalValue}`),
-              sql` `
-            )}
-            ELSE ${inventory.totalValue}
-          END`,
-        };
-
-        await tx
-          .update(inventory)
-          .set({
-            quantityOnHand: caseStatements.quantityOnHand,
-            unitCost: caseStatements.unitCost,
-            totalValue: caseStatements.totalValue,
-            updatedBy: ctx.user.id,
-            updatedAt: new Date(),
-          })
-          .where(inArray(inventory.id, updateIds));
-      }
-
-      // Step 6: Prepare movement records for all successful items
-      for (const item of data.items) {
-        if (!existingProductIds.has(item.productId)) {
-          continue; // Skip invalid products
-        }
-
-        const inv = inventoryMap.get(item.productId);
-        if (!inv) continue;
-
-        // Drizzle's numericCasted automatically converts to number, no Number() needed
-        const previousQuantity =
-          existingInventory.find((i) => i.productId === item.productId)?.quantityOnHand ?? 0;
-        const newQuantity = previousQuantity + item.quantity;
-        const unitCost = item.unitCost ?? inv.unitCost ?? 0;
-
-        movementsToCreate.push({
-          organizationId: ctx.organizationId,
-          inventoryId: inv.id,
-          productId: item.productId,
-          locationId: data.locationId,
-          movementType: 'receive',
-          quantity: item.quantity,
-          previousQuantity: previousQuantity,
-          newQuantity: newQuantity,
-          unitCost: unitCost,
-          totalCost: unitCost * item.quantity,
-          referenceType: data.referenceType,
-          referenceId: data.referenceId,
-          notes: data.notes,
-          createdBy: ctx.user.id,
-        });
-      }
-
-      // Step 7: Batch insert movement records
-      const createdMovements =
-        movementsToCreate.length > 0
-          ? await tx.insert(inventoryMovements).values(movementsToCreate).returning()
-          : [];
-
-      // Step 8: Build results array
-      const movementsByProductId = new Map(createdMovements.map((m) => [m.productId, m]));
-
-      for (const item of data.items) {
-        if (!existingProductIds.has(item.productId)) {
-          continue; // Already added error result
-        }
-
-        const inv = inventoryMap.get(item.productId);
-        const movement = movementsByProductId.get(item.productId);
-
-        results.push({
-          productId: item.productId,
-          success: true,
-          inventory: inv as Inventory,
-          movement: movement as InventoryMovement,
-        });
-      }
-
-      return {
-        success: true,
-        itemCount: results.length,
-        successCount: results.filter((r) => r.success).length,
-        failureCount: results.filter((r) => !r.success).length,
-        results,
-      };
-    });
-  });
-
 /**
  * Get default location for the organization.
  */
+export const getDefaultLocationSchema = normalizeObjectInput(z.object({}));
+
 export const getDefaultLocation = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(getDefaultLocationSchema)
   .handler(async () => {
     const ctx = await withAuth();
 

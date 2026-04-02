@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -70,14 +71,16 @@ export type UpdateWarrantyPolicyInput = z.infer<typeof updateWarrantyPolicySchem
 // GET WARRANTY POLICIES (LIST)
 // ============================================================================
 
-export const getWarrantyPoliciesSchema = z.object({
+export const getWarrantyPoliciesBaseSchema = z.object({
   type: warrantyPolicyTypeSchema.optional(),
   isActive: z.boolean().optional(),
   includeDefaults: z.boolean().optional().default(true),
 });
 
+export const getWarrantyPoliciesSchema = normalizeObjectInput(getWarrantyPoliciesBaseSchema);
+
 // Use z.input to allow optional parameters, z.infer gives output type with defaults applied
-export type GetWarrantyPoliciesInput = z.input<typeof getWarrantyPoliciesSchema>;
+export type GetWarrantyPoliciesInput = z.input<typeof getWarrantyPoliciesBaseSchema>;
 
 // ============================================================================
 // GET WARRANTY POLICY BY ID

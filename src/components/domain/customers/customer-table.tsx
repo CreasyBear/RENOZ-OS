@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createCustomerColumns, type CustomerTableData } from "./customer-columns";
+import type { SortDirection } from "./customer-sorting";
 
 // Re-export CustomerTableData for backwards compatibility
 export type { CustomerTableData } from "./customer-columns";
@@ -49,7 +50,7 @@ interface CustomerTableProps {
   selectedIds: Set<string>;
   onSelectAll: (checked: boolean) => void;
   onSelectOne: (id: string, checked: boolean) => void;
-  onSort: (column: string) => void;
+  onSort: (column: string, direction?: SortDirection) => void;
   sortColumn?: string;
   sortDirection?: "asc" | "desc";
   onViewCustomer?: (id: string) => void;
@@ -312,7 +313,7 @@ export const CustomerTable = memo(function CustomerTable({
     (updater: SortingState | ((prev: SortingState) => SortingState)) => {
       const newSorting = typeof updater === "function" ? updater(sorting) : updater;
       if (newSorting.length > 0) {
-        onSort(newSorting[0].id);
+        onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
       }
     },
     [sorting, onSort]

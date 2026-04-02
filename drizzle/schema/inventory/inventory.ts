@@ -90,6 +90,8 @@ export interface MovementMetadata {
   shipmentId?: string;
   /** RMA ID for return movements */
   rmaId?: string;
+  /** Manual receive reason (canonical inventory receive path) */
+  receiptReason?: string;
   /** Total COGS for this movement */
   cogsTotal?: number;
   /** COGS per unit for this movement */

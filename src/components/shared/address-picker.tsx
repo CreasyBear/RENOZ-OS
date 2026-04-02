@@ -159,7 +159,11 @@ export function AddressPicker({
                       />
                       <div className="flex flex-1 flex-col gap-0.5">
                         <div className="flex items-center gap-2">
-                          {addr.type && (
+                          {addr.id === "order-shipping" ? (
+                            <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700">
+                              Order default
+                            </span>
+                          ) : addr.type ? (
                             <span
                               className={cn(
                                 "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
@@ -170,7 +174,7 @@ export function AddressPicker({
                             >
                               {addr.type}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                         <span className="text-sm font-medium">
                           {addr.street1}

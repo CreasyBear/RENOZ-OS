@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/route-guards';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
+import { USER_SORT_FIELDS } from '@/lib/schemas/auth';
 
 // Search params for filtering
 export const userSearchSchema = z.object({
@@ -26,7 +27,7 @@ export const userSearchSchema = z.object({
     .enum(['owner', 'admin', 'manager', 'sales', 'operations', 'support', 'viewer'])
     .optional(),
   status: z.enum(['active', 'invited', 'suspended', 'deactivated']).optional(),
-  sortBy: z.string().optional(),
+  sortBy: z.enum(USER_SORT_FIELDS).optional(),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 

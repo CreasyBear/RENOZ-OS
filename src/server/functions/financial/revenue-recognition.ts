@@ -20,6 +20,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { eq, and, isNull, gte, lte, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   revenueRecognition,
   deferredRevenue,
@@ -622,7 +623,7 @@ export const retryRecognitionSync = createServerFn({ method: 'POST' })
  * Get all revenue recognition records for an order.
  */
 export const getOrderRecognitions = createServerFn({ method: 'GET' })
-  .inputValidator(getOrderRecognitionsSchema)
+  .inputValidator(normalizeObjectInput(getOrderRecognitionsSchema))
   .handler(async ({ data }): Promise<RevenueRecognitionRecord[]> => {
     const ctx = await withAuth();
 
@@ -672,7 +673,7 @@ export const getOrderRecognitions = createServerFn({ method: 'GET' })
  * Get deferred revenue records for an order.
  */
 export const getOrderDeferredRevenue = createServerFn({ method: 'GET' })
-  .inputValidator(getOrderDeferredRevenueSchema)
+  .inputValidator(normalizeObjectInput(getOrderDeferredRevenueSchema))
   .handler(async ({ data }): Promise<DeferredRevenueRecord[]> => {
     const ctx = await withAuth();
 
@@ -722,7 +723,7 @@ export const getOrderDeferredRevenue = createServerFn({ method: 'GET' })
  * Useful for finding failed syncs and manual overrides.
  */
 export const listRecognitionsByState = createServerFn({ method: 'GET' })
-  .inputValidator(listRecognitionsByStateSchema)
+  .inputValidator(normalizeObjectInput(listRecognitionsByStateSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const { state, dateFrom, dateTo, page, pageSize } = data;
@@ -798,7 +799,7 @@ export const listRecognitionsByState = createServerFn({ method: 'GET' })
  * Get recognition summary by period for reports.
  */
 export const getRecognitionSummary = createServerFn({ method: 'GET' })
-  .inputValidator(getRecognitionSummarySchema)
+  .inputValidator(normalizeObjectInput(getRecognitionSummarySchema))
   .handler(async ({ data }): Promise<RecognitionSummary[]> => {
     const ctx = await withAuth();
     const { dateFrom, dateTo } = data;
@@ -847,7 +848,7 @@ export const getRecognitionSummary = createServerFn({ method: 'GET' })
  * Get deferred revenue balance summary.
  */
 export const getDeferredRevenueBalance = createServerFn({ method: 'GET' })
-  .inputValidator(getDeferredRevenueBalanceSchema)
+  .inputValidator(normalizeObjectInput(getDeferredRevenueBalanceSchema))
   .handler(async ({ data: _data }): Promise<DeferredRevenueBalance> => {
     // Note: asOfDate filtering can be added later for historical snapshots
     const ctx = await withAuth();

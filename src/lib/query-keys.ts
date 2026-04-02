@@ -26,8 +26,24 @@
  */
 
 // Import filter types from schemas (single source of truth per SCHEMA-TRACE.md)
+import type { CustomerSortField } from '@/components/domain/customers/customer-sorting';
+import type { OrderSortField } from '@/components/domain/orders/order-sorting';
 import type { AuditLogsFilters } from '@/lib/schemas/users';
 import type { ReportType } from '@/lib/schemas/reports/report-favorites';
+import type { InvoiceSortField } from '@/lib/schemas/invoices/invoice-filters';
+import type { OpportunitySortField } from '@/lib/schemas/pipeline/pipeline';
+import type { ListArticlesInput } from '@/lib/schemas/support/knowledge-base';
+import type { ListFeedbackInput } from '@/lib/schemas/support/csat-responses';
+import type { ListIssueTemplatesInput } from '@/lib/schemas/support/issue-templates';
+import type { ListRmasInput } from '@/lib/schemas/support/rma';
+import type { SupplierSortField } from '@/lib/schemas/suppliers';
+import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
+
+type KbArticleSortField = NonNullable<ListArticlesInput['sortBy']>;
+type CsatSortField = NonNullable<ListFeedbackInput['sortBy']>;
+type IssueTemplateSortField = NonNullable<ListIssueTemplatesInput['sortBy']>;
+type RmaSortField = NonNullable<ListRmasInput['sortBy']>;
+type WarrantySortField = NonNullable<WarrantyListFilters['sortBy']>;
 
 // ============================================================================
 // FILTER TYPES
@@ -40,7 +56,7 @@ export interface CustomerFilters {
   size?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: CustomerSortField
   sortOrder?: 'asc' | 'desc'
   cursor?: string
 }
@@ -51,7 +67,7 @@ export interface OrderFilters {
   customerId?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: OrderSortField
   sortOrder?: 'asc' | 'desc'
   cursor?: string
 }
@@ -64,7 +80,7 @@ export interface InvoiceFilters {
   toDate?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: InvoiceSortField
   sortOrder?: 'asc' | 'desc'
   cursor?: string
 }
@@ -77,7 +93,7 @@ export interface OpportunityFilters {
   customerId?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: OpportunitySortField
   sortOrder?: 'asc' | 'desc'
   cursor?: string
 }
@@ -119,7 +135,7 @@ export interface RmaFilters {
   search?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: RmaSortField
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -183,7 +199,7 @@ export interface KbArticleFilters {
   tags?: string[]
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: KbArticleSortField
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -197,7 +213,7 @@ export interface CsatFilters {
   endDate?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: CsatSortField
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -207,7 +223,7 @@ export interface IssueTemplateFilters {
   search?: string
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: IssueTemplateSortField
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -229,7 +245,7 @@ export interface SupplierFilters {
   ratingMax?: number
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: SupplierSortField
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -246,7 +262,7 @@ export interface WarrantyFilters {
   expiresWithin?: number
   page?: number
   pageSize?: number
-  sortBy?: string
+  sortBy?: WarrantySortField
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -461,6 +477,9 @@ export const queryKeys = {
     lists: () => [...queryKeys.customers.all, 'list'] as const,
     list: (filters?: CustomerFilters) =>
       [...queryKeys.customers.lists(), filters ?? {}] as const,
+    infiniteLists: () => [...queryKeys.customers.all, 'infinite-list'] as const,
+    infiniteList: (filters?: CustomerFilters) =>
+      [...queryKeys.customers.infiniteLists(), filters ?? {}] as const,
     details: () => [...queryKeys.customers.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.customers.details(), id] as const,
     tags: {
@@ -546,6 +565,9 @@ export const queryKeys = {
     lists: () => [...queryKeys.orders.all, 'list'] as const,
     list: (filters?: OrderFilters) =>
       [...queryKeys.orders.lists(), filters ?? {}] as const,
+    infiniteLists: () => [...queryKeys.orders.all, 'infinite-list'] as const,
+    infiniteList: (filters?: OrderFilters) =>
+      [...queryKeys.orders.infiniteLists(), filters ?? {}] as const,
     details: () => [...queryKeys.orders.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.orders.details(), id] as const,
     byCustomer: (customerId: string) =>
@@ -555,6 +577,8 @@ export const queryKeys = {
       [...queryKeys.orders.lists(), { status }] as const,
     fulfillment: (status?: string) =>
       [...queryKeys.orders.all, 'fulfillment', status ?? ''] as const,
+    fulfillmentSummary: () =>
+      [...queryKeys.orders.all, 'fulfillment', 'summary'] as const,
     shipments: (filters?: Record<string, unknown>) =>
       [...queryKeys.orders.all, 'shipments', filters ?? {}] as const,
     shipmentDetail: (shipmentId: string) =>
@@ -606,6 +630,9 @@ export const queryKeys = {
     lists: () => [...queryKeys.opportunities.all, 'list'] as const,
     list: (filters?: OpportunityFilters) =>
       [...queryKeys.opportunities.lists(), filters ?? {}] as const,
+    infiniteLists: () => [...queryKeys.opportunities.all, 'infinite-list'] as const,
+    infiniteList: (filters?: OpportunityFilters) =>
+      [...queryKeys.opportunities.infiniteLists(), filters ?? {}] as const,
     details: () => [...queryKeys.opportunities.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.opportunities.details(), id] as const,
     byCustomer: (customerId: string) =>
@@ -1260,6 +1287,8 @@ export const queryKeys = {
       [...queryKeys.warrantyClaims.lists(), { warrantyId }] as const,
     byCustomer: (customerId: string) =>
       [...queryKeys.warrantyClaims.lists(), { customerId }] as const,
+    summary: (warrantyId: string) =>
+      [...queryKeys.warrantyClaims.all, 'summary', warrantyId] as const,
   },
 
   warrantyExtensions: {
@@ -1452,6 +1481,8 @@ export const queryKeys = {
       [...queryKeys.suppliers.purchaseOrders(), 'list', filters ?? {}] as const,
     purchaseOrderStatusCounts: () =>
       [...queryKeys.suppliers.purchaseOrders(), 'statusCounts'] as const,
+    purchaseOrdersReceivingSummary: () =>
+      [...queryKeys.suppliers.purchaseOrders(), 'receivingSummary'] as const,
     purchaseOrderDetail: (id: string) =>
       [...queryKeys.suppliers.purchaseOrders(), 'detail', id] as const,
     purchaseOrderItems: (poId: string) =>

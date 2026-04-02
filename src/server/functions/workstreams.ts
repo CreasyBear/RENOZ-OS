@@ -14,6 +14,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectWorkstreams } from 'drizzle/schema';
 import {
   createWorkstreamSchema,
@@ -32,9 +33,11 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
  */
 export const listWorkstreams = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      projectId: z.string().uuid(),
-    })
+    normalizeObjectInput(
+      z.object({
+        projectId: z.string().uuid(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
@@ -60,7 +63,7 @@ export const listWorkstreams = createServerFn({ method: 'GET' })
  * Get a single workstream by ID
  */
 export const getWorkstream = createServerFn({ method: 'GET' })
-  .inputValidator(workstreamIdSchema)
+  .inputValidator(normalizeObjectInput(workstreamIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 

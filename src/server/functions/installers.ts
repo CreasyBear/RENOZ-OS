@@ -28,6 +28,7 @@ import {
 } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   installerProfiles,
   installerCertifications,
@@ -215,7 +216,7 @@ export const listInstallers = createServerFn({ method: 'GET' })
  * Get single installer with full profile including certifications, skills, territories
  */
 export const getInstaller = createServerFn({ method: 'GET' })
-  .inputValidator(installerIdSchema)
+  .inputValidator(normalizeObjectInput(installerIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
@@ -459,7 +460,7 @@ export const deleteInstallerProfile = createServerFn({ method: 'POST' })
  * Returns all active installers without pagination
  */
 export const listAllActiveInstallers = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}).optional())
+  .inputValidator(normalizeObjectInput(z.object({})))
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
@@ -1039,11 +1040,13 @@ export const deleteBlockout = createServerFn({ method: 'POST' })
  */
 export const getInstallerAvailabilityBatch = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      installerIds: z.array(z.string().uuid()),
-      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    })
+    normalizeObjectInput(
+      z.object({
+        installerIds: z.array(z.string().uuid()),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
@@ -1162,7 +1165,7 @@ export const getInstallerAvailabilityBatch = createServerFn({ method: 'GET' })
  * Check installer availability for a date range
  */
 export const checkAvailability = createServerFn({ method: 'GET' })
-  .inputValidator(checkAvailabilitySchema)
+  .inputValidator(normalizeObjectInput(checkAvailabilitySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
@@ -1264,7 +1267,7 @@ export const checkAvailability = createServerFn({ method: 'GET' })
  * Get installer workload (current assignments)
  */
 export const getInstallerWorkload = createServerFn({ method: 'GET' })
-  .inputValidator(installerIdSchema)
+  .inputValidator(normalizeObjectInput(installerIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
@@ -1328,7 +1331,7 @@ export const getInstallerWorkload = createServerFn({ method: 'GET' })
  * Suggest installers for a job based on territory, skills, and availability
  */
 export const suggestInstallers = createServerFn({ method: 'GET' })
-  .inputValidator(suggestInstallersSchema)
+  .inputValidator(normalizeObjectInput(suggestInstallersSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 

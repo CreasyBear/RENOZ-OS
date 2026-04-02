@@ -22,6 +22,11 @@ import {
   deleteTemplateItem,
 } from '@/server/functions/orders/order-templates';
 
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -190,7 +195,7 @@ export function useCreateOrderFromTemplate() {
     mutationFn: (input: Parameters<typeof createOrderFromTemplate>[0]['data']) =>
       createFn({ data: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.templates() });
     },
   });

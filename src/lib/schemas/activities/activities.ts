@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { filterSchema, idParamSchema } from '../_shared/patterns';
+import { filterSchema, idParamQuerySchema, normalizeObjectInput } from '../_shared/patterns';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 import type { UseInfiniteQueryResult, InfiniteData } from '@tanstack/react-query';
 import type { CursorPaginatedResponse } from '@/lib/db/pagination';
@@ -346,7 +346,9 @@ export type ActivityFilter = z.infer<typeof activityFilterSchema>;
 // ACTIVITY LIST QUERY (Cursor pagination - activities are always large)
 // ============================================================================
 
-export const activityListQuerySchema = cursorPaginationSchema.merge(activityFilterSchema);
+export const activityListQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(activityFilterSchema)
+);
 
 export type ActivityListQuery = z.infer<typeof activityListQuerySchema>;
 
@@ -354,7 +356,7 @@ export type ActivityListQuery = z.infer<typeof activityListQuerySchema>;
 // ACTIVITY PARAMS
 // ============================================================================
 
-export const activityParamsSchema = idParamSchema;
+export const activityParamsSchema = idParamQuerySchema;
 export type ActivityParams = z.infer<typeof activityParamsSchema>;
 
 // ============================================================================
@@ -364,14 +366,16 @@ export type ActivityParams = z.infer<typeof activityParamsSchema>;
 /**
  * Query activities for a specific entity.
  */
-export const entityActivitiesQuerySchema = z.object({
-  entityType: activityEntityTypeSchema,
-  entityId: z.string().uuid(),
-  /** When entityType is 'order', include customer activities for this customer (Quick Log, etc.) */
-  relatedCustomerId: z.string().uuid().optional(),
-  cursor: z.string().optional(),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const entityActivitiesQuerySchema = normalizeObjectInput(
+  z.object({
+    entityType: activityEntityTypeSchema,
+    entityId: z.string().uuid(),
+    /** When entityType is 'order', include customer activities for this customer (Quick Log, etc.) */
+    relatedCustomerId: z.string().uuid().optional(),
+    cursor: z.string().optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+);
 
 export type EntityActivitiesQuery = z.infer<typeof entityActivitiesQuerySchema>;
 
@@ -393,11 +397,13 @@ export interface UseUnifiedActivitiesOptions
 /**
  * Query activities by a specific user.
  */
-export const userActivitiesQuerySchema = z.object({
-  userId: z.string().uuid(),
-  cursor: z.string().optional(),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const userActivitiesQuerySchema = normalizeObjectInput(
+  z.object({
+    userId: z.string().uuid(),
+    cursor: z.string().optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+);
 
 export type UserActivitiesQuery = z.infer<typeof userActivitiesQuerySchema>;
 
@@ -408,15 +414,17 @@ export type UserActivitiesQuery = z.infer<typeof userActivitiesQuerySchema>;
 /**
  * Activity feed query with all filtering options.
  */
-export const activityFeedQuerySchema = cursorPaginationSchema.extend({
-  entityType: activityEntityTypeSchema.optional(),
-  entityId: z.string().uuid().optional(),
-  action: activityActionSchema.optional(),
-  userId: z.string().uuid().optional(),
-  source: activitySourceSchema.optional(), // COMMS-AUTO-002: Filter by source
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-});
+export const activityFeedQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.extend({
+    entityType: activityEntityTypeSchema.optional(),
+    entityId: z.string().uuid().optional(),
+    action: activityActionSchema.optional(),
+    userId: z.string().uuid().optional(),
+    source: activitySourceSchema.optional(), // COMMS-AUTO-002: Filter by source
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+  })
+);
 
 export type ActivityFeedQuery = z.infer<typeof activityFeedQuerySchema>;
 
@@ -427,13 +435,15 @@ export type ActivityFeedQuery = z.infer<typeof activityFeedQuerySchema>;
 /**
  * Schema for activity statistics query.
  */
-export const activityStatsQuerySchema = z.object({
+export const activityStatsQueryBaseSchema = z.object({
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
   groupBy: z
     .enum(['action', 'entityType', 'userId', 'source', 'day', 'hour']) // COMMS-AUTO-002: Added source grouping
     .default('action'),
 });
+
+export const activityStatsQuerySchema = normalizeObjectInput(activityStatsQueryBaseSchema);
 
 export type ActivityStatsQuery = z.infer<typeof activityStatsQuerySchema>;
 

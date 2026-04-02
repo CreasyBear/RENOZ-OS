@@ -15,6 +15,7 @@
 import { z } from "zod";
 import { sql, and, or, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
+import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 
 // ============================================================================
 // TYPES
@@ -57,6 +58,8 @@ export const cursorPaginationSchema = z.object({
 });
 
 export type CursorPaginationParams = z.infer<typeof cursorPaginationSchema>;
+export const cursorPaginationQuerySchema = normalizeObjectInput(cursorPaginationSchema);
+export type CursorPaginationQueryParams = z.infer<typeof cursorPaginationSchema>;
 
 // ============================================================================
 // CURSOR ENCODING/DECODING

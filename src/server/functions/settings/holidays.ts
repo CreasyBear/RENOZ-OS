@@ -16,7 +16,7 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
-import { paginationSchema } from '@/lib/schemas';
+import { idParamQuerySchema, normalizeObjectInput, paginationSchema } from '@/lib/schemas';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
@@ -47,16 +47,20 @@ const updateHolidaySchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-const listHolidaysSchema = paginationSchema.extend({
+const listHolidaysSchema = normalizeObjectInput(
+  paginationSchema.extend({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   includeRecurring: z.boolean().optional().default(true),
-});
+  })
+);
 
-const listHolidaysCursorSchema = cursorPaginationSchema.merge(
+const listHolidaysCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
   z.object({
     year: z.coerce.number().int().min(2000).max(2100).optional(),
     includeRecurring: z.boolean().optional().default(true),
   })
+  )
 );
 
 const bulkCreateHolidaysSchema = z.object({
@@ -204,7 +208,7 @@ export const listHolidaysCursor = createServerFn({ method: 'GET' })
  * Get a single holiday by ID.
  */
 export const getHoliday = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

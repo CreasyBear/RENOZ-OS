@@ -72,7 +72,10 @@ export function isRetryableAuthError(error: unknown): boolean {
     message.includes('jwt') ||
     message.includes('unauthorized') ||
     message.includes('forbidden') ||
-    message.includes('user not active')
+    message.includes('user not active') ||
+    message.includes('auth_user_missing') ||
+    message.includes('auth session missing') ||
+    message.includes('session missing')
   ) {
     return false
   }
@@ -258,6 +261,15 @@ export async function getAuthContext(location?: RouteLocation): Promise<AuthRout
         await supabase.auth.signOut()
         invalidateAuthCache()
         throw toLoginRedirect(location, 'invalid_user')
+      }
+
+      if (
+        message.includes('auth_user_missing') ||
+        message.includes('auth session missing') ||
+        message.includes('session missing')
+      ) {
+        invalidateAuthCache()
+        throw toLoginRedirect(location)
       }
 
       if (

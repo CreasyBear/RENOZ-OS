@@ -6,6 +6,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { fulfillmentImportSchema } from '@/lib/schemas/orders/shipments';
 import {
   createShipmentSchema,
@@ -49,7 +50,7 @@ export const listShipmentsCursor = createServerFn({ method: 'GET' })
   .handler(listShipmentsCursorHandler);
 
 export const getShipment = createServerFn({ method: 'GET' })
-  .inputValidator(shipmentParamsSchema)
+  .inputValidator(normalizeObjectInput(shipmentParamsSchema))
   .handler(getShipmentHandler);
 
 export const createShipment = createServerFn({ method: 'POST' })
@@ -96,7 +97,7 @@ export const addTrackingEvent = createServerFn({ method: 'POST' })
   .handler(addTrackingEventHandler);
 
 export const getOrderShipments = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({ orderId: z.string().uuid() }))
+  .inputValidator(normalizeObjectInput(z.object({ orderId: z.string().uuid() })))
   .handler(getOrderShipmentsHandler);
 
 export const deleteShipment = createServerFn({ method: 'POST' })

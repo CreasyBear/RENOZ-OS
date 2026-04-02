@@ -19,6 +19,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, isNull, gt, ne, desc, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { orders, customers, opportunities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 
@@ -45,9 +46,11 @@ export interface RecentItemsResponse {
 // SCHEMAS
 // ============================================================================
 
-const recentItemsQuerySchema = z.object({
-  limit: z.number().min(1).max(10).default(5),
-});
+const recentItemsQuerySchema = normalizeObjectInput(
+  z.object({
+    limit: z.number().min(1).max(10).default(5),
+  })
+);
 
 // ============================================================================
 // FINANCIAL: OUTSTANDING INVOICES

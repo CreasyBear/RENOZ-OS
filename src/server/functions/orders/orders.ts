@@ -5,6 +5,7 @@ export { generateOrderNumber } from './order-numbering';
 export {
   listOrders,
   getOrderStats,
+  getFulfillmentDashboardSummary,
   listOrdersCursor,
   getOrder,
   getOrderWithCustomer,
@@ -22,6 +23,9 @@ export {
 } from './order-write';
 export {
   validateStatusTransition,
+  getOrderWorkflowOptions,
+  getOrderStatusOptions,
+  changeOrderStatusManaged,
   updateOrderStatus,
   bulkUpdateOrderStatus,
 } from './order-status';

@@ -5,6 +5,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
 import { customers, orderLineItems, orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -17,12 +18,14 @@ import type {
 } from '@/lib/schemas/orders';
 import { generateOrderNumber } from './order-numbering';
 
-const fulfillmentKanbanQuerySchema = z.object({
-  customerId: z.string().uuid().optional(),
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-  search: z.string().optional(),
-});
+export const fulfillmentKanbanQuerySchema = normalizeObjectInput(
+  z.object({
+    customerId: z.string().uuid().optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+    search: z.string().optional(),
+  })
+);
 
 type Order = typeof orders.$inferSelect;
 

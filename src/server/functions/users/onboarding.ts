@@ -10,6 +10,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { userOnboarding } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError } from '@/lib/server/errors';
@@ -81,6 +82,9 @@ export const ONBOARDING_STEPS = {
   ],
 } as const;
 
+export const emptyOnboardingProgressInputSchema = normalizeObjectInput(z.object({}));
+export const emptyOnboardingMutationInputSchema = z.object({}).default({});
+
 // ============================================================================
 // GET ONBOARDING PROGRESS
 // ============================================================================
@@ -89,7 +93,7 @@ export const ONBOARDING_STEPS = {
  * Get the current user's onboarding progress.
  */
 export const getOnboardingProgress = createServerFn({ method: 'GET' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptyOnboardingProgressInputSchema)
   .handler(async () => {
     const ctx = await withAuth();
 
@@ -275,7 +279,7 @@ export const dismissOnboardingStep = createServerFn({ method: 'POST' })
  * Useful for testing or if user wants to redo onboarding.
  */
 export const resetOnboarding = createServerFn({ method: 'POST' })
-  .inputValidator(z.object({}))
+  .inputValidator(emptyOnboardingMutationInputSchema)
   .handler(async () => {
     const ctx = await withAuth();
 

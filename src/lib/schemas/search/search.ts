@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // SEARCH INPUTS
@@ -36,18 +37,22 @@ export const searchEntityTypeValues = [
 
 export const searchEntityTypeSchema = z.enum(searchEntityTypeValues);
 
-export const searchQuerySchema = z.object({
-  query: z.string().min(2, 'Query must be at least 2 characters').max(200),
-  entityTypes: z.array(searchEntityTypeSchema).optional(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const searchQuerySchema = normalizeObjectInput(
+  z.object({
+    query: z.string().min(2, 'Query must be at least 2 characters').max(200),
+    entityTypes: z.array(searchEntityTypeSchema).optional(),
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+);
 
-export const quickSearchSchema = z.object({
-  query: z.string().min(2, 'Query must be at least 2 characters').max(200),
-  entityTypes: z.array(searchEntityTypeSchema).optional(),
-  limit: z.coerce.number().int().min(1).max(20).default(5),
-});
+export const quickSearchSchema = normalizeObjectInput(
+  z.object({
+    query: z.string().min(2, 'Query must be at least 2 characters').max(200),
+    entityTypes: z.array(searchEntityTypeSchema).optional(),
+    limit: z.coerce.number().int().min(1).max(20).default(5),
+  })
+);
 
 export const reindexSearchSchema = z.object({
   entityTypes: z.array(searchEntityTypeSchema).optional(),
@@ -83,9 +88,11 @@ export const searchResponseSchema = z.object({
 // RECENT ITEMS
 // ============================================================================
 
-export const listRecentItemsSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(50).default(20),
-});
+export const listRecentItemsSchema = normalizeObjectInput(
+  z.object({
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  })
+);
 
 export const trackRecentItemSchema = z.object({
   entityType: z.string().max(50),

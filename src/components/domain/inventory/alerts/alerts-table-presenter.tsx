@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 import { createAlertColumns, type AlertTableItem } from "./alert-columns";
 
 export interface AlertsTablePresenterProps {
@@ -30,7 +31,7 @@ export interface AlertsTablePresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** Selected alert IDs */
   selectedIds: Set<string>;
   /** Whether all items are selected */
@@ -116,7 +117,7 @@ export const AlertsTablePresenter = memo(function AlertsTablePresenter({
   ) => {
     const newSorting = typeof updater === "function" ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
     }
   };
 

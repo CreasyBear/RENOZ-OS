@@ -158,9 +158,12 @@ export function useCreateRma() {
 
   return useMutation({
     mutationFn: (data: CreateRmaInput) => createRma({ data }),
-    onSuccess: () => {
-      // Invalidate all RMA lists
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      if (result.orderId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
     },
   });
 }
@@ -188,6 +191,7 @@ export function useUpdateRma() {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       // Invalidate lists
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
     },
   });
 }
@@ -208,6 +212,7 @@ export function useApproveRma() {
       // Invalidate both list and detail caches per STANDARDS.md
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmaDetail(result.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
     },
   });
 }
@@ -223,6 +228,9 @@ export function useRejectRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      if (result.orderId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
     },
   });
 }
@@ -241,6 +249,7 @@ export function useReceiveRma() {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       // Inventory restored; invalidate so lists, details, movements, dashboard refresh
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
     },
   });
 }
@@ -288,6 +297,9 @@ export function useProcessRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      if (result.orderId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
     },
   });
 }
@@ -308,6 +320,9 @@ export function useCancelRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      if (result.orderId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
     },
   });
 }

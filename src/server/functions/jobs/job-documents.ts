@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobAssignments, jobPhotos } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
@@ -203,7 +204,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
 // ============================================================================
 
 export const listJobDocuments = createServerFn({ method: 'GET' })
-  .inputValidator(listJobDocumentsSchema.parse)
+  .inputValidator(normalizeObjectInput(listJobDocumentsSchema))
   .handler(async ({ data }: { data: ListJobDocumentsInput }) => {
     const ctx = await withAuth();
 

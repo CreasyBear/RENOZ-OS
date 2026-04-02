@@ -9,7 +9,9 @@
  */
 
 import type { ReactNode } from 'react';
+import type { SummaryState } from '@/lib/metrics/summary-health';
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 import { warrantyPolicyTypeSchema } from './policies';
 import type { WarrantyClaimListItem } from './claims';
 import type { WarrantyExtensionItem } from './extensions';
@@ -91,27 +93,29 @@ export type UpdateWarrantyInput = z.infer<typeof updateWarrantySchema>;
 // WARRANTY FILTERS
 // ============================================================================
 
-export const warrantyFiltersSchema = z.object({
-  status: warrantyStatusSchema.optional(),
-  statuses: z.array(warrantyStatusSchema).optional(),
-  policyType: warrantyPolicyTypeSchema.optional(),
-  customerId: z.string().uuid().optional(),
-  productId: z.string().uuid().optional(),
-  policyId: z.string().uuid().optional(),
-  expiryFrom: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  expiryTo: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  search: z.string().optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-  sortBy: z.enum(['createdAt', 'expiryDate', 'status']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
+export const warrantyFiltersSchema = normalizeObjectInput(
+  z.object({
+    status: warrantyStatusSchema.optional(),
+    statuses: z.array(warrantyStatusSchema).optional(),
+    policyType: warrantyPolicyTypeSchema.optional(),
+    customerId: z.string().uuid().optional(),
+    productId: z.string().uuid().optional(),
+    policyId: z.string().uuid().optional(),
+    expiryFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    expiryTo: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    search: z.string().optional(),
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
+    sortBy: z.enum(['createdAt', 'expiryDate', 'status']).default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+);
 
 export type WarrantyFilters = z.infer<typeof warrantyFiltersSchema>;
 
@@ -168,26 +172,30 @@ export type WarrantyListResponse = z.infer<typeof warrantyListResponseSchema>;
 // EXPIRING WARRANTIES + OPT-OUT SETTINGS
 // ============================================================================
 
-export const getExpiringWarrantiesSchema = z.object({
-  days: z.number().min(1).max(365).default(30),
-  limit: z.number().min(1).max(100).default(10),
-  sortOrder: z.enum(['asc', 'desc']).default('asc'),
-});
+export const getExpiringWarrantiesSchema = normalizeObjectInput(
+  z.object({
+    days: z.number().min(1).max(365).default(30),
+    limit: z.number().min(1).max(100).default(10),
+    sortOrder: z.enum(['asc', 'desc']).default('asc'),
+  })
+);
 
 export type GetExpiringWarrantiesInput = z.input<typeof getExpiringWarrantiesSchema>;
 
 /**
  * Schema for expiring warranties report with full filtering and pagination.
  */
-export const getExpiringWarrantiesReportSchema = z.object({
-  days: z.number().min(1).max(365).default(30),
-  customerId: z.string().optional(),
-  productId: z.string().optional(),
-  status: z.enum(['active', 'expired', 'all']).default('active'),
-  sortBy: z.enum(['expiry_asc', 'expiry_desc', 'customer', 'product']).default('expiry_asc'),
-  page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
-});
+export const getExpiringWarrantiesReportSchema = normalizeObjectInput(
+  z.object({
+    days: z.number().min(1).max(365).default(30),
+    customerId: z.string().optional(),
+    productId: z.string().optional(),
+    status: z.enum(['active', 'expired', 'all']).default('active'),
+    sortBy: z.enum(['expiry_asc', 'expiry_desc', 'customer', 'product']).default('expiry_asc'),
+    page: z.number().min(1).default(1),
+    limit: z.number().min(1).max(100).default(20),
+  })
+);
 
 export type GetExpiringWarrantiesReportInput = z.input<typeof getExpiringWarrantiesReportSchema>;
 
@@ -390,9 +398,12 @@ export interface WarrantyDetailViewProps {
   headerActionsInLayout?: boolean;
   onDelete?: () => void;
   claims: WarrantyClaimListItem[];
+  claimSummary?: import('./claims').WarrantyClaimSummary;
+  claimSummaryState?: SummaryState;
   extensions: WarrantyExtensionItem[];
   certificateStatus: WarrantyCertificateStatus | null | undefined;
   isClaimsLoading: boolean;
+  isClaimSummaryLoading?: boolean;
   isExtensionsLoading: boolean;
   isExtensionsError: boolean;
   isCertificateLoading: boolean;

@@ -110,7 +110,7 @@ export default function MobileHomePage() {
         <MobileActionButton
           icon={<PackagePlus />}
           label="Receive Inventory"
-          description="Scan and receive incoming goods"
+          description="Scan and receive non-PO inbound stock"
           onClick={() => navigate({ to: "/mobile/receiving" })}
           variant="success"
         />

@@ -10,7 +10,6 @@ import { useMemo, useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
-  getSortedRowModel,
   getPaginationRowModel,
 } from "@tanstack/react-table";
 import { Shield } from "lucide-react";
@@ -20,6 +19,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { createWarrantyColumns } from "./warranty-columns";
 import type { CreateWarrantyColumnsOptions } from '@/lib/schemas/warranty';
 import type { WarrantyListItem } from '@/lib/schemas/warranty/warranties';
+import type { WarrantySortField, SortDirection } from '../warranty-sorting';
 
 // Re-export schema type for external use (per SCHEMA-TRACE.md)
 export type { WarrantyListItem } from '@/lib/schemas/warranty/warranties';
@@ -29,11 +29,14 @@ interface WarrantyListTableProps {
   total: number;
   page: number;
   pageSize: number;
+  sortField: WarrantySortField;
+  sortDirection: SortDirection;
   isLoading?: boolean;
   error?: Error | null;
   onRetry?: () => void;
   onRowClick?: (warranty: WarrantyListItem) => void;
   onPageChange: (page: number) => void;
+  onSortChange: (field: string, direction?: SortDirection) => void;
   className?: string;
   // Selection props
   selectedIds?: Set<string>;
@@ -51,11 +54,14 @@ export function WarrantyListTable({
   total,
   page,
   pageSize,
+  sortField,
+  sortDirection,
   isLoading,
   error,
   onRetry,
   onRowClick,
   onPageChange,
+  onSortChange,
   className,
   // Selection props with defaults
   selectedIds = new Set(),
@@ -112,6 +118,13 @@ export function WarrantyListTable({
     [columnOptions]
   );
 
+  const handleSortChange = useCallback(
+    (field: string, direction: "asc" | "desc") => {
+      onSortChange(field, direction);
+    },
+    [onSortChange]
+  );
+
   // Create table instance for pagination component
    
   const table = useReactTable({
@@ -131,7 +144,6 @@ export function WarrantyListTable({
       }
     },
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     manualPagination: true,
   });
@@ -164,6 +176,9 @@ export function WarrantyListTable({
         data={warranties}
         columns={columns}
         enableSorting
+        manualSorting
+        sorting={{ field: sortField, direction: sortDirection }}
+        onSortChange={handleSortChange}
         onRowClick={onRowClick}
         isLoading={isLoading}
         className="rounded-lg border"

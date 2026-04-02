@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import type { PurchaseOrderTableData } from "@/lib/schemas/purchase-orders";
 import { POTablePresenter } from "./po-table-presenter";
 import { POMobileCards } from "./po-mobile-cards";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 
 export interface POListPresenterProps {
   /** Purchase orders to display */
@@ -45,7 +46,7 @@ export interface POListPresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View PO handler */
   onViewPO: (id: string) => void;
   /** Edit PO handler */

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { createSupplierColumns, type SupplierTableItem } from "./supplier-columns";
+import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 
 export interface SuppliersTablePresenterProps {
   /** Suppliers to display */
@@ -44,7 +45,7 @@ export interface SuppliersTablePresenterProps {
   /** Current sort direction */
   sortDirection: "asc" | "desc";
   /** Sort change handler (server-side) */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** View supplier handler */
   onViewSupplier: (id: string) => void;
   /** Edit supplier handler */
@@ -115,7 +116,7 @@ export const SuppliersTablePresenter = memo(function SuppliersTablePresenter({
   ) => {
     const newSorting = typeof updater === "function" ? updater(sorting) : updater;
     if (newSorting.length > 0) {
-      onSort(newSorting[0].id);
+      onSort(newSorting[0].id, newSorting[0].desc ? "desc" : "asc");
     }
   };
 

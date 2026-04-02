@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // COMMON FILTER SCHEMAS
@@ -19,23 +20,25 @@ export const warrantyDateRangeSchema = z.object({
   endDate: z.string().optional(),
 });
 
-export const warrantyAnalyticsFilterSchema = z.object({
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  warrantyType: z
-    .enum(['battery_performance', 'inverter_manufacturer', 'installation_workmanship', 'all'])
-    .default('all'),
-  claimType: z
-    .enum([
-      'cell_degradation',
-      'bms_fault',
-      'inverter_failure',
-      'installation_defect',
-      'other',
-      'all',
-    ])
-    .default('all'),
-});
+export const warrantyAnalyticsFilterSchema = normalizeObjectInput(
+  z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    warrantyType: z
+      .enum(['battery_performance', 'inverter_manufacturer', 'installation_workmanship', 'all'])
+      .default('all'),
+    claimType: z
+      .enum([
+        'cell_degradation',
+        'bms_fault',
+        'inverter_failure',
+        'installation_defect',
+        'other',
+        'all',
+      ])
+      .default('all'),
+  })
+);
 
 export type WarrantyAnalyticsFilter = z.infer<typeof warrantyAnalyticsFilterSchema>;
 

@@ -5,10 +5,11 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
-import { orderShipments, orders, shipmentItems } from 'drizzle/schema';
+import { addresses, customers, orderShipments, orders, shipmentItems } from 'drizzle/schema';
 import {
   createShipmentSchema,
   shipmentParamsSchema,
+  type ShipmentAddress,
   updateShipmentSchema,
 } from '@/lib/schemas';
 import { normalizeSerial } from '@/lib/serials';
@@ -26,28 +27,10 @@ export async function createShipmentHandler({
 }): Promise<ShipmentWithItems> {
   const ctx = await withAuth();
 
-  const [order] = await db
-    .select()
-    .from(orders)
-    .where(
-      and(
-        eq(orders.id, data.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-        isNull(orders.deletedAt)
-      )
-    )
-    .limit(1);
-
-  if (!order) {
-    throw new NotFoundError('Order not found');
-  }
-
   const normalizedItems = data.items.map((item) => ({
     ...item,
     serialNumbers: item.serialNumbers?.map((serial) => normalizeSerial(serial)) ?? undefined,
   }));
-
-  await validateShipmentItems(ctx.organizationId, data.orderId, normalizedItems);
 
   const shipmentNumber =
     data.shipmentNumber || (await generateShipmentNumber(ctx.organizationId, data.orderId));
@@ -60,6 +43,179 @@ export async function createShipmentHandler({
       sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
     );
 
+    const [order] = await tx
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, data.orderId),
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!order) {
+      throw new NotFoundError('Order not found');
+    }
+
+    await validateShipmentItems(tx, ctx.organizationId, data.orderId, normalizedItems);
+
+    let customerAddress: {
+      name?: string;
+      street1: string;
+      street2?: string;
+      city: string;
+      state?: string | null;
+      postcode: string;
+      country: string;
+      phone?: string;
+    } | undefined;
+
+    if (data.addressSource === 'customer') {
+      if (!order.customerId) {
+        throw new ValidationError('Customer address is unavailable for this order', {
+          customerAddressId: ['This order does not have a customer to source an address from.'],
+        });
+      }
+
+      if (!data.customerAddressId) {
+        throw new ValidationError('Customer address is required', {
+          customerAddressId: ['Select a saved customer address before creating the shipment.'],
+        });
+      }
+
+      const [selectedAddress] = await tx
+        .select({
+          id: addresses.id,
+          street1: addresses.street1,
+          street2: addresses.street2,
+          city: addresses.city,
+          state: addresses.state,
+          postcode: addresses.postcode,
+          country: addresses.country,
+          customerName: customers.name,
+        })
+        .from(addresses)
+        .innerJoin(
+          customers,
+          and(
+            eq(addresses.customerId, customers.id),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
+        )
+        .where(
+          and(
+            eq(addresses.id, data.customerAddressId),
+            eq(addresses.organizationId, ctx.organizationId),
+            eq(addresses.customerId, order.customerId)
+          )
+        )
+        .limit(1);
+
+      if (!selectedAddress) {
+        throw new ValidationError('Selected customer address was not found', {
+          customerAddressId: ['Choose a valid saved customer address for this shipment.'],
+        });
+      }
+
+      customerAddress = {
+        name: selectedAddress.customerName ?? undefined,
+        street1: selectedAddress.street1,
+        street2: selectedAddress.street2 ?? undefined,
+        city: selectedAddress.city,
+        state: selectedAddress.state,
+        postcode: selectedAddress.postcode,
+        country: selectedAddress.country,
+      };
+    }
+
+    const shipmentShippingAddress =
+      data.addressSource === 'custom' && data.shippingAddress
+        ? data.shippingAddress
+        : data.addressSource === 'customer'
+          ? customerAddress
+          : data.shippingAddress
+            ? data.shippingAddress
+            : data.addressSource === 'order' && order.shippingAddress?.street1
+        ? {
+            name: order.shippingAddress.contactName ?? undefined,
+            street1: order.shippingAddress.street1,
+            street2: order.shippingAddress.street2 ?? undefined,
+            city: order.shippingAddress.city,
+            state: order.shippingAddress.state,
+            postcode: order.shippingAddress.postalCode,
+            country: order.shippingAddress.country,
+            phone: order.shippingAddress.contactPhone ?? undefined,
+          }
+            : undefined;
+
+    if (data.addressSource === 'custom' && !shipmentShippingAddress?.street1) {
+      throw new ValidationError('Custom shipment address is required', {
+        shippingAddress: ['Enter the custom shipment address before creating the shipment.'],
+      });
+    }
+
+    if (data.saveToOrderShippingAddress) {
+      if (!shipmentShippingAddress?.street1 || !shipmentShippingAddress.city || !shipmentShippingAddress.postcode) {
+        throw new ValidationError('Shipment address is required to save back to the order', {
+          shippingAddress: ['Select or enter a shipment address before saving it to the order.'],
+        });
+      }
+
+      await tx
+        .update(orders)
+        .set({
+          shippingAddress: {
+            street1: shipmentShippingAddress.street1,
+            street2: shipmentShippingAddress.street2,
+            city: shipmentShippingAddress.city,
+            state: shipmentShippingAddress.state ?? '',
+            postalCode: shipmentShippingAddress.postcode,
+            country: shipmentShippingAddress.country ?? 'AU',
+            contactName: shipmentShippingAddress.name,
+            contactPhone: shipmentShippingAddress.phone,
+          },
+          updatedBy: ctx.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, data.orderId));
+    }
+
+    const shipmentAddressForStorage: ShipmentAddress | undefined = shipmentShippingAddress
+      ? {
+          name:
+            shipmentShippingAddress.name ??
+            customerAddress?.name ??
+            order.shippingAddress?.contactName ??
+            'Delivery Contact',
+          street1: shipmentShippingAddress.street1,
+          street2: shipmentShippingAddress.street2,
+          city: shipmentShippingAddress.city,
+          state: shipmentShippingAddress.state ?? '',
+          postcode: shipmentShippingAddress.postcode,
+          country: shipmentShippingAddress.country ?? 'AU',
+          phone: shipmentShippingAddress.phone,
+        }
+      : undefined;
+
+    const returnAddressForStorage: ShipmentAddress | undefined = data.returnAddress
+      ? {
+          name: data.returnAddress.name,
+          company: data.returnAddress.company,
+          street1: data.returnAddress.street1,
+          street2: data.returnAddress.street2,
+          city: data.returnAddress.city,
+          state: data.returnAddress.state,
+          postcode: data.returnAddress.postcode,
+          country: data.returnAddress.country,
+          phone: data.returnAddress.phone,
+          email: data.returnAddress.email,
+          instructions: data.returnAddress.instructions,
+        }
+      : undefined;
+
     const [shipment] = await tx
       .insert(orderShipments)
       .values({
@@ -71,8 +227,8 @@ export async function createShipmentHandler({
         carrierService: data.carrierService,
         trackingNumber: data.trackingNumber,
         trackingUrl,
-        shippingAddress: data.shippingAddress,
-        returnAddress: data.returnAddress,
+        shippingAddress: shipmentAddressForStorage,
+        returnAddress: returnAddressForStorage,
         weight: data.weight,
         length: data.length,
         width: data.width,

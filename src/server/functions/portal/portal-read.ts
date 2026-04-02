@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { orders, orderLineItems, jobAssignments, quotes, quoteVersions } from 'drizzle/schema';
 import { getActivePortalIdentity } from './_shared';
 import {
@@ -21,7 +22,7 @@ import {
 // ============================================================================
 
 export const listPortalOrders = createServerFn({ method: 'GET' })
-  .inputValidator(portalListSchema)
+  .inputValidator(normalizeObjectInput(portalListSchema))
   .handler(async ({ data }) => {
     const identity = await getActivePortalIdentity();
     const offset = (data.page - 1) * data.pageSize;
@@ -60,7 +61,7 @@ export const listPortalOrders = createServerFn({ method: 'GET' })
 // ============================================================================
 
 export const getPortalOrder = createServerFn({ method: 'GET' })
-  .inputValidator(portalOrderParamsSchema)
+  .inputValidator(normalizeObjectInput(portalOrderParamsSchema))
   .handler(async ({ data }) => {
     const identity = await getActivePortalIdentity();
 
@@ -110,7 +111,7 @@ export const getPortalOrder = createServerFn({ method: 'GET' })
 // ============================================================================
 
 export const listPortalJobs = createServerFn({ method: 'GET' })
-  .inputValidator(portalListSchema)
+  .inputValidator(normalizeObjectInput(portalListSchema))
   .handler(async ({ data }) => {
     const identity = await getActivePortalIdentity();
     const offset = (data.page - 1) * data.pageSize;
@@ -141,7 +142,7 @@ export const listPortalJobs = createServerFn({ method: 'GET' })
 // ============================================================================
 
 export const listPortalQuotes = createServerFn({ method: 'GET' })
-  .inputValidator(portalListSchema)
+  .inputValidator(normalizeObjectInput(portalListSchema))
   .handler(async ({ data }) => {
     const identity = await getActivePortalIdentity();
     const offset = (data.page - 1) * data.pageSize;
@@ -171,7 +172,7 @@ export const listPortalQuotes = createServerFn({ method: 'GET' })
 // ============================================================================
 
 export const listPortalQuoteVersions = createServerFn({ method: 'GET' })
-  .inputValidator(portalQuoteParamsSchema)
+  .inputValidator(normalizeObjectInput(portalQuoteParamsSchema))
   .handler(async ({ data }) => {
     const identity = await getActivePortalIdentity();
 

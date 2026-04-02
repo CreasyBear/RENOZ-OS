@@ -12,6 +12,7 @@ import { eq, and, or, ilike, desc, asc, gte, lte, count, isNull, not, inArray, s
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   createSupplierSchema,
   updateSupplierSchema,
@@ -126,11 +127,20 @@ export const listSuppliers = createServerFn({ method: 'GET' })
       case 'name':
         orderColumn = suppliers.name;
         break;
+      case 'supplierType':
+        orderColumn = suppliers.supplierType;
+        break;
       case 'status':
         orderColumn = suppliers.status;
         break;
       case 'overallRating':
         orderColumn = suppliers.overallRating;
+        break;
+      case 'totalPurchaseOrders':
+        orderColumn = suppliers.totalPurchaseOrders;
+        break;
+      case 'leadTimeDays':
+        orderColumn = suppliers.leadTimeDays;
         break;
       case 'lastOrderDate':
         orderColumn = suppliers.lastOrderDate;
@@ -238,7 +248,7 @@ export const listSuppliersCursor = createServerFn({ method: 'GET' })
  * Get a single supplier with full details
  */
 export const getSupplier = createServerFn({ method: 'GET' })
-  .inputValidator(getSupplierSchema)
+  .inputValidator(normalizeObjectInput(getSupplierSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
@@ -728,11 +738,13 @@ export const updateSupplierRating = createServerFn({ method: 'POST' })
  */
 export const getSupplierPerformance = createServerFn({ method: 'GET' })
   .inputValidator(
-    z.object({
-      supplierId: z.string().uuid(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
-    })
+    normalizeObjectInput(
+      z.object({
+        supplierId: z.string().uuid(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
+    )
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });

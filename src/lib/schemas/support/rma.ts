@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -135,6 +136,7 @@ export type RejectRmaInput = z.infer<typeof rejectRmaSchema>;
 
 export const receiveRmaSchema = z.object({
   rmaId: z.string().uuid(),
+  locationId: z.string().uuid('Receiving location is required').optional(),
   inspectionNotes: rmaInspectionNotesSchema.optional(),
 });
 export type ReceiveRmaInput = z.infer<typeof receiveRmaSchema>;
@@ -158,6 +160,7 @@ export type BulkApproveRmaInput = z.infer<typeof bulkApproveRmaSchema>;
 
 export const bulkReceiveRmaSchema = z.object({
   rmaIds: z.array(z.string().uuid()).min(1, 'At least one RMA is required').max(50, 'Maximum 50 RMAs per batch'),
+  locationId: z.string().uuid('Receiving location is required').optional(),
   inspectionNotes: rmaInspectionNotesSchema.optional(),
 });
 export type BulkReceiveRmaInput = z.infer<typeof bulkReceiveRmaSchema>;
@@ -177,36 +180,40 @@ export const getRmaSchema = z.object({
 });
 export type GetRmaInput = z.infer<typeof getRmaSchema>;
 
-export const listRmasSchema = z.object({
-  // Filters
-  status: rmaStatusSchema.optional(),
-  reason: rmaReasonSchema.optional(),
-  customerId: z.string().uuid().optional(),
-  orderId: z.string().uuid().optional(),
-  issueId: z.string().uuid().optional(),
-
-  // Search
-  search: z.string().max(100).optional(), // Search by RMA number
-
-  // Pagination
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(20),
-
-  // Sorting
-  sortBy: z.enum(['createdAt', 'rmaNumber', 'status']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-});
-export type ListRmasInput = z.infer<typeof listRmasSchema>;
-
-export const listRmasCursorSchema = cursorPaginationSchema.merge(
+export const listRmasSchema = normalizeObjectInput(
   z.object({
+    // Filters
     status: rmaStatusSchema.optional(),
     reason: rmaReasonSchema.optional(),
     customerId: z.string().uuid().optional(),
     orderId: z.string().uuid().optional(),
     issueId: z.string().uuid().optional(),
-    search: z.string().max(100).optional(),
+
+    // Search
+    search: z.string().max(100).optional(), // Search by RMA number
+
+    // Pagination
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(20),
+
+    // Sorting
+    sortBy: z.enum(['createdAt', 'rmaNumber', 'status']).default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
   })
+);
+export type ListRmasInput = z.infer<typeof listRmasSchema>;
+
+export const listRmasCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
+    z.object({
+      status: rmaStatusSchema.optional(),
+      reason: rmaReasonSchema.optional(),
+      customerId: z.string().uuid().optional(),
+      orderId: z.string().uuid().optional(),
+      issueId: z.string().uuid().optional(),
+      search: z.string().max(100).optional(),
+    })
+  )
 );
 export type ListRmasCursorInput = z.infer<typeof listRmasCursorSchema>;
 
@@ -269,6 +276,26 @@ export interface RmaResponse {
   issue?: { id: string; title: string } | null;
   /** Units restored to inventory (receiveRma only) */
   unitsRestored?: number;
+}
+
+export type RmaResolutionStageStatus = 'completed' | 'pending' | 'not_required';
+
+export interface RmaProcessResult extends RmaResponse {
+  stages: {
+    resolutionRecorded: {
+      status: 'completed';
+      message: string;
+    };
+    financialAction: {
+      status: RmaResolutionStageStatus;
+      message?: string;
+    };
+    replacementAction: {
+      status: RmaResolutionStageStatus;
+      message?: string;
+    };
+  };
+  followUpMessage?: string | null;
 }
 
 export interface ListRmasResponse {

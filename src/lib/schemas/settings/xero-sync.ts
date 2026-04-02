@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { idSchema } from '../_shared/patterns';
+import { idSchema, normalizeObjectInput } from '../_shared/patterns';
 
 // ============================================================================
 // XERO SYNC STATUS
@@ -115,14 +115,16 @@ export type GetInvoiceXeroStatusInput = z.infer<typeof getInvoiceXeroStatusSchem
 /**
  * Query for listing invoices by Xero sync status.
  */
-export const listInvoicesBySyncStatusSchema = z.object({
-  status: xeroSyncStatusSchema.optional(),
-  // Only include invoices with errors
-  errorsOnly: z.boolean().default(false),
-  // Pagination
-  page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(20),
-});
+export const listInvoicesBySyncStatusSchema = normalizeObjectInput(
+  z.object({
+    status: xeroSyncStatusSchema.optional(),
+    // Only include invoices with errors
+    errorsOnly: z.boolean().default(false),
+    // Pagination
+    page: z.number().int().positive().default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+  })
+);
 
 export type ListInvoicesBySyncStatusInput = z.infer<typeof listInvoicesBySyncStatusSchema>;
 
@@ -146,6 +148,12 @@ export interface XeroSyncResult {
   nextAction?: XeroNextAction | null;
   nextActionLabel?: string | null;
   retryAfterSeconds?: number | null;
+  stages?: {
+    readiness: WorkflowStageResult;
+    validation: WorkflowStageResult;
+    sync: WorkflowStageResult;
+    persist: WorkflowStageResult;
+  };
 }
 
 export type XeroNextAction =
@@ -159,6 +167,12 @@ export type XeroNextAction =
 
 export type XeroIssueSeverity = 'critical' | 'warning' | 'info';
 export type XeroRetryPolicy = 'allowed' | 'blocked' | 'retry_after';
+export type WorkflowStageStatus = 'completed' | 'failed' | 'skipped';
+
+export interface WorkflowStageResult {
+  status: WorkflowStageStatus;
+  message?: string;
+}
 
 export interface XeroIssueAction {
   action: XeroNextAction | null;

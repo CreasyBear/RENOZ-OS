@@ -10,6 +10,8 @@
  * @see STANDARDS.md - Types imported from schemas
  */
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
+import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getCustomerAlerts,
@@ -53,14 +55,23 @@ export interface UseCustomerOrderSummaryOptions {
  * ```
  */
 export function useCustomerAlerts({ customerId, enabled = true }: UseCustomerAlertsOptions) {
+  const getCustomerAlertsFn = useServerFn(getCustomerAlerts);
+
   return useQuery<CustomerAlertsResponse>({
     queryKey: queryKeys.customers.alerts(customerId),
     queryFn: async () => {
-      const result = await getCustomerAlerts({
-        data: { customerId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getCustomerAlertsFn({
+          data: { customerId }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Customer alerts are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 60 * 1000, // 1 minute - alerts can be slightly stale
@@ -87,14 +98,23 @@ export function useCustomerActiveItems({
   customerId,
   enabled = true,
 }: UseCustomerActiveItemsOptions) {
+  const getCustomerActiveItemsFn = useServerFn(getCustomerActiveItems);
+
   return useQuery({
     queryKey: queryKeys.customers.activeItems(customerId),
     queryFn: async () => {
-      const result = await getCustomerActiveItems({
-        data: { customerId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getCustomerActiveItemsFn({
+          data: { customerId }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Customer activity is temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 30 * 1000, // 30 seconds - active items change frequently
@@ -124,14 +144,23 @@ export function useCustomerOrderSummary({
   customerId,
   enabled = true,
 }: UseCustomerOrderSummaryOptions) {
+  const getCustomerOrderSummaryFn = useServerFn(getCustomerOrderSummary);
+
   return useQuery({
     queryKey: queryKeys.customers.orderSummary(customerId),
     queryFn: async () => {
-      const result = await getCustomerOrderSummary({
-        data: { customerId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getCustomerOrderSummaryFn({
+          data: { customerId }
+        });
+        if (result == null) throw new Error('Query returned no data');
+        return result;
+      } catch (error) {
+        throw normalizeQueryError(
+          error,
+          'Customer order metrics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 60 * 1000, // 1 minute

@@ -22,6 +22,11 @@ import {
   cancelAmendment,
 } from '@/server/functions/orders/order-amendments';
 
+function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -133,7 +138,7 @@ export function useRequestAmendment() {
     mutationFn: (input: RequestAmendmentInput) => requestFn({ data: input }),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
     },
   });
@@ -189,7 +194,7 @@ export function useApplyAmendment() {
     onSuccess: (result, variables) => {
       const amendment = result as Amendment;
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(amendment.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(amendment.orderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(amendment.orderId) });

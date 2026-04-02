@@ -31,7 +31,7 @@ export interface RmaDetailViewProps {
   isPending?: boolean;
   onApprove: (notes?: string) => Promise<void>;
   onReject: (reason: string) => Promise<void>;
-  onReceive: (inspectionNotes?: { condition?: string; notes?: string }) => Promise<void>;
+  onReceive: (inspection?: { condition?: string; notes?: string; locationId?: string }) => Promise<void>;
   onProcess: (resolution: RmaResolution, details?: { refundAmount?: number; notes?: string }) => Promise<void>;
   onCancel: () => Promise<void>;
   isCancelPending?: boolean;

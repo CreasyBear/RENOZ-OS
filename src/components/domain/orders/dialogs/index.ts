@@ -8,3 +8,8 @@ export {
   RecordPaymentDialog,
   type RecordPaymentDialogProps,
 } from './record-payment-dialog';
+
+export {
+  RefundPaymentDialog,
+  type RefundPaymentDialogProps,
+} from './refund-payment-dialog';

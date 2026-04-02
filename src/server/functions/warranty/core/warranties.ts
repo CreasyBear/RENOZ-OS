@@ -21,6 +21,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { getWarrantyUrgencyLevel } from '@/lib/warranty/urgency-utils';
+import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   getExpiringWarrantiesSchema,
   getExpiringWarrantiesReportSchema,
@@ -633,7 +634,7 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
  * Returns WarrantyDetail type from @/lib/schemas/warranty per SCHEMA-TRACE.md
  */
 export const getWarranty = createServerFn({ method: 'GET' })
-  .inputValidator(getWarrantySchema)
+  .inputValidator(normalizeObjectInput(getWarrantySchema))
   .handler(async ({ data }): Promise<WarrantyDetail> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const result = await _getWarrantyCached(data.id, ctx.organizationId);

@@ -45,7 +45,7 @@ interface PODirectoryProps {
   onPageChange: (page: number) => void;
   sortField: PurchaseOrderSortField;
   sortDirection: 'asc' | 'desc';
-  onSortChange: (field: string) => void;
+  onSortChange: (field: string, direction?: 'asc' | 'desc') => void;
   selectedIds: Set<string>;
   onSelect: (id: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;

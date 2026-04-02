@@ -9,11 +9,24 @@
 import { z } from 'zod';
 import { INVOICE_STATUS_VALUES } from '@/lib/constants/invoice-status';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { normalizeObjectInput } from '../_shared/patterns';
 
 /**
  * Invoice status enum schema
  */
 export const invoiceStatusSchema = z.enum(INVOICE_STATUS_VALUES);
+
+export const INVOICE_SORT_FIELDS = [
+  'createdAt',
+  'dueDate',
+  'total',
+  'invoiceNumber',
+  'customer',
+] as const;
+
+export const invoiceSortFieldSchema = z.enum(INVOICE_SORT_FIELDS);
+
+export type InvoiceSortField = z.infer<typeof invoiceSortFieldSchema>;
 
 /**
  * Invoice list filter schema
@@ -28,7 +41,7 @@ export const invoiceFilterSchema = z.object({
   maxAmount: z.number().optional(), // Maximum invoice amount
   page: z.number().int().positive().optional(),
   pageSize: z.number().int().positive().max(100).optional(),
-  sortBy: z.enum(['createdAt', 'dueDate', 'total', 'invoiceNumber', 'customer']).optional(),
+  sortBy: invoiceSortFieldSchema.optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
   cursor: z.string().optional(),
 });
@@ -38,7 +51,7 @@ export type InvoiceFilter = z.infer<typeof invoiceFilterSchema>;
 /**
  * Invoice list query schema (for server functions)
  */
-export const invoiceListQuerySchema = invoiceFilterSchema;
+export const invoiceListQuerySchema = normalizeObjectInput(invoiceFilterSchema);
 
 export type InvoiceListQuery = z.infer<typeof invoiceListQuerySchema>;
 
@@ -46,7 +59,9 @@ export type InvoiceListQuery = z.infer<typeof invoiceListQuerySchema>;
  * Invoice cursor query schema (for cursor-based pagination on large datasets)
  */
 const invoiceCursorFilterSchema = invoiceFilterSchema.omit({ page: true, pageSize: true, cursor: true });
-export const invoiceCursorQuerySchema = cursorPaginationSchema.merge(invoiceCursorFilterSchema);
+export const invoiceCursorQuerySchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(invoiceCursorFilterSchema)
+);
 
 export type InvoiceCursorQuery = z.infer<typeof invoiceCursorQuerySchema>;
 
@@ -65,11 +80,13 @@ export type UpdateInvoiceStatusInput = z.infer<typeof updateInvoiceStatusSchema>
 /**
  * Invoice summary request schema
  */
-export const invoiceSummaryQuerySchema = z.object({
-  statuses: z.array(invoiceStatusSchema).optional(),
-  customerId: z.string().uuid().optional(),
-  fromDate: z.string().optional(),
-  toDate: z.string().optional(),
-});
+export const invoiceSummaryQuerySchema = z
+  .object({
+    statuses: z.array(invoiceStatusSchema).optional(),
+    customerId: z.string().uuid().optional(),
+    fromDate: z.string().optional(),
+    toDate: z.string().optional(),
+  })
+  .default({});
 
 export type InvoiceSummaryQuery = z.infer<typeof invoiceSummaryQuerySchema>;

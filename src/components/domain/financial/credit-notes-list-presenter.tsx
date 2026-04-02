@@ -8,6 +8,7 @@ import { memo, useMemo, useCallback } from 'react';
 import { FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { SortDirection } from '@/components/shared/data-table/server-sorting';
 import {
   DataTableEmpty,
   DataTableSkeleton,
@@ -63,7 +64,7 @@ export interface CreditNotesListPresenterProps {
   /** Current sort direction */
   sortDirection: 'asc' | 'desc';
   /** Sort change handler */
-  onSort: (field: string) => void;
+  onSort: (field: string, direction?: SortDirection) => void;
   /** Issue credit note handler */
   onIssue: (id: string) => void;
   /** Apply credit note handler (opens dialog) */

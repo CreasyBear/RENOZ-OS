@@ -24,7 +24,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { logAuditEvent } from '../_shared/audit-logs-internal';
 import { AUDIT_ACTIONS } from 'drizzle/schema';
-import { paginationSchema } from '@/lib/schemas';
+import { idParamQuerySchema, normalizeObjectInput, paginationSchema } from '@/lib/schemas';
 import { cursorPaginationSchema } from '@/lib/db/pagination';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { uploadFile, deleteFile, createSignedUrl } from '@/lib/storage';
@@ -59,16 +59,19 @@ const createExportSchema = z.object({
   anonymized: z.boolean().optional().default(false),
   includedFields: z.array(z.string()).optional(),
 });
-const listExportsSchema = paginationSchema.extend({
+const listExportsBaseSchema = paginationSchema.extend({
   status: exportStatusSchema.optional(),
   format: exportFormatSchema.optional(),
 });
+const listExportsSchema = normalizeObjectInput(listExportsBaseSchema);
 
-const listExportsCursorSchema = cursorPaginationSchema.merge(
+const listExportsCursorSchema = normalizeObjectInput(
+  cursorPaginationSchema.merge(
   z.object({
     status: exportStatusSchema.optional(),
     format: exportFormatSchema.optional(),
   })
+  )
 );
 // ============================================================================
 // LIST EXPORTS
@@ -187,7 +190,7 @@ export const listDataExportsCursor = createServerFn({ method: 'GET' })
  * Get a single export job by ID.
  */
 export const getDataExport = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const [exportJob] = await db
@@ -553,7 +556,7 @@ export async function cleanupExpiredExports(): Promise<number> {
  * Get a signed download URL for a completed export.
  */
 export const getExportDownloadUrl = createServerFn({ method: 'GET' })
-  .inputValidator(idParamSchema)
+  .inputValidator(idParamQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const [exportJob] = await db

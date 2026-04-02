@@ -5,9 +5,6 @@
  * SUPP-GOODS-RECEIPT story.
  */
 
-export { ReceiptCreationDialog } from './receipt-creation-dialog';
-export type { ReceiptCreationDialogProps } from './receipt-creation-dialog';
-
 export { ReceiptHistory } from './receipt-history';
 export type { ReceiptHistoryProps } from './receipt-history';
 

@@ -299,6 +299,7 @@ export function CustomerDetailContainer({
         alertsLoading={detail.alertsLoading}
         activeItems={detail.activeItems}
         activeItemsLoading={detail.activeItemsLoading}
+        extendedDataWarning={detail.extendedDataWarning}
         headerActions={children ? null : headerActionsEl}
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onScheduleFollowUp}
