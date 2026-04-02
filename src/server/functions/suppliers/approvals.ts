@@ -325,11 +325,26 @@ export const listPendingApprovals = createServerFn({ method: 'GET' })
     }
 
     const whereClause = and(...conditions);
+    const purchaseOrderJoin = eq(purchaseOrderApprovals.purchaseOrderId, purchaseOrders.id);
+    const supplierJoin = and(
+      eq(purchaseOrders.supplierId, suppliers.id),
+      eq(suppliers.organizationId, ctx.organizationId),
+      isNull(suppliers.deletedAt)
+    );
+    const requesterJoin = and(
+      eq(purchaseOrders.createdBy, users.id),
+      eq(users.organizationId, ctx.organizationId),
+      isNull(users.deletedAt)
+    );
 
+    // Count must reuse the same joins as the list query when search touches related tables.
     // Get total count
     const countResult = await db
       .select({ count: count() })
       .from(purchaseOrderApprovals)
+      .innerJoin(purchaseOrders, purchaseOrderJoin)
+      .leftJoin(suppliers, supplierJoin)
+      .leftJoin(users, requesterJoin)
       .where(whereClause);
 
     const totalItems = Number(countResult[0]?.count ?? 0);
@@ -370,23 +385,9 @@ export const listPendingApprovals = createServerFn({ method: 'GET' })
         requesterEmail: users.email,
       })
       .from(purchaseOrderApprovals)
-      .innerJoin(purchaseOrders, eq(purchaseOrderApprovals.purchaseOrderId, purchaseOrders.id))
-      .leftJoin(
-        suppliers,
-        and(
-          eq(purchaseOrders.supplierId, suppliers.id),
-          eq(suppliers.organizationId, ctx.organizationId),
-          isNull(suppliers.deletedAt)
-        )
-      )
-      .leftJoin(
-        users,
-        and(
-          eq(purchaseOrders.createdBy, users.id),
-          eq(users.organizationId, ctx.organizationId),
-          isNull(users.deletedAt)
-        )
-      )
+      .innerJoin(purchaseOrders, purchaseOrderJoin)
+      .leftJoin(suppliers, supplierJoin)
+      .leftJoin(users, requesterJoin)
       .where(whereClause)
       .orderBy(orderFn(orderColumn))
       .limit(pageSize)

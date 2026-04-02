@@ -171,6 +171,14 @@ TanStack Start may pass **`undefined`** into GET server functions when the clien
 
 **TanStack `createServerFn` typing:** Wrapping the validator in `z.preprocess` / `normalizeObjectInput` can change inferred client options (e.g. `getX({ data })` no longer type-checks). Prefer exporting a normalized schema from **`src/lib/schemas/...`** when possible. If a hook relies on `Parameters<typeof getX>[0]['data']`, keep that endpoint’s `inputValidator` on a **plain `z.object`** (skip normalization for that call site) until Start’s types align with preprocess wrappers — see **`getPurchaseOrder`** in supplier purchase-order server functions.
 
+### UI `asChild` composition
+
+`Button asChild` is only safe when the child is a known single DOM-like element path. Do **not** wrap navigation helpers like `DynamicLink` with `Button asChild`, and avoid `Button asChild` with router `Link` unless there is a compelling, verified reason.
+
+**Do this for navigation:** render the link directly and style it with `buttonVariants(...)` (optionally combined with `cn(...)`).
+
+**Reason:** Radix `Slot` / `Children.only` composition can fail at runtime when custom link wrappers or route abstractions do not behave like a single stable element. We already have real regressions from `Button asChild` + `DynamicLink` on customer/Xero flows.
+
 ### Database Conventions
 
 - **Casing**: snake_case for all tables and columns
@@ -229,6 +237,8 @@ for (const shipment of shipments) {
 **organizationId on joins**: When joining related tables (addresses, contacts, images, product attributes), add `eq(joinedTable.organizationId, ctx.organizationId)` to the join condition. Don't rely on the parent row's org scoping alone.
 
 **Soft-delete on joins**: When joining a table that has `softDeleteColumn`, add `isNull(joinedTable.deletedAt)` to the join condition.
+
+**Count query joins**: Any `SELECT count(...)` used for pagination totals must include the same `JOIN`s as the list query whenever the shared `WHERE` references joined columns (e.g. `ilike(customers.name, ...)`). Otherwise PostgreSQL fails with an undefined table/column error, or the count diverges from the list.
 
 **Unbounded queries**: Every list/search query must have a `LIMIT`. Dashboard aggregations over historical data should have a date floor (e.g., last 2 years).
 

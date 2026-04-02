@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { DynamicLink } from '@/components/ui/dynamic-link';
 import { Input } from '@/components/ui/input';
 import {
@@ -220,14 +220,13 @@ export function XeroContactManager({
             )}
             Create Xero Contact
           </Button>
-          <Button variant="ghost" asChild>
-            <DynamicLink
-              to="/financial/xero-sync"
-              search={{ view: 'invoice_sync', issue: 'missing_contact_mapping', customerId }}
-            >
-              View Xero blockers
-            </DynamicLink>
-          </Button>
+          <DynamicLink
+            to="/financial/xero-sync"
+            search={{ view: 'invoice_sync', issue: 'missing_contact_mapping', customerId }}
+            className={buttonVariants({ variant: 'ghost' })}
+          >
+            View Xero blockers
+          </DynamicLink>
         </div>
 
         <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>

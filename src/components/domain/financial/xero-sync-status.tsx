@@ -21,7 +21,7 @@ import {
   AlertTitle,
 } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DynamicLink } from '@/components/ui/dynamic-link';
 import {
@@ -451,29 +451,33 @@ function InvoiceRemediationSheet({
                 <div className="flex flex-wrap gap-2">
                   {actionHref && issue?.primaryAction.label ? (
                     issue.primaryAction.action === 'view_reconciled_invoice' ? (
-                      <Button asChild>
-                        <a href={actionHref} target="_blank" rel="noreferrer">
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          {issue.primaryAction.label}
-                        </a>
-                      </Button>
+                      <a
+                        href={actionHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={buttonVariants({ variant: 'default' })}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        {issue.primaryAction.label}
+                      </a>
                     ) : (
-                      <Button asChild>
-                        <DynamicLink to={actionHref.split('?')[0]} search={parseSearchParams(actionHref)}>
-                          {issue.primaryAction.label}
-                        </DynamicLink>
-                      </Button>
+                      <DynamicLink
+                        to={actionHref.split('?')[0]}
+                        search={parseSearchParams(actionHref)}
+                        className={buttonVariants({ variant: 'default' })}
+                      >
+                        {issue.primaryAction.label}
+                      </DynamicLink>
                     )
                   ) : null}
                   {secondaryActionHref && issue?.secondaryAction?.label ? (
-                    <Button variant="outline" asChild>
-                      <DynamicLink
-                        to={secondaryActionHref.split('?')[0]}
-                        search={parseSearchParams(secondaryActionHref)}
-                      >
-                        {issue.secondaryAction.label}
-                      </DynamicLink>
-                    </Button>
+                    <DynamicLink
+                      to={secondaryActionHref.split('?')[0]}
+                      search={parseSearchParams(secondaryActionHref)}
+                      className={buttonVariants({ variant: 'outline' })}
+                    >
+                      {issue.secondaryAction.label}
+                    </DynamicLink>
                   ) : null}
                   <Button
                     variant="ghost"
@@ -511,12 +515,15 @@ function InvoiceRemediationSheet({
                       <span className="font-mono text-xs">{invoice.xeroInvoiceId ?? 'Not linked'}</span>
                     </div>
                     {invoice.xeroInvoiceUrl ? (
-                      <Button variant="link" className="h-auto p-0" asChild>
-                        <a href={invoice.xeroInvoiceUrl} target="_blank" rel="noreferrer">
-                          View in Xero
-                          <ExternalLink className="ml-1 h-3.5 w-3.5" />
-                        </a>
-                      </Button>
+                      <a
+                        href={invoice.xeroInvoiceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(buttonVariants({ variant: 'link' }), 'h-auto p-0')}
+                      >
+                        View in Xero
+                        <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                      </a>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -547,12 +554,14 @@ function InvoiceRemediationSheet({
                       </span>
                     </div>
                     {invoice.customerId ? (
-                      <Button variant="link" className="h-auto p-0" asChild>
-                        <Link to="/customers/$customerId/edit" params={{ customerId: invoice.customerId }}>
-                          Open customer mapping
-                          <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
+                      <Link
+                        to="/customers/$customerId/edit"
+                        params={{ customerId: invoice.customerId }}
+                        className={cn(buttonVariants({ variant: 'link' }), 'h-auto p-0')}
+                      >
+                        Open customer mapping
+                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                      </Link>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -623,12 +632,14 @@ function PaymentEventSheet({
                     <div className="font-mono text-xs break-all">{event.paymentId ?? event.dedupeKey}</div>
                   </div>
                   {event.orderId ? (
-                    <Button variant="link" className="h-auto p-0" asChild>
-                      <Link to="/orders/$orderId" params={{ orderId: event.orderId }}>
-                        Open linked order
-                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
+                    <Link
+                      to="/orders/$orderId"
+                      params={{ orderId: event.orderId }}
+                      className={cn(buttonVariants({ variant: 'link' }), 'h-auto p-0')}
+                    >
+                      Open linked order
+                      <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                    </Link>
                   ) : null}
                 </CardContent>
               </Card>

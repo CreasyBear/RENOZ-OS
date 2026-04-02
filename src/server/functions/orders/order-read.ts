@@ -249,9 +249,17 @@ export const listOrders = createServerFn({ method: 'GET' })
       conditions.push(lte(orders.orderDate, dateTo.toISOString().slice(0, 10)));
     }
 
+    const customerJoin = and(
+      eq(orders.customerId, customers.id),
+      eq(customers.organizationId, ctx.organizationId),
+      isNull(customers.deletedAt)
+    );
+
+    // Count must use the same customer join as the list query when search references customers.name
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(orders)
+      .leftJoin(customers, customerJoin)
       .where(and(...conditions));
 
     const total = countResult?.count ?? 0;
@@ -291,14 +299,7 @@ export const listOrders = createServerFn({ method: 'GET' })
         itemCount: sql<number>`count(${orderLineItems.id})::int`,
       })
       .from(orders)
-      .leftJoin(
-        customers,
-        and(
-          eq(orders.customerId, customers.id),
-          eq(customers.organizationId, ctx.organizationId),
-          isNull(customers.deletedAt)
-        )
-      )
+      .leftJoin(customers, customerJoin)
       .leftJoin(orderLineItems, eq(orders.id, orderLineItems.orderId))
       .where(and(...conditions))
       .groupBy(orders.id, customers.id, customers.name)

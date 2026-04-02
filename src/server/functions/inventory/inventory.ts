@@ -292,10 +292,14 @@ const _listInventory = cache(
       conditions.push(lte(inventory.totalValue, filters.maxValue));
     }
 
+    const productJoin = eq(inventory.productId, products.id);
+
+    // Keep count and totals on the same join graph as the row query when search touches products.
     // Get total count
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(inventory)
+      .leftJoin(products, productJoin)
       .where(and(...conditions));
 
     const total = countResult?.count ?? 0;
@@ -312,6 +316,7 @@ const _listInventory = cache(
         `,
       })
       .from(inventory)
+      .leftJoin(products, productJoin)
       .where(and(...conditions));
 
     // Build order clause
@@ -335,7 +340,7 @@ const _listInventory = cache(
         location: locations,
       })
       .from(inventory)
-      .leftJoin(products, eq(inventory.productId, products.id))
+      .leftJoin(products, productJoin)
       .leftJoin(locations, eq(inventory.locationId, locations.id))
       .where(and(...conditions))
       .orderBy(orderDir(orderColumn))
