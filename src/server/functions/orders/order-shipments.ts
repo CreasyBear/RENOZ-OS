@@ -14,6 +14,7 @@ import {
   markShippedSchema,
   confirmDeliverySchema,
   updateShipmentStatusSchema,
+  reopenShipmentSchema,
   shipmentParamsSchema,
   shipmentListQuerySchema,
   shipmentListCursorQuerySchema,
@@ -32,6 +33,7 @@ import {
 import {
   importFulfillmentShipmentsHandler,
   markShippedHandler,
+  reopenShipmentHandler,
 } from './order-shipments-finalization';
 import {
   addTrackingEventHandler,
@@ -81,6 +83,10 @@ export const updateShipmentStatus = createServerFn({ method: 'POST' })
 export const confirmDelivery = createServerFn({ method: 'POST' })
   .inputValidator(confirmDeliverySchema)
   .handler(confirmDeliveryHandler);
+
+export const reopenShipment = createServerFn({ method: 'POST' })
+  .inputValidator(reopenShipmentSchema)
+  .handler(reopenShipmentHandler);
 
 const addTrackingEventInputSchema = z.object({
   shipmentId: z.string().uuid(),

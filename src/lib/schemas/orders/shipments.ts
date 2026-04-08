@@ -152,6 +152,14 @@ export const updateShipmentStatusSchema = z.object({
 
 export type UpdateShipmentStatus = z.infer<typeof updateShipmentStatusSchema>;
 
+export const reopenShipmentSchema = z.object({
+  id: z.string().uuid(),
+  idempotencyKey: z.string().min(8).max(128),
+  reason: z.string().max(500).optional(),
+});
+
+export type ReopenShipment = z.infer<typeof reopenShipmentSchema>;
+
 // ============================================================================
 // MARK AS SHIPPED SCHEMA
 // ============================================================================

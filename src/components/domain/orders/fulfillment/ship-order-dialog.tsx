@@ -122,7 +122,7 @@ export interface ShipOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orderId: string;
-  onSuccess?: () => void;
+  onSuccess?: (result?: { shipmentId: string; shipmentStatus: string }) => void;
   /** When all items shipped, called when user clicks "View Shipments" to switch to fulfillment tab */
   onViewShipments?: () => void;
 }
@@ -456,7 +456,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             });
             setStep("form");
             setInitialized(false);
-            onSuccess?.();
+            onSuccess?.({ shipmentId: shipment.id, shipmentStatus: shipment.status });
             return;
           }
         }
@@ -497,7 +497,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             });
             setStep("form");
             setInitialized(false);
-            onSuccess?.();
+            onSuccess?.({ shipmentId: shipment.id, shipmentStatus: shipment.status });
             return;
           }
         }
@@ -526,8 +526,11 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           }
         }
         setWorkflowNotice(null);
+        onSuccess?.({
+          shipmentId: shipment.id,
+          shipmentStatus: values.shipNow ? 'in_transit' : shipment.status,
+        });
         handleOpenChange(false);
-        onSuccess?.();
       } catch (error) {
         // Server ValidationError.errors keys are orderLineItemId (order-shipments.ts).
         // Values are string[]; we use messages[0] per line item.

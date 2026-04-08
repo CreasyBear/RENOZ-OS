@@ -57,6 +57,11 @@ export interface GeneratedDocument {
   fileSize: number | null;
   generatedAt: Date | string;
   generatedById: string | null;
+  regenerationCount?: number;
+  sourceRevision?: number | null;
+  shipmentNumber?: string | null;
+  isStale?: boolean;
+  staleReason?: string;
   createdAt?: Date | string;
 }
 

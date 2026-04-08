@@ -282,9 +282,13 @@ export async function updateShipmentHandler({
     throw new NotFoundError('Shipment not found');
   }
 
-  if (existing.status === 'delivered' || existing.status === 'returned') {
-    throw new ValidationError('Cannot update completed shipment', {
-      status: [`Shipment is ${existing.status}`],
+  if (existing.status !== 'pending') {
+    throw new ValidationError('Only pending shipments can be edited directly', {
+      status: [
+        existing.status === 'delivered' || existing.status === 'returned'
+          ? `Shipment is ${existing.status}`
+          : 'Reopen the shipment before editing physical fulfillment details.',
+      ],
     });
   }
 
@@ -295,11 +299,18 @@ export async function updateShipmentHandler({
       updateData.trackingNumber ?? existing.trackingNumber
     );
 
+  const shippingAddressChanged =
+    updateData.shippingAddress !== undefined &&
+    JSON.stringify(existing.shippingAddress ?? null) !== JSON.stringify(updateData.shippingAddress);
+
   const [shipment] = await db
     .update(orderShipments)
     .set({
       ...updateData,
       trackingUrl,
+      ...(shippingAddressChanged && {
+        operationalDocumentRevision: sql`${orderShipments.operationalDocumentRevision} + 1`,
+      }),
       updatedBy: ctx.user.id,
     })
     .where(eq(orderShipments.id, id))

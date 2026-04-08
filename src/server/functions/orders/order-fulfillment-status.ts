@@ -10,6 +10,7 @@ type OrderTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 interface FulfillmentTotals {
   totalOrdered: number;
+  totalPicked: number;
   totalShipped: number;
   totalDelivered: number;
 }
@@ -33,7 +34,15 @@ function determineOrderFulfillmentStatus(
     return 'partially_shipped';
   }
 
-  return null;
+  if (totals.totalPicked >= totals.totalOrdered) {
+    return 'picked';
+  }
+
+  if (totals.totalPicked > 0) {
+    return 'picking';
+  }
+
+  return 'confirmed';
 }
 
 function toOrderDateString(value: string | Date | null | undefined) {
@@ -76,6 +85,7 @@ export async function recomputeOrderFulfillmentStatus(
   const [totals] = await tx
     .select({
       totalOrdered: sql<number>`coalesce(sum(${orderLineItems.quantity}), 0)::int`,
+      totalPicked: sql<number>`coalesce(sum(${orderLineItems.qtyPicked}), 0)::int`,
       totalShipped: sql<number>`coalesce(sum(${orderLineItems.qtyShipped}), 0)::int`,
       totalDelivered: sql<number>`coalesce(sum(${orderLineItems.qtyDelivered}), 0)::int`,
     })
@@ -89,26 +99,23 @@ export async function recomputeOrderFulfillmentStatus(
 
   const nextStatus = determineOrderFulfillmentStatus({
     totalOrdered: Number(totals?.totalOrdered ?? 0),
+    totalPicked: Number(totals?.totalPicked ?? 0),
     totalShipped: Number(totals?.totalShipped ?? 0),
     totalDelivered: Number(totals?.totalDelivered ?? 0),
   });
-
-  if (!nextStatus) {
-    return currentOrder;
-  }
 
   const nextShippedDate =
     nextStatus === 'shipped' || nextStatus === 'partially_shipped'
       ? toOrderDateString(currentOrder.shippedDate) ??
         toOrderDateString(params.shippedAt) ??
         toOrderDateString(new Date())
-      : currentOrder.shippedDate;
+      : null;
   const nextDeliveredDate =
     nextStatus === 'delivered'
       ? toOrderDateString(currentOrder.deliveredDate) ??
         toOrderDateString(params.deliveredAt) ??
         toOrderDateString(new Date())
-      : currentOrder.deliveredDate;
+      : null;
 
   const needsUpdate =
     currentOrder.status !== nextStatus ||
@@ -122,7 +129,7 @@ export async function recomputeOrderFulfillmentStatus(
   const [updatedOrder] = await tx
     .update(orders)
     .set({
-      status: nextStatus,
+      status: nextStatus ?? currentOrder.status,
       shippedDate: nextShippedDate,
       deliveredDate: nextDeliveredDate,
       ...buildOrderAggregateVersionUpdate(params.userId),

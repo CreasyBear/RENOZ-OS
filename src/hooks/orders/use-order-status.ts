@@ -147,6 +147,9 @@ export function useChangeOrderStatusManaged(options: UseUpdateOrderStatusOptions
       queryClient.invalidateQueries({
         queryKey: [...queryKeys.orders.detail(variables.orderId), 'managed-status-options'],
       });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.orders.detail(variables.orderId), 'workflow-options'],
+      });
       invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
       queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });

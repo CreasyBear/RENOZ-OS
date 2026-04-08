@@ -49,7 +49,7 @@ import type {
   DeliveryNoteDocumentData,
   DeliveryNoteLineItem,
 } from '@/lib/documents/templates/operational';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { fetchOrganizationForDocument } from './organization-for-pdf';
 import {
   fetchAllocatedSerialsByOrderLineItem,
@@ -63,6 +63,7 @@ import { getPendingShipmentReservations } from '@/server/functions/orders/order-
 
 const STORAGE_BUCKET = 'documents';
 const QUOTE_VALIDITY_DAYS = 30;
+const ORDER_SCOPED_DOCUMENT_TYPES = new Set(['quote', 'invoice', 'pro-forma']);
 
 // ============================================================================
 // SCHEMAS
@@ -341,6 +342,7 @@ async function fetchShipmentDocumentData(
       carrier: orderShipments.carrier,
       carrierService: orderShipments.carrierService,
       trackingNumber: orderShipments.trackingNumber,
+      operationalDocumentRevision: orderShipments.operationalDocumentRevision,
       createdAt: orderShipments.createdAt,
       shippedAt: orderShipments.shippedAt,
       deliveredAt: orderShipments.deliveredAt,
@@ -508,6 +510,46 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
     const { orderId, documentType, regenerate } = data;
+
+    if (!ORDER_SCOPED_DOCUMENT_TYPES.has(documentType)) {
+      const shipments = await db
+        .select({
+          id: orderShipments.id,
+        })
+        .from(orderShipments)
+        .where(
+          and(
+            eq(orderShipments.organizationId, ctx.organizationId),
+            eq(orderShipments.orderId, orderId)
+          )
+        );
+
+      if (shipments.length === 0) {
+        throw new ValidationError(
+          'Create a shipment before generating shipment-backed operational documents.',
+          {
+            shipmentId: ['Shipment context is required for packing slips and delivery notes.'],
+          }
+        );
+      }
+
+      if (shipments.length > 1) {
+        throw new ValidationError(
+          'Multiple shipments exist for this order. Generate the document from a specific shipment.',
+          {
+            shipmentId: ['Choose the shipment that owns this operational document.'],
+          }
+        );
+      }
+
+      return generateShipmentDocument({
+        data: {
+          shipmentId: shipments[0].id,
+          documentType: documentType as 'packing-slip' | 'delivery-note',
+          regenerate,
+        },
+      });
+    }
 
     // Fetch all required data
     const [orderData, orgData] = await Promise.all([
@@ -780,6 +822,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         fileSize,
         generatedById: ctx.user.id,
         regenerationCount: 0,
+        sourceRevision: null,
       })
       .onConflictDoUpdate({
         target: [
@@ -796,6 +839,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           generatedAt: new Date(),
           updatedAt: new Date(),
           regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+          sourceRevision: null,
         },
       })
       .returning({ regenerationCount: generatedDocuments.regenerationCount });
@@ -886,6 +930,7 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
           storageUrl: generatedDocuments.storageUrl,
           filename: generatedDocuments.filename,
           fileSize: generatedDocuments.fileSize,
+          sourceRevision: generatedDocuments.sourceRevision,
         })
         .from(generatedDocuments)
         .where(
@@ -898,7 +943,12 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
         )
         .limit(1);
 
-      if (existingDocument?.storageUrl) {
+      const isStale =
+        existingDocument != null &&
+        Number(existingDocument.sourceRevision ?? 0) <
+          Number(shipment.operationalDocumentRevision ?? 0);
+
+      if (existingDocument?.storageUrl && !isStale) {
         return {
           orderId: orderData.id,
           shipmentId,
@@ -1061,6 +1111,7 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
         fileSize,
         generatedById: ctx.user.id,
         regenerationCount: 0,
+        sourceRevision: shipment.operationalDocumentRevision ?? 0,
       })
       .onConflictDoUpdate({
         target: [
@@ -1077,6 +1128,7 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
           generatedAt: new Date(),
           updatedAt: new Date(),
           regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+          sourceRevision: shipment.operationalDocumentRevision ?? 0,
         },
       })
       .returning({ regenerationCount: generatedDocuments.regenerationCount });

@@ -13,6 +13,8 @@
 
 **Out of scope:** Order edit, fulfillment, invoicing, quote-to-order conversion UI, permissions matrix for every role (see AuthZ note).
 
+**Current operator handoff:** Orders created from `New Order` land in `draft`. The operator then opens order detail and clicks `Confirm Order` to move the order into the active fulfillment lifecycle. From there the canonical path is `confirmed -> picking -> picked -> shipped/partially_shipped -> delivered`.
+
 ---
 
 ## 1. Trust boundary
@@ -73,6 +75,8 @@ sequenceDiagram
   S-->>M: OrderWithLineItems
   M->>M: setQueryData detail; invalidate lists
   P->>P: navigate /orders/$orderId
+  P->>P: order detail opens in draft state
+  Note over P,S: Operator clicks "Confirm Order" on detail to enter fulfillment
 ```
 
 **Idempotency:** If `getOrderByClientRequestId` finds a row, handler **returns existing** order. On unique violation (`23505`), handler attempts same lookup and returns existing if found ([`order-write.ts`](../../src/server/functions/orders/order-write.ts)).
@@ -137,16 +141,28 @@ sequenceDiagram
 | Parallel validation | Form `validateOrderCreationForm` + server totals check | Divergence if formulas change in one place |
 | Draft persistence disabled | Comment in `useOrderCreationForm` | UX/product expectation mismatch |
 
+## 10. Current lifecycle reminder
+
+Today the expected operator flow after create is:
+
+1. Create order from `New Order`
+2. Land on order detail in `draft`
+3. Click `Confirm Order`
+4. Pick items
+5. Create shipment / ship remaining
+6. Confirm delivery
+7. Generate commercial and operational documents from order detail as needed
+
 ---
 
-## 10. Verification
+## 11. Verification
 
 - Search `createOrder`, `OrderCreationWizard`, `validateOrderCreationForm` under `tests/`.
 - **Gap:** Idempotent replay test (same `clientRequestId` twice returns same id); permission test once `PERMISSIONS.order.create` (or equivalent) exists.
 
 ---
 
-## 11. Follow-up traces
+## 12. Follow-up traces
 
 - Add line item / edit order line flows.
 - Quote PDF pipeline (`generateQuotePdf`) failure modes and retries.

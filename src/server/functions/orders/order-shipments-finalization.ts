@@ -21,6 +21,7 @@ import {
 import { products } from 'drizzle/schema/products/products';
 import {
   addSerializedItemEvent,
+  allocateSerializedItemToOrderLine,
   findSerializedItemBySerial,
   linkSerializedItemToShipmentItem,
   releaseSerializedItemAllocation,
@@ -33,12 +34,13 @@ import {
 } from '@/server/functions/_shared/inventory-finance';
 import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
 import { fulfillmentImportSchema } from '@/lib/schemas/orders/shipments';
-import { markShippedSchema } from '@/lib/schemas';
+import { markShippedSchema, reopenShipmentSchema } from '@/lib/schemas';
 import { generateTrackingUrl } from './order-shipments-shared';
 import type { OrderShipment } from './order-shipment-types';
 import { recomputeOrderFulfillmentStatus } from './order-fulfillment-status';
 
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
+type ReopenShipmentInput = z.infer<typeof reopenShipmentSchema>;
 
 export async function markShipmentAsShipped(
   ctx: Awaited<ReturnType<typeof withAuth>>,
@@ -393,6 +395,237 @@ export async function markShippedHandler({
     ...shipment,
     success: true as const,
     message: 'Shipment marked as shipped.',
+    affectedIds: [shipment.id],
+  };
+}
+
+export async function reopenShipmentHandler({
+  data,
+}: {
+  data: ReopenShipmentInput;
+}) {
+  const ctx = await withAuth();
+  const idempotencyKey = data.idempotencyKey.trim();
+  const [existing] = await db
+    .select()
+    .from(orderShipments)
+    .where(
+      and(eq(orderShipments.id, data.id), eq(orderShipments.organizationId, ctx.organizationId))
+    )
+    .limit(1);
+
+  if (!existing) {
+    throw new NotFoundError('Shipment not found');
+  }
+
+  if (!['in_transit', 'out_for_delivery', 'failed'].includes(existing.status)) {
+    throw new ValidationError('Shipment cannot be reopened from the current state', {
+      status: ['Only non-delivered outbound shipments can be reopened.'],
+    });
+  }
+
+  const replayed = await hasProcessedIdempotencyKey(db, {
+    organizationId: ctx.organizationId,
+    entityType: 'shipment',
+    entityId: existing.id,
+    action: 'updated',
+    idempotencyKey,
+  });
+
+  if (replayed) {
+    return {
+      ...existing,
+      success: true as const,
+      message: 'Shipment reopen replay ignored.',
+      affectedIds: [existing.id],
+    };
+  }
+
+  const shipment = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
+
+    const items = await tx
+      .select({
+        id: shipmentItems.id,
+        orderLineItemId: shipmentItems.orderLineItemId,
+        quantity: shipmentItems.quantity,
+        serialNumbers: shipmentItems.serialNumbers,
+      })
+      .from(shipmentItems)
+      .where(eq(shipmentItems.shipmentId, existing.id));
+
+    const shouldReverseShippedQuantities =
+      existing.status === 'in_transit' || existing.status === 'out_for_delivery';
+
+    for (const item of items) {
+      if (shouldReverseShippedQuantities) {
+        await tx
+          .update(orderLineItems)
+          .set({
+            qtyShipped: sql`greatest(${orderLineItems.qtyShipped} - ${item.quantity}, 0)`,
+          })
+          .where(eq(orderLineItems.id, item.orderLineItemId));
+      }
+
+      const [lineItemWithProduct] = await tx
+        .select({
+          productId: orderLineItems.productId,
+        })
+        .from(orderLineItems)
+        .where(eq(orderLineItems.id, item.orderLineItemId))
+        .limit(1);
+
+      if (!lineItemWithProduct?.productId || !shouldReverseShippedQuantities) {
+        continue;
+      }
+
+      const [inventoryItem] = await tx
+        .select()
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.productId, lineItemWithProduct.productId),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (inventoryItem) {
+        await tx
+          .update(inventory)
+          .set({
+            quantityOnHand: sql`${inventory.quantityOnHand} + ${item.quantity}`,
+            quantityAllocated: sql`${inventory.quantityAllocated} + ${item.quantity}`,
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(inventory.id, inventoryItem.id));
+
+        await tx.insert(inventoryMovements).values({
+          organizationId: ctx.organizationId,
+          inventoryId: inventoryItem.id,
+          productId: inventoryItem.productId,
+          locationId: inventoryItem.locationId,
+          movementType: 'return',
+          quantity: item.quantity,
+          previousQuantity: Number(inventoryItem.quantityOnHand),
+          newQuantity: Number(inventoryItem.quantityOnHand) + Number(item.quantity),
+          unitCost: 0,
+          totalCost: 0,
+          referenceType: 'shipment',
+          referenceId: existing.id,
+          notes: `Shipment ${existing.shipmentNumber} reopened`,
+          createdBy: ctx.user.id,
+        });
+      }
+
+      const shipmentSerials = ((item.serialNumbers as string[] | null) ?? [])
+        .map((serial) => serial.trim().toUpperCase())
+        .filter(Boolean);
+
+      for (const serial of shipmentSerials) {
+        const serialRecord = await findSerializedItemBySerial(tx, ctx.organizationId, serial, {
+          userId: ctx.user.id,
+          source: 'order_shipment_reopen',
+        });
+        if (!serialRecord) continue;
+
+        await allocateSerializedItemToOrderLine(tx, {
+          organizationId: ctx.organizationId,
+          serializedItemId: serialRecord.id,
+          orderLineItemId: item.orderLineItemId,
+          userId: ctx.user.id,
+        });
+
+        await addSerializedItemEvent(tx, {
+          organizationId: ctx.organizationId,
+          serializedItemId: serialRecord.id,
+          eventType: 'allocated',
+          entityType: 'shipment_item',
+          entityId: item.id,
+          notes: `Shipment ${existing.shipmentNumber} reopened for correction`,
+          userId: ctx.user.id,
+        });
+      }
+    }
+
+    const normalizedTrackingEvents = (
+      (existing.trackingEvents as Array<Record<string, unknown>> | null) ?? []
+    ).flatMap((event) => {
+      if (typeof event.timestamp !== 'string' || typeof event.status !== 'string') {
+        return [];
+      }
+
+      return [
+        {
+          timestamp: event.timestamp,
+          status: event.status,
+          description:
+            typeof event.description === 'string' ? event.description : undefined,
+          location: typeof event.location === 'string' ? event.location : undefined,
+        },
+      ];
+    });
+
+    const trackingEvents: Array<{
+      timestamp: string;
+      status: string;
+      description?: string;
+      location?: string;
+    }> = [
+      ...normalizedTrackingEvents,
+      {
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+        description: data.reason?.trim() || 'Shipment reopened for correction',
+      },
+    ];
+
+    const [updatedShipment] = await tx
+      .update(orderShipments)
+      .set({
+        status: 'pending',
+        shippedAt: null,
+        deliveredAt: null,
+        deliveryConfirmation: null,
+        trackingEvents,
+        operationalDocumentRevision: sql`${orderShipments.operationalDocumentRevision} + 1`,
+        updatedBy: ctx.user.id,
+      })
+      .where(eq(orderShipments.id, existing.id))
+      .returning();
+
+    await recomputeOrderFulfillmentStatus(tx, {
+      organizationId: ctx.organizationId,
+      orderId: existing.orderId,
+      userId: ctx.user.id,
+    });
+
+    await tx.insert(activities).values({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      entityType: 'shipment',
+      entityId: updatedShipment.id,
+      action: 'updated',
+      description: `Shipment reopened: ${updatedShipment.shipmentNumber}`,
+      metadata: {
+        shipmentNumber: updatedShipment.shipmentNumber,
+        previousStatus: existing.status,
+        newStatus: updatedShipment.status,
+        idempotencyKey,
+        reason: data.reason?.trim() || undefined,
+      },
+      createdBy: ctx.user.id,
+    });
+
+    return updatedShipment;
+  });
+
+  return {
+    ...shipment,
+    success: true as const,
+    message: 'Shipment reopened for correction.',
     affectedIds: [shipment.id],
   };
 }

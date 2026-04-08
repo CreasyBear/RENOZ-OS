@@ -300,10 +300,12 @@ export type ChangeOrderStatusManagedInput = z.infer<
 >;
 
 export const orderWorkflowActionKeySchema = z.enum([
+  'confirm_order',
   'open_pick',
   'open_ship',
   'open_shipments',
   'confirm_delivery',
+  'reopen_shipment',
   'cancel_order',
 ]);
 export type OrderWorkflowActionKey = z.infer<typeof orderWorkflowActionKeySchema>;
@@ -387,6 +389,7 @@ export interface OrderListItem {
   orderDate: Date | string | null; // Database/JSON may return Date or ISO string
   dueDate: Date | string | null; // Database/JSON may return Date or ISO string
   total: number | null;
+  balanceDue: number | null;
   metadata: OrderMetadata | FlexibleJson | null; // FlexibleJson for ServerFn boundary per SCHEMA-TRACE
   createdAt: Date;
   updatedAt: Date;

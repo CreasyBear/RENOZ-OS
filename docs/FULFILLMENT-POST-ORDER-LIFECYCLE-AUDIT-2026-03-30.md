@@ -5,6 +5,8 @@
 **Scope:** Core + Adjacent post-confirmation lifecycle across status orchestration, picking, shipment creation/finalization, delivery confirmation, amendments, payments/refunds, and returns/RMA  
 **Related:** [Workflow Audit and Remediation Process](./WORKFLOW-AUDIT-REMEDIATION-PROCESS.md), [Workflow Baseline Audit](./WORKFLOW-BASELINE-AUDIT-2026-03-30.md), [SCHEMA-TRACE](../SCHEMA-TRACE.md), [STANDARDS](../STANDARDS.md)
 
+> Historical note: this audit is a point-in-time snapshot from March 30, 2026. Since then, the order detail workflow has been tightened so draft orders expose `Confirm Order`, delivery confirmation recomputes order fulfillment state, and document quick-actions have been expanded on order detail. Treat the findings below as historical context, not current behavior guarantees.
+
 ## Summary
 
 This audit reviewed the post-confirmation lifecycle as separate operational lanes so unlike workflows do not get blended together:

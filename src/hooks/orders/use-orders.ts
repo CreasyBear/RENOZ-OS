@@ -190,6 +190,9 @@ export function useCreateOrder() {
       queryClient.setQueryData(queryKeys.orders.detail(result.id), result);
       // Invalidate order lists
       invalidateOrderListQueries(queryClient);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', result.id),
+      });
       // Invalidate customer orders if customerId provided
       if (result.customerId) {
         queryClient.invalidateQueries({
@@ -272,6 +275,9 @@ export function useUpdateOrder() {
     onSuccess: (result, variables) => {
       // Invalidate the specific order
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.history('order', variables.id),
+      });
       // Invalidate order lists
       invalidateOrderListQueries(queryClient);
       // Invalidate customer orders

@@ -241,6 +241,10 @@ export async function getOrderShipmentsHandler({
         ? null
         : 'Every item in this shipment draft must be fully picked before a dispatch note can be generated.',
       canGenerateDeliveryNote: shipment.status === 'delivered',
+      deliveryNoteBlockedReason:
+        shipment.status === 'delivered'
+          ? null
+          : 'Confirm delivery on the shipment before generating the delivery note.',
     };
   });
 }

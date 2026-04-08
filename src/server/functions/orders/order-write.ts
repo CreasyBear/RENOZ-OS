@@ -9,6 +9,7 @@ import {
   customers,
   orderLineItems,
   orders,
+  orderShipments,
   type OrderAddress,
   type OrderMetadata,
 } from 'drizzle/schema';
@@ -47,6 +48,19 @@ const ORDER_EXCLUDED_FIELDS: string[] = [
 ];
 
 type Order = typeof orders.$inferSelect;
+
+function toShipmentAddressFromOrderAddress(address: OrderAddress) {
+  return {
+    name: address.contactName ?? 'Delivery Contact',
+    street1: address.street1,
+    street2: address.street2 ?? undefined,
+    city: address.city,
+    state: address.state,
+    postcode: address.postalCode,
+    country: address.country,
+    phone: address.contactPhone ?? undefined,
+  };
+}
 
 export const createOrder = createServerFn({ method: 'POST' })
   .inputValidator(createOrderSchema)
@@ -369,6 +383,9 @@ export const updateOrder = createServerFn({ method: 'POST' })
     }
 
     const updateData: Record<string, unknown> = { ...input };
+    const shippingAddressChanged =
+      input.shippingAddress !== undefined &&
+      JSON.stringify(existing.shippingAddress ?? null) !== JSON.stringify(input.shippingAddress);
     if (requestedStatus && requestedStatus === currentStatus) {
       delete updateData.status;
     }
@@ -424,6 +441,24 @@ export const updateOrder = createServerFn({ method: 'POST' })
         throw new ConflictError(
           'Order was modified by another user. Please refresh and try again.'
         );
+      }
+
+      if (shippingAddressChanged && input.shippingAddress) {
+        await tx
+          .update(orderShipments)
+          .set({
+            shippingAddress: toShipmentAddressFromOrderAddress(input.shippingAddress as OrderAddress),
+            operationalDocumentRevision: sql`${orderShipments.operationalDocumentRevision} + 1`,
+            updatedBy: ctx.user.id,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(orderShipments.organizationId, ctx.organizationId),
+              eq(orderShipments.orderId, id),
+              eq(orderShipments.status, 'pending')
+            )
+          );
       }
 
       await enqueueSearchIndexOutbox(

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { toastError } from '@/hooks';
 
 interface UseOrderDetailRouteIntentsOptions {
   orderStatus?: string;
@@ -19,7 +18,6 @@ interface UseOrderDetailRouteIntentsOptions {
 }
 
 export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOptions) {
-  const blockedEditSearchHandledRef = useRef(false);
   const blockedShipSearchHandledRef = useRef(false);
   const [shipIntentBlocked, setShipIntentBlocked] = useState(false);
 
@@ -70,34 +68,13 @@ export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOp
   }, [options.dialogOpen, options.openPayment, options.paymentFromSearch]);
 
   useEffect(() => {
-    if (!options.editFromSearch) {
-      blockedEditSearchHandledRef.current = false;
-      return;
+    if (options.editFromSearch && options.dialogOpen !== 'edit') {
+      options.openEdit();
     }
-    if (!options.orderStatus) return;
-
-    if (options.orderStatus === 'draft') {
-      blockedEditSearchHandledRef.current = false;
-      if (options.dialogOpen !== 'edit') {
-        options.openEdit();
-      }
-      return;
-    }
-    if (blockedEditSearchHandledRef.current) return;
-
-    blockedEditSearchHandledRef.current = true;
-    if (options.dialogOpen === 'edit') {
-      options.closeDialog();
-    }
-    toastError('Only draft orders can be edited');
-    options.clearSearch();
   }, [
-    options.clearSearch,
-    options.closeDialog,
     options.dialogOpen,
     options.editFromSearch,
     options.openEdit,
-    options.orderStatus,
   ]);
 
   return {
