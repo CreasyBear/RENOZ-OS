@@ -250,7 +250,7 @@ export function getDocumentTypeLabel(type: DocumentType): string {
   const labels: Record<DocumentType, string> = {
     quote: 'Quote',
     invoice: 'Invoice',
-    'pro-forma': 'Pro-Forma',
+    'pro-forma': 'Pro Forma',
     'packing-slip': 'Packing Slip',
     'dispatch-note': 'Dispatch Note',
     'delivery-note': 'Delivery Note',

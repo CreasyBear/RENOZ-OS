@@ -83,17 +83,22 @@ export function useOrderDetailContainerActions(
     async (data: EditOrderFormData) => {
       if (!options.orderVersion) return;
 
+      const hasAnyShippingField = Object.values(data.shippingAddress).some((value) =>
+        Boolean(value?.trim?.() ?? value)
+      );
+      const shippingStreet1 = data.shippingAddress.street1?.trim() || '';
+
       await updateOrderMutation.mutateAsync({
         id: options.orderId,
         expectedVersion: options.orderVersion,
         customerId: data.customerId,
         orderNumber: data.orderNumber,
-        dueDate: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : undefined,
-        internalNotes: data.internalNotes || undefined,
-        customerNotes: data.customerNotes || undefined,
-        shippingAddress: data.shippingAddress.street1?.trim()
+        dueDate: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null,
+        internalNotes: data.internalNotes?.trim() ? data.internalNotes.trim() : null,
+        customerNotes: data.customerNotes?.trim() ? data.customerNotes.trim() : null,
+        shippingAddress: hasAnyShippingField
           ? {
-              street1: data.shippingAddress.street1.trim(),
+              street1: shippingStreet1,
               street2: data.shippingAddress.street2?.trim() || undefined,
               city: data.shippingAddress.city?.trim() || '',
               state: data.shippingAddress.state?.trim() || '',
@@ -102,7 +107,7 @@ export function useOrderDetailContainerActions(
               contactName: data.shippingAddress.contactName?.trim() || undefined,
               contactPhone: data.shippingAddress.contactPhone?.trim() || undefined,
             }
-          : undefined,
+          : null,
       });
       toastSuccess('Order updated');
       options.refetch();

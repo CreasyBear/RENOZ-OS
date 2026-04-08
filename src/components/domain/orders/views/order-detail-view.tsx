@@ -767,7 +767,7 @@ export const OrderDetailView = memo(function OrderDetailView({
                             <div className="flex items-center justify-between">
                               <span className="flex items-center gap-2 text-sm">
                                 <Receipt className="h-4 w-4 text-muted-foreground" />
-                                Pro-Forma
+                                Pro Forma
                               </span>
                               {documentActions ? (
                                 <Button
@@ -1007,7 +1007,7 @@ export const OrderDetailView = memo(function OrderDetailView({
                           onClick={documentActions.onGenerateProForma}
                           disabled={documentActions.isGeneratingProForma}
                         >
-                          {documentActions.isGeneratingProForma ? 'Working...' : 'Pro-Forma'}
+                          {documentActions.isGeneratingProForma ? 'Working...' : 'Pro Forma'}
                         </Button>
                       </div>
                     </div>

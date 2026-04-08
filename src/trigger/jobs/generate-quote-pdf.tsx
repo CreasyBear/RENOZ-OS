@@ -89,13 +89,20 @@ export const generateQuotePdf = task({
         customerId: orders.customerId,
         orderDate: orders.orderDate,
         dueDate: orders.dueDate,
+        billingAddress: orders.billingAddress,
+        shippingAddress: orders.shippingAddress,
         subtotal: orders.subtotal,
         discountAmount: orders.discountAmount,
         discountPercent: orders.discountPercent,
         taxAmount: orders.taxAmount,
+        shippingAmount: orders.shippingAmount,
         total: orders.total,
+        paidAmount: orders.paidAmount,
+        balanceDue: orders.balanceDue,
         customerNotes: orders.customerNotes,
         internalNotes: orders.internalNotes,
+        status: orders.status,
+        paymentStatus: orders.paymentStatus,
       })
       .from(orders)
       .where(
@@ -136,7 +143,10 @@ export const generateQuotePdf = task({
       discountAmount: Number(order.discountAmount) || 0,
       discountPercent: Number(order.discountPercent) || 0,
       taxAmount: Number(order.taxAmount) || 0,
+      shippingAmount: Number(order.shippingAmount) || 0,
       total: Number(order.total) || 0,
+      paidAmount: Number(order.paidAmount) || 0,
+      balanceDue: Number(order.balanceDue) || 0,
       lineItems: lineItems.map((item) => ({
         ...item,
         quantity: Number(item.quantity) || 1,
@@ -151,7 +161,7 @@ export const generateQuotePdf = task({
     // Step 2: Fetch organization details (with logo pre-fetched for PDF)
     const orgData = await fetchOrganizationForDocument(organizationId);
 
-    // Step 3: Fetch customer details with primary billing address
+    // Step 3: Fetch customer details with billing/shipping addresses
     const [customer] = await db
       .select({
         id: customers.id,
@@ -173,7 +183,6 @@ export const generateQuotePdf = task({
       throw new Error(`Customer ${customerId} not found`);
     }
 
-    // Fetch primary billing address
     const [billingAddress] = await db
       .select({
         street1: addresses.street1,
@@ -194,43 +203,88 @@ export const generateQuotePdf = task({
       )
       .limit(1);
 
-    // Fallback to any primary address if no billing address
-    let customerAddress = billingAddress;
-    if (!billingAddress) {
-      const [anyPrimaryAddress] = await db
-        .select({
-          street1: addresses.street1,
-          street2: addresses.street2,
-          city: addresses.city,
-          state: addresses.state,
-          postcode: addresses.postcode,
-          country: addresses.country,
-        })
-        .from(addresses)
-        .where(
-          and(
-            eq(addresses.customerId, customerId),
-            eq(addresses.organizationId, organizationId),
-            eq(addresses.isPrimary, true)
-          )
+    const [shippingAddress] = await db
+      .select({
+        street1: addresses.street1,
+        street2: addresses.street2,
+        city: addresses.city,
+        state: addresses.state,
+        postcode: addresses.postcode,
+        country: addresses.country,
+      })
+      .from(addresses)
+      .where(
+        and(
+          eq(addresses.customerId, customerId),
+          eq(addresses.organizationId, organizationId),
+          eq(addresses.type, "shipping"),
+          eq(addresses.isPrimary, true)
         )
-        .limit(1);
-      customerAddress = anyPrimaryAddress;
-    }
+      )
+      .limit(1);
+
+    const [primaryAddress] = await db
+      .select({
+        street1: addresses.street1,
+        street2: addresses.street2,
+        city: addresses.city,
+        state: addresses.state,
+        postcode: addresses.postcode,
+        country: addresses.country,
+      })
+      .from(addresses)
+      .where(
+        and(
+          eq(addresses.customerId, customerId),
+          eq(addresses.organizationId, organizationId),
+          eq(addresses.isPrimary, true)
+        )
+      )
+      .limit(1);
 
     const customerData = {
       id: customer.id,
       name: customer.name,
       email: customer.email,
       phone: customer.phone,
-      address: customerAddress
+      address: primaryAddress
         ? {
-            addressLine1: customerAddress.street1,
-            addressLine2: customerAddress.street2,
-            city: customerAddress.city,
-            state: customerAddress.state,
-            postalCode: customerAddress.postcode,
-            country: customerAddress.country,
+            addressLine1: primaryAddress.street1,
+            addressLine2: primaryAddress.street2,
+            city: primaryAddress.city,
+            state: primaryAddress.state,
+            postalCode: primaryAddress.postcode,
+            country: primaryAddress.country,
+          }
+        : undefined,
+      billingAddress: billingAddress
+        ? {
+            addressLine1: billingAddress.street1,
+            addressLine2: billingAddress.street2,
+            city: billingAddress.city,
+            state: billingAddress.state,
+            postalCode: billingAddress.postcode,
+            country: billingAddress.country,
+          }
+        : undefined,
+      shippingAddress: shippingAddress
+        ? {
+            addressLine1: shippingAddress.street1,
+            addressLine2: shippingAddress.street2,
+            city: shippingAddress.city,
+            state: shippingAddress.state,
+            postalCode: shippingAddress.postcode,
+            country: shippingAddress.country,
+          }
+        : undefined,
+      primaryAddress: primaryAddress
+        ? {
+            addressLine1: primaryAddress.street1,
+            addressLine2: primaryAddress.street2,
+            city: primaryAddress.city,
+            state: primaryAddress.state,
+            postalCode: primaryAddress.postcode,
+            country: primaryAddress.country,
           }
         : undefined,
     };

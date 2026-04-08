@@ -54,6 +54,7 @@ export interface OrderDocumentsTabProps {
 const DOCUMENT_TYPE_ICONS: Record<string, React.ElementType> = {
   quote: FileText,
   invoice: Receipt,
+  'pro-forma': Receipt,
   'packing-slip': Package,
   'dispatch-note': Truck,
   'delivery-note': Truck,
@@ -62,6 +63,7 @@ const DOCUMENT_TYPE_ICONS: Record<string, React.ElementType> = {
 function getDocumentBadgeVariant(documentType: string) {
   switch (documentType) {
     case 'quote':
+    case 'pro-forma':
       return 'secondary';
     case 'invoice':
       return 'default';
@@ -277,7 +279,7 @@ export const OrderDocumentsTab = memo(function OrderDocumentsTab({
         <div>
           <h2 className="text-base font-semibold text-foreground">Documents</h2>
           <p className="text-sm text-muted-foreground">
-            Quotes, invoices, packing slips, dispatch notes, and delivery notes
+            Quotes, pro formas, invoices, and shipment-backed fulfillment notes
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -324,7 +326,7 @@ export const OrderDocumentsTab = memo(function OrderDocumentsTab({
               disabled={documentActions.isGeneratingProForma}
             >
               <Receipt className="h-4 w-4 mr-2" />
-              {documentActions.isGeneratingProForma ? 'Generating Pro-Forma...' : 'Generate Pro-Forma'}
+              {documentActions.isGeneratingProForma ? 'Generating Pro Forma...' : 'Generate Pro Forma'}
             </Button>
           </ActionSection>
 

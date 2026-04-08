@@ -58,6 +58,11 @@ const generatedAt = new Date().toISOString();
 
 const checks = [
   {
+    gateName: 'document-schema-gates',
+    command: 'node',
+    args: ['scripts/run-document-schema-gates.mjs'],
+  },
+  {
     gateName: 'route-intent-smoke',
     command: 'npm',
     args: ['run', 'test:route-intent-smoke'],

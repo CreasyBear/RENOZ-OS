@@ -105,11 +105,15 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       customerId: orders.customerId,
       orderDate: orders.orderDate,
       dueDate: orders.dueDate,
+      billingAddress: orders.billingAddress,
       subtotal: orders.subtotal,
       discountAmount: orders.discountAmount,
       discountPercent: orders.discountPercent,
       taxAmount: orders.taxAmount,
+      shippingAmount: orders.shippingAmount,
       total: orders.total,
+      paidAmount: orders.paidAmount,
+      balanceDue: orders.balanceDue,
       customerNotes: orders.customerNotes,
       internalNotes: orders.internalNotes,
       status: orders.status,
@@ -166,7 +170,10 @@ async function fetchOrderData(orderId: string, organizationId: string) {
     discountAmount: Number(order.discountAmount) || 0,
     discountPercent: Number(order.discountPercent) || 0,
     taxAmount: Number(order.taxAmount) || 0,
+    shippingAmount: Number(order.shippingAmount) || 0,
     total: Number(order.total) || 0,
+    paidAmount: Number(order.paidAmount) || 0,
+    balanceDue: Number(order.balanceDue) || 0,
   };
 }
 
@@ -249,9 +256,9 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
 
   return {
     ...customer,
-    address: toDocumentAddress(shippingAddress ?? billingAddress ?? primaryAddress),
+    address: toDocumentAddress(primaryAddress ?? billingAddress ?? shippingAddress),
     shippingAddress: toDocumentAddress(shippingAddress),
-    billingAddress: toDocumentAddress(billingAddress ?? primaryAddress),
+    billingAddress: toDocumentAddress(billingAddress),
     primaryAddress: toDocumentAddress(primaryAddress),
   };
 }

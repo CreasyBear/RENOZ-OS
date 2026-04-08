@@ -8,6 +8,11 @@
 
 import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
 import {
+  buildFinancialSummaryRows,
+  getFinancialDocumentRecipientName,
+  resolveFinancialDocumentAddresses,
+} from "../../financial-presentation";
+import {
   PageNumber,
   DocumentFixedHeader,
   formatAddressLines,
@@ -24,82 +29,22 @@ import {
   DOCUMENT_LOGO_MAX_WIDTH,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
-import type { DocumentOrganization, DocumentPaymentDetails } from "../../types";
+import type {
+  DocumentCustomer,
+  DocumentLineItem,
+  DocumentOrder,
+  DocumentOrganization,
+  ProFormaDocumentData as SharedProFormaDocumentData,
+} from "../../types";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface ProFormaLineItem {
-  id: string;
-  lineNumber?: string | null;
-  sku?: string | null;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  discountPercent?: number | null;
-  discountAmount?: number | null;
-  taxAmount?: number | null;
-  total: number;
-  notes?: string | null;
-}
-
-export interface ProFormaCustomer {
-  id: string;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  taxId?: string | null;
-  address?: {
-    addressLine1?: string | null;
-    addressLine2?: string | null;
-    city?: string | null;
-    state?: string | null;
-    postalCode?: string | null;
-    country?: string | null;
-    contactName?: string | null;
-    contactPhone?: string | null;
-  } | null;
-}
-
-export interface ProFormaOrder {
-  id: string;
-  orderNumber: string;
-  orderDate?: Date | null;
-  customer: ProFormaCustomer;
-  lineItems: ProFormaLineItem[];
-  billingAddress?: {
-    addressLine1?: string | null;
-    addressLine2?: string | null;
-    city?: string | null;
-    state?: string | null;
-    postalCode?: string | null;
-    country?: string | null;
-    contactName?: string | null;
-    contactPhone?: string | null;
-  } | null;
-  subtotal: number;
-  discount?: number | null;
-  discountPercent?: number | null;
-  taxRate?: number | null;
-  taxAmount: number;
-  shippingAmount?: number | null;
-  total: number;
-  customerNotes?: string | null;
-}
-
-export interface ProFormaDocumentData {
-  type: "pro-forma";
-  documentNumber: string;
-  issueDate: Date;
-  validUntil: Date;
-  order: ProFormaOrder;
-  terms?: string | null;
-  notes?: string | null;
-  reference?: string | null;
-  paymentDetails?: DocumentPaymentDetails | null;
-  generatedAt?: Date | null;
-}
+export type ProFormaLineItem = DocumentLineItem;
+export type ProFormaCustomer = DocumentCustomer;
+export type ProFormaOrder = DocumentOrder;
+export interface ProFormaDocumentData extends SharedProFormaDocumentData {}
 
 export interface ProFormaPdfTemplateProps {
   data: ProFormaDocumentData;
@@ -198,6 +143,9 @@ const styles = StyleSheet.create({
   toColumn: {
     flex: 1,
     marginLeft: 10,
+  },
+  secondaryAddressSection: {
+    marginTop: 12,
   },
   sectionLabel: {
     fontSize: 9,
@@ -355,8 +303,12 @@ function ProFormaContent({ data }: ProFormaPdfTemplateProps) {
 
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
   const fromAddressLines = formatAddressLines(organization.address);
-  const toAddress = order.billingAddress ?? order.customer.address;
-  const toAddressLines = formatAddressLines(toAddress);
+  const { billTo, shipTo, showShipTo } = resolveFinancialDocumentAddresses(order);
+  const billToAddressLines = formatAddressLines(billTo);
+  const shipToAddressLines = formatAddressLines(shipTo);
+  const billToName = getFinancialDocumentRecipientName(billTo, order.customer.name);
+  const shipToName = getFinancialDocumentRecipientName(shipTo, order.customer.name);
+  const summaryRows = buildFinancialSummaryRows(order);
   const resolvedNotes = data.notes ?? order.customerNotes;
 
   return (
@@ -421,13 +373,22 @@ function ProFormaContent({ data }: ProFormaPdfTemplateProps) {
           </View>
           <View style={styles.toColumn}>
             <Text style={styles.sectionLabel}>Bill To</Text>
-            <Text style={styles.sectionName}>{order.customer.name}</Text>
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
+            <Text style={styles.sectionName}>{billToName}</Text>
+            {billToAddressLines.length > 0 ? (
+              billToAddressLines.map((line) => (
                 <Text key={line} style={styles.sectionDetail}>{line}</Text>
               ))
             ) : (
               <Text style={styles.sectionDetail}>—</Text>
+            )}
+            {showShipTo && (
+              <View style={styles.secondaryAddressSection}>
+                <Text style={styles.sectionLabel}>Ship To</Text>
+                <Text style={styles.sectionName}>{shipToName}</Text>
+                {shipToAddressLines.map((line) => (
+                  <Text key={line} style={styles.sectionDetail}>{line}</Text>
+                ))}
+              </View>
             )}
           </View>
         </View>
@@ -473,44 +434,23 @@ function ProFormaContent({ data }: ProFormaPdfTemplateProps) {
         {/* Summary */}
         <View style={styles.summarySection} wrap={false}>
           <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.subtotal, organization.currency, locale)}
-              </Text>
-            </View>
-
-            {order.discount && order.discount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Discount</Text>
-                <Text style={styles.summaryValue}>
-                  -{formatCurrencyForPdf(order.discount, organization.currency, locale)}
-                </Text>
-              </View>
+            {summaryRows.map((row) =>
+              row.emphasized ? (
+                <View key={row.key} style={styles.summaryTotal}>
+                  <Text style={styles.summaryTotalLabel}>{row.label}</Text>
+                  <Text style={styles.summaryTotalValue}>
+                    {formatCurrencyForPdf(row.amount, organization.currency, locale)}
+                  </Text>
+                </View>
+              ) : (
+                <View key={row.key} style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{row.label}</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCurrencyForPdf(row.amount, organization.currency, locale)}
+                  </Text>
+                </View>
+              )
             )}
-
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
-              </Text>
-            </View>
-
-            {order.shippingAmount && order.shippingAmount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Shipping</Text>
-                <Text style={styles.summaryValue}>
-                  {formatCurrencyForPdf(order.shippingAmount, organization.currency, locale)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.summaryTotal}>
-              <Text style={styles.summaryTotalLabel}>Total</Text>
-              <Text style={styles.summaryTotalValue}>
-                {formatCurrencyForPdf(order.total, organization.currency, locale)}
-              </Text>
-            </View>
           </View>
         </View>
 

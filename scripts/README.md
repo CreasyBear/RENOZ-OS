@@ -8,6 +8,7 @@ Scripts in this directory and their current status. Last updated: 2026-02-22.
 |--------|---------|-------|
 | `check-pending-dialog-guards.mjs` | Ensures dialogs with async submit have Escape/outside-click guards | Refined to exclude AlertDialog-only files |
 | `check-route-casts.mjs` | Route cast guard (lint:reliability) | |
+| `run-document-schema-gates.mjs` | Verifies document-lineage columns exist before deploy | Requires DATABASE_URL |
 | `run-serialized-lineage-gates.mjs` | Serialized lineage DB invariants | Requires DATABASE_URL |
 | `run-route-intent-smoke.mjs` | Route-intent unit tests | |
 | `download-pdf-fonts.mjs` | Download Inter fonts for react-pdf | |
@@ -30,6 +31,7 @@ Scripts in this directory and their current status. Last updated: 2026-02-22.
 
 - `lint:reliability` → check-route-casts + check-pending-dialog-guards
 - `reliability:release-gates` → run-release-gates.mjs
+- `run-release-gates.mjs` now includes `run-document-schema-gates.mjs`
 - `reliability:serialized-gates` → run-serialized-lineage-gates.mjs
 - `reliability:finance-gates` → run-finance-integrity-gates.mjs
 - `test:route-intent-smoke` → run-route-intent-smoke.mjs

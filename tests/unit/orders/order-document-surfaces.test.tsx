@@ -66,7 +66,7 @@ describe('order document surfaces', () => {
 
     expect(screen.getByRole('button', { name: 'Generate Quote' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate Invoice' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Generate Pro-Forma' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate Pro Forma' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate Packing Slip' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate Delivery Note' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate Dispatch Note' })).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe('order document surfaces', () => {
     expect(screen.getAllByText('Documents').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Quote').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Invoice').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Pro-Forma').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pro Forma').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Packing Slip').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Delivery Note').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Dispatch Note').length).toBeGreaterThan(0);

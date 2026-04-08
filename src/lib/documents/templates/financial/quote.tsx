@@ -7,6 +7,11 @@
 
 import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
 import {
+  buildFinancialSummaryRows,
+  getFinancialDocumentRecipientName,
+  resolveFinancialDocumentAddresses,
+} from "../../financial-presentation";
+import {
   PageNumber,
   DocumentFixedHeader,
   formatAddressLines,
@@ -103,6 +108,9 @@ const styles = StyleSheet.create({
   toColumn: {
     flex: 1,
     marginLeft: 10,
+  },
+  secondaryAddressSection: {
+    marginTop: 12,
   },
   sectionLabel: {
     fontSize: 9,
@@ -316,7 +324,12 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
 
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
   const fromAddressLines = formatAddressLines(organization.address);
-  const toAddressLines = formatAddressLines(order.billingAddress);
+  const { billTo, shipTo, showShipTo } = resolveFinancialDocumentAddresses(order);
+  const billToAddressLines = formatAddressLines(billTo);
+  const shipToAddressLines = formatAddressLines(shipTo);
+  const billToName = getFinancialDocumentRecipientName(billTo, order.customer.name);
+  const shipToName = getFinancialDocumentRecipientName(shipTo, order.customer.name);
+  const summaryRows = buildFinancialSummaryRows(order);
 
   const hasPerItemTax = order.lineItems.some(item => item.taxRate != null);
 
@@ -360,7 +373,7 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
           )}
         </View>
 
-        {/* From / Quote To two-column */}
+        {/* From / Bill To two-column */}
         <View style={styles.fromToRow}>
           <View style={styles.fromColumn}>
             <Text style={styles.sectionLabel}>From</Text>
@@ -376,14 +389,23 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
             )}
           </View>
           <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Quote To</Text>
-            <Text style={styles.sectionName}>{order.customer.name}</Text>
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
+            <Text style={styles.sectionLabel}>Bill To</Text>
+            <Text style={styles.sectionName}>{billToName}</Text>
+            {billToAddressLines.length > 0 ? (
+              billToAddressLines.map((line) => (
                 <Text key={line} style={styles.sectionDetail}>{line}</Text>
               ))
             ) : (
               <Text style={styles.sectionDetail}>—</Text>
+            )}
+            {showShipTo && (
+              <View style={styles.secondaryAddressSection}>
+                <Text style={styles.sectionLabel}>Ship To</Text>
+                <Text style={styles.sectionName}>{shipToName}</Text>
+                {shipToAddressLines.map((line) => (
+                  <Text key={line} style={styles.sectionDetail}>{line}</Text>
+                ))}
+              </View>
             )}
           </View>
         </View>
@@ -437,35 +459,23 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
         {/* Summary */}
         <View style={styles.summarySection} wrap={false}>
           <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.subtotal, organization.currency, locale)}
-              </Text>
-            </View>
-
-            {order.discount && order.discount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Discount</Text>
-                <Text style={styles.summaryValue}>
-                  -{formatCurrencyForPdf(order.discount, organization.currency, locale)}
-                </Text>
-              </View>
+            {summaryRows.map((row) =>
+              row.emphasized ? (
+                <View key={row.key} style={styles.summaryTotal}>
+                  <Text style={styles.summaryTotalLabel}>{row.label}</Text>
+                  <Text style={styles.summaryTotalValue}>
+                    {formatCurrencyForPdf(row.amount, organization.currency, locale)}
+                  </Text>
+                </View>
+              ) : (
+                <View key={row.key} style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{row.label}</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCurrencyForPdf(row.amount, organization.currency, locale)}
+                  </Text>
+                </View>
+              )
             )}
-
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
-              </Text>
-            </View>
-
-            <View style={styles.summaryTotal}>
-              <Text style={styles.summaryTotalLabel}>Total</Text>
-              <Text style={styles.summaryTotalValue}>
-                {formatCurrencyForPdf(order.total, organization.currency, locale)}
-              </Text>
-            </View>
           </View>
         </View>
 
