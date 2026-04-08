@@ -152,6 +152,10 @@ export const updateOrderSchema = createOrderSchema
   .partial()
   .omit({ lineItems: true, clientRequestId: true })
   .extend({
+    status: orderStatusSchema.optional(),
+    paymentStatus: paymentStatusSchema.optional(),
+    shippingAmount: currencySchema.optional(),
+    metadata: orderMetadataSchema.optional(),
     expectedVersion: z.number().int().positive('Expected version is required'),
   });
 
