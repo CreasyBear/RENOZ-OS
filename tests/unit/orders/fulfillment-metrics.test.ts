@@ -1,3 +1,4 @@
+import { subDays, format } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import {
   buildFulfillmentStats,
@@ -56,8 +57,11 @@ describe('buildFulfillmentStats', () => {
 
 describe('isOverdueOrder', () => {
   it('uses orderDate and ignores missing dates', () => {
+    const recentOrderDate = format(subDays(new Date(), 2), 'yyyy-MM-dd')
+    const overdueOrderDate = format(subDays(new Date(), 5), 'yyyy-MM-dd')
+
     expect(isOverdueOrder(null)).toBe(false)
-    expect(isOverdueOrder('2026-03-29')).toBe(false)
-    expect(isOverdueOrder('2026-03-20')).toBe(true)
+    expect(isOverdueOrder(recentOrderDate)).toBe(false)
+    expect(isOverdueOrder(overdueOrderDate)).toBe(true)
   })
 })
