@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   areDocumentAddressesEqual,
   buildFinancialSummaryRows,
+  buildFinancialTableRows,
+  getFinancialLineAmount,
   getFinancialDocumentRecipientName,
   resolveFinancialDocumentAddresses,
 } from '@/lib/documents/financial-presentation';
@@ -48,7 +50,6 @@ describe('financial document presentation', () => {
       {
         subtotal: 1000,
         discount: 50,
-        shippingAmount: 25,
         taxAmount: 97.5,
         total: 1072.5,
         balanceDue: 400,
@@ -58,14 +59,54 @@ describe('financial document presentation', () => {
 
     expect(presentation.showShipTo).toBe(true);
     expect(rows.map((row) => row.label)).toEqual([
-      'Subtotal',
+      'Subtotal (before GST)',
       'Discount',
-      'Shipping',
-      'Tax',
+      'GST (10%)',
       'Total',
       'Balance Due',
     ]);
+    expect(rows.some((row) => row.label === 'Shipping (ex GST)')).toBe(false);
     expect(rows.find((row) => row.key === 'tax')?.amount).toBe(97.5);
+  });
+
+  it('derives ex-GST line amounts for financial tables', () => {
+    expect(
+      getFinancialLineAmount({
+        total: 110,
+        taxAmount: 10,
+      })
+    ).toBe(100);
+  });
+
+  it('adds shipping as a dedicated financial table row when present', () => {
+    const rows = buildFinancialTableRows({
+      lineItems: [
+        {
+          id: 'line-1',
+          description: 'Install',
+          quantity: 2,
+          unitPrice: 55,
+          total: 110,
+          taxAmount: 10,
+        },
+      ],
+      shippingAmount: 15,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        key: 'line-1',
+        description: 'Install',
+        amount: 100,
+      }),
+      expect.objectContaining({
+        key: 'shipping-charge',
+        description: 'Shipping',
+        quantity: 1,
+        unitPrice: 15,
+        amount: 15,
+      }),
+    ]);
   });
 
   it('prefers address contact names for rendered recipient labels', () => {

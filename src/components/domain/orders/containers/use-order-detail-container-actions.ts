@@ -20,7 +20,10 @@ import {
   useGenerateShipmentDispatchNote,
   useGenerateShipmentDeliveryNote,
 } from '@/hooks/documents';
-import type { EditOrderFormData } from '../cards/order-edit-dialog.schema';
+import {
+  normalizeEditOrderShippingAddress,
+  type EditOrderFormData,
+} from '../cards/order-edit-dialog.schema';
 
 interface UseOrderDetailContainerActionsOptions {
   orderId: string;
@@ -82,11 +85,7 @@ export function useOrderDetailContainerActions(
   const handleEditSubmit = useCallback(
     async (data: EditOrderFormData) => {
       if (!options.orderVersion) return;
-
-      const hasAnyShippingField = Object.values(data.shippingAddress).some((value) =>
-        Boolean(value?.trim?.() ?? value)
-      );
-      const shippingStreet1 = data.shippingAddress.street1?.trim() || '';
+      const shippingAddress = normalizeEditOrderShippingAddress(data.shippingAddress);
 
       await updateOrderMutation.mutateAsync({
         id: options.orderId,
@@ -96,18 +95,7 @@ export function useOrderDetailContainerActions(
         dueDate: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null,
         internalNotes: data.internalNotes?.trim() ? data.internalNotes.trim() : null,
         customerNotes: data.customerNotes?.trim() ? data.customerNotes.trim() : null,
-        shippingAddress: hasAnyShippingField
-          ? {
-              street1: shippingStreet1,
-              street2: data.shippingAddress.street2?.trim() || undefined,
-              city: data.shippingAddress.city?.trim() || '',
-              state: data.shippingAddress.state?.trim() || '',
-              postalCode: data.shippingAddress.postalCode?.trim() || '',
-              country: data.shippingAddress.country?.trim() || 'AU',
-              contactName: data.shippingAddress.contactName?.trim() || undefined,
-              contactPhone: data.shippingAddress.contactPhone?.trim() || undefined,
-            }
-          : null,
+        shippingAddress,
       });
       toastSuccess('Order updated');
       options.refetch();

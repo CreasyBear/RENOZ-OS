@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { editOrderSchema } from '@/components/domain/orders/cards/order-edit-dialog.schema';
+import {
+  editOrderSchema,
+  normalizeEditOrderShippingAddress,
+} from '@/components/domain/orders/cards/order-edit-dialog.schema';
 
 const customerId = '11111111-1111-4111-8111-111111111111';
 
@@ -50,5 +53,44 @@ describe('order edit dialog schema', () => {
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.shippingAddress?.length ?? 0).toBeGreaterThan(0);
     }
+  });
+
+  it('normalizes a populated shipping address to the canonical order shape', () => {
+    const address = normalizeEditOrderShippingAddress({
+      street1: ' 12 Test Street ',
+      street2: ' Unit 5 ',
+      city: ' Perth ',
+      state: ' WA ',
+      postalCode: ' 6000 ',
+      country: ' au ',
+      contactName: ' Alex ',
+      contactPhone: ' 0400 000 000 ',
+    });
+
+    expect(address).toEqual({
+      street1: '12 Test Street',
+      street2: 'Unit 5',
+      city: 'Perth',
+      state: 'WA',
+      postalCode: '6000',
+      country: 'AU',
+      contactName: 'Alex',
+      contactPhone: '0400 000 000',
+    });
+  });
+
+  it('returns null when shipping address is completely blank', () => {
+    const address = normalizeEditOrderShippingAddress({
+      street1: '',
+      street2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: '',
+      contactName: '',
+      contactPhone: '',
+    });
+
+    expect(address).toBeNull();
   });
 });

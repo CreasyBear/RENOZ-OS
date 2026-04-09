@@ -11,6 +11,9 @@ count.txt
 .tanstack
 .wrangler
 build-output.log
+artifacts/document-previews/
+artifacts/document-wireframes/
+artifacts/release-gates/release-gates-*.json
 
 # Vercel
 .vercel

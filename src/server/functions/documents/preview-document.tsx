@@ -82,6 +82,20 @@ const previewDocumentSchema = z.discriminatedUnion('useSampleData', [
 
 export type PreviewDocumentInput = z.infer<typeof previewDocumentSchema>;
 
+interface PreviewDocumentResult {
+  success: true;
+  documentType: DocumentType;
+  useSampleData: boolean;
+  base64: string;
+  mimeType: 'application/pdf';
+  previewData: {
+    organization: PreviewDocumentData['organization'];
+    documentType: DocumentType;
+    hasLineItems: boolean;
+    total: number;
+  };
+}
+
 // ============================================================================
 // SAMPLE DATA
 // ============================================================================
@@ -236,7 +250,7 @@ const SAMPLE_DOCUMENT_DATA: PreviewDocumentData & {
  */
 export const previewDocument = createServerFn({ method: 'POST' })
   .inputValidator(previewDocumentSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<PreviewDocumentResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
 
     const { documentType } = data;
@@ -407,6 +421,10 @@ export const previewDocument = createServerFn({ method: 'POST' })
           unitPrice: Number(item.unitPrice) || 0,
           total: Number(item.lineTotal) || Number(item.unitPrice) * (Number(item.quantity) || 1),
           sku: item.sku ?? undefined,
+          discountPercent: Number(item.discountPercent) || 0,
+          discountAmount: Number(item.discountAmount) || 0,
+          taxAmount: Number(item.taxAmount) || 0,
+          notes: item.notes ?? undefined,
         }));
 
         // Build document data from real order
@@ -558,7 +576,7 @@ export const previewDocument = createServerFn({ method: 'POST' })
       base64,
       mimeType: 'application/pdf',
       previewData: {
-        organization: documentData.organization as { [key: string]: {} },
+        organization: documentData.organization,
         documentType,
         hasLineItems: documentData.order.lineItems.length > 0,
         total: documentData.order.total,

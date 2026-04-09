@@ -7,11 +7,16 @@
 
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
-  DocumentHeader,
   FixedDocumentHeader,
-  AddressBlock,
+  DocumentBodyText,
+  DocumentDetailStrip,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
   PageNumber,
   WorkOrderSignOff,
+  type DetailStripItem,
   pageMargins,
   fixedHeaderClearance,
   colors,
@@ -370,19 +375,6 @@ export interface WorkOrderPdfDocumentProps extends WorkOrderPdfTemplateProps {
 // HELPER FUNCTIONS
 // ============================================================================
 
-function getPriorityColor(priority: WorkOrderPriority | null | undefined): string {
-  switch (priority) {
-    case "urgent":
-    case "high":
-      return colors.status.error;
-    case "medium":
-      return colors.status.warning;
-    case "low":
-    default:
-      return colors.status.success;
-  }
-}
-
 function getPriorityLabel(priority: WorkOrderPriority | null | undefined): string {
   switch (priority) {
     case "urgent":
@@ -499,6 +491,25 @@ function WorkOrderContent({
         phone: data.customer.phone,
         email: data.customer.email,
       };
+  const detailItems = [
+    data.scheduledDate
+      ? {
+          label: "Scheduled",
+          value: formatDateForPdf(data.scheduledDate, locale),
+          weight: 1.4,
+          emphasis: "strong" as const,
+        }
+      : null,
+    data.scheduledTimeWindow ? { label: "Time Window", value: data.scheduledTimeWindow, weight: 1 } : null,
+    data.estimatedDuration ? { label: "Duration", value: data.estimatedDuration, weight: 0.9 } : null,
+    data.priority
+      ? { label: "Priority", value: getPriorityLabel(data.priority), weight: 0.9, emphasis: "subtle" as const }
+      : null,
+  ].filter(Boolean) as DetailStripItem[];
+  const assignedLines = [
+    data.assignedTechnician?.phone ?? null,
+    data.assignedTechnician?.email ?? null,
+  ].filter((line): line is string => Boolean(line));
 
   return (
     <Page size="A4" style={styles.page}>
@@ -508,119 +519,84 @@ function WorkOrderContent({
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header with logo and document info */}
-        <DocumentHeader
-          title="WORK ORDER"
-          documentNumber={data.documentNumber}
-          date={data.issueDate}
+        <DocumentMasthead
+          title="Work Order"
+          subtitle={data.title}
+          meta={[
+            { label: "Work Order", value: data.documentNumber },
+            { label: "Issue Date", value: formatDateForPdf(data.issueDate, locale) },
+            ...(data.orderNumber ? [{ label: "Order", value: data.orderNumber }] : []),
+          ]}
+          callout={{
+            eyebrow: "Field Schedule",
+            title: data.scheduledDate
+              ? formatDateForPdf(data.scheduledDate, locale)
+              : "To Be Scheduled",
+            detail: data.scheduledTimeWindow ?? data.estimatedDuration ?? "Prepare checklist and materials before site arrival.",
+            tone: data.priority === "urgent" || data.priority === "high" ? "warning" : "info",
+          }}
         />
 
-        {/* Two-column: Customer/Site info and Job Info */}
-        <View style={styles.twoColumn}>
-          <View style={[styles.column, styles.leftColumn]}>
-            <AddressBlock
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
               label="Customer / Site"
-              address={siteAddress}
-              showContact
+              name={siteAddress.name ?? data.customer.name}
+              lines={[
+                ...(siteAddress.street1 ? [siteAddress.street1] : []),
+                ...(siteAddress.street2 ? [siteAddress.street2] : []),
+                ...([siteAddress.city, siteAddress.state, siteAddress.postalCode]
+                  .filter(Boolean)
+                  .join(" ")
+                  ? [[siteAddress.city, siteAddress.state, siteAddress.postalCode].filter(Boolean).join(" ")]
+                  : []),
+                ...(siteAddress.country ? [siteAddress.country] : []),
+              ]}
+              mutedLines={[
+                ...(siteAddress.phone ? [siteAddress.phone] : []),
+                ...(siteAddress.email ? [siteAddress.email] : []),
+                ...(data.siteAddress?.accessInstructions
+                  ? [`Access: ${data.siteAddress.accessInstructions}`]
+                  : []),
+              ]}
             />
-            {data.siteAddress?.accessInstructions && (
-              <View style={{ marginTop: spacing.sm }}>
-                <Text style={styles.infoLabel}>Access Instructions</Text>
-                <Text style={styles.infoValue}>
-                  {data.siteAddress.accessInstructions}
-                </Text>
-              </View>
-            )}
-          </View>
+          }
+          right={
+            data.assignedTechnician ? (
+              <DocumentInfoPanel
+                label="Assigned To"
+                name={data.assignedTechnician.name}
+                lines={assignedLines}
+                mutedLines={[
+                  ...(data.jobType ? [`Job Type: ${data.jobType}`] : []),
+                  ...(data.jobTitle && data.jobTitle !== data.title ? [data.jobTitle] : []),
+                ]}
+              />
+            ) : (
+              <DocumentInfoPanel
+                label="Assigned To"
+                name="Unassigned"
+                lines={[]}
+                mutedLines={data.jobType ? [`Job Type: ${data.jobType}`] : undefined}
+              />
+            )
+          }
+        />
 
-          <View style={styles.column}>
-            {/* Assigned Technician */}
-            {data.assignedTechnician && (
-              <View style={{ marginBottom: spacing.md }}>
-                <Text style={styles.sectionTitle}>Assigned To</Text>
-                <Text style={styles.infoValue}>{data.assignedTechnician.name}</Text>
-                {data.assignedTechnician.phone && (
-                  <Text
-                    style={[styles.infoValue, { fontSize: fontSize.xs, color: colors.text.secondary }]}
-                  >
-                    {data.assignedTechnician.phone}
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Job Info Section */}
-        <View style={styles.jobInfoSection}>
-          <Text style={styles.sectionTitle}>Job Details</Text>
-          <View style={styles.infoGrid}>
-            {data.orderNumber && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Order Reference</Text>
-                <Text style={styles.infoValue}>{data.orderNumber}</Text>
-              </View>
-            )}
-            {data.jobType && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Job Type</Text>
-                <Text style={styles.infoValue}>{data.jobType}</Text>
-              </View>
-            )}
-            {data.scheduledDate && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Scheduled Date</Text>
-                <Text style={styles.infoValue}>
-                  {formatDateForPdf(data.scheduledDate, locale)}
-                </Text>
-              </View>
-            )}
-            {data.scheduledTimeWindow && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Time Window</Text>
-                <Text style={styles.infoValue}>{data.scheduledTimeWindow}</Text>
-              </View>
-            )}
-            {data.estimatedDuration && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Est. Duration</Text>
-                <Text style={styles.infoValue}>{data.estimatedDuration}</Text>
-              </View>
-            )}
-            {data.priority && (
-              <View style={styles.infoItem}>
-                <Text style={styles.infoLabel}>Priority</Text>
-                <View
-                  style={[
-                    styles.priorityBadge,
-                    { backgroundColor: getPriorityColor(data.priority) },
-                  ]}
-                >
-                  <Text style={styles.priorityText}>
-                    {getPriorityLabel(data.priority)}
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
+        <DocumentDetailStrip items={detailItems} />
 
         {/* Job Description */}
         {(data.title || data.description) && (
-          <View style={styles.descriptionSection}>
-            <Text style={styles.sectionTitle}>{data.title || "Work Description"}</Text>
-            {data.description && (
-              <Text style={styles.descriptionText}>{data.description}</Text>
-            )}
-          </View>
+          <DocumentSectionCard title={data.title || "Work Description"}>
+            <DocumentBodyText>{data.description ?? data.title}</DocumentBodyText>
+          </DocumentSectionCard>
         )}
 
         {/* Safety Notes */}
         {data.safetyNotes && (
-          <View style={styles.safetySection}>
-            <Text style={styles.safetyTitle}>SAFETY NOTES</Text>
-            <Text style={styles.safetyText}>{data.safetyNotes}</Text>
-          </View>
+          <DocumentSectionCard title="Safety Notes">
+            <DocumentBodyText>{data.safetyNotes}</DocumentBodyText>
+          </DocumentSectionCard>
         )}
 
         {/* Checklist */}
@@ -635,20 +611,16 @@ function WorkOrderContent({
 
         {/* Technician Notes */}
         {data.technicianNotes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.sectionTitle}>Technician Notes</Text>
-            <View style={styles.notesBox}>
-              <Text style={styles.notesText}>{data.technicianNotes}</Text>
-            </View>
-          </View>
+          <DocumentSectionCard title="Technician Notes">
+            <DocumentBodyText>{data.technicianNotes}</DocumentBodyText>
+          </DocumentSectionCard>
         )}
 
         {/* Internal Notes */}
         {data.internalNotes && (
-          <View style={styles.internalNotesSection}>
-            <Text style={styles.internalNotesTitle}>INTERNAL NOTES</Text>
-            <Text style={styles.internalNotesText}>{data.internalNotes}</Text>
-          </View>
+          <DocumentSectionCard title="Internal Notes">
+            <DocumentBodyText>{data.internalNotes}</DocumentBodyText>
+          </DocumentSectionCard>
         )}
 
         {/* Signature Section */}

@@ -153,9 +153,39 @@ export {
 // ============================================================================
 
 export {
+  buildSerialManifestGroups,
+  buildSerialManifestRows,
+  type SerialManifestGroup,
+  type SerialManifestLineItem,
+  type SerialManifestRow,
+} from "./serial-number-manifest";
+
+export {
   SerialNumbersCell,
+  SerialNumbersSummary,
   type SerialNumbersCellProps,
+  type SerialNumbersSummaryProps,
 } from "./serial-numbers-cell";
+
+// ============================================================================
+// DOCUMENT SURFACES
+// ============================================================================
+
+export {
+  DocumentBodyText,
+  DocumentDetailStrip,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
+  DocumentSplitRow,
+  DocumentSummaryCard,
+  DocumentBulletList,
+  type DetailStripItem,
+  type SummaryCardRow,
+  type SurfaceCallout,
+  type SurfaceMetaItem,
+} from "./document-surfaces";
 
 // ============================================================================
 // ICONS

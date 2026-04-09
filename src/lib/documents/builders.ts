@@ -85,48 +85,70 @@ export interface CustomerDataFromDb {
 // TYPES - Preview document data shape
 // ============================================================================
 
-export interface PreviewDocumentData {
-  organization: Record<string, unknown>;
-  customer: {
-    name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
-    addressLine2?: string;
-    city?: string;
-    state?: string;
-    postalCode?: string;
-    postcode?: string;
-    country?: string;
-    billingAddress?: AddressRecord;
-    shippingAddress?: AddressRecord;
-    primaryAddress?: AddressRecord;
-  };
-  order: {
-    orderNumber: string;
-    createdAt: string;
-    dueDate?: string;
-    validUntil: string;
-    billingAddress?: AddressRecord;
-    shippingAddress?: AddressRecord;
-    lineItems: Array<{
-      description: string;
-      quantity: number;
-      unitPrice: number;
-      total: number;
-      sku?: string;
-    }>;
-    subtotal: number;
-    taxRate?: number;
-    taxAmount: number;
-    discount?: number;
-    shippingAmount?: number;
-    paidAmount?: number;
-    balanceDue?: number;
+export interface PreviewOrganizationData {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  abn?: string;
+  logoUrl?: string | null;
+}
+
+export interface PreviewCustomerData {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  postcode?: string;
+  country?: string;
+  billingAddress?: AddressRecord;
+  shippingAddress?: AddressRecord;
+  primaryAddress?: AddressRecord;
+}
+
+export interface PreviewOrderData {
+  orderNumber: string;
+  createdAt: string;
+  dueDate?: string;
+  validUntil: string;
+  billingAddress?: AddressRecord;
+  shippingAddress?: AddressRecord;
+  lineItems: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
     total: number;
+    sku?: string;
+    discountPercent?: number;
+    discountAmount?: number;
+    taxAmount?: number;
+    taxRate?: number;
     notes?: string;
-    terms?: string;
-  };
+  }>;
+  subtotal: number;
+  taxRate?: number;
+  taxAmount: number;
+  discount?: number;
+  shippingAmount?: number;
+  paidAmount?: number;
+  balanceDue?: number;
+  total: number;
+  notes?: string;
+  terms?: string;
+}
+
+export interface PreviewDocumentData {
+  organization: PreviewOrganizationData;
+  customer: PreviewCustomerData;
+  order: PreviewOrderData;
 }
 
 function isMeaningfulAddress(address?: AddressRecord | null) {
@@ -320,11 +342,12 @@ export function buildDocumentOrderFromPreviewData(
       description: item.description,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      discountPercent: 0,
-      discountAmount: 0,
-      taxAmount: 0,
+      discountPercent: item.discountPercent ?? 0,
+      discountAmount: item.discountAmount ?? 0,
+      taxAmount: item.taxAmount ?? 0,
+      taxRate: item.taxRate ?? null,
       total: item.total,
-      notes: null,
+      notes: item.notes ?? null,
     })
   );
 

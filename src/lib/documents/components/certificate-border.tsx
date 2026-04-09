@@ -208,6 +208,7 @@ const ornamentStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginVertical: spacing.md,
+    alignSelf: "center",
   },
   sealInner: {
     width: 48,

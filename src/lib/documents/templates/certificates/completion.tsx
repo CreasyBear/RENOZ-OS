@@ -16,6 +16,13 @@ import {
 } from "../../components/certificate-border";
 import { PageNumber } from "../../components/footer";
 import {
+  DocumentBodyText,
+  DocumentBulletList,
+  DocumentDetailStrip,
+  DocumentMasthead,
+  DocumentSectionCard,
+} from "../../components";
+import {
   colors,
   fontSize,
   spacing,
@@ -43,8 +50,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: "center",
-    paddingVertical: spacing["2xl"],
+    alignItems: "stretch",
+    paddingVertical: spacing.lg,
   },
   // Logo area
   logoContainer: {
@@ -92,8 +99,8 @@ const styles = StyleSheet.create({
   // Main content area
   mainContent: {
     width: "100%",
-    paddingHorizontal: spacing["2xl"],
-    marginVertical: spacing.lg,
+    paddingHorizontal: 0,
+    marginVertical: spacing.md,
   },
   // Customer section
   certifyText: {
@@ -375,98 +382,61 @@ function CompletionCertificateContent({ data }: CompletionCertificatePdfTemplate
     };
     return typeMap[type] || String(type).charAt(0).toUpperCase() + String(type).slice(1);
   };
+  const logoUrl = organization.branding?.logoDataUrl ?? null;
+  const detailItems = [
+    { label: "Scheduled", value: formatDateForPdf(data.scheduledDate, locale) },
+    { label: "Completed", value: formatDateForPdf(data.completedAt, locale) },
+    ...(data.orderNumber ? [{ label: "Order", value: data.orderNumber }] : []),
+  ];
 
   return (
     <Page size="A4" style={styles.page}>
       <CertificateBorder primaryColor={primaryColor} variant="classic">
         <View style={styles.content}>
-          {/* Logo/Organization */}
-          <View style={styles.logoContainer}>
-            {organization.branding?.logoDataUrl ? (
-              <Image
-                src={organization.branding.logoDataUrl}
-                style={styles.logo}
-              />
-            ) : (
-              <Text style={[styles.orgName, { color: primaryColor }]}>
-                {organization.name}
-              </Text>
-            )}
-          </View>
-
-          {/* Title */}
-          <View style={styles.titleContainer}>
-            <Text style={[styles.title, { color: primaryColor }]}>
-              CERTIFICATE OF COMPLETION
-            </Text>
-            <Text style={styles.subtitle}>
-              {getJobTypeDisplay(data.jobType)}
-            </Text>
-            <Text style={styles.certificateNumber}>
-              Job Reference: {data.jobNumber}
-            </Text>
-          </View>
+          <DocumentMasthead
+            title="Certificate of Completion"
+            subtitle={data.jobTitle}
+            variant="certificate"
+            meta={[
+              { label: "Job Reference", value: data.jobNumber },
+              { label: "Customer", value: data.customerName },
+              { label: "Job Type", value: getJobTypeDisplay(data.jobType) },
+            ]}
+            callout={{
+              eyebrow: "Completed On",
+              title: formatDateForPdf(data.completedAt, locale),
+              detail: `Issued by ${organization.name}`,
+              tone: "success",
+            }}
+            logoUrl={logoUrl}
+          />
 
           <CertificateDivider primaryColor={primaryColor} />
 
-          {/* Main Content */}
           <View style={styles.mainContent}>
-            <Text style={styles.certifyText}>
-              This is to certify that the following work has been completed for
-            </Text>
-            <Text style={styles.customerName}>{data.customerName}</Text>
+            <DocumentSectionCard title="Completed For" variant="formal">
+              <DocumentBodyText>{data.customerName}</DocumentBodyText>
+            </DocumentSectionCard>
 
-            {/* Job Details */}
-            <View style={styles.jobSection}>
-              <Text style={styles.jobTitle}>{data.jobTitle}</Text>
-              <Text style={styles.jobNumber}>{`Job No: ${data.jobNumber}`}</Text>
-              {data.jobDescription && (
-                <Text style={styles.jobDescription}>{data.jobDescription}</Text>
-              )}
-            </View>
+            <DocumentSectionCard title="Completed Work" variant="formal">
+              <>
+                <DocumentBodyText>{data.jobTitle}</DocumentBodyText>
+                {data.jobDescription ? (
+                  <DocumentBodyText>{data.jobDescription}</DocumentBodyText>
+                ) : null}
+                {data.jobAddress ? (
+                  <DocumentBodyText>{`Service Location: ${data.jobAddress}`}</DocumentBodyText>
+                ) : null}
+              </>
+            </DocumentSectionCard>
 
-            {/* Location */}
-            {data.jobAddress && (
-              <View style={styles.addressSection}>
-                <Text style={styles.addressLabel}>Service Location</Text>
-                <Text style={styles.addressText}>{data.jobAddress}</Text>
-              </View>
-            )}
+            <DocumentDetailStrip items={detailItems} variant="formal" />
 
-            {/* Details */}
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Scheduled Date</Text>
-                <Text style={styles.detailValue}>
-                  {formatDateForPdf(data.scheduledDate, locale)}
-                </Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Completed Date</Text>
-                <Text style={styles.detailValue}>
-                  {formatDateForPdf(data.completedAt, locale)}
-                </Text>
-              </View>
-              {data.orderNumber && (
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Order Number</Text>
-                  <Text style={styles.detailValue}>{data.orderNumber}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Work Performed */}
-            {data.workPerformed && data.workPerformed.length > 0 && (
-              <View style={styles.workSection}>
-                <Text style={styles.workTitle}>Work Performed</Text>
-                {data.workPerformed.map((item, index) => (
-                  <View key={index} style={styles.workItem}>
-                    <Text style={styles.workBullet}>*</Text>
-                    <Text style={styles.workText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            {data.workPerformed && data.workPerformed.length > 0 ? (
+              <DocumentSectionCard title="Work Performed" variant="formal">
+                <DocumentBulletList items={data.workPerformed} />
+              </DocumentSectionCard>
+            ) : null}
           </View>
 
           <CertificateDivider primaryColor={primaryColor} />

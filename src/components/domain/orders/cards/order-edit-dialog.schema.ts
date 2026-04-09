@@ -1,9 +1,16 @@
 import { z } from 'zod';
+import { orderAddressSchema } from '@/lib/schemas/orders/orders';
 
 const blankStringToUndefined = (value: unknown) => {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;
+};
+
+const trimToUndefined = (value?: string) => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 };
 
 export const editOrderSchema = z.object({
@@ -67,3 +74,33 @@ export const editOrderSchema = z.object({
 });
 
 export type EditOrderFormData = z.infer<typeof editOrderSchema>;
+
+export function normalizeEditOrderShippingAddress(
+  address: EditOrderFormData['shippingAddress']
+) {
+  const normalized = {
+    street1: trimToUndefined(address.street1),
+    street2: trimToUndefined(address.street2),
+    city: trimToUndefined(address.city),
+    state: trimToUndefined(address.state),
+    postalCode: trimToUndefined(address.postalCode),
+    country: trimToUndefined(address.country)?.toUpperCase(),
+    contactName: trimToUndefined(address.contactName),
+    contactPhone: trimToUndefined(address.contactPhone),
+  };
+
+  if (!Object.values(normalized).some(Boolean)) {
+    return null;
+  }
+
+  return orderAddressSchema.parse({
+    street1: normalized.street1 ?? '',
+    city: normalized.city ?? '',
+    state: normalized.state ?? '',
+    postalCode: normalized.postalCode ?? '',
+    country: normalized.country ?? 'AU',
+    ...(normalized.street2 ? { street2: normalized.street2 } : {}),
+    ...(normalized.contactName ? { contactName: normalized.contactName } : {}),
+    ...(normalized.contactPhone ? { contactPhone: normalized.contactPhone } : {}),
+  });
+}

@@ -5,11 +5,18 @@
  * are fully picked and ready for dispatch.
  */
 
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   DocumentFixedHeader,
-  SerialNumbersCell,
+  DocumentBodyText,
+  DocumentDetailStrip,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
+  SerialNumbersSummary,
+  type DetailStripItem,
   formatAddressLines,
   formatDateForPdf,
   colors,
@@ -216,7 +223,6 @@ const styles = StyleSheet.create({
   colSku: { flex: 1 },
   colDescription: { flex: 2.5 },
   colQty: { width: 50, textAlign: "center" },
-  colSerial: { width: 70 },
   notesSection: {
     marginTop: 20,
     paddingTop: 12,
@@ -243,6 +249,18 @@ function DispatchNoteContent({ data }: DispatchNotePdfTemplateProps) {
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
   const fromAddressLines = formatAddressLines(organization.address);
   const toAddressLines = formatAddressLines(data.shippingAddress);
+  const detailItems = [
+    {
+      label: "Dispatch Date",
+      value: formatDateForPdf(data.dispatchDate, locale, "short"),
+      weight: 1.4,
+      emphasis: "strong" as const,
+    },
+    data.carrier ? { label: "Carrier", value: data.carrier, weight: 1 } : null,
+    data.trackingNumber
+      ? { label: "Tracking", value: data.trackingNumber, weight: 1, emphasis: "subtle" as const }
+      : null,
+  ].filter(Boolean) as DetailStripItem[];
 
   return (
     <Page size="A4" style={styles.page}>
@@ -252,93 +270,44 @@ function DispatchNoteContent({ data }: DispatchNotePdfTemplateProps) {
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        <View style={styles.headerRow}>
-          <View style={styles.metaSection}>
-            <Text style={styles.metaTitle}>Dispatch Note</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Note #: </Text>
-              <Text style={styles.metaValue}>{data.documentNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Order #: </Text>
-              <Text style={styles.metaValue}>{data.orderNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Issued: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.issueDate, locale, "short")}
-              </Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Dispatch: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.dispatchDate, locale, "short")}
-              </Text>
-            </View>
-          </View>
+        <DocumentMasthead
+          title="Dispatch Note"
+          meta={[
+            { label: "Note", value: data.documentNumber },
+            { label: "Order", value: data.orderNumber },
+            { label: "Issued", value: formatDateForPdf(data.issueDate, locale, "short") },
+          ]}
+          callout={{
+            eyebrow: "Ready for Dispatch",
+            title: formatDateForPdf(data.dispatchDate, locale, "short"),
+            detail: data.trackingNumber ? `Tracking ${data.trackingNumber}` : "Awaiting carrier handoff.",
+            tone: "info",
+          }}
+          logoUrl={logoUrl}
+        />
 
-          {logoUrl ? (
-            <View style={styles.logoWrapper}>
-              <Image src={logoUrl} style={styles.logo} />
-            </View>
-          ) : null}
-        </View>
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
+              label="From"
+              name={organization.name}
+              lines={[...fromAddressLines, ...(organization.phone ? [organization.phone] : [])]}
+            />
+          }
+          right={
+            <DocumentInfoPanel
+              label="Ship To"
+              name={data.customer.name}
+              lines={toAddressLines}
+              mutedLines={[
+                ...(data.shippingAddress?.contactName ? [`Attn: ${data.shippingAddress.contactName}`] : []),
+                ...(data.shippingAddress?.contactPhone ? [data.shippingAddress.contactPhone] : []),
+              ]}
+            />
+          }
+        />
 
-        <View style={styles.fromToRow}>
-          <View style={styles.fromColumn}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <Text style={styles.sectionName}>{organization.name}</Text>
-            {fromAddressLines.map((line) => (
-              <Text key={line} style={styles.sectionDetail}>
-                {line}
-              </Text>
-            ))}
-            {organization.phone ? (
-              <Text style={styles.sectionDetail}>{organization.phone}</Text>
-            ) : null}
-          </View>
-
-          <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Ship To</Text>
-            <Text style={styles.sectionName}>{data.customer.name}</Text>
-            {data.shippingAddress?.contactName ? (
-              <Text style={styles.sectionDetail}>
-                Attn: {data.shippingAddress.contactName}
-              </Text>
-            ) : null}
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
-                <Text key={line} style={styles.sectionDetail}>
-                  {line}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.sectionDetail}>-</Text>
-            )}
-            {data.shippingAddress?.contactPhone ? (
-              <Text style={styles.sectionDetail}>
-                {data.shippingAddress.contactPhone}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        {(data.carrier || data.trackingNumber) ? (
-          <View style={styles.detailRow}>
-            {data.carrier ? (
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Carrier</Text>
-                <Text style={styles.detailValue}>{data.carrier}</Text>
-              </View>
-            ) : null}
-            {data.trackingNumber ? (
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Tracking #</Text>
-                <Text style={styles.detailValue}>{data.trackingNumber}</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        <DocumentDetailStrip items={detailItems} />
 
         <View style={styles.table}>
           <View style={styles.tableHeader}>
@@ -346,9 +315,6 @@ function DispatchNoteContent({ data }: DispatchNotePdfTemplateProps) {
             <Text style={[styles.tableHeaderCell, styles.colSku]}>SKU</Text>
             <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
-            {hasSerials ? (
-              <Text style={[styles.tableHeaderCell, styles.colSerial]}>Serials</Text>
-            ) : null}
           </View>
 
           {data.lineItems.map((item, index) => (
@@ -362,20 +328,21 @@ function DispatchNoteContent({ data }: DispatchNotePdfTemplateProps) {
                 ) : null}
               </View>
               <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
-              {hasSerials ? (
-                <View style={styles.colSerial}>
-                  <SerialNumbersCell serialNumbers={item.serialNumbers ?? []} />
-                </View>
-              ) : null}
             </View>
           ))}
         </View>
 
+        {hasSerials ? (
+          <SerialNumbersSummary
+            title="Serialized Items Ready for Dispatch"
+            items={data.lineItems}
+          />
+        ) : null}
+
         {data.notes ? (
-          <View style={styles.notesSection}>
-            <Text style={styles.notesTitle}>Dispatch Notes</Text>
-            <Text style={styles.notesText}>{data.notes}</Text>
-          </View>
+          <DocumentSectionCard title="Dispatch Notes">
+            <DocumentBodyText>{data.notes}</DocumentBodyText>
+          </DocumentSectionCard>
         ) : null}
       </View>
 

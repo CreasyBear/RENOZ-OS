@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildDocumentOrderFromDb } from '@/lib/documents/builders';
+import { buildDocumentOrderFromDb, buildDocumentOrderFromPreviewData } from '@/lib/documents/builders';
+import { buildFinancialTableRows } from '@/lib/documents/financial-presentation';
 
 describe('document builders', () => {
   it('prefers order billing and shipping addresses over customer fallbacks', () => {
@@ -135,5 +136,38 @@ describe('document builders', () => {
 
     expect(order.billingAddress?.addressLine1).toBe('Customer Bill 2');
     expect(order.shippingAddress?.addressLine1).toBe('Customer Ship 2');
+  });
+
+  it('preserves preview line-item tax and discount data for financial presentation', () => {
+    const order = buildDocumentOrderFromPreviewData({
+      organization: {
+        name: 'Acme',
+      },
+      customer: {
+        name: 'Acme Customer',
+      },
+      order: {
+        orderNumber: 'ORD-003',
+        createdAt: '2026-04-08T00:00:00.000Z',
+        validUntil: '2026-04-15T00:00:00.000Z',
+        lineItems: [
+          {
+            description: 'Install',
+            quantity: 1,
+            unitPrice: 100,
+            total: 110,
+            discountPercent: 0,
+            discountAmount: 0,
+            taxAmount: 10,
+          },
+        ],
+        subtotal: 100,
+        taxAmount: 10,
+        total: 110,
+      },
+    });
+
+    expect(order.lineItems[0]?.taxAmount).toBe(10);
+    expect(buildFinancialTableRows(order)[0]?.amount).toBe(100);
   });
 });

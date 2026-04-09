@@ -680,6 +680,12 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       }
 
       case 'packing-slip': {
+        const shippingAddress = resolveOperationalShippingAddress({
+          orderShippingAddress: orderData.shippingAddress,
+          customerShippingAddress: customerData.shippingAddress,
+          customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
+          customerName: customerData.name,
+        });
         const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
         const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
           orderData.lineItems.map((item) => item.id)
@@ -715,17 +721,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
             email: customerData.email,
             phone: customerData.phone,
           },
-          shippingAddress: orderData.shippingAddress ? {
-            name: orderData.shippingAddress.contactName || customerData.name,
-            addressLine1: orderData.shippingAddress.street1,
-            addressLine2: orderData.shippingAddress.street2,
-            city: orderData.shippingAddress.city,
-            state: orderData.shippingAddress.state,
-            postalCode: orderData.shippingAddress.postalCode,
-            country: orderData.shippingAddress.country,
-            contactName: orderData.shippingAddress.contactName,
-            contactPhone: orderData.shippingAddress.contactPhone,
-          } : null,
+          shippingAddress,
           lineItems: packingSlipLineItems,
           carrier: data.carrier,
           shippingMethod: data.shippingMethod,
@@ -744,6 +740,12 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       }
 
       case 'delivery-note': {
+        const shippingAddress = resolveOperationalShippingAddress({
+          orderShippingAddress: orderData.shippingAddress,
+          customerShippingAddress: customerData.shippingAddress,
+          customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
+          customerName: customerData.name,
+        });
         const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
         const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
           orderData.lineItems.map((item) => item.id)
@@ -780,17 +782,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
             email: customerData.email,
             phone: customerData.phone,
           },
-          shippingAddress: orderData.shippingAddress ? {
-            name: orderData.shippingAddress.contactName || customerData.name,
-            addressLine1: orderData.shippingAddress.street1,
-            addressLine2: orderData.shippingAddress.street2,
-            city: orderData.shippingAddress.city,
-            state: orderData.shippingAddress.state,
-            postalCode: orderData.shippingAddress.postalCode,
-            country: orderData.shippingAddress.country,
-            contactName: orderData.shippingAddress.contactName,
-            contactPhone: orderData.shippingAddress.contactPhone,
-          } : null,
+          shippingAddress,
           lineItems: deliveryNoteLineItems,
           carrier: data.carrier,
           trackingNumber: undefined, // trackingNumber not in input schema

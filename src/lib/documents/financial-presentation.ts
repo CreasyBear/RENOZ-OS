@@ -1,10 +1,25 @@
-import type { DocumentAddress, DocumentOrder } from './types';
+import type { DocumentAddress, DocumentLineItem, DocumentOrder } from './types';
 
 export interface FinancialSummaryRow {
-  key: 'subtotal' | 'discount' | 'shipping' | 'tax' | 'total' | 'balanceDue';
+  key: 'subtotal' | 'discount' | 'tax' | 'total' | 'balanceDue';
   label: string;
   amount: number;
   emphasized?: boolean;
+}
+
+export interface FinancialTableRow {
+  key: string;
+  description: string;
+  sku?: string | null;
+  notes?: string | null;
+  quantity: number;
+  unitPrice: number;
+  taxRate?: number | null;
+  amount: number;
+}
+
+function roundCurrency(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function normalizeAddressValue(value?: string | null) {
@@ -54,14 +69,47 @@ export function getFinancialDocumentRecipientName(
   return normalizeAddressValue(address?.contactName) || fallbackName;
 }
 
+export function getFinancialLineAmount(
+  lineItem: Pick<DocumentLineItem, 'total' | 'taxAmount'>
+): number {
+  return roundCurrency(lineItem.total - (lineItem.taxAmount ?? 0));
+}
+
+export function buildFinancialTableRows(
+  order: Pick<DocumentOrder, 'lineItems' | 'shippingAmount'>
+): FinancialTableRow[] {
+  const rows: FinancialTableRow[] = order.lineItems.map((lineItem) => ({
+    key: lineItem.id,
+    description: lineItem.description,
+    sku: lineItem.sku,
+    notes: lineItem.notes,
+    quantity: lineItem.quantity,
+    unitPrice: lineItem.unitPrice,
+    taxRate: lineItem.taxRate,
+    amount: getFinancialLineAmount(lineItem),
+  }));
+
+  if ((order.shippingAmount ?? 0) > 0) {
+    rows.push({
+      key: 'shipping-charge',
+      description: 'Shipping',
+      quantity: 1,
+      unitPrice: order.shippingAmount ?? 0,
+      amount: order.shippingAmount ?? 0,
+    });
+  }
+
+  return rows;
+}
+
 export function buildFinancialSummaryRows(
-  order: Pick<DocumentOrder, 'subtotal' | 'discount' | 'shippingAmount' | 'taxAmount' | 'total' | 'balanceDue'>,
+  order: Pick<DocumentOrder, 'subtotal' | 'discount' | 'taxAmount' | 'total' | 'balanceDue'>,
   options?: { includeBalanceDue?: boolean },
 ): FinancialSummaryRow[] {
   const rows: FinancialSummaryRow[] = [
     {
       key: 'subtotal',
-      label: 'Subtotal',
+      label: 'Subtotal (before GST)',
       amount: order.subtotal,
     },
   ];
@@ -74,17 +122,9 @@ export function buildFinancialSummaryRows(
     });
   }
 
-  if ((order.shippingAmount ?? 0) > 0) {
-    rows.push({
-      key: 'shipping',
-      label: 'Shipping',
-      amount: order.shippingAmount ?? 0,
-    });
-  }
-
   rows.push({
     key: 'tax',
-    label: 'Tax',
+    label: 'GST (10%)',
     amount: order.taxAmount,
   });
 
