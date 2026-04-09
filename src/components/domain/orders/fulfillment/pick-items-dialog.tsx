@@ -273,16 +273,16 @@ export const PickItemsDialog = memo(function PickItemsDialog({
         if (result.orderStatus === 'picked') {
           if (onShipOrder) {
             onShipOrder();
-            toastSuccess('All items picked. Ready to ship.', {
-              description: 'Ship Order dialog opened. Create a shipment with carrier and tracking.',
+            toastSuccess('All items picked. Fulfillment ready for review.', {
+              description: 'Shipping dialog opened. Create a shipment or review any existing drafts.',
               action: {
-                label: 'Ship Order',
+                label: 'Review Fulfillment',
                 onClick: () => onShipOrder(),
               },
             });
           } else {
-            toastSuccess('All items picked. Ready to ship.', {
-              description: 'Proceed to create a shipment.',
+            toastSuccess('All items picked. Fulfillment ready for review.', {
+              description: 'Open Fulfillment to create a shipment or review draft shipments.',
               action: {
                 label: 'Go to Fulfillment',
                 onClick: () => onSuccess?.(),

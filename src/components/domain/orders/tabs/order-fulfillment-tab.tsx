@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 import { PackageCheck, Truck, Info } from 'lucide-react';
 import { ShipmentList } from '../fulfillment/shipment-list';
 import { AmendmentList } from '../amendments';
-import { useCancelAmendment } from '@/hooks/orders';
+import { useCancelAmendment, useOrderShipments } from '@/hooks/orders';
 import { OrderLineItemSerialsCell, SerialNumbersList } from '../components';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { useUserLookup } from '@/hooks/users';
 import { toastSuccess, toastError } from '@/hooks';
 import type { OrderWithCustomer } from '@/hooks/orders/use-order-detail';
+import { summarizeOrderShipmentAvailability } from '../fulfillment/shipment-availability';
 
 // ============================================================================
 // TYPES
@@ -112,6 +113,14 @@ function FulfillmentActionBar({
 
   const { onPickItems, onShipOrder, onConfirmDelivery } = fulfillmentActions;
   const progress = computeFulfillmentProgress(lineItems);
+  const { data: shipments } = useOrderShipments(orderId ?? '', !!orderId);
+  const shipmentAvailability = summarizeOrderShipmentAvailability(lineItems ?? [], shipments ?? []);
+  const hasOnlyPendingDraftReservations =
+    shipmentAvailability.pendingShipmentCount > 0 && !shipmentAvailability.hasReservableItems;
+  const draftReservationMessage =
+    shipmentAvailability.pendingShipmentCount === 1
+      ? 'Picked stock is already reserved in 1 pending shipment draft below.'
+      : `Picked stock is already reserved in ${shipmentAvailability.pendingShipmentCount} pending shipment drafts below.`;
 
   if ((orderStatus === 'confirmed' || orderStatus === 'picking') && onPickItems) {
     return (
@@ -142,6 +151,32 @@ function FulfillmentActionBar({
             Pick Items
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (
+    hasOnlyPendingDraftReservations &&
+    orderId &&
+    (orderStatus === 'picked' || orderStatus === 'partially_shipped')
+  ) {
+    return (
+      <div className="mb-4 space-y-3">
+        <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <Truck className="h-4 w-4" />
+            <span>{draftReservationMessage}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {onPickItems && (
+              <Button size="sm" variant="outline" onClick={onPickItems}>
+                <PackageCheck className="h-4 w-4 mr-2" />
+                Pick / Unpick
+              </Button>
+            )}
+          </div>
+        </div>
+        <ShipmentList orderId={orderId} onConfirmDelivery={onConfirmDelivery} />
       </div>
     );
   }

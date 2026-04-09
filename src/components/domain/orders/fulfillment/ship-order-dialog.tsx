@@ -59,6 +59,7 @@ import { toast } from "sonner";
 import { toastSuccess, toastError } from "@/hooks";
 import {
   useOrderWithCustomer,
+  useOrderShipments,
   useCreateShipment,
   useMarkShipped,
   useRequestAmendment,
@@ -87,9 +88,16 @@ import {
   shipOrderFormSchema,
   type ShipOrderFormData,
 } from "@/lib/schemas/orders/ship-order-form";
+import {
+  getLineItemShipmentAvailability,
+  summarizePendingShipmentReservations,
+} from "./shipment-availability";
+
+const SELECT_PLACEHOLDER_VALUE = "__placeholder__";
 const FALLBACK_RECIPIENT_NAME = "Recipient";
 const CARRIERS = [
   { value: "australia_post", label: "Australia Post" },
+  { value: "chemcouriers", label: "Chemcouriers" },
   { value: "startrack", label: "StarTrack" },
   { value: "tnt", label: "TNT" },
   { value: "dhl", label: "DHL" },
@@ -102,6 +110,7 @@ const CARRIERS = [
 ];
 const CARRIER_SERVICES: Record<string, readonly string[]> = {
   australia_post: ["Express Post", "Parcel Post", "Express Courier"],
+  chemcouriers: ["Road", "Air", "Express"],
   startrack: ["Express", "Premium", "Standard"],
   tnt: ["Express", "Road Express", "Economy"],
   dhl: ["Express Worldwide", "Express Easy"],
@@ -110,7 +119,7 @@ const CARRIER_SERVICES: Record<string, readonly string[]> = {
   aramex: ["Express", "Economy"],
   toll: ["Priority", "IPEC"],
   couriers_please: ["Standard", "Express"],
-  other: ["Standard"],
+  other: [],
 };
 const AU_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
 
@@ -132,6 +141,7 @@ interface LineItemSelection {
   productName: string;
   sku: string | null;
   availableQty: number;
+  reservedQty: number;
   pickedQty: number;
   shippedQty: number;
   selectedQty: number;
@@ -167,13 +177,6 @@ function hasAnyAddress(
     values.addressState?.trim() ||
     values.addressPostcode?.trim()
   );
-}
-
-function getLineItemAvailableToShip(item: {
-  qtyPicked?: number | null;
-  qtyShipped?: number | null;
-}) {
-  return Math.max(0, Number(item.qtyPicked ?? 0) - Number(item.qtyShipped ?? 0));
 }
 
 /** Build address options for picker: customer addresses + order shipping (if present) */
@@ -224,6 +227,12 @@ function buildAddressOptions(order: OrderWithCustomer | null | undefined): Addre
   return options;
 }
 
+function resolveCarrierValue(values: Pick<ShipOrderFormData, "carrier" | "customCarrier">) {
+  return (
+    values.carrier === "other" ? values.customCarrier?.trim() : values.carrier?.trim()
+  ) ?? "";
+}
+
 function handleShipmentError(
   error: unknown,
   context: { orderId: string; shipmentId?: string },
@@ -253,6 +262,7 @@ function handleShipmentError(
 
 const getDefaultFormValues = (): ShipOrderFormData => ({
   carrier: "",
+  customCarrier: "",
   carrierService: "",
   trackingNumber: "",
   shippingCost: undefined,
@@ -293,6 +303,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     orderId,
     enabled: open,
   });
+  const { data: shipments, isLoading: shipmentsLoading } = useOrderShipments(orderId, open);
   const createShipmentMutation = useCreateShipment();
   const markShippedMutation = useMarkShipped();
   const requestAmendmentMutation = useRequestAmendment();
@@ -302,6 +313,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const selectedItems = getSelectedItems(itemSelections);
   const totalQtyToShip = selectedItems.reduce((sum, i) => sum + i.selectedQty, 0);
   const totalAvailableQty = itemSelections.reduce((sum, i) => sum + i.availableQty, 0);
+  const totalReservedQty = itemSelections.reduce((sum, i) => sum + i.reservedQty, 0);
   const remainingUnfulfilled = totalAvailableQty - totalQtyToShip;
   const isPartialShipment = remainingUnfulfilled > 0 && totalQtyToShip > 0;
   const quantitiesChanged = itemSelections.some(
@@ -331,7 +343,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           return;
         }
       }
-      if (values.shipNow && !values.carrier) {
+      if (values.shipNow && !resolveCarrierValue(values)) {
         toastError("Please select a carrier to mark as shipped");
         return;
       }
@@ -342,6 +354,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       await performCreateShipmentRef.current(values);
     },
   });
+  const resolvedCarrier = resolveCarrierValue(form.state.values);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -378,6 +391,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           return;
         }
       }
+      const carrierToUse = resolveCarrierValue(values);
       // Field mapping: form addressPostcode -> API postcode; server/order uses postalCode
       const shippingAddress = hasAnyAddress(values)
         ? {
@@ -414,7 +428,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       try {
         const shipment = await createShipmentMutation.mutateAsync({
           orderId,
-          carrier: values.carrier || undefined,
+          carrier: carrierToUse || undefined,
           carrierService: values.carrierService || undefined,
           trackingNumber: values.trackingNumber || undefined,
           shippingCost: shippingCostCents,
@@ -433,12 +447,12 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           })),
         });
 
-        if (values.shipNow && values.carrier) {
+        if (values.shipNow && carrierToUse) {
           try {
             await markShippedMutation.mutateAsync({
               id: shipment.id,
               idempotencyKey: `shipment-mark-shipped:${shipment.id}`,
-              carrier: values.carrier,
+              carrier: carrierToUse,
               carrierService: values.carrierService || undefined,
               trackingNumber: values.trackingNumber || undefined,
               shippingCost: shippingCostCents,
@@ -504,7 +518,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
         const totalShipped = items.reduce((sum, i) => sum + i.selectedQty, 0);
         const carrierLabel =
-          CARRIERS.find((c) => c.value === values.carrier)?.label ?? values.carrier;
+          values.carrier === "other"
+            ? carrierToUse
+            : CARRIERS.find((c) => c.value === values.carrier)?.label ?? carrierToUse;
 
         // Always close and show toast on success.
         if (remainingUnfulfilled > 0) {
@@ -562,7 +578,8 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
   // Initialize item selections and form when order first loads (no address prefill)
   useEffect(() => {
-    if (!orderData || initialized) return;
+    if (!orderData || shipmentsLoading || initialized) return;
+    const pendingReservations = summarizePendingShipmentReservations(shipments ?? []);
     const formValues: ShipOrderFormData = {
       ...getDefaultFormValues(),
       addressCountry: DEFAULT_COUNTRY,
@@ -579,20 +596,21 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       if (orderData.lineItems) {
         setItemSelections(
           orderData.lineItems.map((item) => {
-            const allocated = (item.allocatedSerialNumbers as string[] | null) ?? [];
-            const availableQty = getLineItemAvailableToShip(item);
+            const { availableQty, reservedQty, availableSerialNumbers } =
+              getLineItemShipmentAvailability(item, pendingReservations);
             const initialQty = Math.max(0, availableQty);
             return {
               lineItemId: item.id,
               productName: item.description,
               sku: item.sku,
               availableQty,
+              reservedQty,
               pickedQty: Number(item.qtyPicked ?? 0),
               shippedQty: Number(item.qtyShipped ?? 0),
               selectedQty: initialQty,
               selected: initialQty > 0,
-              allocatedSerialNumbers: allocated,
-              selectedSerials: allocated.slice(0, initialQty),
+              allocatedSerialNumbers: availableSerialNumbers,
+              selectedSerials: availableSerialNumbers.slice(0, initialQty),
               isSerialized: item.product?.isSerialized ?? false,
               productId: item.productId ?? item.product?.id ?? null,
             };
@@ -601,16 +619,17 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       }
       form.reset(formValues);
     });
-  }, [orderData, initialized, form]);
+  }, [orderData, shipments, shipmentsLoading, initialized, form]);
 
   // Re-sync when orderData refetches and availableQty decreased (compare orderData only; avoid itemSelections in deps)
   useEffect(() => {
-    if (!orderData?.lineItems || !initialized) return;
+    if (!orderData?.lineItems || shipmentsLoading || !initialized) return;
+    const pendingReservations = summarizePendingShipmentReservations(shipments ?? []);
     const availableQtyByLineItem = new Map<string, number>();
     for (const item of orderData.lineItems) {
       availableQtyByLineItem.set(
         item.id,
-        getLineItemAvailableToShip(item)
+        getLineItemShipmentAvailability(item, pendingReservations).availableQty
       );
     }
     const prev = prevAvailableQtyRef.current;
@@ -621,7 +640,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     if (anyDecreased) {
       globalThis.queueMicrotask(() => setInitialized(false));
     }
-  }, [orderData, initialized]);
+  }, [orderData, shipments, shipmentsLoading, initialized]);
 
   const isPending =
     createShipmentMutation.isPending ||
@@ -739,13 +758,15 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const services = carrier ? (CARRIER_SERVICES[carrier] ?? []) : [];
   const totalItemsToShip = selectedItems.length;
   const carrierLabel =
-    CARRIERS.find((c) => c.value === carrier)?.label ?? carrier;
+    carrier === "other"
+      ? resolvedCarrier
+      : CARRIERS.find((c) => c.value === carrier)?.label ?? carrier;
   const hasAddrForDisplay = hasAnyAddress(form.state.values);
   const addressIsCollapsible = true;
 
   const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleOpenChange);
 
-  if (orderLoading || itemSelections.length === 0 || totalAvailableQty === 0) {
+  if (orderLoading || shipmentsLoading || itemSelections.length === 0 || totalAvailableQty === 0) {
     return (
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent
@@ -763,14 +784,14 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               Create Shipment
             </DialogTitle>
             <DialogDescription>
-              {orderLoading
+              {orderLoading || shipmentsLoading
                 ? "Loading order..."
                 : itemSelections.length === 0
                   ? "This order has no line items."
                   : "No picked items are ready to ship yet."}
             </DialogDescription>
           </DialogHeader>
-          {orderLoading ? (
+          {orderLoading || shipmentsLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
@@ -779,7 +800,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               <p className="text-muted-foreground">
                 {itemSelections.length === 0
                   ? "This order has no line items."
-                  : "No picked items are ready to ship yet. Pick items first or review existing shipments."}
+                  : totalReservedQty > 0
+                    ? "All currently picked items are already reserved in pending shipment drafts. Review or ship those drafts first."
+                    : "No picked items are ready to ship yet. Pick items first or review existing shipments."}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {itemSelections.length > 0 && totalAvailableQty === 0 && onViewShipments && (
@@ -842,7 +865,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       submitDisabled={
         isPending ||
         totalItemsToShip === 0 ||
-        (step === "form" && form.state.values.shipNow && !carrier)
+        (step === "form" && form.state.values.shipNow && !resolvedCarrier)
       }
       size="full"
       className="max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto"
@@ -865,6 +888,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               <div className="flex items-center justify-between">
                 <Label className="text-base">Items to Ship</Label>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={handleSelectAll}
@@ -928,17 +952,27 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                               <Badge variant="secondary">Pick First</Badge>
                             ) : item.shippedQty >= item.pickedQty ? (
                               <Badge variant="secondary">Shipped</Badge>
+                            ) : item.reservedQty > 0 ? (
+                              <Badge variant="secondary">Reserved in Draft</Badge>
                             ) : (
                               <Badge variant="secondary">Unavailable</Badge>
                             )
                           ) : (
-                            item.availableQty
+                            <div className="space-y-1 text-right">
+                              <div>{item.availableQty}</div>
+                              {item.reservedQty > 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {item.reservedQty} in draft
+                                </p>
+                              ) : null}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>
                           {item.availableQty > 0 && (
                             <div className="flex items-center justify-end gap-2">
                               <Button
+                                type="button"
                                 variant="outline"
                                 size="icon"
                                 className="h-7 w-7 min-h-[44px] min-w-[44px] sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
@@ -954,6 +988,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                                 {item.selected ? item.selectedQty : 0}
                               </span>
                               <Button
+                                type="button"
                                 variant="outline"
                                 size="icon"
                                 className="h-7 w-7 min-h-[44px] min-w-[44px] sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
@@ -1217,7 +1252,12 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             <div className="space-y-4">
               <Label className="text-base">Carrier Details</Label>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div
+                className={cn(
+                  "grid gap-4",
+                  carrier === "other" ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2"
+                )}
+              >
                 <form.Field name="carrier">
                   {(field) => (
                     <FormField
@@ -1230,9 +1270,13 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                       }
                     >
                       <Select
-                        value={field.state.value || undefined}
+                        value={field.state.value || SELECT_PLACEHOLDER_VALUE}
                         onValueChange={(v) => {
+                          if (v === SELECT_PLACEHOLDER_VALUE) return;
                           field.handleChange(v);
+                          if (v !== "other") {
+                            form.setFieldValue("customCarrier", "");
+                          }
                           form.setFieldValue("carrierService", "");
                         }}
                       >
@@ -1240,6 +1284,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                           <SelectValue placeholder="Select carrier" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value={SELECT_PLACEHOLDER_VALUE} disabled>
+                            Select carrier
+                          </SelectItem>
                           {CARRIERS.map((c) => (
                             <SelectItem key={c.value} value={c.value}>
                               {c.label}
@@ -1250,14 +1297,25 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                     </FormField>
                   )}
                 </form.Field>
+                {carrier === "other" && (
+                  <form.Field name="customCarrier">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="Carrier Name"
+                        placeholder="Enter carrier name"
+                      />
+                    )}
+                  </form.Field>
+                )}
                 <form.Field name="carrierService">
                   {(field) => (
                     <SelectField
                       field={field}
                       label="Service"
                       options={services.map((s) => ({ value: s, label: s }))}
-                      placeholder="Select service"
-                      disabled={!carrier || services.length === 0}
+                      placeholder={carrier === "other" ? "No preset services" : "Select service"}
+                      disabled={!carrier || carrier === "other" || services.length === 0}
                     />
                   )}
                 </form.Field>
@@ -1310,7 +1368,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
               )}
             </form.Field>
 
-            {form.state.values.shipNow && !carrier && (
+            {form.state.values.shipNow && !resolvedCarrier && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
@@ -1428,7 +1486,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             )}
 
             {/* Carrier Summary */}
-            {carrier && (
+            {resolvedCarrier && (
               <>
                 <Separator />
                 <div className="space-y-2">

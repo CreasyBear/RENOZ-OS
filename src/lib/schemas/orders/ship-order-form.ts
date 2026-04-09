@@ -15,6 +15,7 @@ import { shipmentAddressSchema } from './shipments';
 export const shipOrderFormSchema = z
   .object({
     carrier: z.string().max(100).optional(),
+    customCarrier: z.string().max(100).optional(),
     carrierService: z.string().max(100).optional(),
     trackingNumber: z.string().max(200).optional(),
     shippingCost: z
@@ -36,6 +37,14 @@ export const shipOrderFormSchema = z
     addressPhone: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.carrier === 'other' && !data.customCarrier?.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['customCarrier'],
+        message: 'Enter the carrier name',
+      });
+    }
+
     const hasAny =
       !!(
         data.addressStreet1?.trim() ||

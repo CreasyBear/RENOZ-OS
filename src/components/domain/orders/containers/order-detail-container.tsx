@@ -62,6 +62,7 @@ import { OrderEditDialog } from '../cards/order-edit-dialog';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
 import { ShipOrderDialog } from '../fulfillment/ship-order-dialog';
 import { ConfirmDeliveryDialog } from '../fulfillment/confirm-delivery-dialog';
+import { summarizeOrderShipmentAvailability } from '../fulfillment/shipment-availability';
 import { AmendmentRequestDialogContainer, AmendmentReviewDialog } from '../amendments';
 import { RecordPaymentDialog } from '../dialogs/record-payment-dialog';
 import { RefundPaymentDialog } from '../dialogs/refund-payment-dialog';
@@ -490,8 +491,28 @@ export function OrderDetailContainer({
   });
   const reopenShipmentMutation = useReopenShipment();
   const orderStatus = detail.order?.status;
-  const { shipIntentBlocked } = useOrderDetailRouteIntents({
+  const shipmentAvailability = useMemo(
+    () =>
+      summarizeOrderShipmentAvailability(
+        detail.order?.lineItems ?? [],
+        shipmentsQuery.data ?? []
+      ),
+    [detail.order?.lineItems, shipmentsQuery.data]
+  );
+  const canShipFromStatus =
+    orderStatus === 'picked' || orderStatus === 'partially_shipped';
+  const canShipFromAvailability =
+    canShipFromStatus && shipmentAvailability.hasReservableItems;
+  const shipBlockedReason = !canShipFromStatus
+    ? 'status'
+    : shipmentAvailability.totalReservedQty > 0
+      ? 'reserved_in_draft'
+      : 'unavailable';
+  const { shipIntentBlockedReason } = useOrderDetailRouteIntents({
     orderStatus,
+    shipChecksReady: !!detail.order && !shipmentsQuery.isLoading,
+    canShip: canShipFromAvailability,
+    shipBlockedReason,
     dialogOpen: dialogState.open,
     editFromSearch,
     pickFromSearch,
@@ -574,6 +595,10 @@ export function OrderDetailContainer({
         }
 
         if (resolution.kind === 'create-shipment') {
+          if (!canShipFromAvailability) {
+            toast.info('No picked units are currently available to ship. Review fulfillment first.');
+            return;
+          }
           setPendingOperationalDocument(documentType);
           openShip();
           toast.info('Create the shipment and we will continue with the dispatch note.');
@@ -612,7 +637,7 @@ export function OrderDetailContainer({
         return;
       }
 
-      if (detail.order?.status === 'picked' || detail.order?.status === 'partially_shipped') {
+      if (canShipFromAvailability) {
         setPendingOperationalDocument(documentType);
         openShip();
         toast.info('Create the shipment and we will continue with the document.');
@@ -623,6 +648,7 @@ export function OrderDetailContainer({
       toast.info('Operational documents are generated from shipment records in Fulfillment.');
     },
     [
+      canShipFromAvailability,
       detail,
       generateShipmentOperationalDocument,
       openShip,
@@ -712,15 +738,27 @@ export function OrderDetailContainer({
       </Alert>
     );
   }
-  if (shipIntentBlocked) {
+  if (shipIntentBlockedReason) {
     contextualBanners.push(
       <Alert key="ship-intent-blocked" className="border-amber-500/50 bg-amber-500/10">
         <Package className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between gap-4">
-          <span>This order must be picked before it can be shipped.</span>
-          <Button size="sm" variant="outline" onClick={openPick}>
-            Pick Items
-          </Button>
+          <span>
+            {shipIntentBlockedReason === 'status'
+              ? 'This order must be picked before it can be shipped.'
+              : shipIntentBlockedReason === 'reserved_in_draft'
+                ? 'Picked stock is already reserved in pending shipment drafts. Review those drafts in Fulfillment.'
+                : 'No picked units are currently available to ship. Review fulfillment or adjust picking first.'}
+          </span>
+          {shipIntentBlockedReason === 'status' ? (
+            <Button size="sm" variant="outline" onClick={openPick}>
+              Pick Items
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => detail.onTabChange('fulfillment')}>
+              Open Fulfillment
+            </Button>
+          )}
         </AlertDescription>
       </Alert>
     );

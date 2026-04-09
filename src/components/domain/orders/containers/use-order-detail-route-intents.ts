@@ -2,8 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+export type ShipIntentBlockedReason = 'status' | 'reserved_in_draft' | 'unavailable' | null;
+
 interface UseOrderDetailRouteIntentsOptions {
   orderStatus?: string;
+  shipChecksReady: boolean;
+  canShip: boolean;
+  shipBlockedReason: Exclude<ShipIntentBlockedReason, null>;
   dialogOpen: string | null;
   editFromSearch: boolean;
   pickFromSearch: boolean;
@@ -19,7 +24,7 @@ interface UseOrderDetailRouteIntentsOptions {
 
 export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOptions) {
   const blockedShipSearchHandledRef = useRef(false);
-  const [shipIntentBlocked, setShipIntentBlocked] = useState(false);
+  const [shipIntentBlockedReason, setShipIntentBlockedReason] = useState<ShipIntentBlockedReason>(null);
 
   useEffect(() => {
     if (options.pickFromSearch) {
@@ -30,36 +35,42 @@ export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOp
   useEffect(() => {
     if (
       options.shipFromSearch &&
-      (options.orderStatus === 'picked' || options.orderStatus === 'partially_shipped') &&
+      options.shipChecksReady &&
+      options.canShip &&
       options.dialogOpen !== 'ship'
     ) {
       blockedShipSearchHandledRef.current = false;
-      globalThis.queueMicrotask(() => setShipIntentBlocked(false));
+      globalThis.queueMicrotask(() => setShipIntentBlockedReason(null));
       options.openShip();
     }
-  }, [options.dialogOpen, options.openShip, options.orderStatus, options.shipFromSearch]);
+  }, [options.canShip, options.dialogOpen, options.openShip, options.shipChecksReady, options.shipFromSearch]);
 
   useEffect(() => {
     if (!options.shipFromSearch) {
       blockedShipSearchHandledRef.current = false;
-      globalThis.queueMicrotask(() => setShipIntentBlocked(false));
+      globalThis.queueMicrotask(() => setShipIntentBlockedReason(null));
       return;
     }
-    if (!options.orderStatus) return;
+    if (!options.orderStatus || !options.shipChecksReady) return;
 
-    const canShip =
-      options.orderStatus === 'picked' || options.orderStatus === 'partially_shipped';
-    if (canShip) {
+    if (options.canShip) {
       blockedShipSearchHandledRef.current = false;
-      globalThis.queueMicrotask(() => setShipIntentBlocked(false));
+      globalThis.queueMicrotask(() => setShipIntentBlockedReason(null));
       return;
     }
     if (blockedShipSearchHandledRef.current) return;
 
     blockedShipSearchHandledRef.current = true;
-    globalThis.queueMicrotask(() => setShipIntentBlocked(true));
+    globalThis.queueMicrotask(() => setShipIntentBlockedReason(options.shipBlockedReason));
     options.clearSearch();
-  }, [options.clearSearch, options.orderStatus, options.shipFromSearch]);
+  }, [
+    options.canShip,
+    options.clearSearch,
+    options.orderStatus,
+    options.shipBlockedReason,
+    options.shipChecksReady,
+    options.shipFromSearch,
+  ]);
 
   useEffect(() => {
     if (options.paymentFromSearch && options.dialogOpen !== 'payment') {
@@ -78,6 +89,6 @@ export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOp
   ]);
 
   return {
-    shipIntentBlocked,
+    shipIntentBlockedReason,
   };
 }
