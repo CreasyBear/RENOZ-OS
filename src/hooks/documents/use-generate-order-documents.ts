@@ -121,7 +121,15 @@ function resolveShipmentInvalidateId(
   return result?.shipmentId ?? result?.entityId ?? variables.shipmentId;
 }
 
-function unwrapServerFnResult(value: unknown): unknown {
+async function unwrapServerFnResult(value: unknown): Promise<unknown> {
+  if (value instanceof Response) {
+    const contentType = value.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      return unwrapServerFnResult(await value.json());
+    }
+    throw new Error('Document generation returned a non-JSON response');
+  }
+
   if (!value || typeof value !== 'object') return value;
 
   const record = value as UnknownRecord;
@@ -135,14 +143,14 @@ function unwrapServerFnResult(value: unknown): unknown {
   return value;
 }
 
-function normalizeGeneratedDocumentResult(
+async function normalizeGeneratedDocumentResult(
   value: unknown,
   fallback: {
     orderId?: string;
     shipmentId?: string;
   }
-): GenerateOrderDocumentResult {
-  const candidate = unwrapServerFnResult(value);
+): Promise<GenerateOrderDocumentResult> {
+  const candidate = await unwrapServerFnResult(value);
   if (!candidate || typeof candidate !== 'object') {
     throw new Error('Document generation returned an invalid response');
   }

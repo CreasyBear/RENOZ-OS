@@ -79,6 +79,53 @@ describe('order document generation hooks', () => {
     });
   });
 
+  it('normalizes raw Response payloads from POST server functions', async () => {
+    mockGenerateOrderDocument.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          result: {
+            orderId: '64f93295-5ed4-4ca2-9717-735039132698',
+            documentType: 'pro-forma',
+            entityType: 'order',
+            entityId: '64f93295-5ed4-4ca2-9717-735039132698',
+            url: 'https://example.com/pro-forma.pdf',
+            filename: 'pro-forma.pdf',
+            storagePath: 'orders/pro-forma.pdf',
+            fileSize: 987,
+            checksum: 'ghi789',
+          },
+        }),
+        {
+          headers: {
+            'content-type': 'application/json',
+          },
+        }
+      )
+    );
+
+    const { useGenerateOrderProForma } = await import(
+      '@/hooks/documents/use-generate-order-documents'
+    );
+
+    const { result } = renderHook(() => useGenerateOrderProForma(), {
+      wrapper: createWrapper(),
+    });
+
+    let mutationResult: unknown;
+    await act(async () => {
+      mutationResult = await result.current.mutateAsync({
+        orderId: '64f93295-5ed4-4ca2-9717-735039132698',
+      });
+    });
+
+    expect(mutationResult).toMatchObject({
+      orderId: '64f93295-5ed4-4ca2-9717-735039132698',
+      documentType: 'pro-forma',
+      url: 'https://example.com/pro-forma.pdf',
+      filename: 'pro-forma.pdf',
+    });
+  });
+
   it('normalizes wrapped shipment document responses before returning them to callers', async () => {
     mockGenerateShipmentDocument.mockResolvedValue({
       data: {
