@@ -977,6 +977,10 @@ export function OrderDetailContainer({
         onOpenChange={handlePickDialogOpenChange}
         orderId={orderId}
         onSuccess={() => detail.refetch()}
+        onReviewFulfillment={() => {
+          detail.refetch();
+          detail.onTabChange('fulfillment');
+        }}
         onShipOrder={openShip}
       />
       <ShipOrderDialog

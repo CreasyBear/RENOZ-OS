@@ -104,6 +104,28 @@ function invalidateOrderDocumentViews(queryClient: ReturnType<typeof useQueryCli
   });
 }
 
+function resolveOrderId(
+  result: Pick<GenerateOrderDocumentResult, 'orderId'> | undefined,
+  variables: { orderId: string }
+) {
+  return result?.orderId ?? variables.orderId;
+}
+
+function invalidateResolvedOrderDocumentViews(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orderId: string | undefined
+) {
+  if (!orderId) return;
+  invalidateOrderDocumentViews(queryClient, orderId);
+}
+
+function resolveShipmentInvalidateId(
+  result: Pick<GenerateOrderDocumentResult, 'shipmentId' | 'entityId'> | undefined,
+  variables: { shipmentId: string }
+) {
+  return result?.shipmentId ?? result?.entityId ?? variables.shipmentId;
+}
+
 // ============================================================================
 // GENERIC DOCUMENT GENERATION
 // ============================================================================
@@ -142,8 +164,8 @@ export function useGenerateOrderDocument() {
     totalWeight?: number;
   }>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+    onSuccess: (result, variables) => {
+      invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
   });
 }
@@ -175,8 +197,8 @@ export function useGenerateOrderQuote() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderQuoteInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+    onSuccess: (result, variables) => {
+      invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
   });
 }
@@ -204,8 +226,8 @@ export function useGenerateOrderInvoice() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderInvoiceInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+    onSuccess: (result, variables) => {
+      invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
   });
 }
@@ -237,8 +259,8 @@ export function useGenerateOrderProForma() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderProFormaInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+    onSuccess: (result, variables) => {
+      invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
   });
 }
@@ -268,8 +290,8 @@ export function useGenerateOrderPackingSlip() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderPackingSlipInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+    onSuccess: (result, variables) => {
+      invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
   });
 }
@@ -297,8 +319,8 @@ export function useGenerateOrderDeliveryNote() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderDeliveryNoteInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+    onSuccess: (result, variables) => {
+      invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
   });
 }
@@ -309,11 +331,14 @@ export function useGenerateShipmentPackingSlip() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateShipmentDocumentInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('shipment', result.shipmentId ?? result.entityId ?? ''),
+        queryKey: queryKeys.documents.history(
+          'shipment',
+          resolveShipmentInvalidateId(result, variables)
+        ),
       });
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+      invalidateResolvedOrderDocumentViews(queryClient, result?.orderId);
     },
   });
 }
@@ -324,11 +349,14 @@ export function useGenerateShipmentDispatchNote() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateShipmentDocumentInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('shipment', result.shipmentId ?? result.entityId ?? ''),
+        queryKey: queryKeys.documents.history(
+          'shipment',
+          resolveShipmentInvalidateId(result, variables)
+        ),
       });
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+      invalidateResolvedOrderDocumentViews(queryClient, result?.orderId);
     },
   });
 }
@@ -339,11 +367,14 @@ export function useGenerateShipmentDeliveryNote() {
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateShipmentDocumentInput>({
     mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('shipment', result.shipmentId ?? result.entityId ?? ''),
+        queryKey: queryKeys.documents.history(
+          'shipment',
+          resolveShipmentInvalidateId(result, variables)
+        ),
       });
-      invalidateOrderDocumentViews(queryClient, result.orderId);
+      invalidateResolvedOrderDocumentViews(queryClient, result?.orderId);
     },
   });
 }

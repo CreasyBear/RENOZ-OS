@@ -8,6 +8,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import {
   transformAuditActivity,
@@ -20,6 +21,22 @@ import { getCustomerEmailActivities } from '@/server/functions/communications/cu
 import { getActivityTimeline } from '@/server/functions/pipeline/pipeline';
 import { queryKeys } from '@/lib/query-keys';
 import { isActivityEntityType, type UseUnifiedActivitiesOptions } from '@/lib/schemas/activities';
+import type { ActivityWithUser } from '@/lib/schemas/activities';
+import type { CursorPaginatedResponse } from '@/lib/db/pagination';
+
+function getEntityActivityItems(
+  result: CursorPaginatedResponse<ActivityWithUser> | ActivityWithUser[] | null | undefined
+) {
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  if (result && Array.isArray(result.items)) {
+    return result.items;
+  }
+
+  throw new Error('Entity activities returned an invalid response');
+}
 
 // ============================================================================
 // HOOK
@@ -36,6 +53,11 @@ export function useUnifiedActivities({
   enabled = true,
   pageSize = 50,
 }: UseUnifiedActivitiesOptions) {
+  const getEntityActivitiesFn = useServerFn(getEntityActivities);
+  const getCustomerActivitiesFn = useServerFn(getCustomerActivities);
+  const getCustomerEmailActivitiesFn = useServerFn(getCustomerEmailActivities);
+  const getActivityTimelineFn = useServerFn(getActivityTimeline);
+
   // Fetch audit trail activities
   const {
     data: auditData,
@@ -52,8 +74,8 @@ export function useUnifiedActivities({
       if (!isActivityEntityType(entityType)) {
         throw new Error(`Invalid entity type: ${entityType}`);
       }
-      
-      const result = await getEntityActivities({
+
+      const result = await getEntityActivitiesFn({
         data: {
           entityType,
           entityId,
@@ -61,13 +83,11 @@ export function useUnifiedActivities({
           pageSize,
         },
       });
-      if (!result || !Array.isArray(result.items)) {
-        throw new Error('Entity activities returned an invalid response');
-      }
+      const items = getEntityActivityItems(result);
       // transformAuditActivity expects Activity & { user?: ... }
       // ActivityWithUser extends Activity and has compatible user structure
       // The user property structure matches exactly, so we can pass directly
-      return result.items.map((item) => transformAuditActivity(item));
+      return items.map((item) => transformAuditActivity(item));
     },
     enabled: enabled && !!entityId,
   });
@@ -83,7 +103,7 @@ export function useUnifiedActivities({
       if (entityType !== 'customer') {
         return [];
       }
-      const result = await getCustomerActivities({
+      const result = await getCustomerActivitiesFn({
         data: {
           customerId: entityId,
         },
@@ -101,7 +121,7 @@ export function useUnifiedActivities({
   } = useQuery({
     queryKey: queryKeys.unifiedActivities.entityEmails(entityId),
     queryFn: async () => {
-      const result = await getCustomerEmailActivities({
+      const result = await getCustomerEmailActivitiesFn({
         data: {
           customerId: entityId,
           limit: 50,
@@ -121,7 +141,7 @@ export function useUnifiedActivities({
   } = useQuery({
     queryKey: queryKeys.pipeline.activityTimeline(entityId, { days: 90 }),
     queryFn: async () => {
-      const result = await getActivityTimeline({
+      const result = await getActivityTimelineFn({
         data: { opportunityId: entityId, days: 90 },
       });
       if (!result) throw new Error('Activity timeline returned no data');

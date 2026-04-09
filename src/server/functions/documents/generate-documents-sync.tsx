@@ -89,6 +89,9 @@ const generateShipmentDocumentSchema = z.object({
   regenerate: z.boolean().optional().default(false),
 });
 
+type GenerateOrderDocumentInput = z.infer<typeof generateOrderDocumentSchema>;
+type GenerateShipmentDocumentInput = z.infer<typeof generateShipmentDocumentSchema>;
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -512,9 +515,11 @@ async function uploadPdf(
 /**
  * Generate any order document synchronously
  */
-export const generateOrderDocument = createServerFn({ method: 'POST' })
-  .inputValidator(generateOrderDocumentSchema)
-  .handler(async ({ data }) => {
+async function generateOrderDocumentHandler({
+  data,
+}: {
+  data: GenerateOrderDocumentInput;
+}) {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
     const { orderId, documentType, regenerate } = data;
 
@@ -549,7 +554,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         );
       }
 
-      return generateShipmentDocument({
+      return generateShipmentDocumentHandler({
         data: {
           shipmentId: shipments[0].id,
           documentType: documentType as 'packing-slip' | 'delivery-note',
@@ -901,11 +906,17 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       fileSize,
       checksum,
     };
-  });
+}
 
-export const generateShipmentDocument = createServerFn({ method: 'POST' })
-  .inputValidator(generateShipmentDocumentSchema)
-  .handler(async ({ data }) => {
+export const generateOrderDocument = createServerFn({ method: 'POST' })
+  .inputValidator(generateOrderDocumentSchema)
+  .handler(generateOrderDocumentHandler);
+
+async function generateShipmentDocumentHandler({
+  data,
+}: {
+  data: GenerateShipmentDocumentInput;
+}) {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
     const { shipmentId, documentType, regenerate } = data;
 
@@ -1168,7 +1179,11 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
       fileSize,
       checksum,
     };
-  });
+}
+
+export const generateShipmentDocument = createServerFn({ method: 'POST' })
+  .inputValidator(generateShipmentDocumentSchema)
+  .handler(generateShipmentDocumentHandler);
 
 // ============================================================================
 // CONVENIENCE EXPORTS
@@ -1180,8 +1195,8 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
 export const generateOrderQuotePdf = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ orderId: z.string().uuid(), regenerate: z.boolean().optional() }))
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'quote' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'quote', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1197,8 +1212,8 @@ export const generateOrderInvoicePdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'invoice' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'invoice', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1208,8 +1223,8 @@ export const generateOrderInvoicePdf = createServerFn({ method: 'POST' })
 export const generateOrderProFormaPdf = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ orderId: z.string().uuid(), regenerate: z.boolean().optional() }))
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'pro-forma' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'pro-forma', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1229,8 +1244,8 @@ export const generateOrderPackingSlipPdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'packing-slip' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'packing-slip', regenerate: false },
     });
   });
 
@@ -1246,8 +1261,8 @@ export const generateOrderDeliveryNotePdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'delivery-note' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'delivery-note', regenerate: false },
     });
   });
 
@@ -1259,8 +1274,8 @@ export const generateShipmentPackingSlipPdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateShipmentDocument({
-      data: { ...data, documentType: 'packing-slip' },
+    return generateShipmentDocumentHandler({
+      data: { ...data, documentType: 'packing-slip', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1272,8 +1287,8 @@ export const generateShipmentDispatchNotePdf = createServerFn({ method: 'POST' }
     })
   )
   .handler(async ({ data }) => {
-    return generateShipmentDocument({
-      data: { ...data, documentType: 'dispatch-note' },
+    return generateShipmentDocumentHandler({
+      data: { ...data, documentType: 'dispatch-note', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1285,7 +1300,7 @@ export const generateShipmentDeliveryNotePdf = createServerFn({ method: 'POST' }
     })
   )
   .handler(async ({ data }) => {
-    return generateShipmentDocument({
-      data: { ...data, documentType: 'delivery-note' },
+    return generateShipmentDocumentHandler({
+      data: { ...data, documentType: 'delivery-note', regenerate: data.regenerate ?? false },
     });
   });
