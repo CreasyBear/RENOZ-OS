@@ -335,9 +335,9 @@ export function useFlattenedActivities(
   
   return React.useMemo(() => {
     if (!data) return [];
-    // InfiniteData has pages property
-    // Both ActivityFeedResult and EntityActivitiesResult return ActivityWithUser[]
-    return data.pages.flatMap((page) => page.items);
+    // Guard against malformed/partial page payloads so feeds fail soft instead of crashing.
+    const pages = Array.isArray(data.pages) ? data.pages : [];
+    return pages.flatMap((page) => (Array.isArray(page?.items) ? page.items : []));
   }, [data]); // data reference is stable from TanStack Query
 }
 

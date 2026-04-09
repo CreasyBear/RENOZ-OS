@@ -23,37 +23,54 @@ interface UseOrderDetailRouteIntentsOptions {
 }
 
 export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOptions) {
+  const {
+    orderStatus,
+    shipChecksReady,
+    canShip,
+    shipBlockedReason,
+    dialogOpen,
+    editFromSearch,
+    pickFromSearch,
+    shipFromSearch,
+    paymentFromSearch,
+    clearSearch,
+    openPick,
+    openEdit,
+    openShip,
+    openPayment,
+  } = options;
+
   const blockedShipSearchHandledRef = useRef(false);
   const [shipIntentBlockedReason, setShipIntentBlockedReason] = useState<ShipIntentBlockedReason>(null);
 
   useEffect(() => {
-    if (options.pickFromSearch) {
-      options.openPick();
+    if (pickFromSearch) {
+      openPick();
     }
-  }, [options.pickFromSearch, options.openPick]);
+  }, [pickFromSearch, openPick]);
 
   useEffect(() => {
     if (
-      options.shipFromSearch &&
-      options.shipChecksReady &&
-      options.canShip &&
-      options.dialogOpen !== 'ship'
+      shipFromSearch &&
+      shipChecksReady &&
+      canShip &&
+      dialogOpen !== 'ship'
     ) {
       blockedShipSearchHandledRef.current = false;
       globalThis.queueMicrotask(() => setShipIntentBlockedReason(null));
-      options.openShip();
+      openShip();
     }
-  }, [options.canShip, options.dialogOpen, options.openShip, options.shipChecksReady, options.shipFromSearch]);
+  }, [canShip, dialogOpen, openShip, shipChecksReady, shipFromSearch]);
 
   useEffect(() => {
-    if (!options.shipFromSearch) {
+    if (!shipFromSearch) {
       blockedShipSearchHandledRef.current = false;
       globalThis.queueMicrotask(() => setShipIntentBlockedReason(null));
       return;
     }
-    if (!options.orderStatus || !options.shipChecksReady) return;
+    if (!orderStatus || !shipChecksReady) return;
 
-    if (options.canShip) {
+    if (canShip) {
       blockedShipSearchHandledRef.current = false;
       globalThis.queueMicrotask(() => setShipIntentBlockedReason(null));
       return;
@@ -61,32 +78,28 @@ export function useOrderDetailRouteIntents(options: UseOrderDetailRouteIntentsOp
     if (blockedShipSearchHandledRef.current) return;
 
     blockedShipSearchHandledRef.current = true;
-    globalThis.queueMicrotask(() => setShipIntentBlockedReason(options.shipBlockedReason));
-    options.clearSearch();
+    globalThis.queueMicrotask(() => setShipIntentBlockedReason(shipBlockedReason));
+    clearSearch();
   }, [
-    options.canShip,
-    options.clearSearch,
-    options.orderStatus,
-    options.shipBlockedReason,
-    options.shipChecksReady,
-    options.shipFromSearch,
+    canShip,
+    clearSearch,
+    orderStatus,
+    shipBlockedReason,
+    shipChecksReady,
+    shipFromSearch,
   ]);
 
   useEffect(() => {
-    if (options.paymentFromSearch && options.dialogOpen !== 'payment') {
-      options.openPayment();
+    if (paymentFromSearch && dialogOpen !== 'payment') {
+      openPayment();
     }
-  }, [options.dialogOpen, options.openPayment, options.paymentFromSearch]);
+  }, [dialogOpen, openPayment, paymentFromSearch]);
 
   useEffect(() => {
-    if (options.editFromSearch && options.dialogOpen !== 'edit') {
-      options.openEdit();
+    if (editFromSearch && dialogOpen !== 'edit') {
+      openEdit();
     }
-  }, [
-    options.dialogOpen,
-    options.editFromSearch,
-    options.openEdit,
-  ]);
+  }, [dialogOpen, editFromSearch, openEdit]);
 
   return {
     shipIntentBlockedReason,

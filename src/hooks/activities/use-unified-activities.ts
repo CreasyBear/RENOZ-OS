@@ -61,6 +61,9 @@ export function useUnifiedActivities({
           pageSize,
         },
       });
+      if (!result || !Array.isArray(result.items)) {
+        throw new Error('Entity activities returned an invalid response');
+      }
       // transformAuditActivity expects Activity & { user?: ... }
       // ActivityWithUser extends Activity and has compatible user structure
       // The user property structure matches exactly, so we can pass directly

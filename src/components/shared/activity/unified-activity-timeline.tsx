@@ -299,6 +299,9 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
     () => getMetadataSummary(activity.metadata),
     [activity.metadata]
   );
+  const headline = activity.subject || activity.description;
+  const supportingDescription =
+    activity.subject && activity.description !== activity.subject ? activity.description : null;
 
   const handleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -349,15 +352,17 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        {/* Header */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{config.label}</span>
-
-          {/* Source badge */}
+          <Badge
+            variant="secondary"
+            className="border-transparent bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/80"
+          >
+            {config.label}
+          </Badge>
           <Badge
             variant="outline"
             className={cn(
-              'text-xs font-normal',
+              'text-[10px] font-medium uppercase tracking-wide',
               activity.source === 'audit'
                 ? 'border-blue-200 bg-blue-50 text-blue-700'
                 : 'border-amber-200 bg-amber-50 text-amber-700'
@@ -365,10 +370,8 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
           >
             {activity.source === 'audit' ? 'System' : 'Planned'}
           </Badge>
-
-          {/* Direction indicator */}
           {activity.direction && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
               {activity.direction === 'inbound' ? (
                 <ArrowDownLeft className="h-3 w-3" />
               ) : activity.direction === 'outbound' ? (
@@ -377,78 +380,85 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
               {activity.direction}
             </span>
           )}
-
-          {/* Duration */}
           {activity.duration && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
               <Clock className="h-3 w-3" />
               {formatDuration(activity.duration)}
             </span>
           )}
-
-          {/* Status badges */}
           {activity.isCompleted && (
-            <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+            <Badge variant="secondary" className="border-transparent bg-green-100 text-[11px] text-green-700">
               <CheckCircle2 className="h-3 w-3 mr-1" />
               Done
             </Badge>
           )}
           {activity.isOverdue && (
-            <Badge variant="destructive" className="text-xs">
+            <Badge variant="destructive" className="text-[11px]">
               <AlertTriangle className="h-3 w-3 mr-1" />
               Overdue
             </Badge>
           )}
         </div>
 
-        {/* Subject */}
-        {activity.subject && (
-          <p className="text-sm font-medium text-foreground mt-1">{activity.subject}</p>
-        )}
+        <div className="mt-2 space-y-1.5">
+          <p className="text-sm font-medium leading-5 text-foreground">
+            {headline}
+          </p>
+          {supportingDescription ? (
+            <p className="text-sm leading-5 text-muted-foreground">
+              {supportingDescription}
+            </p>
+          ) : null}
+        </div>
 
-        {/* Description */}
-        <p className="text-sm text-muted-foreground mt-1">{activity.description}</p>
-
-        {/* Metadata summary - shows rich context like product names, quantities */}
         {metadataSummary.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {metadataSummary.map((item) => (
-              <Badge
+              <div
                 key={item.label}
-                variant="secondary"
-                className="text-[10px] font-normal h-5 bg-muted/60"
+                className="rounded-md border bg-muted/25 px-2.5 py-2"
               >
-                <span className="text-muted-foreground">{item.label}:</span>
-                <span className="ml-1 font-medium">{item.value}</span>
-              </Badge>
+                <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {item.label}
+                </div>
+                <div className="mt-1 break-words text-sm font-medium text-foreground">
+                  {item.value}
+                </div>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Outcome */}
         {activity.outcome && (
-          <p className="text-sm text-muted-foreground mt-1">
-            <span className="font-medium">Outcome:</span> {activity.outcome}
-          </p>
-        )}
-
-        {/* Changes (for audit activities) */}
-        {activity.changes?.fields && activity.changes.fields.length > 0 && (
-          <div className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded">
-            <span className="font-medium">Changed:</span>{' '}
-            {activity.changes.fields.join(', ')}
+          <div className="mt-3 rounded-md border-l-2 border-primary/30 bg-muted/20 px-3 py-2">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Outcome
+            </div>
+            <p className="mt-1 text-sm text-foreground/90">{activity.outcome}</p>
           </div>
         )}
 
-        {/* Footer */}
-        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-          <span title={formatDate(activity.createdAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}>
+        {activity.changes?.fields && activity.changes.fields.length > 0 && (
+          <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium uppercase tracking-wide text-[10px]">Changed</span>
+            <div className="mt-1 text-sm text-foreground/85">
+            {activity.changes.fields.join(', ')}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span
+            className="font-medium text-foreground/80"
+            title={formatDate(activity.createdAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+          >
             {formatRelativeTime(activity.createdAt)}
           </span>
 
           {activity.userName && (
             <span className="flex items-center gap-1">
-              <span className="font-medium">by</span> {activity.userName}
+              <span className="text-muted-foreground/70">by</span>
+              <span className="font-medium text-foreground/80">{activity.userName}</span>
             </span>
           )}
 
