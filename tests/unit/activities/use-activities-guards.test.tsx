@@ -145,4 +145,55 @@ describe('activity hook guards', () => {
     expect(result.current.hasError).toBe(false);
     expect(result.current.activities[0]?.description).toContain('Order updated');
   });
+
+  it('useUnifiedActivities unwraps nested server-fn payloads for audit activities', async () => {
+    mockGetEntityActivities.mockResolvedValue({
+      result: {
+        items: [
+          {
+            id: 'activity-2',
+            action: 'created',
+            entityType: 'order',
+            entityId: '64f93295-5ed4-4ca2-9717-735039132698',
+            description: 'Order created',
+            metadata: null,
+            changes: null,
+            createdAt: '2026-04-09T07:30:00.000Z',
+            createdBy: 'user-2',
+            userId: 'user-2',
+            source: 'manual',
+            entityName: 'ORD-20260407-0001',
+            user: {
+              id: 'user-2',
+              name: 'Bob',
+              email: 'bob@example.com',
+            },
+          },
+        ],
+        nextCursor: null,
+        hasNextPage: false,
+      },
+    });
+    mockGetCustomerActivities.mockResolvedValue([]);
+    mockGetCustomerEmailActivities.mockResolvedValue([]);
+    mockGetActivityTimeline.mockResolvedValue({ activities: [] });
+
+    const { useUnifiedActivities } = await import('@/hooks/activities/use-unified-activities');
+
+    const { result } = renderHook(
+      () =>
+        useUnifiedActivities({
+          entityType: 'order',
+          entityId: '64f93295-5ed4-4ca2-9717-735039132698',
+        }),
+      { wrapper: createWrapper() }
+    );
+
+    await waitFor(() => {
+      expect(result.current.activities).toHaveLength(1);
+    });
+
+    expect(result.current.hasError).toBe(false);
+    expect(result.current.activities[0]?.description).toContain('Order created');
+  });
 });

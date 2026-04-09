@@ -26,15 +26,8 @@ import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { type DocumentType } from '@/lib/documents/types';
 import {
-  generateOrderQuotePdf,
-  generateOrderInvoicePdf,
-  generateOrderProFormaPdf,
-  generateOrderPackingSlipPdf,
-  generateOrderDeliveryNotePdf,
-  generateShipmentDispatchNotePdf,
-  generateShipmentPackingSlipPdf,
-  generateShipmentDeliveryNotePdf,
   generateOrderDocument,
+  generateShipmentDocument,
 } from '@/server/functions/documents/generate-documents-sync';
 
 // ============================================================================
@@ -57,6 +50,8 @@ export interface GenerateOrderDocumentResult {
   fileSize: number;
   checksum: string;
 }
+
+type UnknownRecord = Record<string, unknown>;
 
 export interface GenerateOrderQuoteInput {
   orderId: string;
@@ -126,6 +121,60 @@ function resolveShipmentInvalidateId(
   return result?.shipmentId ?? result?.entityId ?? variables.shipmentId;
 }
 
+function unwrapServerFnResult(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+
+  const record = value as UnknownRecord;
+  if ('result' in record && record.result !== value) {
+    return unwrapServerFnResult(record.result);
+  }
+  if ('data' in record && record.data !== value) {
+    return unwrapServerFnResult(record.data);
+  }
+
+  return value;
+}
+
+function normalizeGeneratedDocumentResult(
+  value: unknown,
+  fallback: {
+    orderId?: string;
+    shipmentId?: string;
+  }
+): GenerateOrderDocumentResult {
+  const candidate = unwrapServerFnResult(value);
+  if (!candidate || typeof candidate !== 'object') {
+    throw new Error('Document generation returned an invalid response');
+  }
+
+  const record = candidate as UnknownRecord;
+  if (typeof record.url !== 'string' || typeof record.filename !== 'string') {
+    throw new Error('Document generation returned an invalid response');
+  }
+
+  return {
+    orderId: typeof record.orderId === 'string' ? record.orderId : fallback.orderId ?? '',
+    documentType: record.documentType as DocumentType,
+    status: 'completed',
+    entityType:
+      record.entityType === 'shipment' || record.entityType === 'order'
+        ? record.entityType
+        : undefined,
+    entityId: typeof record.entityId === 'string' ? record.entityId : undefined,
+    shipmentId:
+      typeof record.shipmentId === 'string'
+        ? record.shipmentId
+        : typeof record.entityId === 'string'
+          ? record.entityId
+          : fallback.shipmentId,
+    url: record.url,
+    filename: record.filename,
+    storagePath: typeof record.storagePath === 'string' ? record.storagePath : '',
+    fileSize: typeof record.fileSize === 'number' ? record.fileSize : 0,
+    checksum: typeof record.checksum === 'string' ? record.checksum : '',
+  };
+}
+
 // ============================================================================
 // GENERIC DOCUMENT GENERATION
 // ============================================================================
@@ -163,7 +212,10 @@ export function useGenerateOrderDocument() {
     packageCount?: number;
     totalWeight?: number;
   }>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(await generateFn({ data: input }), {
+        orderId: input.orderId,
+      }),
     onSuccess: (result, variables) => {
       invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
@@ -193,10 +245,14 @@ export function useGenerateOrderDocument() {
  */
 export function useGenerateOrderQuote() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateOrderQuotePdf);
+  const generateFn = useServerFn(generateOrderDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderQuoteInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'quote' } }),
+        { orderId: input.orderId }
+      ),
     onSuccess: (result, variables) => {
       invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
@@ -222,10 +278,14 @@ export function useGenerateOrderQuote() {
  */
 export function useGenerateOrderInvoice() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateOrderInvoicePdf);
+  const generateFn = useServerFn(generateOrderDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderInvoiceInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'invoice' } }),
+        { orderId: input.orderId }
+      ),
     onSuccess: (result, variables) => {
       invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
@@ -255,10 +315,14 @@ export function useGenerateOrderInvoice() {
  */
 export function useGenerateOrderProForma() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateOrderProFormaPdf);
+  const generateFn = useServerFn(generateOrderDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderProFormaInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'pro-forma' } }),
+        { orderId: input.orderId }
+      ),
     onSuccess: (result, variables) => {
       invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
@@ -286,10 +350,14 @@ export function useGenerateOrderProForma() {
  */
 export function useGenerateOrderPackingSlip() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateOrderPackingSlipPdf);
+  const generateFn = useServerFn(generateOrderDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderPackingSlipInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'packing-slip' } }),
+        { orderId: input.orderId }
+      ),
     onSuccess: (result, variables) => {
       invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
@@ -315,10 +383,14 @@ export function useGenerateOrderPackingSlip() {
  */
 export function useGenerateOrderDeliveryNote() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateOrderDeliveryNotePdf);
+  const generateFn = useServerFn(generateOrderDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateOrderDeliveryNoteInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'delivery-note' } }),
+        { orderId: input.orderId }
+      ),
     onSuccess: (result, variables) => {
       invalidateResolvedOrderDocumentViews(queryClient, resolveOrderId(result, variables));
     },
@@ -327,10 +399,14 @@ export function useGenerateOrderDeliveryNote() {
 
 export function useGenerateShipmentPackingSlip() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateShipmentPackingSlipPdf);
+  const generateFn = useServerFn(generateShipmentDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateShipmentDocumentInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'packing-slip' } }),
+        { shipmentId: input.shipmentId }
+      ),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.documents.history(
@@ -345,10 +421,14 @@ export function useGenerateShipmentPackingSlip() {
 
 export function useGenerateShipmentDispatchNote() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateShipmentDispatchNotePdf);
+  const generateFn = useServerFn(generateShipmentDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateShipmentDocumentInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'dispatch-note' } }),
+        { shipmentId: input.shipmentId }
+      ),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.documents.history(
@@ -363,10 +443,14 @@ export function useGenerateShipmentDispatchNote() {
 
 export function useGenerateShipmentDeliveryNote() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateShipmentDeliveryNotePdf);
+  const generateFn = useServerFn(generateShipmentDocument);
 
   return useMutation<GenerateOrderDocumentResult, Error, GenerateShipmentDocumentInput>({
-    mutationFn: (input) => generateFn({ data: input }),
+    mutationFn: async (input) =>
+      normalizeGeneratedDocumentResult(
+        await generateFn({ data: { ...input, documentType: 'delivery-note' } }),
+        { shipmentId: input.shipmentId }
+      ),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.documents.history(
