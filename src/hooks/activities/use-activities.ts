@@ -414,6 +414,10 @@ export interface LogEntityActivityInput {
   entityId: string;
   activityType: 'call' | 'email' | 'meeting' | 'note' | 'follow_up';
   description: string;
+  title?: string;
+  body?: string;
+  category?: string;
+  importance?: string;
   outcome?: string;
   scheduledAt?: Date;
   isFollowUp?: boolean;

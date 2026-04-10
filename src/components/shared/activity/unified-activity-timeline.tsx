@@ -9,7 +9,7 @@ import * as React from 'react';
 import { Link } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
-import { formatRelativeTime, formatDate } from '@/lib/formatters';
+import { formatDate } from '@/lib/formatters';
 import {
   Plus,
   Pencil,
@@ -38,6 +38,7 @@ import {
   Filter,
   AlertTriangle,
   Inbox,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button';
@@ -53,12 +54,14 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { getActivityTypeConfig } from '@/lib/schemas/unified-activity';
 import { ENTITY_ICONS, ENTITY_LABELS } from './activity-config';
-import type { ActivityEntityType, ActivityMetadata } from '@/lib/schemas/activities';
-import { isActivityEntityType, isActivityMetadata } from '@/lib/schemas/activities';
+import type { ActivityEntityType } from '@/lib/schemas/activities';
+import { isActivityEntityType } from '@/lib/schemas/activities';
+import { presentActivity, type PresentedActivity } from '@/lib/activities/present-activity';
 
 // ============================================================================
 // ICON MAP
@@ -185,6 +188,11 @@ interface Filters {
   dateTo: string;
 }
 
+interface TimelineActivityEntry {
+  activity: UnifiedActivity;
+  presented: PresentedActivity;
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -208,100 +216,27 @@ function formatEntityLabel(entityType: string): string {
 
 interface ActivityItemProps {
   activity: UnifiedActivity;
+  presented: PresentedActivity;
   onClick?: (activity: UnifiedActivity) => void;
   onComplete?: (activityId: string, outcome?: string) => void;
   isCompletePending?: boolean;
   compact?: boolean;
 }
-
-// Priority metadata keys to show in summary
-const METADATA_PRIORITY_KEYS = [
-  'productName', 'productNames', 'itemName', 'itemNames',
-  'quantity', 'count', 'total', 'amount',
-  'orderNumber', 'quoteNumber', 'invoiceNumber',
-  'customerName', 'supplierName',
-  'status', 'oldStatus', 'newStatus',
-  'reason', 'assignedTo', 'installerName',
-  'recipientEmail', 'recipientName', 'subject', 'contentPreview',
-];
-
-// Keys to hide from display
-const METADATA_HIDDEN_KEYS = new Set([
-  'requestId', 'activityKey', 'customerId', 'orderId', 'productId',
-  'opportunityId', 'supplierId', 'organizationId',
-]);
-
-function formatMetadataLabel(key: string): string {
-  return key
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatMetadataValue(value: unknown): string | null {
-  if (value == null) return null;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number') return value.toLocaleString();
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (Array.isArray(value)) {
-    if (value.length === 0) return null;
-    if (value.every((v) => typeof v === 'string' || typeof v === 'number')) {
-      return value.join(', ');
-    }
-    return `${value.length} items`;
-  }
-  return null;
-}
-
-function getMetadataSummary(metadata: unknown): Array<{ label: string; value: string }> {
-  if (!metadata || !isActivityMetadata(metadata)) return [];
-  // metadata is validated as ActivityMetadata via type guard
-  const meta = metadata;
-
-  const entries: Array<{ key: string; label: string; value: string }> = [];
-
-  // First pass: priority keys
-  for (const key of METADATA_PRIORITY_KEYS) {
-    if (key in meta && !METADATA_HIDDEN_KEYS.has(key)) {
-      // Type-safe access: key is a known key of ActivityMetadata
-      const value = formatMetadataValue(meta[key as keyof ActivityMetadata]);
-      if (value) {
-        entries.push({ key, label: formatMetadataLabel(key), value });
-      }
-    }
-  }
-
-  // Second pass: other keys (up to 4 total)
-  if (entries.length < 4) {
-    for (const [key, val] of Object.entries(meta) as [keyof ActivityMetadata, unknown][]) {
-      if (entries.length >= 4) break;
-      if (METADATA_HIDDEN_KEYS.has(key)) continue;
-      if (entries.some((e) => e.key === key)) continue;
-
-      const value = formatMetadataValue(val);
-      if (value) {
-        entries.push({ key: String(key), label: formatMetadataLabel(String(key)), value });
-      }
-    }
-  }
-
-  return entries.slice(0, 4).map(({ label, value }) => ({ label, value }));
-}
-
-const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onComplete, isCompletePending, compact = false }: ActivityItemProps) {
+const ActivityItem = React.memo(function ActivityItem({
+  activity,
+  presented,
+  onClick,
+  onComplete,
+  isCompletePending,
+  compact = false,
+}: ActivityItemProps) {
   const config = getActivityTypeConfig(activity.type);
-  const Icon = iconMap[config.icon] || Activity;
+  const Icon = iconMap[presented.iconKey] || iconMap[config.icon] || Activity;
 
   const isPlanned = activity.source === 'planned';
   const showCompletionToggle = isPlanned && !activity.isCompleted && onComplete;
-
-  const metadataSummary = React.useMemo(
-    () => getMetadataSummary(activity.metadata),
-    [activity.metadata]
-  );
-  const headline = activity.subject || activity.description;
-  const supportingDescription =
-    activity.subject && activity.description !== activity.subject ? activity.description : null;
+  const metaFacts = compact ? presented.factChips.slice(0, 2) : presented.factChips;
+  const hasDetails = presented.detailSections.length > 0;
 
   const handleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -314,7 +249,7 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
         'relative flex gap-4 pb-6 last:pb-0',
         compact && 'pb-3 gap-3',
         onClick && 'cursor-pointer hover:bg-muted/50 -mx-4 px-4 rounded-lg transition-colors',
-        activity.isOverdue && 'bg-red-50/50 -mx-4 px-4 rounded-lg'
+        activity.isOverdue && 'bg-red-50/40 -mx-4 px-4 rounded-lg'
       )}
       onClick={() => onClick?.(activity)}
     >
@@ -353,25 +288,67 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="border-transparent bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/80"
+          <span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground/75">
+            {presented.kindLabel}
+          </span>
+          {presented.sourceLabel ? (
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {presented.sourceLabel}
+            </span>
+          ) : null}
+          {presented.status === 'done' ? (
+            <Badge variant="secondary" className="border-transparent bg-green-100 text-[11px] text-green-700">
+              <CheckCircle2 className="mr-1 h-3 w-3" />
+              Done
+            </Badge>
+          ) : null}
+          {presented.status === 'overdue' ? (
+            <Badge variant="destructive" className="text-[11px]">
+              <AlertTriangle className="mr-1 h-3 w-3" />
+              Overdue
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="mt-2 space-y-1">
+          <p className="text-sm font-semibold leading-5 text-foreground">
+            {presented.title}
+          </p>
+          {presented.summary ? (
+            <p className="text-sm leading-5 text-muted-foreground">
+              {presented.summary}
+            </p>
+          ) : null}
+        </div>
+
+        {metaFacts.length > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {metaFacts.map((chip) => (
+              <span key={`${chip.label ?? 'value'}-${chip.value}`} className="flex items-center gap-1">
+                {chip.label ? <span className="text-muted-foreground/70">{chip.label}</span> : null}
+                <span className="font-medium text-foreground/75">{chip.value}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span
+            className="font-medium text-foreground/80"
+            title={formatDate(activity.createdAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
           >
-            {config.label}
-          </Badge>
-          <Badge
-            variant="outline"
-            className={cn(
-              'text-[10px] font-medium uppercase tracking-wide',
-              activity.source === 'audit'
-                ? 'border-blue-200 bg-blue-50 text-blue-700'
-                : 'border-amber-200 bg-amber-50 text-amber-700'
-            )}
-          >
-            {activity.source === 'audit' ? 'System' : 'Planned'}
-          </Badge>
-          {activity.direction && (
-            <span className="flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+            {presented.timestampLabel}
+          </span>
+
+          {presented.actorLabel && (
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground/70">by</span>
+              <span className="font-medium text-foreground/80">{presented.actorLabel}</span>
+            </span>
+          )}
+
+          {activity.direction && !compact ? (
+            <span className="flex items-center gap-1">
               {activity.direction === 'inbound' ? (
                 <ArrowDownLeft className="h-3 w-3" />
               ) : activity.direction === 'outbound' ? (
@@ -379,96 +356,81 @@ const ActivityItem = React.memo(function ActivityItem({ activity, onClick, onCom
               ) : null}
               {activity.direction}
             </span>
-          )}
-          {activity.duration && (
-            <span className="flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+          ) : null}
+
+          {activity.duration && !compact ? (
+            <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {formatDuration(activity.duration)}
             </span>
-          )}
-          {activity.isCompleted && (
-            <Badge variant="secondary" className="border-transparent bg-green-100 text-[11px] text-green-700">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Done
-            </Badge>
-          )}
-          {activity.isOverdue && (
-            <Badge variant="destructive" className="text-[11px]">
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              Overdue
-            </Badge>
-          )}
-        </div>
-
-        <div className="mt-2 space-y-1.5">
-          <p className="text-sm font-medium leading-5 text-foreground">
-            {headline}
-          </p>
-          {supportingDescription ? (
-            <p className="text-sm leading-5 text-muted-foreground">
-              {supportingDescription}
-            </p>
           ) : null}
         </div>
 
-        {metadataSummary.length > 0 && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {metadataSummary.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-md border bg-muted/25 px-2.5 py-2"
+        {hasDetails ? (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-3 h-auto px-0 py-0 text-xs font-medium text-muted-foreground hover:bg-transparent hover:text-foreground"
+                onClick={(event) => event.stopPropagation()}
               >
-                <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {item.label}
-                </div>
-                <div className="mt-1 break-words text-sm font-medium text-foreground">
-                  {item.value}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                View details
+                <ChevronDown className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-3" onClick={(event) => event.stopPropagation()}>
+              {presented.detailSections.map((section) => {
+                if (section.type === 'note') {
+                  return (
+                    <div key={`${activity.id}-${section.label}`} className="space-y-1">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        {section.label}
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">
+                        {section.body}
+                      </p>
+                    </div>
+                  );
+                }
 
-        {activity.outcome && (
-          <div className="mt-3 rounded-md border-l-2 border-primary/30 bg-muted/20 px-3 py-2">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Outcome
-            </div>
-            <p className="mt-1 text-sm text-foreground/90">{activity.outcome}</p>
-          </div>
-        )}
+                if (section.type === 'list') {
+                  return (
+                    <div key={`${activity.id}-${section.label}`} className="space-y-1.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        {section.label}
+                      </div>
+                      <ul className="space-y-1 text-sm text-foreground/85">
+                        {section.items.map((item) => (
+                          <li key={item} className="leading-6">
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                }
 
-        {activity.changes?.fields && activity.changes.fields.length > 0 && (
-          <div className="mt-3 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-            <span className="font-medium uppercase tracking-wide text-[10px]">Changed</span>
-            <div className="mt-1 text-sm text-foreground/85">
-            {activity.changes.fields.join(', ')}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span
-            className="font-medium text-foreground/80"
-            title={formatDate(activity.createdAt, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-          >
-            {formatRelativeTime(activity.createdAt)}
-          </span>
-
-          {activity.userName && (
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground/70">by</span>
-              <span className="font-medium text-foreground/80">{activity.userName}</span>
-            </span>
-          )}
-
-          {activity.scheduledAt && !activity.isCompleted && (
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              Scheduled {formatRelativeTime(activity.scheduledAt)}
-            </span>
-          )}
-        </div>
+                return (
+                  <div key={`${activity.id}-${section.label}`} className="space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      {section.label}
+                    </div>
+                    <dl className="space-y-1.5 text-sm">
+                      {section.items.map((item) => (
+                        <div key={`${section.label}-${item.label}-${item.value}`} className="flex flex-wrap gap-x-2 gap-y-1">
+                          <dt className="text-muted-foreground">{item.label}</dt>
+                          <dd className="font-medium text-foreground/85">{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                );
+              })}
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
       </div>
     </div>
   );
@@ -648,11 +610,11 @@ interface VirtualizedTimelineProps {
   items: Array<
     | { type: 'date-header'; date: string; label: string; count: number }
     | { type: 'entity-header'; entityType: string; label: string; count: number }
-    | { type: 'activity'; activity: UnifiedActivity }
+    | { type: 'activity'; entry: TimelineActivityEntry }
   >;
   parentRef: React.RefObject<HTMLDivElement | null>;
   compact?: boolean;
-  renderActivityItem: (activity: UnifiedActivity) => React.ReactNode;
+  renderActivityItem: (entry: TimelineActivityEntry) => React.ReactNode;
 }
 
 function VirtualizedTimeline({
@@ -725,7 +687,7 @@ function VirtualizedTimeline({
               </div>
             ) : (
               <div className="ml-2 border-l-2 border-muted pl-4">
-                {renderActivityItem(item.activity)}
+                {renderActivityItem(item.entry)}
               </div>
             )}
           </div>
@@ -806,27 +768,32 @@ export function UnifiedActivityTimeline({
     dateTo: '',
   });
 
+  const timelineEntries = React.useMemo<TimelineActivityEntry[]>(
+    () => activities.map((activity) => ({ activity, presented: presentActivity(activity) })),
+    [activities]
+  );
+
   // Apply filters
   const filteredActivities = React.useMemo(() => {
-    let result = [...activities];
+    let result = [...timelineEntries];
 
     if (filters.source !== 'all') {
-      result = result.filter((a) => a.source === filters.source);
+      result = result.filter((entry) => entry.activity.source === filters.source);
     }
 
     if (filters.type !== 'all') {
-      result = result.filter((a) => a.type === filters.type);
+      result = result.filter((entry) => entry.activity.type === filters.type);
     }
 
     if (filters.dateFrom) {
       const from = new Date(filters.dateFrom);
-      result = result.filter((a) => new Date(a.createdAt) >= from);
+      result = result.filter((entry) => new Date(entry.activity.createdAt) >= from);
     }
 
     if (filters.dateTo) {
       const to = new Date(filters.dateTo);
       to.setHours(23, 59, 59, 999);
-      result = result.filter((a) => new Date(a.createdAt) <= to);
+      result = result.filter((entry) => new Date(entry.activity.createdAt) <= to);
     }
 
     if (maxItems) {
@@ -834,20 +801,24 @@ export function UnifiedActivityTimeline({
     }
 
     return result;
-  }, [activities, filters, maxItems]);
+  }, [timelineEntries, filters, maxItems]);
 
   const entityGroups = React.useMemo(() => {
-    const hasMultipleEntities = new Set(filteredActivities.map((activity) => activity.entityType))
+    const hasMultipleEntities = new Set(filteredActivities.map((entry) => entry.activity.entityType))
       .size;
     if (hasMultipleEntities <= 1) return null;
-    const groups: Array<{ key: string; label: string; activities: UnifiedActivity[] }> = [];
-    for (const activity of filteredActivities) {
-      let group = groups.find((item) => item.key === activity.entityType);
+    const groups: Array<{ key: string; label: string; activities: TimelineActivityEntry[] }> = [];
+    for (const entry of filteredActivities) {
+      let group = groups.find((item) => item.key === entry.activity.entityType);
       if (!group) {
-        group = { key: activity.entityType, label: formatEntityLabel(activity.entityType), activities: [] };
+        group = {
+          key: entry.activity.entityType,
+          label: formatEntityLabel(entry.activity.entityType),
+          activities: [],
+        };
         groups.push(group);
       }
-      group.activities.push(activity);
+      group.activities.push(entry);
     }
     return groups;
   }, [filteredActivities]);
@@ -862,11 +833,11 @@ export function UnifiedActivityTimeline({
   const dateGroups = React.useMemo(() => {
     if (!groupByDate) return null;
 
-    const groups: Record<string, UnifiedActivity[]> = {};
-    for (const activity of filteredActivities) {
-      const date = new Date(activity.createdAt).toISOString().split('T')[0];
+    const groups: Record<string, TimelineActivityEntry[]> = {};
+    for (const entry of filteredActivities) {
+      const date = new Date(entry.activity.createdAt).toISOString().split('T')[0];
       if (!groups[date]) groups[date] = [];
-      groups[date].push(activity);
+      groups[date].push(entry);
     }
     return groups;
   }, [filteredActivities, groupByDate]);
@@ -882,10 +853,11 @@ export function UnifiedActivityTimeline({
 
   // Render activity item with all props
   const renderActivityItem = React.useCallback(
-    (activity: UnifiedActivity) => (
+    (entry: TimelineActivityEntry) => (
       <ActivityItem
-        key={activity.id}
-        activity={activity}
+        key={entry.activity.id}
+        activity={entry.activity}
+        presented={entry.presented}
         onClick={onActivityClick}
         onComplete={onComplete}
         isCompletePending={isCompletePending}
@@ -902,7 +874,7 @@ export function UnifiedActivityTimeline({
     const items: Array<
       | { type: 'date-header'; date: string; label: string; count: number }
       | { type: 'entity-header'; entityType: string; label: string; count: number }
-      | { type: 'activity'; activity: UnifiedActivity }
+      | { type: 'activity'; entry: TimelineActivityEntry }
     > = [];
 
     if (dateGroups) {
@@ -917,8 +889,8 @@ export function UnifiedActivityTimeline({
           label: getDateLabel(new Date(date)),
           count: dateGroups[date].length,
         });
-        for (const activity of dateGroups[date]) {
-          items.push({ type: 'activity', activity });
+        for (const entry of dateGroups[date]) {
+          items.push({ type: 'activity', entry });
         }
       }
     } else if (entityGroups) {
@@ -931,14 +903,14 @@ export function UnifiedActivityTimeline({
           label: entityLabel,
           count: group.activities.length,
         });
-        for (const activity of group.activities) {
-          items.push({ type: 'activity', activity });
+        for (const entry of group.activities) {
+          items.push({ type: 'activity', entry });
         }
       }
     } else {
       // Flat list
-      for (const activity of filteredActivities) {
-        items.push({ type: 'activity', activity });
+      for (const entry of filteredActivities) {
+        items.push({ type: 'activity', entry });
       }
     }
 

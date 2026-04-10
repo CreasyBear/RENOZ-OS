@@ -89,6 +89,10 @@ export const logEntityActivitySchema = z.object({
   entityId: z.string().uuid(),
   activityType: z.enum(['call', 'email', 'meeting', 'note', 'follow_up']),
   description: z.string().min(1).max(2000),
+  title: z.string().max(200).optional(),
+  body: z.string().max(2000).optional(),
+  category: z.string().max(80).optional(),
+  importance: z.string().max(40).optional(),
   outcome: z.string().max(1000).optional(),
   scheduledAt: z.coerce.date().optional(),
   isFollowUp: z.boolean().default(false),
@@ -166,10 +170,17 @@ export const activityMetadataSchema = z.object({
   // Note activity fields
   noteId: z.string().optional(),
   contentPreview: z.string().optional(),
+  noteTitle: z.string().optional(),
+  noteImportance: z.string().optional(),
 
   // Communications fields
   logType: z.string().optional(),
   fullNotes: z.string().optional(),
+  filename: z.string().optional(),
+  fileSize: z.number().optional(),
+  documentType: z.string().optional(),
+  isRegeneration: z.boolean().optional(),
+  regenerationCount: z.number().optional(),
 
   // Customer fields (merge operations)
   mergedCount: z.number().optional(),

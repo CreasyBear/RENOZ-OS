@@ -25,6 +25,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -46,6 +53,10 @@ export type ActivityType = 'call' | 'email' | 'meeting' | 'note' | 'follow_up';
 export interface ActivityLogData {
   type: ActivityType;
   description: string;
+  title?: string;
+  body?: string;
+  category?: string;
+  importance?: string;
   outcome?: string;
   scheduledAt?: Date;
   isFollowUp: boolean;
@@ -89,6 +100,20 @@ const ACTIVITY_TYPES: Array<{
   { value: 'follow_up', label: 'Follow-up', icon: Clock, placeholder: 'What needs to be followed up?' },
 ];
 
+const NOTE_CATEGORIES = [
+  { value: 'update', label: 'Update' },
+  { value: 'customer-comment', label: 'Customer comment' },
+  { value: 'internal-note', label: 'Internal note' },
+  { value: 'risk', label: 'Risk' },
+  { value: 'decision', label: 'Decision' },
+  { value: 'next-step', label: 'Next step' },
+] as const;
+
+const NOTE_IMPORTANCE_OPTIONS = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'important', label: 'Important' },
+] as const;
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -107,12 +132,17 @@ export const EntityActivityLogger = memo(function EntityActivityLogger({
   const navigate = useNavigate();
   const [activityType, setActivityType] = useState<ActivityType>(defaultType);
   const [description, setDescription] = useState('');
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteBody, setNoteBody] = useState('');
+  const [noteCategory, setNoteCategory] = useState('');
+  const [noteImportance, setNoteImportance] = useState('');
   const [outcome, setOutcome] = useState('');
   const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
   const [followUpDate, setFollowUpDate] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
   const currentType = ACTIVITY_TYPES.find((t) => t.value === activityType) ?? ACTIVITY_TYPES[3];
+  const isStructuredNote = activityType === 'note';
 
   // Get default datetime for follow-up (tomorrow at 9am)
   const getDefaultFollowUpDateTime = (): string => {
@@ -125,6 +155,10 @@ export const EntityActivityLogger = memo(function EntityActivityLogger({
   const resetForm = useCallback(() => {
     setActivityType(defaultType);
     setDescription('');
+    setNoteTitle('');
+    setNoteBody('');
+    setNoteCategory('');
+    setNoteImportance('');
     setOutcome('');
     setScheduleFollowUp(false);
     setFollowUpDate('');
@@ -133,32 +167,41 @@ export const EntityActivityLogger = memo(function EntityActivityLogger({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim()) return;
+    const primaryContent = isStructuredNote ? noteBody.trim() : description.trim();
+    if (!primaryContent) return;
 
     const data: ActivityLogData = {
       type: activityType,
-      description: description.trim(),
+      description: primaryContent,
+      title: isStructuredNote ? noteTitle.trim() || undefined : undefined,
+      body: isStructuredNote ? primaryContent : undefined,
+      category: isStructuredNote ? noteCategory || undefined : undefined,
+      importance: isStructuredNote ? noteImportance || undefined : undefined,
       outcome: outcome.trim() || undefined,
       scheduledAt: scheduleFollowUp && followUpDate ? new Date(followUpDate) : undefined,
       isFollowUp: scheduleFollowUp,
     };
 
-    await onSubmit(data);
-    setShowSuccess(true);
-    onSuccess?.(data);
+    try {
+      await onSubmit(data);
+      setShowSuccess(true);
+      onSuccess?.(data);
+    } catch {
+      // The submit handler owns user-facing error feedback; keep the dialog open.
+    }
   };
 
   const handleClose = useCallback(
     (newOpen: boolean) => {
-      if (!newOpen && showSuccess) {
+      if (!newOpen) {
         resetForm();
       }
       onOpenChange(newOpen);
     },
-    [showSuccess, resetForm, onOpenChange]
+    [resetForm, onOpenChange]
   );
 
-  const canSubmit = description.trim().length > 0 && !isSubmitting;
+  const canSubmit = (isStructuredNote ? noteBody.trim().length > 0 : description.trim().length > 0) && !isSubmitting;
 
   // Generate suggested next actions using utility function
   const suggestedActions = useMemo<SuggestedAction[]>(() => {
@@ -236,19 +279,80 @@ export const EntityActivityLogger = memo(function EntityActivityLogger({
               })}
             </div>
 
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="activity-description">Description *</Label>
-              <Textarea
-                id="activity-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={currentType.placeholder}
-                rows={3}
-                required
-                maxLength={2000}
-              />
-            </div>
+            {isStructuredNote ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="activity-note-title">Title</Label>
+                  <Input
+                    id="activity-note-title"
+                    value={noteTitle}
+                    onChange={(e) => setNoteTitle(e.target.value)}
+                    placeholder="Short note title"
+                    maxLength={200}
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="activity-note-category">Category</Label>
+                    <Select value={noteCategory} onValueChange={setNoteCategory}>
+                      <SelectTrigger id="activity-note-category">
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NOTE_CATEGORIES.map((category) => (
+                          <SelectItem key={category.value} value={category.value}>
+                            {category.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="activity-note-importance">Importance</Label>
+                    <Select value={noteImportance} onValueChange={setNoteImportance}>
+                      <SelectTrigger id="activity-note-importance">
+                        <SelectValue placeholder="Select importance" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NOTE_IMPORTANCE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="activity-note-body">Body *</Label>
+                  <Textarea
+                    id="activity-note-body"
+                    value={noteBody}
+                    onChange={(e) => setNoteBody(e.target.value)}
+                    placeholder="Capture what happened, what changed, or what matters next..."
+                    rows={5}
+                    required
+                    maxLength={2000}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="activity-description">Description *</Label>
+                <Textarea
+                  id="activity-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder={currentType.placeholder}
+                  rows={3}
+                  required
+                  maxLength={2000}
+                />
+              </div>
+            )}
 
             {/* Outcome (for calls and meetings) */}
             {(activityType === 'call' || activityType === 'meeting') && (
@@ -299,7 +403,7 @@ export const EntityActivityLogger = memo(function EntityActivityLogger({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => handleClose(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>

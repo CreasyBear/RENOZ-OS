@@ -23,3 +23,6 @@ export {
   resolveMetadataUuids,
   batchResolveMetadataUuids,
 } from './activity-metadata';
+
+export { buildManualActivityLogPresentation } from './build-manual-activity-log';
+export { readAuditNote } from './read-audit-note';

@@ -1,4 +1,5 @@
 import type { ActivityExportRequest, ActivityWithUser } from '@/lib/schemas/activities';
+import { readAuditNote } from '@/lib/activities/read-audit-note';
 
 export const MAX_ACTIVITY_EXPORT_ROWS = 10000;
 export const MAX_ACTIVITY_PDF_EXPORT_ROWS = 500;
@@ -63,7 +64,7 @@ export function buildActivityExportCsv(items: ActivityWithUser[]): string {
       item.entityId,
       item.entityName ?? '',
       item.action,
-      item.description ?? '',
+      readAuditNote(item)?.preview ?? item.description ?? '',
       item.source,
       item.user?.id ?? '',
       item.user?.name ?? '',
