@@ -94,4 +94,45 @@ describe('useRma mutations hardening', () => {
       queryKey: ['orders', 'detail', 'order-1'],
     });
   });
+
+  it('refreshes linked issue and order context after executing a remedy', async () => {
+    processRmaMock.mockResolvedValue({
+      id: 'rma-1',
+      orderId: 'order-1',
+      issueId: 'issue-1',
+      execution: {
+        status: 'completed',
+      },
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
+    const { useProcessRma } = await import('@/hooks/support/use-rma');
+    const { result } = renderHook(() => useProcessRma(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        rmaId: 'rma-1',
+        resolution: 'repair',
+        notes: 'Repaired on bench.',
+      });
+    });
+
+    expect(setQueryDataSpy).toHaveBeenCalledWith(
+      ['support', 'rmas', 'detail', 'rma-1'],
+      expect.objectContaining({ id: 'rma-1' })
+    );
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: ['orders', 'detail', 'order-1'],
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: ['support', 'issues', 'detail', 'issue-1'],
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: ['support', 'issues', 'list'],
+    });
+  });
 });

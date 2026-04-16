@@ -41,6 +41,12 @@ export { IssueStatusChangeDialog } from './issue-status-change-dialog';
 export type { StatusChangeResult } from './issue-status-change-dialog';
 export { IssueTemplateFormDialog } from './issue-template-form-dialog';
 export { IssueTemplateList } from './issue-template-list';
+export {
+  ISSUE_NEXT_ACTION_OPTIONS,
+  ISSUE_NEXT_ACTION_LABELS,
+  ISSUE_RESOLUTION_CATEGORY_OPTIONS,
+  ISSUE_RESOLUTION_CATEGORY_LABELS,
+} from './issue-options';
 
 // --- Filter Config (FILTER-STANDARDS compliant) ---
 export {

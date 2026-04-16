@@ -58,6 +58,12 @@ export interface UseRmasOptions {
   orderId?: string;
   /** Filter by issue */
   issueId?: string;
+  /** Filter by resolution */
+  resolution?: ListRmasInput['resolution'];
+  /** Filter by execution status */
+  executionStatus?: ListRmasInput['executionStatus'];
+  /** Filter by linked issue state */
+  linkedIssueOpenState?: ListRmasInput['linkedIssueOpenState'];
   /** Search by RMA number */
   search?: string;
   /** Page number (1-indexed) */
@@ -81,6 +87,9 @@ export function useRmas({
   customerId,
   orderId,
   issueId,
+  resolution,
+  executionStatus,
+  linkedIssueOpenState,
   search,
   page = 1,
   pageSize = 20,
@@ -94,6 +103,9 @@ export function useRmas({
     customerId,
     orderId,
     issueId,
+    resolution,
+    executionStatus,
+    linkedIssueOpenState,
     search,
     page,
     pageSize,
@@ -161,8 +173,12 @@ export function useCreateRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
       if (result.orderId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
+      if (result.issueId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });
       }
     },
   });
@@ -230,6 +246,10 @@ export function useRejectRma() {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       if (result.orderId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
+      if (result.issueId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
       }
     },
   });
@@ -299,6 +319,10 @@ export function useProcessRma() {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       if (result.orderId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
+      if (result.issueId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
       }
     },
   });

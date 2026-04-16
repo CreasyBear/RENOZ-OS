@@ -7,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-008
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -22,6 +22,17 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  ISSUE_NEXT_ACTION_OPTIONS,
+  ISSUE_RESOLUTION_CATEGORY_OPTIONS,
+} from './issue-options';
 import type { IssueStatus } from '@/lib/schemas/support';
 import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 
@@ -52,7 +63,11 @@ const statusConfig: Record<IssueStatus, StatusConfig> = {
 // COMPONENT
 // ============================================================================
 
-import type { StatusChangeResult } from '@/lib/schemas/support/issues';
+import type {
+  IssueNextActionType,
+  IssueResolutionCategory,
+  StatusChangeResult,
+} from '@/lib/schemas/support/issues';
 
 export type { StatusChangeResult };
 
@@ -77,18 +92,38 @@ export function IssueStatusChangeDialog({
 }: IssueStatusChangeDialogProps) {
   const [note, setNote] = useState('');
   const [skipPrompt, setSkipPrompt] = useState(false);
+  const [resolutionCategory, setResolutionCategory] = useState<IssueResolutionCategory | ''>('');
+  const [nextActionType, setNextActionType] = useState<IssueNextActionType | ''>('');
+  const [diagnosisNotes, setDiagnosisNotes] = useState('');
 
   const fromConfig = statusConfig[fromStatus];
   const toConfig = statusConfig[toStatus];
+  const isResolveTransition = toStatus === 'resolved';
+
+  const resetForm = () => {
+    setNote('');
+    setSkipPrompt(false);
+    setResolutionCategory('');
+    setNextActionType('');
+    setDiagnosisNotes('');
+  };
+
+  useEffect(() => {
+    if (open) {
+      resetForm();
+    }
+  }, [open, issueTitle, fromStatus, toStatus]);
 
   const handleConfirm = () => {
     onConfirm({
       confirmed: true,
       note: note.trim(),
       skipPromptForSession: skipPrompt,
+      ...(resolutionCategory && { resolutionCategory }),
+      ...(nextActionType && { nextActionType }),
+      ...(diagnosisNotes.trim() && { diagnosisNotes: diagnosisNotes.trim() }),
     });
-    setNote('');
-    setSkipPrompt(false);
+    resetForm();
   };
 
   const handleCancel = () => {
@@ -97,14 +132,15 @@ export function IssueStatusChangeDialog({
       note: '',
       skipPromptForSession: false,
     });
-    setNote('');
-    setSkipPrompt(false);
+    resetForm();
   };
 
   // Require note for certain transitions
-  const requiresNote = toStatus === 'on_hold' || toStatus === 'resolved' || toStatus === 'closed';
+  const requiresNote = toStatus === 'on_hold' || toStatus === 'resolved';
 
-  const canSubmit = !requiresNote || note.trim().length > 0;
+  const canSubmit = isResolveTransition
+    ? note.trim().length > 0 && !!resolutionCategory && !!nextActionType
+    : !requiresNote || note.trim().length > 0;
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
 
   return (
@@ -112,6 +148,9 @@ export function IssueStatusChangeDialog({
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen && isPending) return;
+        if (!nextOpen) {
+          resetForm();
+        }
         onOpenChange(nextOpen);
       }}
     >
@@ -144,15 +183,21 @@ export function IssueStatusChangeDialog({
           {/* Note Input */}
           <div className="space-y-2">
             <Label htmlFor="status-note">
-              {requiresNote ? 'Note (required)' : 'Note (optional)'}
+              {isResolveTransition
+                ? 'Resolution summary (required)'
+                : requiresNote
+                  ? 'Note (required)'
+                  : 'Note (optional)'}
             </Label>
             <Textarea
               id="status-note"
               placeholder={
                 toStatus === 'on_hold'
                   ? 'Why is this issue on hold?'
-                  : toStatus === 'resolved' || toStatus === 'closed'
-                    ? 'Describe the resolution...'
+                  : toStatus === 'resolved'
+                    ? 'Summarize the resolution for the operator record...'
+                    : toStatus === 'closed'
+                      ? 'Add an optional note about closing this issue...'
                     : 'Add a note about this status change...'
               }
               value={note}
@@ -162,22 +207,82 @@ export function IssueStatusChangeDialog({
             />
             {requiresNote && !note.trim() && (
               <p className="text-destructive text-xs">
-                A note is required when changing to {toConfig.label.toLowerCase()}.
+                {isResolveTransition
+                  ? 'A resolution summary is required before resolving this issue.'
+                  : `A note is required when changing to ${toConfig.label.toLowerCase()}.`}
               </p>
             )}
           </div>
 
+          {isResolveTransition && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="resolution-category">Resolution category</Label>
+                <Select
+                  value={resolutionCategory}
+                  onValueChange={(value) =>
+                    setResolutionCategory(value as IssueResolutionCategory)
+                  }
+                >
+                  <SelectTrigger id="resolution-category">
+                    <SelectValue placeholder="Select a resolution category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ISSUE_RESOLUTION_CATEGORY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="next-action-type">Next action</Label>
+                <Select
+                  value={nextActionType}
+                  onValueChange={(value) => setNextActionType(value as IssueNextActionType)}
+                >
+                  <SelectTrigger id="next-action-type">
+                    <SelectValue placeholder="Select the next action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ISSUE_NEXT_ACTION_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="diagnosis-notes">Diagnosis notes (optional)</Label>
+                <Textarea
+                  id="diagnosis-notes"
+                  placeholder="Capture supporting diagnostics, observations, or technician notes..."
+                  value={diagnosisNotes}
+                  onChange={(e) => setDiagnosisNotes(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+            </>
+          )}
+
           {/* Skip Prompt Option */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="skip-prompt"
-              checked={skipPrompt}
-              onCheckedChange={(checked) => setSkipPrompt(checked === true)}
-            />
-            <Label htmlFor="skip-prompt" className="text-muted-foreground text-sm">
-              Don&apos;t show this dialog for the rest of this session
-            </Label>
-          </div>
+          {!isResolveTransition && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="skip-prompt"
+                checked={skipPrompt}
+                onCheckedChange={(checked) => setSkipPrompt(checked === true)}
+              />
+              <Label htmlFor="skip-prompt" className="text-muted-foreground text-sm">
+                Don&apos;t show this dialog for the rest of this session
+              </Label>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

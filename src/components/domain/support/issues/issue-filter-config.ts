@@ -17,7 +17,13 @@ import {
   XCircle,
 } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
-import type { IssueStatus, IssuePriority, IssueFiltersState } from "@/lib/schemas/support/issues";
+import type {
+  IssueStatus,
+  IssuePriority,
+  IssueFiltersState,
+  IssueRmaState,
+} from "@/lib/schemas/support/issues";
+import { ISSUE_NEXT_ACTION_OPTIONS } from './issue-options';
 
 export type { IssueStatus, IssuePriority, IssueFiltersState };
 
@@ -27,6 +33,12 @@ export const DEFAULT_ISSUE_FILTERS: IssueFiltersState = {
   priority: [],
   assignedTo: null,
   customerId: null,
+  nextActionType: null,
+  rmaState: "any",
+  serialState: "any",
+  warrantyState: "any",
+  orderState: "any",
+  serviceSystemState: "any",
 };
 
 // ============================================================================
@@ -48,6 +60,17 @@ export const ISSUE_PRIORITY_OPTIONS: FilterOption<IssuePriority>[] = [
   { value: "medium", label: "Medium" },
   { value: "high", label: "High", icon: AlertTriangle },
   { value: "critical", label: "Critical", icon: AlertTriangle },
+];
+
+const LINEAGE_STATE_OPTIONS: FilterOption<string>[] = [
+  { value: "present", label: "Present" },
+  { value: "missing", label: "Missing" },
+];
+
+const RMA_STATE_OPTIONS: FilterOption<Exclude<IssueRmaState, "any">>[] = [
+  { value: "ready", label: "Ready" },
+  { value: "blocked", label: "Blocked" },
+  { value: "linked", label: "Linked" },
 ];
 
 // ============================================================================
@@ -88,6 +111,48 @@ export const ISSUE_FILTER_CONFIG: FilterBarConfig<IssueFiltersState> = {
       options: [], // Populated dynamically
       allLabel: "All Customers",
     },
+    {
+      key: "nextActionType",
+      label: "Next Action",
+      type: "select",
+      options: ISSUE_NEXT_ACTION_OPTIONS,
+      allLabel: "Any Next Action",
+    },
+    {
+      key: "rmaState",
+      label: "RMA State",
+      type: "select",
+      options: RMA_STATE_OPTIONS,
+      allLabel: "Any RMA State",
+    },
+    {
+      key: "serialState",
+      label: "Serial",
+      type: "select",
+      options: LINEAGE_STATE_OPTIONS,
+      allLabel: "Any Serial State",
+    },
+    {
+      key: "warrantyState",
+      label: "Linked Warranty",
+      type: "select",
+      options: LINEAGE_STATE_OPTIONS,
+      allLabel: "Any Warranty State",
+    },
+    {
+      key: "orderState",
+      label: "Source Order",
+      type: "select",
+      options: LINEAGE_STATE_OPTIONS,
+      allLabel: "Any Order State",
+    },
+    {
+      key: "serviceSystemState",
+      label: "Service System",
+      type: "select",
+      options: LINEAGE_STATE_OPTIONS,
+      allLabel: "Any Service System State",
+    },
   ],
   presets: [
     {
@@ -126,6 +191,12 @@ export const ISSUE_FILTER_CONFIG: FilterBarConfig<IssueFiltersState> = {
     priority: "Priority",
     assignedTo: "Owner",
     customerId: "Customer",
+    nextActionType: "Next Action",
+    rmaState: "RMA State",
+    serialState: "Serial",
+    warrantyState: "Linked Warranty",
+    orderState: "Source Order",
+    serviceSystemState: "Service System",
   },
 };
 

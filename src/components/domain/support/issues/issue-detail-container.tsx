@@ -40,6 +40,7 @@ export function IssueDetailContainer({
     isLoading,
     error,
     customerContext,
+    relatedContext,
     customerId,
     actions,
     statusDialog,
@@ -105,6 +106,7 @@ export function IssueDetailContainer({
         activeTab={resolvedActiveTab}
         onTabChange={handleTabChange}
         customerContext={customerContext}
+        relatedContext={relatedContext}
         actions={actions}
         statusDialog={statusDialog}
         setStatusDialog={setStatusDialog}

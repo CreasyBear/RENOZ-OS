@@ -19,6 +19,7 @@ import {
   createIssue,
   updateIssue,
   deleteIssue,
+  previewIssueIntake,
 } from '@/server/functions/support/issues';
 import { escalateIssue } from '@/server/functions/support/escalation';
 import type {
@@ -27,6 +28,9 @@ import type {
   IssueStatus,
   IssuePriority,
   IssueType,
+  IssueNextActionType,
+  IssueLineageState,
+  IssueRmaState,
 } from '@/lib/schemas/support/issues';
 
 type IssueListResult = Awaited<ReturnType<typeof getIssues>>;
@@ -46,6 +50,12 @@ export interface IssueListFilters {
   search?: string;
   slaStatus?: 'breached' | 'at_risk';
   escalated?: boolean;
+  nextActionType?: IssueNextActionType;
+  rmaState?: IssueRmaState;
+  serialState?: IssueLineageState;
+  warrantyState?: IssueLineageState;
+  orderState?: IssueLineageState;
+  serviceSystemState?: IssueLineageState;
   limit?: number;
   offset?: number;
 }
@@ -118,6 +128,36 @@ export function useIssue({ issueId, enabled = true }: UseIssueOptions) {
     },
     enabled: enabled && !!issueId,
     staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useIssueIntakePreview(
+  data: Partial<
+    Pick<
+      CreateIssueInput,
+      | 'customerId'
+      | 'warrantyId'
+      | 'warrantyEntitlementId'
+      | 'productId'
+      | 'orderId'
+      | 'shipmentId'
+      | 'serializedItemId'
+      | 'serviceSystemId'
+      | 'serialNumber'
+      | 'metadata'
+    >
+  >,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.support.issueIntakePreview(data),
+    queryFn: async () => {
+      const result = await previewIssueIntake({ data });
+      if (result == null) throw new Error('Query returned no data');
+      return result;
+    },
+    enabled,
+    staleTime: 15 * 1000,
   });
 }
 

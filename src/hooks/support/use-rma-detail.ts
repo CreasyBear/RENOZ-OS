@@ -24,7 +24,10 @@ import {
 } from './use-rma';
 import { useTrackView } from '@/hooks/search';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
-import { rmaInspectionNotesSchema, type RmaResolution } from '@/lib/schemas/support/rma';
+import {
+  rmaInspectionNotesSchema,
+  type ProcessRmaPayload,
+} from '@/lib/schemas/support/rma';
 
 // ============================================================================
 // TYPES
@@ -47,11 +50,8 @@ export interface UseRmaDetailReturn {
   onReject: (reason: string) => Promise<void>;
   /** Receive RMA (approved → received); restores inventory */
   onReceive: (inspection?: { condition?: string; notes?: string; locationId?: string }) => Promise<void>;
-  /** Process RMA (received → processed) */
-  onProcess: (
-    resolution: RmaResolution,
-    details?: { refundAmount?: number; notes?: string }
-  ) => Promise<void>;
+  /** Execute remedy for an RMA (received → processed when successful) */
+  onProcess: (input: ProcessRmaPayload) => Promise<void>;
   /** Cancel RMA (requested/approved → cancelled) */
   onCancel: () => Promise<void>;
   /** Cancel mutation pending state */
@@ -127,19 +127,18 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
     }
   };
 
-  const handleProcess = async (
-    resolution: RmaResolution,
-    details?: { refundAmount?: number; notes?: string }
-  ) => {
+  const handleProcess = async (input: ProcessRmaPayload) => {
     try {
       const result = await processMutation.mutateAsync({
         rmaId,
-        resolution,
-        resolutionDetails: details,
+        ...input,
       });
-      toastSuccess(result.followUpMessage ?? 'RMA processed successfully');
+      if (result.execution?.status === 'blocked') {
+        throw new Error(result.execution.blockedReason ?? 'RMA execution is blocked');
+      }
+      toastSuccess('RMA remedy completed successfully');
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to process RMA');
+      toastError(err instanceof Error ? err.message : 'Failed to execute remedy');
     }
   };
 

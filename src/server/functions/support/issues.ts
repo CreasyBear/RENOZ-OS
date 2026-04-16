@@ -23,6 +23,7 @@ import {
   businessHoursConfig,
   organizationHolidays,
   customers,
+  serviceSystems,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
@@ -31,6 +32,7 @@ import {
   getIssuesSchema,
   getIssuesCursorSchema,
   getIssueByIdSchema,
+  type IssueRmaState,
 } from '@/lib/schemas/support/issues';
 import {
   calculateInitialTracking,
@@ -48,11 +50,21 @@ import {
   toSlaTracking,
   toSlaConfiguration,
 } from '@/lib/sla';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 import { createSerializedMutationError, serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
+import {
+  buildIssueAnchorState,
+  assertIssueAnchors,
+  extractIssueAnchorValues,
+  getIssueRelatedContext,
+  previewIssueAnchors,
+  resolveIssueAnchors,
+  syncIssueAnchorMetadata,
+} from './_shared/issue-anchor-resolution';
+import { getIssueRemedyContext } from './_shared/issue-remedy-context';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -68,6 +80,141 @@ const ISSUE_EXCLUDED_FIELDS: string[] = [
   'slaTrackingId',
 ];
 
+function applyLineageStateFilter(
+  conditions: Array<ReturnType<typeof eq>>,
+  state: 'any' | 'present' | 'missing' | undefined,
+  column: typeof issues.serialNumber | typeof issues.warrantyId | typeof issues.orderId | typeof issues.serviceSystemId
+) {
+  if (state === 'present') {
+    conditions.push(isNotNull(column) as never);
+  } else if (state === 'missing') {
+    conditions.push(isNull(column) as never);
+  }
+}
+
+function applyOptionalEqualityFilter(
+  conditions: Array<ReturnType<typeof eq>>,
+  value: string | undefined,
+  column: typeof issues.nextActionType
+) {
+  if (value) {
+    conditions.push(eq(column, value as never) as never);
+  }
+}
+
+function matchesRmaState(
+  requestedState: IssueRmaState | undefined,
+  actualState: 'ready' | 'blocked' | 'linked' | null
+) {
+  if (!requestedState || requestedState === 'any') return true;
+  return actualState === requestedState;
+}
+
+type IssueListQueryRow = {
+  issue: typeof issues.$inferSelect;
+  tracking: typeof slaTracking.$inferSelect | null;
+  config: typeof slaConfigurations.$inferSelect | null;
+  customer: { id: string; name: string } | null;
+  serviceSystem: { id: string; displayName: string } | null;
+};
+
+function mapIssueRowsWithMetrics(rows: IssueListQueryRow[]): IssueWithSlaMetrics[] {
+  return rows.map(({ issue, tracking, config, customer, serviceSystem }) => {
+    let slaMetrics: IssueSlaMetrics | null = null;
+
+    if (tracking && config) {
+      const trackingData = {
+        ...tracking,
+        startedAt: tracking.startedAt,
+        responseDueAt: tracking.responseDueAt,
+        resolutionDueAt: tracking.resolutionDueAt,
+        respondedAt: tracking.respondedAt,
+        resolvedAt: tracking.resolvedAt,
+        pausedAt: tracking.pausedAt,
+      };
+
+      const configData = {
+        id: config.id,
+        organizationId: config.organizationId,
+        domain: config.domain,
+        name: config.name,
+        description: config.description,
+        responseTargetValue: config.responseTargetValue,
+        responseTargetUnit: config.responseTargetUnit,
+        resolutionTargetValue: config.resolutionTargetValue,
+        resolutionTargetUnit: config.resolutionTargetUnit,
+        atRiskThresholdPercent: config.atRiskThresholdPercent,
+        escalateOnBreach: config.escalateOnBreach,
+        escalateToUserId: config.escalateToUserId,
+        businessHoursConfigId: config.businessHoursConfigId,
+        isDefault: config.isDefault,
+        priorityOrder: config.priorityOrder,
+        isActive: config.isActive,
+      };
+
+      const snapshot = computeStateSnapshot(
+        toSlaTracking(trackingData),
+        toSlaConfiguration(configData)
+      );
+
+      slaMetrics = {
+        slaTrackingId: tracking.id,
+        status: tracking.status,
+        isPaused: tracking.isPaused,
+        responseBreached: tracking.responseBreached,
+        resolutionBreached: tracking.resolutionBreached,
+        isResponseAtRisk: snapshot.isResponseAtRisk,
+        isResolutionAtRisk: snapshot.isResolutionAtRisk,
+        responseTimeRemaining: snapshot.responseTimeRemaining,
+        resolutionTimeRemaining: snapshot.resolutionTimeRemaining,
+        responsePercentComplete: snapshot.responsePercentComplete,
+        resolutionPercentComplete: snapshot.resolutionPercentComplete,
+        responseDueAt: tracking.responseDueAt,
+        resolutionDueAt: tracking.resolutionDueAt,
+      };
+    }
+
+    return {
+      ...issue,
+      slaMetrics,
+      customer: customer?.id ? { id: customer.id, name: customer.name } : null,
+      serviceSystem: serviceSystem?.id
+        ? { id: serviceSystem.id, displayName: serviceSystem.displayName }
+        : null,
+    };
+  });
+}
+
+async function resolveIssueDetailContext(
+  organizationId: string,
+  issue: typeof issues.$inferSelect
+) {
+  const normalizedAnchors = extractIssueAnchorValues(issue);
+  const anchorResolution = await resolveIssueAnchors(organizationId, normalizedAnchors);
+  const remedyContext = await getIssueRemedyContext({
+    organizationId,
+    issue: {
+      id: issue.id,
+      status: issue.status,
+      orderId: anchorResolution.anchors.orderId,
+      serializedItemId: anchorResolution.anchors.serializedItemId,
+      serialNumber: anchorResolution.anchors.serialNumber,
+      resolutionCategory: issue.resolutionCategory,
+      resolutionNotes: issue.resolutionNotes,
+      diagnosisNotes: issue.diagnosisNotes,
+      nextActionType: issue.nextActionType,
+      resolvedAt: issue.resolvedAt,
+      resolvedByUserId: issue.resolvedByUserId,
+    },
+    supportContext: anchorResolution.supportContext,
+  });
+
+  return {
+    anchorResolution,
+    remedyContext,
+  };
+}
+
 // ============================================================================
 // CREATE ISSUE
 // ============================================================================
@@ -80,6 +227,14 @@ export const createIssue = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const logger = createActivityLoggerWithContext(ctx);
+    const issueAnchorState = buildIssueAnchorState({ input: data });
+    const resolution = await resolveIssueAnchors(ctx.organizationId, issueAnchorState.anchors);
+    assertIssueAnchors({
+      anchors: issueAnchorState.anchors,
+      explicitFields: issueAnchorState.explicitFields,
+      customerId: data.customerId ?? null,
+      resolution,
+    });
 
     // Wrap issue creation + SLA tracking in a transaction for atomicity
     const { issue, slaTrackingRecord } = await db.transaction(async (tx) => {
@@ -96,9 +251,17 @@ export const createIssue = createServerFn({ method: 'POST' })
           type: data.type,
           priority: data.priority,
           status: 'open',
-          customerId: data.customerId ?? null,
+          customerId: resolution.commercialCustomerId ?? data.customerId ?? null,
+          warrantyId: resolution.anchors.warrantyId,
+          warrantyEntitlementId: resolution.anchors.warrantyEntitlementId,
+          orderId: resolution.anchors.orderId,
+          shipmentId: resolution.anchors.shipmentId,
+          productId: resolution.anchors.productId,
+          serializedItemId: resolution.anchors.serializedItemId,
+          serviceSystemId: resolution.anchors.serviceSystemId,
+          serialNumber: resolution.anchors.serialNumber,
           assignedToUserId: data.assignedToUserId ?? null,
-          metadata: data.metadata ?? null,
+          metadata: syncIssueAnchorMetadata(issueAnchorState.metadata, resolution.anchors),
           tags: data.tags ?? null,
           createdBy: ctx.user.id,
         })
@@ -335,6 +498,15 @@ export const getIssues = createServerFn({ method: 'GET' })
     if (data.customerId) {
       conditions.push(eq(issues.customerId, data.customerId));
     }
+    applyOptionalEqualityFilter(conditions as never[], data.nextActionType, issues.nextActionType);
+    applyLineageStateFilter(conditions as never[], data.serialState, issues.serialNumber);
+    applyLineageStateFilter(conditions as never[], data.warrantyState, issues.warrantyId);
+    applyLineageStateFilter(conditions as never[], data.orderState, issues.orderId);
+    applyLineageStateFilter(
+      conditions as never[],
+      data.serviceSystemState,
+      issues.serviceSystemId
+    );
     if (data.assignedToFilter === 'unassigned') {
       conditions.push(isNull(issues.assignedToUserId));
     } else if (data.assignedToFilter === 'me' || data.assignedToUserId) {
@@ -350,15 +522,26 @@ export const getIssues = createServerFn({ method: 'GET' })
       );
     }
 
-    const results = await db
+    const needsRmaFiltering = !!data.rmaState && data.rmaState !== 'any';
+
+    const baseQuery = db
       .select()
       .from(issues)
       .where(and(...conditions))
-      .orderBy(desc(issues.createdAt))
-      .limit(data.limit)
-      .offset(data.offset);
+      .orderBy(desc(issues.createdAt));
 
-    return results;
+    const results = needsRmaFiltering
+      ? await baseQuery
+      : await baseQuery.limit(data.limit).offset(data.offset);
+
+    const enrichedRows = await enrichIssueListRows(ctx.organizationId, results);
+    const filteredRows = enrichedRows.filter((issue) =>
+      matchesRmaState(data.rmaState, issue.rmaState ?? null)
+    );
+
+    return needsRmaFiltering
+      ? filteredRows.slice(data.offset, data.offset + data.limit)
+      : filteredRows;
   });
 
 /**
@@ -368,7 +551,21 @@ export const getIssuesCursor = createServerFn({ method: 'GET' })
   .inputValidator(getIssuesCursorSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const { cursor, pageSize = 20, sortOrder = 'desc', status, priority, type, customerId, assignedToUserId, assignedToFilter, search, escalated } = data;
+    const {
+      cursor,
+      pageSize = 20,
+      sortOrder = 'desc',
+      status,
+      priority,
+      type,
+      customerId,
+      assignedToUserId,
+      assignedToFilter,
+      search,
+      escalated,
+      nextActionType,
+      rmaState,
+    } = data;
 
     const conditions = [eq(issues.organizationId, ctx.organizationId)];
     if (status) {
@@ -381,6 +578,15 @@ export const getIssuesCursor = createServerFn({ method: 'GET' })
     }
     if (type) conditions.push(eq(issues.type, type));
     if (customerId) conditions.push(eq(issues.customerId, customerId));
+    applyOptionalEqualityFilter(conditions as never[], nextActionType, issues.nextActionType);
+    applyLineageStateFilter(conditions as never[], data.serialState, issues.serialNumber);
+    applyLineageStateFilter(conditions as never[], data.warrantyState, issues.warrantyId);
+    applyLineageStateFilter(conditions as never[], data.orderState, issues.orderId);
+    applyLineageStateFilter(
+      conditions as never[],
+      data.serviceSystemState,
+      issues.serviceSystemId
+    );
     if (assignedToFilter === 'unassigned') {
       conditions.push(isNull(issues.assignedToUserId));
     } else if (assignedToFilter === 'me' || assignedToUserId) {
@@ -394,25 +600,54 @@ export const getIssuesCursor = createServerFn({ method: 'GET' })
       );
     }
 
-    if (cursor) {
-      const cursorPosition = decodeCursor(cursor);
-      if (cursorPosition) {
-        conditions.push(
-          buildCursorCondition(issues.createdAt, issues.id, cursorPosition, sortOrder)
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const batchSize = rmaState && rmaState !== 'any' ? Math.max(pageSize * 3, 50) : pageSize + 1;
+    const selectIssueRows = (
+      batchCursor: ReturnType<typeof decodeCursor> | null,
+      limit: number
+    ) => {
+      const batchConditions = [...conditions];
+      if (batchCursor) {
+        batchConditions.push(
+          buildCursorCondition(issues.createdAt, issues.id, batchCursor, sortOrder)
         );
+      }
+
+      return db
+        .select()
+        .from(issues)
+        .where(and(...batchConditions))
+        .orderBy(orderDir(issues.createdAt), orderDir(issues.id))
+        .limit(limit);
+    };
+
+    const filteredRows: Awaited<ReturnType<typeof enrichIssueListRows>> = [];
+    let batchCursor = cursor ? decodeCursor(cursor) : null;
+    let exhausted = false;
+
+    while (filteredRows.length <= pageSize && !exhausted) {
+      const results = await selectIssueRows(batchCursor, batchSize);
+      if (results.length === 0) {
+        exhausted = true;
+        break;
+      }
+
+      const enrichedRows = await enrichIssueListRows(ctx.organizationId, results);
+      filteredRows.push(
+        ...enrichedRows.filter((issue) => matchesRmaState(rmaState, issue.rmaState ?? null))
+      );
+
+      const lastResult = results[results.length - 1];
+      batchCursor = lastResult
+        ? { createdAt: lastResult.createdAt.toISOString(), id: lastResult.id }
+        : batchCursor;
+
+      if (results.length < batchSize) {
+        exhausted = true;
       }
     }
 
-    const orderDir = sortOrder === 'asc' ? asc : desc;
-
-    const results = await db
-      .select()
-      .from(issues)
-      .where(and(...conditions))
-      .orderBy(orderDir(issues.createdAt), orderDir(issues.id))
-      .limit(pageSize + 1);
-
-    return buildStandardCursorResponse(results, pageSize);
+    return buildStandardCursorResponse(filteredRows, pageSize);
   });
 
 /**
@@ -453,16 +688,65 @@ export const getIssueById = createServerFn({ method: 'GET' })
         );
       }
     }
-
-    // Extract warrantyId from metadata if present
-    const metadata = issue.metadata as Record<string, unknown> | null;
-    const warrantyId = metadata?.warrantyId as string | null;
+    const { anchorResolution, remedyContext } = await resolveIssueDetailContext(
+      ctx.organizationId,
+      issue
+    );
+    const relatedContext = await getIssueRelatedContext({
+      organizationId: ctx.organizationId,
+      issueId: issue.id,
+      issue: {
+        id: issue.id,
+        customerId: issue.customerId,
+        warrantyId: anchorResolution.anchors.warrantyId,
+        orderId: anchorResolution.anchors.orderId,
+        shipmentId: anchorResolution.anchors.shipmentId,
+        serializedItemId: anchorResolution.anchors.serializedItemId,
+        serviceSystemId: anchorResolution.anchors.serviceSystemId,
+      },
+      supportContext: anchorResolution.supportContext,
+    });
 
     return {
       ...issue,
+      ...anchorResolution.anchors,
       slaMetrics: slaState,  // Return as slaMetrics to match client expectations
-      warrantyId: warrantyId ?? null,
+      supportContext: anchorResolution.supportContext,
+      resolution: remedyContext.resolution,
+      rmaReadiness: remedyContext.rmaReadiness,
+      relatedContext,
     };
+  });
+
+export const previewIssueIntake = createServerFn({ method: 'GET' })
+  .inputValidator(
+    normalizeObjectInput(
+      createIssueSchema
+        .partial()
+        .pick({
+          customerId: true,
+          warrantyId: true,
+          warrantyEntitlementId: true,
+          productId: true,
+          orderId: true,
+          shipmentId: true,
+          serializedItemId: true,
+          serviceSystemId: true,
+          serialNumber: true,
+          metadata: true,
+        })
+    )
+  )
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    const issueAnchorState = buildIssueAnchorState({ input: data });
+
+    return previewIssueAnchors({
+      organizationId: ctx.organizationId,
+      anchors: issueAnchorState.anchors,
+      explicitFields: issueAnchorState.explicitFields,
+      customerId: data.customerId ?? null,
+    });
   });
 
 // ============================================================================
@@ -495,6 +779,51 @@ export const updateIssue = createServerFn({ method: 'POST' })
 
     if (!existing) {
       throw new NotFoundError('Issue not found', 'issue');
+    }
+
+    const issueAnchorState = buildIssueAnchorState({
+      input: updates,
+      existing: {
+        ...extractIssueAnchorValues(existing),
+        metadata: existing.metadata as Record<string, unknown> | null,
+      },
+    });
+    const resolution = await resolveIssueAnchors(ctx.organizationId, issueAnchorState.anchors);
+    assertIssueAnchors({
+      anchors: issueAnchorState.anchors,
+      explicitFields: issueAnchorState.explicitFields,
+      customerId:
+        Object.prototype.hasOwnProperty.call(updates, 'customerId')
+          ? (updates.customerId ?? null)
+          : existing.customerId,
+      resolution,
+    });
+    const hasExplicitAnchorChange = Object.entries(issueAnchorState.explicitFields).some(
+      ([field, explicit]) => field !== 'customerId' && explicit
+    );
+    const nextCustomerId = issueAnchorState.explicitFields.customerId
+      ? (updates.customerId ?? null)
+      : hasExplicitAnchorChange && resolution.commercialCustomerId
+        ? resolution.commercialCustomerId
+        : existing.customerId;
+    const isResolving = updates.status === 'resolved';
+    if (isResolving) {
+      const validationErrors: Record<string, string[]> = {};
+      if (!updates.resolutionCategory) {
+        validationErrors.resolutionCategory = ['Resolution category is required.'];
+      }
+      if (!updates.resolutionNotes?.trim()) {
+        validationErrors.resolutionNotes = ['Resolution summary is required.'];
+      }
+      if (!updates.nextActionType) {
+        validationErrors.nextActionType = ['Next action is required.'];
+      }
+      if (Object.keys(validationErrors).length > 0) {
+        throw new ValidationError(
+          'Structured resolution details are required before resolving an issue.',
+          validationErrors
+        );
+      }
     }
 
     const [issue] = await db.transaction(async (tx) => {
@@ -540,9 +869,8 @@ export const updateIssue = createServerFn({ method: 'POST' })
           }
 
           if (
-            (updates.status === 'resolved' || updates.status === 'closed') &&
+            updates.status === 'resolved' &&
             existing.status !== 'resolved' &&
-            existing.status !== 'closed' &&
             !tracking.resolvedAt
           ) {
             const resolvedAt = new Date();
@@ -561,16 +889,32 @@ export const updateIssue = createServerFn({ method: 'POST' })
               eventData: buildResolvedEventData(toSlaTracking(tracking), resolvedAt),
               triggeredByUserId: ctx.user.id,
             });
-            issueResolvedAt = resolvedAt;
           }
         }
+      }
+
+      if (updates.status === 'resolved' && existing.status !== 'resolved') {
+        issueResolvedAt = new Date();
       }
 
       return await tx
         .update(issues)
         .set({
           ...updates,
-          ...(issueResolvedAt && { resolvedAt: issueResolvedAt }),
+          customerId: nextCustomerId,
+          warrantyId: resolution.anchors.warrantyId,
+          warrantyEntitlementId: resolution.anchors.warrantyEntitlementId,
+          orderId: resolution.anchors.orderId,
+          shipmentId: resolution.anchors.shipmentId,
+          productId: resolution.anchors.productId,
+          serializedItemId: resolution.anchors.serializedItemId,
+          serviceSystemId: resolution.anchors.serviceSystemId,
+          serialNumber: resolution.anchors.serialNumber,
+          metadata: syncIssueAnchorMetadata(issueAnchorState.metadata, resolution.anchors),
+          ...(issueResolvedAt && {
+            resolvedAt: issueResolvedAt,
+            resolvedByUserId: ctx.user.id,
+          }),
           updatedBy: ctx.user.id,
         })
         .where(eq(issues.id, issueId))
@@ -639,6 +983,39 @@ export type IssueWithSlaMetrics = typeof issues.$inferSelect & {
   slaMetrics: IssueSlaMetrics | null;
 };
 
+type EnrichedIssueWithMetrics = IssueWithSlaMetrics & {
+  customer?: { id: string; name: string } | null;
+  serviceSystem?: { id: string; displayName: string } | null;
+  rmaState: 'ready' | 'blocked' | 'linked';
+  linkedRmaCount: number;
+};
+
+async function enrichIssueListRows<
+  TIssue extends typeof issues.$inferSelect & {
+    customer?: { id: string; name: string } | null;
+    serviceSystem?: { id: string; displayName: string } | null;
+    slaMetrics?: IssueSlaMetrics | null;
+  },
+>(organizationId: string, rows: TIssue[]) {
+  return Promise.all(
+    rows.map(async (issue) => {
+      const { anchorResolution, remedyContext } = await resolveIssueDetailContext(
+        organizationId,
+        issue
+      );
+
+      return {
+        ...issue,
+        ...anchorResolution.anchors,
+        resolutionCategory: issue.resolutionCategory ?? null,
+        nextActionType: issue.nextActionType ?? null,
+        rmaState: remedyContext.rmaReadiness.state,
+        linkedRmaCount: remedyContext.rmaReadiness.existingRmas.length,
+      };
+    })
+  );
+}
+
 /**
  * Get issues with computed SLA metrics for list display
  * Uses SLA State Manager computeStateSnapshot for real-time breach/at-risk status
@@ -670,6 +1047,15 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
     if (data.customerId) {
       conditions.push(eq(issues.customerId, data.customerId));
     }
+    applyOptionalEqualityFilter(conditions as never[], data.nextActionType, issues.nextActionType);
+    applyLineageStateFilter(conditions as never[], data.serialState, issues.serialNumber);
+    applyLineageStateFilter(conditions as never[], data.warrantyState, issues.warrantyId);
+    applyLineageStateFilter(conditions as never[], data.orderState, issues.orderId);
+    applyLineageStateFilter(
+      conditions as never[],
+      data.serviceSystemState,
+      issues.serviceSystemId
+    );
     if (data.assignedToFilter === 'unassigned') {
       conditions.push(isNull(issues.assignedToUserId));
     } else if (data.assignedToFilter === 'me' || data.assignedToUserId) {
@@ -699,95 +1085,62 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
       );
     }
 
-    // Get issues with their SLA tracking data and customer (for kanban customer link)
-    const results = await db
-      .select({
-        issue: issues,
-        tracking: slaTracking,
-        config: slaConfigurations,
-        customer: { id: customers.id, name: customers.name },
-      })
-      .from(issues)
-      .leftJoin(slaTracking, eq(issues.slaTrackingId, slaTracking.id))
-      .leftJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
-      .leftJoin(
-        customers,
-        and(
-          eq(issues.customerId, customers.id),
-          eq(customers.organizationId, ctx.organizationId),
-          isNull(customers.deletedAt)
+    const needsRmaFiltering = !!data.rmaState && data.rmaState !== 'any';
+    const selectIssueRows = (limit: number, offset: number) =>
+      db
+        .select({
+          issue: issues,
+          tracking: slaTracking,
+          config: slaConfigurations,
+          customer: { id: customers.id, name: customers.name },
+          serviceSystem: {
+            id: serviceSystems.id,
+            displayName: serviceSystems.displayName,
+          },
+        })
+        .from(issues)
+        .leftJoin(slaTracking, eq(issues.slaTrackingId, slaTracking.id))
+        .leftJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
+        .leftJoin(
+          customers,
+          and(
+            eq(issues.customerId, customers.id),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
         )
-      )
-      .where(and(...conditions))
-      .orderBy(desc(issues.createdAt))
-      .limit(data.limit)
-      .offset(data.offset);
+        .leftJoin(serviceSystems, eq(issues.serviceSystemId, serviceSystems.id))
+        .where(and(...conditions))
+        .orderBy(desc(issues.createdAt))
+        .limit(limit)
+        .offset(offset);
 
-    // Compute SLA metrics for each issue
-    const issuesWithMetrics: IssueWithSlaMetrics[] = results.map(({ issue, tracking, config, customer }) => {
-      let slaMetrics: IssueSlaMetrics | null = null;
+    if (!needsRmaFiltering) {
+      const results = await selectIssueRows(data.limit, data.offset);
+      const issuesWithMetrics = mapIssueRowsWithMetrics(results);
+      return enrichIssueListRows(ctx.organizationId, issuesWithMetrics);
+    }
 
-      if (tracking && config) {
-        // Convert DB rows to types expected by computeStateSnapshot
-        const trackingData = {
-          ...tracking,
-          startedAt: tracking.startedAt,
-          responseDueAt: tracking.responseDueAt,
-          resolutionDueAt: tracking.resolutionDueAt,
-          respondedAt: tracking.respondedAt,
-          resolvedAt: tracking.resolvedAt,
-          pausedAt: tracking.pausedAt,
-        };
+    const targetCount = data.offset + data.limit;
+    const batchSize = Math.max(data.limit * 3, 50);
+    const matchedRows: EnrichedIssueWithMetrics[] = [];
+    let fetchOffset = 0;
 
-        const configData = {
-          id: config.id,
-          organizationId: config.organizationId,
-          domain: config.domain,
-          name: config.name,
-          description: config.description,
-          responseTargetValue: config.responseTargetValue,
-          responseTargetUnit: config.responseTargetUnit,
-          resolutionTargetValue: config.resolutionTargetValue,
-          resolutionTargetUnit: config.resolutionTargetUnit,
-          atRiskThresholdPercent: config.atRiskThresholdPercent,
-          escalateOnBreach: config.escalateOnBreach,
-          escalateToUserId: config.escalateToUserId,
-          businessHoursConfigId: config.businessHoursConfigId,
-          isDefault: config.isDefault,
-          priorityOrder: config.priorityOrder,
-          isActive: config.isActive,
-        };
+    while (matchedRows.length < targetCount) {
+      const batch = await selectIssueRows(batchSize, fetchOffset);
+      if (batch.length === 0) break;
 
-        const snapshot = computeStateSnapshot(
-          toSlaTracking(trackingData),
-          toSlaConfiguration(configData)
-        );
+      const issuesWithMetrics = mapIssueRowsWithMetrics(batch);
+      const enrichedBatch = await enrichIssueListRows(ctx.organizationId, issuesWithMetrics);
+      matchedRows.push(
+        ...enrichedBatch.filter((issue) => matchesRmaState(data.rmaState, issue.rmaState ?? null))
+      );
 
-        slaMetrics = {
-          slaTrackingId: tracking.id,
-          status: tracking.status,
-          isPaused: tracking.isPaused,
-          responseBreached: tracking.responseBreached,
-          resolutionBreached: tracking.resolutionBreached,
-          isResponseAtRisk: snapshot.isResponseAtRisk,
-          isResolutionAtRisk: snapshot.isResolutionAtRisk,
-          responseTimeRemaining: snapshot.responseTimeRemaining,
-          resolutionTimeRemaining: snapshot.resolutionTimeRemaining,
-          responsePercentComplete: snapshot.responsePercentComplete,
-          resolutionPercentComplete: snapshot.resolutionPercentComplete,
-          responseDueAt: tracking.responseDueAt,
-          resolutionDueAt: tracking.resolutionDueAt,
-        };
-      }
+      fetchOffset += batch.length;
+      if (batch.length < batchSize) break;
+    }
 
-      return {
-        ...issue,
-        slaMetrics,
-        customer: customer?.id ? { id: customer.id, name: customer.name } : null,
-      };
-    });
-
-    return issuesWithMetrics;
+    return matchedRows.slice(data.offset, targetCount);
   });
 
 /**
@@ -797,7 +1150,26 @@ export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
   .inputValidator(getIssuesCursorSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const { cursor, pageSize = 20, sortOrder = 'desc', status, priority, type, customerId, assignedToUserId, assignedToFilter, search, slaStatus, escalated } = data;
+    const {
+      cursor,
+      pageSize = 20,
+      sortOrder = 'desc',
+      status,
+      priority,
+      type,
+      customerId,
+      assignedToUserId,
+      assignedToFilter,
+      search,
+      slaStatus,
+      escalated,
+      nextActionType,
+      rmaState,
+      serialState,
+      warrantyState,
+      orderState,
+      serviceSystemState,
+    } = data;
 
     const conditions = [eq(issues.organizationId, ctx.organizationId)];
     if (status) {
@@ -810,6 +1182,11 @@ export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
     }
     if (type) conditions.push(eq(issues.type, type));
     if (customerId) conditions.push(eq(issues.customerId, customerId));
+    applyOptionalEqualityFilter(conditions as never[], nextActionType, issues.nextActionType);
+    applyLineageStateFilter(conditions as never[], serialState, issues.serialNumber);
+    applyLineageStateFilter(conditions as never[], warrantyState, issues.warrantyId);
+    applyLineageStateFilter(conditions as never[], orderState, issues.orderId);
+    applyLineageStateFilter(conditions as never[], serviceSystemState, issues.serviceSystemId);
     if (assignedToFilter === 'unassigned') {
       conditions.push(isNull(issues.assignedToUserId));
     } else if (assignedToFilter === 'me' || assignedToUserId) {
@@ -835,108 +1212,82 @@ export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
       );
     }
 
-    if (cursor) {
-      const cursorPosition = decodeCursor(cursor);
-      if (cursorPosition) {
-        conditions.push(
-          buildCursorCondition(issues.createdAt, issues.id, cursorPosition, sortOrder)
+    const orderDir = sortOrder === 'asc' ? asc : desc;
+    const batchSize = rmaState && rmaState !== 'any' ? Math.max(pageSize * 3, 50) : pageSize + 1;
+    const selectIssueRows = (batchCursor: ReturnType<typeof decodeCursor> | null, limit: number) => {
+      const batchConditions = [...conditions];
+      if (batchCursor) {
+        batchConditions.push(
+          buildCursorCondition(issues.createdAt, issues.id, batchCursor, sortOrder)
         );
+      }
+
+      return db
+        .select({
+          issue: issues,
+          tracking: slaTracking,
+          config: slaConfigurations,
+          customer: { id: customers.id, name: customers.name },
+          serviceSystem: {
+            id: serviceSystems.id,
+            displayName: serviceSystems.displayName,
+          },
+        })
+        .from(issues)
+        .leftJoin(slaTracking, eq(issues.slaTrackingId, slaTracking.id))
+        .leftJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
+        .leftJoin(
+          customers,
+          and(
+            eq(issues.customerId, customers.id),
+            eq(customers.organizationId, ctx.organizationId),
+            isNull(customers.deletedAt)
+          )
+        )
+        .leftJoin(serviceSystems, eq(issues.serviceSystemId, serviceSystems.id))
+        .where(and(...batchConditions))
+        .orderBy(orderDir(issues.createdAt), orderDir(issues.id))
+        .limit(limit);
+    };
+
+    const filteredRows: EnrichedIssueWithMetrics[] = [];
+    let batchCursor = cursor ? decodeCursor(cursor) : null;
+    let exhausted = false;
+
+    while (filteredRows.length <= pageSize && !exhausted) {
+      const results = await selectIssueRows(batchCursor, batchSize);
+      if (results.length === 0) {
+        exhausted = true;
+        break;
+      }
+
+      const issuesWithMetrics = mapIssueRowsWithMetrics(results);
+      const enrichedRows = await enrichIssueListRows(ctx.organizationId, issuesWithMetrics);
+      filteredRows.push(
+        ...enrichedRows.filter((issue) => matchesRmaState(rmaState, issue.rmaState ?? null))
+      );
+
+      const lastResult = results[results.length - 1]?.issue;
+      batchCursor = lastResult
+        ? { createdAt: lastResult.createdAt.toISOString(), id: lastResult.id }
+        : batchCursor;
+
+      if (results.length < batchSize) {
+        exhausted = true;
       }
     }
 
-    const orderDir = sortOrder === 'asc' ? asc : desc;
-
-    const results = await db
-      .select({
-        issue: issues,
-        tracking: slaTracking,
-        config: slaConfigurations,
-        customer: { id: customers.id, name: customers.name },
-      })
-      .from(issues)
-      .leftJoin(slaTracking, eq(issues.slaTrackingId, slaTracking.id))
-      .leftJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
-      .leftJoin(
-        customers,
-        and(
-          eq(issues.customerId, customers.id),
-          eq(customers.organizationId, ctx.organizationId),
-          isNull(customers.deletedAt)
-        )
-      )
-      .where(and(...conditions))
-      .orderBy(orderDir(issues.createdAt), orderDir(issues.id))
-      .limit(pageSize + 1);
-
-    const hasNextPage = results.length > pageSize;
-    const pageResults = hasNextPage ? results.slice(0, pageSize) : results;
-
-    const issuesWithMetrics: IssueWithSlaMetrics[] = pageResults.map(({ issue, tracking, config, customer }) => {
-      let slaMetrics: IssueSlaMetrics | null = null;
-
-      if (tracking && config) {
-        const trackingData = {
-          ...tracking,
-          startedAt: tracking.startedAt,
-          responseDueAt: tracking.responseDueAt,
-          resolutionDueAt: tracking.resolutionDueAt,
-          respondedAt: tracking.respondedAt,
-          resolvedAt: tracking.resolvedAt,
-          pausedAt: tracking.pausedAt,
-        };
-        const configData = {
-          id: config.id,
-          organizationId: config.organizationId,
-          domain: config.domain,
-          name: config.name,
-          description: config.description,
-          responseTargetValue: config.responseTargetValue,
-          responseTargetUnit: config.responseTargetUnit,
-          resolutionTargetValue: config.resolutionTargetValue,
-          resolutionTargetUnit: config.resolutionTargetUnit,
-          atRiskThresholdPercent: config.atRiskThresholdPercent,
-          escalateOnBreach: config.escalateOnBreach,
-          escalateToUserId: config.escalateToUserId,
-          businessHoursConfigId: config.businessHoursConfigId,
-          isDefault: config.isDefault,
-          priorityOrder: config.priorityOrder,
-          isActive: config.isActive,
-        };
-        const snapshot = computeStateSnapshot(
-          toSlaTracking(trackingData),
-          toSlaConfiguration(configData)
-        );
-        slaMetrics = {
-          slaTrackingId: tracking.id,
-          status: tracking.status,
-          isPaused: tracking.isPaused,
-          responseBreached: tracking.responseBreached,
-          resolutionBreached: tracking.resolutionBreached,
-          isResponseAtRisk: snapshot.isResponseAtRisk,
-          isResolutionAtRisk: snapshot.isResolutionAtRisk,
-          responseTimeRemaining: snapshot.responseTimeRemaining,
-          resolutionTimeRemaining: snapshot.resolutionTimeRemaining,
-          responsePercentComplete: snapshot.responsePercentComplete,
-          resolutionPercentComplete: snapshot.resolutionPercentComplete,
-          responseDueAt: tracking.responseDueAt,
-          resolutionDueAt: tracking.resolutionDueAt,
-        };
-      }
-      return {
-        ...issue,
-        slaMetrics,
-        customer: customer?.id ? { id: customer.id, name: customer.name } : null,
-      };
-    });
+    const hasNextPage = filteredRows.length > pageSize;
+    const pageItems = hasNextPage ? filteredRows.slice(0, pageSize) : filteredRows;
 
     let nextCursor: string | null = null;
-    if (hasNextPage && pageResults.length > 0) {
-      const last = pageResults[pageResults.length - 1].issue;
+    if (hasNextPage && pageItems.length > 0) {
+      const last = pageItems[pageItems.length - 1];
       nextCursor = encodeCursor({ createdAt: last.createdAt, id: last.id });
     }
 
     return {
-      items: issuesWithMetrics,
+      items: pageItems,
       nextCursor,
       hasNextPage,
     };

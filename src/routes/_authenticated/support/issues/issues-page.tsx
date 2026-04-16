@@ -42,6 +42,10 @@ import {
   ISSUE_FILTER_CONFIG,
   DEFAULT_ISSUE_FILTERS,
 } from '@/components/domain/support/issues/issue-filter-config';
+import {
+  ISSUE_NEXT_ACTION_LABELS,
+  ISSUE_RESOLUTION_CATEGORY_LABELS,
+} from '@/components/domain/support/issues/issue-options';
 
 import type { issuesSearchSchema } from './index';
 import type { z } from 'zod';
@@ -79,7 +83,20 @@ export default function IssuesPage({ search }: IssuesPageProps) {
     defaults: DEFAULT_ISSUE_FILTERS,
     fromUrlParams,
     toUrlParams,
-    resetPageOnChange: ['search', 'status', 'priority', 'slaStatus', 'escalated', 'assignedToUserId'],
+    resetPageOnChange: [
+      'search',
+      'status',
+      'priority',
+      'slaStatus',
+      'escalated',
+      'assignedToUserId',
+      'nextActionType',
+      'rmaState',
+      'serialState',
+      'warrantyState',
+      'orderState',
+      'serviceSystemState',
+    ],
   });
 
   // Handle filter changes
@@ -107,6 +124,12 @@ export default function IssuesPage({ search }: IssuesPageProps) {
     search: filters.search,
     slaStatus: search.slaStatus,
     escalated: search.escalated,
+    nextActionType: filters.nextActionType ?? undefined,
+    rmaState: filters.rmaState,
+    serialState: filters.serialState,
+    warrantyState: filters.warrantyState,
+    orderState: filters.orderState,
+    serviceSystemState: filters.serviceSystemState,
     assignedToFilter,
     assignedToUserId,
     limit: search.pageSize,
@@ -114,7 +137,18 @@ export default function IssuesPage({ search }: IssuesPageProps) {
   });
 
   const issues = (data ?? []) as IssueListItem[];
-  const hasFilters = !!(filters.status.length > 0 || filters.priority.length > 0 || search.type || filters.search);
+  const hasFilters = !!(
+    filters.status.length > 0 ||
+    filters.priority.length > 0 ||
+    search.type ||
+    filters.search ||
+    filters.nextActionType ||
+    filters.rmaState !== 'any' ||
+    filters.serialState !== 'any' ||
+    filters.warrantyState !== 'any' ||
+    filters.orderState !== 'any' ||
+    filters.serviceSystemState !== 'any'
+  );
 
   // Handle issue click
   const handleIssueClick = (issue: IssueListItem) => {
@@ -139,6 +173,81 @@ export default function IssuesPage({ search }: IssuesPageProps) {
         header: 'Title',
         cell: ({ row }) => (
           <div className="max-w-[300px] truncate font-medium">{row.original.title}</div>
+        ),
+      },
+      {
+        id: 'context',
+        header: 'Context',
+        cell: ({ row }) => (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1">
+              {row.original.serialNumber ? (
+                <Badge variant="outline" className="font-mono text-[11px]">
+                  {row.original.serialNumber}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                  Missing serial
+                </Badge>
+              )}
+              {row.original.warrantyId ? (
+                <Badge variant="secondary" className="text-[11px]">
+                  Warranty linked
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                  No warranty
+                </Badge>
+              )}
+              {row.original.orderId ? (
+                <Badge variant="secondary" className="text-[11px]">
+                  Order linked
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                  No order
+                </Badge>
+              )}
+              {row.original.serviceSystem ? (
+                <Badge variant="outline" className="text-[11px]">
+                  System linked
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[11px] text-muted-foreground">
+                  No system
+                </Badge>
+              )}
+              {row.original.resolutionCategory ? (
+                <Badge variant="outline" className="text-[11px]">
+                  {ISSUE_RESOLUTION_CATEGORY_LABELS[row.original.resolutionCategory] ??
+                    row.original.resolutionCategory}
+                </Badge>
+              ) : null}
+              {row.original.nextActionType ? (
+                <Badge variant="secondary" className="text-[11px]">
+                  {ISSUE_NEXT_ACTION_LABELS[row.original.nextActionType] ??
+                    row.original.nextActionType}
+                </Badge>
+              ) : null}
+              {row.original.rmaState ? (
+                <Badge
+                  variant={row.original.rmaState === 'ready' ? 'default' : 'outline'}
+                  className="text-[11px]"
+                >
+                  {row.original.rmaState === 'linked'
+                    ? `Linked RMA${row.original.linkedRmaCount && row.original.linkedRmaCount > 1 ? 's' : ''}`
+                    : row.original.rmaState === 'ready'
+                      ? 'RMA Ready'
+                      : 'RMA Blocked'}
+                </Badge>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {row.original.serviceSystem?.displayName ??
+                row.original.customer?.name ??
+                'No commercial or installed-system context resolved yet'}
+            </p>
+          </div>
         ),
       },
       {
@@ -251,10 +360,11 @@ export default function IssuesPage({ search }: IssuesPageProps) {
             </Button>
             <Link
               to="/support/issues/new"
+              search={{ intakeAnchor: 'serial' }}
               className={cn(buttonVariants())}
             >
               <Plus className="mr-2 h-4 w-4" />
-              New Issue
+              Start from Serial
             </Link>
           </div>
         }
@@ -279,8 +389,9 @@ export default function IssuesPage({ search }: IssuesPageProps) {
             title="No issues found"
             message={hasFilters ? 'Try adjusting your filters' : 'Create your first issue to get started'}
             primaryAction={{
-              label: 'Create Issue',
-              onClick: () => navigate({ to: '/support/issues/new' }),
+              label: 'Start from Serial',
+              onClick: () =>
+                navigate({ to: '/support/issues/new', search: { intakeAnchor: 'serial' } }),
             }}
           />
         ) : (

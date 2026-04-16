@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table/data-table';
 import { CheckboxCell, DataTableColumnHeader } from '@/components/shared/data-table';
-import { RmaStatusBadge, RmaReasonBadge } from './rma-status-badge';
+import { RmaStatusBadge, RmaReasonBadge, RmaResolutionBadge } from './rma-status-badge';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -24,10 +24,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
-import type { RmaResponse, RmaStatus, RmaReason } from '@/lib/schemas/support/rma';
+import type {
+  LinkedIssueOpenState,
+  RmaExecutionStatus,
+  RmaReason,
+  RmaResolution,
+  RmaResponse,
+  RmaStatus,
+} from '@/lib/schemas/support/rma';
 import { formatDistanceToNow } from 'date-fns';
 import { Plus, Search, Package, Eye, MoreHorizontal } from 'lucide-react';
 import {
@@ -36,7 +44,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { RMA_STATUS_OPTIONS, RMA_REASON_OPTIONS } from './rma-options';
+import {
+  getRmaExecutionContextSummary,
+  getRmaExecutionStatusLabel,
+  RMA_EXECUTION_STATUS_OPTIONS,
+  RMA_LINKED_ISSUE_STATE_OPTIONS,
+  RMA_REASON_OPTIONS,
+  RMA_RESOLUTION_OPTIONS,
+  RMA_STATUS_OPTIONS,
+} from './rma-options';
 import type { RmaSortField, SortDirection } from './rma-sorting';
 
 interface RmaListProps {
@@ -54,6 +70,9 @@ interface RmaListProps {
   statusFilter: RmaStatus | 'all';
   /** From route container (filter state). */
   reasonFilter: RmaReason | 'all';
+  resolutionFilter: RmaResolution | 'all';
+  executionStatusFilter: RmaExecutionStatus | 'all';
+  linkedIssueOpenStateFilter: LinkedIssueOpenState;
   /** From route container (filter state). */
   searchQuery: string;
   /** From route container (pagination state). */
@@ -65,6 +84,9 @@ interface RmaListProps {
   onStatusFilterChange: (value: RmaStatus | 'all') => void;
   /** From route container (filter handler). */
   onReasonFilterChange: (value: RmaReason | 'all') => void;
+  onResolutionFilterChange: (value: RmaResolution | 'all') => void;
+  onExecutionStatusFilterChange: (value: RmaExecutionStatus | 'all') => void;
+  onLinkedIssueOpenStateChange: (value: LinkedIssueOpenState) => void;
   /** From route container (filter handler). */
   onSearchChange: (value: string) => void;
   /** From route container (pagination handler). */
@@ -104,12 +126,18 @@ export function RmaList({
   onRetry,
   statusFilter,
   reasonFilter,
+  resolutionFilter,
+  executionStatusFilter,
+  linkedIssueOpenStateFilter,
   searchQuery,
   page,
   sortBy,
   sortOrder,
   onStatusFilterChange,
   onReasonFilterChange,
+  onResolutionFilterChange,
+  onExecutionStatusFilterChange,
+  onLinkedIssueOpenStateChange,
   onSearchChange,
   onPageChange,
   onSortChange,
@@ -170,6 +198,42 @@ export function RmaList({
         accessorKey: 'reason',
         header: 'Reason',
         cell: ({ row }) => <RmaReasonBadge reason={row.original.reason} />,
+      },
+      {
+        id: 'resolution',
+        header: 'Remedy',
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            {row.original.resolution ? (
+              <RmaResolutionBadge resolution={row.original.resolution} />
+            ) : (
+              <span className="text-muted-foreground text-sm">Not selected</span>
+            )}
+            <ExecutionBadge status={row.original.executionStatus} />
+          </div>
+        ),
+      },
+      {
+        id: 'context',
+        header: 'Context',
+        cell: ({ row }) => {
+          const summary = getRmaExecutionContextSummary(row.original.execution, row.original.issueId);
+
+          return (
+            <div className="space-y-1 text-sm">
+              <div className="font-medium">{summary.title}</div>
+              {summary.detail ? (
+                <div className="text-muted-foreground line-clamp-2">{summary.detail}</div>
+              ) : null}
+              <div className="text-muted-foreground">
+                {row.original.orderId ? `Order ${row.original.orderId.slice(0, 8)}` : 'No order'}
+                {row.original.linkedIssueOpen !== null && row.original.linkedIssueOpen !== undefined
+                  ? ` · Issue ${row.original.linkedIssueOpen ? 'open' : 'closed'}`
+                  : ''}
+              </div>
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'createdAt',
@@ -267,6 +331,54 @@ export function RmaList({
             </SelectContent>
           </Select>
 
+          <Select
+            value={resolutionFilter}
+            onValueChange={(v) => onResolutionFilterChange(v as RmaResolution | 'all')}
+          >
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="Resolution" />
+            </SelectTrigger>
+            <SelectContent>
+              {RMA_RESOLUTION_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={executionStatusFilter}
+            onValueChange={(v) => onExecutionStatusFilterChange(v as RmaExecutionStatus | 'all')}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Execution" />
+            </SelectTrigger>
+            <SelectContent>
+              {RMA_EXECUTION_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={linkedIssueOpenStateFilter}
+            onValueChange={(v) => onLinkedIssueOpenStateChange(v as LinkedIssueOpenState)}
+          >
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="Issue State" />
+            </SelectTrigger>
+            <SelectContent>
+              {RMA_LINKED_ISSUE_STATE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Create button */}
           {showCreateButton && onCreateRma && (
             <Button onClick={onCreateRma}>
@@ -283,7 +395,12 @@ export function RmaList({
           icon={Package}
           title="No RMAs found"
           message={
-            searchQuery || statusFilter !== 'all' || reasonFilter !== 'all'
+            searchQuery ||
+            statusFilter !== 'all' ||
+            reasonFilter !== 'all' ||
+            resolutionFilter !== 'all' ||
+            executionStatusFilter !== 'all' ||
+            linkedIssueOpenStateFilter !== 'any'
               ? 'Try adjusting your filters'
               : 'Create your first RMA to get started'
           }
@@ -341,4 +458,10 @@ export function RmaList({
       )}
     </div>
   );
+}
+
+function ExecutionBadge({ status }: { status: RmaExecutionStatus }) {
+  const variant = status === 'completed' ? 'default' : 'outline';
+
+  return <Badge variant={variant}>{getRmaExecutionStatusLabel(status)}</Badge>;
 }

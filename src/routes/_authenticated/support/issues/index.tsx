@@ -15,6 +15,12 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
+import {
+  issueLineageStateSchema,
+  issueNextActionTypeSchema,
+  issueRmaStateSchema,
+  issueTypeSchema,
+} from '@/lib/schemas/support/issues';
 
 // ============================================================================
 // LAZY LOADED PAGE COMPONENT
@@ -31,16 +37,7 @@ export const issuesSearchSchema = z.object({
   status: z.string().optional(),
   /** Comma-separated priority values for multi-select presets */
   priority: z.string().optional(),
-  type: z
-    .enum([
-      'hardware_fault',
-      'software_firmware',
-      'installation_defect',
-      'performance_degradation',
-      'connectivity',
-      'other',
-    ])
-    .optional(),
+  type: issueTypeSchema.optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(20),
@@ -48,6 +45,16 @@ export const issuesSearchSchema = z.object({
   slaStatus: z.enum(['breached', 'at_risk']).optional(),
   /** escalated: true = only escalated issues */
   escalated: z.coerce.boolean().optional(),
+  nextActionType: issueNextActionTypeSchema.optional(),
+  rmaState: issueRmaStateSchema.optional(),
+  serialState: issueLineageStateSchema.optional(),
+  warrantyState: issueLineageStateSchema.optional(),
+  orderState: issueLineageStateSchema.optional(),
+  serviceSystemState: issueLineageStateSchema.optional(),
+  hasSerial: z.coerce.boolean().optional(),
+  hasWarranty: z.coerce.boolean().optional(),
+  hasOrder: z.coerce.boolean().optional(),
+  hasServiceSystem: z.coerce.boolean().optional(),
   /** assignedToUserId: specific user UUID, or use assignedToFilter for me/unassigned */
   assignedToUserId: z.string().uuid().optional(),
   /** assignedToFilter: "me" = current user, "unassigned" = no assignee */

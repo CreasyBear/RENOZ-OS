@@ -37,6 +37,7 @@ import type { ListFeedbackInput } from '@/lib/schemas/support/csat-responses';
 import type { ListIssueTemplatesInput } from '@/lib/schemas/support/issue-templates';
 import type { ListRmasInput } from '@/lib/schemas/support/rma';
 import type { SupplierSortField } from '@/lib/schemas/suppliers';
+import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
 
 type KbArticleSortField = NonNullable<ListArticlesInput['sortBy']>;
@@ -132,6 +133,9 @@ export interface RmaFilters {
   customerId?: string
   orderId?: string
   issueId?: string
+  resolution?: string
+  executionStatus?: string
+  linkedIssueOpenState?: string
   search?: string
   page?: number
   pageSize?: number
@@ -146,6 +150,12 @@ export interface IssueFilters {
   customerId?: string
   assignedToUserId?: string
   search?: string
+  nextActionType?: string
+  rmaState?: 'any' | 'ready' | 'blocked' | 'linked'
+  serialState?: 'any' | 'present' | 'missing'
+  warrantyState?: 'any' | 'present' | 'missing'
+  orderState?: 'any' | 'present' | 'missing'
+  serviceSystemState?: 'any' | 'present' | 'missing'
   limit?: number
   offset?: number
   includeSlaMetrics?: boolean
@@ -1042,6 +1052,8 @@ export const queryKeys = {
       [...queryKeys.support.issuesList(), filters ?? {}] as const,
     issueDetails: () => [...queryKeys.support.all, 'issues', 'detail'] as const,
     issueDetail: (id: string) => [...queryKeys.support.issueDetails(), id] as const,
+    issueIntakePreview: (input?: Record<string, unknown>) =>
+      [...queryKeys.support.all, 'issues', 'intake-preview', input ?? {}] as const,
 
     // RMAs
     rmasList: () => [...queryKeys.support.all, 'rmas', 'list'] as const,
@@ -1276,6 +1288,33 @@ export const queryKeys = {
       [...queryKeys.warrantyCertificates.details(), warrantyId] as const,
   },
 
+  warrantyEntitlements: {
+    all: ['warrantyEntitlements'] as const,
+    lists: () => [...queryKeys.warrantyEntitlements.all, 'list'] as const,
+    list: (filters?: WarrantyEntitlementFilters) =>
+      [...queryKeys.warrantyEntitlements.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.warrantyEntitlements.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.warrantyEntitlements.details(), id] as const,
+  },
+
+  serviceSystems: {
+    all: ['serviceSystems'] as const,
+    lists: () => [...queryKeys.serviceSystems.all, 'list'] as const,
+    list: (filters?: { search?: string; ownershipStatus?: string }) =>
+      [...queryKeys.serviceSystems.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.serviceSystems.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.serviceSystems.details(), id] as const,
+  },
+
+  serviceLinkageReviews: {
+    all: ['serviceLinkageReviews'] as const,
+    lists: () => [...queryKeys.serviceLinkageReviews.all, 'list'] as const,
+    list: (filters?: { status?: string; reasonCode?: string }) =>
+      [...queryKeys.serviceLinkageReviews.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.serviceLinkageReviews.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.serviceLinkageReviews.details(), id] as const,
+  },
+
   warrantyClaims: {
     all: ['warrantyClaims'] as const,
     lists: () => [...queryKeys.warrantyClaims.all, 'list'] as const,
@@ -1285,6 +1324,9 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.warrantyClaims.details(), id] as const,
     byWarranty: (warrantyId: string) =>
       [...queryKeys.warrantyClaims.lists(), { warrantyId }] as const,
+    byCommercialCustomer: (customerId: string) =>
+      [...queryKeys.warrantyClaims.lists(), { customerId }] as const,
+    /** Compatibility alias: this remains commercial-account based. */
     byCustomer: (customerId: string) =>
       [...queryKeys.warrantyClaims.lists(), { customerId }] as const,
     summary: (warrantyId: string) =>

@@ -21,6 +21,7 @@ export const rmaStatusSchema = z.enum([
   'received',
   'processed',
   'rejected',
+  'cancelled',
 ]);
 export type RmaStatus = z.infer<typeof rmaStatusSchema>;
 
@@ -44,6 +45,12 @@ export const rmaResolutionSchema = z.enum([
 ]);
 export type RmaResolution = z.infer<typeof rmaResolutionSchema>;
 
+export const rmaExecutionStatusSchema = z.enum(['pending', 'blocked', 'completed']);
+export type RmaExecutionStatus = z.infer<typeof rmaExecutionStatusSchema>;
+
+export const linkedIssueOpenStateSchema = z.enum(['any', 'open', 'closed']);
+export type LinkedIssueOpenState = z.infer<typeof linkedIssueOpenStateSchema>;
+
 // ============================================================================
 // NESTED SCHEMAS
 // ============================================================================
@@ -66,6 +73,24 @@ export const rmaResolutionDetailsSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 export type RmaResolutionDetails = z.infer<typeof rmaResolutionDetailsSchema>;
+
+export const rmaArtifactRefSchema = z.object({
+  id: z.string().uuid(),
+  label: z.string().nullable().optional(),
+});
+export type RmaArtifactRef = z.infer<typeof rmaArtifactRefSchema>;
+
+export const rmaExecutionSummarySchema = z.object({
+  status: rmaExecutionStatusSchema,
+  blockedReason: z.string().nullable(),
+  refundPayment: rmaArtifactRefSchema.nullable(),
+  creditNote: rmaArtifactRefSchema.nullable(),
+  replacementOrder: rmaArtifactRefSchema.nullable(),
+  linkedIssueOpen: z.boolean().nullable(),
+  completedAt: z.string().datetime().nullable(),
+  completedBy: z.string().uuid().nullable(),
+});
+export type RmaExecutionSummary = z.infer<typeof rmaExecutionSummarySchema>;
 
 // ============================================================================
 // RMA LINE ITEM SCHEMAS
@@ -141,12 +166,42 @@ export const receiveRmaSchema = z.object({
 });
 export type ReceiveRmaInput = z.infer<typeof receiveRmaSchema>;
 
-export const processRmaSchema = z.object({
+const processRmaCommonFields = {
   rmaId: z.string().uuid(),
-  resolution: rmaResolutionSchema,
-  resolutionDetails: rmaResolutionDetailsSchema.optional(),
-});
+  notes: z.string().max(2000).optional(),
+};
+
+export const processRmaSchema = z.discriminatedUnion('resolution', [
+  z.object({
+    ...processRmaCommonFields,
+    resolution: z.literal('refund'),
+    originalPaymentId: z.string().uuid('A source payment is required'),
+    amount: z.number().positive('Refund amount must be greater than 0'),
+  }),
+  z.object({
+    ...processRmaCommonFields,
+    resolution: z.literal('credit'),
+    amount: z.number().positive('Credit amount must be greater than 0'),
+    creditReason: z.string().min(1, 'Credit reason is required').max(500),
+    applyNow: z.boolean().default(true),
+  }),
+  z.object({
+    ...processRmaCommonFields,
+    resolution: z.literal('replacement'),
+    confirmReplacement: z.literal(true),
+  }),
+  z.object({
+    ...processRmaCommonFields,
+    resolution: z.literal('repair'),
+  }),
+  z.object({
+    ...processRmaCommonFields,
+    resolution: z.literal('no_action'),
+  }),
+]);
 export type ProcessRmaInput = z.infer<typeof processRmaSchema>;
+type DistributiveOmit<T, K extends keyof any> = T extends unknown ? Omit<T, K> : never;
+export type ProcessRmaPayload = DistributiveOmit<ProcessRmaInput, 'rmaId'>;
 
 // ============================================================================
 // BULK WORKFLOW SCHEMAS
@@ -180,6 +235,14 @@ export const getRmaSchema = z.object({
 });
 export type GetRmaInput = z.infer<typeof getRmaSchema>;
 
+export const getRmaLookupSchema = z
+  .object({
+    rmaId: z.string().uuid().optional(),
+    rmaNumber: z.string().trim().min(1).max(100).optional(),
+  })
+  .refine((data) => data.rmaId || data.rmaNumber, 'Either rmaId or rmaNumber is required');
+export type GetRmaLookupInput = z.infer<typeof getRmaLookupSchema>;
+
 export const listRmasSchema = normalizeObjectInput(
   z.object({
     // Filters
@@ -188,6 +251,9 @@ export const listRmasSchema = normalizeObjectInput(
     customerId: z.string().uuid().optional(),
     orderId: z.string().uuid().optional(),
     issueId: z.string().uuid().optional(),
+    resolution: rmaResolutionSchema.optional(),
+    executionStatus: rmaExecutionStatusSchema.optional(),
+    linkedIssueOpenState: linkedIssueOpenStateSchema.optional(),
 
     // Search
     search: z.string().max(100).optional(), // Search by RMA number
@@ -211,6 +277,9 @@ export const listRmasCursorSchema = normalizeObjectInput(
       customerId: z.string().uuid().optional(),
       orderId: z.string().uuid().optional(),
       issueId: z.string().uuid().optional(),
+      resolution: rmaResolutionSchema.optional(),
+      executionStatus: rmaExecutionStatusSchema.optional(),
+      linkedIssueOpenState: linkedIssueOpenStateSchema.optional(),
       search: z.string().max(100).optional(),
     })
   )
@@ -253,6 +322,13 @@ export interface RmaResponse {
   reasonDetails: string | null;
   resolution: RmaResolution | null;
   resolutionDetails: RmaResolutionDetails | null;
+  executionStatus: RmaExecutionStatus;
+  executionBlockedReason: string | null;
+  executionCompletedAt: string | null;
+  executionCompletedBy: string | null;
+  refundPaymentId: string | null;
+  creditNoteId: string | null;
+  replacementOrderId: string | null;
   inspectionNotes: RmaInspectionNotes | null;
   internalNotes: string | null;
   customerNotes: string | null;
@@ -274,29 +350,13 @@ export interface RmaResponse {
   lineItems?: RmaLineItemResponse[];
   customer?: { id: string; name: string } | null;
   issue?: { id: string; title: string } | null;
+  execution?: RmaExecutionSummary;
+  linkedIssueOpen?: boolean | null;
   /** Units restored to inventory (receiveRma only) */
   unitsRestored?: number;
 }
 
-export type RmaResolutionStageStatus = 'completed' | 'pending' | 'not_required';
-
-export interface RmaProcessResult extends RmaResponse {
-  stages: {
-    resolutionRecorded: {
-      status: 'completed';
-      message: string;
-    };
-    financialAction: {
-      status: RmaResolutionStageStatus;
-      message?: string;
-    };
-    replacementAction: {
-      status: RmaResolutionStageStatus;
-      message?: string;
-    };
-  };
-  followUpMessage?: string | null;
-}
+export interface RmaProcessResult extends RmaResponse {}
 
 export interface ListRmasResponse {
   data: RmaResponse[];

@@ -29,6 +29,8 @@ import { users } from "../users";
 import { issues } from "./issues";
 import { customers } from "../customers/customers";
 import { orders, orderLineItems } from "../orders";
+import { orderPayments } from "../orders/order-payments";
+import { creditNotes } from "../financial/credit-notes";
 
 // ============================================================================
 // ENUMS
@@ -73,6 +75,15 @@ export const rmaResolutionEnum = pgEnum("rma_resolution", [
   "repair",
   "credit",
   "no_action",
+]);
+
+/**
+ * RMA execution status
+ */
+export const rmaExecutionStatusEnum = pgEnum("rma_execution_status", [
+  "pending",
+  "blocked",
+  "completed",
 ]);
 
 // ============================================================================
@@ -137,6 +148,23 @@ export const returnAuthorizations = pgTable(
     resolution: rmaResolutionEnum("resolution"),
     resolutionDetails: jsonb("resolution_details").$type<RmaResolutionDetails>(),
 
+    // Remedy execution
+    executionStatus: rmaExecutionStatusEnum("execution_status").notNull().default("pending"),
+    executionBlockedReason: text("execution_blocked_reason"),
+    executionCompletedAt: text("execution_completed_at"),
+    executionCompletedBy: uuid("execution_completed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    refundPaymentId: uuid("refund_payment_id").references(() => orderPayments.id, {
+      onDelete: "set null",
+    }),
+    creditNoteId: uuid("credit_note_id").references(() => creditNotes.id, {
+      onDelete: "set null",
+    }),
+    replacementOrderId: uuid("replacement_order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+
     // Inspection
     inspectionNotes: jsonb("inspection_notes").$type<RmaInspectionNotes>(),
 
@@ -179,6 +207,12 @@ export const returnAuthorizations = pgTable(
 
     // Find RMAs by status
     rmaOrgStatusIdx: index("idx_rma_org_status").on(table.organizationId, table.status),
+
+    // Find RMAs by execution status
+    rmaOrgExecutionStatusIdx: index("idx_rma_org_execution_status").on(
+      table.organizationId,
+      table.executionStatus
+    ),
 
     // Find recent RMAs
     rmaOrgCreatedIdx: index("idx_rma_org_created").on(table.organizationId, table.createdAt),

@@ -67,7 +67,7 @@ import { AmendmentRequestDialogContainer, AmendmentReviewDialog } from '../amend
 import { RecordPaymentDialog } from '../dialogs/record-payment-dialog';
 import { RefundPaymentDialog } from '../dialogs/refund-payment-dialog';
 import { RmaCreateDialog } from '@/components/domain/support/rma/rma-create-dialog';
-import { useCreateRma } from '@/hooks/support';
+import { useCreateRma, useIssue } from '@/hooks/support';
 import { useOrderDetailDialogState } from './use-order-detail-dialog-state';
 import { useOrderDetailRouteIntents } from './use-order-detail-route-intents';
 import { useOrderDetailContainerActions } from './use-order-detail-container-actions';
@@ -416,6 +416,10 @@ export function OrderDetailContainer({
     navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
   }, [navigate, orderId]);
   const createRmaMutation = useCreateRma();
+  const { data: fromIssue } = useIssue({
+    issueId: fromIssueId ?? '',
+    enabled: !!fromIssueId,
+  });
   const {
     dialogState,
     isInteractionDialogOpen,
@@ -693,6 +697,8 @@ export function OrderDetailContainer({
     });
   }, [detail.order]);
   const canCreateGenericRma = rmaOrderLineItems.length > 0;
+  const canCreateIssueRma = fromIssue?.rmaReadiness?.state === 'ready';
+  const canOpenRmaDialog = Boolean((fromIssueId && canCreateIssueRma) || canCreateGenericRma);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Loading State
@@ -729,11 +735,22 @@ export function OrderDetailContainer({
       <Alert key="from-issue" className="border-blue-500/50 bg-blue-500/10">
         <Package className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between gap-4">
-          <span>Creating RMA from issue — select items below and create the return authorization.</span>
-          <Button size="sm" onClick={openRma}>
-            <Package className="h-4 w-4 mr-2" />
-            Create RMA
-          </Button>
+          <span>
+            {fromIssue?.resolution
+              ? `Issue ${fromIssue.issueNumber} resolved as ${fromIssue.resolution.summary}.`
+              : 'Issue context is loading before RMA creation.'}{' '}
+            {fromIssue?.rmaReadiness?.state === 'ready'
+              ? 'Select items below and create the return authorization.'
+              : fromIssue?.rmaReadiness?.blockedReason
+                ? fromIssue.rmaReadiness.blockedReason
+                : 'RMA creation will unlock once the issue resolution is ready.'}
+          </span>
+          {canCreateIssueRma ? (
+            <Button size="sm" onClick={openRma}>
+              <Package className="h-4 w-4 mr-2" />
+              Create RMA
+            </Button>
+          ) : null}
         </AlertDescription>
       </Alert>
     );
@@ -864,7 +881,7 @@ export function OrderDetailContainer({
       onRequestAmendment={openAmendment}
       onRecordPayment={openPayment}
       onCreateRma={openRma}
-      canCreateRma={canCreateGenericRma}
+      canCreateRma={fromIssueId ? canCreateIssueRma : canCreateGenericRma}
       backLinkSearch={
         fromIssueId && detail.order?.customerId
           ? { customerId: detail.order.customerId, fromIssueId }
@@ -1108,7 +1125,7 @@ export function OrderDetailContainer({
       />
 
       {/* RMA Create Dialog */}
-      {(fromIssueId || canCreateGenericRma) && (
+      {canOpenRmaDialog && (
         <RmaCreateDialog
           open={dialogState.open === 'rma'}
           onOpenChange={(open) => {
@@ -1119,6 +1136,8 @@ export function OrderDetailContainer({
           orderLineItems={rmaOrderLineItems}
           issueId={fromIssueId}
           customerId={detail.order.customerId ?? undefined}
+          defaultReason={fromIssue?.rmaReadiness?.suggestedReason ?? undefined}
+          defaultReasonDetails={fromIssue?.resolution?.summary ?? null}
           onSuccess={(rmaId) => {
             closeDialog();
             toastSuccess('RMA created successfully', {

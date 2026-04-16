@@ -365,6 +365,12 @@ function IssuesBoardPage() {
       if (!issue) return;
       if (transitionPendingIds.has(event.issueId)) return;
 
+      if (event.toStatus === 'resolved') {
+        toast.info('Resolve this issue from the detail page so you can capture structured resolution details.');
+        navigate({ to: '/support/issues/$issueId', params: { issueId: event.issueId } });
+        return;
+      }
+
       if (skipStatusPrompt) {
         void (async () => {
           await runStatusTransition({
@@ -386,7 +392,7 @@ function IssuesBoardPage() {
         });
       }
     },
-    [issues, skipStatusPrompt, transitionPendingIds, runStatusTransition]
+    [issues, navigate, skipStatusPrompt, transitionPendingIds, runStatusTransition]
   );
 
   // Handle status change dialog confirmation
@@ -453,6 +459,9 @@ function IssuesBoardPage() {
       }
       if (event.action === 'change_status' || event.action === 'close') {
         const toStatus = event.value as IssueStatus;
+        if (toStatus === 'resolved') {
+          throw new Error('Resolve issues from the detail page so structured resolution details can be captured.');
+        }
         const fromStatus = issues.find((i) => i.id === issueId)?.status;
         await updateMutation.mutateAsync({ issueId, status: toStatus });
         trackSupportIssueTransition({

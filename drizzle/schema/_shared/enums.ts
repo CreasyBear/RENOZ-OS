@@ -318,6 +318,26 @@ export const issueTypeEnum = pgEnum("issue_type", [
   "other",
 ]);
 
+export const issueResolutionCategoryEnum = pgEnum("issue_resolution_category", [
+  "hardware_fault",
+  "shipping_damage",
+  "fulfillment_error",
+  "installation_issue",
+  "software_or_firmware",
+  "usage_guidance",
+  "no_fault_found",
+  "other",
+]);
+
+export const issueNextActionTypeEnum = pgEnum("issue_next_action_type", [
+  "create_rma",
+  "warranty_claim",
+  "field_service",
+  "customer_follow_up",
+  "monitor",
+  "no_action",
+]);
+
 // ============================================================================
 // SLA ENUMS
 // ============================================================================
@@ -481,6 +501,8 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "warranty_claim",
   "warranty_policy",
   "warranty_extension",
+  // Service domain
+  "service_system",
 ]);
 
 export const activitySourceEnum = pgEnum("activity_source", [

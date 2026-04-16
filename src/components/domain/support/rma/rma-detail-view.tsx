@@ -12,10 +12,11 @@
 import { Link } from '@tanstack/react-router';
 import { XCircle } from 'lucide-react';
 import { EntityHeader } from '@/components/shared';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RmaDetailCard } from './rma-detail-card';
 import { RmaWorkflowActions } from './rma-workflow-actions';
 import { getRmaStatusConfigForEntityHeader } from './rma-status-badge';
-import type { RmaResponse, RmaResolution } from '@/lib/schemas/support/rma';
+import type { ProcessRmaPayload, RmaResponse } from '@/lib/schemas/support/rma';
 
 // ============================================================================
 // TYPES
@@ -32,7 +33,7 @@ export interface RmaDetailViewProps {
   onApprove: (notes?: string) => Promise<void>;
   onReject: (reason: string) => Promise<void>;
   onReceive: (inspection?: { condition?: string; notes?: string; locationId?: string }) => Promise<void>;
-  onProcess: (resolution: RmaResolution, details?: { refundAmount?: number; notes?: string }) => Promise<void>;
+  onProcess: (input: ProcessRmaPayload) => Promise<void>;
   onCancel: () => Promise<void>;
   isCancelPending?: boolean;
 }
@@ -107,31 +108,103 @@ export function RmaDetailView({
 
         <div className="space-y-4">
           {rma?.issueId && (
-            <div className="rounded-lg border p-4">
-              <h3 className="mb-2 text-sm font-medium">Related Issue</h3>
+            <LinkedRecordCard
+              title="Related Issue"
+              description={
+                rma.execution?.linkedIssueOpen !== null && rma.execution?.linkedIssueOpen !== undefined
+                  ? `Issue is ${rma.execution.linkedIssueOpen ? 'still open' : 'already closed'}.`
+                  : null
+              }
+            >
               <Link
                 to="/support/issues/$issueId"
                 params={{ issueId: rma.issueId }}
                 className="text-primary text-sm hover:underline"
               >
-                View Issue →
+                View Issue
               </Link>
-            </div>
+            </LinkedRecordCard>
           )}
           {rma?.orderId && (
-            <div className="rounded-lg border p-4">
-              <h3 className="mb-2 text-sm font-medium">Related Order</h3>
+            <LinkedRecordCard title="Related Order">
               <Link
                 to="/orders/$orderId"
                 params={{ orderId: rma.orderId }}
                 className="text-primary text-sm hover:underline"
               >
-                View Order →
+                View Order
               </Link>
-            </div>
+            </LinkedRecordCard>
+          )}
+          {rma?.execution?.creditNote && (
+            <LinkedRecordCard title="Credit Note">
+              <Link
+                to="/financial/credit-notes/$creditNoteId"
+                params={{ creditNoteId: rma.execution.creditNote.id }}
+                className="text-primary text-sm hover:underline"
+              >
+                {rma.execution.creditNote.label ?? 'View Credit Note'}
+              </Link>
+            </LinkedRecordCard>
+          )}
+          {rma?.execution?.replacementOrder && (
+            <LinkedRecordCard title="Replacement Order">
+              <Link
+                to="/orders/$orderId"
+                params={{ orderId: rma.execution.replacementOrder.id }}
+                className="text-primary text-sm hover:underline"
+              >
+                {rma.execution.replacementOrder.label ?? 'View Replacement Order'}
+              </Link>
+            </LinkedRecordCard>
+          )}
+          {rma?.execution?.refundPayment && rma.orderId && (
+            <LinkedRecordCard
+              title="Refund Payment"
+              description={rma.execution.refundPayment.id}
+              descriptionClassName="font-mono"
+            >
+              <Link
+                to="/orders/$orderId"
+                params={{ orderId: rma.orderId }}
+                className="text-primary text-sm hover:underline"
+              >
+                View on Order
+              </Link>
+            </LinkedRecordCard>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+interface LinkedRecordCardProps {
+  title: string;
+  description?: string | null;
+  descriptionClassName?: string;
+  children: React.ReactNode;
+}
+
+function LinkedRecordCard({
+  title,
+  description,
+  descriptionClassName,
+  children,
+}: LinkedRecordCardProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {description ? (
+          <p className={['text-muted-foreground text-sm', descriptionClassName].filter(Boolean).join(' ')}>
+            {description}
+          </p>
+        ) : null}
+        {children}
+      </CardContent>
+    </Card>
   );
 }
