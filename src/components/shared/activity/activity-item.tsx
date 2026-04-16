@@ -235,6 +235,7 @@ function buildRelatedEntities(
   pushRelated("project", metadata.projectId, metadata.projectTitle);
   pushRelated("product", metadata.productId, metadata.productName);
   pushRelated("warranty", metadata.warrantyId, metadata.warrantyNumber);
+  pushRelated("service_system", metadata.serviceSystemId, metadata.serviceSystemDisplayName);
 
   return related;
 }

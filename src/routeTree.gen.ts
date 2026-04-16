@@ -119,7 +119,10 @@ import { Route as AuthenticatedCustomersNewRouteImport } from './routes/_authent
 import { Route as AuthenticatedCustomersDuplicatesRouteImport } from './routes/_authenticated/customers/duplicates'
 import { Route as AuthenticatedCustomersCommunicationsRouteImport } from './routes/_authenticated/customers/communications'
 import { Route as AuthenticatedCustomersCustomerIdRouteImport } from './routes/_authenticated/customers/$customerId'
+import { Route as AuthenticatedSupportWarrantyEntitlementsIndexRouteImport } from './routes/_authenticated/support/warranty-entitlements/index'
 import { Route as AuthenticatedSupportWarrantiesIndexRouteImport } from './routes/_authenticated/support/warranties/index'
+import { Route as AuthenticatedSupportServiceSystemsIndexRouteImport } from './routes/_authenticated/support/service-systems/index'
+import { Route as AuthenticatedSupportServiceLinkageReviewsIndexRouteImport } from './routes/_authenticated/support/service-linkage-reviews/index'
 import { Route as AuthenticatedSupportRmasIndexRouteImport } from './routes/_authenticated/support/rmas/index'
 import { Route as AuthenticatedSupportIssuesIndexRouteImport } from './routes/_authenticated/support/issues/index'
 import { Route as AuthenticatedSupportClaimsIndexRouteImport } from './routes/_authenticated/support/claims/index'
@@ -143,6 +146,8 @@ import { Route as ApiTrackOpenEmailIdRouteImport } from './routes/api/track/open
 import { Route as ApiOauthSyncConnectionIdRouteImport } from './routes/api/oauth/sync.$connectionId'
 import { Route as ApiAiCostBudgetRouteImport } from './routes/api/ai/cost.budget'
 import { Route as AuthenticatedSupportWarrantiesWarrantyIdRouteImport } from './routes/_authenticated/support/warranties/$warrantyId'
+import { Route as AuthenticatedSupportServiceSystemsServiceSystemIdRouteImport } from './routes/_authenticated/support/service-systems/$serviceSystemId'
+import { Route as AuthenticatedSupportServiceLinkageReviewsReviewIdRouteImport } from './routes/_authenticated/support/service-linkage-reviews/$reviewId'
 import { Route as AuthenticatedSupportRmasRmaIdRouteImport } from './routes/_authenticated/support/rmas/$rmaId'
 import { Route as AuthenticatedSupportIssuesNewRouteImport } from './routes/_authenticated/support/issues/new'
 import { Route as AuthenticatedSupportIssuesIssueIdRouteImport } from './routes/_authenticated/support/issues/$issueId'
@@ -812,10 +817,28 @@ const AuthenticatedCustomersCustomerIdRoute =
     path: '/customers/$customerId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedSupportWarrantyEntitlementsIndexRoute =
+  AuthenticatedSupportWarrantyEntitlementsIndexRouteImport.update({
+    id: '/support/warranty-entitlements/',
+    path: '/support/warranty-entitlements/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSupportWarrantiesIndexRoute =
   AuthenticatedSupportWarrantiesIndexRouteImport.update({
     id: '/support/warranties/',
     path: '/support/warranties/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportServiceSystemsIndexRoute =
+  AuthenticatedSupportServiceSystemsIndexRouteImport.update({
+    id: '/support/service-systems/',
+    path: '/support/service-systems/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportServiceLinkageReviewsIndexRoute =
+  AuthenticatedSupportServiceLinkageReviewsIndexRouteImport.update({
+    id: '/support/service-linkage-reviews/',
+    path: '/support/service-linkage-reviews/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSupportRmasIndexRoute =
@@ -952,6 +975,18 @@ const AuthenticatedSupportWarrantiesWarrantyIdRoute =
   AuthenticatedSupportWarrantiesWarrantyIdRouteImport.update({
     id: '/support/warranties/$warrantyId',
     path: '/support/warranties/$warrantyId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportServiceSystemsServiceSystemIdRoute =
+  AuthenticatedSupportServiceSystemsServiceSystemIdRouteImport.update({
+    id: '/support/service-systems/$serviceSystemId',
+    path: '/support/service-systems/$serviceSystemId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportServiceLinkageReviewsReviewIdRoute =
+  AuthenticatedSupportServiceLinkageReviewsReviewIdRouteImport.update({
+    id: '/support/service-linkage-reviews/$reviewId',
+    path: '/support/service-linkage-reviews/$reviewId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSupportRmasRmaIdRoute =
@@ -1261,6 +1296,8 @@ export interface FileRoutesByFullPath {
   '/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
   '/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
   '/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
+  '/support/service-linkage-reviews/$reviewId': typeof AuthenticatedSupportServiceLinkageReviewsReviewIdRoute
+  '/support/service-systems/$serviceSystemId': typeof AuthenticatedSupportServiceSystemsServiceSystemIdRoute
   '/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   '/api/ai/cost/budget': typeof ApiAiCostBudgetRoute
   '/api/oauth/sync/$connectionId': typeof ApiOauthSyncConnectionIdRoute
@@ -1284,7 +1321,10 @@ export interface FileRoutesByFullPath {
   '/support/claims/': typeof AuthenticatedSupportClaimsIndexRoute
   '/support/issues/': typeof AuthenticatedSupportIssuesIndexRoute
   '/support/rmas/': typeof AuthenticatedSupportRmasIndexRoute
+  '/support/service-linkage-reviews/': typeof AuthenticatedSupportServiceLinkageReviewsIndexRoute
+  '/support/service-systems/': typeof AuthenticatedSupportServiceSystemsIndexRoute
   '/support/warranties/': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/support/warranty-entitlements/': typeof AuthenticatedSupportWarrantyEntitlementsIndexRoute
   '/communications/campaigns/$campaignId/edit': typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
   '/communications/settings/inbox-accounts/callback': typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   '/projects/$projectId/visits/$visitId': typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
@@ -1424,6 +1464,8 @@ export interface FileRoutesByTo {
   '/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
   '/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
   '/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
+  '/support/service-linkage-reviews/$reviewId': typeof AuthenticatedSupportServiceLinkageReviewsReviewIdRoute
+  '/support/service-systems/$serviceSystemId': typeof AuthenticatedSupportServiceSystemsServiceSystemIdRoute
   '/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   '/api/ai/cost/budget': typeof ApiAiCostBudgetRoute
   '/api/oauth/sync/$connectionId': typeof ApiOauthSyncConnectionIdRoute
@@ -1447,7 +1489,10 @@ export interface FileRoutesByTo {
   '/support/claims': typeof AuthenticatedSupportClaimsIndexRoute
   '/support/issues': typeof AuthenticatedSupportIssuesIndexRoute
   '/support/rmas': typeof AuthenticatedSupportRmasIndexRoute
+  '/support/service-linkage-reviews': typeof AuthenticatedSupportServiceLinkageReviewsIndexRoute
+  '/support/service-systems': typeof AuthenticatedSupportServiceSystemsIndexRoute
   '/support/warranties': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/support/warranty-entitlements': typeof AuthenticatedSupportWarrantyEntitlementsIndexRoute
   '/communications/campaigns/$campaignId/edit': typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
   '/communications/settings/inbox-accounts/callback': typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   '/projects/$projectId/visits/$visitId': typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
@@ -1590,6 +1635,8 @@ export interface FileRoutesById {
   '/_authenticated/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
   '/_authenticated/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
   '/_authenticated/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
+  '/_authenticated/support/service-linkage-reviews/$reviewId': typeof AuthenticatedSupportServiceLinkageReviewsReviewIdRoute
+  '/_authenticated/support/service-systems/$serviceSystemId': typeof AuthenticatedSupportServiceSystemsServiceSystemIdRoute
   '/_authenticated/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   '/api/ai/cost/budget': typeof ApiAiCostBudgetRoute
   '/api/oauth/sync/$connectionId': typeof ApiOauthSyncConnectionIdRoute
@@ -1613,7 +1660,10 @@ export interface FileRoutesById {
   '/_authenticated/support/claims/': typeof AuthenticatedSupportClaimsIndexRoute
   '/_authenticated/support/issues/': typeof AuthenticatedSupportIssuesIndexRoute
   '/_authenticated/support/rmas/': typeof AuthenticatedSupportRmasIndexRoute
+  '/_authenticated/support/service-linkage-reviews/': typeof AuthenticatedSupportServiceLinkageReviewsIndexRoute
+  '/_authenticated/support/service-systems/': typeof AuthenticatedSupportServiceSystemsIndexRoute
   '/_authenticated/support/warranties/': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/_authenticated/support/warranty-entitlements/': typeof AuthenticatedSupportWarrantyEntitlementsIndexRoute
   '/_authenticated/communications/campaigns/$campaignId_/edit': typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
   '/_authenticated/communications/settings/inbox-accounts_/callback': typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   '/_authenticated/projects/$projectId_/visits/$visitId': typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
@@ -1756,6 +1806,8 @@ export interface FileRouteTypes {
     | '/support/issues/$issueId'
     | '/support/issues/new'
     | '/support/rmas/$rmaId'
+    | '/support/service-linkage-reviews/$reviewId'
+    | '/support/service-systems/$serviceSystemId'
     | '/support/warranties/$warrantyId'
     | '/api/ai/cost/budget'
     | '/api/oauth/sync/$connectionId'
@@ -1779,7 +1831,10 @@ export interface FileRouteTypes {
     | '/support/claims/'
     | '/support/issues/'
     | '/support/rmas/'
+    | '/support/service-linkage-reviews/'
+    | '/support/service-systems/'
     | '/support/warranties/'
+    | '/support/warranty-entitlements/'
     | '/communications/campaigns/$campaignId/edit'
     | '/communications/settings/inbox-accounts/callback'
     | '/projects/$projectId/visits/$visitId'
@@ -1919,6 +1974,8 @@ export interface FileRouteTypes {
     | '/support/issues/$issueId'
     | '/support/issues/new'
     | '/support/rmas/$rmaId'
+    | '/support/service-linkage-reviews/$reviewId'
+    | '/support/service-systems/$serviceSystemId'
     | '/support/warranties/$warrantyId'
     | '/api/ai/cost/budget'
     | '/api/oauth/sync/$connectionId'
@@ -1942,7 +1999,10 @@ export interface FileRouteTypes {
     | '/support/claims'
     | '/support/issues'
     | '/support/rmas'
+    | '/support/service-linkage-reviews'
+    | '/support/service-systems'
     | '/support/warranties'
+    | '/support/warranty-entitlements'
     | '/communications/campaigns/$campaignId/edit'
     | '/communications/settings/inbox-accounts/callback'
     | '/projects/$projectId/visits/$visitId'
@@ -2084,6 +2144,8 @@ export interface FileRouteTypes {
     | '/_authenticated/support/issues/$issueId'
     | '/_authenticated/support/issues/new'
     | '/_authenticated/support/rmas/$rmaId'
+    | '/_authenticated/support/service-linkage-reviews/$reviewId'
+    | '/_authenticated/support/service-systems/$serviceSystemId'
     | '/_authenticated/support/warranties/$warrantyId'
     | '/api/ai/cost/budget'
     | '/api/oauth/sync/$connectionId'
@@ -2107,7 +2169,10 @@ export interface FileRouteTypes {
     | '/_authenticated/support/claims/'
     | '/_authenticated/support/issues/'
     | '/_authenticated/support/rmas/'
+    | '/_authenticated/support/service-linkage-reviews/'
+    | '/_authenticated/support/service-systems/'
     | '/_authenticated/support/warranties/'
+    | '/_authenticated/support/warranty-entitlements/'
     | '/_authenticated/communications/campaigns/$campaignId_/edit'
     | '/_authenticated/communications/settings/inbox-accounts_/callback'
     | '/_authenticated/projects/$projectId_/visits/$visitId'
@@ -2911,11 +2976,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCustomersCustomerIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/support/warranty-entitlements/': {
+      id: '/_authenticated/support/warranty-entitlements/'
+      path: '/support/warranty-entitlements'
+      fullPath: '/support/warranty-entitlements/'
+      preLoaderRoute: typeof AuthenticatedSupportWarrantyEntitlementsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/support/warranties/': {
       id: '/_authenticated/support/warranties/'
       path: '/support/warranties'
       fullPath: '/support/warranties/'
       preLoaderRoute: typeof AuthenticatedSupportWarrantiesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/service-systems/': {
+      id: '/_authenticated/support/service-systems/'
+      path: '/support/service-systems'
+      fullPath: '/support/service-systems/'
+      preLoaderRoute: typeof AuthenticatedSupportServiceSystemsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/service-linkage-reviews/': {
+      id: '/_authenticated/support/service-linkage-reviews/'
+      path: '/support/service-linkage-reviews'
+      fullPath: '/support/service-linkage-reviews/'
+      preLoaderRoute: typeof AuthenticatedSupportServiceLinkageReviewsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/support/rmas/': {
@@ -3077,6 +3163,20 @@ declare module '@tanstack/react-router' {
       path: '/support/warranties/$warrantyId'
       fullPath: '/support/warranties/$warrantyId'
       preLoaderRoute: typeof AuthenticatedSupportWarrantiesWarrantyIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/service-systems/$serviceSystemId': {
+      id: '/_authenticated/support/service-systems/$serviceSystemId'
+      path: '/support/service-systems/$serviceSystemId'
+      fullPath: '/support/service-systems/$serviceSystemId'
+      preLoaderRoute: typeof AuthenticatedSupportServiceSystemsServiceSystemIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/service-linkage-reviews/$reviewId': {
+      id: '/_authenticated/support/service-linkage-reviews/$reviewId'
+      path: '/support/service-linkage-reviews/$reviewId'
+      fullPath: '/support/service-linkage-reviews/$reviewId'
+      preLoaderRoute: typeof AuthenticatedSupportServiceLinkageReviewsReviewIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/support/rmas/$rmaId': {
@@ -3439,6 +3539,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSupportIssuesIssueIdRoute: typeof AuthenticatedSupportIssuesIssueIdRoute
   AuthenticatedSupportIssuesNewRoute: typeof AuthenticatedSupportIssuesNewRoute
   AuthenticatedSupportRmasRmaIdRoute: typeof AuthenticatedSupportRmasRmaIdRoute
+  AuthenticatedSupportServiceLinkageReviewsReviewIdRoute: typeof AuthenticatedSupportServiceLinkageReviewsReviewIdRoute
+  AuthenticatedSupportServiceSystemsServiceSystemIdRoute: typeof AuthenticatedSupportServiceSystemsServiceSystemIdRoute
   AuthenticatedSupportWarrantiesWarrantyIdRoute: typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   AuthenticatedAdminActivitiesIndexRoute: typeof AuthenticatedAdminActivitiesIndexRoute
   AuthenticatedAdminAuditIndexRoute: typeof AuthenticatedAdminAuditIndexRoute
@@ -3459,7 +3561,10 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSupportClaimsIndexRoute: typeof AuthenticatedSupportClaimsIndexRoute
   AuthenticatedSupportIssuesIndexRoute: typeof AuthenticatedSupportIssuesIndexRoute
   AuthenticatedSupportRmasIndexRoute: typeof AuthenticatedSupportRmasIndexRoute
+  AuthenticatedSupportServiceLinkageReviewsIndexRoute: typeof AuthenticatedSupportServiceLinkageReviewsIndexRoute
+  AuthenticatedSupportServiceSystemsIndexRoute: typeof AuthenticatedSupportServiceSystemsIndexRoute
   AuthenticatedSupportWarrantiesIndexRoute: typeof AuthenticatedSupportWarrantiesIndexRoute
+  AuthenticatedSupportWarrantyEntitlementsIndexRoute: typeof AuthenticatedSupportWarrantyEntitlementsIndexRoute
   AuthenticatedCommunicationsCampaignsCampaignIdEditRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdEditRoute
   AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute: typeof AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute
   AuthenticatedProjectsProjectIdVisitsVisitIdRoute: typeof AuthenticatedProjectsProjectIdVisitsVisitIdRoute
@@ -3597,6 +3702,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedSupportIssuesIssueIdRoute,
   AuthenticatedSupportIssuesNewRoute: AuthenticatedSupportIssuesNewRoute,
   AuthenticatedSupportRmasRmaIdRoute: AuthenticatedSupportRmasRmaIdRoute,
+  AuthenticatedSupportServiceLinkageReviewsReviewIdRoute:
+    AuthenticatedSupportServiceLinkageReviewsReviewIdRoute,
+  AuthenticatedSupportServiceSystemsServiceSystemIdRoute:
+    AuthenticatedSupportServiceSystemsServiceSystemIdRoute,
   AuthenticatedSupportWarrantiesWarrantyIdRoute:
     AuthenticatedSupportWarrantiesWarrantyIdRoute,
   AuthenticatedAdminActivitiesIndexRoute:
@@ -3631,8 +3740,14 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSupportClaimsIndexRoute: AuthenticatedSupportClaimsIndexRoute,
   AuthenticatedSupportIssuesIndexRoute: AuthenticatedSupportIssuesIndexRoute,
   AuthenticatedSupportRmasIndexRoute: AuthenticatedSupportRmasIndexRoute,
+  AuthenticatedSupportServiceLinkageReviewsIndexRoute:
+    AuthenticatedSupportServiceLinkageReviewsIndexRoute,
+  AuthenticatedSupportServiceSystemsIndexRoute:
+    AuthenticatedSupportServiceSystemsIndexRoute,
   AuthenticatedSupportWarrantiesIndexRoute:
     AuthenticatedSupportWarrantiesIndexRoute,
+  AuthenticatedSupportWarrantyEntitlementsIndexRoute:
+    AuthenticatedSupportWarrantyEntitlementsIndexRoute,
   AuthenticatedCommunicationsCampaignsCampaignIdEditRoute:
     AuthenticatedCommunicationsCampaignsCampaignIdEditRoute,
   AuthenticatedCommunicationsSettingsInboxAccountsCallbackRoute:

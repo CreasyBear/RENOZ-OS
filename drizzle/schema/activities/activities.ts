@@ -90,6 +90,16 @@ export interface ActivityMetadata {
   opportunityId?: string;
   /** Opportunity title (denormalized for display) */
   opportunityTitle?: string;
+  /** Service linkage review ID */
+  reviewId?: string;
+  /** Linked service system ID */
+  serviceSystemId?: string;
+  /** Service system display name */
+  serviceSystemDisplayName?: string;
+  /** Current service owner ID */
+  currentOwnerId?: string;
+  /** Current service owner display name */
+  currentOwnerName?: string;
 
   // ============================================
   // EMAIL ACTIVITY FIELDS (email_sent, email_opened, email_clicked)

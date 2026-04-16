@@ -62,6 +62,7 @@ export function getEntityLink(
     warranty_claim: `/warranties/${entityId}/claims`,
     warranty_policy: `/warranties/policies/${entityId}`,
     warranty_extension: `/warranties/${entityId}/extensions`,
+    service_system: `/support/service-systems/${entityId}`,
     issue: `/support/issues/${entityId}`,
     project: `/projects/${entityId}`,
     purchase_order: `/purchase-orders/${entityId}`,

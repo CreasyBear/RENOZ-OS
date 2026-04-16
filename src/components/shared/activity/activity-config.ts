@@ -122,6 +122,7 @@ export const ENTITY_ICONS: Record<ActivityEntityType, LucideIcon> = {
   warranty_claim: ClipboardCheck,
   warranty_policy: ScrollText,
   warranty_extension: Clock,
+  service_system: Shield,
 };
 
 export const ENTITY_LABELS: Record<ActivityEntityType, string> = {
@@ -153,6 +154,7 @@ export const ENTITY_LABELS: Record<ActivityEntityType, string> = {
   warranty_claim: "Warranty Claim",
   warranty_policy: "Warranty Policy",
   warranty_extension: "Warranty Extension",
+  service_system: "Service System",
 };
 
 // ============================================================================

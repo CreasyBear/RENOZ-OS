@@ -190,6 +190,48 @@
       "when": 1773892800000,
       "tag": "0028_order_request_identity_and_versioning",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1776065132767,
+      "tag": "0030_warranty_entitlements_phase1",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1776139146880,
+      "tag": "0031_issue_support_anchor_normalization",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1776140625444,
+      "tag": "0032_warranty_claim_claimant_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1776222447056,
+      "tag": "0033_service_owner_system_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776305767491,
+      "tag": "0034_issue_resolution_rma_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1776314686746,
+      "tag": "0035_rma_remedy_execution_completion",
+      "breakpoints": true
     }
   ]
 }

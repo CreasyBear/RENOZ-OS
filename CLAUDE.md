@@ -39,6 +39,13 @@ npm run predeploy
 
 **Deployment**: Run `npm run predeploy` before pushing to catch typecheck/lint/test/build failures locally and avoid wasted CI build time.
 
+## Deploy Configuration
+
+- **Platform**: Vercel
+- **Build command**: `npm run build:vercel`
+- **Pre-merge local gate**: `npm run predeploy`
+- **Production URL**: not documented in-repo yet; provide it explicitly when running deploy verification or add it here once confirmed
+
 ## React Grab (UI to Code)
 
 React Grab is installed for local dev and is loaded only in `import.meta.env.DEV`.

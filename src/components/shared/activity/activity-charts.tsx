@@ -89,6 +89,8 @@ const ENTITY_CHART_COLORS: Record<ActivityEntityType, string> = {
   warranty_claim: "#DB2777", // pink-600
   warranty_policy: "#0891B2", // cyan-600
   warranty_extension: "#7C3AED", // violet-600
+  // Service domain
+  service_system: "#0F766E", // teal-700
 };
 
 // ============================================================================

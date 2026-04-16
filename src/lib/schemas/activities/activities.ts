@@ -62,6 +62,8 @@ export const activityEntityTypeValues = [
   'warranty_claim',
   'warranty_policy',
   'warranty_extension',
+  // Service domain
+  'service_system',
 ] as const;
 
 // Activity source values for tracking how activities were created (COMMS-AUTO-002)
@@ -150,6 +152,11 @@ export const activityMetadataSchema = z.object({
   orderNumber: z.string().optional(),
   opportunityId: z.string().uuid().optional(),
   opportunityTitle: z.string().optional(),
+  reviewId: z.string().uuid().optional(),
+  serviceSystemId: z.string().uuid().optional(),
+  serviceSystemDisplayName: z.string().optional(),
+  currentOwnerId: z.string().uuid().optional(),
+  currentOwnerName: z.string().optional(),
 
   // Email activity fields
   emailId: z.string().optional(),
