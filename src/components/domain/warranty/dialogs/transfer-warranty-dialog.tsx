@@ -1,19 +1,10 @@
 /**
  * Transfer Warranty Dialog Component
  *
- * Dialog for transferring a warranty to a new customer.
- * Includes customer selection and reason input.
- *
- * Features:
- * - Customer selection with search
- * - Reason/notes field
- * - Warranty information display
- * - Form validation
- *
- * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json
+ * Compatibility wrapper for beneficial owner transfer from warranty surfaces.
  */
-
 import * as React from 'react';
+import { z } from 'zod';
 import {
   Dialog,
   DialogContent,
@@ -25,48 +16,65 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Spinner } from '@/components/ui/spinner';
-import { ArrowRightLeft, User } from 'lucide-react';
-import { CustomerSelectorContainer } from '@/components/domain/orders/creation/customer-selector-container';
-import type { SelectedCustomer } from '@/components/domain/orders/creation/customer-selector';
+import { ArrowRightLeft } from 'lucide-react';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { FormFieldDisplayProvider } from '@/components/shared/forms';
 import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+const transferWarrantySchema = z.object({
+  fullName: z.string().min(1, 'Owner name is required').max(255),
+  email: z.union([z.literal(''), z.string().email('Enter a valid email')]),
+  phone: z
+    .string()
+    .max(50)
+    .refine((value) => value === '' || /^[+\d\s()-]+$/.test(value), 'Enter a valid phone number'),
+  street1: z.string().max(255),
+  street2: z.string().max(255),
+  city: z.string().max(100),
+  state: z.string().max(100),
+  postalCode: z.string().max(20),
+  country: z.string().max(2),
+  ownerNotes: z.string().max(2000),
+  reason: z.string().min(1, 'Transfer reason is required').max(2000),
+});
+
+type TransferWarrantyValues = z.infer<typeof transferWarrantySchema>;
 
 export interface TransferWarrantyDialogProps {
-  /** Whether the dialog is open */
   open: boolean;
-  /** Callback when the open state changes */
   onOpenChange: (open: boolean) => void;
-  /** The warranty to transfer */
   warranty: {
     id: string;
     warrantyNumber: string;
     productName?: string;
     customerName?: string;
-    customerId: string;
   };
-  /** Callback after successful transfer */
   onSuccess?: () => void;
-  /** From route container (mutation). */
   onSubmit: (payload: {
     id: string;
-    newCustomerId: string;
-    reason?: string;
+    newOwner: {
+      fullName: string;
+      email?: string;
+      phone?: string;
+      address?: {
+        street1: string;
+        street2?: string;
+        city: string;
+        state: string;
+        postalCode: string;
+        country: string;
+      };
+      notes?: string;
+    };
+    reason: string;
   }) => Promise<void>;
-  /** From route container (mutation). */
   isSubmitting?: boolean;
 }
-
-// ============================================================================
-// COMPONENT
-// ============================================================================
 
 export function TransferWarrantyDialog({
   open,
@@ -78,135 +86,194 @@ export function TransferWarrantyDialog({
 }: TransferWarrantyDialogProps) {
   const isPending = isSubmitting ?? false;
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
-
-  // Form state
-  const [selectedCustomerId, setSelectedCustomerId] = React.useState<string | null>(null);
-  const [reason, setReason] = React.useState('');
-
-  // Reset form when dialog opens
-  React.useEffect(() => {
-    if (open) {
-      setSelectedCustomerId(null);
-      setReason('');
-    }
-  }, [open]);
-
-  // Handle submit
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!selectedCustomerId) {
-      return;
-    }
-
-    // Prevent transferring to the same customer
-    if (selectedCustomerId === warranty.customerId) {
-      return;
-    }
-
-    try {
+  const form = useTanStackForm<TransferWarrantyValues>({
+    schema: transferWarrantySchema,
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phone: '',
+      street1: '',
+      street2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: 'AU',
+      ownerNotes: '',
+      reason: '',
+    },
+    onSubmit: async (values) => {
+      const hasAddress = Boolean(
+        values.street1 || values.city || values.state || values.postalCode || values.country
+      );
       await onSubmit({
         id: warranty.id,
-        newCustomerId: selectedCustomerId,
-        reason: reason.trim() || undefined,
+        newOwner: {
+          fullName: values.fullName.trim(),
+          email: values.email || undefined,
+          phone: values.phone || undefined,
+          address: hasAddress
+            ? {
+                street1: values.street1,
+                street2: values.street2 || undefined,
+                city: values.city,
+                state: values.state,
+                postalCode: values.postalCode,
+                country: values.country,
+              }
+            : undefined,
+          notes: values.ownerNotes || undefined,
+        },
+        reason: values.reason.trim(),
       });
 
       onOpenChange(false);
       onSuccess?.();
-    } catch {
-      // Error is handled by mutation
-    }
-  };
+    },
+  });
 
-  const isValid = selectedCustomerId !== null && selectedCustomerId !== warranty.customerId;
+  React.useEffect(() => {
+    if (open) {
+      form.reset();
+    }
+  }, [form, open]);
 
   const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
-        className="sm:max-w-2xl"
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
         onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
         onInteractOutside={pendingInteractionGuards.onInteractOutside}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft className="size-5" />
-            Transfer Warranty
+            Transfer Warranty Ownership
           </DialogTitle>
           <DialogDescription>
-            Transfer warranty {warranty.warrantyNumber} to a new customer
+            Transfer the beneficial owner for this warranty&apos;s service system.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Warranty Info Card */}
-          <Card className="bg-muted/50">
-            <CardContent className="p-4">
-              <div className="grid gap-1">
-                <p className="text-sm font-medium">{warranty.warrantyNumber}</p>
-                {warranty.productName && (
-                  <p className="text-muted-foreground text-sm">{warranty.productName}</p>
-                )}
-                {warranty.customerName && (
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <User className="text-muted-foreground size-4" />
-                    <span className="text-muted-foreground">Current Customer:</span>
-                    <span className="font-medium">{warranty.customerName}</span>
-                  </div>
-                )}
+        <form
+          className="space-y-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            form.handleSubmit();
+          }}
+        >
+          <FormFieldDisplayProvider form={form}>
+            <Card className="bg-muted/50">
+              <CardContent className="space-y-1 p-4 text-sm">
+                <div className="font-medium">{warranty.warrantyNumber}</div>
+                {warranty.productName ? <div className="text-muted-foreground">{warranty.productName}</div> : null}
+                {warranty.customerName ? (
+                  <div className="text-muted-foreground">Purchased via {warranty.customerName}</div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>New owner name</Label>
+                <form.Field name="fullName">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
               </div>
-            </CardContent>
-          </Card>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <form.Field name="email">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <form.Field name="phone">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2">
+                <Label>Country</Label>
+                <form.Field name="country">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value.toUpperCase())} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Street address</Label>
+                <form.Field name="street1">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Street address line 2</Label>
+                <form.Field name="street2">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2">
+                <Label>City</Label>
+                <form.Field name="city">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2">
+                <Label>State</Label>
+                <form.Field name="state">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+              <div className="space-y-2">
+                <Label>Postal code</Label>
+                <form.Field name="postalCode">
+                  {(field) => (
+                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  )}
+                </form.Field>
+              </div>
+            </div>
 
-          {/* Customer Selection */}
-          <div className="space-y-2">
-            <Label>Select New Customer *</Label>
-            <CustomerSelectorContainer
-              selectedCustomerId={selectedCustomerId}
-              onSelect={(customer: SelectedCustomer | null) =>
-                setSelectedCustomerId(customer?.id ?? null)
-              }
-            />
-            {selectedCustomerId === warranty.customerId && (
-              <p className="text-destructive text-sm">
-                Cannot transfer warranty to the same customer
-              </p>
-            )}
-          </div>
+            <div className="space-y-2">
+              <Label>Owner notes</Label>
+              <form.Field name="ownerNotes">
+                {(field) => (
+                  <Textarea rows={2} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                )}
+              </form.Field>
+            </div>
 
-          {/* Reason */}
-          <div className="space-y-2">
-            <Label htmlFor="reason">Reason for Transfer</Label>
-            <Textarea
-              id="reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter reason for transferring this warranty..."
-              maxLength={2000}
-              rows={3}
-            />
-            <p className="text-muted-foreground text-right text-xs">{reason.length}/2000</p>
-          </div>
+            <div className="space-y-2">
+              <Label>Transfer reason</Label>
+              <form.Field name="reason">
+                {(field) => (
+                  <Textarea rows={3} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                )}
+              </form.Field>
+            </div>
+          </FormFieldDisplayProvider>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isPending}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!isValid || isPending}>
-              {isPending ? (
-                <>
-                  <Spinner className="mr-2 size-4" />
-                  Transferring...
-                </>
-              ) : (
-                'Transfer Warranty'
-              )}
+            <Button type="submit" disabled={isPending}>
+              Transfer Ownership
             </Button>
           </DialogFooter>
         </form>

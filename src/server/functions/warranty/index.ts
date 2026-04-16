@@ -1,10 +1,12 @@
 /**
  * Warranty Server Functions
  *
- * Barrel export for all warranty domain server functions.
+ * Public server-function surface for the warranty domain.
+ *
+ * Internal helpers under `./_shared` are intentionally not re-exported here.
  */
 
-// Warranties (core)
+// --- Core Warranties ---
 export {
   getExpiringWarranties,
   getWarrantyStatusCounts,
@@ -20,7 +22,14 @@ export {
   cancelWarrantyClaim,
 } from './core/warranties';
 
-// Warranty Policies
+// --- Warranty Entitlements ---
+export {
+  listWarrantyEntitlements,
+  getWarrantyEntitlement,
+  activateWarrantyFromEntitlement,
+} from './entitlements';
+
+// --- Warranty Policies ---
 export {
   createWarrantyPolicy,
   updateWarrantyPolicy,
@@ -37,7 +46,7 @@ export {
   triggerWarrantyRegistrationNotification,
 } from './policies/warranty-policies';
 
-// Warranty Claims
+// --- Warranty Claims ---
 export {
   createWarrantyClaim,
   updateClaimStatus,
@@ -50,7 +59,7 @@ export {
   assignClaim,
 } from './claims/warranty-claims';
 
-// Warranty Extensions
+// --- Warranty Extensions ---
 export {
   extendWarranty,
   listWarrantyExtensions,
@@ -58,14 +67,14 @@ export {
   getExtensionById,
 } from './extensions/warranty-extensions';
 
-// Warranty Certificates
+// --- Warranty Certificates ---
 export {
   generateWarrantyCertificate,
   getWarrantyCertificate,
   regenerateWarrantyCertificate,
 } from './certificates/warranty-certificates';
 
-// Warranty Analytics
+// --- Warranty Analytics ---
 export {
   getWarrantyAnalyticsSummary,
   getClaimsByProduct,
@@ -78,7 +87,7 @@ export {
   getWarrantyAnalyticsFilterOptions,
 } from './analytics/warranty-analytics';
 
-// Bulk Import
+// --- Bulk Import ---
 export {
   csvWarrantyRowSchema,
   previewBulkWarrantyImportSchema,

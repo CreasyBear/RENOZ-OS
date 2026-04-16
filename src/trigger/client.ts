@@ -297,9 +297,17 @@ export interface WarrantyClaimSubmittedPayload {
   warrantyId: string
   warrantyNumber: string
   organizationId: string
+  /** Commercial account anchor for compatibility. */
   customerId: string
+  /** Commercial account display name for compatibility. */
   customerName: string
+  /** Commercial account email; direct-claim events should use claimantEmail for delivery. */
   customerEmail?: string
+  claimantRole?: 'channel_partner' | 'owner' | 'internal' | 'other'
+  claimantCustomerId?: string
+  claimantName?: string
+  claimantEmail?: string
+  channelBypassReason?: string
   productId: string
   productName: string
   claimType: string
@@ -316,9 +324,17 @@ export interface WarrantyClaimResolvedPayload {
   warrantyId: string
   warrantyNumber: string
   organizationId: string
+  /** Commercial account anchor for compatibility. */
   customerId: string
+  /** Commercial account display name for compatibility. */
   customerName: string
+  /** Commercial account email; direct-claim events should use claimantEmail for delivery. */
   customerEmail?: string
+  claimantRole?: 'channel_partner' | 'owner' | 'internal' | 'other'
+  claimantCustomerId?: string
+  claimantName?: string
+  claimantEmail?: string
+  channelBypassReason?: string
   resolution: string
   resolutionType: string
   resolvedAt: string

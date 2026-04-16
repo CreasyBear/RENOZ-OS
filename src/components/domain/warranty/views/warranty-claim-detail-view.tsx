@@ -53,6 +53,7 @@ import {
   type WarrantyClaimDetailViewProps,
 } from '@/lib/schemas/warranty';
 import { EntityHeader } from '@/components/shared/detail-view';
+import { WARRANTY_CLAIMANT_ROLE_LABELS } from '../warranty-claim-options';
 
 // ============================================================================
 // VIEW
@@ -252,8 +253,20 @@ export function WarrantyClaimDetailView({
             Warranty {claim.warranty?.warrantyNumber ?? ''}
           </Link>
           <div className="text-muted-foreground">
-            Customer: {claim.customer?.name ?? 'Unknown'}
+            Purchased via {claim.commercialCustomer?.name ?? claim.customer?.name ?? 'Unknown commercial account'}
           </div>
+          <div className="text-muted-foreground">
+            Claimant: {claim.claimant?.displayName ?? claim.customer?.name ?? 'Unknown'}
+          </div>
+          {claim.serviceSystem?.id ? (
+            <Link
+              to="/support/service-systems/$serviceSystemId"
+              params={{ serviceSystemId: claim.serviceSystem.id }}
+              className="text-primary hover:underline"
+            >
+              Service system {claim.serviceSystem.displayName}
+            </Link>
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -390,7 +403,33 @@ export function WarrantyClaimDetailView({
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-1">
                         <Label className="text-muted-foreground text-xs tracking-wider uppercase">
-                          Customer
+                          Claimant
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <User className="text-muted-foreground h-4 w-4" />
+                          <div className="space-y-1">
+                            <div className="font-medium">
+                              {claim.claimant?.displayName ?? claim.customer?.name ?? 'Unknown Claimant'}
+                            </div>
+                            <div className="text-muted-foreground text-xs">
+                              {WARRANTY_CLAIMANT_ROLE_LABELS[claim.claimant?.role ?? 'channel_partner'] ??
+                                claim.claimant?.role ??
+                                'Channel Partner'}
+                            </div>
+                            {(claim.claimant?.snapshot?.email || claim.claimant?.snapshot?.phone) && (
+                              <div className="text-muted-foreground text-xs">
+                                {[claim.claimant.snapshot?.email, claim.claimant.snapshot?.phone]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Purchased Via
                         </Label>
                         <div className="flex items-center gap-2">
                           <User className="text-muted-foreground h-4 w-4" />
@@ -400,10 +439,78 @@ export function WarrantyClaimDetailView({
                             search={{}}
                             className="text-primary hover:underline"
                           >
-                            {claim.customer?.name ?? 'Unknown Customer'}
+                            {claim.commercialCustomer?.name ?? claim.customer?.name ?? 'Unknown commercial account'}
                           </Link>
                         </div>
                       </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Service System
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <Battery className="text-muted-foreground h-4 w-4" />
+                          <div className="space-y-1">
+                            {claim.serviceSystem?.id ? (
+                              <Link
+                                to="/support/service-systems/$serviceSystemId"
+                                params={{ serviceSystemId: claim.serviceSystem.id }}
+                                className="text-primary font-medium hover:underline"
+                              >
+                                {claim.serviceSystem.displayName}
+                              </Link>
+                            ) : (
+                              <div className="font-medium">Not linked yet</div>
+                            )}
+                            {claim.serviceSystem?.siteAddressLabel ? (
+                              <div className="text-muted-foreground text-xs">
+                                {claim.serviceSystem.siteAddressLabel}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                          Owner of Record
+                        </Label>
+                        <div className="flex items-center gap-2">
+                          <User className="text-muted-foreground h-4 w-4" />
+                          <div className="space-y-1">
+                            <div>
+                              {claim.currentOwner?.fullName ??
+                                claim.ownerRecord?.fullName ??
+                                'Not captured yet'}
+                            </div>
+                            {(claim.currentOwner?.email ||
+                              claim.currentOwner?.phone ||
+                              claim.ownerRecord?.email ||
+                              claim.ownerRecord?.phone) && (
+                              <div className="text-muted-foreground text-xs">
+                                {[
+                                  claim.currentOwner?.email ?? claim.ownerRecord?.email,
+                                  claim.currentOwner?.phone ?? claim.ownerRecord?.phone,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {claim.claimant?.role !== 'channel_partner' &&
+                        claim.claimant?.channelBypassReason && (
+                          <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                            <Label className="text-muted-foreground text-xs tracking-wider uppercase">
+                              Channel Bypass Reason
+                            </Label>
+                            <p className="text-sm leading-relaxed">
+                              {claim.claimant.channelBypassReason}
+                            </p>
+                          </div>
+                        )}
 
                       <div className="space-y-1">
                         <Label className="text-muted-foreground text-xs tracking-wider uppercase">
@@ -550,8 +657,19 @@ export function WarrantyClaimDetailView({
                         search={{}}
                         className="text-primary hover:underline"
                       >
-                        View customer
+                        View purchased-via customer
                       </Link>
+                      {claim.claimant?.customer?.id &&
+                        claim.claimant.customer.id !== claim.customerId && (
+                          <Link
+                            to="/customers/$customerId"
+                            params={{ customerId: claim.claimant.customer.id }}
+                            search={{}}
+                            className="text-primary hover:underline"
+                          >
+                            View claimant account
+                          </Link>
+                        )}
                     </CardContent>
                   </Card>
 

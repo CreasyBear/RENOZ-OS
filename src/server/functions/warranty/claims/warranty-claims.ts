@@ -14,7 +14,7 @@ import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { eq, and, or, desc, asc, sql, count, like } from 'drizzle-orm';
+import { eq, and, or, desc, asc, sql, count, like, inArray } from 'drizzle-orm';
 import {
   decodeCursor,
   buildCursorCondition,
@@ -27,6 +27,7 @@ import {
   warrantyClaims,
   warranties,
   warrantyPolicies,
+  warrantyOwnerRecords,
   customers,
   products,
   users,
@@ -67,6 +68,10 @@ import {
   listWarrantyClaimsSchema,
   getWarrantyClaimSchema,
   assignClaimSchema,
+  isWarrantyClaimantRoleValue,
+  type WarrantyClaimantRoleValue,
+  type WarrantyClaimQuickFilterValue,
+  type WarrantyClaimantSnapshot,
 } from '@/lib/schemas/warranty/claims';
 import { buildClaimAtRiskOrBreachedCondition } from '@/lib/warranty/claim-sla-filters';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -80,6 +85,7 @@ import {
   findSerializedItemBySerial,
 } from '@/server/functions/_shared/serialized-lineage';
 import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
+import { getServiceContextForWarranty } from '@/server/functions/service/_shared/service-resolver';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -98,6 +104,26 @@ const WARRANTY_CLAIM_EXCLUDED_FIELDS = [
   'organizationId',
   'slaTrackingId',
 ] as const satisfies readonly string[];
+
+type CustomerSummary = {
+  id: string;
+  name: string | null;
+  email?: string | null;
+};
+
+type OwnerRecordSummary = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  notes?: string | null;
+  address?: unknown;
+};
+
+type ClaimActivityMetadataSource = Pick<
+  WarrantyClaim,
+  'customerId' | 'claimantRole' | 'claimantCustomerId' | 'claimantSnapshot' | 'channelBypassReason'
+>;
 
 // ============================================================================
 // HELPERS
@@ -131,6 +157,185 @@ async function generateClaimNumber(organizationId: string): Promise<string> {
   }
 
   return `${prefix}${nextSequence.toString().padStart(5, '0')}`;
+}
+
+function getClaimantRole(
+  role: string | null | undefined
+): WarrantyClaimantRoleValue {
+  return isWarrantyClaimantRoleValue(role) ? role : 'channel_partner';
+}
+
+function normalizeClaimantSnapshot(
+  snapshot: WarrantyClaimantSnapshot | null | undefined
+): WarrantyClaimantSnapshot | null {
+  if (!snapshot?.fullName?.trim()) return null;
+  return {
+    fullName: snapshot.fullName.trim(),
+    email: snapshot.email?.trim() || undefined,
+    phone: snapshot.phone?.trim() || undefined,
+  };
+}
+
+function buildOwnerClaimantSnapshot(
+  ownerRecord: OwnerRecordSummary | null | undefined
+): WarrantyClaimantSnapshot | null {
+  if (!ownerRecord?.fullName?.trim()) return null;
+  return {
+    fullName: ownerRecord.fullName.trim(),
+    email: ownerRecord.email ?? undefined,
+    phone: ownerRecord.phone ?? undefined,
+  };
+}
+
+function deriveClaimantDisplayName(args: {
+  role: WarrantyClaimantRoleValue;
+  commercialCustomer: CustomerSummary | null;
+  claimantCustomer: CustomerSummary | null;
+  claimantSnapshot: WarrantyClaimantSnapshot | null;
+}) {
+  if (args.claimantCustomer?.name) return args.claimantCustomer.name;
+  if (args.claimantSnapshot?.fullName) return args.claimantSnapshot.fullName;
+  if (args.role === 'channel_partner') return args.commercialCustomer?.name ?? null;
+  return null;
+}
+
+function buildClaimantView(args: {
+  claim: Pick<
+    WarrantyClaim,
+    'customerId' | 'claimantRole' | 'claimantCustomerId' | 'claimantSnapshot' | 'channelBypassReason'
+  >;
+  commercialCustomer: CustomerSummary | null;
+  claimantCustomer: CustomerSummary | null;
+}) {
+  const role = getClaimantRole(args.claim.claimantRole);
+  const effectiveClaimantCustomer =
+    role === 'channel_partner'
+      ? args.claimantCustomer ?? args.commercialCustomer
+      : args.claimantCustomer;
+  const claimantSnapshot = normalizeClaimantSnapshot(args.claim.claimantSnapshot ?? null);
+
+  return {
+    role,
+    displayName: deriveClaimantDisplayName({
+      role,
+      commercialCustomer: args.commercialCustomer,
+      claimantCustomer: effectiveClaimantCustomer,
+      claimantSnapshot,
+    }),
+    customerId: effectiveClaimantCustomer?.id ?? (role === 'channel_partner' ? args.claim.customerId : null),
+    customer: effectiveClaimantCustomer
+      ? {
+          id: effectiveClaimantCustomer.id,
+          name: effectiveClaimantCustomer.name,
+        }
+      : null,
+    snapshot: claimantSnapshot,
+    channelBypassReason: args.claim.channelBypassReason ?? null,
+  };
+}
+
+function buildClaimantModeCondition(mode: 'channel_partner' | 'direct' | undefined) {
+  if (!mode) return null;
+  return mode === 'channel_partner'
+    ? sql`coalesce(${warrantyClaims.claimantRole}, 'channel_partner') = 'channel_partner'`
+    : sql`coalesce(${warrantyClaims.claimantRole}, 'channel_partner') <> 'channel_partner'`;
+}
+
+function buildClaimActivityMetadata(args: {
+  claim: ClaimActivityMetadataSource;
+  commercialCustomer: CustomerSummary | null;
+  claimantCustomer?: CustomerSummary | null;
+  claimantName?: string | null;
+  extra: Record<string, unknown>;
+  customFields?: Record<string, unknown>;
+}) {
+  const claimantView = buildClaimantView({
+    claim: args.claim,
+    commercialCustomer: args.commercialCustomer,
+    claimantCustomer: args.claimantCustomer ?? null,
+  });
+
+  return {
+    customerId: args.claim.customerId,
+    customerName: args.commercialCustomer?.name ?? undefined,
+    commercialCustomerId: args.claim.customerId,
+    commercialCustomerName: args.commercialCustomer?.name ?? undefined,
+    claimantRole: claimantView.role,
+    claimantCustomerId: claimantView.customerId,
+    claimantName: args.claimantName ?? claimantView.displayName ?? undefined,
+    channelBypassReason: claimantView.channelBypassReason,
+    ...args.extra,
+    customFields: {
+      claimantRole: claimantView.role,
+      claimantName: args.claimantName ?? claimantView.displayName ?? null,
+      claimantCustomerId: claimantView.customerId,
+      channelBypassReason: claimantView.channelBypassReason,
+      ...(args.customFields ?? {}),
+    },
+  };
+}
+
+async function loadCustomerMap(organizationId: string, customerIds: Array<string | null | undefined>) {
+  const uniqueCustomerIds = Array.from(
+    new Set(customerIds.filter((value): value is string => !!value))
+  );
+
+  if (uniqueCustomerIds.length === 0) {
+    return new Map<string, CustomerSummary>();
+  }
+
+  const rows = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+    })
+    .from(customers)
+    .where(
+      and(
+        eq(customers.organizationId, organizationId),
+        inArray(customers.id, uniqueCustomerIds)
+      )
+    );
+
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+function resolveClaimantForCreate(args: {
+  commercialCustomer: CustomerSummary;
+  ownerRecord: OwnerRecordSummary | null;
+  input: z.infer<typeof createWarrantyClaimSchema>;
+}) {
+  const claimantRole = args.input.claimantRole ?? 'channel_partner';
+
+  if (claimantRole === 'channel_partner') {
+    return {
+      claimantRole,
+      claimantCustomerId: args.input.claimantCustomerId ?? args.commercialCustomer.id,
+      claimantSnapshot: null,
+      channelBypassReason: null,
+    };
+  }
+
+  const channelBypassReason = args.input.channelBypassReason?.trim();
+  if (!channelBypassReason) {
+    throw new ValidationError('A channel bypass reason is required for direct warranty claims');
+  }
+
+  const claimantSnapshot =
+    normalizeClaimantSnapshot(args.input.claimantSnapshot) ??
+    (claimantRole === 'owner' ? buildOwnerClaimantSnapshot(args.ownerRecord) : null);
+
+  if (!claimantSnapshot) {
+    throw new ValidationError('Claimant details are required when the claimant is not the channel partner');
+  }
+
+  return {
+    claimantRole,
+    claimantCustomerId: null,
+    claimantSnapshot,
+    channelBypassReason,
+  };
 }
 
 /**
@@ -272,7 +477,7 @@ async function startSlaTrackingForClaim(
 }
 
 function buildQuickFilterCondition(
-  quickFilter: 'submitted' | 'at_risk_sla' | 'awaiting_decision' | undefined
+  quickFilter: WarrantyClaimQuickFilterValue | undefined
 ) {
   if (quickFilter === 'submitted') {
     return eq(warrantyClaims.status, 'submitted');
@@ -312,11 +517,18 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
         customer: customers,
         product: products,
         policy: warrantyPolicies,
+        ownerRecord: {
+          id: warrantyOwnerRecords.id,
+          fullName: warrantyOwnerRecords.fullName,
+          email: warrantyOwnerRecords.email,
+          phone: warrantyOwnerRecords.phone,
+        },
       })
       .from(warranties)
       .innerJoin(customers, eq(warranties.customerId, customers.id))
       .innerJoin(products, eq(warranties.productId, products.id))
       .innerJoin(warrantyPolicies, eq(warranties.warrantyPolicyId, warrantyPolicies.id))
+      .leftJoin(warrantyOwnerRecords, eq(warranties.ownerRecordId, warrantyOwnerRecords.id))
       .where(
         and(eq(warranties.id, data.warrantyId), eq(warranties.organizationId, ctx.organizationId))
       )
@@ -338,6 +550,20 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
     // Generate claim number
     const claimNumber = await generateClaimNumber(ctx.organizationId);
     const now = new Date();
+    const claimantSelection = resolveClaimantForCreate({
+      commercialCustomer: warranty.customer,
+      ownerRecord: warranty.ownerRecord?.id ? warranty.ownerRecord : null,
+      input: data,
+    });
+    const claimantDisplayName = deriveClaimantDisplayName({
+      role: claimantSelection.claimantRole,
+      commercialCustomer: warranty.customer,
+      claimantCustomer:
+        claimantSelection.claimantRole === 'channel_partner'
+          ? warranty.customer
+          : null,
+      claimantSnapshot: claimantSelection.claimantSnapshot,
+    });
 
     // Get SLA configuration for warranty claims
     const slaConfig = await getWarrantySlaConfig(ctx.organizationId);
@@ -354,6 +580,10 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
           claimNumber,
           warrantyId: data.warrantyId,
           customerId: warranty.warranty.customerId,
+          claimantRole: claimantSelection.claimantRole,
+          claimantCustomerId: claimantSelection.claimantCustomerId,
+          claimantSnapshot: claimantSelection.claimantSnapshot,
+          channelBypassReason: claimantSelection.channelBypassReason,
           claimType: data.claimType,
           description: data.description,
           status: 'submitted',
@@ -385,8 +615,11 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       return [inserted];
     });
 
-    // Get customer email for notification
-    const customerEmail = warranty.customer.email ?? undefined;
+    const commercialCustomerEmail = warranty.customer.email ?? undefined;
+    const claimantEmail =
+      claimantSelection.claimantRole === 'channel_partner'
+        ? commercialCustomerEmail
+        : claimantSelection.claimantSnapshot?.email ?? undefined;
 
     if (warranty.warranty.productSerial) {
       const serializedItem = await findSerializedItemBySerial(
@@ -420,10 +653,15 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       warrantyNumber: warranty.warranty.warrantyNumber,
       organizationId: ctx.organizationId,
       customerId: warranty.warranty.customerId,
-      customerEmail,
-      customerName: warranty.customer.name,
+      customerEmail: commercialCustomerEmail,
+      customerName: warranty.customer.name ?? 'Unknown Customer',
+      claimantRole: claimantSelection.claimantRole,
+      claimantCustomerId: claimantSelection.claimantCustomerId ?? undefined,
+      claimantName: claimantDisplayName ?? undefined,
+      claimantEmail,
+      channelBypassReason: claimantSelection.channelBypassReason ?? undefined,
       productId: warranty.product.id,
-      productName: warranty.product.name,
+      productName: warranty.product.name ?? 'Unknown Product',
       claimType: data.claimType,
       description: data.description,
       submittedAt: now.toISOString(),
@@ -454,18 +692,23 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
         after: claim,
         excludeFields: excludeFieldsForActivity<WarrantyClaim>(WARRANTY_CLAIM_EXCLUDED_FIELDS),
       }),
-      metadata: {
-        customerId: warranty.warranty.customerId,
-        customerName: warranty.customer.name,
-        claimId: claim.id,
-        claimNumber,
-        warrantyId: warranty.warranty.id,
-        warrantyNumber: warranty.warranty.warrantyNumber,
-        claimType: data.claimType,
-        claimStatus: 'submitted',
-        productId: warranty.product.id,
-        productName: warranty.product.name ?? undefined,
-      },
+      metadata: buildClaimActivityMetadata({
+        claim,
+        commercialCustomer: warranty.customer,
+        claimantCustomer:
+          claimantSelection.claimantRole === 'channel_partner' ? warranty.customer : null,
+        claimantName: claimantDisplayName ?? null,
+        extra: {
+          claimId: claim.id,
+          claimNumber,
+          warrantyId: warranty.warranty.id,
+          warrantyNumber: warranty.warranty.warrantyNumber,
+          claimType: data.claimType,
+          claimStatus: 'submitted',
+          productId: warranty.product.id,
+          productName: warranty.product.name ?? undefined,
+        },
+      }),
     });
 
     return serializedMutationSuccess(
@@ -602,17 +845,20 @@ export const updateClaimStatus = createServerFn({ method: 'POST' })
         after: { status: data.status },
         fields: ['status'],
       },
-      metadata: {
-        customerId: existingClaim.customerId,
-        claimId: claim.id,
-        claimNumber: claim.claimNumber,
-        warrantyId: claim.warrantyId,
-        previousStatus: currentStatus,
-        newStatus: data.status,
-        claimStatus: data.status,
-        idempotencyKey: data.idempotencyKey ?? undefined,
-        requestInfoRequest: isRequestInfo,
-      },
+      metadata: buildClaimActivityMetadata({
+        claim: existingClaim,
+        commercialCustomer: { id: existingClaim.customerId, name: null },
+        extra: {
+          claimId: claim.id,
+          claimNumber: claim.claimNumber,
+          warrantyId: claim.warrantyId,
+          previousStatus: currentStatus,
+          newStatus: data.status,
+          claimStatus: data.status,
+          idempotencyKey: data.idempotencyKey ?? undefined,
+          requestInfoRequest: isRequestInfo,
+        },
+      }),
     });
 
     const message = isRequestInfo
@@ -704,18 +950,21 @@ export const approveClaim = createServerFn({ method: 'POST' })
         after: { status: 'approved' },
         fields: ['status', 'approvedByUserId', 'approvedAt'],
       },
-      metadata: {
-        customerId: existingClaim.customerId,
-        claimId: claim.id,
-        claimNumber: claim.claimNumber,
-        warrantyId: claim.warrantyId,
-        previousStatus: existingClaim.status,
-        newStatus: 'approved',
-        claimStatus: 'approved',
-        customFields: {
-          slaBreached: slaBreached,
+      metadata: buildClaimActivityMetadata({
+        claim: existingClaim,
+        commercialCustomer: { id: existingClaim.customerId, name: null },
+        extra: {
+          claimId: claim.id,
+          claimNumber: claim.claimNumber,
+          warrantyId: claim.warrantyId,
+          previousStatus: existingClaim.status,
+          newStatus: 'approved',
+          claimStatus: 'approved',
         },
-      },
+        customFields: {
+          slaBreached,
+        },
+      }),
     });
 
     return serializedMutationSuccess(claim, `Claim ${claim.claimNumber} approved.`, {
@@ -816,16 +1065,19 @@ export const denyClaim = createServerFn({ method: 'POST' })
         after: { status: 'denied', denialReason: data.denialReason },
         fields: ['status', 'denialReason'],
       },
-      metadata: {
-        customerId: existingClaim.customerId,
-        claimId: claim.id,
-        claimNumber: claim.claimNumber,
-        warrantyId: claim.warrantyId,
-        previousStatus: existingClaim.status,
-        newStatus: 'denied',
-        claimStatus: 'denied',
-        denialReason: data.denialReason,
-      },
+      metadata: buildClaimActivityMetadata({
+        claim: existingClaim,
+        commercialCustomer: { id: existingClaim.customerId, name: null },
+        extra: {
+          claimId: claim.id,
+          claimNumber: claim.claimNumber,
+          warrantyId: claim.warrantyId,
+          previousStatus: existingClaim.status,
+          newStatus: 'denied',
+          claimStatus: 'denied',
+          denialReason: data.denialReason,
+        },
+      }),
     });
 
     return serializedMutationSuccess(claim, `Claim ${claim.claimNumber} denied.`, {
@@ -943,8 +1195,15 @@ export const resolveClaim = createServerFn({ method: 'POST' })
       return [updated!];
     });
 
-    // Get customer email for notification
-    const customerEmail = existingClaim.customer.email ?? undefined;
+    const resolvedClaimantRole = getClaimantRole(existingClaim.claim.claimantRole);
+    const claimantName =
+      existingClaim.claim.claimantSnapshot?.fullName ??
+      (resolvedClaimantRole === 'channel_partner' ? existingClaim.customer.name : null);
+    const commercialCustomerEmail = existingClaim.customer.email ?? undefined;
+    const claimantEmail =
+      resolvedClaimantRole === 'channel_partner'
+        ? commercialCustomerEmail
+        : existingClaim.claim.claimantSnapshot?.email ?? undefined;
 
     // Trigger notification event
     const payload: WarrantyClaimResolvedPayload = {
@@ -954,8 +1213,15 @@ export const resolveClaim = createServerFn({ method: 'POST' })
       warrantyNumber: existingClaim.warranty.warrantyNumber,
       organizationId: ctx.organizationId,
       customerId: existingClaim.warranty.customerId,
-      customerEmail,
-      customerName: existingClaim.customer.name,
+      customerEmail: commercialCustomerEmail,
+      customerName: existingClaim.customer.name ?? 'Unknown Customer',
+      claimantRole: resolvedClaimantRole,
+      claimantCustomerId:
+        existingClaim.claim.claimantCustomerId ??
+        (resolvedClaimantRole === 'channel_partner' ? existingClaim.claim.customerId : undefined),
+      claimantName: claimantName ?? undefined,
+      claimantEmail,
+      channelBypassReason: existingClaim.claim.channelBypassReason ?? undefined,
       resolution: data.resolutionNotes ?? 'Resolved',
       resolutionType: data.resolutionType,
       resolvedAt: now.toISOString(),
@@ -987,24 +1253,27 @@ export const resolveClaim = createServerFn({ method: 'POST' })
         after: { status: 'resolved', resolutionType: data.resolutionType },
         fields: ['status', 'resolutionType', 'resolutionNotes', 'resolvedAt'],
       },
-      metadata: {
-        customerId: existingClaim.claim.customerId,
-        customerName: existingClaim.customer.name,
-        claimId: claim.id,
-        claimNumber: claim.claimNumber,
-        warrantyId: existingClaim.warranty.id,
-        warrantyNumber: existingClaim.warranty.warrantyNumber,
-        previousStatus: existingClaim.claim.status,
-        newStatus: 'resolved',
-        claimStatus: 'resolved',
-        resolutionType: data.resolutionType,
-        productId: existingClaim.product.id,
-        productName: existingClaim.product.name ?? undefined,
+      metadata: buildClaimActivityMetadata({
+        claim: existingClaim.claim,
+        commercialCustomer: existingClaim.customer,
+        claimantName,
+        extra: {
+          claimId: claim.id,
+          claimNumber: claim.claimNumber,
+          warrantyId: existingClaim.warranty.id,
+          warrantyNumber: existingClaim.warranty.warrantyNumber,
+          previousStatus: existingClaim.claim.status,
+          newStatus: 'resolved',
+          claimStatus: 'resolved',
+          resolutionType: data.resolutionType,
+          productId: existingClaim.product.id,
+          productName: existingClaim.product.name ?? undefined,
+        },
         customFields: {
           cost: data.cost ?? null,
           extensionMonths: data.extensionMonths ?? null,
         },
-      },
+      }),
     });
 
     return serializedMutationSuccess(
@@ -1045,6 +1314,19 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
 
     if (data.customerId) {
       conditions.push(eq(warrantyClaims.customerId, data.customerId));
+    }
+
+    if (data.claimantRole) {
+      conditions.push(eq(warrantyClaims.claimantRole, data.claimantRole));
+    }
+
+    if (data.claimantCustomerId) {
+      conditions.push(eq(warrantyClaims.claimantCustomerId, data.claimantCustomerId));
+    }
+
+    const claimantModeCondition = buildClaimantModeCondition(data.claimantMode);
+    if (claimantModeCondition) {
+      conditions.push(claimantModeCondition);
     }
 
     if (data.status) {
@@ -1120,12 +1402,25 @@ export const listWarrantyClaims = createServerFn({ method: 'GET' })
       .limit(data.pageSize)
       .offset((data.page - 1) * data.pageSize); // OFFSET pagination; consider cursor-based for >10k rows
 
+    const claimantCustomerMap = await loadCustomerMap(
+      ctx.organizationId,
+      claims.map((row) => row.claim.claimantCustomerId)
+    );
+
     return {
       items: claims.map((row) => ({
         ...row.claim,
         productId: row.product.id,
         warranty: row.warranty,
+        commercialCustomer: row.customer,
         customer: row.customer,
+        claimant: buildClaimantView({
+          claim: row.claim,
+          commercialCustomer: row.customer,
+          claimantCustomer: row.claim.claimantCustomerId
+            ? claimantCustomerMap.get(row.claim.claimantCustomerId) ?? null
+            : null,
+        }),
         product: row.product,
         assignedUser: row.assignedUser?.id ? row.assignedUser : null,
         slaTracking: row.sla,
@@ -1174,6 +1469,9 @@ const listWarrantyClaimsCursorSchema = normalizeObjectInput(
   cursorPaginationSchema.extend({
     warrantyId: z.string().uuid().optional(),
     customerId: z.string().uuid().optional(),
+    claimantRole: listWarrantyClaimsBaseSchema.shape.claimantRole.optional(),
+    claimantMode: listWarrantyClaimsBaseSchema.shape.claimantMode.optional(),
+    claimantCustomerId: z.string().uuid().optional(),
     status: listWarrantyClaimsBaseSchema.shape.status.optional(),
     claimType: listWarrantyClaimsBaseSchema.shape.claimType.optional(),
     quickFilter: listWarrantyClaimsBaseSchema.shape.quickFilter.optional(),
@@ -1189,11 +1487,17 @@ export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
     const conditions = [eq(warrantyClaims.organizationId, ctx.organizationId)];
     if (data.warrantyId) conditions.push(eq(warrantyClaims.warrantyId, data.warrantyId));
     if (data.customerId) conditions.push(eq(warrantyClaims.customerId, data.customerId));
+    if (data.claimantRole) conditions.push(eq(warrantyClaims.claimantRole, data.claimantRole));
+    if (data.claimantCustomerId) {
+      conditions.push(eq(warrantyClaims.claimantCustomerId, data.claimantCustomerId));
+    }
     if (data.status) conditions.push(eq(warrantyClaims.status, data.status));
     if (data.claimType) conditions.push(eq(warrantyClaims.claimType, data.claimType));
     if (data.assignedUserId) conditions.push(eq(warrantyClaims.assignedUserId, data.assignedUserId));
     const quickFilterCondition = buildQuickFilterCondition(data.quickFilter);
     if (quickFilterCondition) conditions.push(quickFilterCondition);
+    const claimantModeCondition = buildClaimantModeCondition(data.claimantMode);
+    if (claimantModeCondition) conditions.push(claimantModeCondition);
 
     if (data.cursor) {
       const cursorPosition = decodeCursor(data.cursor);
@@ -1238,6 +1542,11 @@ export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
       .orderBy(orderDirection(warrantyClaims.createdAt), orderDirection(warrantyClaims.id))
       .limit(pageSize + 1);
 
+    const claimantCustomerMap = await loadCustomerMap(
+      ctx.organizationId,
+      results.map((row) => row.claim.claimantCustomerId)
+    );
+
     const response = buildStandardCursorResponse(
       results.map((r) => r.claim),
       pageSize
@@ -1246,7 +1555,15 @@ export const listWarrantyClaimsCursor = createServerFn({ method: 'GET' })
       ...row.claim,
       productId: row.product.id,
       warranty: row.warranty,
+      commercialCustomer: row.customer,
       customer: row.customer,
+      claimant: buildClaimantView({
+        claim: row.claim,
+        commercialCustomer: row.customer,
+        claimantCustomer: row.claim.claimantCustomerId
+          ? claimantCustomerMap.get(row.claim.claimantCustomerId) ?? null
+          : null,
+      }),
       product: row.product,
       assignedUser: row.assignedUser?.id ? row.assignedUser : null,
     }));
@@ -1273,6 +1590,14 @@ const _getWarrantyClaimCached = cache(async (claimId: string, organizationId: st
       customer: customers,
       product: products,
       policy: warrantyPolicies,
+      ownerRecord: {
+        id: warrantyOwnerRecords.id,
+        fullName: warrantyOwnerRecords.fullName,
+        email: warrantyOwnerRecords.email,
+        phone: warrantyOwnerRecords.phone,
+        address: warrantyOwnerRecords.address,
+        notes: warrantyOwnerRecords.notes,
+      },
       assignedUser: {
         id: users.id,
         name: users.name,
@@ -1285,6 +1610,7 @@ const _getWarrantyClaimCached = cache(async (claimId: string, organizationId: st
     .innerJoin(customers, eq(warrantyClaims.customerId, customers.id))
     .innerJoin(products, eq(warranties.productId, products.id))
     .innerJoin(warrantyPolicies, eq(warranties.warrantyPolicyId, warrantyPolicies.id))
+    .leftJoin(warrantyOwnerRecords, eq(warranties.ownerRecordId, warrantyOwnerRecords.id))
     .leftJoin(users, eq(warrantyClaims.assignedUserId, users.id))
     .leftJoin(slaTracking, eq(warrantyClaims.slaTrackingId, slaTracking.id))
     .where(
@@ -1296,6 +1622,13 @@ const _getWarrantyClaimCached = cache(async (claimId: string, organizationId: st
     .limit(1);
 
   if (!result) return null;
+
+  const claimantCustomerMap = await loadCustomerMap(organizationId, [
+    result.claim.claimantCustomerId,
+  ]);
+  const claimantCustomer = result.claim.claimantCustomerId
+    ? claimantCustomerMap.get(result.claim.claimantCustomerId) ?? null
+    : null;
 
   let approvedByUser = null;
   if (result.claim.approvedByUserId) {
@@ -1312,15 +1645,26 @@ const _getWarrantyClaimCached = cache(async (claimId: string, organizationId: st
     approvedByUser = approver ?? null;
   }
 
+  const serviceContext = await getServiceContextForWarranty(organizationId, result.warranty.id);
+
   return {
     ...result.claim,
     warranty: result.warranty,
+    commercialCustomer: result.customer,
     customer: result.customer,
+    claimant: buildClaimantView({
+      claim: result.claim,
+      commercialCustomer: result.customer,
+      claimantCustomer,
+    }),
+    ownerRecord: result.ownerRecord?.id ? result.ownerRecord : null,
     product: result.product,
     policy: result.policy,
     assignedUser: result.assignedUser?.id ? result.assignedUser : null,
     approvedByUser,
     slaTracking: result.sla,
+    serviceSystem: serviceContext.serviceSystem,
+    currentOwner: serviceContext.currentOwner,
   };
 });
 
@@ -1402,13 +1746,16 @@ export const assignClaim = createServerFn({ method: 'POST' })
         after: { assignedUserId: data.assignedUserId },
         fields: ['assignedUserId'],
       },
-      metadata: {
-        customerId: existingClaim.customerId,
-        claimId: claim.id,
-        claimNumber: claim.claimNumber,
-        warrantyId: claim.warrantyId,
-        assignedTo: data.assignedUserId ?? undefined,
-      },
+      metadata: buildClaimActivityMetadata({
+        claim: existingClaim,
+        commercialCustomer: { id: existingClaim.customerId, name: null },
+        extra: {
+          claimId: claim.id,
+          claimNumber: claim.claimNumber,
+          warrantyId: claim.warrantyId,
+          assignedTo: data.assignedUserId ?? undefined,
+        },
+      }),
     });
 
     return claim;

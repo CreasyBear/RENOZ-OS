@@ -29,6 +29,7 @@ import {
   useExtendWarranty,
   useUpdateWarrantyOptOut,
   useDeleteWarranty,
+  useTransferWarranty,
   type WarrantyClaimTypeValue,
 } from '@/hooks/warranty';
 import { useConfirmation } from '@/hooks';
@@ -49,6 +50,7 @@ import type {
   WarrantyDetailContainerProps,
 } from '@/lib/schemas/warranty';
 import { openCertificateWindow } from '@/lib/warranty';
+import { TransferWarrantyDialog } from '../dialogs/transfer-warranty-dialog';
 import { WarrantyDetailView } from '../views/warranty-detail-view';
 
 export type { WarrantyDetailContainerRenderProps, WarrantyDetailContainerProps };
@@ -100,6 +102,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   } = useWarrantyExtensions(warrantyId);
 
   const extendMutation = useExtendWarranty();
+  const transferWarrantyMutation = useTransferWarranty();
 
   const { data: certificateStatus, isLoading: certificateLoading } = useWarrantyCertificate(warrantyId);
   const generateCertificateMutation = useGenerateWarrantyCertificate();
@@ -111,6 +114,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [pendingClaimAction, setPendingClaimAction] = useState<{
     claimId: string;
     action: 'review' | 'open' | 'resolve';
@@ -137,6 +141,16 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   } = useUnifiedActivities({
     entityType: 'warranty',
     entityId: warrantyId,
+  });
+
+  const {
+    activities: systemActivities,
+    isLoading: systemActivitiesLoading,
+    error: systemActivitiesError,
+  } = useUnifiedActivities({
+    entityType: 'service_system',
+    entityId: warranty?.serviceSystem?.id ?? '',
+    enabled: !!warranty?.serviceSystem?.id,
   });
 
   const handleOptOutToggle = (checked: boolean) => {
@@ -257,6 +271,10 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     warrantyId: string;
     claimType: WarrantyClaimTypeValue;
     description: string;
+    claimantRole?: import('@/lib/schemas/warranty').WarrantyClaimantRoleValue;
+    claimantCustomerId?: string;
+    claimantSnapshot?: import('@/lib/schemas/warranty').WarrantyClaimantSnapshot;
+    channelBypassReason?: string;
     cycleCountAtClaim?: number;
     notes?: string;
   }) => {
@@ -292,6 +310,15 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   }) => {
     await extendMutation.mutateAsync(payload);
     await refetchExtensions();
+  };
+
+  const handleTransferWarranty = async (payload: {
+    id: string;
+    newOwner: import('@/lib/schemas/service').ServiceOwnerInput;
+    reason: string;
+  }) => {
+    await transferWarrantyMutation.mutateAsync(payload);
+    await refetchWarranty();
   };
 
   const handleClaimRowClick = useCallback(
@@ -461,6 +488,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
           }
         }}
         onExtendDialogOpenChange={(open) => setExtendDialogOpen(open)}
+        onOpenTransferOwnership={() => setTransferDialogOpen(true)}
         onRetryExtensions={() => refetchExtensions()}
         onClaimsSuccess={() => refetchClaims()}
         onExtensionsSuccess={() => refetchExtensions()}
@@ -475,6 +503,9 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         activities={activities ?? []}
         activitiesLoading={activitiesLoading}
         activitiesError={activitiesError}
+        systemActivities={systemActivities ?? []}
+        systemActivitiesLoading={systemActivitiesLoading}
+        systemActivitiesError={systemActivitiesError}
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onLogActivity}
         onDelete={handleDelete}
@@ -483,6 +514,20 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         onRegenerateCertificate={handleRegenerateCertificate}
         isCertificateGenerating={generateCertificateMutation.isPending}
         isCertificateRegenerating={regenerateCertificateMutation.isPending}
+        isTransferringOwnership={transferWarrantyMutation.isPending}
+      />
+
+      <TransferWarrantyDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        warranty={{
+          id: warranty.id,
+          warrantyNumber: warranty.warrantyNumber,
+          productName: warranty.productName ?? undefined,
+          customerName: warranty.customerName ?? undefined,
+        }}
+        onSubmit={handleTransferWarranty}
+        isSubmitting={transferWarrantyMutation.isPending}
       />
 
       {/* Activity Logger Dialog */}

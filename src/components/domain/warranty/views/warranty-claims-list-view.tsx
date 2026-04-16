@@ -50,38 +50,26 @@ import {
   formatClaimDate,
   formatClaimCost,
 } from '@/lib/warranty/claims-utils';
-import type { WarrantyClaimStatusValue, WarrantyClaimTypeValue } from '@/hooks/warranty';
 import {
   isWarrantyClaimStatusValue,
+  isWarrantyClaimantRoleValue,
   isWarrantyClaimTypeValue,
 } from '@/lib/schemas/warranty';
 import type {
   WarrantyClaimListItem,
   WarrantyClaimsListViewProps,
 } from '@/lib/schemas/warranty';
+import {
+  WARRANTY_CLAIM_STATUS_OPTIONS,
+  WARRANTY_CLAIM_TYPE_OPTIONS,
+  WARRANTY_CLAIMANT_MODE_OPTIONS,
+  WARRANTY_CLAIMANT_ROLE_LABELS,
+  WARRANTY_CLAIMANT_ROLE_OPTIONS,
+  WARRANTY_CLAIM_QUICK_FILTER_OPTIONS,
+} from '../warranty-claim-options';
 
 // Re-export for convenience
 export type { WarrantyClaimListItem, WarrantyClaimsListViewProps };
-
-// ============================================================================
-// OPTIONS
-// ============================================================================
-
-const STATUS_OPTIONS: { value: WarrantyClaimStatusValue; label: string }[] = [
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'under_review', label: 'Under Review' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'denied', label: 'Denied' },
-  { value: 'resolved', label: 'Resolved' },
-];
-
-const TYPE_OPTIONS: { value: WarrantyClaimTypeValue; label: string }[] = [
-  { value: 'cell_degradation', label: 'Cell Degradation' },
-  { value: 'bms_fault', label: 'BMS Fault' },
-  { value: 'inverter_failure', label: 'Inverter Failure' },
-  { value: 'installation_defect', label: 'Installation Defect' },
-  { value: 'other', label: 'Other' },
-];
 
 // ============================================================================
 // MEMOIZED ROW (TABLE-STANDARDS §1)
@@ -106,10 +94,23 @@ const ClaimTableRow = memo(function ClaimTableRow({
       <TableCell className="font-mono text-sm">{claim.claimNumber}</TableCell>
       <TableCell>
         <div className="flex flex-col">
-          <span className="font-medium">{claim.customer?.name ?? 'Unknown'}</span>
+          <span className="font-medium">
+            {claim.commercialCustomer?.name ?? claim.customer?.name ?? 'Unknown'}
+          </span>
           <span className="text-muted-foreground hidden text-xs sm:inline">
             {claim.warranty?.warrantyNumber ?? '—'}
           </span>
+          {claim.claimant?.displayName &&
+            (claim.claimant.role !== 'channel_partner' ||
+              claim.claimant.displayName !==
+                (claim.commercialCustomer?.name ?? claim.customer?.name ?? null)) && (
+              <span className="text-muted-foreground mt-1 inline-flex items-center gap-2 text-xs">
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                  {WARRANTY_CLAIMANT_ROLE_LABELS[claim.claimant.role] ?? claim.claimant.role}
+                </Badge>
+                Claimant: {claim.claimant.displayName}
+              </span>
+            )}
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
@@ -151,6 +152,10 @@ const ClaimTableRow = memo(function ClaimTableRow({
 // ============================================================================
 
 export function WarrantyClaimsListView({
+  commercialCustomerOptions,
+  customerId,
+  claimantRole,
+  claimantMode,
   status,
   type,
   quickFilter,
@@ -158,6 +163,9 @@ export function WarrantyClaimsListView({
   pagination,
   isLoading,
   error,
+  onCommercialCustomerChange,
+  onClaimantRoleChange,
+  onClaimantModeChange,
   onStatusChange,
   onTypeChange,
   onQuickFilterChange,
@@ -167,7 +175,16 @@ export function WarrantyClaimsListView({
   onRetry,
 }: WarrantyClaimsListViewProps) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const hasActiveFilters = Boolean(status || type || quickFilter);
+  const hasActiveFilters = Boolean(
+    customerId || claimantRole || claimantMode || status || type || quickFilter
+  );
+  const activeFilterCount =
+    (customerId ? 1 : 0) +
+    (claimantRole ? 1 : 0) +
+    (claimantMode ? 1 : 0) +
+    (status ? 1 : 0) +
+    (type ? 1 : 0) +
+    (quickFilter ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -178,6 +195,75 @@ export function WarrantyClaimsListView({
               <Filter className="text-muted-foreground h-4 w-4" />
               <span className="text-sm font-medium">Filters:</span>
             </div>
+
+            <Select
+              value={customerId ?? 'all'}
+              onValueChange={(value) =>
+                onCommercialCustomerChange(value === 'all' ? undefined : value)
+              }
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="All Purchased Via" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Purchased Via</SelectItem>
+                {commercialCustomerOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={claimantMode ?? 'all'}
+              onValueChange={(value) =>
+                onClaimantModeChange(
+                  value === 'all'
+                    ? undefined
+                    : value === 'channel_partner' || value === 'direct'
+                      ? value
+                      : undefined
+                )
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Claim Paths" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Claim Paths</SelectItem>
+                {WARRANTY_CLAIMANT_MODE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={claimantRole ?? 'all'}
+              onValueChange={(value) =>
+                onClaimantRoleChange(
+                  value === 'all'
+                    ? undefined
+                    : isWarrantyClaimantRoleValue(value)
+                      ? value
+                      : undefined
+                )
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Claimants" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Claimants</SelectItem>
+                {WARRANTY_CLAIMANT_ROLE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <Select
               value={status ?? 'all'}
@@ -192,7 +278,7 @@ export function WarrantyClaimsListView({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {STATUS_OPTIONS.map((option) => (
+                {WARRANTY_CLAIM_STATUS_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -213,7 +299,7 @@ export function WarrantyClaimsListView({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {TYPE_OPTIONS.map((option) => (
+                {WARRANTY_CLAIM_TYPE_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -234,38 +320,19 @@ export function WarrantyClaimsListView({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={quickFilter === 'submitted' ? 'default' : 'outline'}
-              onClick={() =>
-                onQuickFilterChange(quickFilter === 'submitted' ? undefined : 'submitted')
-              }
-            >
-              Submitted
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={quickFilter === 'at_risk_sla' ? 'default' : 'outline'}
-              onClick={() =>
-                onQuickFilterChange(quickFilter === 'at_risk_sla' ? undefined : 'at_risk_sla')
-              }
-            >
-              At Risk SLA
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={quickFilter === 'awaiting_decision' ? 'default' : 'outline'}
-              onClick={() =>
-                onQuickFilterChange(
-                  quickFilter === 'awaiting_decision' ? undefined : 'awaiting_decision'
-                )
-              }
-            >
-              Awaiting Decision
-            </Button>
+            {WARRANTY_CLAIM_QUICK_FILTER_OPTIONS.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                size="sm"
+                variant={quickFilter === option.value ? 'default' : 'outline'}
+                onClick={() =>
+                  onQuickFilterChange(quickFilter === option.value ? undefined : option.value)
+                }
+              >
+                {option.label}
+              </Button>
+            ))}
           </div>
 
           <div className="flex items-center justify-between md:hidden">
@@ -276,7 +343,7 @@ export function WarrantyClaimsListView({
                   Filters
                   {hasActiveFilters && (
                     <Badge variant="secondary" className="ml-2">
-                      {(status ? 1 : 0) + (type ? 1 : 0) + (quickFilter ? 1 : 0)}
+                      {activeFilterCount}
                     </Badge>
                   )}
                 </Button>
@@ -284,9 +351,89 @@ export function WarrantyClaimsListView({
               <SheetContent side="bottom" className="h-[50vh]">
                 <SheetHeader>
                   <SheetTitle>Filter Claims</SheetTitle>
-                  <SheetDescription>Filter warranty claims by status and type</SheetDescription>
+                  <SheetDescription>
+                    Filter warranty claims by commercial channel, claimant path, and status
+                  </SheetDescription>
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Purchased Via</label>
+                    <Select
+                      value={customerId ?? 'all'}
+                      onValueChange={(value) =>
+                        onCommercialCustomerChange(value === 'all' ? undefined : value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Purchased Via" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Purchased Via</SelectItem>
+                        {commercialCustomerOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Claim Path</label>
+                    <Select
+                      value={claimantMode ?? 'all'}
+                      onValueChange={(value) =>
+                        onClaimantModeChange(
+                          value === 'all'
+                            ? undefined
+                            : value === 'channel_partner' || value === 'direct'
+                              ? value
+                              : undefined
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Claim Paths" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Claim Paths</SelectItem>
+                        {WARRANTY_CLAIMANT_MODE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Claimant Role</label>
+                    <Select
+                      value={claimantRole ?? 'all'}
+                      onValueChange={(value) =>
+                        onClaimantRoleChange(
+                          value === 'all'
+                            ? undefined
+                            : isWarrantyClaimantRoleValue(value)
+                              ? value
+                              : undefined
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Claimants" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Claimants</SelectItem>
+                        {WARRANTY_CLAIMANT_ROLE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Status</label>
                     <Select
@@ -306,7 +453,7 @@ export function WarrantyClaimsListView({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        {STATUS_OPTIONS.map((option) => (
+                        {WARRANTY_CLAIM_STATUS_OPTIONS.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -334,7 +481,7 @@ export function WarrantyClaimsListView({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Types</SelectItem>
-                        {TYPE_OPTIONS.map((option) => (
+                        {WARRANTY_CLAIM_TYPE_OPTIONS.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -403,7 +550,7 @@ export function WarrantyClaimsListView({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[140px]">Claim #</TableHead>
-                    <TableHead>Customer</TableHead>
+                    <TableHead>Purchased Via</TableHead>
                     <TableHead className="hidden md:table-cell">Product</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>

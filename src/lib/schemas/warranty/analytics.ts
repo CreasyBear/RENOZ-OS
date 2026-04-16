@@ -297,6 +297,9 @@ export interface ExportWarrantyAnalyticsResult {
 
 export interface WarrantyAnalyticsFilterOptions {
   products: Array<{ id: string; name: string }>;
+  /** Preferred name for the commercial-account filter surface. */
+  commercialCustomers: Array<{ id: string; name: string }>;
+  /** Legacy compatibility alias. Prefer commercialCustomers in new UI. */
   customers: Array<{ id: string; name: string }>;
   dateRanges: Array<{ value: string; label: string }>;
 }

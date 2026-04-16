@@ -34,6 +34,12 @@ export interface OrderComboboxProps {
   disabled?: boolean;
   /** Additional class names */
   className?: string;
+  /** Optional id for form-field integration */
+  id?: string;
+  /** Optional aria-invalid for form-field integration */
+  'aria-invalid'?: boolean;
+  /** Optional aria-describedby for form-field integration */
+  'aria-describedby'?: string;
 }
 
 /**
@@ -46,6 +52,9 @@ export function OrderCombobox({
   placeholder = 'Search orders by number...',
   disabled,
   className,
+  id,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: OrderComboboxProps) {
   const listOrdersFn = useServerFn(listOrders);
 
@@ -93,6 +102,9 @@ export function OrderCombobox({
       emptyMessage="No orders found."
       disabled={disabled}
       className={className}
+      id={id}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
     />
   );
 }

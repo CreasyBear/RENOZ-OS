@@ -18,7 +18,10 @@ import {
   transferWarranty,
 } from '@/server/functions/warranty';
 import { queryKeys } from '@/lib/query-keys';
-import type { WarrantyFilters } from '@/lib/schemas/warranty/warranties';
+import type {
+  TransferWarrantyInput,
+  WarrantyFilters,
+} from '@/lib/schemas/warranty/warranties';
 
 export interface UseWarrantiesOptions extends Partial<WarrantyFilters> {
   enabled?: boolean;
@@ -149,14 +152,14 @@ export function useVoidWarranty() {
 }
 
 /**
- * Transfer a warranty to a new customer
+ * Transfer beneficial ownership for a warranty's linked service system.
  */
 export function useTransferWarranty() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, newCustomerId, reason }: { id: string; newCustomerId: string; reason?: string }) =>
-      transferWarranty({ data: { id, newCustomerId, reason } }),
+    mutationFn: (input: TransferWarrantyInput) =>
+      transferWarranty({ data: input }),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(variables.id) });
@@ -164,13 +167,13 @@ export function useTransferWarranty() {
       if (result.previousCustomerId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(result.previousCustomerId) });
       }
-      if (result.newCustomerId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(result.newCustomerId) });
+      if (result.serviceSystemId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.serviceSystems.detail(result.serviceSystemId) });
       }
-      toast.success('Warranty transferred successfully');
+      toast.success('Warranty ownership transferred successfully');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to transfer warranty');
+      toast.error(error instanceof Error ? error.message : 'Failed to transfer warranty ownership');
     },
   });
 }

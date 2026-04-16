@@ -186,6 +186,12 @@ export {
 } from "./order-combobox"
 
 export {
+  WarrantyCombobox,
+  type WarrantyComboboxProps,
+  type WarrantySummary,
+} from "./warranty-combobox"
+
+export {
   AddressPicker,
   type AddressPickerProps,
   type AddressOption,

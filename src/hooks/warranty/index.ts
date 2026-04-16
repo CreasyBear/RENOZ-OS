@@ -1,7 +1,8 @@
 /**
  * Warranty Hooks
  *
- * Hooks for warranty management, policies, claims, analytics, and certificates.
+ * Hooks for warranty management, entitlements, policies, claims, analytics,
+ * certificates, and extensions.
  */
 
 // --- Core warranty hooks ---
@@ -14,6 +15,13 @@ export {
   useVoidWarranty,
   useTransferWarranty,
 } from './core/use-warranties';
+
+// --- Entitlement hooks ---
+export {
+  useWarrantyEntitlements,
+  useWarrantyEntitlement,
+  useActivateWarrantyFromEntitlement,
+} from './entitlements/use-warranty-entitlements';
 export {
   useExpiringWarranties,
   useExpiringWarrantiesReport,
@@ -95,11 +103,23 @@ export {
 
 // --- Detail view header actions ---
 export { useWarrantyHeaderActions } from './use-warranty-header-actions';
-export type { WarrantyHeaderActionsInput, WarrantyHeaderActionsResult } from './use-warranty-header-actions';
+export type {
+  WarrantyHeaderActionsInput,
+  WarrantyHeaderActionsResult,
+} from './use-warranty-header-actions';
 
 // --- Re-export key types ---
 export type { WarrantyFilters, WarrantyStatus } from '@/lib/schemas/warranty/warranties';
 export type {
+  WarrantyEntitlementFilters,
+  WarrantyEntitlementStatus,
+  WarrantyEntitlementListItem,
+  WarrantyEntitlementDetail,
+  ActivateWarrantyFromEntitlementInput,
+} from '@/lib/schemas/warranty/entitlements';
+export type {
+  WarrantyClaimantModeValue,
+  WarrantyClaimantRoleValue,
   WarrantyClaimStatusValue,
   WarrantyClaimTypeValue,
   WarrantyClaimResolutionTypeValue,

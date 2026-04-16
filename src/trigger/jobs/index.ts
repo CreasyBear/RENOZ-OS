@@ -96,6 +96,13 @@ export {
   processScheduledEmailsJob,
 } from "./process-scheduled-emails";
 
+export {
+  sendWarrantyRegistrationEmail,
+  sendWarrantyExpiryReminder,
+  sendWarrantyClaimSubmittedNotification,
+  sendWarrantyClaimResolvedNotification,
+} from "./warranty-notifications";
+
 // ============================================================================
 // CAMPAIGN EMAIL TASKS
 // ============================================================================

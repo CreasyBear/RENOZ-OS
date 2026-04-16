@@ -19,6 +19,8 @@ import {
   type DenyClaimInput,
   type ResolveClaimInput,
   type AssignClaimInput,
+  type WarrantyClaimantModeValue,
+  type WarrantyClaimantRoleValue,
   type WarrantyClaimStatusValue,
   type WarrantyClaimTypeValue,
   type WarrantyClaimResolutionTypeValue,
@@ -62,7 +64,13 @@ const DETAIL_STALE_TIME = 60 * 1000; // 60 seconds for details
 // TYPE EXPORTS
 // ============================================================================
 
-export type { WarrantyClaimStatusValue, WarrantyClaimTypeValue, WarrantyClaimResolutionTypeValue };
+export type {
+  WarrantyClaimantModeValue,
+  WarrantyClaimantRoleValue,
+  WarrantyClaimStatusValue,
+  WarrantyClaimTypeValue,
+  WarrantyClaimResolutionTypeValue,
+};
 
 // ============================================================================
 // CLAIM STATUS HELPERS
@@ -96,7 +104,7 @@ function showClaimMutationOutcome(
   }
   if (result?.notificationQueued === false) {
     toast.warning(
-      `${claimLabel} ${operation}, but customer notification email failed. Operation succeeded.`
+      `${claimLabel} ${operation}, but claimant notification delivery did not complete. Operation succeeded.`
     );
     return;
   }
@@ -191,11 +199,12 @@ export function useWarrantyClaimSummary(warrantyId: string | undefined) {
 }
 
 /**
- * Hook for fetching claims for a specific customer.
+ * Hook for fetching claims for a specific commercial customer.
+ * Compatibility note: this remains commercial-account based in phase 2C.
  */
 export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.warrantyClaims.byCustomer(customerId ?? ''),
+    queryKey: queryKeys.warrantyClaims.byCommercialCustomer(customerId ?? ''),
     queryFn: async () => {
       try {
         const result = await listWarrantyClaims({

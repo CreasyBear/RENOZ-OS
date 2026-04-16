@@ -44,7 +44,10 @@ import { StatusBadge } from '@/components/shared';
 import { AlertCircle, FileWarning, Shield } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  warrantyClaimTypeSchema,
+  warrantyClaimantRoleSchema,
   isWarrantyClaimTypeValue,
+  type WarrantyClaimantRoleValue,
   type WarrantyClaimTypeValue,
 } from '@/lib/schemas/warranty';
 import { claimTypeConfig } from '@/lib/warranty/claims-utils';
@@ -53,6 +56,10 @@ import {
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
 import { FormFieldDisplayProvider } from '@/components/shared/forms';
+import {
+  WARRANTY_CLAIM_TYPE_OPTIONS,
+  WARRANTY_CLAIMANT_ROLE_OPTIONS,
+} from '../warranty-claim-options';
 
 // ============================================================================
 // TYPES
@@ -63,10 +70,12 @@ const MAX_DESCRIPTION_LENGTH = 5000;
 
 const claimFormSchema = z
   .object({
-    claimType: z.union([
-      z.enum(['cell_degradation', 'bms_fault', 'inverter_failure', 'installation_defect', 'other']),
-      z.literal(''),
-    ]),
+    claimType: z.union([warrantyClaimTypeSchema, z.literal('')]),
+    claimantRole: warrantyClaimantRoleSchema,
+    claimantFullName: z.string().max(255).optional(),
+    claimantEmail: z.string().email('Enter a valid email').or(z.literal('')).optional(),
+    claimantPhone: z.string().max(50).optional(),
+    channelBypassReason: z.string().max(2000).optional(),
     description: z
       .string()
       .min(MIN_DESCRIPTION_LENGTH, `Minimum ${MIN_DESCRIPTION_LENGTH} characters required`)
@@ -77,6 +86,23 @@ const claimFormSchema = z
   .refine((data) => data.claimType !== '', {
     message: 'Claim type is required',
     path: ['claimType'],
+  })
+  .superRefine((data, ctx) => {
+    if (data.claimantRole !== 'channel_partner' && !data.channelBypassReason?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['channelBypassReason'],
+        message: 'A channel bypass reason is required for direct claims',
+      });
+    }
+
+    if (data.claimantRole !== 'channel_partner' && !data.claimantFullName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['claimantFullName'],
+        message: 'Claimant name is required for direct claims',
+      });
+    }
   });
 
 type ClaimFormValues = z.infer<typeof claimFormSchema>;
@@ -91,7 +117,13 @@ export interface WarrantyClaimFormDialogProps {
     id: string;
     warrantyNumber: string;
     productName?: string;
-    customerName?: string;
+    commercialCustomerId?: string;
+    commercialCustomerName?: string;
+    ownerRecord?: {
+      fullName: string;
+      email?: string | null;
+      phone?: string | null;
+    } | null;
     status: string;
     policyType?: string;
     currentCycleCount?: number | null;
@@ -104,6 +136,14 @@ export interface WarrantyClaimFormDialogProps {
     warrantyId: string;
     claimType: WarrantyClaimTypeValue;
     description: string;
+    claimantRole?: WarrantyClaimantRoleValue;
+    claimantCustomerId?: string;
+    claimantSnapshot?: {
+      fullName: string;
+      email?: string;
+      phone?: string;
+    };
+    channelBypassReason?: string;
     cycleCountAtClaim?: number;
     notes?: string;
   }) => Promise<void>;
@@ -114,14 +154,6 @@ export interface WarrantyClaimFormDialogProps {
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-const CLAIM_TYPES: { value: WarrantyClaimTypeValue; label: string; description: string }[] = [
-  { value: 'cell_degradation', label: 'Cell Degradation', description: 'Battery cell performance decline below expected levels' },
-  { value: 'bms_fault', label: 'BMS Fault', description: 'Battery Management System malfunction or errors' },
-  { value: 'inverter_failure', label: 'Inverter Failure', description: 'Inverter stopped working or producing errors' },
-  { value: 'installation_defect', label: 'Installation Defect', description: 'Issues related to installation workmanship' },
-  { value: 'other', label: 'Other', description: 'Other warranty-covered issues' },
-];
 
 // ============================================================================
 // COMPONENT
@@ -141,11 +173,24 @@ export function WarrantyClaimFormDialog({
   const canFileClaim = warranty.status === 'active' || warranty.status === 'expiring_soon';
 
   const defaultCycleCount = warranty.currentCycleCount?.toString() ?? '';
+  const defaultOwnerSnapshot = React.useMemo(
+    () => ({
+      fullName: warranty.ownerRecord?.fullName ?? '',
+      email: warranty.ownerRecord?.email ?? '',
+      phone: warranty.ownerRecord?.phone ?? '',
+    }),
+    [warranty.ownerRecord]
+  );
 
   const form = useTanStackForm<ClaimFormValues>({
     schema: claimFormSchema,
     defaultValues: {
       claimType: '',
+      claimantRole: 'channel_partner',
+      claimantFullName: '',
+      claimantEmail: '',
+      claimantPhone: '',
+      channelBypassReason: '',
       description: '',
       cycleCount: defaultCycleCount,
       notes: '',
@@ -159,6 +204,23 @@ export function WarrantyClaimFormDialog({
         warrantyId: warranty.id,
         claimType,
         description: values.description.trim(),
+        claimantRole: values.claimantRole,
+        claimantCustomerId:
+          values.claimantRole === 'channel_partner'
+            ? warranty.commercialCustomerId
+            : undefined,
+        claimantSnapshot:
+          values.claimantRole === 'channel_partner'
+            ? undefined
+            : {
+                fullName: values.claimantFullName?.trim() ?? '',
+                email: values.claimantEmail?.trim() || undefined,
+                phone: values.claimantPhone?.trim() || undefined,
+              },
+        channelBypassReason:
+          values.claimantRole === 'channel_partner'
+            ? undefined
+            : values.channelBypassReason?.trim() || undefined,
         cycleCountAtClaim: values.cycleCount ? parseInt(values.cycleCount, 10) : undefined,
         notes: values.notes?.trim() || undefined,
       });
@@ -172,6 +234,11 @@ export function WarrantyClaimFormDialog({
     if (open) {
       form.reset({
         claimType: '',
+        claimantRole: 'channel_partner',
+        claimantFullName: '',
+        claimantEmail: '',
+        claimantPhone: '',
+        channelBypassReason: '',
         description: '',
         cycleCount: defaultCycleCount,
         notes: '',
@@ -228,8 +295,15 @@ export function WarrantyClaimFormDialog({
                     {warranty.productName && (
                       <p className="text-muted-foreground text-sm">{warranty.productName}</p>
                     )}
-                    {warranty.customerName && (
-                      <p className="text-muted-foreground text-sm">{warranty.customerName}</p>
+                    {warranty.commercialCustomerName && (
+                      <p className="text-muted-foreground text-sm">
+                        Purchased via {warranty.commercialCustomerName}
+                      </p>
+                    )}
+                    {warranty.ownerRecord?.fullName && (
+                      <p className="text-muted-foreground text-sm">
+                        Owner of record: {warranty.ownerRecord.fullName}
+                      </p>
                     )}
                     <div className="mt-2 flex items-center gap-2">
                       <StatusBadge
@@ -248,6 +322,160 @@ export function WarrantyClaimFormDialog({
               </Card>
 
               {/* Claim Type */}
+              <form.Field name="claimantRole">
+                {(field) => (
+                  <div className="space-y-2">
+                    <Label htmlFor="claimantRole">
+                      Who Is Making This Claim? <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(value) => {
+                        const nextRole = value as WarrantyClaimantRoleValue;
+                        field.handleChange(nextRole);
+
+                        if (nextRole === 'owner') {
+                          form.setFieldValue('claimantFullName', defaultOwnerSnapshot.fullName);
+                          form.setFieldValue('claimantEmail', defaultOwnerSnapshot.email);
+                          form.setFieldValue('claimantPhone', defaultOwnerSnapshot.phone);
+                        } else if (nextRole === 'channel_partner') {
+                          form.setFieldValue('claimantFullName', '');
+                          form.setFieldValue('claimantEmail', '');
+                          form.setFieldValue('claimantPhone', '');
+                          form.setFieldValue('channelBypassReason', '');
+                        } else if (field.state.value === 'channel_partner') {
+                          form.setFieldValue('claimantFullName', '');
+                          form.setFieldValue('claimantEmail', '');
+                          form.setFieldValue('claimantPhone', '');
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="claimantRole" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WARRANTY_CLAIMANT_ROLE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex flex-col items-start">
+                              <span>{option.label}</span>
+                              <span className="text-muted-foreground text-xs">
+                                {option.description}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {field.state.value === 'channel_partner' ? (
+                      <p className="text-muted-foreground text-xs">
+                        Claim will default to the commercial customer channel:
+                        {' '}
+                        {warranty.commercialCustomerName ?? 'Unknown customer'}.
+                      </p>
+                    ) : field.state.value === 'owner' && !warranty.ownerRecord ? (
+                      <p className="text-muted-foreground text-xs">
+                        No owner of record is saved on this warranty yet, so enter the direct
+                        claimant details manually.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground text-xs">
+                        Direct claims are allowed, but you need to capture who claimed and why the
+                        channel was bypassed.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </form.Field>
+
+              {form.state.values.claimantRole !== 'channel_partner' && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <form.Field name="claimantFullName">
+                      {(field) => (
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="claimantFullName">
+                            Claimant Name <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            id="claimantFullName"
+                            value={field.state.value ?? ''}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            onBlur={field.handleBlur}
+                            placeholder="Enter the claimant’s full name"
+                          />
+                          {field.state.meta.errors.length > 0 && (
+                            <p className="text-sm text-destructive">
+                              {String(field.state.meta.errors[0])}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </form.Field>
+
+                    <form.Field name="claimantEmail">
+                      {(field) => (
+                        <div className="space-y-2">
+                          <Label htmlFor="claimantEmail">Claimant Email</Label>
+                          <Input
+                            id="claimantEmail"
+                            type="email"
+                            value={field.state.value ?? ''}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            onBlur={field.handleBlur}
+                            placeholder="name@example.com"
+                          />
+                          {field.state.meta.errors.length > 0 && (
+                            <p className="text-sm text-destructive">
+                              {String(field.state.meta.errors[0])}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </form.Field>
+
+                    <form.Field name="claimantPhone">
+                      {(field) => (
+                        <div className="space-y-2">
+                          <Label htmlFor="claimantPhone">Claimant Phone</Label>
+                          <Input
+                            id="claimantPhone"
+                            value={field.state.value ?? ''}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            onBlur={field.handleBlur}
+                            placeholder="Phone number"
+                          />
+                        </div>
+                      )}
+                    </form.Field>
+                  </div>
+
+                  <form.Field name="channelBypassReason">
+                    {(field) => (
+                      <div className="space-y-2">
+                        <Label htmlFor="channelBypassReason">
+                          Channel Bypass Reason <span className="text-destructive">*</span>
+                        </Label>
+                        <Textarea
+                          id="channelBypassReason"
+                          value={field.state.value ?? ''}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          onBlur={field.handleBlur}
+                          placeholder="Explain why the retailer / installer is not the claimant in this case..."
+                          maxLength={2000}
+                          rows={2}
+                        />
+                        {field.state.meta.errors.length > 0 && (
+                          <p className="text-sm text-destructive">
+                            {String(field.state.meta.errors[0])}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </form.Field>
+                </>
+              )}
+
+              {/* Claim Type */}
               <form.Field name="claimType">
                 {(field) => (
                   <div className="space-y-2">
@@ -264,7 +492,7 @@ export function WarrantyClaimFormDialog({
                         <SelectValue placeholder="Select the type of issue" />
                       </SelectTrigger>
                       <SelectContent>
-                        {CLAIM_TYPES.map((type) => (
+                        {WARRANTY_CLAIM_TYPE_OPTIONS.map((type) => (
                           <SelectItem key={type.value} value={type.value}>
                             <div className="flex flex-col items-start">
                               <span>{type.label}</span>
