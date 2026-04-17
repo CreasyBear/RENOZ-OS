@@ -18,6 +18,7 @@ import {
   transferWarranty,
 } from '@/server/functions/warranty';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   TransferWarrantyInput,
   WarrantyFilters,
@@ -47,9 +48,14 @@ export function useWarranties(options: UseWarrantiesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.warranties.list(queryFilters),
     queryFn: async () => {
-      const result = await listWarranties({ data: queryFilters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listWarranties({ data: queryFilters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranties are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
   });
@@ -60,9 +66,14 @@ export function useWarrantyStatusCounts() {
   return useQuery({
     queryKey: queryKeys.warranties.statusCounts(),
     queryFn: async () => {
-      const result = await getWarrantyStatusCounts();
-      if (result == null) throw new Error('Warranty status counts returned no data');
-      return result;
+      try {
+        return await getWarrantyStatusCounts();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty status counts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000,
   });
@@ -77,11 +88,17 @@ export function useWarranty({ id, enabled = true }: UseWarrantyOptions) {
   return useQuery({
     queryKey: queryKeys.warranties.detail(id),
     queryFn: async () => {
-      const result = await getWarranty({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWarranty({
+          data: { id }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Warranty details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,

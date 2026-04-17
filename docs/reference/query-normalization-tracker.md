@@ -84,10 +84,19 @@ Execution artifact for the read-path error handling program. This replaces the o
 | `src/components/domain/customers/tabs/customer-orders-tab.tsx` | `customer.orderSummary` consumer | n/a | summary unavailable is distinct from no order history | `headline` | orders tab shows unavailable alert and Orders-module escape hatch | `tests/unit/customers/query-normalization-wave2.test.tsx` | `verified` | Fixes silent degradation on orders tab. |
 | `src/hooks/orders/use-orders.ts` | `listOrders`, `getOrder`, `getOrderStats`, `getFulfillmentDashboardSummary` | mixed: `always-shaped`, `detail-not-found` | list/stats/fulfillment reads return shaped success; missing detail is `not-found` | `headline` | list/stats degrade visibly on thrown failure; order detail preserves not-found semantics | `tests/unit/orders/query-normalization-wave2.test.tsx` | `verified` | Removed order-list synthetic fallbacks and fulfillment null-sentinel throw; classified reads from server truth. |
 | `src/hooks/orders/use-order-detail.ts` | `getOrderWithCustomer` | `detail-not-found` | missing order remains `not-found`; successful detail stays shaped | `headline` | detail pages preserve not-found vs unavailable distinction | `tests/unit/orders/query-normalization-wave2.test.tsx` | `verified` | Order-with-customer hook now uses read-path policy instead of generic normalization. |
-| `src/components/domain/orders/fulfillment/fulfillment-dashboard-container.tsx` | `useFulfillmentDashboardSummary` consumer | n/a | summary unavailable already distinct from empty queue | `headline` | visible banner plus hidden headline cards | `tests/unit/orders/query-normalization-wave2.test.ts` | `deferred` | Existing consumer policy already aligned; hook-classification work stays in orders wave. |
-| `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx` | fulfillment presenter | n/a | headline summary already withheld on unavailable state | `headline` | explicit unavailable subtitles and warning banner | `tests/unit/orders/query-normalization-wave2.test.ts` | `deferred` | No code change needed in this slice. |
+| `src/components/domain/orders/fulfillment/fulfillment-dashboard-container.tsx` | `useFulfillmentDashboardSummary` consumer | n/a | summary unavailable already distinct from empty queue | `headline` | visible banner plus hidden headline cards | `tests/unit/orders/fulfillment-metrics.test.ts` | `verified` | Existing consumer policy was already aligned; Wave 2 order-hook normalization now feeds the same summary-state contract. |
+| `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx` | fulfillment presenter | n/a | headline summary already withheld on unavailable state | `headline` | explicit unavailable subtitles and warning banner | `tests/unit/orders/fulfillment-metrics.test.ts` | `verified` | Presenter behavior is enforced through `buildFulfillmentStats` and summary-state-driven metric hiding. |
 | `tests/unit/customers/query-normalization-wave2.test.tsx` | wave test | n/a | hook and consumer verification | n/a | n/a | self | `verified` | Covers always-shaped hook success/failure and unavailable tab rendering. |
 | `tests/unit/orders/query-normalization-wave2.test.tsx` | orders wave test | n/a | order hook verification | n/a | n/a | self | `verified` | Covers always-shaped order list/stats/fulfillment reads and detail not-found semantics. |
+| `tests/unit/orders/fulfillment-metrics.test.ts` | fulfillment consumer policy test | n/a | summary-state verification | n/a | n/a | self | `verified` | Confirms fulfillment headline metrics stay hidden when authoritative summary is loading or unavailable. |
+
+### Wave 3: Warranty + Inventory + Procurement
+
+| File | Backing server fn | Contract type | Semantic outcomes | Consumer criticality | Render policy | Test file | Status | Deferred reason / notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/hooks/warranty/core/use-warranties.ts` | `listWarranties`, `getWarrantyStatusCounts`, `getWarranty` | mixed: `always-shaped`, `detail-not-found` | list/count reads return empty/zero success; missing warranty detail is `not-found` | `headline` for detail/list, `secondary` for status counts | list/count surfaces degrade visibly on failure; detail preserves not-found semantics | `tests/unit/warranty/query-normalization-wave3.test.tsx` | `verified` | Removed raw null-sentinel throws and normalized from server truth. |
+| `src/hooks/warranty/core/use-expiring-warranties.ts` | `getExpiringWarranties`, `getExpiringWarrantiesReport`, `getExpiringWarrantiesFilterOptions` | `always-shaped` | empty expiring-warranty results and filter options are healthy success | `headline` for dashboard/report list, `secondary` for filter options | report and dashboard surfaces should show explicit unavailable states only on thrown failures | `tests/unit/warranty/query-normalization-wave3.test.tsx` | `verified` | First Wave 3 warranty bay; report/filter-option reads no longer use raw query guards. |
+| `tests/unit/warranty/query-normalization-wave3.test.tsx` | warranty wave test | n/a | hook contract verification | n/a | n/a | self | `verified` | Covers warranty list/count/detail plus expiring-report/filter-option semantics. |
 
 ## Backlog Inventory
 
@@ -100,8 +109,6 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 - `src/hooks/warranty/analytics/use-warranty-analytics.ts`
 - `src/hooks/warranty/certificates/use-warranty-certificates.ts`
 - `src/hooks/warranty/claims/use-warranty-claims.ts`
-- `src/hooks/warranty/core/use-expiring-warranties.ts`
-- `src/hooks/warranty/core/use-warranties.ts`
 - `src/hooks/warranty/extensions/use-warranty-extensions.ts`
 - `src/hooks/warranty/policies/use-warranty-policies.ts`
 - `src/hooks/inventory/use-alerts.ts`
