@@ -104,7 +104,13 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   const extendMutation = useExtendWarranty();
   const transferWarrantyMutation = useTransferWarranty();
 
-  const { data: certificateStatus, isLoading: certificateLoading } = useWarrantyCertificate(warrantyId);
+  const {
+    data: certificateStatus,
+    isLoading: certificateLoading,
+    isError: isCertificateStatusError,
+    error: certificateStatusQueryError,
+    refetch: refetchCertificateStatus,
+  } = useWarrantyCertificate(warrantyId);
   const generateCertificateMutation = useGenerateWarrantyCertificate();
   const regenerateCertificateMutation = useRegenerateWarrantyCertificate();
 
@@ -236,6 +242,10 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   };
 
   const handleRetryCertificate = async () => {
+    if (isCertificateStatusError) {
+      await refetchCertificateStatus();
+      return;
+    }
     if (lastCertificateAction === 'regenerate') {
       await handleRegenerateCertificate();
       return;
@@ -250,6 +260,12 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
       });
     }
   };
+
+  const certificateStatusErrorMessage = isCertificateStatusError
+    ? certificateStatusQueryError instanceof Error
+      ? certificateStatusQueryError.message
+      : 'Warranty certificate status is temporarily unavailable. Please refresh and try again.'
+    : null;
 
   // Must be before early returns (hooks rule)
   const { primaryAction, secondaryActions } = useWarrantyHeaderActions({
@@ -498,7 +514,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         onRequestInfoClaim={handleRequestInfoClaim}
         onExtendWarranty={handleExtendWarranty}
         onToggleOptOut={handleOptOutToggle}
-        certificateError={certificateError}
+        certificateError={certificateStatusErrorMessage ?? certificateError}
         onRetryCertificate={handleRetryCertificate}
         activities={activities ?? []}
         activitiesLoading={activitiesLoading}

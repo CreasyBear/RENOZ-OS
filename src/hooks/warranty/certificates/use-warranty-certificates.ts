@@ -12,6 +12,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   generateWarrantyCertificate,
   getWarrantyCertificate,
@@ -43,11 +44,17 @@ export function useWarrantyCertificate(warrantyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyCertificates.detail(warrantyId ?? ''),
     queryFn: async () => {
-      const result = await getWarrantyCertificate({
-        data: { warrantyId: warrantyId! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWarrantyCertificate({
+          data: { warrantyId: warrantyId! }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty certificate status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!warrantyId,
     // Certificates don't change often, so we can use longer stale time

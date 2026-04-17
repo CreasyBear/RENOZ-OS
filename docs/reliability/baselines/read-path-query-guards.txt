@@ -62,5 +62,4 @@ src/hooks/users/use-invitations.ts
 src/hooks/users/use-my-activity.ts
 src/hooks/users/use-sessions.ts
 src/hooks/users/use-users.ts
-src/hooks/warranty/certificates/use-warranty-certificates.ts
 src/hooks/warranty/claims/use-warranty-claims.ts
