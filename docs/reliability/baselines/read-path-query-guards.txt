@@ -15,7 +15,6 @@ src/hooks/dashboard/use-inventory-counts.ts
 src/hooks/dashboard/use-recent-items.ts
 src/hooks/dashboard/use-tracked-products.ts
 src/hooks/documents/use-generate-document.ts
-src/hooks/inventory/use-locations.ts
 src/hooks/inventory/use-quality.ts
 src/hooks/inventory/use-stock-counts.ts
 src/hooks/inventory/use-valuation.ts

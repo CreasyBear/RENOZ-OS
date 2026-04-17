@@ -70,7 +70,12 @@ export default function ReceivingPage() {
     isLoading: isLoadingSelectedProduct,
   } = useProduct(search.productId ?? "", !!search.productId);
 
-  const { locations: locationsData, isLoading: isLoadingLocations } = useLocations({
+  const {
+    locations: locationsData,
+    isLoading: isLoadingLocations,
+    locationsError,
+    fetchLocations,
+  } = useLocations({
     autoFetch: true,
   });
 
@@ -182,6 +187,7 @@ export default function ReceivingPage() {
   const headerDescription = hasProductContext && selectedProduct
     ? `Record non-PO inbound stock for ${selectedProduct.sku ? `${selectedProduct.name} (${selectedProduct.sku})` : selectedProduct.name}`
     : "Record non-PO inbound stock and update inventory levels";
+  const hasUnavailableLocations = !!locationsError && !isLoadingLocations && locations.length === 0;
 
   return (
     <PageLayout variant="full-width">
@@ -233,19 +239,36 @@ export default function ReceivingPage() {
 
           <TabsContent value="receive">
             <div className="grid gap-6 lg:grid-cols-2">
-              <ReceivingForm
-                products={products}
-                locations={locations}
-                isLoadingProducts={isLoadingProducts}
-                isLoadingLocations={isLoadingLocations}
-                onSubmit={handleReceive}
-                onCancel={handleCancel}
-                onProductSearch={handleProductSearch}
-                defaultLocationId={defaultLocation?.id}
-                defaultProductId={search.productId}
-                lockProductSelection={hasProductContext && !!selectedProduct}
-                submitError={receiveMutation.error?.message ?? null}
-              />
+              <div className="space-y-6">
+                {hasUnavailableLocations ? (
+                  <Alert>
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Warehouse locations are temporarily unavailable</AlertTitle>
+                    <AlertDescription>
+                      {locationsError.message}
+                      <div className="mt-3">
+                        <Button variant="outline" onClick={() => void fetchLocations()}>
+                          Retry Locations
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <ReceivingForm
+                    products={products}
+                    locations={locations}
+                    isLoadingProducts={isLoadingProducts}
+                    isLoadingLocations={isLoadingLocations}
+                    onSubmit={handleReceive}
+                    onCancel={handleCancel}
+                    onProductSearch={handleProductSearch}
+                    defaultLocationId={defaultLocation?.id}
+                    defaultProductId={search.productId}
+                    lockProductSelection={hasProductContext && !!selectedProduct}
+                    submitError={receiveMutation.error?.message ?? null}
+                  />
+                )}
+              </div>
 
               {/* Recent receives sidebar */}
               <ReceivingHistory

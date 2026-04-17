@@ -78,7 +78,12 @@ export default function MobileReceivingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  const { locations: locationsData, isLoading: isLoadingLocations } = useLocations({
+  const {
+    locations: locationsData,
+    isLoading: isLoadingLocations,
+    locationsError,
+    fetchLocations,
+  } = useLocations({
     autoFetch: true,
   });
   const { data: productSearchData } = useProductSearch(
@@ -100,6 +105,7 @@ export default function MobileReceivingPage() {
     name: l.name,
     code: l.code ?? "",
   }));
+  const hasUnavailableLocations = !!locationsError && !isLoadingLocations && locations.length === 0;
 
   const handleScan = useCallback((barcode: string) => {
     setBarcodeSearch(barcode);
@@ -299,6 +305,23 @@ export default function MobileReceivingPage() {
                 </Label>
                 {isLoadingLocations ? (
                   <Skeleton className="h-[44px] w-full" />
+                ) : hasUnavailableLocations ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" aria-hidden="true" />
+                      <div className="space-y-3">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Warehouse locations are temporarily unavailable.
+                          </p>
+                          <p className="text-muted-foreground">{locationsError.message}</p>
+                        </div>
+                        <Button type="button" variant="outline" onClick={() => void fetchLocations()}>
+                          Retry Locations
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 ) : locations.length === 0 ? (
                   <div className="text-center py-4 text-muted-foreground text-sm">
                     No locations configured. Please set up warehouse locations first.
