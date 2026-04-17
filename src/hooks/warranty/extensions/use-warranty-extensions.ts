@@ -15,6 +15,7 @@ import {
   getExtensionHistory,
   getExtensionById,
 } from '@/server/functions/warranty/extensions/warranty-extensions';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   ExtendWarrantyInput,
   GetExtensionHistoryInput,
@@ -46,11 +47,17 @@ export function useWarrantyExtensions(warrantyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.list(warrantyId ?? ''),
     queryFn: async () => {
-      const result = await listWarrantyExtensions({
-        data: { warrantyId: warrantyId! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listWarrantyExtensions({
+          data: { warrantyId: warrantyId! }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty extensions are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty could not be found.',
+        });
+      }
     },
     enabled: !!warrantyId,
   });
@@ -79,9 +86,14 @@ export function useExtensionHistory(options?: GetExtensionHistoryInput) {
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.historyFiltered(params),
     queryFn: async () => {
-      const result = await getExtensionHistory({ data: params });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getExtensionHistory({ data: params });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty extension history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
   });
 }
@@ -99,11 +111,17 @@ export function useExtensionById(extensionId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.detail(extensionId ?? ''),
     queryFn: async () => {
-      const result = await getExtensionById({
-        data: { extensionId: extensionId! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getExtensionById({
+          data: { extensionId: extensionId! }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Warranty extension details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty extension could not be found.',
+        });
+      }
     },
     enabled: !!extensionId,
   });

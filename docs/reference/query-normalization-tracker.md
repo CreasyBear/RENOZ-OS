@@ -96,7 +96,9 @@ Execution artifact for the read-path error handling program. This replaces the o
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/hooks/warranty/core/use-warranties.ts` | `listWarranties`, `getWarrantyStatusCounts`, `getWarranty` | mixed: `always-shaped`, `detail-not-found` | list/count reads return empty/zero success; missing warranty detail is `not-found` | `headline` for detail/list, `secondary` for status counts | list/count surfaces degrade visibly on failure; detail preserves not-found semantics | `tests/unit/warranty/query-normalization-wave3.test.tsx` | `verified` | Removed raw null-sentinel throws and normalized from server truth. |
 | `src/hooks/warranty/core/use-expiring-warranties.ts` | `getExpiringWarranties`, `getExpiringWarrantiesReport`, `getExpiringWarrantiesFilterOptions` | `always-shaped` | empty expiring-warranty results and filter options are healthy success | `headline` for dashboard/report list, `secondary` for filter options | report and dashboard surfaces should show explicit unavailable states only on thrown failures | `tests/unit/warranty/query-normalization-wave3.test.tsx` | `verified` | First Wave 3 warranty bay; report/filter-option reads no longer use raw query guards. |
+| `src/hooks/warranty/extensions/use-warranty-extensions.ts` | `listWarrantyExtensions`, `getExtensionHistory`, `getExtensionById` | mixed: `always-shaped`, `detail-not-found` | extension lists/history accept empty success; missing extension detail is `not-found` | `secondary` | history/list panels degrade locally on failure; extension detail preserves not-found semantics | `tests/unit/warranty/query-normalization-wave3-extensions.test.tsx` | `verified` | Warranty extension reads now follow the read-path policy without raw null guards. |
 | `tests/unit/warranty/query-normalization-wave3.test.tsx` | warranty wave test | n/a | hook contract verification | n/a | n/a | self | `verified` | Covers warranty list/count/detail plus expiring-report/filter-option semantics. |
+| `tests/unit/warranty/query-normalization-wave3-extensions.test.tsx` | warranty extensions wave test | n/a | hook contract verification | n/a | n/a | self | `verified` | Covers extension list/history success and extension-detail not-found semantics. |
 
 ## Backlog Inventory
 
@@ -109,7 +111,6 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 - `src/hooks/warranty/analytics/use-warranty-analytics.ts`
 - `src/hooks/warranty/certificates/use-warranty-certificates.ts`
 - `src/hooks/warranty/claims/use-warranty-claims.ts`
-- `src/hooks/warranty/extensions/use-warranty-extensions.ts`
 - `src/hooks/warranty/policies/use-warranty-policies.ts`
 - `src/hooks/inventory/use-alerts.ts`
 - `src/hooks/inventory/use-forecasting.ts`
