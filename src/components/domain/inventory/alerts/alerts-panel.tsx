@@ -228,9 +228,12 @@ const AlertItem = memo(function AlertItem({
 interface AlertsPanelProps {
   alerts: InventoryAlert[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string;
   onAcknowledge?: (alertId: string) => void;
   onViewDetails?: (alert: InventoryAlert) => void;
   onViewAll?: () => void;
+  onRetry?: () => void;
   maxHeight?: string;
   className?: string;
 }
@@ -238,9 +241,12 @@ interface AlertsPanelProps {
 export const AlertsPanel = memo(function AlertsPanel({
   alerts,
   isLoading,
+  isError,
+  errorMessage,
   onAcknowledge,
   onViewDetails,
   onViewAll,
+  onRetry,
   maxHeight = "400px",
   className,
 }: AlertsPanelProps) {
@@ -289,6 +295,32 @@ export const AlertsPanel = memo(function AlertsPanel({
                 </div>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Stock Alerts
+          </CardTitle>
+          <CardDescription>Inventory alert status is temporarily unavailable.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-sm text-foreground">
+              {errorMessage ?? 'Triggered inventory alerts are temporarily unavailable. Please refresh and try again.'}
+            </p>
+            {onRetry ? (
+              <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
