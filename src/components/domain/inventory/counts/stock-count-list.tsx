@@ -81,6 +81,9 @@ type SortDirection = 'asc' | 'desc';
 interface StockCountListProps {
   counts: StockCount[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
   onView?: (count: StockCount) => void;
   onEdit?: (count: StockCount) => void;
   onDelete?: (count: StockCount) => void;
@@ -170,6 +173,9 @@ function SortHeader({
 export const StockCountList = memo(function StockCountList({
   counts,
   isLoading,
+  isError,
+  errorMessage,
+  onRetry,
   onView,
   onEdit,
   onDelete,
@@ -264,6 +270,29 @@ export const StockCountList = memo(function StockCountList({
             ))}
           </TableBody>
         </Table>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className={cn("rounded-lg border border-destructive/30 bg-destructive/5 p-6", className)}>
+        <div className="flex items-start gap-3">
+          <XCircle className="mt-0.5 h-5 w-5 text-destructive" aria-hidden="true" />
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-foreground">Stock counts are temporarily unavailable.</p>
+              <p className="text-sm text-muted-foreground">
+                {errorMessage ?? 'Please refresh and try again.'}
+              </p>
+            </div>
+            {onRetry ? (
+              <Button variant="outline" onClick={onRetry}>
+                Retry Stock Counts
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }

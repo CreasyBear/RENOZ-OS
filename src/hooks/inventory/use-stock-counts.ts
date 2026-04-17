@@ -11,6 +11,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listStockCounts,
@@ -108,9 +109,15 @@ export function useStockCounts(options: UseStockCountsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.inventory.stockCounts(filters),
     queryFn: async () => {
-      const result = await listStockCounts({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listStockCounts({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Stock counts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -124,11 +131,18 @@ export function useStockCount(countId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.stockCount(countId),
     queryFn: async () => {
-      const result = await getStockCount({
-        data: { id: countId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getStockCount({
+          data: { id: countId } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Stock count details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested stock count could not be found.',
+        });
+      }
     },
     enabled: enabled && !!countId,
     staleTime: 30 * 1000,
@@ -147,8 +161,17 @@ export function useStockCountItems(countId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.stockCountItems(countId),
     queryFn: async () => {
-      const result = await getStockCount({ data: { id: countId } });
-      return result.count.items;
+      try {
+        const result = await getStockCount({ data: { id: countId } });
+        return result.count.items;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Stock count items are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested stock count could not be found.',
+        });
+      }
     },
     enabled: enabled && !!countId,
     staleTime: 15 * 1000,
@@ -162,11 +185,18 @@ export function useCountVarianceAnalysis(countId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.stockCountVariances(countId),
     queryFn: async () => {
-      const result = await getCountVarianceAnalysis({
-        data: { id: countId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCountVarianceAnalysis({
+          data: { id: countId } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Stock count variance analysis is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested stock count could not be found.',
+        });
+      }
     },
     enabled: enabled && !!countId,
     staleTime: 60 * 1000,
@@ -188,9 +218,15 @@ export function useCountHistory(
   return useQuery({
     queryKey: queryKeys.inventory.stockCountsHistory(options),
     queryFn: async () => {
-      const result = await getCountHistory({ data: options });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCountHistory({ data: options });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Stock count history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,

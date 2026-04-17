@@ -92,6 +92,8 @@ export default function StockCountsPage() {
   const {
     data: countsData,
     isLoading,
+    error: countsError,
+    refetch: refetchCounts,
   } = useStockCounts({ page: 1, pageSize: 50 });
 
   const {
@@ -301,6 +303,9 @@ export default function StockCountsPage() {
           <StockCountList
             counts={counts}
             isLoading={isLoading}
+            isError={!!countsError}
+            errorMessage={countsError?.message ?? null}
+            onRetry={() => void refetchCounts()}
             onView={handleViewCount}
             onStart={handleStartCount}
           />
