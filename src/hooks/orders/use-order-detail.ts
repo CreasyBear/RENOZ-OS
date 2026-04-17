@@ -10,7 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
-import { normalizeQueryError } from '@/lib/error-handling';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type { OrderStatus } from '@/lib/schemas/orders';
 import {
   getOrderWithCustomer,
@@ -67,10 +67,11 @@ export function useOrderWithCustomer({
         });
         return expectOrderQueryData(result, 'Order detail is unavailable.') as OrderWithCustomer;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Order details are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Order details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested order could not be found.',
+        });
       }
     },
     enabled: enabled && !!orderId,
