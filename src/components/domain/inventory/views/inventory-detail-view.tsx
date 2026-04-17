@@ -94,6 +94,8 @@ export interface InventoryDetailViewProps {
   isLoadingMovements?: boolean;
   isLoadingCostLayers?: boolean;
   isLoadingQuality?: boolean;
+  qualityError?: Error | null;
+  onRetryQuality?: () => void;
   /** Tab counts from composite hook */
   counts?: {
     movements: number;
@@ -851,9 +853,18 @@ function CostLayersTabContent({ costLayers = [], isLoading }: CostLayersTabConte
 interface QualityTabContentProps {
   qualityRecords?: QualityRecord[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
 }
 
-function QualityTabContent({ qualityRecords = [], isLoading }: QualityTabContentProps) {
+function QualityTabContent({
+  qualityRecords = [],
+  isLoading,
+  isError,
+  errorMessage,
+  onRetry,
+}: QualityTabContentProps) {
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -867,6 +878,31 @@ function QualityTabContent({ qualityRecords = [], isLoading }: QualityTabContent
             <Skeleton className="h-6 w-16" />
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" aria-hidden="true" />
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-foreground">
+                Quality inspection history is temporarily unavailable.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {errorMessage ?? 'Please refresh and try again.'}
+              </p>
+            </div>
+            {onRetry ? (
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                Retry Quality History
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }
@@ -952,6 +988,8 @@ export const InventoryDetailView = memo(function InventoryDetailView({
   isLoadingMovements,
   isLoadingCostLayers,
   isLoadingQuality,
+  qualityError,
+  onRetryQuality,
   counts,
   className,
 }: InventoryDetailViewProps) {
@@ -1137,6 +1175,9 @@ export const InventoryDetailView = memo(function InventoryDetailView({
               <QualityTabContent
                 qualityRecords={qualityRecords}
                 isLoading={isLoadingQuality}
+                isError={!!qualityError}
+                errorMessage={qualityError?.message ?? null}
+                onRetry={onRetryQuality}
               />
             </TabsContent>
 
