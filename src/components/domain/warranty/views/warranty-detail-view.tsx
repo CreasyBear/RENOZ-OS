@@ -169,6 +169,7 @@ export function WarrantyDetailView({
   extensions,
   certificateStatus,
   isClaimsLoading,
+  isClaimsError = false,
   isClaimSummaryLoading = false,
   isExtensionsLoading,
   isExtensionsError,
@@ -188,6 +189,7 @@ export function WarrantyDetailView({
   onClaimDialogOpenChange,
   onApprovalDialogOpenChange,
   onExtendDialogOpenChange,
+  onRetryClaims,
   onRetryExtensions,
   onClaimsSuccess,
   onExtensionsSuccess,
@@ -795,9 +797,11 @@ export function WarrantyDetailView({
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="claims" className="gap-2">
               Claims
-              <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
-                {claims.length}
-              </Badge>
+              {!isClaimsError ? (
+                <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
+                  {claims.length}
+                </Badge>
+              ) : null}
             </TabsTrigger>
             <TabsTrigger value="warranty-activity">Warranty Activity</TabsTrigger>
             <TabsTrigger value="system-history">System History</TabsTrigger>
@@ -1189,7 +1193,9 @@ export function WarrantyDetailView({
                         Claims History
                       </CardTitle>
                       <CardDescription>
-                        {claims.length} claim{claims.length !== 1 ? 's' : ''} filed for this warranty
+                        {isClaimsError
+                          ? 'Claim history is temporarily unavailable for this warranty.'
+                          : `${claims.length} claim${claims.length !== 1 ? 's' : ''} filed for this warranty`}
                       </CardDescription>
                     </div>
                     {canFileClaim && (
@@ -1203,6 +1209,19 @@ export function WarrantyDetailView({
                 <CardContent>
                   {isClaimsLoading ? (
                     <ClaimsTableSkeleton />
+                  ) : isClaimsError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription className="flex items-center justify-between gap-4">
+                        <span>
+                          Warranty claims are temporarily unavailable. Please refresh and try again.
+                        </span>
+                        {onRetryClaims ? (
+                          <Button variant="outline" size="sm" onClick={onRetryClaims}>
+                            Retry
+                          </Button>
+                        ) : null}
+                      </AlertDescription>
+                    </Alert>
                   ) : claims.length === 0 ? (
                     <div className="py-8 text-center">
                       <FileWarning className="text-muted-foreground mx-auto mb-4 h-12 w-12" />

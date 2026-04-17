@@ -70,6 +70,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   const {
     data: claimsData,
     isLoading: claimsLoading,
+    isError: isClaimsError,
     refetch: refetchClaims,
   } = useWarrantyClaimsByWarranty(warrantyId);
   const {
@@ -473,6 +474,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         extensions={extensionsData?.extensions ?? []}
         certificateStatus={certificateStatus ?? undefined}
         isClaimsLoading={claimsLoading}
+        isClaimsError={isClaimsError}
         isClaimSummaryLoading={claimSummaryLoading}
         isExtensionsLoading={extensionsLoading}
         isExtensionsError={extensionsError}
@@ -505,6 +507,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         }}
         onExtendDialogOpenChange={(open) => setExtendDialogOpen(open)}
         onOpenTransferOwnership={() => setTransferDialogOpen(true)}
+        onRetryClaims={() => refetchClaims()}
         onRetryExtensions={() => refetchExtensions()}
         onClaimsSuccess={() => refetchClaims()}
         onExtensionsSuccess={() => refetchExtensions()}

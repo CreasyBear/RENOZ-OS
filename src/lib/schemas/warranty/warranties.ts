@@ -490,6 +490,7 @@ export interface WarrantyDetailViewProps {
   extensions: WarrantyExtensionItem[];
   certificateStatus: WarrantyCertificateStatus | null | undefined;
   isClaimsLoading: boolean;
+  isClaimsError?: boolean;
   isClaimSummaryLoading?: boolean;
   isExtensionsLoading: boolean;
   isExtensionsError: boolean;
@@ -513,6 +514,7 @@ export interface WarrantyDetailViewProps {
   onApprovalDialogOpenChange: (open: boolean) => void;
   onExtendDialogOpenChange: (open: boolean) => void;
   onRetryExtensions: () => void;
+  onRetryClaims?: () => void;
   onClaimsSuccess: () => void;
   onExtensionsSuccess: () => void;
   onSubmitClaim: (payload: {
