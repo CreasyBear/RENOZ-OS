@@ -13,6 +13,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listInventory,
@@ -468,9 +469,19 @@ export function useMovements(
   return useQuery({
     queryKey: queryKeys.inventory.movements(queryFilters),
     queryFn: async () => {
-      const result = await listMovements({ data: queryFilters });
-      if (result == null) throw new Error('Inventory movements returned no data');
-      return result;
+      try {
+        const result = await listMovements({ data: queryFilters });
+        if (result == null) {
+          throw new Error('Inventory movements returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory movements are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -493,9 +504,19 @@ export function useMovementsDashboard(
   return useQuery({
     queryKey: queryKeys.inventory.movements({ ...queryFilters, dashboard: true }),
     queryFn: async () => {
-      const result = await listMovements({ data: queryFilters });
-      if (result == null) throw new Error('Inventory movements returned no data');
-      return result;
+      try {
+        const result = await listMovements({ data: queryFilters });
+        if (result == null) {
+          throw new Error('Inventory dashboard movements returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory dashboard movements are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 15 * 1000,
@@ -627,12 +648,22 @@ export function useInventoryDashboard(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.dashboard(),
     queryFn: async () => {
-      const result = await getInventoryDashboard();
-      if (import.meta.env.DEV) {
-        console.debug('[useInventoryDashboard] raw-result', result);
+      try {
+        const result = await getInventoryDashboard();
+        if (import.meta.env.DEV) {
+          console.debug('[useInventoryDashboard] raw-result', result);
+        }
+        if (result == null) {
+          throw new Error('Inventory dashboard returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory dashboard metrics are temporarily unavailable. Please refresh and try again.',
+        });
       }
-      if (result == null) throw new Error('Inventory dashboard returned no data');
-      return result;
     },
     enabled,
     staleTime: 30 * 1000,

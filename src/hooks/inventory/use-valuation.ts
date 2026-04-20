@@ -12,6 +12,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listCostLayers,
@@ -68,9 +69,19 @@ export function useCostLayers(filters: CostLayerFilters = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.costLayers(filters as Record<string, unknown>),
     queryFn: async () => {
-      const result = await listCostLayers({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await listCostLayers({ data: filters });
+        if (result == null) {
+          throw new Error('Inventory cost layers returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory cost layers are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -84,11 +95,22 @@ export function useInventoryCostLayers(inventoryId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.costLayersDetail(inventoryId),
     queryFn: async () => {
-      const result = await getInventoryCostLayers({
-        data: { inventoryId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getInventoryCostLayers({
+          data: { inventoryId } 
+        });
+        if (result == null) {
+          throw new Error('Inventory cost layer detail returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Inventory cost layer details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested inventory item could not be found.',
+        });
+      }
     },
     enabled: enabled && !!inventoryId,
     staleTime: 60 * 1000,
@@ -102,9 +124,19 @@ export function useInventoryValuation(filters: ValuationFilters = {}, enabled = 
   return useQuery({
     queryKey: queryKeys.inventory.valuation(filters),
     queryFn: async () => {
-      const result = await getInventoryValuation({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getInventoryValuation({ data: filters });
+        if (result == null) {
+          throw new Error('Inventory valuation returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory valuation is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -118,9 +150,19 @@ export function useInventoryFinanceIntegrity(filters: FinanceIntegrityFilters = 
   return useQuery({
     queryKey: queryKeys.inventory.financeIntegrity(filters),
     queryFn: async () => {
-      const result = await getInventoryFinanceIntegrity({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getInventoryFinanceIntegrity({ data: filters });
+        if (result == null) {
+          throw new Error('Inventory finance integrity returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory finance integrity signals are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -138,11 +180,22 @@ export function useCOGSPreview(
   return useQuery({
     queryKey: queryKeys.inventory.cogs(inventoryId, quantity),
     queryFn: async () => {
-      const result = await calculateCOGS({
-        data: { inventoryId, quantity, simulate: true } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await calculateCOGS({
+          data: { inventoryId, quantity, simulate: true } 
+        });
+        if (result == null) {
+          throw new Error('Inventory COGS preview returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'COGS preview is temporarily unavailable for the requested quantity. Please adjust the quantity or try again.',
+          notFoundMessage: 'The requested inventory item could not be found.',
+        });
+      }
     },
     enabled: enabled && !!inventoryId && quantity > 0,
     staleTime: 30 * 1000,
@@ -158,11 +211,21 @@ export function useInventoryAging(filters: AgingFilters = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.aging({ ...filters, ageBuckets }),
     queryFn: async () => {
-      const result = await getInventoryAging({
-        data: { ...filters, ageBuckets } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getInventoryAging({
+          data: { ...filters, ageBuckets } 
+        });
+        if (result == null) {
+          throw new Error('Inventory aging returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory aging analysis is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -176,9 +239,19 @@ export function useInventoryTurnover(filters: TurnoverFilters = {}, enabled = tr
   return useQuery({
     queryKey: queryKeys.inventory.turnover(filters),
     queryFn: async () => {
-      const result = await getInventoryTurnover({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getInventoryTurnover({ data: filters });
+        if (result == null) {
+          throw new Error('Inventory turnover returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory turnover analysis is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,

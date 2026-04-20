@@ -22,6 +22,7 @@ import {
   ArrowLeftRight,
   ShieldCheck,
   Wrench,
+  AlertTriangle,
 } from "lucide-react";
 import { ValuationReport, type ValuationSummary, type CategoryValuation, type LocationValuation } from "@/components/domain/inventory/reports/valuation-report";
 import { AgingReport, type AgingSummary, type AgeBucket, type AgingItem } from "@/components/domain/inventory/reports/aging-report";
@@ -56,6 +57,44 @@ import type {
 
 type AnalyticsTab = "valuation" | "aging" | "turnover" | "movements";
 
+function AnalyticsReadState({
+  title,
+  message,
+  onRetry,
+  variant = 'unavailable',
+}: {
+  title: string;
+  message: string;
+  onRetry?: () => void;
+  variant?: 'unavailable' | 'degraded';
+}) {
+  const isDegraded = variant === 'degraded';
+
+  return (
+    <Card className={isDegraded ? 'border-amber-500/30 bg-amber-500/5' : 'border-destructive/30 bg-destructive/5'}>
+      <CardContent className="pt-6">
+        <div className="flex items-start gap-3">
+          <AlertTriangle
+            className={isDegraded ? 'mt-0.5 h-5 w-5 text-amber-600' : 'mt-0.5 h-5 w-5 text-destructive'}
+            aria-hidden="true"
+          />
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-foreground">{title}</p>
+              <p className="text-sm text-muted-foreground">{message}</p>
+            </div>
+            {onRetry ? (
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>("valuation");
   const [reconcileResult, setReconcileResult] = useState<InventoryFinanceReconcileResult | null>(null);
@@ -66,25 +105,42 @@ export default function AnalyticsPage() {
   const {
     data: valuationData,
     isLoading: isLoadingValuation,
+    error: valuationError,
+    refetch: refetchValuation,
   } = useInventoryValuation();
 
   // Aging data - fetched when tab selected
   const {
     data: agingData,
     isLoading: isLoadingAging,
+    error: agingError,
+    refetch: refetchAging,
   } = useInventoryAging({}, activeTab === "aging");
 
   // Turnover data - fetched when tab selected
   const {
     data: turnoverData,
     isLoading: isLoadingTurnover,
+    error: turnoverError,
+    refetch: refetchTurnover,
   } = useInventoryTurnover({ period: "90d" }, activeTab === "turnover");
 
   // Movement data - fetched when tab selected
   const {
     data: movementData,
     isLoading: isLoadingMovements,
+    error: movementError,
+    refetch: refetchMovements,
   } = useMovements({ page: 1, pageSize: 100, sortOrder: 'desc' }, activeTab === "movements");
+
+  const showValuationUnavailable = !!valuationError && !valuationData;
+  const showValuationDegraded = !!valuationError && !!valuationData;
+  const showAgingUnavailable = !!agingError && !agingData;
+  const showAgingDegraded = !!agingError && !!agingData;
+  const showTurnoverUnavailable = !!turnoverError && !turnoverData;
+  const showTurnoverDegraded = !!turnoverError && !!turnoverData;
+  const showMovementsUnavailable = !!movementError && !movementData;
+  const showMovementsDegraded = !!movementError && !!movementData;
 
   // Transform valuation data - server now returns complete data
   const valuationSummary: ValuationSummary | null = valuationData
@@ -485,41 +541,113 @@ export default function AnalyticsPage() {
           </TabsList>
 
           <TabsContent value="valuation">
-            <ValuationReport
-              summary={valuationSummary}
-              byCategory={valuationByCategory}
-              byLocation={valuationByLocation}
-              financeIntegrity={valuationData?.financeIntegrity ?? null}
-              isLoading={isLoadingValuation}
-            />
+            {showValuationUnavailable ? (
+              <AnalyticsReadState
+                title="Inventory valuation is temporarily unavailable."
+                message={valuationError?.message ?? 'Please refresh and try again.'}
+                onRetry={() => void refetchValuation()}
+              />
+            ) : (
+              <div className="space-y-4">
+                {showValuationDegraded ? (
+                  <AnalyticsReadState
+                    title="Showing the most recent inventory valuation while refresh is unavailable."
+                    message={valuationError?.message ?? 'The valuation snapshot below may be stale until the next successful reload.'}
+                    onRetry={() => void refetchValuation()}
+                    variant="degraded"
+                  />
+                ) : null}
+                <ValuationReport
+                  summary={valuationSummary}
+                  byCategory={valuationByCategory}
+                  byLocation={valuationByLocation}
+                  financeIntegrity={valuationData?.financeIntegrity ?? null}
+                  isLoading={isLoadingValuation}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="aging">
-            <AgingReport
-              summary={agingSummary}
-              buckets={agingBuckets}
-              items={agingItems}
-              isLoading={isLoadingAging}
-            />
+            {showAgingUnavailable ? (
+              <AnalyticsReadState
+                title="Inventory aging analysis is temporarily unavailable."
+                message={agingError?.message ?? 'Please refresh and try again.'}
+                onRetry={() => void refetchAging()}
+              />
+            ) : (
+              <div className="space-y-4">
+                {showAgingDegraded ? (
+                  <AnalyticsReadState
+                    title="Showing the most recent inventory aging analysis while refresh is unavailable."
+                    message={agingError?.message ?? 'The aging analysis below may be stale until the next successful reload.'}
+                    onRetry={() => void refetchAging()}
+                    variant="degraded"
+                  />
+                ) : null}
+                <AgingReport
+                  summary={agingSummary}
+                  buckets={agingBuckets}
+                  items={agingItems}
+                  isLoading={isLoadingAging}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="turnover">
-            <TurnoverReport
-              summary={turnoverSummary}
-              byCategory={turnoverByCategory}
-              trends={turnoverTrends}
-              isLoading={isLoadingTurnover}
-            />
+            {showTurnoverUnavailable ? (
+              <AnalyticsReadState
+                title="Inventory turnover analysis is temporarily unavailable."
+                message={turnoverError?.message ?? 'Please refresh and try again.'}
+                onRetry={() => void refetchTurnover()}
+              />
+            ) : (
+              <div className="space-y-4">
+                {showTurnoverDegraded ? (
+                  <AnalyticsReadState
+                    title="Showing the most recent inventory turnover analysis while refresh is unavailable."
+                    message={turnoverError?.message ?? 'The turnover analysis below may be stale until the next successful reload.'}
+                    onRetry={() => void refetchTurnover()}
+                    variant="degraded"
+                  />
+                ) : null}
+                <TurnoverReport
+                  summary={turnoverSummary}
+                  byCategory={turnoverByCategory}
+                  trends={turnoverTrends}
+                  isLoading={isLoadingTurnover}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="movements">
-            <MovementAnalytics
-              summary={movementSummary}
-              byType={movementByType}
-              topMovers={topMovers}
-              trends={movementTrends}
-              isLoading={isLoadingMovements}
-            />
+            {showMovementsUnavailable ? (
+              <AnalyticsReadState
+                title="Inventory movement analytics are temporarily unavailable."
+                message={movementError?.message ?? 'Please refresh and try again.'}
+                onRetry={() => void refetchMovements()}
+              />
+            ) : (
+              <div className="space-y-4">
+                {showMovementsDegraded ? (
+                  <AnalyticsReadState
+                    title="Showing the most recent movement analytics while refresh is unavailable."
+                    message={movementError?.message ?? 'The movement analytics below may be stale until the next successful reload.'}
+                    onRetry={() => void refetchMovements()}
+                    variant="degraded"
+                  />
+                ) : null}
+                <MovementAnalytics
+                  summary={movementSummary}
+                  byType={movementByType}
+                  topMovers={topMovers}
+                  trends={movementTrends}
+                  isLoading={isLoadingMovements}
+                />
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </PageLayout.Content>

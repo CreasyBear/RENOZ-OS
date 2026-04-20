@@ -10,6 +10,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getWMSDashboard,
   getStockByCategory,
@@ -53,20 +54,6 @@ export type { CategoryStock, LocationStock, RecentMovement, WMSDashboardData };
  * ));
  * ```
  */
-const EMPTY_WMS_DASHBOARD: WMSDashboardData = {
-  totals: { totalValue: 0, totalUnits: 0, totalSkus: 0 },
-  comparison: {
-    totalValueChange: 0,
-    totalUnitsChange: 0,
-    totalSkusChange: 0,
-    alertsChange: 0,
-    locationsChange: 0,
-  },
-  stockByCategory: [],
-  stockByLocation: [],
-  recentMovements: [],
-};
-
 export function useWMSDashboard() {
   return useQuery({
     queryKey: queryKeys.inventory.wmsDashboard(),
@@ -78,11 +65,17 @@ export function useWMSDashboard() {
           status: result == null ? 'null/undefined' : 'ok',
           totalValue: result?.totals?.totalValue,
         });
-        // Return empty structure when server returns null (avoids noisy error; dashboard renders empty state)
-        return result ?? EMPTY_WMS_DASHBOARD;
+        if (result == null) {
+          throw new Error('WMS dashboard returned no data');
+        }
+        return result;
       } catch (err) {
         inventoryLogger.error('[useWMSDashboard] queryFn error', err);
-        throw err;
+        throw normalizeReadQueryError(err, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory dashboard data is temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     staleTime: 60 * 1000, // 1 minute
@@ -109,9 +102,19 @@ export function useStockByCategory() {
   return useQuery({
     queryKey: queryKeys.inventory.stockByCategory(),
     queryFn: async () => {
-      const result = await getStockByCategory();
-      if (result == null) throw new Error('Stock by category returned no data');
-      return result;
+      try {
+        const result = await getStockByCategory();
+        if (result == null) {
+          throw new Error('Stock by category returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Stock-by-category data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 60 * 1000, // 1 minute
   });
@@ -137,9 +140,19 @@ export function useStockByLocation() {
   return useQuery({
     queryKey: queryKeys.inventory.stockByLocation(),
     queryFn: async () => {
-      const result = await getStockByLocation();
-      if (result == null) throw new Error('Stock by location returned no data');
-      return result;
+      try {
+        const result = await getStockByLocation();
+        if (result == null) {
+          throw new Error('Stock by location returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Stock-by-location data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 60 * 1000, // 1 minute
   });
@@ -168,11 +181,21 @@ export function useRecentMovementsTimeline(limit = 10) {
   return useQuery({
     queryKey: queryKeys.inventory.recentMovementsTimeline(limit),
     queryFn: async () => {
-      const result = await getRecentMovementsTimeline({
-        data: { limit }
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        const result = await getRecentMovementsTimeline({
+          data: { limit }
+        });
+        if (result == null) {
+          throw new Error('Recent inventory movements returned no data');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Recent inventory movements are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
   });
