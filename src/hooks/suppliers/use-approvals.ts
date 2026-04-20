@@ -13,6 +13,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { classifyReadFailureKind, normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listPendingApprovals,
   getApprovalDetails,
@@ -54,9 +55,26 @@ export function usePendingApprovals(options: UsePendingApprovalsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.approvals.pending(filters),
     queryFn: async () => {
-      const result = await listPendingApprovals({ data: filters as ListPendingApprovalsInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listPendingApprovals({ data: filters as ListPendingApprovalsInput });
+      } catch (error) {
+        const normalizedError = normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pending approvals are temporarily unavailable. Please refresh and try again.',
+        });
+
+        if (
+          classifyReadFailureKind(error) === 'validation' &&
+          error &&
+          typeof error === 'object' &&
+          typeof (error as { message?: unknown }).message === 'string'
+        ) {
+          normalizedError.message = (error as { message: string }).message;
+        }
+
+        throw normalizedError;
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -87,11 +105,18 @@ export function useApprovalDetails(
   return useQuery({
     queryKey: queryKeys.approvals.detail(approvalId),
     queryFn: async () => {
-      const result = await getApprovalDetails({
-        data: { approvalId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getApprovalDetails({
+          data: { approvalId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Approval details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested approval could not be found.',
+        });
+      }
     },
     enabled: enabled && !!approvalId,
     staleTime: 60 * 1000,
@@ -108,11 +133,17 @@ export function useApprovalHistory(purchaseOrderId: string, options: { enabled?:
   return useQuery({
     queryKey: queryKeys.approvals.history(purchaseOrderId),
     queryFn: async () => {
-      const result = await getApprovalHistory({
-        data: { purchaseOrderId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getApprovalHistory({
+          data: { purchaseOrderId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Approval history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!purchaseOrderId,
     staleTime: 60 * 1000,
@@ -129,9 +160,15 @@ export function useMyApprovalStats(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.approvals.stats(),
     queryFn: async () => {
-      const result = await getApprovalStats({});
-      if (result == null) throw new Error('Approval stats returned no data');
-      return result;
+      try {
+        return await getApprovalStats({});
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Approval stats are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,

@@ -109,7 +109,11 @@ export default function ApprovalsPage() {
 
   // Fetch approval details when item is selected AND dialog is open
   const approvalId = selectedItem?.id ?? '';
-  const { data: approvalDetails, isLoading: isLoadingDetails } = useApprovalDetails(approvalId, {
+  const {
+    data: approvalDetails,
+    isLoading: isLoadingDetails,
+    error: approvalDetailsError,
+  } = useApprovalDetails(approvalId, {
     enabled: !!approvalId && decisionDialogOpen,
   });
 
@@ -296,6 +300,7 @@ export default function ApprovalsPage() {
               lineTotal: item.lineTotal,
             }))
           } : undefined}
+          approvalDetailsError={approvalDetailsError}
           isLoadingApprovalDetails={isLoadingDetails}
           decisionDialogOpen={decisionDialogOpen}
           onDecisionDialogOpenChange={setDecisionDialogOpen}

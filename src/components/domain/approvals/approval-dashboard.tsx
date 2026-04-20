@@ -64,6 +64,8 @@ export interface ApprovalDashboardProps {
   onSelectedItemChange: (item: ApprovalItem | null) => void;
   /** @source useApprovalDetails hook in /approvals/index.tsx */
   approvalDetails?: { items?: Array<{ id: string; productName: string; productSku?: string; quantity: number; unitPrice: number | null; lineTotal: number | null }> };
+  /** @source useApprovalDetails error state in /approvals/index.tsx */
+  approvalDetailsError?: Error | null;
   /** @source useApprovalDetails loading state in /approvals/index.tsx */
   isLoadingApprovalDetails?: boolean;
   /** @source useState(decisionDialogOpen) in /approvals/index.tsx */
@@ -137,6 +139,7 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
   selectedItem,
   onSelectedItemChange,
   approvalDetails,
+  approvalDetailsError,
   isLoadingApprovalDetails,
   decisionDialogOpen,
   onDecisionDialogOpenChange,
@@ -359,6 +362,7 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
         item={selectedItem}
         escalationUsers={escalationUsers}
         approvalDetails={approvalDetails}
+        approvalDetailsError={approvalDetailsError}
         isLoadingApprovalDetails={isLoadingApprovalDetails}
         onDecision={(decision, data) => {
           onDecision(decision, data);
