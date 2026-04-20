@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WarrantyDetailViewProps } from '@/lib/schemas/warranty';
 
 const mockListWarrantyClaims = vi.fn();
 const mockGetWarrantyClaimSummary = vi.fn();
@@ -81,16 +82,18 @@ function createWrapper(queryClient: QueryClient) {
   return Wrapper;
 }
 
-function createWarrantyDetailViewProps() {
+function createWarrantyDetailViewProps(): WarrantyDetailViewProps {
   return {
     warranty: {
       id: 'warranty-1',
       warrantyNumber: 'WAR-001',
+      organizationId: 'org-1',
       customerId: 'customer-1',
       customerName: 'Acme Corp',
       productId: 'product-1',
       productName: 'Home Battery',
       productSerial: 'BAT-001',
+      warrantyPolicyId: 'policy-1',
       status: 'active',
       policyName: 'Standard Warranty',
       policyType: 'installation_workmanship',
@@ -98,11 +101,14 @@ function createWarrantyDetailViewProps() {
       expiryDate: '2027-01-01T00:00:00.000Z',
       currentCycleCount: 0,
       cycleLimit: 6000,
+      assignedUserId: null,
+      certificateUrl: null,
       notes: null,
       expiryAlertOptOut: false,
       lastExpiryAlertSent: null,
       items: [],
       ownerRecord: {
+        id: 'owner-1',
         fullName: 'Acme Corp',
         email: 'ops@acme.test',
         phone: '0400 000 000',
@@ -111,23 +117,38 @@ function createWarrantyDetailViewProps() {
           city: 'Perth',
           state: 'WA',
           postalCode: '6000',
+          country: 'Australia',
         },
+        notes: null,
       },
       currentOwner: {
+        id: 'owner-1',
         fullName: 'Acme Corp',
         email: 'ops@acme.test',
         phone: '0400 000 000',
+        address: {
+          street1: '1 Main St',
+          city: 'Perth',
+          state: 'WA',
+          postalCode: '6000',
+          country: 'Australia',
+        },
+        notes: null,
       },
+      ownershipHistorySummary: [],
       serviceLinkageStatus: 'unlinked',
       serviceSystem: null,
       systemHistoryPreview: [],
       pendingServiceReview: null,
       sourceEntitlement: null,
+      activatedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
     },
     headerActionsInLayout: false,
     claims: [],
     claimSummary: undefined,
-    claimSummaryState: 'healthy',
+    claimSummaryState: 'ready',
     extensions: [],
     certificateStatus: undefined,
     isClaimsLoading: false,
@@ -179,7 +200,7 @@ function createWarrantyDetailViewProps() {
     onLogActivity: vi.fn(),
     onScheduleFollowUp: vi.fn(),
     onDelete: vi.fn(),
-  } as const;
+  };
 }
 
 describe('warranty claims query normalization wave 3', () => {

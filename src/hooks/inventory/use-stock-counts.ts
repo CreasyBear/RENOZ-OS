@@ -133,7 +133,7 @@ export function useStockCount(countId: string, enabled = true) {
     queryFn: async () => {
       try {
         return await getStockCount({
-          data: { id: countId } 
+          data: { id: countId }
         });
       } catch (error) {
         throw normalizeReadQueryError(error, {
@@ -187,7 +187,7 @@ export function useCountVarianceAnalysis(countId: string, enabled = true) {
     queryFn: async () => {
       try {
         return await getCountVarianceAnalysis({
-          data: { id: countId } 
+          data: { id: countId }
         });
       } catch (error) {
         throw normalizeReadQueryError(error, {

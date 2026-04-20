@@ -246,6 +246,7 @@ describe('purchase-order consumer normalization wave 3c', () => {
         search={{
           page: 1,
           pageSize: 20,
+          search: '',
           sortBy: 'createdAt',
           sortOrder: 'desc',
         }}

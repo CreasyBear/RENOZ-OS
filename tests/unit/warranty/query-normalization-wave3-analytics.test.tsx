@@ -249,10 +249,10 @@ describe('warranty analytics query normalization wave 3', () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.queries.summary.error).toMatchObject({
+    expect((result.current.queries.summary as { error?: unknown }).error).toMatchObject({
       failureKind: 'system',
       contractType: 'always-shaped',
     });
-    expect(result.current.queries.claimsByProduct.isSuccess).toBe(true);
+    expect((result.current.queries.claimsByProduct as { isSuccess?: boolean }).isSuccess).toBe(true);
   });
 });

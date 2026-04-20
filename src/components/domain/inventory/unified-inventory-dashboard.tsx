@@ -311,10 +311,23 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   const showWmsDegraded = !!wmsError && hasUsableWmsData;
   const showDashboardUnavailable = !!dashboardError && !hasUsableDashboardData;
   const showDashboardDegraded = !!dashboardError && hasUsableDashboardData;
+  const wmsErrorMessage =
+    typeof wmsError === 'object' &&
+    wmsError !== null &&
+    'message' in wmsError &&
+    typeof (wmsError as { message?: unknown }).message === 'string'
+      ? (wmsError as { message: string }).message
+      : 'Please refresh and try again.';
+  const dashboardErrorMessage =
+    typeof dashboardError === 'object' &&
+    dashboardError !== null &&
+    'message' in dashboardError &&
+    typeof (dashboardError as { message?: unknown }).message === 'string'
+      ? (dashboardError as { message: string }).message
+      : 'Please refresh and try again.';
 
   if (showWmsUnavailable) {
-    const errorMessage =
-      wmsError instanceof Error ? wmsError.message : 'Unknown error';
+    const errorMessage = wmsErrorMessage;
     return (
       <div className="p-8 text-center text-muted-foreground">
         <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
@@ -347,13 +360,13 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
       {showWmsDegraded ? (
         <DashboardReadWarning
           title="Showing the most recent inventory dashboard snapshot while refresh is unavailable."
-          message={wmsError?.message ?? 'Warehouse metrics and movement panels may be stale until the next successful reload.'}
+          message={wmsErrorMessage}
         />
       ) : null}
       {showDashboardDegraded ? (
         <DashboardReadWarning
           title="Showing the most recent dashboard metrics while refresh is unavailable."
-          message={dashboardError?.message ?? 'Top movers and derived metrics may be stale until the next successful reload.'}
+          message={dashboardErrorMessage}
         />
       ) : null}
 
@@ -574,7 +587,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
                 {showWmsDegraded ? (
                   <DashboardReadWarning
                     title="Category breakdown may be stale."
-                    message={wmsError?.message ?? 'Refresh failed. Showing the most recent stock-by-category data.'}
+                    message={wmsErrorMessage}
                   />
                 ) : null}
                 <CategoryList categories={wmsData?.stockByCategory ?? []} formatValue={formatValue} />
@@ -596,7 +609,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
                 {showWmsDegraded ? (
                   <DashboardReadWarning
                     title="Location breakdown may be stale."
-                    message={wmsError?.message ?? 'Refresh failed. Showing the most recent stock-by-location data.'}
+                    message={wmsErrorMessage}
                   />
                 ) : null}
                 <LocationList locations={wmsData?.stockByLocation ?? []} />
@@ -660,14 +673,14 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             ) : showWmsUnavailable ? (
               <DashboardReadWarning
                 title="Recent movements are temporarily unavailable."
-                message={wmsError?.message ?? 'Please refresh and try again.'}
+                message={wmsErrorMessage}
               />
             ) : (
               <div className="space-y-4">
                 {showWmsDegraded ? (
                   <DashboardReadWarning
                     title="Recent movements may be stale."
-                    message={wmsError?.message ?? 'Refresh failed. Showing the most recent movement timeline.'}
+                    message={wmsErrorMessage}
                   />
                 ) : null}
                 <MovementsTimeline groupedMovements={groupedMovements} />
@@ -698,7 +711,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
                 {showDashboardDegraded ? (
                   <DashboardReadWarning
                     title="Top movers may be stale."
-                    message={dashboardError?.message ?? 'Refresh failed. Showing the most recent top-mover data.'}
+                    message={dashboardErrorMessage}
                   />
                 ) : null}
                 <TopMoversList movers={topMovers} />

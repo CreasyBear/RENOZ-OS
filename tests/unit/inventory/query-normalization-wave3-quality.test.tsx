@@ -219,8 +219,7 @@ describe('inventory quality query normalization wave 3', () => {
         qualityRecords={[
           {
             id: 'inspection-1',
-            inventoryId: 'inventory-1',
-            inspectionDate: '2026-01-01T00:00:00.000Z',
+            inspectionDate: new Date('2026-01-01T00:00:00.000Z'),
             inspectorName: 'Alex Inspector',
             result: 'pass',
             notes: 'Passed visual inspection',

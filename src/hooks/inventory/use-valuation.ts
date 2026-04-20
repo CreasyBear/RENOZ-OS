@@ -97,7 +97,7 @@ export function useInventoryCostLayers(inventoryId: string, enabled = true) {
     queryFn: async () => {
       try {
         const result = await getInventoryCostLayers({
-          data: { inventoryId } 
+          data: { inventoryId }
         });
         if (result == null) {
           throw new Error('Inventory cost layer detail returned no data');
@@ -182,7 +182,7 @@ export function useCOGSPreview(
     queryFn: async () => {
       try {
         const result = await calculateCOGS({
-          data: { inventoryId, quantity, simulate: true } 
+          data: { inventoryId, quantity, simulate: true }
         });
         if (result == null) {
           throw new Error('Inventory COGS preview returned no data');
@@ -213,7 +213,7 @@ export function useInventoryAging(filters: AgingFilters = {}, enabled = true) {
     queryFn: async () => {
       try {
         const result = await getInventoryAging({
-          data: { ...filters, ageBuckets } 
+          data: { ...filters, ageBuckets }
         });
         if (result == null) {
           throw new Error('Inventory aging returned no data');
