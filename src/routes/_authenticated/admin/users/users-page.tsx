@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { UsersTablePresenter } from './users-table-presenter';
 import type { UserTableItem } from '@/lib/schemas/users';
 import {
@@ -65,6 +66,8 @@ interface UsersAdminPagePresenterProps {
   };
   /** Filters state for DomainFilterBar */
   filters: UsersFiltersState;
+  /** Optional degraded state for stats cards */
+  statsUnavailableMessage?: string | null;
   /** Filter change handler */
   onFiltersChange: (filters: UsersFiltersState) => void;
   /** Search params from route (page, pageSize, sort) */
@@ -120,6 +123,7 @@ export default function UsersAdminPagePresenter({
   users,
   stats,
   filters,
+  statsUnavailableMessage,
   onFiltersChange,
   search,
   isLoading,
@@ -191,6 +195,12 @@ export default function UsersAdminPagePresenter({
           Invite User
         </Link>
       </div>
+
+      {statsUnavailableMessage ? (
+        <Alert>
+          <AlertDescription>{statsUnavailableMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {/* Stats Cards - Using MetricCard per METRIC-CARD-STANDARDS */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

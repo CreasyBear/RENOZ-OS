@@ -5,6 +5,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getInvitationByToken,
   acceptInvitation,
@@ -38,11 +39,17 @@ export function useInvitationByToken(token: string) {
   return useQuery({
     queryKey: queryKeys.users.invitations.byToken(token),
     queryFn: async () => {
-      const result = await getInvitationByToken({
-        data: { token } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInvitationByToken({
+          data: { token }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Invitation details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'This invitation link is invalid or no longer available.',
+        });
+      }
     },
     enabled: !!token,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -58,11 +65,16 @@ export function useInvitations() {
   return useQuery({
     queryKey: queryKeys.users.invitations.lists(),
     queryFn: async () => {
-      const result = await listInvitations({
-        data: {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listInvitations({
+          data: {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Invitations are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -85,11 +97,16 @@ export function useInvitationsFiltered(filters?: InvitationFilters) {
   return useQuery({
     queryKey: queryKeys.users.invitations.list(filters),
     queryFn: async () => {
-      const result = await listInvitations({
-        data: filters ?? {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listInvitations({
+          data: filters ?? {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Invitations are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
     retry: 2,
@@ -104,9 +121,14 @@ export function useInvitationStats() {
   return useQuery({
     queryKey: queryKeys.users.invitations.stats(),
     queryFn: async () => {
-      const result = await listInvitationStats();
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listInvitationStats();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Invitation metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
     retry: 2,

@@ -110,7 +110,11 @@ export default function UserDetailPage() {
 
   // Fetch user and activity data
   const { data: user, isLoading: isLoadingUser, error: userError } = useUser(userId);
-  const { data: activity, isLoading: isLoadingActivity } = useUserActivity(userId);
+  const {
+    data: activity,
+    isLoading: isLoadingActivity,
+    error: activityError,
+  } = useUserActivity(userId);
   useDetailBreadcrumb(
     `/admin/users/${userId}`,
     user ? (user.name ?? user.email ?? userId) : undefined,
@@ -143,6 +147,7 @@ export default function UserDetailPage() {
       key={user.id}
       user={user as UserWithGroups}
       activity={activity as ActivityResult | undefined}
+      activityError={activityError}
       isLoadingActivity={isLoadingActivity}
       userId={userId}
       activeTab={activeTab}
@@ -157,6 +162,7 @@ export default function UserDetailPage() {
 interface UserDetailPresenterProps {
   user: UserWithGroups;
   activity?: ActivityResult;
+  activityError?: Error | null;
   isLoadingActivity: boolean;
   userId: string;
   activeTab: Tab;
@@ -165,6 +171,7 @@ interface UserDetailPresenterProps {
 function UserDetailPresenter({
   user,
   activity,
+  activityError,
   isLoadingActivity,
   userId,
   activeTab,
@@ -531,6 +538,12 @@ function UserDetailPresenter({
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
                 </div>
+              ) : activityError && !activity ? (
+                <Alert>
+                  <AlertDescription>
+                    {activityError.message || 'User activity is temporarily unavailable.'}
+                  </AlertDescription>
+                </Alert>
               ) : !activity || activity.items.length === 0 ? (
                 <DataTableEmpty
                   variant="empty"
@@ -539,24 +552,33 @@ function UserDetailPresenter({
                   description="Activity for this user will appear here as they use the system."
                 />
               ) : (
-                <ul className="space-y-4">
-                  {activity.items.map((item) => (
-                    <li key={item.id} className="flex items-start gap-4">
-                      <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
-                        <Clock className="text-muted-foreground h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm">
-                          <span className="font-medium">{item.action}</span> on{' '}
-                          <span className="text-muted-foreground">{item.entityType}</span>
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                          {new Date(item.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-4">
+                  {activityError ? (
+                    <Alert>
+                      <AlertDescription>
+                        {activityError.message || 'User activity is temporarily unavailable.'}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                  <ul className="space-y-4">
+                    {activity.items.map((item) => (
+                      <li key={item.id} className="flex items-start gap-4">
+                        <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+                          <Clock className="text-muted-foreground h-4 w-4" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm">
+                            <span className="font-medium">{item.action}</span> on{' '}
+                            <span className="text-muted-foreground">{item.entityType}</span>
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {new Date(item.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </CardContent>
           </Card>

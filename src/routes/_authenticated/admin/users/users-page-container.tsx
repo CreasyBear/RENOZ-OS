@@ -269,7 +269,7 @@ export default function UsersAdminPageContainer() {
   );
 
   // Handle loading state
-  if (isLoadingUsers || isLoadingStats) {
+  if (isLoadingUsers || (isLoadingStats && !statsData)) {
     return (
       <PageLayout variant="full-width">
         <PageLayout.Content>
@@ -280,10 +280,10 @@ export default function UsersAdminPageContainer() {
   }
 
   // Handle error state
-  if (usersError || statsError) {
+  if (usersError && !usersData) {
     return (
       <RouteErrorFallback
-        error={usersError || statsError || new Error('Unknown error')}
+        error={usersError}
         parentRoute="/admin"
       />
     );
@@ -294,6 +294,11 @@ export default function UsersAdminPageContainer() {
       users={users}
       stats={stats}
       filters={filters}
+      statsUnavailableMessage={
+        statsError
+          ? 'User metrics are temporarily unavailable. Showing the latest user table data.'
+          : null
+      }
       onFiltersChange={handleFiltersChange}
       search={{ page: search.page, pageSize: search.pageSize, sortBy: search.sortBy, sortOrder: search.sortOrder }}
       isLoading={isLoading}

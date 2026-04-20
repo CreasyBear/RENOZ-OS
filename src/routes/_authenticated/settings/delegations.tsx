@@ -119,9 +119,21 @@ function DelegationsPage() {
   const tab = search.tab ?? 'my-delegations';
 
   // Fetch data using hooks
-  const { data: myDelegationsData, isLoading: isLoadingMyDelegations } = useMyDelegations({ page: 1, pageSize: 50 });
-  const { data: delegationsToMeData, isLoading: isLoadingDelegationsToMe } = useDelegationsToMe({ page: 1, pageSize: 50 });
-  const { data: usersData, isLoading: isLoadingUsers } = useUsers({ page: 1, pageSize: 100, sortOrder: 'asc', status: 'active' });
+  const {
+    data: myDelegationsData,
+    isLoading: isLoadingMyDelegations,
+    error: myDelegationsError,
+  } = useMyDelegations({ page: 1, pageSize: 50 });
+  const {
+    data: delegationsToMeData,
+    isLoading: isLoadingDelegationsToMe,
+    error: delegationsToMeError,
+  } = useDelegationsToMe({ page: 1, pageSize: 50 });
+  const {
+    data: usersData,
+    isLoading: isLoadingUsers,
+    error: usersError,
+  } = useUsers({ page: 1, pageSize: 100, sortOrder: 'asc', status: 'active' });
 
   // Mutations
   const createDelegationMutation = useCreateDelegation();
@@ -146,7 +158,10 @@ function DelegationsPage() {
 
   const selectedUser = availableUsers.find((u) => u.id === selectedUserId);
 
-  const isLoading = isLoadingMyDelegations || isLoadingDelegationsToMe || isLoadingUsers;
+  const isLoading =
+    (isLoadingMyDelegations && !myDelegationsData) ||
+    (isLoadingDelegationsToMe && !delegationsToMeData) ||
+    (isLoadingUsers && !usersData);
   const isSubmitting = createDelegationMutation.isPending || cancelDelegationMutation.isPending;
 
   const handleTabChange = (newTab: string) => {
@@ -230,6 +245,21 @@ function DelegationsPage() {
       />
       <PageLayout.Content className="space-y-6">
 
+      {myDelegationsError || delegationsToMeError || usersError ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="flex items-start gap-3 py-4">
+            <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700" />
+            <div className="space-y-1 text-sm text-amber-900">
+              <p className="font-medium">Delegation data is partially unavailable.</p>
+              <p>
+                Existing delegation data is still visible where available. Refresh to retry the
+                unavailable sections.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Active Delegation Banner */}
       {activeDelegations.length > 0 && (
         <Card className="border-blue-200 bg-blue-50">
@@ -277,7 +307,15 @@ function DelegationsPage() {
 
         {/* My Delegations Tab */}
         <TabsContent value="my-delegations" className="mt-6">
-          {myDelegations.items.length === 0 ? (
+          {myDelegationsError && myDelegations.items.length === 0 ? (
+            <Card className="flex flex-col items-center justify-center py-12">
+              <AlertCircle className="text-muted-foreground mb-4 h-12 w-12" />
+              <h3 className="text-lg font-medium">Delegations unavailable</h3>
+              <p className="text-muted-foreground mt-1 max-w-sm text-center">
+                We couldn&apos;t load your delegations right now. Please refresh and try again.
+              </p>
+            </Card>
+          ) : myDelegations.items.length === 0 ? (
             <Card className="flex flex-col items-center justify-center py-12">
               <Users className="text-muted-foreground mb-4 h-12 w-12" />
               <h3 className="text-lg font-medium">No delegations yet</h3>
@@ -306,7 +344,15 @@ function DelegationsPage() {
 
         {/* Delegated to Me Tab */}
         <TabsContent value="delegated-to-me" className="mt-6">
-          {delegationsToMe.items.length === 0 ? (
+          {delegationsToMeError && delegationsToMe.items.length === 0 ? (
+            <Card className="flex flex-col items-center justify-center py-12">
+              <AlertCircle className="text-muted-foreground mb-4 h-12 w-12" />
+              <h3 className="text-lg font-medium">Delegations unavailable</h3>
+              <p className="text-muted-foreground mt-1 max-w-sm text-center">
+                We couldn&apos;t load delegations assigned to you right now. Please refresh and try again.
+              </p>
+            </Card>
+          ) : delegationsToMe.items.length === 0 ? (
             <Card className="flex flex-col items-center justify-center py-12">
               <UserCheck className="text-muted-foreground mb-4 h-12 w-12" />
               <h3 className="text-lg font-medium">No tasks delegated to you</h3>
@@ -401,6 +447,11 @@ function DelegationsPage() {
                   </Command>
                 </PopoverContent>
               </Popover>
+              {usersError && availableUsers.length === 0 ? (
+                <p className="text-sm text-amber-700">
+                  Colleague lookup is temporarily unavailable. Refresh and try again.
+                </p>
+              ) : null}
             </div>
 
             {/* Date Range */}

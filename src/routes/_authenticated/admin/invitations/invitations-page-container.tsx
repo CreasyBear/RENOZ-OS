@@ -44,7 +44,7 @@ export default function InvitationsPageContainer() {
     pageSize: search.pageSize,
     status: search.status === 'all' ? undefined : search.status,
   });
-  const { data: invitationStatsData } = useInvitationStats();
+  const { data: invitationStatsData, error: invitationStatsError } = useInvitationStats();
 
   // Mutation hooks
   const sendInvitationMutation = useSendInvitation();
@@ -165,7 +165,7 @@ export default function InvitationsPageContainer() {
     resendInvitationMutation.isPending;
 
   // Handle loading state
-  if (isLoadingInvitations) {
+  if (isLoadingInvitations && !invitationsData) {
     return (
       <PageLayout variant="full-width">
         <PageLayout.Content>
@@ -176,7 +176,7 @@ export default function InvitationsPageContainer() {
   }
 
   // Handle error state
-  if (invitationsError) {
+  if (invitationsError && !invitationsData) {
     return (
       <PageLayout variant="full-width">
         <PageLayout.Content>
@@ -200,6 +200,11 @@ export default function InvitationsPageContainer() {
     <InvitationsPagePresenter
       filteredInvitations={filteredInvitations}
       stats={stats}
+      statsUnavailableMessage={
+        invitationStatsError
+          ? 'Invitation metrics are temporarily unavailable. Showing the latest invitation list data.'
+          : null
+      }
       search={search}
       pagination={invitations.pagination}
       searchQuery={searchQuery}

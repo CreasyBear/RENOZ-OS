@@ -1,4 +1,3 @@
-src/hooks/_shared/use-audit-logs.ts
 src/hooks/dashboard/use-dashboard-layouts.ts
 src/hooks/dashboard/use-inventory-counts.ts
 src/hooks/dashboard/use-recent-items.ts
@@ -13,12 +12,6 @@ src/hooks/products/use-product-inventory.ts
 src/hooks/products/use-product-pricing.ts
 src/hooks/products/use-product-search-advanced.ts
 src/hooks/products/use-products.ts
-src/hooks/profile/use-notification-preferences.ts
 src/hooks/settings/use-win-loss-reasons.ts
 src/hooks/support/use-issue-templates.ts
 src/hooks/support/use-knowledge-base.ts
-src/hooks/users/use-delegations.ts
-src/hooks/users/use-invitations.ts
-src/hooks/users/use-my-activity.ts
-src/hooks/users/use-sessions.ts
-src/hooks/users/use-users.ts

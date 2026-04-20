@@ -282,29 +282,45 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 | `src/components/domain/reports/win-loss-analysis-container.tsx` | `useWinLossAnalysis`, `useCompetitors` consumer | n/a | win/loss container previously had no explicit degraded path | `headline` | cached analytics stay visible with degraded banner; cold-load failure is explicit unavailable state | `tests/unit/reports/query-normalization-wave4e.test.tsx` | `verified` | Keeps report presenter visible while upstream reads retry. |
 | `tests/unit/reports/query-normalization-wave4e.test.tsx` | reports/analytics wave test | n/a | hook and consumer verification | n/a | n/a | self | `verified` | Covers list/detail semantics plus landing/settings/win-loss degraded behavior. |
 
-### Wave 5: Long Tail
+### Wave 5A: Admin Identity and Personal Control Plane
 
-- `src/hooks/_shared/use-audit-logs.ts`
-- `src/hooks/dashboard/use-dashboard-layouts.ts`
-- `src/hooks/dashboard/use-inventory-counts.ts`
-- `src/hooks/dashboard/use-recent-items.ts`
-- `src/hooks/dashboard/use-tracked-products.ts`
-- `src/hooks/documents/use-generate-document.ts`
-- `src/hooks/invoices/use-invoice-summary.ts`
-- `src/hooks/invoices/use-invoices.ts`
-- `src/hooks/portal/use-portal-data.ts`
-- `src/hooks/products/use-product-bundles.ts`
-- `src/hooks/products/use-product-images.ts`
-- `src/hooks/products/use-product-inventory.ts`
-- `src/hooks/products/use-product-pricing.ts`
-- `src/hooks/products/use-product-search-advanced.ts`
-- `src/hooks/products/use-products.ts`
-- `src/hooks/profile/use-notification-preferences.ts`
-- `src/hooks/settings/use-win-loss-reasons.ts`
-- `src/hooks/users/use-delegations.ts`
-- `src/hooks/users/use-invitations.ts`
-- `src/hooks/users/use-my-activity.ts`
-- `src/hooks/users/use-sessions.ts`
-- `src/hooks/users/use-users.ts`
-- `tests/unit/users/query-normalization-wave5.test.ts`
-- `tests/unit/query-error-normalization-wave5.test.ts`
+| File | Backing server fn | Contract type | Semantic outcomes | Consumer criticality | Render policy | Test file | Status | Deferred reason / notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/hooks/_shared/use-audit-logs.ts` | `listAuditLogs`, `getAuditStats` | `always-shaped` | audit log lists and stats keep healthy empty success | `headline` | audit/admin surfaces distinguish unavailable from empty results | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Raw sentinel throws removed; metrics now normalize to read-path failures only on real transport or auth errors. |
+| `src/hooks/users/use-users.ts` | `listUsers`, `getUser`, `getUserStats`, `getUserActivity` | mixed: `always-shaped`, `detail-not-found` | user list/stats/activity are shaped empty success; missing user detail stays `not-found` | `headline` | admin users list stays usable when stats fail independently; detail pages preserve `404` meaning | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | User activity tabs now distinguish unavailable from real empty history. |
+| `src/hooks/users/use-invitations.ts` | `getInvitationByToken`, `listInvitations`, `listInvitationStats` | mixed: `detail-not-found`, `always-shaped` | invalid invite token stays `not-found`; invitation list/stats remain shaped empty success | `headline` | invitation admin screens degrade stats independently; accept-invitation preserves invalid-link semantics | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | No synthetic null failure remains in invitation list/stats reads. |
+| `src/hooks/users/use-delegations.ts` | `listMyDelegations`, `listDelegationsToMe`, `listAllDelegations`, `getActiveDelegate` | mixed: `always-shaped`, `nullable-by-design` | delegation lists are shaped empty success; active delegate remains valid `null` when absent | `secondary` | delegation settings keep stale list data visible and use unavailable states only on cold-load failure | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | `getActiveDelegate` preserves server-provided absence instead of throwing a synthetic failure. |
+| `src/hooks/users/use-my-activity.ts` | `getMyActivity` | `always-shaped` | recent security activity keeps healthy empty success | `secondary` | security settings distinguish unavailable from “no recent activity” | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Settings page now shows degraded warning when activity refresh fails with cached data. |
+| `src/hooks/users/use-sessions.ts` | `listMySessions` | `always-shaped` | active sessions list keeps healthy empty success | `secondary` | security settings no longer treat failed session reads as “no active sessions” | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Session management stays usable on stale-data refetch failure. |
+| `src/hooks/profile/use-notification-preferences.ts` | `getPreferences` | `always-shaped` | empty preference rows map to valid default state, not failure | `secondary` | profile settings show unavailable copy instead of first-run empty behavior on read failure | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Preference form now surfaces read errors explicitly. |
+| `src/routes/_authenticated/admin/users/users-page-container.tsx` | `useUsers`, `useUserStats` consumer | n/a | user table can remain visible while stats fail | `headline` | cold-load user failure blocks; stats failure with user data degrades locally | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Matches the cross-wave stale-data policy. |
+| `src/routes/_authenticated/admin/users/user-detail-page.tsx` | `useUser`, `useUserActivity` consumer | n/a | user detail remains headline; activity tab is secondary | `headline` + `secondary` | detail not-found blocks intentionally; activity failure no longer renders a fake empty history | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Activity tab now shows localized unavailable messaging. |
+| `src/routes/_authenticated/admin/invitations/invitations-page-container.tsx` | `useInvitationsFiltered`, `useInvitationStats` consumer | n/a | list can remain visible while stats fail | `headline` | invitation list blocks only on cold-load list failure; stats degrade locally | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Keeps invitation admin consistent with user admin policy. |
+| `src/routes/_authenticated/settings/delegations.tsx` | delegation + users consumers | n/a | delegation sections can degrade independently | `headline` + `secondary` | existing delegation data stays visible where available; cold-load failures render unavailable states | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Create-dialog user picker now distinguishes unavailable lookup from empty colleague list. |
+| `src/routes/_authenticated/settings/security.tsx` | sessions + activity consumers | n/a | sessions and activity are secondary sections on a settings page | `secondary` | stale sessions/activity remain visible with degraded warning; cold-load failures no longer fake empty sections | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Settings page now uses localized unavailable panels. |
+| `src/components/domain/users/notification-preferences-form.tsx` | preferences consumer | n/a | default preferences remain valid empty success | `secondary` | read failure now shows explicit unavailable message above the form | `tests/unit/users/query-normalization-wave5a.test.tsx` | `verified` | Prevents fake first-run state on transport failure. |
+| `tests/unit/users/query-normalization-wave5a.test.tsx` | admin/control-plane wave test | n/a | hook and consumer verification | n/a | n/a | self | `verified` | Covers hook contracts plus degraded admin/settings consumer states. |
+
+### Wave 5 Remaining Backlog
+
+- `5B` Product catalog foundation
+  - `src/hooks/products/use-product-bundles.ts`
+  - `src/hooks/products/use-product-images.ts`
+  - `src/hooks/products/use-product-pricing.ts`
+  - `src/hooks/products/use-product-search-advanced.ts`
+  - `src/hooks/products/use-products.ts`
+- `5C` Product operational reads and dashboard shell
+  - `src/hooks/dashboard/use-dashboard-layouts.ts`
+  - `src/hooks/dashboard/use-inventory-counts.ts`
+  - `src/hooks/dashboard/use-recent-items.ts`
+  - `src/hooks/dashboard/use-tracked-products.ts`
+  - `src/hooks/products/use-product-inventory.ts`
+- `5D` Finance, portal, and document delivery
+  - `src/hooks/documents/use-generate-document.ts`
+  - `src/hooks/invoices/use-invoice-summary.ts`
+  - `src/hooks/invoices/use-invoices.ts`
+  - `src/hooks/portal/use-portal-data.ts`
+- `5E` Support/settings tail
+  - `src/hooks/settings/use-win-loss-reasons.ts`
+  - `src/hooks/support/use-issue-templates.ts`
+  - `src/hooks/support/use-knowledge-base.ts`
