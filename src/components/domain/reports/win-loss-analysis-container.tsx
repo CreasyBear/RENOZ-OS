@@ -15,6 +15,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { useWinLossAnalysis, useCompetitors } from '@/hooks/reports';
 import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
 import { WinLossAnalysis } from './win-loss-analysis';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
 // ============================================================================
 // HELPERS
@@ -60,6 +62,7 @@ export function WinLossAnalysisContainer() {
 
   // Fetch competitors
   const competitorsQuery = useCompetitors({ dateFrom, dateTo });
+  const hasAnyData = Boolean(analysisQuery.data || competitorsQuery.data);
 
   const createScheduledReport = useCreateScheduledReport();
   const generateReport = useGenerateReport();
@@ -103,18 +106,43 @@ export function WinLossAnalysisContainer() {
   }, []);
 
   return (
-    <WinLossAnalysis
-      analysis={analysisQuery.data}
-      competitors={competitorsQuery.data?.competitors ?? []}
-      isLoading={analysisQuery.isLoading || competitorsQuery.isLoading}
-      period={period}
-      onPeriodChange={setPeriod}
-      onExport={handleExport}
-      onScheduleReport={handleScheduleReport}
-      scheduleOpen={scheduleOpen}
-      onScheduleOpenChange={handleScheduleOpenChange}
-      onScheduleSubmit={handleScheduleSubmit}
-      isScheduleSubmitting={createScheduledReport.isPending}
-    />
+    <div className="space-y-4">
+      {analysisQuery.error || competitorsQuery.error ? (
+        <Alert variant={hasAnyData ? 'default' : 'destructive'}>
+          <AlertTitle>
+            {hasAnyData ? 'Showing cached win/loss data' : 'Win/loss analysis unavailable'}
+          </AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {(analysisQuery.error ?? competitorsQuery.error)?.message ??
+                'Win/loss analysis is temporarily unavailable. Please refresh and try again.'}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void analysisQuery.refetch();
+                void competitorsQuery.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <WinLossAnalysis
+        analysis={analysisQuery.data}
+        competitors={competitorsQuery.data?.competitors ?? []}
+        isLoading={analysisQuery.isLoading || competitorsQuery.isLoading}
+        period={period}
+        onPeriodChange={setPeriod}
+        onExport={handleExport}
+        onScheduleReport={handleScheduleReport}
+        scheduleOpen={scheduleOpen}
+        onScheduleOpenChange={handleScheduleOpenChange}
+        onScheduleSubmit={handleScheduleSubmit}
+        isScheduleSubmitting={createScheduledReport.isPending}
+      />
+    </div>
   );
 }

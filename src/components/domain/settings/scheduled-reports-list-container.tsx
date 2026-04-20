@@ -10,6 +10,7 @@
 
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useConfirmation } from '@/hooks';
 import { confirmations } from '@/hooks/_shared/use-confirmation';
 import { toast } from '@/hooks';
@@ -351,6 +352,17 @@ export function ScheduledReportsListContainer({
 
       {/* Filters + Bulk Actions */}
       <div className="space-y-3">
+        {error && reports.length > 0 ? (
+          <Alert>
+            <AlertTitle>Showing cached scheduled reports</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{error.message}</span>
+              <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <DomainFilterBar
           config={SCHEDULED_REPORTS_FILTER_CONFIG}
           filters={filters}
@@ -379,7 +391,7 @@ export function ScheduledReportsListContainer({
         <ScheduledReportsListPresenter
           reports={reports}
           isLoading={isLoading}
-          error={error instanceof Error ? error : error ? new Error(String(error)) : null}
+          error={reports.length === 0 ? (error instanceof Error ? error : error ? new Error(String(error)) : null) : null}
           onRetry={() => refetch()}
           filters={filters}
           onFiltersChange={onFiltersChange}

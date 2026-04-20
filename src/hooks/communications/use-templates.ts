@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { QUERY_CONFIG } from '@/lib/constants';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   CreateTemplateInput,
   UpdateTemplateInput,
@@ -45,11 +46,17 @@ export function useTemplates(options: UseTemplatesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.communications.templatesList({ type: category, limit: 100 }),
     queryFn: async () => {
-      const result = await getEmailTemplates({
-        data: { category, activeOnly } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getEmailTemplates({
+          data: { category, activeOnly } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Email templates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_LONG,
@@ -67,11 +74,17 @@ export function useTemplate(options: UseTemplateOptions) {
   return useQuery({
     queryKey: queryKeys.communications.templateDetail(templateId),
     queryFn: async () => {
-      const result = await getEmailTemplate({
-        data: { id: templateId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getEmailTemplate({
+          data: { id: templateId } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Template details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!templateId,
     staleTime: 5 * 60 * 1000,
@@ -89,11 +102,17 @@ export function useTemplateVersions(options: UseTemplateVersionsOptions) {
   return useQuery({
     queryKey: queryKeys.communications.templateVersions(templateId),
     queryFn: async () => {
-      const result = await getTemplateVersionHistory({
-        data: { templateId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getTemplateVersionHistory({
+          data: { templateId } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Template version history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!templateId,
     staleTime: 5 * 60 * 1000,

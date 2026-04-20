@@ -15,6 +15,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { MessageSquare } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { z } from 'zod';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -158,6 +160,8 @@ export function CommunicationsContainer({
   const {
     data: communicationsData,
     isLoading: isLoadingCommunications,
+    error: communicationsError,
+    refetch: refetchCommunications,
   } = useCustomerCommunications({
     customerId: customerId || '',
     enabled: !!customerId && activeTab === 'timeline',
@@ -171,6 +175,8 @@ export function CommunicationsContainer({
   const {
     data: templatesData,
     isLoading: isLoadingTemplates,
+    error: templatesError,
+    refetch: refetchTemplates,
   } = useTemplates({
     enabled: activeTab === 'templates',
   });
@@ -198,6 +204,8 @@ export function CommunicationsContainer({
   const {
     data: campaignsData,
     isLoading: isLoadingCampaigns,
+    error: campaignsError,
+    refetch: refetchCampaigns,
   } = useCampaigns({
     enabled: activeTab === 'campaigns',
   });
@@ -383,12 +391,27 @@ export function CommunicationsContainer({
 
           <TabsContent value="timeline" className="mt-6">
             {customerId ? (
-              <CommunicationTimeline
-                customerId={customerId}
-                communications={communications}
-                isLoading={isLoadingCommunications}
-                onLogCommunication={handleLogCommunication}
-              />
+              <div className="space-y-4">
+                {communicationsError ? (
+                  <Alert variant={communicationsData ? "default" : "destructive"}>
+                    <AlertTitle>
+                      {communicationsData ? "Showing cached communications" : "Customer communications unavailable"}
+                    </AlertTitle>
+                    <AlertDescription className="flex items-center justify-between gap-3">
+                      <span>{communicationsError.message}</span>
+                      <Button variant="outline" size="sm" onClick={() => void refetchCommunications()}>
+                        Retry
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                <CommunicationTimeline
+                  customerId={customerId}
+                  communications={communications}
+                  isLoading={isLoadingCommunications}
+                  onLogCommunication={handleLogCommunication}
+                />
+              </div>
             ) : (
               <div className="text-center py-12">
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -407,22 +430,52 @@ export function CommunicationsContainer({
           </TabsContent>
 
           <TabsContent value="templates" className="mt-6">
-            <CommunicationTemplates
-              templates={templates}
-              isLoading={isLoadingTemplates}
-              onSaveTemplate={handleSaveTemplate}
-              onDeleteTemplate={handleDeleteTemplate}
-              onUseTemplate={handleUseTemplate}
-            />
+            <div className="space-y-4">
+              {templatesError ? (
+                <Alert variant={templatesData ? "default" : "destructive"}>
+                  <AlertTitle>
+                    {templatesData ? "Showing cached templates" : "Templates unavailable"}
+                  </AlertTitle>
+                  <AlertDescription className="flex items-center justify-between gap-3">
+                    <span>{templatesError.message}</span>
+                    <Button variant="outline" size="sm" onClick={() => void refetchTemplates()}>
+                      Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              <CommunicationTemplates
+                templates={templates}
+                isLoading={isLoadingTemplates}
+                onSaveTemplate={handleSaveTemplate}
+                onDeleteTemplate={handleDeleteTemplate}
+                onUseTemplate={handleUseTemplate}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="campaigns" className="mt-6">
-            <BulkCommunications
-              segments={segments}
-              campaigns={campaigns}
-              isLoading={isLoadingCampaigns || isLoadingSegments}
-              onSendCampaign={handleSendCampaign}
-            />
+            <div className="space-y-4">
+              {campaignsError ? (
+                <Alert variant={campaignsData ? "default" : "destructive"}>
+                  <AlertTitle>
+                    {campaignsData ? "Showing cached campaigns" : "Campaigns unavailable"}
+                  </AlertTitle>
+                  <AlertDescription className="flex items-center justify-between gap-3">
+                    <span>{campaignsError.message}</span>
+                    <Button variant="outline" size="sm" onClick={() => void refetchCampaigns()}>
+                      Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              <BulkCommunications
+                segments={segments}
+                campaigns={campaigns}
+                isLoading={isLoadingCampaigns || isLoadingSegments}
+                onSendCampaign={handleSendCampaign}
+              />
+            </div>
           </TabsContent>
         </Tabs>
 

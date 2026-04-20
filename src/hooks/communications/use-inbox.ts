@@ -14,6 +14,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useCallback } from "react";
 import { queryKeys } from "@/lib/query-keys";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { listEmailHistory } from "@/server/functions/communications/email-history";
 import { getScheduledEmails } from "@/server/functions/communications/scheduled-emails";
 import { QUERY_CONFIG, LIMITS } from "@/lib/constants";
@@ -152,20 +153,24 @@ export function useInbox(filters: InboxListQuery = { page: 1, pageSize: LIMITS.E
       cursor: undefined, // Cursor pagination not yet implemented - using offset pagination
     }),
     queryFn: async () => {
-      const result = await listEmailHistory({
-        data: {
-          status: filters.status,
-          customerId: filters.customerId,
-          campaignId: filters.campaignId,
-          dateFrom: filters.dateFrom,
-          dateTo: filters.dateTo,
-          search: filters.search,
-          pageSize: filters.pageSize ?? LIMITS.EMAIL_SYNC_MAX_EMAILS,
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listEmailHistory({
+          data: {
+            status: filters.status,
+            customerId: filters.customerId,
+            campaignId: filters.campaignId,
+            dateFrom: filters.dateFrom,
+            dateTo: filters.dateTo,
+            search: filters.search,
+            pageSize: filters.pageSize ?? LIMITS.EMAIL_SYNC_MAX_EMAILS,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: "always-shaped",
+          fallbackMessage: "Email history is temporarily unavailable. Please refresh and try again.",
+        });
+      }
     },
     enabled: shouldFetchHistory,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
@@ -181,18 +186,24 @@ export function useInbox(filters: InboxListQuery = { page: 1, pageSize: LIMITS.E
       offset: ((filters.page ?? 1) - 1) * (filters.pageSize ?? 50),
     }),
     queryFn: async () => {
-      const result = await getScheduledEmails({
-        data: {
-          status: filters.status === "pending" ? "pending" : filters.status === "sent" ? "sent" : undefined,
-          customerId: filters.customerId,
-          search: filters.search,
-          limit: filters.pageSize ?? LIMITS.EMAIL_SYNC_MAX_EMAILS,
-          offset: ((filters.page ?? 1) - 1) * (filters.pageSize ?? LIMITS.EMAIL_SYNC_MAX_EMAILS),
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledEmails({
+          data: {
+            status:
+              filters.status === "pending" ? "pending" : filters.status === "sent" ? "sent" : undefined,
+            customerId: filters.customerId,
+            search: filters.search,
+            limit: filters.pageSize ?? LIMITS.EMAIL_SYNC_MAX_EMAILS,
+            offset: ((filters.page ?? 1) - 1) * (filters.pageSize ?? LIMITS.EMAIL_SYNC_MAX_EMAILS),
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: "always-shaped",
+          fallbackMessage:
+            "Scheduled emails are temporarily unavailable. Please refresh and try again.",
+        });
+      }
     },
     enabled: shouldFetchScheduled,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,

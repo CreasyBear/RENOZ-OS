@@ -17,6 +17,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTemplates } from "@/hooks/communications";
 import { TemplatesList } from "@/components/domain/communications/templates-list";
 import { ErrorState } from "@/components/shared";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { useFilterUrlState } from "@/hooks/filters/use-filter-url-state";
 import { useTemplatesPage } from "./use-templates-page";
 import {
@@ -70,7 +72,7 @@ export default function TemplatesPage({ search }: TemplatesPageProps) {
   // ============================================================================
   // ERROR STATE
   // ============================================================================
-  if (error) {
+  if (error && !templatesData) {
     return (
       <>
         <h2 className="text-xl font-semibold mb-4">Email Templates</h2>
@@ -94,6 +96,17 @@ export default function TemplatesPage({ search }: TemplatesPageProps) {
       <p className="text-sm text-muted-foreground mb-4">
         Manage reusable email templates for campaigns and communications
       </p>
+      {error ? (
+        <Alert className="mb-4">
+          <AlertTitle>Showing cached templates</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <TemplatesList
           templates={templates}
           isLoading={isLoading}

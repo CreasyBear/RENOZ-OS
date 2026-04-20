@@ -1,15 +1,4 @@
 src/hooks/_shared/use-audit-logs.ts
-src/hooks/communications/use-campaigns.ts
-src/hooks/communications/use-contact-preferences.ts
-src/hooks/communications/use-customer-communications.ts
-src/hooks/communications/use-email-history.ts
-src/hooks/communications/use-email-preview.ts
-src/hooks/communications/use-email-suppression.ts
-src/hooks/communications/use-inbox.ts
-src/hooks/communications/use-scheduled-calls.ts
-src/hooks/communications/use-scheduled-emails.ts
-src/hooks/communications/use-signatures.ts
-src/hooks/communications/use-templates.ts
 src/hooks/dashboard/use-dashboard-layouts.ts
 src/hooks/dashboard/use-inventory-counts.ts
 src/hooks/dashboard/use-recent-items.ts
@@ -25,10 +14,6 @@ src/hooks/products/use-product-pricing.ts
 src/hooks/products/use-product-search-advanced.ts
 src/hooks/products/use-products.ts
 src/hooks/profile/use-notification-preferences.ts
-src/hooks/reports/use-custom-reports.ts
-src/hooks/reports/use-report-favorites.ts
-src/hooks/reports/use-scheduled-reports.ts
-src/hooks/reports/use-win-loss.ts
 src/hooks/settings/use-win-loss-reasons.ts
 src/hooks/support/use-issue-templates.ts
 src/hooks/support/use-knowledge-base.ts

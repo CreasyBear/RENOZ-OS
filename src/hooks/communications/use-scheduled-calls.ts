@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { QUERY_CONFIG } from '@/lib/constants';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   ScheduleCallInput,
   UpdateScheduledCallInput,
@@ -59,12 +60,17 @@ export function useScheduledCalls(options: UseScheduledCallsOptions = {}) {
   return useQuery<ListScheduledCallsResult>({
     queryKey: queryKeys.communications.scheduledCallsList({ customerId, assigneeId, status }),
     queryFn: async () => {
-      const result = await getScheduledCalls({
-        data: { customerId, assigneeId, status, fromDate, toDate, limit, offset }
-    
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledCalls({
+          data: { customerId, assigneeId, status, fromDate, toDate, limit, offset },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Scheduled calls are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
@@ -82,11 +88,17 @@ export function useScheduledCall(options: UseScheduledCallOptions) {
   return useQuery({
     queryKey: queryKeys.communications.scheduledCallDetail(callId),
     queryFn: async () => {
-      const result = await getScheduledCallById({
-        data: { id: callId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledCallById({
+          data: { id: callId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Scheduled call details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!callId,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
@@ -107,19 +119,24 @@ export function useUpcomingCalls(options: UseUpcomingCallsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.communications.upcomingCalls({ assigneeId, limit }),
     queryFn: async () => {
-      const result = await getScheduledCalls({
-        data: {
-        assigneeId,
-        status: 'pending',
-        fromDate: now,
-        toDate: tomorrow,
-        limit,
-        offset: 0,
+      try {
+        return await getScheduledCalls({
+          data: {
+            assigneeId,
+            status: 'pending',
+            fromDate: now,
+            toDate: tomorrow,
+            limit,
+            offset: 0,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Upcoming calls are temporarily unavailable. Please refresh and try again.',
+        });
       }
-    
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM, // upcoming calls need to stay fresh

@@ -10,6 +10,8 @@
  */
 import { useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { ScheduledEmailsList } from "@/components/domain/communications";
 import { ScheduleEmailDialog } from "@/components/domain/communications";
 import { DomainFilterBar } from "@/components/shared/filters";
@@ -113,12 +115,28 @@ export default function ScheduledEmailsPage({ search }: ScheduledEmailsPageProps
         className="mb-6"
       />
 
+      {error && data ? (
+        <Alert className="mb-6">
+          <AlertTitle>Showing cached scheduled emails</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {error instanceof Error
+                ? error.message
+                : "Scheduled emails are temporarily unavailable. Please refresh and try again."}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <ScheduledEmailsList
         items={emails}
         total={emails.length}
         totalAll={totalCount}
         isLoading={isLoading}
-        error={error}
+        error={data ? undefined : error}
         onRefresh={refetch}
         isRefreshing={isFetching}
         onCancel={handleCancel}

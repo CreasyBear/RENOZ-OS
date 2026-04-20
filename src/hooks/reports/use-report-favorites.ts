@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listReportFavorites,
   createReportFavorite,
@@ -46,9 +47,15 @@ export function useReportFavorites(options: UseReportFavoritesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.reportFavorites.list(filters),
     queryFn: async () => {
-      const result = await listReportFavorites({ data: filters as ListReportFavoritesInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listReportFavorites({ data: filters as ListReportFavoritesInput });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Report favorites are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,

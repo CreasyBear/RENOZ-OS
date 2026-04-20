@@ -331,7 +331,7 @@ export default function CampaignsPage() {
   // ============================================================================
   // ERROR STATE
   // ============================================================================
-  if (error) {
+  if (error && !campaignsData) {
     return (
       <ErrorState
         title="Failed to load campaigns"
@@ -346,6 +346,21 @@ export default function CampaignsPage() {
   // ============================================================================
   return (
     <div className="space-y-4">
+      {error ? (
+        <Alert>
+          <AlertTitle>Showing cached campaigns</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <button
+              type="button"
+              className="text-sm font-medium underline underline-offset-4"
+              onClick={() => void refetch()}
+            >
+              Retry
+            </button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {bulkFailures.length > 0 && (
         <Alert variant="destructive">
           <AlertTitle>

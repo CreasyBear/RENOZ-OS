@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { QUERY_CONFIG } from "@/lib/constants";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import {
   getSuppressionList,
   isEmailSuppressed,
@@ -50,20 +51,26 @@ export function useSuppressionList(options: UseSuppressionListOptions = {}) {
   return useQuery({
     queryKey: queryKeys.communications.emailSuppression.list(filters),
     queryFn: async () => {
-      const result = await getSuppressionList({
-        data: {
-          reason: filters.reason,
-          search: filters.search,
-          includeDeleted: filters.includeDeleted ?? false,
-          page: filters.page ?? 1,
-          pageSize: filters.pageSize ?? 20,
-          sortBy: filters.sortBy ?? "createdAt",
-          sortOrder: filters.sortOrder ?? "desc",
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSuppressionList({
+          data: {
+            reason: filters.reason,
+            search: filters.search,
+            includeDeleted: filters.includeDeleted ?? false,
+            page: filters.page ?? 1,
+            pageSize: filters.pageSize ?? 20,
+            sortBy: filters.sortBy ?? "createdAt",
+            sortOrder: filters.sortOrder ?? "desc",
+          },
+        
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: "always-shaped",
+          fallbackMessage:
+            "Suppression list data is temporarily unavailable. Please refresh and try again.",
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
@@ -96,11 +103,17 @@ export function useCheckSuppression(options: UseCheckSuppressionOptions) {
   return useQuery({
     queryKey: queryKeys.communications.emailSuppression.check(email),
     queryFn: async () => {
-      const result = await isEmailSuppressed({
-        data: { email } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await isEmailSuppressed({
+          data: { email } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: "always-shaped",
+          fallbackMessage:
+            "Suppression status is temporarily unavailable. Please refresh and try again.",
+        });
+      }
     },
     enabled: enabled && !!email,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,

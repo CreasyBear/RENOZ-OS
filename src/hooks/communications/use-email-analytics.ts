@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { QUERY_CONFIG } from "@/lib/constants";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { getEmailMetrics } from "@/server/functions/communications/email-analytics";
 import type { EmailMetricsFilters } from "@/lib/schemas/communications/email-analytics";
 
@@ -38,15 +39,21 @@ export function useEmailMetrics(options: UseEmailMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.communications.emailAnalytics.metrics(filters),
     queryFn: async () => {
-      const result = await getEmailMetrics({
-        data: {
-          period: filters.period ?? "30d",
-          startDate: filters.startDate,
-          endDate: filters.endDate,
-        },
-      });
-      if (result == null) throw new Error('Email analytics returned no data');
-      return result;
+      try {
+        return await getEmailMetrics({
+          data: {
+            period: filters.period ?? "30d",
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: "always-shaped",
+          fallbackMessage:
+            "Email analytics are temporarily unavailable. Please refresh and try again.",
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_LONG,

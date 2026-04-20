@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { QUERY_CONFIG } from '@/lib/constants';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   ScheduleEmailInput,
   UpdateScheduledEmailInput,
@@ -43,11 +44,17 @@ export function useScheduledEmails(options: UseScheduledEmailsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.communications.scheduledEmailsList({ status, customerId, search }),
     queryFn: async () => {
-      const result = await getScheduledEmails({
-        data: { status, customerId, search, limit, offset } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledEmails({
+          data: { status, customerId, search, limit, offset },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Scheduled emails are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
@@ -65,11 +72,17 @@ export function useScheduledEmail(options: UseScheduledEmailOptions) {
   return useQuery({
     queryKey: queryKeys.communications.scheduledEmailDetail(emailId),
     queryFn: async () => {
-      const result = await getScheduledEmailById({
-        data: { id: emailId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledEmailById({
+          data: { id: emailId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Scheduled email details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!emailId,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,

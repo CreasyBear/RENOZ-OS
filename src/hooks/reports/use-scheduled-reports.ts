@@ -14,6 +14,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listScheduledReports,
   getScheduledReport,
@@ -61,9 +62,15 @@ export function useScheduledReports(options: UseScheduledReportsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.scheduledReports.list(filters),
     queryFn: async () => {
-      const result = await listScheduledReports({ data: filters as ListScheduledReportsInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listScheduledReports({ data: filters as ListScheduledReportsInput });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Scheduled reports are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -81,11 +88,17 @@ export function useScheduledReport({ id, enabled = true }: UseScheduledReportOpt
   return useQuery({
     queryKey: queryKeys.reports.scheduledReports.detail(id),
     queryFn: async () => {
-      const result = await getScheduledReport({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledReport({
+          data: { id } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Scheduled report details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
@@ -99,11 +112,17 @@ export function useScheduledReportStatus({ id, enabled = true }: UseScheduledRep
   return useQuery({
     queryKey: queryKeys.reports.scheduledReports.status(id),
     queryFn: async () => {
-      const result = await getScheduledReportStatus({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getScheduledReportStatus({
+          data: { id } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Scheduled report status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 30 * 1000, // 30 seconds - status can change frequently

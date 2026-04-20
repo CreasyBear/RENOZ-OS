@@ -15,6 +15,7 @@ import { useState, useMemo, useEffect, useCallback, startTransition } from "reac
 import { ErrorBoundary } from "react-error-boundary";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "@/lib/toast";
@@ -309,6 +310,25 @@ export function Inbox({
         </div>
       </header>
 
+      {error && items.length > 0 ? (
+        <Alert className="mx-4 mt-4">
+          <AlertTitle>Showing cached inbox items</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {error instanceof Error
+                ? error.message
+                : "Inbox data is temporarily unavailable. Please refresh and try again."}
+            </span>
+            {onRetry ? (
+              <Button size="sm" variant="outline" onClick={() => void Promise.resolve(onRetry())}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Split-pane layout */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         {/* List pane */}
@@ -338,7 +358,7 @@ export function Inbox({
             <InboxList
               items={items}
               isLoading={isLoading}
-              error={error}
+              error={items.length === 0 ? error : undefined}
               selectedId={selectedId}
               onSelect={setSelectedId}
             />

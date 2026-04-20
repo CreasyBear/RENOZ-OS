@@ -60,6 +60,18 @@ export interface UseProjectDetailReturn {
   files: ProjectFile[];
   activities: UnifiedActivity[];
   alerts: ProjectAlert[];
+  notesError: Error | null;
+  notesHasData: boolean;
+  filesError: Error | null;
+  filesHasData: boolean;
+  workstreamsError: Error | null;
+  workstreamsHasData: boolean;
+  siteVisitsError: Error | null;
+  siteVisitsHasData: boolean;
+  alertsError: Error | null;
+  alertsHasData: boolean;
+  refreshSiteVisits: () => Promise<unknown>;
+  refreshAlerts: () => Promise<unknown>;
 
   // Loading States
   isLoading: boolean;
@@ -159,6 +171,18 @@ export function useProjectDetail(
     files: data.files,
     activities: data.activities,
     alerts: data.alerts,
+    notesError: data.notesError,
+    notesHasData: data.notesHasData,
+    filesError: data.filesError,
+    filesHasData: data.filesHasData,
+    workstreamsError: data.workstreamsError,
+    workstreamsHasData: data.workstreamsHasData,
+    siteVisitsError: data.siteVisitsError,
+    siteVisitsHasData: data.siteVisitsHasData,
+    alertsError: data.alertsError,
+    alertsHasData: data.alertsHasData,
+    refreshSiteVisits: data.refreshSiteVisits,
+    refreshAlerts: data.refreshAlerts,
 
     // Loading States (from data hook)
     isLoading: data.isLoading,

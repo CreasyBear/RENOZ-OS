@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { QUERY_CONFIG } from "@/lib/constants";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import {
   renderEmailPreview,
   sendTestEmail,
@@ -42,16 +43,22 @@ export function useEmailPreview(options: UseEmailPreviewOptions) {
   return useQuery<RenderPreviewResult>({
     queryKey: queryKeys.communications.emailPreview.render(templateId, { variables, sampleCustomerId }),
     queryFn: async () => {
-      const result = await renderEmailPreview({
-        data: {
-          templateId,
-          variables,
-          sampleCustomerId,
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await renderEmailPreview({
+          data: {
+            templateId,
+            variables,
+            sampleCustomerId,
+          },
+        
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: "detail-not-found",
+          fallbackMessage:
+            "Email preview is temporarily unavailable. Please refresh and try again.",
+        });
+      }
     },
     enabled: enabled && !!templateId,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,

@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { QUERY_CONFIG } from '@/lib/constants';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type { UpdatePreferencesInput } from '@/lib/schemas/communications/communication-preferences';
 import {
   getContactPreferences,
@@ -33,11 +34,17 @@ export function useContactPreferences(options: UseContactPreferencesOptions) {
   return useQuery({
     queryKey: queryKeys.communications.contactPreference(contactId),
     queryFn: async () => {
-      const result = await getContactPreferences({
-        data: { contactId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getContactPreferences({
+          data: { contactId } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Contact preferences are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!contactId,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
@@ -58,11 +65,17 @@ export function usePreferenceHistory(options: UsePreferenceHistoryOptions = {}) 
   return useQuery({
     queryKey: queryKeys.communications.preferenceHistory(contactId ?? '', { customerId }),
     queryFn: async () => {
-      const result = await getPreferenceHistory({
-        data: { contactId, customerId, limit, offset } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getPreferenceHistory({
+          data: { contactId, customerId, limit, offset } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Preference history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && (!!contactId || !!customerId),
     staleTime: QUERY_CONFIG.STALE_TIME_LONG,

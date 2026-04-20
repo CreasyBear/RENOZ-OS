@@ -13,6 +13,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listCustomReports,
   getCustomReport,
@@ -55,9 +56,15 @@ export function useCustomReports(options: UseCustomReportsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.customReports.list(filters),
     queryFn: async () => {
-      const result = await listCustomReports({ data: filters as ListCustomReportsInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listCustomReports({ data: filters as ListCustomReportsInput });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Custom reports are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -75,11 +82,17 @@ export function useCustomReport({ id, enabled = true }: UseCustomReportOptions) 
   return useQuery({
     queryKey: queryKeys.reports.customReports.detail(id),
     queryFn: async () => {
-      const result = await getCustomReport({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCustomReport({
+          data: { id } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Custom report details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,

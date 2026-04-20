@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { QUERY_CONFIG } from '@/lib/constants';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   CreateSignatureInput,
   UpdateSignatureInput,
@@ -42,11 +43,17 @@ export function useSignatures(options: UseSignaturesOptions = {}) {
   return useQuery<Signature[]>({
     queryKey: queryKeys.communications.signaturesList({ includeCompanyWide }),
     queryFn: async () => {
-      const result = await getEmailSignatures({
-        data: { includeCompanyWide } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getEmailSignatures({
+          data: { includeCompanyWide } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Email signatures are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_LONG,
@@ -64,11 +71,17 @@ export function useSignature(options: UseSignatureOptions) {
   return useQuery<Signature | null>({
     queryKey: queryKeys.communications.signatureDetail(signatureId),
     queryFn: async () => {
-      const result = await getEmailSignature({
-        data: { id: signatureId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getEmailSignature({
+          data: { id: signatureId } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Signature details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!signatureId,
     staleTime: 5 * 60 * 1000,
