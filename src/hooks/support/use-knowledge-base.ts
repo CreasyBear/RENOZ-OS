@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   createCategory,
@@ -64,11 +65,16 @@ export function useKbCategories({
   return useQuery({
     queryKey: queryKeys.support.kbCategoryList(filters),
     queryFn: async () => {
-      const result = await listCategories({
-        data: { ...filters, includeArticleCount } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listCategories({
+          data: { ...filters, includeArticleCount }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Knowledge base categories are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -84,11 +90,17 @@ export function useKbCategory({ categoryId, enabled = true }: UseKbCategoryOptio
   return useQuery({
     queryKey: queryKeys.support.kbCategoryDetail(categoryId),
     queryFn: async () => {
-      const result = await getCategory({
-        data: { categoryId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCategory({
+          data: { categoryId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Knowledge base category details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested knowledge base category could not be found.',
+        });
+      }
     },
     enabled: enabled && !!categoryId,
     staleTime: 5 * 60 * 1000,
@@ -170,18 +182,23 @@ export function useKbArticles({
   return useQuery({
     queryKey: queryKeys.support.kbArticleList(filters),
     queryFn: async () => {
-      const result = await listArticles({
-        data: {
-          ...filters,
-          page: page ?? 1,
-          pageSize: pageSize ?? 20,
-          sortBy: sortBy ?? 'updatedAt',
-          sortOrder: sortOrder ?? 'desc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listArticles({
+          data: {
+            ...filters,
+            page: page ?? 1,
+            pageSize: pageSize ?? 20,
+            sortBy: sortBy ?? 'updatedAt',
+            sortOrder: sortOrder ?? 'desc',
+          },
+
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Knowledge base articles are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -202,11 +219,17 @@ export function useKbArticle({
   return useQuery({
     queryKey: queryKeys.support.kbArticleDetail(articleId),
     queryFn: async () => {
-      const result = await getArticle({
-        data: { articleId, incrementViews } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getArticle({
+          data: { articleId, incrementViews }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Knowledge base article details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested knowledge base article could not be found.',
+        });
+      }
     },
     enabled: enabled && !!articleId,
     staleTime: 60 * 1000,

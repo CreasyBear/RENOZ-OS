@@ -14,6 +14,7 @@ import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsTreeSkeleton } from '@/components/skeletons/settings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { LoadingState } from '@/components/shared/loading-state';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
@@ -62,6 +63,8 @@ function KnowledgeBaseSettingsPage() {
   const createCategoryMutation = useCreateKbCategory();
   const updateCategoryMutation = useUpdateKbCategory();
   const isCategorySubmitting = createCategoryMutation.isPending || updateCategoryMutation.isPending;
+  const categoriesError = error && !categories ? error : null;
+  const categoriesWarning = error && categories ? error : null;
 
   const handleCreateCategory = () => {
     setEditingCategory(null);
@@ -139,43 +142,44 @@ function KnowledgeBaseSettingsPage() {
       />
       <PageLayout.Content className="space-y-6">
 
-      {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">
-              Total Categories
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{categories?.length ?? 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">
-              Root Categories
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {categories?.filter((c) => !c.parentId).length ?? 0}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">
-              Active Categories
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {categories?.filter((c) => c.isActive).length ?? 0}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {categories ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-muted-foreground text-sm font-medium">
+                Total Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{categories.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-muted-foreground text-sm font-medium">
+                Root Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {categories.filter((c) => !c.parentId).length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-muted-foreground text-sm font-medium">
+                Active Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {categories.filter((c) => c.isActive).length}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {/* Category Management */}
       <Card>
@@ -193,12 +197,21 @@ function KnowledgeBaseSettingsPage() {
           </Button>
         </CardHeader>
         <CardContent>
+          {categoriesWarning ? (
+            <Alert className="mb-4">
+              <AlertTitle>Categories unavailable</AlertTitle>
+              <AlertDescription>
+                Showing the most recent category tree while refresh is unavailable.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {isLoading ? (
             <LoadingState text="Loading categories..." />
-          ) : error ? (
+          ) : categoriesError ? (
             <ErrorState
               title="Failed to load categories"
-              message={error instanceof Error ? error.message : 'Unknown category loading error'}
+              message={categoriesError.message}
               onRetry={() => void refetch()}
             />
           ) : categories && categories.length > 0 ? (

@@ -316,7 +316,7 @@ describe('products query normalization wave 5b', () => {
             isActive: true,
             trackInventory: true,
             isSerialized: false,
-          },
+          } as never,
           category: null,
           images: [],
           priceTiers: [],

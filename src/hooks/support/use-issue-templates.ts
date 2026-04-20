@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listIssueTemplates,
@@ -70,18 +71,23 @@ export function useIssueTemplates({
   return useQuery({
     queryKey: queryKeys.support.issueTemplatesListFiltered(filters),
     queryFn: async () => {
-      const result = await listIssueTemplates({
-        data: {
-          ...filters,
-          page: page ?? 1,
-          pageSize: pageSize ?? 20,
-          sortBy: sortBy ?? 'usageCount',
-          sortOrder: sortOrder ?? 'desc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listIssueTemplates({
+          data: {
+            ...filters,
+            page: page ?? 1,
+            pageSize: pageSize ?? 20,
+            sortBy: sortBy ?? 'usageCount',
+            sortOrder: sortOrder ?? 'desc',
+          },
+
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issue templates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -101,11 +107,17 @@ export function useIssueTemplate({ templateId, enabled = true }: UseIssueTemplat
   return useQuery({
     queryKey: queryKeys.support.issueTemplateDetail(templateId),
     queryFn: async () => {
-      const result = await getIssueTemplate({
-        data: { templateId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssueTemplate({
+          data: { templateId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Issue template details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested issue template could not be found.',
+        });
+      }
     },
     enabled: enabled && !!templateId,
     staleTime: 60 * 1000,
@@ -128,11 +140,16 @@ export function usePopularTemplates({
   return useQuery({
     queryKey: queryKeys.support.issueTemplatesPopular(),
     queryFn: async () => {
-      const result = await getPopularTemplates({
-        data: { pageSize: limit } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getPopularTemplates({
+          data: { pageSize: limit }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Popular issue templates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
