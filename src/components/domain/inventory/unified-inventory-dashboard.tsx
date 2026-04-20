@@ -207,6 +207,8 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     productsWithInventory: trackedItems,
     setProducts: setTrackedProducts,
     isLoading: isLoadingTracked,
+    trackedProductsWarning,
+    trackedProductsUnavailable,
   } = useTrackedProducts();
 
   const acknowledgeAlertMutation = useAcknowledgeAlert();
@@ -635,11 +637,24 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           <CardContent>
             {isLoadingTracked ? (
               <TrackedItemsSkeleton />
-            ) : (
-              <TrackedItemsList
-                items={trackedItemsWithStatus}
-                onAddItems={() => setIsTrackedDialogOpen(true)}
+            ) : trackedProductsUnavailable && trackedProductsSelection.length > 0 ? (
+              <DashboardReadWarning
+                title="Tracked items are temporarily unavailable."
+                message={trackedProductsUnavailable}
               />
+            ) : (
+              <div className="space-y-4">
+                {trackedProductsWarning ? (
+                  <DashboardReadWarning
+                    title="Tracked items may be stale."
+                    message={trackedProductsWarning}
+                  />
+                ) : null}
+                <TrackedItemsList
+                  items={trackedItemsWithStatus}
+                  onAddItems={() => setIsTrackedDialogOpen(true)}
+                />
+              </div>
             )}
           </CardContent>
         </Card>

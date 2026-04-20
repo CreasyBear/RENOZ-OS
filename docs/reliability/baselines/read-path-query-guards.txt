@@ -1,12 +1,7 @@
-src/hooks/dashboard/use-dashboard-layouts.ts
-src/hooks/dashboard/use-inventory-counts.ts
-src/hooks/dashboard/use-recent-items.ts
-src/hooks/dashboard/use-tracked-products.ts
 src/hooks/documents/use-generate-document.ts
 src/hooks/invoices/use-invoice-summary.ts
 src/hooks/invoices/use-invoices.ts
 src/hooks/portal/use-portal-data.ts
-src/hooks/products/use-product-inventory.ts
 src/hooks/settings/use-win-loss-reasons.ts
 src/hooks/support/use-issue-templates.ts
 src/hooks/support/use-knowledge-base.ts

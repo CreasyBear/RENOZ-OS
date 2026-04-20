@@ -79,6 +79,8 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
     setProducts: setTrackedProducts,
     isLoading: trackedProductsLoading,
     maxProducts,
+    trackedProductsWarning,
+    trackedProductsUnavailable,
   } = useTrackedProducts();
 
   // Active projects for projects table
@@ -390,6 +392,7 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
       stats={statsData}
       statsSummaryWarning={statsSummaryWarning}
       trackedProducts={trackedProducts}
+      trackedProductsWarning={trackedProductsWarning ?? trackedProductsUnavailable}
       onTrackedProductsChange={setTrackedProducts}
       maxTrackedProducts={maxProducts}
       cashFlow={cashFlowData}

@@ -12,6 +12,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getRecentOutstandingInvoices,
@@ -46,11 +47,16 @@ export function useRecentOutstandingInvoices({
   return useQuery<RecentItemsResponse>({
     queryKey: queryKeys.dashboard.recentOutstanding(limit),
     queryFn: async () => {
-      const result = await getRecentOutstandingInvoices({
-        data: { limit } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getRecentOutstandingInvoices({
+          data: { limit }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Outstanding invoice details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -67,11 +73,16 @@ export function useRecentOverdueInvoices({
   return useQuery<RecentItemsResponse>({
     queryKey: queryKeys.dashboard.recentOverdue(limit),
     queryFn: async () => {
-      const result = await getRecentOverdueInvoices({
-        data: { limit } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getRecentOverdueInvoices({
+          data: { limit }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Overdue invoice details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -92,11 +103,16 @@ export function useRecentOpportunities({
   return useQuery<RecentItemsResponse>({
     queryKey: queryKeys.dashboard.recentOpportunities(limit),
     queryFn: async () => {
-      const result = await getRecentOpportunities({
-        data: { limit } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getRecentOpportunities({
+          data: { limit }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Recent opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -117,11 +133,16 @@ export function useRecentOrdersToShip({
   return useQuery<RecentItemsResponse>({
     queryKey: queryKeys.dashboard.recentOrdersToShip(limit),
     queryFn: async () => {
-      const result = await getRecentOrdersToShip({
-        data: { limit } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getRecentOrdersToShip({
+          data: { limit }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Orders to fulfill are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
