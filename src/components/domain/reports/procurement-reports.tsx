@@ -21,6 +21,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -109,6 +110,7 @@ export const ProcurementReports = memo(function ProcurementReports({
   analytics,
   isLoading,
   error,
+  warning,
   dateRange,
   onDateRangeChange,
   activeTab: controlledTab,
@@ -190,6 +192,13 @@ export const ProcurementReports = memo(function ProcurementReports({
 
   return (
     <div className="space-y-6">
+      {warning ? (
+        <Alert>
+          <AlertTitle>Procurement analytics may be outdated</AlertTitle>
+          <AlertDescription>{warning}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

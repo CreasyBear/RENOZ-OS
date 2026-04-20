@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorState } from '@/components/shared/error-state';
 import type {
   AlertSeverity,
   AlertType,
@@ -37,7 +38,9 @@ import { isValidAlertType } from '@/lib/schemas/procurement';
 
 interface ProcurementAlertsProps {
   alerts: ProcurementAlert[];
+  error?: Error | null;
   isLoading?: boolean;
+  onRetry?: () => void;
   onDismiss?: (id: string) => void;
   maxVisible?: number;
 }
@@ -252,7 +255,9 @@ function CompactAlertsList({ alerts, onDismiss: _onDismiss }: CompactAlertsListP
 
 function ProcurementAlerts({
   alerts,
+  error,
   isLoading = false,
+  onRetry,
   onDismiss,
   maxVisible = 5,
 }: ProcurementAlertsProps) {
@@ -282,7 +287,16 @@ function ProcurementAlerts({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <EmptyState />
+          {error ? (
+            <ErrorState
+              title="Procurement alerts unavailable"
+              message={error.message}
+              onRetry={onRetry}
+              className="py-4"
+            />
+          ) : (
+            <EmptyState />
+          )}
         </CardContent>
       </Card>
     );
@@ -319,6 +333,13 @@ function ProcurementAlerts({
         </div>
       </CardHeader>
       <CardContent>
+        {error ? (
+          <Alert className="mb-3">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Alert data may be outdated</AlertTitle>
+            <AlertDescription>{error.message}</AlertDescription>
+          </Alert>
+        ) : null}
         <div className="space-y-3">
           {visibleAlerts.map((alert) => (
             <AlertItem key={alert.id} alert={alert} onDismiss={onDismiss} />

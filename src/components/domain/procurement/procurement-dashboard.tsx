@@ -69,6 +69,7 @@ interface ProcurementDashboardProps {
   onRefreshOrders?: () => void;
   onRefreshSuppliers?: () => void;
   onRefreshApprovals?: () => void;
+  onRefreshAlerts?: () => void;
   /** @source Mutation handler in container */
   onDismissAlert?: (id: string) => void;
   /** @source useState in container */
@@ -185,6 +186,7 @@ function ProcurementDashboard({
   onRefreshOrders,
   onRefreshSuppliers,
   onRefreshApprovals,
+  onRefreshAlerts,
   onDismissAlert,
   dateRange = 'month',
   onDateRangeChange,
@@ -279,7 +281,9 @@ function ProcurementDashboard({
         <TabsContent value="alerts">
           <ProcurementAlerts
             alerts={alerts ?? []}
+            error={errors.alerts}
             isLoading={isLoading}
+            onRetry={onRefreshAlerts ?? onRefresh}
             onDismiss={onDismissAlert}
             maxVisible={10}
           />

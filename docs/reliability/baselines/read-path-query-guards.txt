@@ -41,7 +41,6 @@ src/hooks/reports/use-report-favorites.ts
 src/hooks/reports/use-scheduled-reports.ts
 src/hooks/reports/use-win-loss.ts
 src/hooks/settings/use-win-loss-reasons.ts
-src/hooks/suppliers/use-procurement-analytics.ts
 src/hooks/support/use-issue-templates.ts
 src/hooks/support/use-knowledge-base.ts
 src/hooks/users/use-delegations.ts

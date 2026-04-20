@@ -70,7 +70,7 @@ export const Route = createFileRoute('/_authenticated/procurement/dashboard')({
  * Procurement Dashboard Page Container
  * Fetches all required data and transforms it for the presenter component.
  */
-function ProcurementDashboardPage() {
+export function ProcurementDashboardPage() {
   const navigate = Route.useNavigate();
   const search = Route.useSearch();
   // Date range state
@@ -274,10 +274,19 @@ function ProcurementDashboardPage() {
   }, [alertsData, dismissedAlertIds]);
 
   // Combined loading state
-  const isLoading = isDashboardLoading || isSpendLoading || isOrderLoading || 
-                   isSupplierLoading || isApprovalsLoading || isAlertsLoading;
+  const hasUsableDashboardData = Boolean(
+    spendMetrics || orderMetrics || supplierMetrics || approvalsData || alertsData
+  );
+  const isLoading =
+    !hasUsableDashboardData &&
+    (isDashboardLoading ||
+      isSpendLoading ||
+      isOrderLoading ||
+      isSupplierLoading ||
+      isApprovalsLoading ||
+      isAlertsLoading);
   
-  // Error handling - show all errors if any exist
+  // Error handling - only block the page when no usable payload exists
   const hasErrors = errors.length > 0;
   const primaryError = errors[0] ?? null;
 
@@ -297,6 +306,10 @@ function ProcurementDashboardPage() {
   const handleRefreshApprovals = useCallback(() => {
     refetchApprovals();
   }, [refetchApprovals]);
+
+  const handleRefreshAlerts = useCallback(() => {
+    refetchAlerts();
+  }, [refetchAlerts]);
 
   // Combined refresh (refetch all)
   const handleRefresh = useCallback(() => {
@@ -349,19 +362,17 @@ function ProcurementDashboardPage() {
       />
 
       <PageLayout.Content>
-        {hasErrors && primaryError && (
-          <div className="mb-4">
-            <ErrorState
-              title="Failed to load procurement data"
-              message={
-                errors.length > 1
-                  ? `${errors.length} widgets failed to load. ${primaryError.message || 'Try refreshing.'}`
-                  : primaryError.message || 'One or more procurement widgets failed to load. Try refreshing.'
-              }
-              onRetry={handleRefresh}
-            />
-          </div>
-        )}
+        {hasErrors && primaryError && !hasUsableDashboardData ? (
+          <ErrorState
+            title="Failed to load procurement data"
+            message={
+              errors.length > 1
+                ? `${errors.length} widgets failed to load. ${primaryError.message || 'Try refreshing.'}`
+                : primaryError.message || 'One or more procurement widgets failed to load. Try refreshing.'
+            }
+            onRetry={handleRefresh}
+          />
+        ) : null}
         <ProcurementDashboard
           spendMetrics={spendMetrics}
           orderMetrics={orderMetrics}
@@ -381,6 +392,7 @@ function ProcurementDashboardPage() {
           onRefreshOrders={handleRefreshOrders}
           onRefreshSuppliers={handleRefreshSuppliers}
           onRefreshApprovals={handleRefreshApprovals}
+          onRefreshAlerts={handleRefreshAlerts}
           onDismissAlert={handleDismissAlert}
           dateRange={dateRange}
           onDateRangeChange={handleDateRangeChange}

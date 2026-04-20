@@ -128,6 +128,7 @@ export interface ProcurementReportsProps {
   analytics: ProcurementAnalytics | undefined;
   isLoading: boolean;
   error: Error | null;
+  warning?: string | null;
   dateRange: DateRange;
   onDateRangeChange: (range: DateRange) => void;
   /** Active tab (synced to URL when provided) */
