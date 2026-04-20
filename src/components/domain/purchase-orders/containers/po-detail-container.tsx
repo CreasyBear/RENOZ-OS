@@ -72,6 +72,7 @@ import { useUnifiedActivities } from '@/hooks/activities';
 import { useTrackView } from '@/hooks/search';
 import { useAlertDismissals, generateAlertId } from '@/hooks/_shared/use-alert-dismissals';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
+import { isReadQueryError } from '@/lib/read-path-policy';
 import {
   purchaseOrderStatusEnum,
   type PurchaseOrderStatus,
@@ -500,10 +501,15 @@ export function PODetailContainer({
   // Render: Error
   // ---------------------------------------------------------------------------
   if (error || !po) {
+    const isNotFound = isReadQueryError(error) && error.failureKind === 'not-found';
     const errorContent = (
       <ErrorState
-        title="Purchase order not found"
-        message="The purchase order you're looking for doesn't exist or has been deleted."
+        title={isNotFound || !error ? 'Purchase order not found' : 'Purchase order details are unavailable'}
+        message={
+          error instanceof Error
+            ? error.message
+            : "The purchase order you're looking for doesn't exist or has been deleted."
+        }
         onRetry={() => refetch()}
         retryLabel="Try Again"
       />
