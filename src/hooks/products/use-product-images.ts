@@ -13,6 +13,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
@@ -65,11 +66,16 @@ export function useProductImages({ productId, enabled = true }: UseProductImages
   return useQuery({
     queryKey: queryKeys.products.images.list(productId),
     queryFn: async () => {
-      const result = await listProductImages({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listProductImages({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Product images are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,
@@ -83,11 +89,16 @@ export function useProductImageStats({ productId, enabled = true }: UseProductIm
   return useQuery({
     queryKey: queryKeys.products.images.stats(productId),
     queryFn: async () => {
-      const result = await getImageStats({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getImageStats({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Image statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,
@@ -101,11 +112,16 @@ export function useProductPrimaryImage({ productId, enabled = true }: UseProduct
   return useQuery({
     queryKey: queryKeys.products.images.primary(productId),
     queryFn: async () => {
-      const result = await getPrimaryImage({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getPrimaryImage({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage: 'Primary image details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,

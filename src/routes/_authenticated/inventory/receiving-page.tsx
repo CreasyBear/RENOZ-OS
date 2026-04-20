@@ -63,6 +63,7 @@ export default function ReceivingPage() {
   const {
     data: productsData,
     isLoading: isLoadingProducts,
+    error: productsError,
   } = useProducts({ search: productSearch, pageSize: 50 });
   const {
     data: selectedProductData,
@@ -111,7 +112,8 @@ export default function ReceivingPage() {
     : productsFromSearch;
   const hasProductContext = search.source === "product_detail" && !!search.productId;
   const hasContextFailure =
-    hasProductContext && !isLoadingSelectedProduct && (!!selectedProductError || !selectedProduct);
+    hasProductContext && !isLoadingSelectedProduct && !selectedProduct;
+  const hasDegradedProductContext = !!selectedProductError && !!selectedProduct;
 
   const locations: Location[] = locationsData.map((l: HookWarehouseLocation) => ({
     id: l.id,
@@ -224,6 +226,16 @@ export default function ReceivingPage() {
           </Alert>
         ) : null}
 
+        {hasDegradedProductContext ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product details unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent product context while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {!hasContextFailure ? (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           <TabsList className="mb-6">
@@ -240,6 +252,15 @@ export default function ReceivingPage() {
           <TabsContent value="receive">
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-6">
+                {productsError instanceof Error ? (
+                  <Alert>
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Product catalog unavailable</AlertTitle>
+                    <AlertDescription>
+                      Product options could not be refreshed. Any products already loaded remain usable.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
                 {hasUnavailableLocations ? (
                   <Alert>
                     <TriangleAlert className="h-4 w-4" />

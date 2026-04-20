@@ -12,6 +12,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
@@ -74,11 +75,17 @@ export function useResolvePrice({
   return useQuery({
     queryKey: queryKeys.products.pricing.resolve(productId, { customerId, quantity }),
     queryFn: async () => {
-      const result = await resolvePrice({
-        data: { productId, customerId, quantity } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await resolvePrice({
+          data: { productId, customerId, quantity }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Product pricing is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested product could not be found.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000,
@@ -92,11 +99,16 @@ export function usePriceTiers({ productId, enabled = true }: UsePriceTiersOption
   return useQuery({
     queryKey: queryKeys.products.pricing.tiers(productId),
     queryFn: async () => {
-      const result = await listPriceTiers({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listPriceTiers({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Price tiers are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,
@@ -114,11 +126,16 @@ export function useCustomerPrices({
   return useQuery({
     queryKey: queryKeys.products.pricing.customer(productId ?? '', customerId),
     queryFn: async () => {
-      const result = await listCustomerPrices({
-        data: { productId, customerId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listCustomerPrices({
+          data: { productId, customerId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer-specific pricing is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && (!!productId || !!customerId),
     staleTime: 60 * 1000,
@@ -137,11 +154,16 @@ export function usePriceHistory({
   return useQuery({
     queryKey: queryKeys.products.pricing.history(productId),
     queryFn: async () => {
-      const result = await getPriceHistory({
-        data: { productId, limit, offset } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getPriceHistory({
+          data: { productId, limit, offset }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Price history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,

@@ -10,6 +10,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
@@ -36,6 +37,7 @@ import {
   exportProducts,
   getImportTemplate,
 } from '@/server/functions/products/product-bulk-ops';
+import type { GetProductResponse, ProductSearchResult } from '@/lib/schemas/products';
 import type { ProductSortField } from '@/lib/schemas/products';
 
 // ============================================================================
@@ -71,9 +73,14 @@ export function useProducts(options: UseProductsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.products.list(filters),
     queryFn: async () => {
-      const result = await listProducts({ data: filters as Record<string, unknown> });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listProducts({ data: filters as Record<string, unknown> });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Products are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -87,17 +94,20 @@ export function useProduct(productId: string, enabled = true) {
   return useQuery<GetProductResponse>({
     queryKey: queryKeys.products.detail(productId),
     queryFn: async () => {
-      const result = await getProduct({ data: { id: productId } });
-      if (result == null) throw new Error('Query returned no data');
-
-      return result;
+      try {
+        return await getProduct({ data: { id: productId } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Product details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested product could not be found.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,
   });
 }
-
-import type { GetProductResponse, ProductSearchResult } from '@/lib/schemas/products';
 
 /**
  * Search products by query string (quick search via quickSearchProducts)
@@ -110,9 +120,14 @@ export function useProductSearch(
   return useQuery<ProductSearchResult>({
     queryKey: queryKeys.products.search(query, options),
     queryFn: async () => {
-      const result = await quickSearchProducts({ data: { q: query, ...options } });
-      if (result == null) throw new Error('Product search returned no data');
-      return result as ProductSearchResult;
+      try {
+        return (await quickSearchProducts({ data: { q: query, ...options } })) as ProductSearchResult;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Product search is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && query.length >= 2,
     staleTime: 30 * 1000,
@@ -135,11 +150,16 @@ export function useSearchProducts(options: UseSearchProductsOptions) {
   return useQuery({
     queryKey: queryKeys.products.search(query, { limit, categoryId }),
     queryFn: async () => {
-      const result = await searchProducts({
-        data: { query, limit, ...(categoryId ? { categoryId } : {}) },
-      });
-      if (result == null) throw new Error('Product search returned no data');
-      return result;
+      try {
+        return await searchProducts({
+          data: { query, limit, ...(categoryId ? { categoryId } : {}) },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Product search is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && query.length >= 2,
     staleTime: 30 * 1000,
@@ -156,9 +176,14 @@ export function useCategories(
   return useQuery({
     queryKey: queryKeys.categories.list(),
     queryFn: async () => {
-      const result = await listCategories({ data: options });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listCategories({ data: options });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Product categories are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -172,9 +197,14 @@ export function useCategoryTree(enabled = true) {
   return useQuery({
     queryKey: queryKeys.categories.tree(),
     queryFn: async () => {
-      const result = await getCategoryTree();
-      if (result == null) throw new Error('Category tree returned no data');
-      return result;
+      try {
+        return await getCategoryTree();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Category hierarchy is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -378,17 +408,21 @@ export function useProductsForJobMaterials(options: UseProductsForJobMaterialsOp
   return useQuery({
     queryKey: queryKeys.products.jobMaterials(jobId),
     queryFn: async () => {
-      const result = await listProducts({
-        data: {
-          page: 1,
-          pageSize: 200,
-          sortBy: 'name',
-          sortOrder: 'asc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listProducts({
+          data: {
+            page: 1,
+            pageSize: 200,
+            sortBy: 'name',
+            sortOrder: 'asc',
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Product options are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!jobId,
     staleTime: 60 * 1000,
@@ -598,11 +632,16 @@ export function useImportTemplate() {
   return useQuery({
     queryKey: queryKeys.products.bulk.template(),
     queryFn: async () => {
-      const result = await getImportTemplate({
-        data: {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getImportTemplate({
+          data: {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'The import template is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 24 * 60 * 60 * 1000, // 24 hours - template doesn't change often
   });

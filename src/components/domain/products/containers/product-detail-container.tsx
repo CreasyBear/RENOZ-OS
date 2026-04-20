@@ -39,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
@@ -226,7 +227,7 @@ export function ProductDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   // Render: Error
   // ─────────────────────────────────────────────────────────────────────────
-  if (error || !productData || !isGetProductResponse(productData)) {
+  if (!productData || !isGetProductResponse(productData)) {
     const errorContent = (
       <ErrorState
         title="Product not found"
@@ -252,6 +253,10 @@ export function ProductDetailContainer({
   // Destructure product data (getProduct returns schema-validated data)
   // ─────────────────────────────────────────────────────────────────────────
   const { product, category, images, priceTiers } = productData;
+  const productReadWarning =
+    error instanceof Error
+      ? 'Showing the most recent product details while refresh is temporarily unavailable.'
+      : null;
 
   const customerPrices = (customerPricesData ?? []).map((price) => ({
     ...price,
@@ -311,6 +316,12 @@ export function ProductDetailContainer({
   // ─────────────────────────────────────────────────────────────────────────
   const content = (
     <>
+      {productReadWarning ? (
+        <Alert className="mb-6">
+          <AlertTitle>Product details unavailable</AlertTitle>
+          <AlertDescription>{productReadWarning}</AlertDescription>
+        </Alert>
+      ) : null}
       <ProductDetailView
         product={product}
         category={category}

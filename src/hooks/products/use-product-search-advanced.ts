@@ -11,6 +11,7 @@
 
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getSearchSuggestions,
@@ -63,11 +64,16 @@ export function useSearchSuggestions(query: string, limit = 10) {
   return useQuery({
     queryKey: queryKeys.products.search(query, { limit }),
     queryFn: async () => {
-      const result = await getSuggestionsFn({
-        data: { query, limit }
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSuggestionsFn({
+          data: { query, limit }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Search suggestions are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: query.length >= 2,
     staleTime: 30 * 1000,
@@ -83,11 +89,16 @@ export function useSearchFacets() {
   return useQuery({
     queryKey: [...queryKeys.products.all, 'facets'] as const,
     queryFn: async () => {
-      const result = await getFacetsFn({
-        data: {}
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getFacetsFn({
+          data: {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Search filters are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

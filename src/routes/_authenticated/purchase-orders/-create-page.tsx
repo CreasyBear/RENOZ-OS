@@ -40,7 +40,11 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
     page: 1,
     pageSize: 100,
   });
-  const { data: productsData, isLoading: isLoadingProducts } = useProducts({
+  const {
+    data: productsData,
+    isLoading: isLoadingProducts,
+    error: productsError,
+  } = useProducts({
     page: 1,
     pageSize: 100,
     isActive: true,
@@ -190,7 +194,8 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
   const hasInvalidContext =
     hasProductContext &&
     !isLoadingSelectedProduct &&
-    (!!selectedProductError || !selectedProductItem || !selectedProductItem.isActive);
+    (!selectedProductItem || !selectedProductItem.isActive);
+  const hasDegradedProductContext = !!selectedProductError && !!selectedProductItem;
   const headerTitle = selectedProductItem && search.source === "product_detail"
     ? `Order Stock for ${selectedProductItem.name}`
     : "Create Purchase Order";
@@ -268,12 +273,32 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
           </Alert>
         ) : null}
 
+        {hasDegradedProductContext ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product details unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent product context while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {suppliersError instanceof Error ? (
           <Alert className="mb-6" variant="destructive">
             <TriangleAlert className="h-4 w-4" />
             <AlertTitle>Supplier list unavailable</AlertTitle>
             <AlertDescription>
               Supplier options could not be loaded. You can stay on this page, but you may need to refresh before you can submit a purchase order.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {productsError instanceof Error ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product catalog unavailable</AlertTitle>
+            <AlertDescription>
+              Product options could not be refreshed. Any products already loaded remain usable.
             </AlertDescription>
           </Alert>
         ) : null}

@@ -11,6 +11,7 @@
  * @see src/server/functions/products/product-bundles.ts for server functions
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from 'sonner';
 import {
@@ -96,11 +97,17 @@ export function useBundleComponents({
   return useQuery({
     queryKey: queryKeys.products.bundles.components(bundleProductId),
     queryFn: async () => {
-      const result = await getBundleComponents({
-        data: { bundleProductId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getBundleComponents({
+          data: { bundleProductId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Bundle components are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested bundle could not be found.',
+        });
+      }
     },
     enabled: enabled && !!bundleProductId,
     staleTime: 30 * 1000,
@@ -117,11 +124,17 @@ export function useCalculateBundlePrice({
   return useQuery({
     queryKey: queryKeys.products.bundles.price(bundleProductId),
     queryFn: async () => {
-      const result = await calculateBundlePrice({
-        data: { bundleProductId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await calculateBundlePrice({
+          data: { bundleProductId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Bundle pricing is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested bundle could not be found.',
+        });
+      }
     },
     enabled: enabled && !!bundleProductId,
     staleTime: 30 * 1000,
@@ -138,11 +151,16 @@ export function useValidateBundle({
   return useQuery({
     queryKey: queryKeys.products.bundles.validation(bundleProductId),
     queryFn: async () => {
-      const result = await validateBundle({
-        data: { bundleProductId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await validateBundle({
+          data: { bundleProductId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Bundle validation is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!bundleProductId,
     staleTime: 60 * 1000,
@@ -159,11 +177,17 @@ export function useExpandBundle({
   return useQuery({
     queryKey: queryKeys.products.bundles.expanded(bundleProductId),
     queryFn: async () => {
-      const result = await expandBundle({
-        data: { bundleProductId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await expandBundle({
+          data: { bundleProductId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Bundle expansion is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested bundle could not be found.',
+        });
+      }
     },
     enabled: enabled && !!bundleProductId,
     staleTime: 60 * 1000,
@@ -180,11 +204,16 @@ export function useBundlesContainingProduct({
   return useQuery({
     queryKey: queryKeys.products.bundles.containing(productId),
     queryFn: async () => {
-      const result = await findBundlesContaining({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await findBundlesContaining({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Bundle membership is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 60 * 1000,
