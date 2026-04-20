@@ -222,7 +222,7 @@ export function ProjectOverviewTab({
  */
 export function ProjectWorkstreamsTab({ project }: TabProps) {
   // Data fetching
-  const { data: workstreamsData, isLoading } = useWorkstreams(project.id);
+  const { data: workstreamsData, isLoading, error, refetch } = useWorkstreams(project.id);
   const workstreams = workstreamsData?.data || [];
 
   // Mutations
@@ -279,6 +279,11 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
         onReorderWorkstreams={handleReorderWorkstreams}
         isLoading={isLoading}
         isReorderable={workstreams.length > 1}
+        error={error as Error | null}
+        hasData={workstreamsData !== undefined}
+        onRetry={() => {
+          void refetch();
+        }}
       />
 
       <WorkstreamCreateDialog

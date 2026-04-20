@@ -21,8 +21,6 @@ src/hooks/jobs/use-installers.ts
 src/hooks/jobs/use-job-resources.ts
 src/hooks/jobs/use-job-scheduling.ts
 src/hooks/jobs/use-job-templates-config.ts
-src/hooks/jobs/use-project-bom.ts
-src/hooks/jobs/use-workstreams.ts
 src/hooks/portal/use-portal-data.ts
 src/hooks/products/use-product-bundles.ts
 src/hooks/products/use-product-images.ts

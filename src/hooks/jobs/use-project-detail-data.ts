@@ -76,6 +76,8 @@ export interface UseProjectDetailDataReturn {
   notesHasData: boolean;
   filesError: Error | null;
   filesHasData: boolean;
+  workstreamsError: Error | null;
+  workstreamsHasData: boolean;
   siteVisitsError: Error | null;
   siteVisitsHasData: boolean;
   alertsError: Error | null;
@@ -223,6 +225,12 @@ export function useProjectDetailData(projectId: string): UseProjectDetailDataRet
       ? new Error(String(filesQuery.error))
       : null;
   const filesHasData = filesQuery.data !== undefined;
+  const workstreamsError = workstreamsQuery.error instanceof Error
+    ? workstreamsQuery.error
+    : workstreamsQuery.error
+      ? new Error(String(workstreamsQuery.error))
+      : null;
+  const workstreamsHasData = workstreamsQuery.data !== undefined;
   const siteVisitsError = siteVisitsQuery.error instanceof Error
     ? siteVisitsQuery.error
     : siteVisitsQuery.error
@@ -344,6 +352,8 @@ export function useProjectDetailData(projectId: string): UseProjectDetailDataRet
     notesHasData,
     filesError,
     filesHasData,
+    workstreamsError,
+    workstreamsHasData,
     siteVisitsError,
     siteVisitsHasData,
     alertsError,

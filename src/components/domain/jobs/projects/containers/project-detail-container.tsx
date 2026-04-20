@@ -374,7 +374,7 @@ export function ProjectDetailContainer({
         completedTasks={detail.completedTasks}
         totalTasks={detail.totalTasks}
         tabCounts={{
-          workstreams: detail.workstreams?.length,
+          workstreams: detail.workstreamsError && !detail.workstreamsHasData ? undefined : detail.workstreams?.length,
           visits: detail.siteVisitsError && !detail.siteVisitsHasData ? undefined : detail.siteVisits?.length,
           tasks: detail.totalTasks,
           notes: detail.notesError && !detail.notesHasData ? undefined : detail.notes?.length,

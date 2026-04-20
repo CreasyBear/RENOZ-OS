@@ -9,6 +9,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getProjectBom,
   createProjectBom,
@@ -38,11 +39,17 @@ export function useProjectBom({ projectId, enabled = true }: UseProjectBomOption
   return useQuery<GetProjectBomResponse>({
     queryKey: queryKeys.projects.bom(projectId),
     queryFn: async () => {
-      const result = await getProjectBom({
-        data: { projectId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProjectBom({
+          data: { projectId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project materials are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000, // 1 minute

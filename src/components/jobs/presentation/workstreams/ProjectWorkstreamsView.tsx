@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import type { ProjectWorkstream } from '@/lib/schemas/jobs';
 
@@ -76,6 +77,9 @@ export interface ProjectWorkstreamsViewProps {
   onReorderWorkstreams?: (workstreamIds: string[]) => void;
   isLoading?: boolean;
   isReorderable?: boolean;
+  error?: Error | null;
+  hasData?: boolean;
+  onRetry?: () => void;
 }
 
 // Task type for workstream
@@ -450,6 +454,9 @@ export function ProjectWorkstreamsView({
   onReorderWorkstreams,
   isLoading,
   isReorderable = false,
+  error = null,
+  hasData = true,
+  onRetry,
 }: ProjectWorkstreamsViewProps) {
   // All hooks must run unconditionally before any returns
   const [sortedWorkstreams, setSortedWorkstreams] = useState<WorkstreamWithTasks[]>([]);
@@ -509,22 +516,42 @@ export function ProjectWorkstreamsView({
     );
   }
 
+  const warning = error ? (
+    <Alert variant={!hasData ? 'destructive' : 'default'}>
+      <AlertTitle>{!hasData ? 'Workstreams unavailable' : 'Showing cached workstreams'}</AlertTitle>
+      <AlertDescription className="flex items-center justify-between gap-3">
+        <span>{error.message || 'Project workstreams are temporarily unavailable. Please refresh and try again.'}</span>
+        {onRetry ? (
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  ) : null;
+
   if (workstreams.length === 0) {
     return (
-      <EmptyState
-        icon={ArrowRight}
-        title="No workstreams yet"
-        message="Create workstreams to organize project tasks by phase."
-        action={onAddWorkstream ? {
-          label: 'Add Workstream',
-          onClick: onAddWorkstream,
-        } : undefined}
-      />
+      <div className="space-y-4">
+        {warning}
+        {!hasData && error ? null : (
+          <EmptyState
+            icon={ArrowRight}
+            title="No workstreams yet"
+            message="Create workstreams to organize project tasks by phase."
+            action={onAddWorkstream ? {
+              label: 'Add Workstream',
+              onClick: onAddWorkstream,
+            } : undefined}
+          />
+        )}
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {warning}
       {isReorderable && onReorderWorkstreams ? (
         <DndContext
           sensors={sensors}

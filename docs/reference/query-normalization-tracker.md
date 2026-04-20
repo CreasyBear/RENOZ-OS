@@ -212,6 +212,17 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 | `src/components/domain/jobs/schedule/schedule-calendar-container.tsx` | `useSchedule` consumer | n/a | schedule calendar previously collapsed failed reads into an empty dashboard | `headline` | `error + no data` shows blocking unavailable banner; `error + stale data` keeps the schedule visible with degraded warning | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Schedule route now keeps stale schedule rows visible and reserves empty copy for shaped success. |
 | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | jobs live-surface wave test | n/a | hook and consumer verification | n/a | n/a | self | `verified` | Covers hook contracts plus unavailable-vs-degraded behavior for files, notes, visits, alerts, and schedule. |
 
+#### Wave 4B: Jobs Project Admin Surfaces
+
+| File | Backing server fn | Contract type | Semantic outcomes | Consumer criticality | Render policy | Test file | Status | Deferred reason / notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/hooks/jobs/use-workstreams.ts` | `listWorkstreams`, `getWorkstream` | mixed: `always-shaped`, `detail-not-found` | workstream list accepts empty success; missing workstream detail is `not-found` | `secondary` | workstream surfaces must distinguish unavailable from healthy empty and preserve detail not-found semantics | `tests/unit/jobs/query-normalization-wave4b.test.tsx` | `verified` | Raw null-sentinel throws removed and list/detail semantics now follow the shared read-path policy. |
+| `src/components/jobs/presentation/workstreams/ProjectWorkstreamsView.tsx` | workstreams presenter consumer | n/a | workstreams view previously rendered “No workstreams yet” on read failure | `secondary` | `error + no data` shows unavailable state; `error + stale data` keeps workstreams visible with degraded warning | `tests/unit/jobs/query-normalization-wave4b.test.tsx` | `verified` | Presenter now reserves empty onboarding copy for healthy shaped success. |
+| `src/components/domain/jobs/projects/project-detail-tabs.tsx` | `useWorkstreams` consumer | n/a | project-detail workstreams tab previously passed failed list reads straight through to empty-state copy | `secondary` | thread localized unavailable/degraded policy into the workstreams presenter | `tests/unit/jobs/query-normalization-wave4b.test.tsx` | `verified` | Tab container now preserves workstream error state and retry. |
+| `src/hooks/jobs/use-project-bom.ts` | `getProjectBom` | `always-shaped` | project BOM returns shaped success even when no BOM exists yet; thrown failures must stay failures | `secondary` | BOM surfaces must distinguish unavailable from “No BOM yet” and “No materials yet” | `tests/unit/jobs/query-normalization-wave4b.test.tsx` | `verified` | Raw null-sentinel throw removed and no-BOM success stays domain-valid. |
+| `src/components/domain/jobs/projects/project-bom-tab.tsx` | `useProjectBom` consumer | n/a | BOM tab previously rendered “No BOM yet” when the read failed | `secondary` | `error + no data` shows unavailable state; `error + stale data` keeps BOM content visible with degraded warning | `tests/unit/jobs/query-normalization-wave4b.test.tsx` | `verified` | BOM create/import onboarding copy now stays reserved for healthy shaped success. |
+| `tests/unit/jobs/query-normalization-wave4b.test.tsx` | jobs project-admin wave test | n/a | hook and consumer verification | n/a | n/a | self | `verified` | Covers workstream list/detail semantics plus BOM unavailable-vs-empty consumer policy. |
+
 #### Remaining Wave 4 Backlog
 
 ##### 4B: Jobs Scheduling, Resources, and Config
@@ -220,8 +231,6 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 - `src/hooks/jobs/use-job-resources.ts`
 - `src/hooks/jobs/use-job-scheduling.ts`
 - `src/hooks/jobs/use-job-templates-config.ts`
-- `src/hooks/jobs/use-project-bom.ts`
-- `src/hooks/jobs/use-workstreams.ts`
 
 ##### 4C-4D: Communications
 
