@@ -249,6 +249,11 @@ export function ProjectDetailContainer({
   const tabs = useProjectDetailTabRenderers({
     project: detail.project,
     siteVisits: enrichedSiteVisits,
+    siteVisitsError: detail.siteVisitsError,
+    siteVisitsHasData: detail.siteVisitsHasData,
+    onRetrySiteVisits: () => {
+      void detail.refreshSiteVisits();
+    },
     tasks: detail.tasks ?? [],
     workstreamNames,
     onGanttDateChange: handleGanttDateChange,
@@ -349,6 +354,11 @@ export function ProjectDetailContainer({
       <ProjectDetailView
         project={detail.project}
         alerts={detail.alerts}
+        alertsError={detail.alertsError}
+        alertsHasData={detail.alertsHasData}
+        onRetryAlerts={() => {
+          void detail.refreshAlerts();
+        }}
         activeTab={detail.activeTab}
         onTabChange={detail.onTabChange}
         showSidebar={detail.showSidebar}
@@ -365,9 +375,10 @@ export function ProjectDetailContainer({
         totalTasks={detail.totalTasks}
         tabCounts={{
           workstreams: detail.workstreams?.length,
+          visits: detail.siteVisitsError && !detail.siteVisitsHasData ? undefined : detail.siteVisits?.length,
           tasks: detail.totalTasks,
-          notes: detail.notes?.length,
-          files: detail.files?.length,
+          notes: detail.notesError && !detail.notesHasData ? undefined : detail.notes?.length,
+          files: detail.filesError && !detail.filesHasData ? undefined : detail.files?.length,
         }}
         renderOverviewTab={tabs.renderOverviewTab}
         renderWorkstreamsTab={tabs.renderWorkstreamsTab}

@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Sheet,
   SheetContent,
@@ -83,6 +84,9 @@ export interface ProjectDetailViewProps {
   project: ProjectDetailData;
   /** Project alerts (Zone 3) */
   alerts?: ProjectAlert[];
+  alertsError?: Error | null;
+  alertsHasData?: boolean;
+  onRetryAlerts?: () => void;
   /** Active tab */
   activeTab: string;
   /** Tab change handler */
@@ -449,6 +453,9 @@ function ProjectSidebar({ project, completedTasks, totalTasks, relatedLinks }: P
 export const ProjectDetailView = memo(function ProjectDetailView({
   project,
   alerts = [],
+  alertsError = null,
+  alertsHasData = true,
+  onRetryAlerts,
   activeTab,
   onTabChange,
   showSidebar,
@@ -586,6 +593,20 @@ export const ProjectDetailView = memo(function ProjectDetailView({
       {/* ─────────────────────────────────────────────────────────────────────
           ZONE 3: ALERTS (Contextual Problems)
           ───────────────────────────────────────────────────────────────────── */}
+      {alertsError ? (
+        <Alert variant={!alertsHasData ? 'destructive' : 'default'}>
+          <AlertTitle>{!alertsHasData ? 'Project alerts unavailable' : 'Showing cached alerts'}</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{alertsError.message || 'Project alerts are temporarily unavailable. Please refresh and try again.'}</span>
+            {onRetryAlerts ? (
+              <Button variant="outline" size="sm" onClick={onRetryAlerts}>
+                Retry
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {alerts.length > 0 && (
         <ProjectAlerts projectId={project.id} alerts={alerts} />
       )}

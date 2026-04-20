@@ -193,17 +193,38 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 
 ### Wave 4: Jobs + Communications + Reports
 
-- `src/hooks/jobs/use-files.ts`
+#### Wave 4A: Jobs Live Project Surfaces
+
+| File | Backing server fn | Contract type | Semantic outcomes | Consumer criticality | Render policy | Test file | Status | Deferred reason / notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/hooks/jobs/use-files.ts` | `listFiles`, `getProjectFilesStats`, `getFile` | mixed: `always-shaped`, `detail-not-found` | list/stats reads accept empty and zero success; missing file detail is `not-found` | `secondary` | file surfaces must distinguish unavailable from healthy empty, and preserve file-detail not-found semantics | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Raw null-sentinel throws removed; list/stats now normalize only real failures. |
+| `src/components/domain/jobs/projects/project-files-tab.tsx` | `useFiles` consumer | n/a | project files tab previously collapsed failed reads into “No files yet” | `secondary` | `error + no data` shows unavailable state; `error + stale data` keeps files visible with degraded warning | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | The files tab now stays honest during both cold-load and refetch failures. |
+| `src/hooks/jobs/use-notes.ts` | `listNotes`, `getProjectNotesStats`, `getNote` | mixed: `always-shaped`, `detail-not-found` | list/stats reads accept empty and zero success; missing note detail is `not-found` | `secondary` | note surfaces must distinguish unavailable from healthy empty, and preserve note-detail not-found semantics | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Raw null-sentinel throws removed and detail semantics preserved. |
+| `src/components/domain/jobs/projects/project-notes-tab.tsx` | `useNotes` consumer | n/a | project notes tab previously collapsed failed reads into “No notes yet” | `secondary` | `error + no data` shows unavailable state; `error + stale data` keeps notes visible with degraded warning | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | The notes tab now keeps empty success and unavailable failure separate. |
+| `src/hooks/jobs/use-job-documents.ts` | `listJobDocuments` | `detail-not-found` | missing parent assignment is a semantic missing state; successful list remains shaped | `secondary` | document consumers must preserve missing-parent meaning instead of flattening to generic unavailable | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Hook normalized from server truth; active live consumer work remains tracked separately if surfaced later. |
+| `src/hooks/jobs/use-project-alerts.ts` | `getProjectAlerts` | `detail-not-found` | existing project yields shaped alert array; missing project is `not-found` | `secondary` | project detail must show localized unavailable/degraded alert treatment instead of pretending there are simply no alerts | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Hook now exposes `hasData` so consumers can separate empty success from failure. |
+| `src/hooks/jobs/use-project-detail-data.ts` | `useProjectAlerts`, `useSiteVisitsByProject`, `useNotes`, `useFiles` consumer hook | n/a | secondary project-detail reads previously collapsed failures into empty arrays and zero-ish tab counts | `secondary` | carry query error/data-presence state through to project-detail consumers so tabs and Zone 3 alerts can degrade honestly | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Added explicit notes/files/visits/alerts error and data-presence state for downstream policy. |
+| `src/components/domain/jobs/projects/views/project-detail-view.tsx` | project alerts consumer | n/a | project alerts zone previously treated failed alert loads like absence | `secondary` | localized unavailable/degraded alert banner plus retry, while preserving visible stale alerts when present | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Zone 3 now differentiates unavailable alerts from healthy no-alert state. |
+| `src/components/domain/jobs/projects/project-detail-tabs.tsx` | project visits consumer | n/a | visits tab previously rendered “No visits scheduled” on failure | `secondary` | `error + no data` suppresses fake empty state; `error + stale data` keeps visits visible with degraded warning | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Project visits tab now follows the same stale-data policy as other live read surfaces. |
+| `src/components/domain/jobs/projects/containers/use-project-detail-tab-renderers.tsx` | project visits consumer wiring | n/a | error/data-presence state was previously dropped before the presenter layer | `secondary` | thread localized degraded/unavailable policy into the visits tab renderer | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Thin wiring fix to keep presenter policy explicit. |
+| `src/components/domain/jobs/projects/containers/project-detail-container.tsx` | project-detail consumer | n/a | tab badge counts previously implied healthy zero when notes/files/visits reads failed | `secondary` | hide misleading tab counts when no usable payload exists; pass retry/degraded props to the presenter | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Count badges now stay aligned with usable data availability. |
+| `src/hooks/jobs/use-site-visits.ts` | `getSiteVisits`, `getPastDueSiteVisits`, `getSiteVisit` | mixed: `always-shaped`, `detail-not-found` | list/schedule/past-due reads accept empty success; missing visit detail is `not-found` | `headline` for detail, `secondary` for lists/schedule | schedule and project visit surfaces must distinguish unavailable from empty while preserving visit-detail not-found semantics | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Raw null-sentinel throws removed from site-visit reads and list validation errors now normalize consistently. |
+| `src/components/domain/jobs/schedule/schedule-calendar-container.tsx` | `useSchedule` consumer | n/a | schedule calendar previously collapsed failed reads into an empty dashboard | `headline` | `error + no data` shows blocking unavailable banner; `error + stale data` keeps the schedule visible with degraded warning | `tests/unit/jobs/query-normalization-wave4a.test.tsx` | `verified` | Schedule route now keeps stale schedule rows visible and reserves empty copy for shaped success. |
+| `tests/unit/jobs/query-normalization-wave4a.test.tsx` | jobs live-surface wave test | n/a | hook and consumer verification | n/a | n/a | self | `verified` | Covers hook contracts plus unavailable-vs-degraded behavior for files, notes, visits, alerts, and schedule. |
+
+#### Remaining Wave 4 Backlog
+
+##### 4B: Jobs Scheduling, Resources, and Config
+
 - `src/hooks/jobs/use-installers.ts`
-- `src/hooks/jobs/use-job-documents.ts`
 - `src/hooks/jobs/use-job-resources.ts`
 - `src/hooks/jobs/use-job-scheduling.ts`
 - `src/hooks/jobs/use-job-templates-config.ts`
-- `src/hooks/jobs/use-notes.ts`
-- `src/hooks/jobs/use-project-alerts.ts`
 - `src/hooks/jobs/use-project-bom.ts`
-- `src/hooks/jobs/use-site-visits.ts`
 - `src/hooks/jobs/use-workstreams.ts`
+
+##### 4C-4D: Communications
+
 - `src/hooks/communications/use-campaigns.ts`
 - `src/hooks/communications/use-contact-preferences.ts`
 - `src/hooks/communications/use-customer-communications.ts`
@@ -215,13 +236,13 @@ Detailed contract rows exist for active slices above. Untouched waves remain exp
 - `src/hooks/communications/use-scheduled-emails.ts`
 - `src/hooks/communications/use-signatures.ts`
 - `src/hooks/communications/use-templates.ts`
+
+##### 4E: Reports and Analytics
+
 - `src/hooks/reports/use-custom-reports.ts`
 - `src/hooks/reports/use-report-favorites.ts`
 - `src/hooks/reports/use-scheduled-reports.ts`
 - `src/hooks/reports/use-win-loss.ts`
-- `tests/unit/jobs/query-normalization-wave4.test.ts`
-- `tests/unit/communications/query-normalization-wave4.test.ts`
-- `tests/unit/reports/query-normalization-wave4.test.ts`
 
 ### Wave 5: Long Tail
 

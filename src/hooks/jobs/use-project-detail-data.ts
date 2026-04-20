@@ -72,6 +72,16 @@ export interface UseProjectDetailDataReturn {
   files: ProjectFile[];
   activities: UnifiedActivity[];
   alerts: ProjectAlert[];
+  notesError: Error | null;
+  notesHasData: boolean;
+  filesError: Error | null;
+  filesHasData: boolean;
+  siteVisitsError: Error | null;
+  siteVisitsHasData: boolean;
+  alertsError: Error | null;
+  alertsHasData: boolean;
+  refreshSiteVisits: () => Promise<unknown>;
+  refreshAlerts: () => Promise<unknown>;
 
   // Loading States
   isLoading: boolean;
@@ -201,6 +211,26 @@ export function useProjectDetailData(projectId: string): UseProjectDetailDataRet
   const bom = bomQuery.data ?? null;
   const alerts = alertsQuery.alerts;
   const activities: UnifiedActivity[] = activitiesQuery.activities ?? [];
+  const notesError = notesQuery.error instanceof Error
+    ? notesQuery.error
+    : notesQuery.error
+      ? new Error(String(notesQuery.error))
+      : null;
+  const notesHasData = notesQuery.data !== undefined;
+  const filesError = filesQuery.error instanceof Error
+    ? filesQuery.error
+    : filesQuery.error
+      ? new Error(String(filesQuery.error))
+      : null;
+  const filesHasData = filesQuery.data !== undefined;
+  const siteVisitsError = siteVisitsQuery.error instanceof Error
+    ? siteVisitsQuery.error
+    : siteVisitsQuery.error
+      ? new Error(String(siteVisitsQuery.error))
+      : null;
+  const siteVisitsHasData = siteVisitsQuery.data !== undefined;
+  const alertsError = alertsQuery.error;
+  const alertsHasData = alertsQuery.hasData;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Derived State (computed during render - no useEffect)
@@ -310,6 +340,16 @@ export function useProjectDetailData(projectId: string): UseProjectDetailDataRet
     files,
     activities,
     alerts,
+    notesError,
+    notesHasData,
+    filesError,
+    filesHasData,
+    siteVisitsError,
+    siteVisitsHasData,
+    alertsError,
+    alertsHasData,
+    refreshSiteVisits: siteVisitsQuery.refetch,
+    refreshAlerts: alertsQuery.refetch,
 
     // Loading States
     isLoading,

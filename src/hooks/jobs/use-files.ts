@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listFiles,
   getFile,
@@ -37,11 +38,16 @@ export function useFiles(projectId: string, options: {
   return useQuery<ListFilesResponse>({
     queryKey: queryKeys.projectFiles.byProjectFiltered(projectId, { siteVisitId, fileType }),
     queryFn: async () => {
-      const result = await listFiles({
-        data: { projectId, siteVisitId, fileType } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFiles({
+          data: { projectId, siteVisitId, fileType },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Project files are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled ?? !!projectId,
   });
@@ -51,11 +57,17 @@ export function useFilesStats(projectId: string, options: { enabled?: boolean } 
   return useQuery({
     queryKey: queryKeys.projectFiles.stats(projectId),
     queryFn: async () => {
-      const result = await getProjectFilesStats({
-        data: { projectId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProjectFilesStats({
+          data: { projectId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project file summary is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: options.enabled ?? !!projectId,
   });
@@ -69,11 +81,17 @@ export function useFile(id: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectFiles.detail(id),
     queryFn: async () => {
-      const result = await getFile({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getFile({
+          data: { id },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Project file details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested project file could not be found.',
+        });
+      }
     },
     enabled: options.enabled ?? !!id,
   });

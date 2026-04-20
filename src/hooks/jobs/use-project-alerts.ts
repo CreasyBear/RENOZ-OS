@@ -11,6 +11,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getProjectAlerts } from '@/server/functions/jobs/project-alerts';
 import type { ProjectAlert } from '@/lib/schemas/jobs/project-alerts';
 
@@ -26,6 +27,8 @@ export interface UseProjectAlertsOptions {
 export interface UseProjectAlertsReturn {
   /** Array of computed alerts */
   alerts: ProjectAlert[];
+  /** Whether the query has a usable payload, even if it is currently stale */
+  hasData: boolean;
   /** Whether alerts are loading */
   isLoading: boolean;
   /** Whether alerts failed to load */
@@ -33,7 +36,7 @@ export interface UseProjectAlertsReturn {
   /** Error if query failed */
   error: Error | null;
   /** Refetch alerts */
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 }
 
 // ============================================================================
@@ -66,11 +69,18 @@ export function useProjectAlerts(
   } = useQuery({
     queryKey: queryKeys.projects.alerts(projectId),
     queryFn: async () => {
-      const result = await getAlertsFn({
-        data: { projectId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getAlertsFn({
+          data: { projectId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Project alerts are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested project could not be found.',
+        });
+      }
     },
     staleTime: 60 * 1000, // 1 minute - alerts should be fresh
     enabled: options?.enabled !== false && !!projectId,
@@ -78,6 +88,7 @@ export function useProjectAlerts(
 
   return {
     alerts: data ?? [],
+    hasData: data !== undefined,
     isLoading,
     isError,
     error: error as Error | null,

@@ -11,6 +11,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   uploadJobDocument,
   listJobDocuments,
@@ -39,11 +40,18 @@ export function useJobDocuments(options: UseJobDocumentsOptions) {
   return useQuery({
     queryKey: queryKeys.jobDocuments.list(jobAssignmentId),
     queryFn: async () => {
-      const result = await listJobDocuments({
-        data: { jobAssignmentId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listJobDocuments({
+          data: { jobAssignmentId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Job documents are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested job assignment could not be found.',
+        });
+      }
     },
     enabled: enabled && !!jobAssignmentId,
     staleTime: 30 * 1000,
