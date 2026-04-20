@@ -175,8 +175,10 @@ export interface SupplierDetailViewProps {
   headerConfig?: SupplierDetailHeaderConfig;
   purchaseOrders?: PurchaseOrderSummary[];
   purchaseOrdersLoading?: boolean;
+  purchaseOrdersError?: Error | null;
   priceAgreements?: PriceAgreement[];
   priceAgreementsLoading?: boolean;
+  priceAgreementsError?: Error | null;
   activities?: UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
@@ -713,9 +715,14 @@ function NotesSection({ notes, tags }: NotesSectionProps) {
 interface RecentPurchaseOrdersSectionProps {
   purchaseOrders: PurchaseOrderSummary[];
   loading?: boolean;
+  error?: Error | null;
 }
 
-function RecentPurchaseOrdersSection({ purchaseOrders, loading }: RecentPurchaseOrdersSectionProps) {
+function RecentPurchaseOrdersSection({
+  purchaseOrders,
+  loading,
+  error,
+}: RecentPurchaseOrdersSectionProps) {
   if (loading) {
     return (
       <section>
@@ -725,6 +732,24 @@ function RecentPurchaseOrdersSection({ purchaseOrders, loading }: RecentPurchase
             <div key={i} className="h-12 bg-muted animate-pulse rounded" />
           ))}
         </div>
+      </section>
+    );
+  }
+
+  if (error && purchaseOrders.length === 0) {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-foreground mb-1">Recent Purchase Orders</h2>
+          <p className="text-sm text-muted-foreground">
+            Latest supplier orders and their current status
+          </p>
+        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Purchase orders are temporarily unavailable for this supplier. Refresh and try again.
+          </AlertDescription>
+        </Alert>
       </section>
     );
   }
@@ -772,6 +797,13 @@ function RecentPurchaseOrdersSection({ purchaseOrders, loading }: RecentPurchase
           <p className="text-sm">No purchase orders yet</p>
         </div>
       )}
+      {error ? (
+        <Alert className="mt-4">
+          <AlertDescription>
+            Showing the last available purchase order data while the latest supplier orders reload.
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </section>
   );
 }
@@ -1000,8 +1032,10 @@ export const SupplierDetailView = memo(function SupplierDetailView({
   headerConfig,
   purchaseOrders = [],
   purchaseOrdersLoading = false,
+  purchaseOrdersError = null,
   priceAgreements = [],
   priceAgreementsLoading = false,
+  priceAgreementsError = null,
   activities = [],
   activitiesLoading = false,
   activitiesError,
@@ -1011,6 +1045,11 @@ export const SupplierDetailView = memo(function SupplierDetailView({
   const currency = useMemo(() => toCurrency(supplier.currency), [supplier.currency]);
   const poCount = useMemo(() => purchaseOrders.length, [purchaseOrders]);
   const priceCount = useMemo(() => priceAgreements.length, [priceAgreements]);
+  const ordersUnavailable = !!purchaseOrdersError && !purchaseOrdersLoading && purchaseOrders.length === 0;
+  const ordersDegraded = !!purchaseOrdersError && purchaseOrders.length > 0;
+  const pricingUnavailable =
+    !!priceAgreementsError && !priceAgreementsLoading && priceAgreements.length === 0;
+  const pricingDegraded = !!priceAgreementsError && priceAgreements.length > 0;
   const { dismiss, isAlertDismissed } = useAlertDismissals();
 
   const alerts = useMemo(() => {
@@ -1110,13 +1149,13 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                   <TabsTrigger value="orders" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3 gap-2">
                     Orders
                     <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
-                      {poCount}
+                      {ordersUnavailable ? '!' : poCount}
                     </Badge>
                   </TabsTrigger>
                   <TabsTrigger value="pricing" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3 gap-2">
                     Pricing
                     <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
-                      {priceCount}
+                      {pricingUnavailable ? '!' : priceCount}
                     </Badge>
                   </TabsTrigger>
                   <TabsTrigger value="activity" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3">
@@ -1135,6 +1174,7 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                     <RecentPurchaseOrdersSection
                       purchaseOrders={purchaseOrders}
                       loading={purchaseOrdersLoading}
+                      error={purchaseOrdersError}
                     />
                     <NotesSection notes={supplier.notes} tags={supplier.tags} />
                   </div>
@@ -1200,7 +1240,13 @@ export const SupplierDetailView = memo(function SupplierDetailView({
 
                 {/* Purchase Orders Tab */}
                 <TabsContent value="orders" className="mt-0 pt-6">
-                  {purchaseOrdersLoading ? (
+                  {ordersUnavailable ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Purchase orders are temporarily unavailable for this supplier. Refresh and try again.
+                      </AlertDescription>
+                    </Alert>
+                  ) : purchaseOrdersLoading ? (
                     <div className="space-y-2">
                       {[1, 2, 3, 4, 5].map((i) => (
                         <div key={i} className="h-12 bg-muted animate-pulse rounded" />
@@ -1242,11 +1288,24 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                       </p>
                     </div>
                   )}
+                  {ordersDegraded ? (
+                    <Alert className="mt-4">
+                      <AlertDescription>
+                        Showing the last available purchase order data while the latest supplier orders reload.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
                 </TabsContent>
 
                 {/* Pricing Tab */}
                 <TabsContent value="pricing" className="mt-0 pt-6">
-                  {priceAgreementsLoading ? (
+                  {pricingUnavailable ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Supplier pricing is temporarily unavailable. Refresh and try again.
+                      </AlertDescription>
+                    </Alert>
+                  ) : priceAgreementsLoading ? (
                     <div className="space-y-2">
                       {[1, 2, 3, 4, 5].map((i) => (
                         <div key={i} className="h-12 bg-muted animate-pulse rounded" />
@@ -1293,6 +1352,13 @@ export const SupplierDetailView = memo(function SupplierDetailView({
                       </p>
                     </div>
                   )}
+                  {pricingDegraded ? (
+                    <Alert className="mt-4">
+                      <AlertDescription>
+                        Showing the last available supplier pricing while the latest agreements reload.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
                 </TabsContent>
 
                 {/* Activity Tab */}

@@ -138,6 +138,7 @@ export function SupplierDetailContainer({
   const {
     data: purchaseOrdersData,
     isLoading: purchaseOrdersLoading,
+    error: purchaseOrdersError,
   } = usePurchaseOrders({
     supplierId,
     pageSize: 100, // Fetch enough for display
@@ -156,6 +157,7 @@ export function SupplierDetailContainer({
   const {
     data: priceListsData,
     isLoading: priceListsLoading,
+    error: priceListsError,
   } = usePriceLists({
     supplierId,
     status: 'active',
@@ -311,8 +313,10 @@ export function SupplierDetailContainer({
         headerConfig={headerConfigForView}
         purchaseOrders={purchaseOrders}
         purchaseOrdersLoading={purchaseOrdersLoading}
+        purchaseOrdersError={purchaseOrdersError instanceof Error ? purchaseOrdersError : null}
         priceAgreements={priceAgreements}
         priceAgreementsLoading={priceListsLoading}
+        priceAgreementsError={priceListsError instanceof Error ? priceListsError : null}
         activities={activities}
         activitiesLoading={activitiesLoading}
         activitiesError={activitiesError}

@@ -10,6 +10,7 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { ErrorState } from '@/components/shared/error-state';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { SupplierForm } from './supplier-form';
 import { SupplierFormSkeleton } from './supplier-form-skeleton';
@@ -29,7 +30,7 @@ export interface SupplierEditContainerProps {
 
 export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps) {
   const navigate = useNavigate();
-  const { data: supplierData, isLoading } = useSupplier(supplierId);
+  const { data: supplierData, isLoading, error, refetch } = useSupplier(supplierId);
   const updateMutation = useUpdateSupplier();
 
   const form = useTanStackForm<SupplierFormValues>({
@@ -126,6 +127,20 @@ export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps
 
   if (isLoading) {
     return <SupplierFormSkeleton />;
+  }
+
+  if (error || !supplierData) {
+    return (
+      <ErrorState
+        title="Supplier details are unavailable"
+        message={
+          error instanceof Error
+            ? error.message
+            : 'The supplier could not be loaded for editing. Refresh and try again.'
+        }
+        onRetry={() => refetch()}
+      />
+    );
   }
 
   return (
