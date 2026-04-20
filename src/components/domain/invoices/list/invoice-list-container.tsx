@@ -16,6 +16,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useInvoices, useInvoiceSummary } from '@/hooks/invoices';
 import { logger } from '@/lib/logger';
 import { useBulkSendReminders, useBulkUpdateInvoiceStatus } from '@/hooks/invoices/use-bulk-invoice-operations';
@@ -258,10 +259,12 @@ export function InvoiceListContainer({
   } = useInvoices(queryFilters);
 
   // Fetch summary
-  const { data: summaryData } = useInvoiceSummary();
+  const { data: summaryData, error: summaryError } = useInvoiceSummary();
 
   // Selection state using shared hook
   const invoices = invoicesData?.invoices ?? [];
+  const hasInvoicesData = !!invoicesData;
+  const hasSummaryData = !!summaryData;
   const {
     selectedIds,
     selectedItems,
@@ -403,7 +406,7 @@ export function InvoiceListContainer({
   );
 
   // Error state for invoices
-  if (invoicesError) {
+  if (invoicesError && !hasInvoicesData) {
     return (
       <div className="space-y-3">
         <DomainFilterBar
@@ -435,6 +438,26 @@ export function InvoiceListContainer({
           defaultFilters={DEFAULT_INVOICE_FILTERS}
           resultCount={invoicesData?.total ?? 0}
         />
+
+        {invoicesError && hasInvoicesData ? (
+          <Alert>
+            <AlertTitle>Invoice list unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent invoice list while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {summaryError ? (
+          <Alert>
+            <AlertTitle>Invoice summary unavailable</AlertTitle>
+            <AlertDescription>
+              {hasSummaryData
+                ? 'Showing the most recent invoice summary while refresh is unavailable.'
+                : 'Invoice summary metrics are temporarily unavailable. Please refresh and try again.'}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {/* Bulk Actions Bar - only show when items are selected */}
         {selectedIds.size >= 2 && (

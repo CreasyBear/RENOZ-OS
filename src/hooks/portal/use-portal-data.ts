@@ -7,6 +7,7 @@
  * - Portal quotes list
  */
 import { useQuery } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listPortalOrders,
@@ -43,9 +44,14 @@ export function usePortalOrders(options: UsePortalListOptions = {}) {
   return useQuery<PortalOrdersResult>({
     queryKey: queryKeys.portal.orders.list(params),
     queryFn: async () => {
-      const result = await listPortalOrders({ data: params });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listPortalOrders({ data: params });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Portal orders are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -62,9 +68,14 @@ export function usePortalJobs(options: UsePortalListOptions = {}) {
   return useQuery<PortalJobsResult>({
     queryKey: queryKeys.portal.jobs.list(params),
     queryFn: async () => {
-      const result = await listPortalJobs({ data: params });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listPortalJobs({ data: params });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Portal jobs are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -81,9 +92,14 @@ export function usePortalQuotes(options: UsePortalListOptions = {}) {
   return useQuery<PortalQuotesResult>({
     queryKey: queryKeys.portal.quotes.list(params),
     queryFn: async () => {
-      const result = await listPortalQuotes({ data: params });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listPortalQuotes({ data: params });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Portal quotes are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,

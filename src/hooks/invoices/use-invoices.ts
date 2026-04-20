@@ -12,6 +12,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type { InvoiceFilter } from '@/lib/schemas/invoices';
 import { queryKeys } from '@/lib/query-keys';
 import {
@@ -47,9 +48,14 @@ export function useInvoices(options: UseInvoicesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.invoices.list(filters),
     queryFn: async () => {
-      const result = await getInvoicesFn({ data: filters as InvoiceFilter });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInvoicesFn({ data: filters as InvoiceFilter });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Invoices are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -80,9 +86,15 @@ export function useInvoice(id: string, options: UseInvoiceOptions = {}) {
   return useQuery<InvoiceDetail, Error>({
     queryKey: queryKeys.invoices.detail(id),
     queryFn: async () => {
-      const result = await getInvoiceFn({ data: { id } });
-      if (result == null) throw new Error('Invoice detail returned no data');
-      return result as InvoiceDetail;
+      try {
+        return await getInvoiceFn({ data: { id } }) as InvoiceDetail;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Invoice details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested invoice could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 30 * 1000,

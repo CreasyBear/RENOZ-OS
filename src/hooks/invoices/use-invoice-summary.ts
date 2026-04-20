@@ -11,6 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type { InvoiceSummaryQuery } from '@/lib/schemas/invoices';
 import { queryKeys } from '@/lib/query-keys';
 import { getInvoiceSummary } from '@/server/functions/invoices';
@@ -50,9 +51,14 @@ export function useInvoiceSummary(options: UseInvoiceSummaryOptions = {}) {
   return useQuery({
     queryKey: queryKeys.invoices.summary(filters.statuses),
     queryFn: async () => {
-      const result = await getSummaryFn({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSummaryFn({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Invoice summary metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute - summary data is less time-sensitive
