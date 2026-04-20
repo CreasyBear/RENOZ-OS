@@ -17,10 +17,6 @@ src/hooks/dashboard/use-tracked-products.ts
 src/hooks/documents/use-generate-document.ts
 src/hooks/invoices/use-invoice-summary.ts
 src/hooks/invoices/use-invoices.ts
-src/hooks/jobs/use-installers.ts
-src/hooks/jobs/use-job-resources.ts
-src/hooks/jobs/use-job-scheduling.ts
-src/hooks/jobs/use-job-templates-config.ts
 src/hooks/portal/use-portal-data.ts
 src/hooks/products/use-product-bundles.ts
 src/hooks/products/use-product-images.ts

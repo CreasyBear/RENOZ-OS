@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listCalendarJobs,
   listUnscheduledJobs,
@@ -58,9 +59,14 @@ export function useCalendarJobs(input: ListCalendarJobsInput) {
       { installerIds: input.installerIds, statuses: input.statuses }
     ),
     queryFn: async () => {
-      const result = await listFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Schedule calendar is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     refetchOnWindowFocus: true,
   });
@@ -75,9 +81,15 @@ export function useUnscheduledJobs(input: ListUnscheduledJobsInput = { limit: 50
   return useQuery({
     queryKey: queryKeys.jobCalendar.unscheduledList({ limit: input.limit, offset: input.offset }),
     queryFn: async () => {
-      const result = await listFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Unscheduled jobs are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
   });
 }
@@ -91,9 +103,15 @@ export function useCalendarInstallers() {
   return useQuery({
     queryKey: queryKeys.jobCalendar.installers({}),
     queryFn: async () => {
-      const result = await listFn({});
-      if (result == null) throw new Error('Schedule list returned no data');
-      return result;
+      try {
+        return await listFn({});
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Schedule installer filters are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -116,9 +134,15 @@ export function useTimelineJobs(input: ListTimelineJobsInput) {
       { installerIds: input.installerIds, statuses: input.statuses }
     ),
     queryFn: async () => {
-      const result = await listFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Schedule timeline is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     refetchOnWindowFocus: true,
   });
@@ -133,9 +157,15 @@ export function useTimelineStats(input: ListTimelineJobsInput) {
   return useQuery({
     queryKey: queryKeys.jobCalendar.timelineStats(input.startDate, input.endDate),
     queryFn: async () => {
-      const result = await statsFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await statsFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Timeline statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -222,9 +252,15 @@ export function useCalendarTasksForKanban(input: ListCalendarJobsInput) {
       { installerIds: input.installerIds, statuses: input.statuses }
     ),
     queryFn: async () => {
-      const result = await listFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Schedule kanban is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     refetchOnWindowFocus: true,
   });
@@ -355,13 +391,19 @@ export function useRescheduleJob() {
  */
 export function useCalendarOAuthConnection() {
   const getConnectionFn = useServerFn(getCalendarOAuthConnection);
-  
+
   return useQuery({
     queryKey: queryKeys.jobCalendar.oauth.connection(),
     queryFn: async () => {
-      const result = await getConnectionFn();
-      if (result == null) throw new Error('Calendar connection returned no data');
-      return result;
+      try {
+        return await getConnectionFn();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Calendar connection status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
@@ -373,13 +415,19 @@ export function useCalendarOAuthConnection() {
  */
 export function useAvailableCalendars() {
   const listCalendarsFn = useServerFn(listAvailableCalendars);
-  
+
   return useQuery({
     queryKey: queryKeys.jobCalendar.oauth.calendars(),
     queryFn: async () => {
-      const result = await listCalendarsFn();
-      if (result == null) throw new Error('Calendars list returned no data');
-      return result;
+      try {
+        return await listCalendarsFn();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Available calendars are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });

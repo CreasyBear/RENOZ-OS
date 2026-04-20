@@ -24,6 +24,7 @@ import {
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -69,7 +70,12 @@ export function JobTemplateFormDialog({
   const updateMutation = useUpdateJobTemplate();
 
   // Checklist templates for selection
-  const { data: checklistData, isLoading: checklistsLoading } = useChecklistTemplates({
+  const {
+    data: checklistData,
+    isLoading: checklistsLoading,
+    error: checklistError,
+    refetch: refetchChecklistTemplates,
+  } = useChecklistTemplates({
     includeInactive: false,
   });
   const checklistTemplates = checklistData?.templates ?? [];
@@ -359,23 +365,52 @@ export function JobTemplateFormDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="checklist">Checklist Template</Label>
-                <Select
-                  value={checklistTemplateId ?? 'none'}
-                  onValueChange={(v) => setChecklistTemplateId(v === 'none' ? undefined : v)}
-                >
-                  <SelectTrigger id="checklist">
-                    <SelectValue placeholder="Select a checklist template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No checklist</SelectItem>
-                    {checklistTemplates.map((ct) => (
-                      <SelectItem key={ct.id} value={ct.id}>
-                        {ct.name} ({ct.items.length} items)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {checklistError ? (
+                  <Alert
+                    variant={checklistData === undefined ? 'destructive' : 'default'}
+                  >
+                    <AlertTitle>
+                      {checklistData === undefined
+                        ? 'Checklist templates unavailable'
+                        : 'Showing cached checklist templates'}
+                    </AlertTitle>
+                    <AlertDescription className="flex items-center justify-between gap-3">
+                      <span>
+                        {checklistError instanceof Error
+                          ? checklistError.message
+                          : 'Checklist templates are temporarily unavailable. Please refresh and try again.'}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void refetchChecklistTemplates()}
+                      >
+                        Retry
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                {checklistData !== undefined ? (
+                  <>
+                    <Label htmlFor="checklist">Checklist Template</Label>
+                    <Select
+                      value={checklistTemplateId ?? 'none'}
+                      onValueChange={(v) => setChecklistTemplateId(v === 'none' ? undefined : v)}
+                    >
+                      <SelectTrigger id="checklist">
+                        <SelectValue placeholder="Select a checklist template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No checklist</SelectItem>
+                        {checklistTemplates.map((ct) => (
+                          <SelectItem key={ct.id} value={ct.id}>
+                            {ct.name} ({ct.items.length} items)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                ) : null}
               </div>
             )}
 

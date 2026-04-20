@@ -18,6 +18,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DomainFilterBar, type FilterBarConfig } from '@/components/shared/filters';
 import { Badge } from '@/components/ui/badge';
@@ -560,11 +561,13 @@ export function JobCostingReportPage() {
   }
 
   // Error state
-  if (error) {
+  if (error && !reportData) {
     return (
       <ErrorState
         message={error instanceof Error ? error.message : 'Failed to load report'}
-        onRetry={() => refetch()}
+        onRetry={() => {
+          void refetch();
+        }}
       />
     );
   }
@@ -598,6 +601,27 @@ export function JobCostingReportPage() {
           </Button>
         </div>
       </div>
+      {error ? (
+        <Alert className="mb-6">
+          <AlertTitle>Showing cached job costing data</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {error instanceof Error
+                ? error.message
+                : 'Job costing report is temporarily unavailable. Please refresh and try again.'}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void refetch();
+              }}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {/* Summary Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>

@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -262,7 +263,7 @@ export function InstallerAvailabilityCalendar({
   );
 
   // Fetch installers
-  const { data: installersData, isLoading } = useInstallers({
+  const { data: installersData, isLoading, error, refetch } = useInstallers({
     page: 1,
     pageSize: 50,
     status: statusFilter === 'all' ? undefined : (statusFilter as 'active' | 'busy' | 'away'),
@@ -333,6 +334,25 @@ export function InstallerAvailabilityCalendar({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {error ? (
+          <Alert variant={installersData === undefined ? 'destructive' : 'default'}>
+            <AlertTitle>
+              {installersData === undefined
+                ? 'Installer availability unavailable'
+                : 'Showing cached installer availability'}
+            </AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>
+                {error instanceof Error
+                  ? error.message
+                  : 'Installer directory is temporarily unavailable. Please refresh and try again.'}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {/* Legend */}
         <div className="flex flex-wrap gap-4 text-xs">
           <div className="flex items-center gap-1.5">
@@ -395,6 +415,14 @@ export function InstallerAvailabilityCalendar({
                 </div>
               </div>
             ))
+          ) : error && installersData === undefined ? (
+            <div className="rounded-lg border border-dashed border-destructive/40 bg-destructive/5 px-4 py-10 text-center">
+              <User className="mx-auto mb-3 h-12 w-12 text-destructive/70" />
+              <p className="text-sm font-medium">Installer availability is unavailable</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Retry once the installer directory is reachable again.
+              </p>
+            </div>
           ) : installers.length === 0 ? (
             <div className="text-center py-12">
               <User className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />

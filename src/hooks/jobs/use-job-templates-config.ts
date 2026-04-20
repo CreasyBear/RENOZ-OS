@@ -11,6 +11,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 
 // Job templates imports
 import {
@@ -68,11 +69,17 @@ export function useJobTemplates(options?: ListJobTemplatesInput) {
   return useQuery({
     queryKey: queryKeys.jobTemplates.templates(),
     queryFn: async () => {
-      const result = await listFn({
-        data: options || {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFn({
+          data: options || {},
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Job templates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -87,11 +94,18 @@ export function useJobTemplate(templateId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.jobTemplates.template(templateId || ''),
     queryFn: async () => {
-      const result = await getFn({
-        data: { templateId: templateId! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getFn({
+          data: { templateId: templateId! },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Job template details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested job template could not be found.',
+        });
+      }
     },
     enabled: !!templateId,
   });
@@ -208,9 +222,15 @@ export function useChecklistTemplates(
   return useQuery({
     queryKey: queryKeys.checklists.templateList(input.includeInactive),
     queryFn: async () => {
-      const result = await listFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Checklist templates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
   });
 }
@@ -224,9 +244,16 @@ export function useChecklistTemplate(input: GetChecklistTemplateInput) {
   return useQuery({
     queryKey: queryKeys.checklists.templateDetail(input.templateId),
     queryFn: async () => {
-      const result = await getFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Checklist template details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested checklist template could not be found.',
+        });
+      }
     },
     enabled: !!input.templateId,
   });
@@ -306,9 +333,15 @@ export function useJobChecklist(input: GetJobChecklistInput) {
   return useQuery({
     queryKey: queryKeys.checklists.jobChecklist(input.jobId),
     queryFn: async () => {
-      const result = await getFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Job checklist is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!input.jobId,
   });
@@ -323,9 +356,16 @@ export function useChecklistItem(input: GetChecklistItemInput) {
   return useQuery({
     queryKey: queryKeys.checklists.item(input.itemId),
     queryFn: async () => {
-      const result = await getFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Checklist item is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested checklist item could not be found.',
+        });
+      }
     },
     enabled: !!input.itemId,
   });
