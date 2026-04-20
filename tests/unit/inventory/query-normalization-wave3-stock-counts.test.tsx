@@ -164,4 +164,31 @@ describe('inventory stock counts query normalization wave 3', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Stock Counts' }));
     expect(retry).toHaveBeenCalled();
   });
+
+  it('keeps cached stock counts visible when a refetch fails', async () => {
+    const { StockCountList } = await import('@/components/domain/inventory/counts/stock-count-list');
+
+    render(
+      <StockCountList
+        counts={[
+          {
+            id: 'count-1',
+            countCode: 'COUNT-001',
+            countType: 'cycle',
+            status: 'in_progress',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          },
+        ]}
+        isError
+        errorMessage="Refresh failed. The list below may be stale until the next successful reload."
+      />
+    );
+
+    expect(
+      screen.getByText('Showing the most recent stock counts while refresh is unavailable.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('COUNT-001')).toBeInTheDocument();
+    expect(screen.queryByText('Stock counts are temporarily unavailable.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No stock counts found')).not.toBeInTheDocument();
+  });
 });

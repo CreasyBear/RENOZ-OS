@@ -865,6 +865,9 @@ function QualityTabContent({
   errorMessage,
   onRetry,
 }: QualityTabContentProps) {
+  const showUnavailableState = !!isError && qualityRecords.length === 0;
+  const showDegradedWarning = !!isError && qualityRecords.length > 0;
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -882,7 +885,7 @@ function QualityTabContent({
     );
   }
 
-  if (isError) {
+  if (showUnavailableState) {
     return (
       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
         <div className="flex items-start gap-3">
@@ -918,6 +921,29 @@ function QualityTabContent({
 
   return (
     <div className="space-y-2">
+      {showDegradedWarning ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" aria-hidden="true" />
+            <div className="space-y-3">
+              <div>
+                <p className="font-medium text-foreground">
+                  Showing the most recent quality history while refresh is unavailable.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {errorMessage ?? 'Refresh failed. The inspection history below may be stale until the next successful reload.'}
+                </p>
+              </div>
+              {onRetry ? (
+                <Button variant="outline" size="sm" onClick={onRetry}>
+                  Retry Quality History
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {qualityRecords.map((record) => (
         <div key={record.id} className="flex items-start gap-4 p-3 border rounded-lg">
           <div

@@ -202,4 +202,45 @@ describe('inventory quality query normalization wave 3', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Quality History' }));
     expect(retry).toHaveBeenCalled();
   });
+
+  it('keeps cached quality history visible when a refetch fails', async () => {
+    const retry = vi.fn();
+    const { InventoryDetailView } = await import(
+      '@/components/domain/inventory/views/inventory-detail-view'
+    );
+
+    render(
+      <InventoryDetailView
+        item={baseItem}
+        activeTab="quality"
+        onTabChange={vi.fn()}
+        showMetaPanel={false}
+        onToggleMetaPanel={vi.fn()}
+        qualityRecords={[
+          {
+            id: 'inspection-1',
+            inventoryId: 'inventory-1',
+            inspectionDate: '2026-01-01T00:00:00.000Z',
+            inspectorName: 'Alex Inspector',
+            result: 'pass',
+            notes: 'Passed visual inspection',
+            defects: [],
+          },
+        ]}
+        isLoadingQuality={false}
+        qualityError={new Error('Refresh failed. The inspection history below may be stale until the next successful reload.')}
+        onRetryQuality={retry}
+      />
+    );
+
+    expect(
+      screen.getByText('Showing the most recent quality history while refresh is unavailable.')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Inspected by/i)).toBeInTheDocument();
+    expect(screen.getByText('Passed visual inspection')).toBeInTheDocument();
+    expect(screen.queryByText('Quality inspection history is temporarily unavailable.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Quality History' }));
+    expect(retry).toHaveBeenCalled();
+  });
 });

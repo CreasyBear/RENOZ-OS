@@ -226,6 +226,9 @@ export const StockCountList = memo(function StockCountList({
     return sorted;
   }, [counts, sort]);
 
+  const showUnavailableState = !!isError && counts.length === 0;
+  const showDegradedWarning = !!isError && counts.length > 0;
+
   // Loading state
   if (isLoading) {
     return (
@@ -274,7 +277,7 @@ export const StockCountList = memo(function StockCountList({
     );
   }
 
-  if (isError) {
+  if (showUnavailableState) {
     return (
       <div className={cn("rounded-lg border border-destructive/30 bg-destructive/5 p-6", className)}>
         <div className="flex items-start gap-3">
@@ -312,7 +315,24 @@ export const StockCountList = memo(function StockCountList({
   }
 
   return (
-    <div className={cn("border rounded-lg overflow-hidden", className)}>
+    <div className={cn("space-y-4", className)}>
+      {showDegradedWarning ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <Clock className="mt-0.5 h-5 w-5 text-amber-600" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">
+                Showing the most recent stock counts while refresh is unavailable.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {errorMessage ?? 'Refresh failed. The list below may be stale until the next successful reload.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="border rounded-lg overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -472,6 +492,7 @@ export const StockCountList = memo(function StockCountList({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 });
