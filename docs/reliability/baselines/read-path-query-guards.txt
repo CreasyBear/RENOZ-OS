@@ -42,9 +42,6 @@ src/hooks/reports/use-scheduled-reports.ts
 src/hooks/reports/use-win-loss.ts
 src/hooks/settings/use-win-loss-reasons.ts
 src/hooks/suppliers/use-approvals.ts
-src/hooks/suppliers/use-bulk-purchase-orders.ts
-src/hooks/suppliers/use-goods-receipt.ts
-src/hooks/suppliers/use-po-costs.ts
 src/hooks/suppliers/use-procurement-analytics.ts
 src/hooks/support/use-issue-templates.ts
 src/hooks/support/use-knowledge-base.ts

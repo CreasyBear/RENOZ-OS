@@ -13,6 +13,7 @@ import { Link } from '@tanstack/react-router';
 import { Package, ChevronDown, ChevronUp, Truck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -52,7 +53,7 @@ const REJECTION_LABELS: Record<string, string> = {
 // ============================================================================
 
 export function POReceiptsTab({ poId }: POReceiptsTabProps) {
-  const { data, isLoading } = usePurchaseOrderReceipts(poId);
+  const { data, isLoading, error } = usePurchaseOrderReceipts(poId);
   const [expandedReceipt, setExpandedReceipt] = useState<string | null>(null);
 
   if (isLoading) {
@@ -65,6 +66,20 @@ export function POReceiptsTab({ poId }: POReceiptsTabProps) {
   }
 
   const receipts = data?.receipts ?? [];
+  const showReceiptsUnavailable = Boolean(error) && receipts.length === 0;
+  const showReceiptsDegraded = Boolean(error) && receipts.length > 0;
+
+  if (showReceiptsUnavailable) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Receipt history unavailable</AlertTitle>
+        <AlertDescription>
+          {error?.message ??
+            'Purchase order receipts are temporarily unavailable. Please refresh and try again.'}
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   if (receipts.length === 0) {
     return (
@@ -78,6 +93,16 @@ export function POReceiptsTab({ poId }: POReceiptsTabProps) {
 
   return (
     <div className="space-y-4">
+      {showReceiptsDegraded ? (
+        <Alert>
+          <AlertTitle>Receipt history may be outdated</AlertTitle>
+          <AlertDescription>
+            {error?.message ??
+              'Purchase order receipts are temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="text-sm text-muted-foreground">
         {receipts.length} receipt{receipts.length !== 1 ? 's' : ''} recorded
       </div>
