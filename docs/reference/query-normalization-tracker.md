@@ -180,13 +180,16 @@ Execution artifact for the read-path error handling program. This replaces the o
 
 Detailed contract rows exist for active slices above. Untouched waves remain explicit file-by-file checklists until each file is classified from server truth.
 
-### Remaining Wave 2 Backlog
+### Wave 3 Closeout
 
-### Wave 3: Warranty + Inventory + Procurement
-
-- `tests/unit/warranty/query-normalization-wave3.test.ts`
-- `tests/unit/inventory/query-normalization-wave3.test.ts`
-- `tests/unit/purchase-orders/query-normalization-wave3.test.ts`
+- Wave 3 is fully classified, implemented, and validated.
+- All active Wave 3 registry rows above are `verified`; there are no remaining `in progress`, `blocked`, or `deferred` Wave 3 items in this registry.
+- Validation closeout passed on `2026-04-20` with:
+  - full Wave 3 focused regression suite green
+  - `npm run lint:reliability` green
+  - `npm run lint` green
+  - `npm run typecheck` green
+- The remaining program backlog starts at Wave 4.
 
 ### Wave 4: Jobs + Communications + Reports
 
