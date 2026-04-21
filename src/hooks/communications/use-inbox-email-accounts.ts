@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { queryKeys } from "@/lib/query-keys";
 import {
   listInboxEmailAccounts,
@@ -38,9 +39,14 @@ export function useInboxEmailAccounts(options?: { refetchInterval?: number | fal
   return useQuery({
     queryKey: queryKeys.communications.inboxEmailAccounts(),
     queryFn: async () => {
-      const result = await listFn();
-      if (result == null) throw new Error('Inbox email accounts returned no data');
-      return result;
+      try {
+        return await listFn();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Email accounts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
     refetchInterval: options?.refetchInterval,

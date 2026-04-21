@@ -20,6 +20,7 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getGeneratedDocuments } from '@/server/functions/documents/get-generated-documents';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -152,9 +153,14 @@ export function useDocumentHistory(filters: DocumentHistoryFilters) {
   return useQuery({
     queryKey: queryKeys.documents.history(filters.entityType, filters.entityId, filters.documentType),
     queryFn: async () => {
-      const result = await fetchDocumentHistory(filters);
-      if (result == null) throw new Error('Document history returned no data');
-      return result;
+      try {
+        return await fetchDocumentHistory(filters);
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Document history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!filters.entityId,
     staleTime: 60 * 1000, // 1 minute

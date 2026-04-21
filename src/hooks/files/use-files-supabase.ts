@@ -38,6 +38,7 @@ import {
   type UseQueryResult,
   type UseMutationResult,
 } from "@tanstack/react-query";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { queryKeys } from "@/lib/query-keys";
 import {
   getPresignedUploadUrl,
@@ -111,16 +112,21 @@ export function useAttachments(
   return useQuery({
     queryKey: queryKeys.files.list(entityType ?? "", entityId ?? ""),
     queryFn: async () => {
-      const result = await listAttachments({
-        data: {
-          ...(entityType ? { entityType } : {}),
-          ...(entityId ? { entityId } : {}),
-          limit: options?.limit ?? 50,
-          offset: options?.offset ?? 0,
-        },
-      });
-      if (result == null) throw new Error('Attachments list returned no data');
-      return result;
+      try {
+        return await listAttachments({
+          data: {
+            ...(entityType ? { entityType } : {}),
+            ...(entityId ? { entityId } : {}),
+            limit: options?.limit ?? 50,
+            offset: options?.offset ?? 0,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Attachments are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: true,
   });
@@ -145,9 +151,15 @@ export function useDownloadUrl(
   return useQuery({
     queryKey: queryKeys.files.download(attachmentId ?? ""),
     queryFn: async () => {
-      const result = await getPresignedDownloadUrl({ data: { attachmentId: attachmentId! } });
-      if (result == null) throw new Error('Download URL returned no data');
-      return result;
+      try {
+        return await getPresignedDownloadUrl({ data: { attachmentId: attachmentId! } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Attachment download is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested attachment could not be found.',
+        });
+      }
     },
     enabled: !!attachmentId,
     staleTime: 50 * 60 * 1000, // 50 minutes - refresh before 1 hour expiry
@@ -170,9 +182,14 @@ export function useDownloadUrls(
   return useQuery({
     queryKey: queryKeys.files.downloads(attachmentIds),
     queryFn: async () => {
-      const result = await getPresignedDownloadUrls({ data: { attachmentIds } });
-      if (result == null) throw new Error('Download URLs returned no data');
-      return result;
+      try {
+        return await getPresignedDownloadUrls({ data: { attachmentIds } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Attachment downloads are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: attachmentIds.length > 0,
     staleTime: 50 * 60 * 1000, // 50 minutes
@@ -196,11 +213,17 @@ export function useTransformedImageUrl(
   return useQuery({
     queryKey: queryKeys.files.transform(attachmentId ?? "", transform),
     queryFn: async () => {
-      const result = await getTransformedImageUrl({
-        data: { attachmentId: attachmentId!, ...transform },
-      });
-      if (result == null) throw new Error('Transformed image URL returned no data');
-      return result;
+      try {
+        return await getTransformedImageUrl({
+          data: { attachmentId: attachmentId!, ...transform },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Image preview is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested attachment could not be found.',
+        });
+      }
     },
     enabled: !!attachmentId,
     staleTime: 50 * 60 * 1000, // 50 minutes
@@ -220,9 +243,7 @@ export function useFetchDownloadUrl(): UseMutationResult<
 > {
   return useMutation({
     mutationFn: async (attachmentId: string) => {
-      const result = await getPresignedDownloadUrl({ data: { attachmentId } });
-      if (result == null) throw new Error('Download URL returned no data');
-      return result;
+      return await getPresignedDownloadUrl({ data: { attachmentId } });
     },
   });
 }

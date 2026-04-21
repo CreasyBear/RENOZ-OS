@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { toast } from 'sonner';
-import { normalizeQueryError } from '@/lib/error-handling';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   activateWarrantyFromEntitlement,
   getWarrantyEntitlement,
@@ -32,14 +32,12 @@ export function useWarrantyEntitlements(filters: Partial<WarrantyEntitlementFilt
     queryKey: queryKeys.warrantyEntitlements.list(queryFilters),
     queryFn: async () => {
       try {
-        const result = await listWarrantyEntitlementsFn({ data: queryFilters });
-        if (result == null) throw new Error('Warranty entitlements query returned no data');
-        return result;
+        return await listWarrantyEntitlementsFn({ data: queryFilters });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty entitlements are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty entitlements are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     staleTime: LIST_STALE_TIME,
@@ -52,14 +50,13 @@ export function useWarrantyEntitlement(id: string, enabled = true) {
     queryKey: queryKeys.warrantyEntitlements.detail(id),
     queryFn: async () => {
       try {
-        const result = await getWarrantyEntitlementFn({ data: { id } });
-        if (result == null) throw new Error('Warranty entitlement query returned no data');
-        return result;
+        return await getWarrantyEntitlementFn({ data: { id } });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty entitlement details are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Warranty entitlement details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty entitlement could not be found.',
+        });
       }
     },
     enabled: enabled && !!id,

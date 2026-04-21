@@ -10,6 +10,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys, type AICostFilters } from '@/lib/query-keys';
 
 // ============================================================================
@@ -128,7 +129,16 @@ export function useAIBudget(options: UseAIBudgetOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.ai.cost.budget(),
-    queryFn: fetchBudgetStatus,
+    queryFn: async () => {
+      try {
+        return await fetchBudgetStatus();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'AI budget status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval,
@@ -158,9 +168,14 @@ export function useAIUsage(options: UseAIUsageOptions = {}) {
   return useQuery({
     queryKey: queryKeys.ai.cost.usage(filters),
     queryFn: async () => {
-      const result = await fetchUsageHistory(filters);
-      if (result == null) throw new Error('AI usage history returned no data');
-      return result;
+      try {
+        return await fetchUsageHistory(filters);
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'AI usage history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

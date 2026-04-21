@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ErrorState } from '@/components/shared/error-state';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   useActivateWarrantyFromEntitlement,
   useWarrantyEntitlements,
@@ -55,7 +56,7 @@ export function WarrantyEntitlementsListContainer({
   const { data, isLoading, error, refetch, isRefetching } = useWarrantyEntitlements(filters);
   const activateMutation = useActivateWarrantyFromEntitlement();
 
-  if (error) {
+  if (error && !data) {
     return (
       <ErrorState
         title="Failed to load warranty entitlements"
@@ -68,6 +69,15 @@ export function WarrantyEntitlementsListContainer({
 
   return (
     <>
+      {error ? (
+        <Alert>
+          <AlertDescription>
+            {data
+              ? error.message || 'Warranty entitlements are temporarily unavailable. Showing the most recent queue.'
+              : error.message || 'Warranty entitlements are temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <WarrantyEntitlementsListView
         entitlements={data?.entitlements ?? []}
         total={data?.total ?? 0}

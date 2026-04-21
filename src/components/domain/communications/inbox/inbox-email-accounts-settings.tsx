@@ -19,6 +19,7 @@ import { SyncInboxAccountButton } from "./sync-inbox-account-button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Card,
   CardContent,
@@ -318,7 +319,7 @@ export function InboxEmailAccountsSettings() {
     });
   };
 
-  if (error) {
+  if (error && !data) {
     return (
       <Card>
         <CardHeader>
@@ -346,6 +347,18 @@ export function InboxEmailAccountsSettings() {
           Connect external email accounts to sync emails into your unified inbox.
         </CardDescription>
       </CardHeader>
+
+      {error ? (
+        <CardContent className="pt-0">
+          <Alert>
+            <AlertDescription>
+              {accounts.length > 0
+                ? error.message || "Email accounts are temporarily unavailable. Showing the most recent connections."
+                : error.message || "Email accounts are temporarily unavailable. Please refresh and try again."}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      ) : null}
 
       {isLoading ? (
         <CardContent>

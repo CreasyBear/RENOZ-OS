@@ -31,6 +31,7 @@ import {
   FileQuestion,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -346,7 +347,7 @@ export const DocumentHistoryList = memo(function DocumentHistoryList({
       }
     }
 
-    if (error) {
+    if (error && !data) {
       return (
         <div className="flex items-center justify-center py-8 text-center text-destructive">
           <p className="text-sm">Failed to load document history</p>
@@ -358,19 +359,31 @@ export const DocumentHistoryList = memo(function DocumentHistoryList({
       return <EmptyState documentType={documentType} />;
     }
 
+    const degradedAlert = error ? (
+      <Alert className="mb-4">
+        <AlertDescription>
+          {error.message || 'Document history is temporarily unavailable. Showing the most recent documents.'}
+        </AlertDescription>
+      </Alert>
+    ) : null;
+
     switch (variant) {
       case 'compact':
         return (
-          <div className="space-y-1">
-            {data.documents.map((doc) => (
-              <DocumentCompactItem key={doc.id} document={doc} />
-            ))}
+          <div>
+            {degradedAlert}
+            <div className="space-y-1">
+              {data.documents.map((doc) => (
+                <DocumentCompactItem key={doc.id} document={doc} />
+              ))}
+            </div>
           </div>
         );
 
       case 'list':
         return (
           <div>
+            {degradedAlert}
             {data.documents.map((doc) => (
               <DocumentListItem key={doc.id} document={doc} />
             ))}
@@ -379,22 +392,25 @@ export const DocumentHistoryList = memo(function DocumentHistoryList({
 
       default:
         return (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Filename</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Generated</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.documents.map((doc) => (
-                <DocumentTableRow key={doc.id} document={doc} />
-              ))}
-            </TableBody>
-          </Table>
+          <div>
+            {degradedAlert}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Filename</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Generated</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.documents.map((doc) => (
+                  <DocumentTableRow key={doc.id} document={doc} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         );
     }
   };

@@ -10,6 +10,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
@@ -44,9 +45,14 @@ export function useNotifications({
   return useQuery<ListNotificationsResult>({
     queryKey: queryKeys.notifications.list({ limit }),
     queryFn: async () => {
-      const result = await listNotifications({ data: { limit } });
-      if (result == null) throw new Error('Notifications query returned no data');
-      return result;
+      try {
+        return await listNotifications({ data: { limit } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Notifications are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds

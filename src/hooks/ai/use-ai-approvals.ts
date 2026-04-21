@@ -12,6 +12,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AIEmailDraft } from '@/lib/ai/approvals/email-draft';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys, type AIApprovalFilters } from '@/lib/query-keys';
 
 // ============================================================================
@@ -161,9 +162,14 @@ export function useAIApprovals(options: UseAIApprovalsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.ai.approvals.list(filters),
     queryFn: async () => {
-      const result = await fetchPendingApprovals(filters);
-      if (result == null) throw new Error('AI pending approvals returned no data');
-      return result;
+      try {
+        return await fetchPendingApprovals(filters);
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'AI approvals are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 15 * 1000, // 15 seconds
@@ -181,8 +187,15 @@ export function useAIPendingApprovalsCount(options: { enabled?: boolean } = {}) 
   return useQuery({
     queryKey: queryKeys.ai.approvals.count(),
     queryFn: async () => {
-      const result = await fetchPendingApprovals({ status: 'pending', limit: 1 });
-      return result.total;
+      try {
+        const result = await fetchPendingApprovals({ status: 'pending', limit: 1 });
+        return result.total;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'AI approvals are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 15 * 1000,

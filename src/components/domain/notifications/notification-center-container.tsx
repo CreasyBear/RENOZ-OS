@@ -19,7 +19,7 @@ import { NotificationCenterPopover } from './notification-center-popover';
 /** Self-contained notification center (bell + popover). Manages open state internally. */
 export function NotificationCenterContainer() {
   const [isOpen, setIsOpen] = useState(false);
-  const { data, isLoading } = useNotifications({
+  const { data, isLoading, error } = useNotifications({
     enabled: isOpen,
     limit: 20,
   });
@@ -37,6 +37,7 @@ export function NotificationCenterContainer() {
       notifications={notifications}
       unreadCount={unreadCount}
       isLoading={isLoading}
+      error={error ?? null}
       onMarkRead={handleMarkRead}
       markingReadId={markRead.isPending ? (markRead.variables as string | undefined) : undefined}
       isOpen={isOpen}
