@@ -279,7 +279,7 @@ describe('system/operational query normalization wave 6b', () => {
             type: 'system',
             title: 'Sync finished',
             message: 'Inbox sync completed.',
-            status: 'unread',
+            status: 'pending',
             data: null,
             createdAt: new Date('2026-04-21T00:00:00.000Z'),
             readAt: null,

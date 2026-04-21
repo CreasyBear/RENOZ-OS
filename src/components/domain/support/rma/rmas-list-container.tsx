@@ -93,6 +93,7 @@ export function RmasListContainer({
 
   const rmas = useMemo(() => data?.data ?? [], [data?.data]);
   const totalCount = data?.pagination?.totalCount ?? 0;
+  const hasRmas = rmas.length > 0;
 
   const {
     selectedIds,
@@ -296,6 +297,17 @@ export function RmasListContainer({
         </Alert>
       )}
 
+      {error && hasRmas ? (
+        <Alert className="mb-3">
+          <AlertTitle>Showing cached RMAs</AlertTitle>
+          <AlertDescription>
+            {error instanceof Error
+              ? error.message
+              : 'RMA data is temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Bulk Actions Bar - show when 2+ selected */}
       {selectedIds.size >= 2 && (
         <BulkActionsBar selectedCount={selectedIds.size} onClear={clearSelection}>
@@ -324,7 +336,7 @@ export function RmasListContainer({
         rmas={rmas}
         totalCount={totalCount}
         isLoading={isLoading}
-        error={error instanceof Error ? error : null}
+        error={!hasRmas && error instanceof Error ? error : null}
         onRetry={refetch}
         statusFilter={status ?? 'all'}
       reasonFilter={reason ?? 'all'}

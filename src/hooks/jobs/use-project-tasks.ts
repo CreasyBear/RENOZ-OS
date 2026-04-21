@@ -12,6 +12,11 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import { getProjectTasks } from '@/server/functions/jobs/job-tasks';
 import type { GetProjectTasksResponse, ProjectTaskResponse } from '@/lib/schemas/jobs/job-tasks';
 import {
@@ -37,9 +42,22 @@ export function useProjectTasks({ projectId, enabled = true }: UseProjectTasksOp
   return useQuery<GetProjectTasksResponse, Error, ProjectTaskResponse[]>({
     queryKey: queryKeys.projectTasks.byProject(projectId),
     queryFn: async () => {
-      const result = await getProjectTasks({ data: { projectId } });
-      if (result == null) throw new Error('Project tasks returned no data');
-      return result;
+      try {
+        const result = await getProjectTasks({ data: { projectId } });
+        return requireReadResult(result, {
+          message: 'Project tasks returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project tasks are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project tasks are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!projectId,
     staleTime: 30 * 1000, // 30 seconds

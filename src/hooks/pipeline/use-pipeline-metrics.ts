@@ -14,6 +14,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   getPipelineMetrics,
   getPipelineForecast,
   getPipelineVelocity,
@@ -50,17 +55,20 @@ export function usePipelineMetrics({ assignedTo, customerId, enabled = true }: U
   return useQuery<PipelineMetricsData>({
     queryKey: queryKeys.pipeline.metrics(),
     queryFn: async () => {
-      const result = await getPipelineMetricsFn({ data: { assignedTo, customerId } });
-      return (
-        (result as PipelineMetricsData) ?? {
-          totalValue: 0,
-          weightedValue: 0,
-          opportunityCount: 0,
-          byStage: {},
-          avgDaysInStage: {},
-          conversionRate: 0,
-        }
-      );
+      try {
+        const result = await getPipelineMetricsFn({ data: { assignedTo, customerId } });
+        return requireReadResult(result, {
+          message: 'Pipeline metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Pipeline metrics are temporarily unavailable. Please refresh and try again.',
+        }) as PipelineMetricsData;
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Pipeline metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -114,16 +122,29 @@ export function usePipelineForecast(options: UsePipelineForecastOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.pipelineForecast(startDate, endDate, groupBy),
     queryFn: async () => {
-      const result = await getPipelineForecast({
-        data: {
-          startDate,
-          endDate,
-          groupBy,
-          includeWeighted,
-        },
-      });
-      if (result == null) throw new Error('Pipeline forecast returned no data');
-      return result;
+      try {
+        const result = await getPipelineForecast({
+          data: {
+            startDate,
+            endDate,
+            groupBy,
+            includeWeighted,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Pipeline forecast returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline forecast is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline forecast is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -171,11 +192,24 @@ export function usePipelineVelocity(options: UsePipelineVelocityOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.pipelineVelocity(dateFrom, dateTo),
     queryFn: async () => {
-      const result = await getPipelineVelocity({
-        data: { dateFrom, dateTo },
-      });
-      if (result == null) throw new Error('Pipeline velocity returned no data');
-      return result;
+      try {
+        const result = await getPipelineVelocity({
+          data: { dateFrom, dateTo },
+        });
+        return requireReadResult(result, {
+          message: 'Pipeline velocity returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline velocity is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline velocity is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -226,11 +260,24 @@ export function useRevenueAttribution(options: UseRevenueAttributionOptions = {}
   return useQuery({
     queryKey: queryKeys.reports.revenueAttribution(dateFrom, dateTo),
     queryFn: async () => {
-      const result = await getRevenueAttribution({
-        data: { dateFrom, dateTo, groupBy },
-      });
-      if (result == null) throw new Error('Revenue attribution returned no data');
-      return result;
+      try {
+        const result = await getRevenueAttribution({
+          data: { dateFrom, dateTo, groupBy },
+        });
+        return requireReadResult(result, {
+          message: 'Revenue attribution returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Revenue attribution is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Revenue attribution is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -248,11 +295,24 @@ export function usePipelineCustomers() {
   return useQuery({
     queryKey: queryKeys.pipeline.customers(),
     queryFn: async () => {
-      const result = await getCustomers({
-        data: { page: 1, pageSize: 200, sortBy: 'name', sortOrder: 'asc' },
-      });
-      if (result == null) throw new Error('Pipeline customers returned no data');
-      return result as { items: Array<{ id: string; name: string; email?: string | null }> };
+      try {
+        const result = await getCustomers({
+          data: { page: 1, pageSize: 200, sortBy: 'name', sortOrder: 'asc' },
+        });
+        return requireReadResult(result, {
+          message: 'Pipeline customers returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline customers are temporarily unavailable. Please refresh and try again.',
+        }) as { items: Array<{ id: string; name: string; email?: string | null }> };
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline customers are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -265,15 +325,27 @@ export function usePipelineProducts() {
   return useQuery({
     queryKey: queryKeys.pipeline.products(),
     queryFn: async () => {
-      const result = await listProducts({
-        data: { page: 1, pageSize: 200, status: 'active', sortBy: 'name', sortOrder: 'asc' },
-      });
-      if (result == null) throw new Error('Pipeline products returned no data');
-      return result as {
-        products: Array<{ id: string; name: string; sku: string; basePrice: number }>;
-      };
+      try {
+        const result = await listProducts({
+          data: { page: 1, pageSize: 200, status: 'active', sortBy: 'name', sortOrder: 'asc' },
+        });
+        return requireReadResult(result, {
+          message: 'Pipeline products returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline products are temporarily unavailable. Please refresh and try again.',
+        }) as {
+          products: Array<{ id: string; name: string; sku: string; basePrice: number }>;
+        };
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pipeline products are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
-

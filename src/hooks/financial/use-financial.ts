@@ -21,6 +21,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 
 // Dashboard
 import {
@@ -93,6 +98,21 @@ import {
 } from '@/server/functions/financial/payment-schedules';
 import type { CreatePaymentPlanInput } from '@/lib/schemas';
 
+function rethrowFinancialReadError(
+  error: unknown,
+  options: {
+    fallbackMessage: string;
+    contractType: 'always-shaped' | 'detail-not-found';
+    notFoundMessage?: string;
+  }
+): never {
+  if (isReadQueryError(error)) {
+    throw error;
+  }
+
+  throw normalizeReadQueryError(error, options);
+}
+
 // ============================================================================
 // QUERY KEYS
 // ============================================================================
@@ -119,9 +139,21 @@ export function useFinancialDashboardMetrics(options: UseFinancialDashboardMetri
   return useQuery({
     queryKey: queryKeys.financial.dashboardMetrics({ includePreviousPeriod }),
     queryFn: async () => {
-      const result = await fn({ data: { includePreviousPeriod } });
-      if (result == null) throw new Error('Financial dashboard metrics returned no data');
-      return result;
+      try {
+        const result = await fn({ data: { includePreviousPeriod } });
+        return requireReadResult(result, {
+          message: 'Financial dashboard metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Financial dashboard metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Financial dashboard metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -136,9 +168,21 @@ export function useFinancialCloseReadiness(enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.closeReadiness(),
     queryFn: async () => {
-      const result = await fn({ data: undefined });
-      if (result == null) throw new Error('Financial close readiness returned no data');
-      return result;
+      try {
+        const result = await fn({ data: undefined });
+        return requireReadResult(result, {
+          message: 'Financial close readiness returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Financial close readiness is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Financial close readiness is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -169,9 +213,19 @@ export function useRevenueByPeriod(options: UseRevenueByPeriodOptions) {
       customerType: params.customerType,
     }),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Revenue report returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Revenue report returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Revenue reporting is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Revenue reporting is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -206,9 +260,21 @@ export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOption
       basis: params.basis,
     }),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Top customers by revenue returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Top customers by revenue returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Top-customer revenue data is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Top-customer revenue data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -238,9 +304,21 @@ export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = 
       pageSize: params.pageSize,
     }),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Outstanding invoices returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Outstanding invoices returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Outstanding invoice data is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Outstanding invoice data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -262,9 +340,19 @@ export function useARAgingReport(options: UseARAgingReportOptions = {}) {
   return useQuery({
     queryKey: queryKeys.financial.arAgingReport(filters),
     queryFn: async () => {
-      const result = await fn({ data: filters });
-      if (result == null) throw new Error('AR aging report returned no data');
-      return result;
+      try {
+        const result = await fn({ data: filters });
+        return requireReadResult(result, {
+          message: 'AR aging report returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'AR aging is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'AR aging is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -277,9 +365,21 @@ export function useCustomerAgingDetail(customerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.arAgingCustomer(customerId),
     queryFn: async () => {
-      const result = await fn({ data: { customerId } });
-      if (result == null) throw new Error('Customer aging detail returned no data');
-      return result;
+      try {
+        const result = await fn({ data: { customerId } });
+        return requireReadResult(result, {
+          message: 'Customer aging detail returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer aging details are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer aging details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 60 * 1000,
@@ -296,9 +396,21 @@ export function useReminderTemplates() {
   return useQuery({
     queryKey: queryKeys.financial.reminderTemplates(),
     queryFn: async () => {
-      const result = await fn({ data: {} });
-      if (result == null) throw new Error('Reminder templates returned no data');
-      return result;
+      try {
+        const result = await fn({ data: {} });
+        return requireReadResult(result, {
+          message: 'Reminder templates returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Reminder templates are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Reminder templates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -371,9 +483,21 @@ export function useOrdersForReminders(options: UseOrdersForRemindersOptions = {}
   return useQuery({
     queryKey: queryKeys.financial.ordersForReminders(params),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Orders for reminders returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Orders for reminders returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Payment reminder candidates are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Payment reminder candidates are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -393,9 +517,21 @@ export function useReminderHistory(options: UseReminderHistoryOptions = {}) {
   return useQuery({
     queryKey: queryKeys.financial.reminderHistory(filters),
     queryFn: async () => {
-      const result = await fn({ data: filters });
-      if (result == null) throw new Error('Reminder history returned no data');
-      return result;
+      try {
+        const result = await fn({ data: filters });
+        return requireReadResult(result, {
+          message: 'Reminder history returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Reminder history is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Reminder history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -420,9 +556,21 @@ export function useRecognitions(options: UseRecognitionsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.financial.recognitions(params.state),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Revenue recognitions returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Revenue recognitions returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Revenue recognition data is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Revenue recognition data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -443,9 +591,21 @@ export function useRecognitionSummary(options: UseRecognitionSummaryOptions) {
   return useQuery({
     queryKey: queryKeys.financial.recognitionSummary(dateFrom.toISOString(), dateTo.toISOString()),
     queryFn: async () => {
-      const result = await fn({ data: { dateFrom, dateTo, groupBy } });
-      if (result == null) throw new Error('Recognition summary returned no data');
-      return result;
+      try {
+        const result = await fn({ data: { dateFrom, dateTo, groupBy } });
+        return requireReadResult(result, {
+          message: 'Recognition summary returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Recognition summary is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Recognition summary is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -458,9 +618,21 @@ export function useDeferredRevenueBalance() {
   return useQuery({
     queryKey: queryKeys.financial.deferredBalance(),
     queryFn: async () => {
-      const result = await fn({ data: {} });
-      if (result == null) throw new Error('Deferred revenue balance returned no data');
-      return result;
+      try {
+        const result = await fn({ data: {} });
+        return requireReadResult(result, {
+          message: 'Deferred revenue balance returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Deferred revenue balance is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Deferred revenue balance is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 60 * 1000,
   });
@@ -504,9 +676,19 @@ export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
       })
     ),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Xero syncs returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Xero syncs returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Xero sync history is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Xero sync history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -519,9 +701,21 @@ export function useXeroIntegrationStatus(enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.xeroIntegration(),
     queryFn: async () => {
-      const result = await fn({ data: undefined });
-      if (result == null) throw new Error('Xero integration status returned no data');
-      return result;
+      try {
+        const result = await fn({ data: undefined });
+        return requireReadResult(result, {
+          message: 'Xero integration status returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Xero integration status is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Xero integration status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -541,9 +735,21 @@ export function useXeroPaymentEvents(options: UseXeroPaymentEventsOptions = {}) 
   return useQuery({
     queryKey: [...queryKeys.financial.xeroPaymentEvents(), { page, pageSize }],
     queryFn: async () => {
-      const result = await fn({ data: { page, pageSize } });
-      if (result == null) throw new Error('Xero payment events returned no data');
-      return result;
+      try {
+        const result = await fn({ data: { page, pageSize } });
+        return requireReadResult(result, {
+          message: 'Xero payment events returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Xero payment events are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Xero payment events are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -556,9 +762,21 @@ export function useXeroInvoiceStatus(orderId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.xeroStatus(orderId),
     queryFn: async () => {
-      const result = await fn({ data: { orderId } });
-      if (result == null) throw new Error('Xero invoice status returned no data');
-      return result;
+      try {
+        const result = await fn({ data: { orderId } });
+        return requireReadResult(result, {
+          message: 'Xero invoice status returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Xero invoice status is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Xero invoice status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
@@ -602,9 +820,19 @@ export function useCreditNotes(options: UseCreditNotesOptions = {}) {
       orderId: params.orderId,
     }),
     queryFn: async () => {
-      const result = await fn({ data: params });
-      if (result == null) throw new Error('Credit notes list returned no data');
-      return result;
+      try {
+        const result = await fn({ data: params });
+        return requireReadResult(result, {
+          message: 'Credit notes list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Credit notes are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Credit notes are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -617,9 +845,23 @@ export function useCreditNote(id: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.creditNoteDetail(id),
     queryFn: async () => {
-      const result = await fn({ data: { id } });
-      if (result == null) throw new Error('Credit note not found');
-      return result;
+      try {
+        const result = await fn({ data: { id } });
+        return requireReadResult(result, {
+          message: 'Credit note not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Credit note details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested credit note could not be found.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Credit note details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested credit note could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
@@ -698,9 +940,23 @@ export function usePaymentSchedule(orderId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.paymentScheduleDetail(orderId),
     queryFn: async () => {
-      const result = await fn({ data: { orderId } });
-      if (result == null) throw new Error('Payment schedule not found');
-      return result;
+      try {
+        const result = await fn({ data: { orderId } });
+        return requireReadResult(result, {
+          message: 'Payment schedule not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Payment schedule details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested payment schedule could not be found.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Payment schedule details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested payment schedule could not be found.',
+        });
+      }
     },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
@@ -737,9 +993,21 @@ export function useStatements(options: UseStatementsOptions) {
   return useQuery({
     queryKey: queryKeys.financial.statements(customerId),
     queryFn: async () => {
-      const result = await listFn({ data: { customerId, page, pageSize } });
-      if (result == null) throw new Error('Statements list returned no data');
-      return result;
+      try {
+        const result = await listFn({ data: { customerId, page, pageSize } });
+        return requireReadResult(result, {
+          message: 'Statements list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Statements are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Statements are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!customerId && customerId !== 'placeholder-customer-id',
     staleTime: 30 * 1000,
@@ -755,9 +1023,21 @@ export function useStatement(statementId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.statement(statementId),
     queryFn: async () => {
-      const result = await getFn({ data: { id: statementId } });
-      if (result == null) throw new Error('Statement not found');
-      return result;
+      try {
+        const result = await getFn({ data: { id: statementId } });
+        return requireReadResult(result, {
+          message: 'Statement not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Statement details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested statement could not be found.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Statement details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested statement could not be found.',
+        });
+      }
     },
     enabled: enabled && !!statementId,
     staleTime: 60 * 1000,
@@ -778,9 +1058,21 @@ export function useStatementHistory(
   return useQuery({
     queryKey: queryKeys.financial.statementHistory(customerId, { page, pageSize, dateFrom: dateFrom?.toISOString(), dateTo: dateTo?.toISOString() }),
     queryFn: async () => {
-      const result = await getHistoryFn({ data: { customerId, page, pageSize, dateFrom, dateTo } });
-      if (result == null) throw new Error('Statement history returned no data');
-      return result;
+      try {
+        const result = await getHistoryFn({ data: { customerId, page, pageSize, dateFrom, dateTo } });
+        return requireReadResult(result, {
+          message: 'Statement history returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Statement history is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        rethrowFinancialReadError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Statement history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 30 * 1000,

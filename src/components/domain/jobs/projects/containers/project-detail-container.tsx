@@ -369,14 +369,15 @@ export function ProjectDetailContainer({
         onToggleSidebar={detail.toggleSidebar}
         activities={detail.activities}
         activitiesLoading={detail.isLoadingSecondary}
+        activitiesError={detail.activitiesError}
         scheduleStatus={detail.scheduleStatus}
         budgetStatus={detail.budgetStatus}
-        completedTasks={detail.completedTasks}
-        totalTasks={detail.totalTasks}
+        completedTasks={detail.tasksError && !detail.tasksHasData ? undefined : detail.completedTasks}
+        totalTasks={detail.tasksError && !detail.tasksHasData ? undefined : detail.totalTasks}
         tabCounts={{
           workstreams: detail.workstreamsError && !detail.workstreamsHasData ? undefined : detail.workstreams?.length,
           visits: detail.siteVisitsError && !detail.siteVisitsHasData ? undefined : detail.siteVisits?.length,
-          tasks: detail.totalTasks,
+          tasks: detail.tasksError && !detail.tasksHasData ? undefined : detail.totalTasks,
           notes: detail.notesError && !detail.notesHasData ? undefined : detail.notes?.length,
           files: detail.filesError && !detail.filesHasData ? undefined : detail.files?.length,
         }}

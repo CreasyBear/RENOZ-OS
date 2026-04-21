@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { subMonths, startOfYear } from 'date-fns';
 import { Clock, TrendingUp, RefreshCw, Bell, ArrowRight, CalendarDays, FileText } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { PageLayout } from '@/components/layout';
@@ -132,6 +133,9 @@ export default function FinancialPage() {
   // Combined loading and error states
   const isLoading = metricsLoading || revenueLoading || customersLoading || outstandingLoading;
   const error = metricsError || revenueError || customersError || outstandingError;
+  const hasUsableDashboardData = Boolean(
+    metrics || revenueByPeriod || topCustomers || outstanding
+  );
 
   return (
     <PageLayout variant="full-width">
@@ -167,6 +171,14 @@ export default function FinancialPage() {
 
         {/* Financial Dashboard */}
         <div className="mt-8">
+          {error && hasUsableDashboardData ? (
+            <Alert className="mb-4">
+              <AlertTitle>Showing your latest financial snapshot</AlertTitle>
+              <AlertDescription>
+                Some financial panels could not be refreshed just now. Existing data is still available below.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <FinancialDashboard
             dashboardData={{
               metrics,
@@ -175,7 +187,7 @@ export default function FinancialPage() {
               outstanding,
             }}
             isLoading={isLoading}
-            error={error ?? undefined}
+            error={!hasUsableDashboardData ? error ?? undefined : undefined}
             periodType={periodType}
             onPeriodTypeChange={setPeriodType}
             topCustomersBasis={topCustomersBasis}

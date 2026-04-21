@@ -17,8 +17,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
 import { useProjects, useDeleteProject } from "@/hooks/jobs";
@@ -254,6 +255,17 @@ export function ProjectsListContainer({
   return (
     <>
       <div className="space-y-4">
+        {projectsError && projects.length > 0 ? (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Showing cached projects</AlertTitle>
+            <AlertDescription>
+              {projectsError instanceof Error
+                ? projectsError.message
+                : 'Project data is temporarily unavailable. Please refresh and try again.'}
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {/* Bulk Actions Bar */}
         <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
           <Button size="sm" variant="destructive" onClick={handleBulkDelete}>
@@ -265,7 +277,15 @@ export function ProjectsListContainer({
         <ProjectsListPresenter
           projects={projects}
           isLoading={isProjectsLoading}
-          error={projectsError instanceof Error ? projectsError : projectsError ? new Error(String(projectsError)) : null}
+          error={
+            projects.length === 0
+              ? projectsError instanceof Error
+                ? projectsError
+                : projectsError
+                  ? new Error(String(projectsError))
+                  : null
+              : null
+          }
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
           isPartiallySelected={isPartiallySelected}

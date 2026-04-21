@@ -12,6 +12,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseStatus } from "@tanstack/react-start/server";
 import { eq, and, ilike, desc, asc, sql, isNull, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
@@ -34,6 +35,7 @@ import {
 } from "@/lib/db/pagination";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { NotFoundError } from "@/lib/server/errors";
 import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
 import { computeChanges } from "@/lib/activity-logger";
 import { logger as appLogger } from "@/lib/logger";
@@ -319,7 +321,8 @@ export const getProject = createServerFn({ method: "GET" })
     });
 
     if (!project) {
-      throw new Error("Project not found");
+      setResponseStatus(404);
+      throw new NotFoundError("Project not found", "project");
     }
 
     return project;

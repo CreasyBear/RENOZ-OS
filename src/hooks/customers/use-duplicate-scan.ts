@@ -11,6 +11,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   scanForDuplicates,
   dismissDuplicatePair,
   getMergeHistory,
@@ -49,17 +54,30 @@ export function useDuplicateScan(options: ScanDuplicatesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.customers.duplicates.detection({ threshold, limit }),
     queryFn: async () => {
-      const result = await scanFn({
-        data: {
-          threshold,
-          limit,
-          offset,
-          includeArchived,
-          batchSize,
-        },
-      });
-      if (result == null) throw new Error('Duplicate scan returned no data');
-      return result;
+      try {
+        const result = await scanFn({
+          data: {
+            threshold,
+            limit,
+            offset,
+            includeArchived,
+            batchSize,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Duplicate scan returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Duplicate scan results are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Duplicate scan results are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes - duplicates don't change often
@@ -111,15 +129,28 @@ export function useMergeHistory(options: MergeHistoryOptions = {}) {
   return useQuery({
     queryKey: queryKeys.customers.duplicates.history({ limit, action }),
     queryFn: async () => {
-      const result = await historyFn({
-        data: {
-          limit,
-          offset,
-          action,
-        },
-      });
-      if (result == null) throw new Error('Merge history returned no data');
-      return result;
+      try {
+        const result = await historyFn({
+          data: {
+            limit,
+            offset,
+            action,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Merge history returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Merge history is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Merge history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 1000 * 60 * 2, // 2 minutes

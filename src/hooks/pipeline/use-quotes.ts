@@ -13,6 +13,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listQuoteVersions,
   getQuoteVersion,
   compareQuoteVersions,
@@ -57,9 +62,20 @@ export function useQuoteVersions({ opportunityId, enabled = true }: UseQuoteVers
   return useQuery({
     queryKey: queryKeys.pipeline.quoteVersions(opportunityId),
     queryFn: async () => {
-      const result = await listQuoteVersions({ data: { opportunityId } });
-      if (result == null) throw new Error('Quote versions returned no data');
-      return result;
+      try {
+        const result = await listQuoteVersions({ data: { opportunityId } });
+        return requireReadResult(result, {
+          message: 'Quote versions returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Quote versions are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Quote versions are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
@@ -82,9 +98,24 @@ export function useQuoteVersion({ versionId, enabled = true }: UseQuoteVersionOp
   return useQuery({
     queryKey: queryKeys.pipeline.quoteVersion(versionId),
     queryFn: async () => {
-      const result = await getQuoteVersion({ data: { id: versionId } });
-      if (result == null) throw new Error('Quote version not found');
-      return result;
+      try {
+        const result = await getQuoteVersion({ data: { id: versionId } });
+        return requireReadResult(result, {
+          message: 'Quote version not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Quote version details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested quote version could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Quote version details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested quote version could not be found.',
+        });
+      }
     },
     enabled: enabled && !!versionId,
     staleTime: 60 * 1000, // 1 minute
@@ -108,9 +139,22 @@ export function useQuoteComparison({ version1Id, version2Id, enabled = true }: U
   return useQuery({
     queryKey: queryKeys.pipeline.quoteComparison(version1Id, version2Id),
     queryFn: async () => {
-      const result = await compareQuoteVersions({ data: { version1Id, version2Id } });
-      if (result == null) throw new Error('Quote comparison returned no data');
-      return result;
+      try {
+        const result = await compareQuoteVersions({ data: { version1Id, version2Id } });
+        return requireReadResult(result, {
+          message: 'Quote comparison returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Quote comparison is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Quote comparison is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!version1Id && !!version2Id,
     staleTime: 60 * 1000, // 1 minute
@@ -134,9 +178,22 @@ export function useExpiringQuotes({ warningDays = 7, limit = 10, enabled = true 
   return useQuery<{ expiringQuotes: QuoteAlertItem[] }>({
     queryKey: queryKeys.pipeline.expiringQuotes(warningDays),
     queryFn: async () => {
-      const result = await getExpiringQuotes({ data: { warningDays, limit } });
-      if (result == null) throw new Error('Expiring quotes returned no data');
-      return result;
+      try {
+        const result = await getExpiringQuotes({ data: { warningDays, limit } });
+        return requireReadResult(result, {
+          message: 'Expiring quotes returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Expiring quote data is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Expiring quote data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -159,9 +216,22 @@ export function useExpiredQuotes({ limit = 10, enabled = true }: UseExpiredQuote
   return useQuery<{ expiredQuotes: QuoteAlertItem[] }>({
     queryKey: queryKeys.pipeline.expiredQuotes(),
     queryFn: async () => {
-      const result = await getExpiredQuotes({ data: { limit } });
-      if (result == null) throw new Error('Expired quotes returned no data');
-      return result;
+      try {
+        const result = await getExpiredQuotes({ data: { limit } });
+        return requireReadResult(result, {
+          message: 'Expired quotes returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Expired quote data is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Expired quote data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -183,9 +253,22 @@ export function useQuoteValidityStats({ enabled = true }: UseQuoteValidityStatsO
   return useQuery({
     queryKey: queryKeys.pipeline.quoteValidityStats(),
     queryFn: async () => {
-      const result = await getQuoteValidityStats({ data: {} });
-      if (result == null) throw new Error('Quote validity stats returned no data');
-      return result;
+      try {
+        const result = await getQuoteValidityStats({ data: {} });
+        return requireReadResult(result, {
+          message: 'Quote validity stats returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Quote validity statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Quote validity statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes

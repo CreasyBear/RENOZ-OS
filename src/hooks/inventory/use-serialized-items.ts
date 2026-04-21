@@ -8,6 +8,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   addSerializedItemNote,
   createSerializedItem,
   deleteSerializedItem,
@@ -70,17 +75,30 @@ export function useSerializedItems(options: UseSerializedItemsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.inventory.serializedList(filters),
     queryFn: async () => {
-      const result = await listSerializedItems({
-        data: {
-          page: filters.page ?? 1,
-          pageSize: filters.pageSize ?? 25,
-          search: filters.search,
-          productId: filters.productId,
-          status: filters.status,
-        },
-      });
-      if (result == null) throw new Error('Serialized items returned no data');
-      return result;
+      try {
+        const result = await listSerializedItems({
+          data: {
+            page: filters.page ?? 1,
+            pageSize: filters.pageSize ?? 25,
+            search: filters.search,
+            productId: filters.productId,
+            status: filters.status,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Serialized items returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Serialized items are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Serialized items are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -91,9 +109,24 @@ export function useSerializedItem(id: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.serializedDetail(id),
     queryFn: async () => {
-      const result = await getSerializedItem({ data: { id } });
-      if (result == null) throw new Error('Serialized item not found');
-      return result;
+      try {
+        const result = await getSerializedItem({ data: { id } });
+        return requireReadResult(result, {
+          message: 'Serialized item not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Serialized item details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested serialized item could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Serialized item details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested serialized item could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 20 * 1000,

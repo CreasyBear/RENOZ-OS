@@ -13,6 +13,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listRmas,
   getRma,
   createRma,
@@ -116,17 +121,28 @@ export function useRmas({
   return useQuery({
     queryKey: queryKeys.support.rmasListFiltered(filters),
     queryFn: async () => {
-      const result = await listRmas({
-        data: {
-          ...filters,
-          page: page ?? 1,
-          pageSize: pageSize ?? 20,
-          sortBy: sortBy ?? 'createdAt',
-          sortOrder: sortOrder ?? 'desc',
-        },
-      });
-      if (result == null) throw new Error('RMA list returned no data');
-      return result;
+      try {
+        const result = await listRmas({
+          data: {
+            ...filters,
+            page: page ?? 1,
+            pageSize: pageSize ?? 20,
+            sortBy: sortBy ?? 'createdAt',
+            sortOrder: sortOrder ?? 'desc',
+          },
+        });
+        return requireReadResult(result, {
+          message: 'RMA list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'RMAs are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'RMAs are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -149,9 +165,22 @@ export function useRma({ rmaId, enabled = true }: UseRmaOptions) {
   return useQuery({
     queryKey: queryKeys.support.rmaDetail(rmaId),
     queryFn: async () => {
-      const result = await getRma({ data: { rmaId } });
-      if (result == null) throw new Error('RMA not found');
-      return result;
+      try {
+        const result = await getRma({ data: { rmaId } });
+        return requireReadResult(result, {
+          message: 'RMA not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'RMA details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested RMA could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'RMA details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested RMA could not be found.',
+        });
+      }
     },
     enabled: enabled && !!rmaId,
     staleTime: 30 * 1000,

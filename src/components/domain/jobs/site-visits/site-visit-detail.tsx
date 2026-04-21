@@ -133,7 +133,12 @@ export function SiteVisitDetail({
   const [now] = useState(() => Date.now());
   const { dismiss, isAlertDismissed } = useAlertDismissals();
 
-  const { data: projectTasks, isLoading: isTasksLoading } = useProjectTasks({
+  const {
+    data: projectTasks,
+    error: projectTasksError,
+    isLoading: isTasksLoading,
+    refetch: refetchProjectTasks,
+  } = useProjectTasks({
     projectId: visit.projectId,
     enabled: !!visit.projectId,
   });
@@ -575,6 +580,20 @@ export function SiteVisitDetail({
             <TabsContent value="tasks" className="mt-4">
               <Card>
                 <CardContent className="p-6">
+                  {projectTasksError ? (
+                    <Alert className="mb-4">
+                      <AlertDescription className="flex items-center gap-2">
+                        <span>{projectTasksError.message}</span>
+                        <Button
+                          variant="link"
+                          className="h-auto p-0"
+                          onClick={() => void refetchProjectTasks()}
+                        >
+                          Retry
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
                   {isTasksLoading ? (
                     <div className="text-center py-8">
                       <CheckSquare className="mx-auto h-12 w-12 text-muted-foreground/50" />
@@ -583,8 +602,14 @@ export function SiteVisitDetail({
                   ) : tasks.length === 0 ? (
                     <div className="text-center py-8">
                       <CheckSquare className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                      <h3 className="mt-4 text-lg font-medium">No tasks yet</h3>
-                      <p className="text-muted-foreground">Add tasks for this visit.</p>
+                      <h3 className="mt-4 text-lg font-medium">
+                        {projectTasksError ? 'Tasks unavailable' : 'No tasks yet'}
+                      </h3>
+                      <p className="text-muted-foreground">
+                        {projectTasksError
+                          ? 'Showing no task data because the latest task load failed.'
+                          : 'Add tasks for this visit.'}
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-2">

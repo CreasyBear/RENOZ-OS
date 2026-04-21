@@ -138,6 +138,39 @@ export function normalizeReadQueryError(
   });
 }
 
+export function requireReadResult<T>(
+  result: T | null | undefined,
+  options: {
+    message: string;
+    fallbackMessage: string;
+    contractType: ReadContractType;
+    notFoundMessage?: string;
+    code?: string;
+    statusCode?: number;
+  }
+): T {
+  if (result != null) {
+    return result;
+  }
+
+  throw normalizeReadQueryError(
+    {
+      message: options.message,
+      code:
+        options.code ??
+        (options.contractType === 'detail-not-found' ? 'NOT_FOUND' : 'SERVER_ERROR'),
+      statusCode:
+        options.statusCode ??
+        (options.contractType === 'detail-not-found' ? 404 : 500),
+    },
+    {
+      fallbackMessage: options.fallbackMessage,
+      contractType: options.contractType,
+      notFoundMessage: options.notFoundMessage,
+    }
+  );
+}
+
 export function isReadQueryError(error: unknown): error is ReadQueryError {
   return (
     error instanceof Error &&

@@ -26,6 +26,7 @@ import { useProducts } from "@/hooks/products";
 import type { InventoryItem } from "@/components/domain/inventory/view-modes";
 import { INVENTORY_STATUS_VALUES, QUALITY_STATUS_VALUES, type SearchParams } from "./browser";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // ============================================================================
 // URL FILTER TRANSFORMERS
@@ -118,7 +119,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
   // Fetch inventory list with current filters
   const isLowStockPreset =
     filters.quantityRange?.min === 0 && filters.quantityRange?.max === 10;
-  const { data: inventoryData, isLoading, refetch } = useInventory({
+  const { data: inventoryData, isLoading, error, refetch } = useInventory({
     search: filters.search,
     productId: filters.productId ?? undefined,
     locationId: filters.locationId ?? undefined,
@@ -161,6 +162,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
       receivedAt: item.createdAt,
     }));
   }, [inventoryData]);
+  const hasInventoryData = inventoryItems.length > 0 || (inventoryData?.total ?? 0) > 0;
 
   // Handle filter changes
   const handleFiltersChange = useCallback((newFilters: InventoryFiltersState) => {
@@ -250,26 +252,40 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
               onDetailChange={handleSerializedDetailChange}
             />
           ) : (
-            <InventoryBrowser
-              items={inventoryItems}
-              isLoading={isLoading}
-              products={productsData?.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
-              locations={locations.map((l) => ({
-                id: l.id,
-                name: l.name,
-                code: l.code,
-              }))}
-              page={search.page}
-              pageSize={search.pageSize}
-              totalCount={inventoryData?.total ?? 0}
-              onPageChange={handlePageChange}
-              filters={filters}
-              onFiltersChange={handleFiltersChange}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onItemClick={handleItemClick}
-              onRefresh={() => refetch()}
-            />
+            <>
+              {error ? (
+                <Alert className="mb-4" variant={!hasInventoryData ? "destructive" : "default"}>
+                  <AlertTitle>
+                    {!hasInventoryData ? 'Unable to load inventory' : 'Showing cached inventory results'}
+                  </AlertTitle>
+                  <AlertDescription>
+                    {error instanceof Error
+                      ? error.message
+                      : 'Inventory data is temporarily unavailable. Please refresh and try again.'}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              <InventoryBrowser
+                items={inventoryItems}
+                isLoading={isLoading}
+                products={productsData?.products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
+                locations={locations.map((l) => ({
+                  id: l.id,
+                  name: l.name,
+                  code: l.code,
+                }))}
+                page={search.page}
+                pageSize={search.pageSize}
+                totalCount={inventoryData?.total ?? 0}
+                onPageChange={handlePageChange}
+                filters={filters}
+                onFiltersChange={handleFiltersChange}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onItemClick={handleItemClick}
+                onRefresh={() => refetch()}
+              />
+            </>
           )}
         </div>
       </PageLayout.Content>

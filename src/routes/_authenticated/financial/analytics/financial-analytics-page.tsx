@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { subMonths, startOfYear } from 'date-fns';
 import { PageLayout } from '@/components/layout';
 import { FinancialDashboard } from '@/components/domain/financial/financial-dashboard';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   useFinancialDashboardMetrics,
   useRevenueByPeriod,
@@ -79,6 +80,9 @@ export default function FinancialAnalyticsPage() {
   const isLoading =
     metricsLoading || revenueLoading || customersLoading || outstandingLoading;
   const error = metricsError || revenueError || customersError || outstandingError;
+  const hasUsableDashboardData = Boolean(
+    metrics || revenueByPeriod || topCustomers || outstanding
+  );
 
   return (
     <PageLayout variant="full-width">
@@ -87,6 +91,14 @@ export default function FinancialAnalyticsPage() {
         description="Revenue trends, KPIs, and financial insights"
       />
       <PageLayout.Content>
+        {error && hasUsableDashboardData ? (
+          <Alert className="mb-4">
+            <AlertTitle>Showing your latest financial snapshot</AlertTitle>
+            <AlertDescription>
+              Some financial panels could not be refreshed just now. Existing data is still available below.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <FinancialDashboard
           dashboardData={{
             metrics,
@@ -95,7 +107,7 @@ export default function FinancialAnalyticsPage() {
             outstanding,
           }}
           isLoading={isLoading}
-          error={error ?? undefined}
+          error={!hasUsableDashboardData ? error ?? undefined : undefined}
           periodType={periodType}
           onPeriodTypeChange={setPeriodType}
           topCustomersBasis={topCustomersBasis}

@@ -141,6 +141,7 @@ export function SerializedItemsListContainer({
   }, [deletingItem, deleteMutation]);
 
   const errorMessage = serializedQuery.error instanceof Error ? serializedQuery.error.message : null;
+  const hasSerializedItems = (serializedQuery.data?.items?.length ?? 0) > 0;
 
   useEffect(() => {
     setSearch(initialSearch);
@@ -206,8 +207,10 @@ export function SerializedItemsListContainer({
       </div>
 
       {errorMessage ? (
-        <Alert variant="destructive">
-          <AlertTitle>Unable to load serialized items</AlertTitle>
+        <Alert variant={hasSerializedItems ? 'default' : 'destructive'}>
+          <AlertTitle>
+            {hasSerializedItems ? 'Showing cached serialized items' : 'Unable to load serialized items'}
+          </AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       ) : null}

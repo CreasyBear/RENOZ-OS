@@ -49,7 +49,9 @@ export function useUpdateProfile() {
           profile,
         },
       });
-      if (result == null) throw new Error('Profile update returned no data');
+      if (result == null) {
+        throw new Error('Profile update returned no data');
+      }
       return result;
     },
     onSuccess: () => {

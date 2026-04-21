@@ -71,9 +71,12 @@ export interface UseProjectDetailDataReturn {
   notes: ProjectNote[];
   files: ProjectFile[];
   activities: UnifiedActivity[];
+  activitiesError: Error | null;
   alerts: ProjectAlert[];
   notesError: Error | null;
   notesHasData: boolean;
+  tasksError: Error | null;
+  tasksHasData: boolean;
   filesError: Error | null;
   filesHasData: boolean;
   workstreamsError: Error | null;
@@ -213,12 +216,23 @@ export function useProjectDetailData(projectId: string): UseProjectDetailDataRet
   const bom = bomQuery.data ?? null;
   const alerts = alertsQuery.alerts;
   const activities: UnifiedActivity[] = activitiesQuery.activities ?? [];
+  const activitiesError = activitiesQuery.error instanceof Error
+    ? activitiesQuery.error
+    : activitiesQuery.error
+      ? new Error(String(activitiesQuery.error))
+      : null;
   const notesError = notesQuery.error instanceof Error
     ? notesQuery.error
     : notesQuery.error
       ? new Error(String(notesQuery.error))
       : null;
   const notesHasData = notesQuery.data !== undefined;
+  const tasksError = tasksQuery.error instanceof Error
+    ? tasksQuery.error
+    : tasksQuery.error
+      ? new Error(String(tasksQuery.error))
+      : null;
+  const tasksHasData = tasksQuery.data !== undefined;
   const filesError = filesQuery.error instanceof Error
     ? filesQuery.error
     : filesQuery.error
@@ -347,9 +361,12 @@ export function useProjectDetailData(projectId: string): UseProjectDetailDataRet
     notes,
     files,
     activities,
+    activitiesError,
     alerts,
     notesError,
     notesHasData,
+    tasksError,
+    tasksHasData,
     filesError,
     filesHasData,
     workstreamsError,

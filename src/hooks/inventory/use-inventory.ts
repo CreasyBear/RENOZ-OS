@@ -13,7 +13,11 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listInventory,
@@ -157,9 +161,20 @@ export function useInventory(options: UseInventoryListOptions = {}) {
   return useQuery({
     queryKey: queryKeys.inventory.list(filters),
     queryFn: async () => {
-      const result = await listInventory({ data: filters });
-      if (result == null) throw new Error('Inventory list returned no data');
-      return result;
+      try {
+        const result = await listInventory({ data: filters });
+        return requireReadResult(result, {
+          message: 'Inventory list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Inventory is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Inventory is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -178,9 +193,22 @@ export function useInventorySearch(
   return useQuery({
     queryKey: queryKeys.inventory.search(query, options),
     queryFn: async () => {
-      const result = await quickSearchInventory({ data: { q: query, limit: options.limit ?? 10 } });
-      if (result == null) throw new Error('Inventory search returned no data');
-      return result;
+      try {
+        const result = await quickSearchInventory({ data: { q: query, limit: options.limit ?? 10 } });
+        return requireReadResult(result, {
+          message: 'Inventory search returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory search is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory search is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && query.length >= 2,
     staleTime: 30 * 1000,
@@ -194,9 +222,24 @@ export function useInventoryItem(inventoryId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.detail(inventoryId),
     queryFn: async () => {
-      const result = await getInventoryItem({ data: { id: inventoryId } });
-      if (result == null) throw new Error('Inventory item not found');
-      return result;
+      try {
+        const result = await getInventoryItem({ data: { id: inventoryId } });
+        return requireReadResult(result, {
+          message: 'Inventory item not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Inventory item details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested inventory item could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Inventory item details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested inventory item could not be found.',
+        });
+      }
     },
     enabled: enabled && !!inventoryId,
     staleTime: 60 * 1000, // 1 minute
@@ -210,11 +253,24 @@ export function useInventoryMovements(inventoryId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.movements({ inventoryId, page: 1, pageSize: 50 }),
     queryFn: async () => {
-      const result = await listMovements({
-        data: { inventoryId, page: 1, pageSize: 50, sortOrder: 'desc' } satisfies MovementListQuery,
-      });
-      if (result == null) throw new Error('Inventory movements returned no data');
-      return result;
+      try {
+        const result = await listMovements({
+          data: { inventoryId, page: 1, pageSize: 50, sortOrder: 'desc' } satisfies MovementListQuery,
+        });
+        return requireReadResult(result, {
+          message: 'Inventory movements returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory movements are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory movements are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!inventoryId,
     staleTime: 30 * 1000,
@@ -228,11 +284,24 @@ export function useInventoryLowStock(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.lowStock(),
     queryFn: async () => {
-      const result = await listInventory({
-        data: { lowStock: true, page: 1, pageSize: 100 },
-      });
-      if (result == null) throw new Error('Low stock inventory returned no data');
-      return result;
+      try {
+        const result = await listInventory({
+          data: { lowStock: true, page: 1, pageSize: 100 },
+        });
+        return requireReadResult(result, {
+          message: 'Low stock inventory returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Low-stock inventory is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Low-stock inventory is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -653,11 +722,14 @@ export function useInventoryDashboard(enabled = true) {
         if (import.meta.env.DEV) {
           console.debug('[useInventoryDashboard] raw-result', result);
         }
-        if (result == null) {
-          throw new Error('Inventory dashboard returned no data');
-        }
-        return result;
+        return requireReadResult(result, {
+          message: 'Inventory dashboard returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory dashboard metrics are temporarily unavailable. Please refresh and try again.',
+        });
       } catch (error) {
+        if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
           fallbackMessage:
@@ -678,9 +750,22 @@ export function useLocationUtilization(enabled = true) {
   return useQuery({
     queryKey: queryKeys.locations.utilization(),
     queryFn: async () => {
-      const result = await getLocationUtilization({});
-      if (result == null) throw new Error('Location utilization returned no data');
-      return result;
+      try {
+        const result = await getLocationUtilization({});
+        return requireReadResult(result, {
+          message: 'Location utilization returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Location utilization is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Location utilization is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -711,9 +796,22 @@ export function useAvailableSerials(options: UseAvailableSerialsOptions) {
   return useQuery({
     queryKey: queryKeys.inventory.availableSerials(productId, locationId),
     queryFn: async () => {
-      const result = await getAvailableSerials({ data: { productId, locationId } });
-      if (result == null) throw new Error('Available serials returned no data');
-      return result;
+      try {
+        const result = await getAvailableSerials({ data: { productId, locationId } });
+        return requireReadResult(result, {
+          message: 'Available serials returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Available serials are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Available serials are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 10 * 1000, // 10 seconds - serials can change frequently during picking

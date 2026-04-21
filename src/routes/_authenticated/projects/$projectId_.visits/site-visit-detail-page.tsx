@@ -69,7 +69,12 @@ export default function SiteVisitDetailPage() {
     enabled: !!project?.customerId,
   });
 
-  const { data: projectTasks = [], isLoading: isLoadingTasks } = useProjectTasks({
+  const {
+    data: projectTasks = [],
+    error: projectTasksError,
+    isLoading: isLoadingTasks,
+    refetch: refetchProjectTasks,
+  } = useProjectTasks({
     projectId,
     enabled: !!projectId,
   });
@@ -226,10 +231,28 @@ export default function SiteVisitDetailPage() {
             <Card>
               <CardHeader><CardTitle>Tasks</CardTitle></CardHeader>
               <CardContent>
+                {projectTasksError ? (
+                  <div className="mb-4 rounded-md border px-4 py-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span>{projectTasksError.message}</span>
+                      <Button
+                        variant="link"
+                        className="h-auto p-0"
+                        onClick={() => void refetchProjectTasks()}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <TaskList
                   tasks={siteVisitTasks}
                   isLoading={isLoadingTasks}
-                  emptyMessage="No tasks for this site visit"
+                  emptyMessage={
+                    projectTasksError && projectTasks.length === 0
+                      ? 'Tasks are temporarily unavailable for this site visit'
+                      : 'No tasks for this site visit'
+                  }
                 />
               </CardContent>
             </Card>

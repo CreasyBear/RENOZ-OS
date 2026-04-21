@@ -8,6 +8,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listRecentBulkOperations,
   rollbackBulkOperation,
 } from '@/server/functions/customers/rollback';
@@ -28,15 +33,28 @@ export function useRecentBulkOperations(
   return useQuery({
     queryKey: [...queryKeys.customers.all, 'bulk-operations', 'recent', filters],
     queryFn: async () => {
-      const result = await listRecentBulkOperations({
-        data: {
-          entityType: filters?.entityType,
-          hours: filters?.hours ?? 24,
-          limit: 10,
-        },
-      });
-      if (result == null) throw new Error('Recent bulk operations returned no data');
-      return result;
+      try {
+        const result = await listRecentBulkOperations({
+          data: {
+            entityType: filters?.entityType,
+            hours: filters?.hours ?? 24,
+            limit: 10,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Recent bulk operations returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Bulk operation history is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Bulk operation history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
   });

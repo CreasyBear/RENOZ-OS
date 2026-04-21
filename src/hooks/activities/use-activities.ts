@@ -9,8 +9,12 @@
 
 import * as React from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import {
   getActivityFeed,
   getEntityActivities,
@@ -103,15 +107,28 @@ export function useActivityFeed(options: UseActivityFeedOptions = {}) {
   return useInfiniteQuery({
     queryKey: queryKeys.activities.feed(filters),
     queryFn: async ({ pageParam }): Promise<CursorPaginatedResponse<ActivityWithUser>> => {
-      const result = await getActivityFeed({
-        data: {
-          ...filters,
-          cursor: typeof pageParam === 'string' ? pageParam : undefined,
-          pageSize,
-        },
-      });
-      if (result == null) throw new Error('Activity feed returned no data');
-      return result;
+      try {
+        const result = await getActivityFeed({
+          data: {
+            ...filters,
+            cursor: typeof pageParam === 'string' ? pageParam : undefined,
+            pageSize,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Activity feed returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity feed is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity feed is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
@@ -148,16 +165,29 @@ export function useEntityActivities(options: UseEntityActivitiesOptions) {
   return useInfiniteQuery({
     queryKey: queryKeys.activities.entity(entityType, entityId),
     queryFn: async ({ pageParam }): Promise<CursorPaginatedResponse<ActivityWithUser>> => {
-      const result = await getEntityActivities({
-        data: {
-          entityType,
-          entityId,
-          cursor: typeof pageParam === 'string' ? pageParam : undefined,
-          pageSize,
-        },
-      });
-      if (result == null) throw new Error('Entity activities returned no data');
-      return result;
+      try {
+        const result = await getEntityActivities({
+          data: {
+            entityType,
+            entityId,
+            cursor: typeof pageParam === 'string' ? pageParam : undefined,
+            pageSize,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Entity activities returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity history is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
@@ -190,15 +220,28 @@ export function useUserActivities(options: UseUserActivitiesOptions) {
   return useInfiniteQuery({
     queryKey: queryKeys.activities.user(userId),
     queryFn: async ({ pageParam }): Promise<CursorPaginatedResponse<Activity>> => {
-      const result = await getUserActivities({
-        data: {
-          userId,
-          cursor: typeof pageParam === 'string' ? pageParam : undefined,
-          pageSize,
-        },
-      });
-      if (result == null) throw new Error('User activities returned no data');
-      return result;
+      try {
+        const result = await getUserActivities({
+          data: {
+            userId,
+            cursor: typeof pageParam === 'string' ? pageParam : undefined,
+            pageSize,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'User activities returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'User activity is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'User activity is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
@@ -220,13 +263,21 @@ export function useActivity(id: string, enabled = true) {
     queryFn: async (): Promise<ActivityWithUser> => {
       try {
         const result = await getActivity({ data: { id } });
-        if (result == null) throw new Error('Activity not found');
-        return result;
+        return requireReadResult(result, {
+          message: 'Activity not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Activity details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested activity could not be found.',
+        });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Activity details are temporarily unavailable. Please refresh and try again.'
-        );
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Activity details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested activity could not be found.',
+        });
       }
     },
     enabled: enabled && !!id,
@@ -269,9 +320,22 @@ export function useActivityStats(options: UseActivityStatsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.activities.stats(query),
     queryFn: async (): Promise<ActivityStatsResult> => {
-      const result = await getActivityStats({ data: query });
-      if (result == null) throw new Error('Activity stats returned no data');
-      return result;
+      try {
+        const result = await getActivityStats({ data: query });
+        return requireReadResult(result, {
+          message: 'Activity stats returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute - stats change less frequently
@@ -308,10 +372,24 @@ export function useActivityLeaderboard(options: UseActivityLeaderboardOptions = 
   return useQuery({
     queryKey: queryKeys.activities.leaderboard({ from: dateFrom, to: dateTo }),
     queryFn: async (): Promise<ActivityLeaderboardItem[]> => {
-      const result = await getActivityLeaderboard({
-        data: { dateFrom, dateTo, groupBy: 'userId' },
-      });
-      return result ?? [];
+      try {
+        const result = await getActivityLeaderboard({
+          data: { dateFrom, dateTo, groupBy: 'userId' },
+        });
+        return requireReadResult(result, {
+          message: 'Activity leaderboard returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity leaderboard is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity leaderboard is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

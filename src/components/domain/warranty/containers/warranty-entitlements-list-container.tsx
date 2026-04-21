@@ -55,12 +55,14 @@ export function WarrantyEntitlementsListContainer({
 
   const { data, isLoading, error, refetch, isRefetching } = useWarrantyEntitlements(filters);
   const activateMutation = useActivateWarrantyFromEntitlement();
+  const errorMessage =
+    error instanceof Error ? error.message : 'Warranty entitlements are temporarily unavailable.';
 
   if (error && !data) {
     return (
       <ErrorState
         title="Failed to load warranty entitlements"
-        message={error instanceof Error ? error.message : 'An error occurred'}
+        message={errorMessage}
         onRetry={() => refetch()}
         isRetrying={isRefetching}
       />
@@ -73,8 +75,8 @@ export function WarrantyEntitlementsListContainer({
         <Alert>
           <AlertDescription>
             {data
-              ? error.message || 'Warranty entitlements are temporarily unavailable. Showing the most recent queue.'
-              : error.message || 'Warranty entitlements are temporarily unavailable. Please refresh and try again.'}
+              ? errorMessage || 'Warranty entitlements are temporarily unavailable. Showing the most recent queue.'
+              : errorMessage || 'Warranty entitlements are temporarily unavailable. Please refresh and try again.'}
           </AlertDescription>
         </Alert>
       ) : null}

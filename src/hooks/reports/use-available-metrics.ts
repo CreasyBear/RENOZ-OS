@@ -11,6 +11,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { getAllMetrics } from '@/lib/metrics/registry';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 
 // ============================================================================
 // TYPES
@@ -45,9 +50,22 @@ export function useAvailableMetrics(options: UseAvailableMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.metrics.available(),
     queryFn: async () => {
-      const result = await getAllMetrics();
-      if (result == null) throw new Error('Available metrics returned no data');
-      return result;
+      try {
+        const result = await getAllMetrics();
+        return requireReadResult(result, {
+          message: 'Available metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Available metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Available metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: Infinity, // Metric definitions don't change at runtime

@@ -257,7 +257,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const createNewLocation = useCallback(
     async (data: CreateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await createLocationMutation.mutateAsync(data);
-      if (result == null) throw new Error('Location could not be created.');
+      if (result == null) {
+        throw new Error('Location could not be created.');
+      }
 
       return result;
     },
@@ -293,7 +295,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const updateExistingLocation = useCallback(
     async (locationId: string, data: UpdateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await updateLocationMutation.mutateAsync({ locationId, data });
-      if (result == null) throw new Error('Location could not be updated.');
+      if (result == null) {
+        throw new Error('Location could not be updated.');
+      }
 
       return result;
     },

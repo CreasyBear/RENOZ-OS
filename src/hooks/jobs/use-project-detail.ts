@@ -59,9 +59,12 @@ export interface UseProjectDetailReturn {
   notes: ProjectNote[];
   files: ProjectFile[];
   activities: UnifiedActivity[];
+  activitiesError: Error | null;
   alerts: ProjectAlert[];
   notesError: Error | null;
   notesHasData: boolean;
+  tasksError: Error | null;
+  tasksHasData: boolean;
   filesError: Error | null;
   filesHasData: boolean;
   workstreamsError: Error | null;
@@ -170,9 +173,12 @@ export function useProjectDetail(
     notes: data.notes,
     files: data.files,
     activities: data.activities,
+    activitiesError: data.activitiesError,
     alerts: data.alerts,
     notesError: data.notesError,
     notesHasData: data.notesHasData,
+    tasksError: data.tasksError,
+    tasksHasData: data.tasksHasData,
     filesError: data.filesError,
     filesHasData: data.filesHasData,
     workstreamsError: data.workstreamsError,
