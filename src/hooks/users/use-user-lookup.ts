@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { normalizeReadQueryError } from '@/lib/read-path-policy'
 import { queryKeys } from '@/lib/query-keys'
 import { listUserNamesForLookup } from '@/server/functions/users/users'
 import { useCurrentUser } from '@/hooks/auth/use-current-user'
@@ -28,12 +29,17 @@ interface UserLookupOptions {
  */
 export function useUserLookup(options: UserLookupOptions = {}) {
   const { user: currentUser } = useCurrentUser()
-  const { data: usersData, isLoading } = useQuery({
+  const { data: usersData, isLoading, error } = useQuery({
     queryKey: queryKeys.users.lookup(),
     queryFn: async () => {
-      const result = await listUserNamesForLookup()
-      if (result == null) throw new Error('User lookup returned no data')
-      return result
+      try {
+        return await listUserNamesForLookup()
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'User lookup is temporarily unavailable. Please refresh and try again.',
+        })
+      }
     },
     enabled: options.enabled ?? true,
     staleTime: 5 * 60 * 1000, // 5 minutes — user names rarely change
@@ -60,6 +66,7 @@ export function useUserLookup(options: UserLookupOptions = {}) {
     getUser,
     userMap,
     isLoading,
+    error: usersData ? null : error,
     currentUserId: currentUser?.appUserId ?? null,
   }
 }

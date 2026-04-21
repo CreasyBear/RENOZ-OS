@@ -15,6 +15,7 @@ import type { UseMutationResult } from '@tanstack/react-query';
 
 // UI Components
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -110,6 +111,10 @@ interface GroupDetailPagePresenterProps {
     email: string;
   } & Record<string, unknown>>;
   /** Active tab */
+  membersUnavailableMessage?: string | null;
+  membersDegradedMessage?: string | null;
+  usersUnavailableMessage?: string | null;
+  usersDegradedMessage?: string | null;
   tab: string;
   /** Group ID */
   groupId: string;
@@ -134,6 +139,10 @@ export default function GroupDetailPagePresenter({
   group,
   members,
   users,
+  membersUnavailableMessage,
+  membersDegradedMessage,
+  usersUnavailableMessage,
+  usersDegradedMessage,
   tab,
   groupId: _groupId,
   updateGroupMutation,
@@ -281,7 +290,15 @@ export default function GroupDetailPagePresenter({
 
         {/* Members Tab */}
         <TabsContent value="members" className="mt-6">
-          {members.length === 0 ? (
+          {membersUnavailableMessage && members.length === 0 ? (
+            <Card className="flex flex-col items-center justify-center py-12">
+              <Users className="text-muted-foreground mb-4 h-12 w-12" />
+              <h3 className="text-lg font-medium">Members unavailable</h3>
+              <p className="text-muted-foreground mt-1 max-w-sm text-center">
+                {membersUnavailableMessage}
+              </p>
+            </Card>
+          ) : members.length === 0 ? (
             <Card className="flex flex-col items-center justify-center py-12">
               <Users className="text-muted-foreground mb-4 h-12 w-12" />
               <h3 className="text-lg font-medium">No members yet</h3>
@@ -295,6 +312,13 @@ export default function GroupDetailPagePresenter({
             </Card>
           ) : (
             <Card>
+              {membersDegradedMessage ? (
+                <CardContent className="pb-0">
+                  <Alert>
+                    <AlertDescription>{membersDegradedMessage}</AlertDescription>
+                  </Alert>
+                </CardContent>
+              ) : null}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -522,6 +546,11 @@ export default function GroupDetailPagePresenter({
             <DialogDescription>Add a user to this group and assign their role.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {usersUnavailableMessage || usersDegradedMessage ? (
+              <Alert>
+                <AlertDescription>{usersUnavailableMessage || usersDegradedMessage}</AlertDescription>
+              </Alert>
+            ) : null}
             <div className="grid gap-2">
               <Label>User</Label>
               <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
@@ -540,7 +569,11 @@ export default function GroupDetailPagePresenter({
                   <Command>
                     <CommandInput placeholder="Search users..." />
                     <CommandList>
-                      <CommandEmpty>No users found.</CommandEmpty>
+                      <CommandEmpty>
+                        {usersUnavailableMessage
+                          ? 'Available users are temporarily unavailable.'
+                          : 'No users found.'}
+                      </CommandEmpty>
                       <CommandGroup>
                         {filteredUsers.map((user) => (
                           <CommandItem
@@ -606,7 +639,11 @@ export default function GroupDetailPagePresenter({
             </Button>
             <Button
               onClick={handleAddMember}
-              disabled={!selectedUserId || addMemberMutation.isPending}
+              disabled={
+                !selectedUserId ||
+                addMemberMutation.isPending ||
+                (!!usersUnavailableMessage && filteredUsers.length === 0)
+              }
             >
               {addMemberMutation.isPending ? 'Adding...' : 'Add Member'}
             </Button>

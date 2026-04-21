@@ -17,6 +17,7 @@ import {
   useHasPermission,
 } from "@/components/shared/permission-guard";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -85,7 +86,7 @@ function ApiTokensContent() {
   const canRevoke = useHasPermission("api_token.revoke");
 
   // Fetch tokens using hook
-  const { data: tokens, isLoading } = useApiTokens();
+  const { data: tokens, isLoading, error } = useApiTokens();
 
   // Create token mutation using hook
   const createMutation = useCreateApiToken();
@@ -145,9 +146,25 @@ function ApiTokensContent() {
         />
       )}
 
+        {error ? (
+          <Alert className="mb-6">
+            <AlertDescription>
+              {tokens
+                ? error.message || 'API tokens are temporarily unavailable. Showing the most recent tokens.'
+                : error.message || 'API tokens are temporarily unavailable. Please refresh and try again.'}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Token list */}
         {isLoading ? (
           <div className="text-gray-500">Loading tokens...</div>
+        ) : error && !tokens ? (
+          <Alert>
+            <AlertDescription>
+              {error.message || 'API tokens are temporarily unavailable. Please refresh and try again.'}
+            </AlertDescription>
+          </Alert>
         ) : tokens && tokens.length > 0 ? (
           <TokenList
             tokens={tokens}

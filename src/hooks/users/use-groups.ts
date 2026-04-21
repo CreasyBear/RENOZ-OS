@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listGroups,
@@ -60,15 +61,20 @@ export function useGroups(filters?: GroupFilters, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.groups.list(filters),
     queryFn: async () => {
-      const result = await listGroups({
-        data: {
-          page: filters?.page ?? 1,
-          pageSize: filters?.pageSize ?? 24,
-          includeInactive: filters?.includeInactive ?? false,
-        },
-      });
-      if (result == null) throw new Error('Groups list returned no data');
-      return result;
+      try {
+        return await listGroups({
+          data: {
+            page: filters?.page ?? 1,
+            pageSize: filters?.pageSize ?? 24,
+            includeInactive: filters?.includeInactive ?? false,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Groups are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -82,9 +88,15 @@ export function useGroup(groupId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.groups.detail(groupId),
     queryFn: async () => {
-      const result = await getGroup({ data: { id: groupId } });
-      if (result == null) throw new Error('Group not found');
-      return result;
+      try {
+        return await getGroup({ data: { id: groupId } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Group details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested group could not be found.',
+        });
+      }
     },
     enabled: enabled && !!groupId,
     staleTime: 30 * 1000,
@@ -102,15 +114,21 @@ export function useGroupMembers(
   return useQuery({
     queryKey: queryKeys.users.groups.members(groupId, filters),
     queryFn: async () => {
-      const result = await listGroupMembers({
-        data: {
-          groupId,
-          page: filters?.page ?? 1,
-          pageSize: filters?.pageSize ?? 100,
-        },
-      });
-      if (result == null) throw new Error('Group members returned no data');
-      return result;
+      try {
+        return await listGroupMembers({
+          data: {
+            groupId,
+            page: filters?.page ?? 1,
+            pageSize: filters?.pageSize ?? 100,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Group members are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested group could not be found.',
+        });
+      }
     },
     enabled: enabled && !!groupId,
     staleTime: 30 * 1000,
@@ -124,9 +142,15 @@ export function useUserGroups(userId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.groups.userGroups(userId),
     queryFn: async () => {
-      const result = await getUserGroups({ data: { id: userId } });
-      if (result == null) throw new Error('User groups returned no data');
-      return result;
+      try {
+        return await getUserGroups({ data: { id: userId } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'User group memberships are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested user could not be found.',
+        });
+      }
     },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,

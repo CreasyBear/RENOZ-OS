@@ -13,6 +13,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { PageLayout } from '@/components/layout';
 import { OnboardingChecklist } from '@/components/shared/onboarding-checklist';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOnboardingProgress } from '@/hooks/users';
 import { trackOnboardingStarted, trackOnboardingCompleted } from '@/lib/analytics';
@@ -24,7 +25,7 @@ export const Route = createFileRoute('/_authenticated/onboarding/')({
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const { data, isLoading } = useOnboardingProgress();
+  const { data, isLoading, error } = useOnboardingProgress();
 
   const stats = data?.stats ?? null;
   const isComplete = stats?.percentComplete === 100;
@@ -50,9 +51,30 @@ function OnboardingPage() {
     );
   }
 
+  if (error && !data) {
+    return (
+      <PageLayout variant="full-width">
+        <PageLayout.Content className="mx-auto max-w-2xl space-y-8 py-12">
+          <Alert>
+            <AlertDescription>
+              {error.message || 'Onboarding progress is temporarily unavailable. Please refresh and try again.'}
+            </AlertDescription>
+          </Alert>
+        </PageLayout.Content>
+      </PageLayout>
+    );
+  }
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Content className="mx-auto max-w-2xl space-y-8 py-12">
+        {error ? (
+          <Alert>
+            <AlertDescription>
+              {error.message || 'Onboarding progress is temporarily unavailable. Showing the most recent checklist.'}
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight">Welcome! Let&apos;s get you set up</h1>
           <p className="mt-2 text-muted-foreground">

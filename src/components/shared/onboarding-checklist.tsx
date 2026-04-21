@@ -19,6 +19,7 @@ import { toast } from '@/hooks';
 
 // UI Components
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import {
   Sheet,
@@ -48,7 +49,7 @@ export function OnboardingChecklist({
   const [open, setOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const { data, isLoading } = useOnboardingProgress();
+  const { data, isLoading, error } = useOnboardingProgress();
   const completeStepMutation = useCompleteOnboardingStep();
   const dismissStepMutation = useDismissOnboardingStep();
 
@@ -93,6 +94,15 @@ export function OnboardingChecklist({
 
   // Don't render if loading or complete
   if (isLoading) return null;
+  if (error && !data) {
+    return (
+      <Alert>
+        <AlertDescription>
+          {error.message || 'Onboarding progress is temporarily unavailable. Please refresh and try again.'}
+        </AlertDescription>
+      </Alert>
+    );
+  }
   if (!stats) return null;
   if (autoHideOnComplete && stats.percentComplete === 100) return null;
 
@@ -101,6 +111,13 @@ export function OnboardingChecklist({
 
   const content = (
     <div className="space-y-4">
+      {error ? (
+        <Alert>
+          <AlertDescription>
+            {error.message || 'Onboarding progress is temporarily unavailable. Showing the most recent checklist.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {/* Progress */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">

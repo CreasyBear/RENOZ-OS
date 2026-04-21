@@ -13,6 +13,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useConfirmation, toast } from '@/hooks';
 import { useGroups, useCreateGroup, useDeleteGroup } from '@/hooks/users';
 import { PageLayout } from '@/components/layout';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
 import { Route } from './index';
 import GroupsPagePresenter from './groups-page';
@@ -58,6 +59,7 @@ export default function GroupsPageContainer() {
   const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0]);
 
   // Extract data with defaults
+  const hasUsableGroups = !!groupsData;
   const groups = groupsData ?? {
     items: [],
     pagination: { page: 1, pageSize: 24, totalItems: 0, totalPages: 0 },
@@ -126,7 +128,7 @@ export default function GroupsPageContainer() {
   }
 
   // Handle error state
-  if (groupsError) {
+  if (groupsError && !hasUsableGroups) {
     return (
       <PageLayout variant="full-width">
         <PageLayout.Content>
@@ -139,23 +141,36 @@ export default function GroupsPageContainer() {
   }
 
   return (
-    <GroupsPagePresenter
-      filteredGroups={filteredGroups}
-      totalGroups={groups.pagination.totalItems}
-      searchQuery={searchQuery}
-      isCreateDialogOpen={isCreateDialogOpen}
-      newGroupName={newGroupName}
-      newGroupDescription={newGroupDescription}
-      newGroupColor={newGroupColor}
-      createGroupMutation={createGroupMutation}
-      onSearchQueryChange={setSearchQuery}
-      onIsCreateDialogOpenChange={setIsCreateDialogOpen}
-      onNewGroupNameChange={setNewGroupName}
-      onNewGroupDescriptionChange={setNewGroupDescription}
-      onNewGroupColorChange={setNewGroupColor}
-      onCreateGroup={handleCreateGroup}
-      onDeleteGroup={(groupId) => handleDeleteGroup(groupId, getGroupName(groupId))}
-      onNavigate={navigate}
-    />
+    <>
+      {groupsError ? (
+        <PageLayout variant="full-width">
+          <PageLayout.Content className="pb-0">
+            <Alert>
+              <AlertDescription>
+                {groupsError.message || 'Groups are temporarily unavailable. Showing the most recent groups.'}
+              </AlertDescription>
+            </Alert>
+          </PageLayout.Content>
+        </PageLayout>
+      ) : null}
+      <GroupsPagePresenter
+        filteredGroups={filteredGroups}
+        totalGroups={groups.pagination.totalItems}
+        searchQuery={searchQuery}
+        isCreateDialogOpen={isCreateDialogOpen}
+        newGroupName={newGroupName}
+        newGroupDescription={newGroupDescription}
+        newGroupColor={newGroupColor}
+        createGroupMutation={createGroupMutation}
+        onSearchQueryChange={setSearchQuery}
+        onIsCreateDialogOpenChange={setIsCreateDialogOpen}
+        onNewGroupNameChange={setNewGroupName}
+        onNewGroupDescriptionChange={setNewGroupDescription}
+        onNewGroupColorChange={setNewGroupColor}
+        onCreateGroup={handleCreateGroup}
+        onDeleteGroup={(groupId) => handleDeleteGroup(groupId, getGroupName(groupId))}
+        onNavigate={navigate}
+      />
+    </>
   );
 }
