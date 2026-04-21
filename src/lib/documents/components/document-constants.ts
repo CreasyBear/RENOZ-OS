@@ -2,7 +2,7 @@
  * Document layout constants (Xero/Cin7 production quality + refinement)
  *
  * Use for Invoice, Quote, Credit Note, Pro Forma, Delivery Note, Packing Slip.
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 export const DOCUMENT_PAGE_MARGINS = { top: 20, bottom: 20, left: 20, right: 20 };

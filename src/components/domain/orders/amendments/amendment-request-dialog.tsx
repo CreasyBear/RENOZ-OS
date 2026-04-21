@@ -12,7 +12,7 @@
  * - discount_change: Apply or modify order-level discounts
  * - shipping_change: Adjust shipping charges
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see STANDARDS.md - Container/Presenter pattern
  */
 

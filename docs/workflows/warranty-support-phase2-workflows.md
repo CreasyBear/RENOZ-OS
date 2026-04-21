@@ -4,9 +4,8 @@
 This document describes the practical operator flow after the bounded warranty/support work through Phases 1 to 5B.
 
 It is the workflow companion to:
-- [Support / Issue / RMA B2B2C Design](../designs/support-issue-rma-b2b2c.md)
+- [Support / Issue / RMA B2B2C Design](../architecture/support-issue-rma-b2b2c.md)
 - [Warranty Entitlements Rollout](../reliability/warranty-entitlements-rollout.md)
-- [Support Issue + RMA Operations Stage Record](../design/SUPPORT-ISSUE-RMA-OPERATIONS-NEXT-STAGE.md)
 
 ## Workflow 1: Delivered Order Creates Coverage
 1. A shipment is marked `delivered`.

@@ -1,10 +1,10 @@
-# Deployment Guide: Renoz CRM to Vercel & GitHub
+# Deployment Guide: Renoz CRM to Vercel via GitHub Actions
 
-This guide covers deploying Renoz CRM v3 to Vercel with GitHub integration.
+> **Before deploying:** Run through [pre-deployment-checklist.md](./pre-deployment-checklist.md) — build, env vars, database migrations, Supabase auth, and known gaps.
 
-> **Before deploying:** Run through [PRE-DEPLOYMENT-CHECKLIST.md](./PRE-DEPLOYMENT-CHECKLIST.md) — build, env vars, database migrations, Supabase auth, and known gaps.
+> **Canonical release path:** merge into `main` → GitHub Actions runs the canonical checks → GitHub Actions deploys with Vercel CLI → post-deploy probe verifies production.
 
-> **Repo structure**: This deployment setup assumes renoz-v3 is the root of your GitHub repository. If renoz-v3 lives inside a monorepo, set **Root Directory** to `renoz-v3` in Vercel Project Settings.
+> **Repo structure:** This deployment setup assumes `renoz-v3` is the root of your GitHub repository. If it lives inside a monorepo, set **Root Directory** to `renoz-v3` in Vercel Project Settings.
 
 ## Prerequisites
 
@@ -15,19 +15,14 @@ This guide covers deploying Renoz CRM v3 to Vercel with GitHub integration.
 
 ---
 
-## Option A: Vercel GitHub Integration (Recommended)
-
-The simplest approach: connect your repo to Vercel and let it auto-deploy on every push.
-
-> **Note**: If using Option A, disable the GitHub Actions deploy workflow to avoid duplicate deployments: rename `.github/workflows/deploy-vercel.yml` to `deploy-vercel.yml.disabled` or delete it.
-
-### 1. Create Vercel Project
+## 1. Create and Link the Vercel Project
 
 1. Go to [vercel.com/new](https://vercel.com/new)
-2. Import your GitHub repository (the renoz-v3 root)
-3. Vercel will auto-detect TanStack Start
+2. Import your GitHub repository
+3. Confirm the project root and framework settings
+4. Keep GitHub Actions as the only canonical deploy path for production
 
-### 2. Configure Environment Variables
+## 2. Configure Environment Variables
 
 In Vercel Project Settings → Environment Variables, add all variables from `.env.example`:
 
@@ -52,27 +47,17 @@ In Vercel Project Settings → Environment Variables, add all variables from `.e
 **Xero note:**
 - Xero runtime auth is organization-scoped OAuth now, not global `XERO_ACCESS_TOKEN` / `XERO_TENANT_ID`
 - env vars above configure the app-level OAuth client and webhook verification only
-- see [docs/XERO-INTEGRATION.md](/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/continuous-claude/renoz-v3/docs/XERO-INTEGRATION.md) for setup and operational details
+- see [xero-integration.md](./xero-integration.md) for setup and operational details
 
-### 3. Deploy
-
-Push to `main` – Vercel will build and deploy automatically. Preview deployments are created for pull requests.
-
----
-
-## Option B: GitHub Actions Deploy
-
-Use this if you prefer deploying via CI (e.g. to run custom steps before deploy). **Do not use both Option A and B** – choose one to avoid duplicate deployments.
-
-### 1. Link Vercel Project
+## 3. Link the CLI to the Vercel Project
 
 ```bash
-npx vercel link
+bun x vercel link
 ```
 
 Follow prompts to link to your Vercel project/team.
 
-### 2. Add GitHub Secrets
+## 4. Add GitHub Secrets and Variables
 
 In your repo: Settings → Secrets and variables → Actions. Add:
 
@@ -81,16 +66,31 @@ In your repo: Settings → Secrets and variables → Actions. Add:
 | `VERCEL_ORG_ID` | From `.vercel/project.json` after `vercel link`, or Vercel dashboard |
 | `VERCEL_PROJECT_ID` | Same |
 | `VERCEL_TOKEN` | [Vercel → Settings → Tokens](https://vercel.com/account/tokens) |
+| `DATABASE_URL` | Optional but recommended if you want document schema gates to run in deploy workflow |
 
-### 3. Configure Vercel Environment
+Add this repository variable:
+
+| Variable | Description |
+|----------|-------------|
+| `APP_URL` | Canonical production URL used by the post-deploy probe and release docs |
+
+## 5. Configure the Vercel Environment
 
 Ensure all env vars are set in Vercel (Project Settings → Environment Variables). The deploy workflow uses `vercel pull` to fetch them during build.
 
-### 4. Deploy
+## 6. Deploy Flow
 
-Push to `main`. The workflow runs:
+Merge into `main`. The workflows run:
 1. **CI** (lint, typecheck, tests) – on every push and pull request
 2. **Deploy** – on push to `main`
+3. **Post-deploy probe** – against `APP_URL`
+
+For local release verification before merging:
+
+```bash
+bun run predeploy
+bun run release:verify
+```
 
 ---
 
@@ -99,7 +99,7 @@ Push to `main`. The workflow runs:
 Before first deploy (or after schema changes), run migrations against your production database:
 
 ```bash
-DATABASE_URL="your-production-connection-string" npm run db:migrate
+DATABASE_URL="your-production-connection-string" bun run db:migrate
 ```
 
 Use the Supabase connection pooler URL for serverless (recommended for Vercel).
@@ -111,7 +111,7 @@ runtime starts using them.
 For drifted production environments, do not blindly run both the Drizzle migration and the Supabase
 reconciliation script. Use one authoritative path:
 
-1. For normal Drizzle-managed environments, run `npm run db:migrate`.
+1. For normal Drizzle-managed environments, run `bun run db:migrate`.
 2. For already-drifted production environments that missed prior Xero/customer changes, run the
    guarded reconciliation SQL in `supabase/migrations/0024_reconcile_purchase_order_xero_drift.sql`
    first, verify the schema and data preflight checks below, then realign your migration bookkeeping
@@ -180,7 +180,8 @@ For auth (OAuth, magic links, password reset, invitations) to work in production
 ## Build Configuration
 
 - **Framework**: TanStack Start (auto-detected by Vercel)
-- **Build command**: `NODE_OPTIONS=--max-old-space-size=8192 npm run build`
+- **Install command**: `bun install --frozen-lockfile`
+- **Build command**: `NODE_OPTIONS=--max-old-space-size=12288 bun run build:vercel`
 - **Output**: Handled by TanStack Start / Nitro (`.output`)
 
 The `vercel.json` in this directory adds:
@@ -193,12 +194,14 @@ The `vercel.json` in this directory adds:
 ## Rollout Guardrails and Rollback
 
 ### Release Gates
-- **Gate A (pre-deploy):** `bun test tests/unit/routes tests/unit/auth` and `npm run build:vercel` must pass.
-- **Gate B (post-deploy):** `npm run deploy:probe` runs 20 login probes and asset URL checks. Fails if any 307 loop or chunk 404 is detected.
+- **Canonical PR gate:** `bun run predeploy`
+- **Stable release gate:** `bun run release:verify`
+- **Optional document schema gate:** `bun run reliability:document-gates` when `DATABASE_URL` is available
+- **Post-deploy probe:** `bun run deploy:probe` runs login probes and asset URL checks. Fails if redirect loops or chunk 404s are detected.
 
 ### Deploy with Guards
 ```bash
-npm run deploy:prod
+bun run deploy:prod
 ```
 Runs tests, build, deploy, then post-deploy probe. Use `--skip-probe` to skip Gate B:
 ```bash
@@ -207,7 +210,7 @@ node scripts/deploy-with-guards.mjs --skip-probe
 
 ### Probe Only (after manual deploy)
 ```bash
-APP_URL=https://renoz-os.vercel.app npm run deploy:probe
+APP_URL=https://your-app.vercel.app bun run deploy:probe
 ```
 
 ### Rollback
@@ -216,8 +219,8 @@ If Gate B fails or users report redirect/chunk issues:
 2. Redeploy that commit:
    ```bash
    git checkout <last-good-commit>
-   npm run build:vercel
-   npx vercel deploy --prebuilt --prod
+   bun run build:vercel
+   bun x vercel deploy --prebuilt --prod
    ```
 3. Or use Vercel dashboard: Deployments → select prior deployment → Promote to Production.
 
@@ -239,13 +242,13 @@ The build uses 12GB Node memory. If it still fails:
 
 1. **Enable Enhanced Builds** (Pro/Enterprise): Project Settings → General → Build & Development Settings → enable "On-Demand Enhanced Builds" (16GB memory). Then increase in `vercel.json`:
    ```json
-   "buildCommand": "NODE_OPTIONS=--max-old-space-size=14336 npm run build:vercel"
+   "buildCommand": "NODE_OPTIONS=--max-old-space-size=14336 bun run build:vercel"
    ```
 
 2. **Build locally and deploy prebuilt** (works on any plan):
    ```bash
-   NODE_OPTIONS=--max-old-space-size=12288 npm run build:vercel
-   vercel deploy --prebuilt --prod
+   NODE_OPTIONS=--max-old-space-size=12288 bun run build:vercel
+   bun x vercel deploy --prebuilt --prod
    ```
    Your machine's RAM is used instead of Vercel's 8GB limit.
 
@@ -255,14 +258,14 @@ Usually caused by URL or auth config mismatch.
 **0. Trailing slash** – `vercel.json` sets `trailingSlash: false` to prevent `/login` ↔ `/login/` redirect loops. If you see repeated 307 redirects from login to login, ensure this is set.
 
 **1. Vercel env vars** – Must match your actual domain exactly:
-- `APP_URL` = `https://renoz-os.vercel.app` (no trailing slash)
+- `APP_URL` = `https://your-app.vercel.app` (no trailing slash)
 - `VITE_APP_URL` = same as `APP_URL`
 
 **2. Supabase URL Configuration** – Authentication → URL Configuration:
-- **Site URL** = `https://renoz-os.vercel.app`
-- **Redirect URLs** = `https://renoz-os.vercel.app/**`
+- **Site URL** = your production `APP_URL`
+- **Redirect URLs** = your production `APP_URL/**`
 
-**3. Clear cookies** – Delete cookies for `renoz-os.vercel.app` and try again, or use an incognito window.
+**3. Clear cookies** – Delete cookies for your production domain and try again, or use an incognito window.
 
 **4. No www vs non-www mismatch** – If you use a custom domain, ensure `APP_URL` matches the exact URL (www or non-www) users visit.
 

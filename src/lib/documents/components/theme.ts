@@ -90,7 +90,7 @@ export const pageMargins = {
 /**
  * Clearance for fixed header on document pages.
  * Use as marginTop on main content to avoid overlap with fixed header.
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 export const fixedHeaderClearance = 56;
 

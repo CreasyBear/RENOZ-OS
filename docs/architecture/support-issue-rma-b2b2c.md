@@ -8,7 +8,6 @@ Operational companions:
 - [Warranty Entitlements Rollout](../reliability/warranty-entitlements-rollout.md)
 - [Service-System External Migration Contract](../reliability/service-system-external-migration-contract.md)
 - [Service-System External Migration Runbook](../reliability/service-system-external-migration-runbook.md)
-- [Support Issue + RMA Operations Stage Record](../design/SUPPORT-ISSUE-RMA-OPERATIONS-NEXT-STAGE.md)
 
 Phase 1 delivers:
 - delivery-time `warranty_entitlements`
@@ -185,4 +184,4 @@ The goal is to keep the original product intent visible while implementation lan
 
 Phase 1 established the commercial and ownership anchors.
 Phases 2 to 5B used those anchors to fix B2B2C support intake, claimant truth, service linkage, issue resolution, and remedy execution without another warranty schema reset.
-The next stage should build on that closed-loop baseline rather than reopening these foundations.
+Future stages should build on that closed-loop baseline rather than reopening these foundations.

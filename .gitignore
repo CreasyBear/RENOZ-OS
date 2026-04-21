@@ -4,6 +4,8 @@ dist
 dist-ssr
 *.local
 count.txt
+package-lock.json
+skills-lock.json
 .env
 .env.local
 .env.*.local
@@ -13,7 +15,10 @@ count.txt
 build-output.log
 artifacts/document-previews/
 artifacts/document-wireframes/
+artifacts/release-gates/latest.json
 artifacts/release-gates/release-gates-*.json
+docs/sql/
+supabase/.temp/
 
 # Vercel
 .vercel
@@ -22,3 +27,26 @@ artifacts/release-gates/release-gates-*.json
 
 # Local Claude MCP credentials
 .claude/mcp.json
+.agents/
+.claude/skills/
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.kilocode/
+.kiro/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.windsurf/
+.zencoder/
+skills/
+scripts/lv51-lv-b-register-to-csv.mjs

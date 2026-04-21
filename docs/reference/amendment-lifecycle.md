@@ -2,7 +2,7 @@
 
 End-to-end flow for order amendments from UI to server and back.
 
-**Related:** [FORM-STANDARDS.md](./design-system/FORM-STANDARDS.md), [STANDARDS.md](../STANDARDS.md)
+**Related:** [form-standards.md](./form-standards.md), [repo-standards.md](./repo-standards.md)
 
 ---
 

@@ -5,11 +5,10 @@ This document establishes authoritative patterns for the Renoz v3 codebase. It i
 **Last updated:** 2026-02-13
 
 **Related:**
-- [CLAUDE.md](./CLAUDE.md) - Project overview and commands
-- [SCHEMA-TRACE.md](./SCHEMA-TRACE.md) - Schema & query trace-through framework
-- [docs/WORKFLOW-AUDIT-REMEDIATION-PROCESS.md](./docs/WORKFLOW-AUDIT-REMEDIATION-PROCESS.md) - Workflow audit and hardening process
-- [docs/reliability/RELIABILITY-STANDARDS.md](./docs/reliability/RELIABILITY-STANDARDS.md) - Reliability rules and anti-pattern prevention
-- [.claude/rules/hook-architecture.md](./.claude/rules/hook-architecture.md) - Detailed hook rules
+- [../../CONTRIBUTING.md](../../CONTRIBUTING.md) - Local workflow, setup, and quality gates
+- [schema-trace.md](./schema-trace.md) - Schema & query trace-through framework
+- [workflow-audit-remediation-process.md](./workflow-audit-remediation-process.md) - Workflow audit and hardening process
+- [../reliability/RELIABILITY-STANDARDS.md](../reliability/RELIABILITY-STANDARDS.md) - Reliability rules and anti-pattern prevention
 
 ---
 
@@ -917,7 +916,7 @@ These rules align Supabase Auth with TanStack Start server functions in this cod
 
 These rules are optimized for React + TanStack Start performance and bundle health.
 
-See [BUILD-OPTIMIZATION.md](./docs/standards/BUILD-OPTIMIZATION.md) for full build optimization standards.
+Build optimization guidance lives in this document's React performance section.
 
 ### Eliminate Async Waterfalls
 - Start independent async work early and await late.
@@ -1035,9 +1034,9 @@ pnpm exec eslint src --no-error-on-unmatched-pattern 2>&1 | grep "react-refresh/
 - **2026-02-13:**
   - Added Section 12: React Refresh (Fast Refresh) — component-only export rule, file patterns, migration guidance
 - **2026-02-12:**
-  - Added [BUILD-OPTIMIZATION.md](./docs/standards/BUILD-OPTIMIZATION.md) for build optimization standards
+  - Added build optimization guidance for large TanStack Start bundles
   - Section 8: Route files must not export named page components; tab modules must not mix lazy() and named exports
-  - Section 10: Exception for circular-risk hooks (direct import); added reference to BUILD-OPTIMIZATION.md
+  - Section 10: Exception for circular-risk hooks (direct import); added build optimization notes
 - **2026-02-05:**
   - Added Supabase Auth + TanStack Start standards section
   - Added React performance standards section (Vercel)

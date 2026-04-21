@@ -4,7 +4,7 @@
  * Displays terms, notes, payment details, and page numbers
  * with professional styling and clear visual hierarchy.
  *
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 import { Text, View, StyleSheet } from "@react-pdf/renderer";

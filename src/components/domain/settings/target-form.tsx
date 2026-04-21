@@ -11,7 +11,7 @@
  * - Target Value (currency/number)
  * - Description (optional)
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see DASH-TARGETS-UI acceptance criteria
  * @see src/lib/schemas/reports/targets.ts for validation
  */

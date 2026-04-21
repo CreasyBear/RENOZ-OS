@@ -7,7 +7,7 @@
  * @source order from parent (OrderDetailContainer passes detail.order)
  * @source searchResults from useSearchProducts
  * @see STANDARDS.md - Container/Presenter pattern
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef, startTransition } from "react";

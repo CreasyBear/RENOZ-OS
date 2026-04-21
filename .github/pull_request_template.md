@@ -30,3 +30,4 @@ See [ROUTE-INTENT-PATTERN.md](../docs/reliability/ROUTE-INTENT-PATTERN.md)
 - [ ] `bun run lint:reliability`
 - [ ] `bun run typecheck`
 - [ ] `bun run test:unit` (or documented reason not run)
+- [ ] `bun run build`

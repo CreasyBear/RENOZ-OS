@@ -5,14 +5,18 @@
  * Runs scripted probes for /login and asset URLs to detect 307 loops or chunk 404s.
  * Exit 0 = pass, 1 = fail (blocks promotion).
  *
- * Usage: APP_URL=https://renoz-os.vercel.app node scripts/probe-production.mjs
- * Or: npm run deploy:probe
+ * Usage: APP_URL=https://your-app.example bun run deploy:probe
+ * Or: VERCEL_URL=deployment-url.vercel.app bun run deploy:probe
  */
 
 const APP_URL =
   process.env.APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-  'https://renoz-os.vercel.app';
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+if (!APP_URL) {
+  console.error('APP_URL or VERCEL_URL must be set for production probing.');
+  process.exit(1);
+}
 
 const PROBE_COUNT = 20;
 const MAX_REDIRECTS = 5;

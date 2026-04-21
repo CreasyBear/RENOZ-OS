@@ -4,7 +4,7 @@
  * Zod schema for the amendment request dialog form.
  * Validates amendment type, reason, line items, shipping, and discount fields.
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see src/components/domain/orders/amendments/amendment-request-dialog.tsx
  */
 

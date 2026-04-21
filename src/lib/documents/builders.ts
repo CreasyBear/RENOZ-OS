@@ -4,7 +4,7 @@
  * Shared builders for transforming order/customer data into document-ready shapes.
  * Used by preview, generate-documents-sync, generate-quote-pdf, and quote-versions.
  *
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 import type { DocumentOrder, DocumentCustomer, DocumentAddress, DocumentLineItem } from "./types";

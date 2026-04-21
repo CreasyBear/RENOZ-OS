@@ -4,7 +4,7 @@
  * Dialog for adjusting inventory stock levels (positive or negative).
  * Creates an inventory movement record for audit trail.
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json
  */
 

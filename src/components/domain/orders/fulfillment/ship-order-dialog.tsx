@@ -8,7 +8,7 @@
  * @source createShipmentMutation from useCreateShipment hook
  * @source markShippedMutation from useMarkShipped hook
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-SHIPPING-UI)
- * @see _misc/docs/design-system/FORM-STANDARDS.md
+ * @see _misc/docs/reference/form-standards.md
  */
 
 import { memo, useState, useCallback, useEffect, useRef, startTransition } from "react";

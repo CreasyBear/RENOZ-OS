@@ -1,308 +1,139 @@
 # Renoz CRM v3
 
-CRM application built with TanStack Start, React, Supabase, and Drizzle.
+Renoz CRM v3 is a multi-tenant CRM and operations platform for renovation, warranty, service, and return-management workflows.
 
-## Getting Started
+It is built with TanStack Start, React 19, Supabase, and Drizzle ORM, and the current codebase includes substantial support, warranty, service-system, inventory, and RMA workflow infrastructure.
+
+## What This Repo Contains
+
+The product currently centers on a few major workflow areas:
+
+- `support / issues / RMAs`: issue intake, diagnosis, RMA creation handoff, remedy execution, and operator closeout
+- `warranty / entitlements / claims`: entitlement activation, claimant-aware warranty claims, and warranty-first support context
+- `service systems`: bounded service-owner and service-system tracking used by warranty and support flows
+- `inventory / fulfillment / finance`: serialized inventory, FIFO cost layers, shipments, returns, and operational finance contracts
+
+## Tech Stack
+
+- `TanStack Start` for routing, server functions, and SSR
+- `React 19` for UI
+- `TanStack Query` for server-state management
+- `Drizzle ORM` with PostgreSQL / Supabase
+- `Tailwind CSS 4` and `shadcn/ui` primitives for UI
+- `Trigger.dev` for background jobs
+- `Zod` for contracts and validation
+- `Vitest` and Testing Library for unit and component coverage
+
+## Quick Start
 
 ### Prerequisites
 
-- Node.js 20+ or [Bun](https://bun.sh)
-- Supabase project
-- Copy `.env.example` to `.env` and fill in values
-- Copy `.claude/mcp.example.json` to `.claude/mcp.json` for local MCP tooling, then add your own tokens locally
+- `Node.js 22`
+- `Bun 1.3.9`
+- a Supabase project and working environment variables
 
-### Development
+### Local development
 
 ```bash
-npm install
-npm run dev
+bun install --frozen-lockfile
+cp .env.example .env
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+The app runs on [http://localhost:3000](http://localhost:3000).
 
-### Building for Production
+## Quality Gates
+
+Core local checks:
 
 ```bash
-npm run build
-npm run preview   # Preview production build locally
+bun run lint
+bun run lint:reliability
+bun run typecheck
+bun run test:unit
+bun run build
 ```
 
-### Testing
+Canonical PR/merge gate:
 
 ```bash
-npm run test          # All tests (Bun)
-npm run test:unit     # Unit tests only
-npm run test:vitest   # Vitest run
-npm run typecheck     # TypeScript check
-npm run lint          # ESLint
+bun run predeploy
+```
+
+Release-only verification before deploying:
+
+```bash
+bun run release:verify
 ```
 
 ## Deployment
 
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Vercel/GitHub deployment steps
-- **[PRE-DEPLOYMENT-CHECKLIST.md](./PRE-DEPLOYMENT-CHECKLIST.md)** — Checklist before go-live
-- **Pre-deploy**: `npm run predeploy` (typecheck + lint + test + build)
+This repo is set up for a single production deployment model:
 
-## Styling
+- merge into `main`
+- GitHub Actions runs the canonical checks
+- GitHub Actions deploys to Vercel via Vercel CLI
+- post-deploy verification runs via the production probe
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+- [docs/operations/deployment.md](./docs/operations/deployment.md): deploy setup, environment variables, migration guidance, and rollback notes
+- [docs/operations/pre-deployment-checklist.md](./docs/operations/pre-deployment-checklist.md): final readiness checklist before production deploys
 
+## Repository Guide
 
+### Key directories
 
+```text
+src/
+  components/            UI primitives, shared UI, and domain components
+  hooks/                 domain hooks and query integrations
+  lib/                   shared schemas, query keys, utilities, and server helpers
+  routes/                TanStack file-based routes and route handlers
+  server/functions/      domain server functions and shared workflow helpers
+  trigger/jobs/          background job definitions
 
-## Routing
-This project uses [TanStack Router](https://tanstack.com/router). The initial setup is a file based router. Which means that the routes are managed as files in `src/routes`.
+drizzle/
+  schema/               database schema definitions
+  migrations/           SQL migrations and metadata
 
-### Adding A Route
+docs/
+  architecture/         long-lived domain and product-model references
+  code-traces/          workflow-grade traces of critical paths
+  inventory/            inventory and operator workflow docs
+  operations/           deploy, auth, and integration runbooks
+  reference/            engineering standards and methodology
+  reliability/          mutation, rollout, and release-hardening standards
+  workflows/            operator-facing workflow companions
 
-To add a new route to your application just add another a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
+tests/
+  unit/                 Vitest unit and component coverage
 ```
 
-Then anywhere in your JSX you can use it like so:
+### Important top-level docs
 
-```tsx
-<Link to="/about">About</Link>
-```
+- [ARCHITECTURE.md](./ARCHITECTURE.md): public engineering overview for the app and repo
+- [docs/README.md](./docs/README.md): curated documentation index
+- [CLAUDE.md](./CLAUDE.md): local contributor/agent operating guidance used in this repo
+- [SECURITY.md](./SECURITY.md): security reporting guidance
 
-This will create a link that will navigate to the `/about` route.
+## Documentation Map
 
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
+Start here based on what you are trying to understand:
 
-### Using A Layout
+- product and operator flows: [docs/workflows/warranty-support-phase2-workflows.md](./docs/workflows/warranty-support-phase2-workflows.md)
+- support and RMA architecture: [docs/architecture/support-issue-rma-b2b2c.md](./docs/architecture/support-issue-rma-b2b2c.md)
+- inventory and valuation model: [docs/inventory/README.md](./docs/inventory/README.md)
+- workflow-grade technical traces: [docs/code-traces/README.md](./docs/code-traces/README.md)
+- reliability and rollout standards: [docs/reliability/RELIABILITY-STANDARDS.md](./docs/reliability/RELIABILITY-STANDARDS.md)
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you use the `<Outlet />` component.
+## Contributing
 
-Here is an example layout that includes a header:
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup expectations, quality gates, and repo conventions.
 
-```tsx
-import { Outlet, createRootRoute } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+## Current Repo Notes
 
-import { Link } from "@tanstack/react-router";
+This repository now reads much more cleanly than an internal working tree, but a few things are still intentionally opinionated:
 
-export const Route = createRootRoute({
-  component: () => (
-    <>
-      <header>
-        <nav>
-          <Link to="/">Home</Link>
-          <Link to="/about">About</Link>
-        </nav>
-      </header>
-      <Outlet />
-      <TanStackRouterDevtools />
-    </>
-  ),
-})
-```
-
-The `<TanStackRouterDevtools />` component is not required so you can remove it if you don't want it in your layout.
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-const peopleRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/people",
-  loader: async () => {
-    const response = await fetch("https://swapi.dev/api/people");
-    return response.json() as Promise<{
-      results: {
-        name: string;
-      }[];
-    }>;
-  },
-  component: () => {
-    const data = peopleRoute.useLoaderData();
-    return (
-      <ul>
-        {data.results.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    );
-  },
-});
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-### React-Query
-
-React-Query is an excellent addition or alternative to route loading and integrating it into you application is a breeze.
-
-First add your dependencies:
-
-```bash
-npm install @tanstack/react-query @tanstack/react-query-devtools
-```
-
-Next we'll need to create a query client and provider. We recommend putting those in `main.tsx`.
-
-```tsx
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-// ...
-
-const queryClient = new QueryClient();
-
-// ...
-
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement);
-
-  root.render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  );
-}
-```
-
-You can also add TanStack Query Devtools to the root route (optional).
-
-```tsx
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-
-const rootRoute = createRootRoute({
-  component: () => (
-    <>
-      <Outlet />
-      <ReactQueryDevtools buttonPosition="top-right" />
-      <TanStackRouterDevtools />
-    </>
-  ),
-});
-```
-
-Now you can use `useQuery` to fetch your data.
-
-```tsx
-import { useQuery } from "@tanstack/react-query";
-
-import "./App.css";
-
-function App() {
-  const { data } = useQuery({
-    queryKey: ["people"],
-    queryFn: () =>
-      fetch("https://swapi.dev/api/people")
-        .then((res) => res.json())
-        .then((data) => data.results as { name: string }[]),
-    initialData: [],
-  });
-
-  return (
-    <div>
-      <ul>
-        {data.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-export default App;
-```
-
-You can find out everything you need to know on how to use React-Query in the [React-Query documentation](https://tanstack.com/query/latest/docs/framework/react/overview).
-
-## State Management
-
-Another common requirement for React applications is state management. There are many options for state management in React. TanStack Store provides a great starting point for your project.
-
-First you need to add TanStack Store as a dependency:
-
-```bash
-npm install @tanstack/store
-```
-
-Now let's create a simple counter in the `src/App.tsx` file as a demonstration.
-
-```tsx
-import { useStore } from "@tanstack/react-store";
-import { Store } from "@tanstack/store";
-import "./App.css";
-
-const countStore = new Store(0);
-
-function App() {
-  const count = useStore(countStore);
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-    </div>
-  );
-}
-
-export default App;
-```
-
-One of the many nice features of TanStack Store is the ability to derive state from other state. That derived state will update when the base state updates.
-
-Let's check this out by doubling the count using derived state.
-
-```tsx
-import { useStore } from "@tanstack/react-store";
-import { Store, Derived } from "@tanstack/store";
-import "./App.css";
-
-const countStore = new Store(0);
-
-const doubledStore = new Derived({
-  fn: () => countStore.state * 2,
-  deps: [countStore],
-});
-doubledStore.mount();
-
-function App() {
-  const count = useStore(countStore);
-  const doubledCount = useStore(doubledStore);
-
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-      <div>Doubled - {doubledCount}</div>
-    </div>
-  );
-}
-
-export default App;
-```
-
-We use the `Derived` class to create a new store that is derived from another store. The `Derived` class has a `mount` method that will start the derived store updating.
-
-Once we've created the derived store we can use it in the `App` component just like we would any other store using the `useStore` hook.
-
-You can find out everything you need to know on how to use TanStack Store in the [TanStack Store documentation](https://tanstack.com/store/latest).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
+- `CLAUDE.md` is kept because it captures high-signal local operating conventions
+- this is a maintainer-led repo with a source-visible `UNLICENSED` policy unless maintainers choose a different license later
+- the surviving docs are intentionally biased toward current operational truth, evergreen engineering reference, and a small set of architecture notes
+- the codebase is large and workflow-heavy, so the docs index is the best entry point after this README

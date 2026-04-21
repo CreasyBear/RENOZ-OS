@@ -85,10 +85,10 @@ flowchart LR
 
 | What to review | Where | Output |
 |----------------|-------|--------|
-| Code standards | STANDARDS.md | Container/presenter, hooks, query keys, barrel exports, route code-splitting |
+| Code standards | `docs/reference/repo-standards.md` | Container/presenter, hooks, query keys, barrel exports, route code-splitting |
 | UI components | `src/components/ui`, `src/components/shared` | Primitives (Form, Dialog, Button), shared patterns (DataTable, empty states) |
 | Domain patterns | Similar flows in codebase (e.g. other wizards, create dialogs) | Reference implementations to match |
-| Design system (if applicable) | docs/DOCUMENT_DESIGN_SYSTEM.md, UI skills | Layout, typography, spacing for forms/dialogs |
+| Design system (if applicable) | `docs/reference/document-design-system.md`, UI skills | Layout, typography, spacing for forms/dialogs |
 
 **Checklist:**
 - [ ] Does this flow follow container/presenter? Use centralized query keys? Barrel exports?
@@ -196,7 +196,7 @@ Prioritize fixes:
 
 | Check | Action |
 |-------|--------|
-| **Convention alignment** | Does this item conflict with STANDARDS.md, FORM-STANDARDS, or domain-specific rules? If the audit doc has a "Convention revert" or "Skipped" section, read it. Do not re-introduce reverted patterns. |
+| **Convention alignment** | Does this item conflict with `repo-standards.md`, `form-standards.md`, or domain-specific rules? If the audit doc has a "Convention revert" or "Skipped" section, read it. Do not re-introduce reverted patterns. |
 | **Prior reversions** | Has this exact recommendation been tried and reverted? (e.g. "Removed lib/constants/shipping.ts" — do not add it back unless the revert reason is addressed.) |
 | **Pattern consistency** | Does the fix use the same patterns as similar flows? (e.g. useReducer where other containers use it; shared field components where forms use them; error helpers where catch blocks are similar.) |
 | **Schema as source of truth** | For validation: does the fix duplicate schema logic or derive from it? Prefer schema + derived helpers over custom validation. |
@@ -284,7 +284,7 @@ Before marking Done, run this checklist:
 | ... | ... | Yes/No | ... |
 
 ## Standards & Design System Review
-- **Compliance:** [notes from STANDARDS.md, UI components, domain patterns]
+- **Compliance:** [notes from repo-standards.md, UI components, domain patterns]
 - **Gaps:** [e.g. wizard doesn't use shared step indicator]
 
 ## User Expectations (5 Questions)
@@ -360,6 +360,6 @@ Before marking Done, run this checklist:
 
 **Done** = all phase checklists complete and practitioner sign-off (or reviewer if applicable).
 
-**Related docs:** [NO-EXPLICIT-ANY-REMEDIATION.md](./NO-EXPLICIT-ANY-REMEDIATION.md), [STANDARDS.md](../STANDARDS.md)
+**Related docs:** [repo-standards.md](./repo-standards.md)
 
 *This doc is linked from STANDARDS; review quarterly to keep process aligned with practice.*

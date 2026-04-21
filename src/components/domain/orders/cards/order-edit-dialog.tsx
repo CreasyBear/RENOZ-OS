@@ -4,7 +4,7 @@
  * Dialog for editing order defaults and operator-facing notes.
  * Draft orders can still change customer/order number; live orders keep those locked.
  *
- * @see _misc/docs/design-system/FORM-STANDARDS.md
+ * @see _misc/docs/reference/form-standards.md
  */
 
 import { useEffect } from 'react';

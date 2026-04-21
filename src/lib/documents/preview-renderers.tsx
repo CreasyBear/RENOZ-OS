@@ -4,7 +4,7 @@
  * Registry of document-type → renderer functions for preview.
  * Replaces the large switch in preview-document.tsx.
  *
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 import type { ReactElement } from 'react';

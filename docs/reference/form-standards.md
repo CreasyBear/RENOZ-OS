@@ -2,7 +2,7 @@
 
 Canonical form implementation patterns for the Renoz v3 codebase. All new forms and form migrations should follow these standards.
 
-**Related:** [FORM-INVENTORY.md](./FORM-INVENTORY.md), [STANDARDS.md](../STANDARDS.md), [CLAUDE.md](../../CLAUDE.md)
+**Related:** [form-inventory.md](./form-inventory.md), [repo-standards.md](./repo-standards.md), [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
 
 ---
 

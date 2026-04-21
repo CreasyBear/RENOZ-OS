@@ -6,8 +6,10 @@ Run through this checklist before deploying Renoz CRM v3 to production.
 
 ## 1. Build & CI
 
-- [ ] `npm run predeploy` succeeds (runs typecheck, lint, test:unit, build)
-- [ ] Or run individually: `npm run typecheck`, `npm run lint`, `npm run test:unit`, `npm run build`
+- [ ] `bun run predeploy` succeeds (canonical PR/merge gate)
+- [ ] `bun run release:verify` succeeds (stable release-only checks)
+- [ ] Run `bun run reliability:document-gates` when `DATABASE_URL` is available and the release touches document generation or related schema contracts
+- [ ] Or run individually: `bun run typecheck`, `bun run lint`, `bun run test:unit`, `bun run build`
 - [ ] GitHub Actions CI (if enabled) is green
 
 ---
@@ -33,7 +35,7 @@ Ensure all required variables are set in Vercel (see `.env.example`):
 
 ## 3. Database
 
-- [ ] Migrations applied to production database: `npm run db:migrate` (run against prod `DATABASE_URL`)
+- [ ] Migrations applied to production database: `bun run db:migrate` (run against prod `DATABASE_URL`)
 - [ ] Supabase RLS policies enabled and tested
 - [ ] Connection uses `sslmode=require`
 
@@ -94,5 +96,5 @@ These are documented in pre-deployment audits; address or accept before go-live:
 
 ## References
 
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Vercel/GitHub deployment steps
-- **Pre-deployment audits** — In monorepo: `../_misc/docs/pre_deployment_audit/` (FULL-APP-AUDIT.md, BAD-SMELLS-REPORT.md, DRIZZLE-SERVER-FUNCTIONS-AUDIT.md)
+- **[deployment.md](./deployment.md)** — Vercel/GitHub deployment steps
+- **Canonical production URL** — GitHub Actions variable `APP_URL` and matching Vercel runtime `APP_URL`

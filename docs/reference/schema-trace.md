@@ -5,8 +5,8 @@ This document establishes a systematic framework for debugging data access, aggr
 **Last updated:** 2026-01-30
 
 **Related:**
-- [STANDARDS.md](./STANDARDS.md) - Codebase architecture patterns
-- [CLAUDE.md](./CLAUDE.md) - Project overview and commands
+- [repo-standards.md](./repo-standards.md) - Codebase architecture patterns
+- [../../CONTRIBUTING.md](../../CONTRIBUTING.md) - Local workflow, setup, and quality gates
 
 ---
 
@@ -49,7 +49,7 @@ Database (PostgreSQL via Drizzle)
 - **What's the expected behavior?** (document expected vs actual)
 
 #### Step 2: Standards Compliance Check
-- Read `STANDARDS.md` to understand:
+- Read `repo-standards.md` to understand:
   - TanStack Query patterns (centralized keys, no direct `useQuery` in routes)
   - Data flow patterns (Route → Hook → Server → Database)
   - Return type patterns (server functions return data directly, not nested)
@@ -543,7 +543,7 @@ export interface SavedCustomerFilterWire {
 }
 ```
 
-**See:** `docs/design-system/FILTER-STANDARDS.md` §9 Type System Adjustments, `STANDARDS.md` §3 Hook Patterns.
+**See:** `repo-standards.md` §3 Hook Patterns and the shared filter/search schema patterns already used in `src/lib/schemas`.
 
 ### When to Extract Types
 
@@ -658,7 +658,7 @@ totalItems: uniqueKeys.size  // Counts unique combinations
 
 ### Issue 5: Inline Type Definitions
 
-**Symptom:** Linter warnings about inline types, violates STANDARDS.md.
+**Symptom:** Linter warnings about inline types, violates `repo-standards.md`.
 
 **Root Cause:** Types defined inline instead of in schema files.
 

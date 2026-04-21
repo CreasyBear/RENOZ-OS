@@ -4,7 +4,7 @@ Comprehensive inventory of all forms in the codebase. Generated as part of the F
 
 **Last updated:** 2026-02-22
 
-**Audit implementation:** Phase 1–4 completed. FORM-STANDARDS.md created, Form Inventory documented, 5 raw useForm forms migrated to useTanStackForm, product-form architecture verified, Form Devtools added.
+**Audit implementation:** Phase 1–4 completed. [form-standards.md](./form-standards.md) established the shared form baseline, the inventory was documented, 5 raw `useForm` forms were migrated to `useTanStackForm`, product-form architecture was verified, and Form Devtools were added.
 
 ---
 
