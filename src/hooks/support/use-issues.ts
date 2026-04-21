@@ -11,6 +11,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getIssues,
@@ -76,9 +77,14 @@ export function useIssues(options: UseIssuesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.support.issuesListFiltered(filters),
     queryFn: async () => {
-      const result = await getIssues({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssues({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issues are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - issues change frequently
@@ -98,9 +104,14 @@ export function useIssuesWithSlaMetrics(options: UseIssuesOptions = {}) {
       includeSlaMetrics: true,
     }),
     queryFn: async () => {
-      const result = await getIssuesWithSlaMetrics({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssuesWithSlaMetrics({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issue queue metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - issues change frequently
@@ -120,11 +131,17 @@ export function useIssue({ issueId, enabled = true }: UseIssueOptions) {
   return useQuery({
     queryKey: queryKeys.support.issueDetail(issueId),
     queryFn: async () => {
-      const result = await getIssueById({
-        data: { issueId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssueById({
+          data: { issueId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Issue details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested issue could not be found.',
+        });
+      }
     },
     enabled: enabled && !!issueId,
     staleTime: 60 * 1000, // 1 minute
@@ -152,9 +169,14 @@ export function useIssueIntakePreview(
   return useQuery({
     queryKey: queryKeys.support.issueIntakePreview(data),
     queryFn: async () => {
-      const result = await previewIssueIntake({ data });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await previewIssueIntake({ data });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issue intake preview is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 15 * 1000,

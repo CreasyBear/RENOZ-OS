@@ -9,6 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { getCustomerTriage } from '@/server/functions/customers/customer-triage';
 import type {
@@ -38,9 +39,14 @@ export function useCustomerTriage(options: UseCustomerTriageOptions = {}) {
   return useQuery<CustomerTriageResponse>({
     queryKey: queryKeys.customers.triage(queryInput),
     queryFn: async () => {
-      const result = await triageFn({ data: queryInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await triageFn({ data: queryInput });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer triage is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds

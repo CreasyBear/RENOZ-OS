@@ -11,7 +11,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { normalizeQueryError } from '@/lib/error-handling';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getCustomerAlerts,
@@ -61,16 +61,14 @@ export function useCustomerAlerts({ customerId, enabled = true }: UseCustomerAle
     queryKey: queryKeys.customers.alerts(customerId),
     queryFn: async () => {
       try {
-        const result = await getCustomerAlertsFn({
+        return await getCustomerAlertsFn({
           data: { customerId }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Customer alerts are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer alerts are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled: enabled && !!customerId,
@@ -104,16 +102,14 @@ export function useCustomerActiveItems({
     queryKey: queryKeys.customers.activeItems(customerId),
     queryFn: async () => {
       try {
-        const result = await getCustomerActiveItemsFn({
+        return await getCustomerActiveItemsFn({
           data: { customerId }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Customer activity is temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer activity is temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled: enabled && !!customerId,
@@ -150,16 +146,14 @@ export function useCustomerOrderSummary({
     queryKey: queryKeys.customers.orderSummary(customerId),
     queryFn: async () => {
       try {
-        const result = await getCustomerOrderSummaryFn({
+        return await getCustomerOrderSummaryFn({
           data: { customerId }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Customer order metrics are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer order metrics are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled: enabled && !!customerId,

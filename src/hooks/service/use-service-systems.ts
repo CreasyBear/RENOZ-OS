@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { toast } from 'sonner';
-import { normalizeQueryError } from '@/lib/error-handling';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import type {
   ListServiceSystemsInput,
@@ -30,14 +30,13 @@ export function useServiceSystem(serviceSystemId: string, enabled = true) {
     queryKey: queryKeys.serviceSystems.detail(serviceSystemId),
     queryFn: async () => {
       try {
-        const result = await getServiceSystemFn({ data: { id: serviceSystemId } });
-        if (result == null) throw new Error('Service system query returned no data');
-        return result;
+        return await getServiceSystemFn({ data: { id: serviceSystemId } });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Service system details are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Service system details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested service system could not be found.',
+        });
       }
     },
     enabled: enabled && !!serviceSystemId,
@@ -52,14 +51,12 @@ export function useServiceSystems(filters: Partial<ListServiceSystemsInput> = {}
     queryKey: queryKeys.serviceSystems.list(filters),
     queryFn: async () => {
       try {
-        const result = await listServiceSystemsFn({ data: filters });
-        if (result == null) throw new Error('Service systems query returned no data');
-        return result;
+        return await listServiceSystemsFn({ data: filters });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Service systems are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Service systems are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     staleTime: LIST_STALE_TIME,
@@ -75,14 +72,12 @@ export function useServiceLinkageReviews(
     queryKey: queryKeys.serviceLinkageReviews.list(filters),
     queryFn: async () => {
       try {
-        const result = await listServiceLinkageReviewsFn({ data: filters });
-        if (result == null) throw new Error('Service linkage reviews query returned no data');
-        return result;
+        return await listServiceLinkageReviewsFn({ data: filters });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Service linkage reviews are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Service linkage reviews are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     staleTime: LIST_STALE_TIME,
@@ -96,14 +91,13 @@ export function useServiceLinkageReview(reviewId: string, enabled = true) {
     queryKey: queryKeys.serviceLinkageReviews.detail(reviewId),
     queryFn: async () => {
       try {
-        const result = await getServiceLinkageReviewFn({ data: { id: reviewId } });
-        if (result == null) throw new Error('Service linkage review query returned no data');
-        return result;
+        return await getServiceLinkageReviewFn({ data: { id: reviewId } });
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Service linkage review details are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Service linkage review details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested service linkage review could not be found.',
+        });
       }
     },
     enabled: enabled && !!reviewId,

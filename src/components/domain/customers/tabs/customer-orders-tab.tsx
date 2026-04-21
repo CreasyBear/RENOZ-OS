@@ -13,6 +13,7 @@ import { Link } from '@tanstack/react-router';
 import { Package, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { formatDate } from '@/lib/formatters';
 import type { CustomerDetailData } from '@/lib/schemas/customers';
+import type { SummaryState } from '@/lib/metrics/summary-health';
 
 // ============================================================================
 // TYPES
@@ -35,6 +37,7 @@ export interface CustomerOrdersTabProps {
   totalOrders: number;
   /** Customer ID for "Create Order" links to pre-select customer */
   customerId?: string;
+  orderSummaryState?: SummaryState;
 }
 
 // ============================================================================
@@ -94,8 +97,30 @@ export const CustomerOrdersTab = memo(function CustomerOrdersTab({
   orderSummary,
   totalOrders,
   customerId,
+  orderSummaryState = 'ready',
 }: CustomerOrdersTabProps) {
   const orders = orderSummary?.recentOrders ?? [];
+
+  if (orderSummaryState === 'unavailable') {
+    return (
+      <div className="space-y-4 pt-6">
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertDescription>
+            Recent order history is temporarily unavailable. Use the Orders module or refresh once the summary query recovers.
+          </AlertDescription>
+        </Alert>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold">Order History</h3>
+          <Link
+            to="/orders"
+            className="text-sm text-primary hover:underline"
+          >
+            Open Orders module →
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (orders.length === 0) {
     return (

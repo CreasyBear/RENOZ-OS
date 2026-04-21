@@ -8,6 +8,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { getSupportMetrics } from '@/server/functions/support/support-metrics';
 
@@ -35,11 +36,16 @@ export function useSupportMetrics({
   return useQuery({
     queryKey: queryKeys.support.supportMetricsWithDates(startDate, endDate),
     queryFn: async () => {
-      const result = await getSupportMetrics({
-        data: { startDate, endDate } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSupportMetrics({
+          data: { startDate, endDate }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Support metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

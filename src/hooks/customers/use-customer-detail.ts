@@ -18,7 +18,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useCustomerNavigation } from './use-customer-navigation';
 import { useCustomer, useDeleteCustomer } from './use-customers';
 import { mergeCustomerDetailWithOrderSummary } from './customer-detail-metrics';
-import { getSummaryState } from '@/lib/metrics/summary-health';
+import { getSummaryState, type SummaryState } from '@/lib/metrics/summary-health';
 import {
   useCustomerAlerts,
   useCustomerActiveItems,
@@ -74,6 +74,7 @@ export interface UseCustomerDetailReturn {
   alertsLoading: boolean;
   activeItemsLoading: boolean;
   extendedDataWarning: string | null;
+  orderSummaryState: SummaryState;
 
   // UI State
   activeTab: string;
@@ -191,19 +192,21 @@ export function useCustomerDetail(
     );
   }, [customer, orderSummaryData]);
 
-  const extendedDataWarning = useMemo(() => {
-    const orderSummaryState = getSummaryState({
+  const orderSummaryState = useMemo<SummaryState>(() => {
+    return getSummaryState({
       data: orderSummaryData,
       error: orderSummaryError,
       isLoading: orderSummaryLoading,
     });
+  }, [orderSummaryData, orderSummaryError, orderSummaryLoading]);
 
+  const orderSummaryWarning = useMemo(() => {
     if (orderSummaryState !== 'unavailable') {
       return null;
     }
 
-    return 'Customer order metrics are temporarily unavailable. Headline values may be incomplete until the summary query recovers.';
-  }, [orderSummaryData, orderSummaryError, orderSummaryLoading]);
+    return 'Customer order metrics are temporarily unavailable. Headline values and recent order surfaces are hidden until the summary query recovers.';
+  }, [orderSummaryState]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Mutations
@@ -298,7 +301,8 @@ export function useCustomerDetail(
     activitiesError: activitiesError as Error | null,
     alertsLoading,
     activeItemsLoading,
-    extendedDataWarning,
+    extendedDataWarning: orderSummaryWarning,
+    orderSummaryState,
 
     // UI State
     activeTab,
