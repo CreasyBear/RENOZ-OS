@@ -17,6 +17,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { FormFieldDisplayProvider } from '@/components/shared/forms';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 
 const resolveSchema = z.object({
   fullName: z.string().min(1).max(255),
@@ -78,6 +82,12 @@ export function ResolveServiceLinkageReviewDialog({
   onSubmit,
   isSubmitting,
 }: ResolveServiceLinkageReviewDialogProps) {
+  const isPending = isSubmitting ?? false;
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(
+    isPending,
+    onOpenChange
+  );
   const form = useTanStackForm<ResolveValues>({
     schema: resolveSchema,
     defaultValues: {
@@ -136,8 +146,12 @@ export function ResolveServiceLinkageReviewDialog({
   }, [form, open, review]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+        onInteractOutside={pendingInteractionGuards.onInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Create New Service System</DialogTitle>
           <DialogDescription>
@@ -237,10 +251,10 @@ export function ResolveServiceLinkageReviewDialog({
               </div>
             </FormFieldDisplayProvider>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isPending}>
                 Create New System
               </Button>
             </DialogFooter>

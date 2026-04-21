@@ -7,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-008
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -34,7 +34,10 @@ import {
   ISSUE_RESOLUTION_CATEGORY_OPTIONS,
 } from './issue-options';
 import type { IssueStatus } from '@/lib/schemas/support';
-import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
+import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from '@/components/ui/dialog-pending-guards';
 
 // ============================================================================
 // TYPES
@@ -108,12 +111,6 @@ export function IssueStatusChangeDialog({
     setDiagnosisNotes('');
   };
 
-  useEffect(() => {
-    if (open) {
-      resetForm();
-    }
-  }, [open, issueTitle, fromStatus, toStatus]);
-
   const handleConfirm = () => {
     onConfirm({
       confirmed: true,
@@ -142,18 +139,15 @@ export function IssueStatusChangeDialog({
     ? note.trim().length > 0 && !!resolutionCategory && !!nextActionType
     : !requiresNote || note.trim().length > 0;
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, (nextOpen) => {
+    if (!nextOpen) {
+      resetForm();
+    }
+    onOpenChange(nextOpen);
+  });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && isPending) return;
-        if (!nextOpen) {
-          resetForm();
-        }
-        onOpenChange(nextOpen);
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className="sm:max-w-[425px]"
         onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}

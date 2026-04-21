@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,19 @@ interface RmaReceiveDialogProps {
   }) => Promise<void>;
 }
 
+interface RmaReceiveDialogFormProps {
+  isPending: boolean;
+  rma: RmaResponse;
+  locations: WarehouseLocationOption[];
+  locationsLoading: boolean;
+  onReceive: (inspection?: {
+    condition?: string;
+    notes?: string;
+    locationId?: string;
+  }) => Promise<void>;
+  onClose: () => void;
+}
+
 const INITIAL_RECEIVE_FORM_STATE = {
   inspectionCondition: 'good',
   inspectionNotes: '',
@@ -66,6 +79,33 @@ export function RmaReceiveDialog({
   locationsLoading,
   onReceive,
 }: RmaReceiveDialogProps) {
+  const handleOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {open ? (
+        <RmaReceiveDialogForm
+          key={`${rma.id}:${open ? 'open' : 'closed'}`}
+          isPending={isPending}
+          rma={rma}
+          locations={locations}
+          locationsLoading={locationsLoading}
+          onReceive={onReceive}
+          onClose={() => onOpenChange(false)}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function RmaReceiveDialogForm({
+  isPending,
+  rma,
+  locations,
+  locationsLoading,
+  onReceive,
+  onClose,
+}: RmaReceiveDialogFormProps) {
   const [inspectionCondition, setInspectionCondition] = useState(
     INITIAL_RECEIVE_FORM_STATE.inspectionCondition
   );
@@ -77,23 +117,11 @@ export function RmaReceiveDialog({
   );
 
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
-  const guardedOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
 
   const resetForm = () => {
     setInspectionCondition(INITIAL_RECEIVE_FORM_STATE.inspectionCondition);
     setInspectionNotes(INITIAL_RECEIVE_FORM_STATE.inspectionNotes);
     setReceivingLocationId(INITIAL_RECEIVE_FORM_STATE.receivingLocationId);
-  };
-
-  useEffect(() => {
-    resetForm();
-  }, [open]);
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      resetForm();
-    }
-    guardedOpenChange(nextOpen);
   };
 
   const handleReceive = async () => {
@@ -109,109 +137,107 @@ export function RmaReceiveDialog({
         locationId: receivingLocationId,
       });
       resetForm();
-      onOpenChange(false);
+      onClose();
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Failed to mark received');
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
-        onInteractOutside={pendingInteractionGuards.onInteractOutside}
-      >
-        <DialogHeader>
-          <DialogTitle>Receive Items</DialogTitle>
-          <DialogDescription>Log the receipt and inspection of returned items.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          {rma.lineItems && rma.lineItems.length > 0 ? (
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Items to receive</Label>
-              <ul className="rounded-md border p-3 text-sm">
-                {rma.lineItems.map((item) => (
-                  <li key={item.id} className="flex justify-between py-1">
-                    <span>{item.orderLineItem?.productName ?? 'Unknown Product'}</span>
-                    <span className="text-muted-foreground">
-                      {item.quantityReturned}
-                      {item.serialNumber ? (
-                        <>
-                          {' · S/N: '}
-                          <Link
-                            to="/inventory/browser"
-                            search={{
-                              view: 'serialized',
-                              serializedSearch: item.serialNumber,
-                              page: 1,
-                            }}
-                            className="font-mono text-primary hover:underline"
-                          >
-                            {item.serialNumber}
-                          </Link>
-                        </>
-                      ) : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+    <DialogContent
+      onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+      onInteractOutside={pendingInteractionGuards.onInteractOutside}
+    >
+      <DialogHeader>
+        <DialogTitle>Receive Items</DialogTitle>
+        <DialogDescription>Log the receipt and inspection of returned items.</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4 py-4">
+        {rma.lineItems && rma.lineItems.length > 0 ? (
           <div className="space-y-2">
-            <Label htmlFor="receivingLocation">Receiving Location</Label>
-            <Select value={receivingLocationId} onValueChange={setReceivingLocationId}>
-              <SelectTrigger id="receivingLocation">
-                <SelectValue
-                  placeholder={
-                    locationsLoading ? 'Loading locations...' : 'Select receiving location'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {locations
-                  .filter((location) => location.isActive !== false)
-                  .map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name} ({location.code})
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs text-muted-foreground">Items to receive</Label>
+            <ul className="rounded-md border p-3 text-sm">
+              {rma.lineItems.map((item) => (
+                <li key={item.id} className="flex justify-between py-1">
+                  <span>{item.orderLineItem?.productName ?? 'Unknown Product'}</span>
+                  <span className="text-muted-foreground">
+                    {item.quantityReturned}
+                    {item.serialNumber ? (
+                      <>
+                        {' · S/N: '}
+                        <Link
+                          to="/inventory/browser"
+                          search={{
+                            view: 'serialized',
+                            serializedSearch: item.serialNumber,
+                            page: 1,
+                          }}
+                          className="font-mono text-primary hover:underline"
+                        >
+                          {item.serialNumber}
+                        </Link>
+                      </>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="condition">Item Condition</Label>
-            <Select value={inspectionCondition} onValueChange={setInspectionCondition}>
-              <SelectTrigger id="condition">
-                <SelectValue placeholder="Select condition" />
-              </SelectTrigger>
-              <SelectContent>
-                {RMA_RECEIVE_CONDITION_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+        ) : null}
+        <div className="space-y-2">
+          <Label htmlFor="receivingLocation">Receiving Location</Label>
+          <Select value={receivingLocationId} onValueChange={setReceivingLocationId}>
+            <SelectTrigger id="receivingLocation">
+              <SelectValue
+                placeholder={
+                  locationsLoading ? 'Loading locations...' : 'Select receiving location'
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {locations
+                .filter((location) => location.isActive !== false)
+                .map((location) => (
+                  <SelectItem key={location.id} value={location.id}>
+                    {location.name} ({location.code})
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="inspectionNotes">Inspection Notes (optional)</Label>
-            <Textarea
-              id="inspectionNotes"
-              placeholder="Note any observations about the returned items..."
-              value={inspectionNotes}
-              onChange={(event) => setInspectionNotes(event.target.value)}
-            />
-          </div>
+            </SelectContent>
+          </Select>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button onClick={handleReceive} disabled={isPending}>
-            {isPending ? 'Processing...' : 'Mark Received'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-2">
+          <Label htmlFor="condition">Item Condition</Label>
+          <Select value={inspectionCondition} onValueChange={setInspectionCondition}>
+            <SelectTrigger id="condition">
+              <SelectValue placeholder="Select condition" />
+            </SelectTrigger>
+            <SelectContent>
+              {RMA_RECEIVE_CONDITION_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="inspectionNotes">Inspection Notes (optional)</Label>
+          <Textarea
+            id="inspectionNotes"
+            placeholder="Note any observations about the returned items..."
+            value={inspectionNotes}
+            onChange={(event) => setInspectionNotes(event.target.value)}
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button onClick={handleReceive} disabled={isPending}>
+          {isPending ? 'Processing...' : 'Mark Received'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }

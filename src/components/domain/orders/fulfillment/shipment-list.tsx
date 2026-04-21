@@ -40,6 +40,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  createPendingDialogInteractionGuards,
+  createPendingDialogOpenChangeHandler,
+} from "@/components/ui/dialog-pending-guards";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -148,6 +152,17 @@ export const ShipmentList = memo(function ShipmentList({
   const pendingShipment = useMemo(
     () => shipments?.find((shipment) => shipment.id === pendingShipmentId) ?? null,
     [pendingShipmentId, shipments]
+  );
+  const pendingInteractionGuards = createPendingDialogInteractionGuards(
+    markShippedMutation.isPending
+  );
+  const handlePendingShipmentDialogOpenChange = createPendingDialogOpenChangeHandler(
+    markShippedMutation.isPending,
+    (nextOpen) => {
+      if (!nextOpen) {
+        closePendingShipmentCompletion();
+      }
+    }
   );
 
   const openPendingShipmentCompletion = (shipment: NonNullable<typeof shipments>[number]) => {
@@ -560,11 +575,12 @@ export const ShipmentList = memo(function ShipmentList({
 
       <Dialog
         open={!!pendingShipment}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) closePendingShipmentCompletion();
-        }}
+        onOpenChange={handlePendingShipmentDialogOpenChange}
       >
-        <DialogContent>
+        <DialogContent
+          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+          onInteractOutside={pendingInteractionGuards.onInteractOutside}
+        >
           <DialogHeader>
             <DialogTitle>
               {pendingShipment

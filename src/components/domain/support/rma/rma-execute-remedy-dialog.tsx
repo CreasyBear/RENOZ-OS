@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -59,6 +59,13 @@ interface RmaExecuteRemedyDialogProps {
   onProcess: (input: ProcessRmaPayload) => Promise<void>;
 }
 
+interface RmaExecuteRemedyDialogFormProps {
+  isPending: boolean;
+  orderPayments: RmaExecutionPaymentSource[];
+  onProcess: (input: ProcessRmaPayload) => Promise<void>;
+  onClose: () => void;
+}
+
 const INITIAL_EXECUTION_FORM_STATE = {
   resolution: 'refund' as RmaResolution,
   refundAmount: '',
@@ -97,6 +104,29 @@ export function RmaExecuteRemedyDialog({
   orderPayments,
   onProcess,
 }: RmaExecuteRemedyDialogProps) {
+  const handleOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {open ? (
+        <RmaExecuteRemedyDialogForm
+          key={`${rma.id}:${open ? 'open' : 'closed'}`}
+          isPending={isPending}
+          orderPayments={orderPayments}
+          onProcess={onProcess}
+          onClose={() => onOpenChange(false)}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function RmaExecuteRemedyDialogForm({
+  isPending,
+  orderPayments,
+  onProcess,
+  onClose,
+}: RmaExecuteRemedyDialogFormProps) {
   const [resolution, setResolution] = useState(INITIAL_EXECUTION_FORM_STATE.resolution);
   const [refundAmount, setRefundAmount] = useState(INITIAL_EXECUTION_FORM_STATE.refundAmount);
   const [originalPaymentId, setOriginalPaymentId] = useState(
@@ -118,7 +148,6 @@ export function RmaExecuteRemedyDialog({
   );
 
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
-  const guardedOpenChange = createPendingDialogOpenChangeHandler(isPending, onOpenChange);
 
   const resetForm = () => {
     setResolution(INITIAL_EXECUTION_FORM_STATE.resolution);
@@ -129,17 +158,6 @@ export function RmaExecuteRemedyDialog({
     setApplyNow(INITIAL_EXECUTION_FORM_STATE.applyNow);
     setConfirmReplacement(INITIAL_EXECUTION_FORM_STATE.confirmReplacement);
     setResolutionNotes(INITIAL_EXECUTION_FORM_STATE.resolutionNotes);
-  };
-
-  useEffect(() => {
-    resetForm();
-  }, [open]);
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      resetForm();
-    }
-    guardedOpenChange(nextOpen);
   };
 
   const handleProcess = async () => {
@@ -198,170 +216,167 @@ export function RmaExecuteRemedyDialog({
       }
 
       resetForm();
-      onOpenChange(false);
+      onClose();
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Failed to execute remedy');
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
-        onInteractOutside={pendingInteractionGuards.onInteractOutside}
-      >
-        <DialogHeader>
-          <DialogTitle>Execute Remedy</DialogTitle>
-          <DialogDescription>
-            Confirm the remedy outcome and create the linked records from this RMA.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="resolution">Resolution</Label>
-            <Select value={resolution} onValueChange={(value) => setResolution(value as RmaResolution)}>
-              <SelectTrigger id="resolution">
-                <SelectValue placeholder="Select resolution" />
-              </SelectTrigger>
-              <SelectContent>
-                {RMA_WORKFLOW_RESOLUTION_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <DialogContent
+      onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
+      onInteractOutside={pendingInteractionGuards.onInteractOutside}
+    >
+      <DialogHeader>
+        <DialogTitle>Execute Remedy</DialogTitle>
+        <DialogDescription>
+          Confirm the remedy outcome and create the linked records from this RMA.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4 py-4">
+        <div className="space-y-2">
+          <Label htmlFor="resolution">Resolution</Label>
+          <Select
+            value={resolution}
+            onValueChange={(value) => setResolution(value as RmaResolution)}
+          >
+            <SelectTrigger id="resolution">
+              <SelectValue placeholder="Select resolution" />
+            </SelectTrigger>
+            <SelectContent>
+              {RMA_WORKFLOW_RESOLUTION_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-          <Alert>
-            <AlertTitle>{RMA_RESOLUTION_LABELS[resolution]}</AlertTitle>
-            <AlertDescription>
-              {getRmaResolutionExecutionDescription(resolution)}
-            </AlertDescription>
-          </Alert>
+        <Alert>
+          <AlertTitle>{RMA_RESOLUTION_LABELS[resolution]}</AlertTitle>
+          <AlertDescription>
+            {getRmaResolutionExecutionDescription(resolution)}
+          </AlertDescription>
+        </Alert>
 
-          {resolution === 'refund' ? (
-            <>
-              {refundablePayments.length === 0 ? (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    No refundable source payment is available for this order. Choose another remedy or record a payment first.
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-              <div className="space-y-2">
-                <Label htmlFor="originalPayment">Source Payment</Label>
-                <Select value={originalPaymentId} onValueChange={setOriginalPaymentId}>
-                  <SelectTrigger id="originalPayment">
-                    <SelectValue placeholder="Select payment to refund" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {refundablePayments.map((payment) => (
-                      <SelectItem key={payment.id} value={payment.id}>
-                        {payment.paymentMethod} · ${Number(payment.amount).toFixed(2)} · remaining $
-                        {payment.remainingRefundable.toFixed(2)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="refundAmount">Refund Amount</Label>
-                <Input
-                  id="refundAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={refundAmount}
-                  onChange={(event) => setRefundAmount(event.target.value)}
-                />
-              </div>
-            </>
-          ) : null}
+        {resolution === 'refund' ? (
+          <>
+            {refundablePayments.length === 0 ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  No refundable source payment is available for this order. Choose another remedy or record a payment first.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="originalPayment">Source Payment</Label>
+              <Select value={originalPaymentId} onValueChange={setOriginalPaymentId}>
+                <SelectTrigger id="originalPayment">
+                  <SelectValue placeholder="Select payment to refund" />
+                </SelectTrigger>
+                <SelectContent>
+                  {refundablePayments.map((payment) => (
+                    <SelectItem key={payment.id} value={payment.id}>
+                      {payment.paymentMethod} · ${Number(payment.amount).toFixed(2)} · remaining $
+                      {payment.remainingRefundable.toFixed(2)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refundAmount">Refund Amount</Label>
+              <Input
+                id="refundAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={refundAmount}
+                onChange={(event) => setRefundAmount(event.target.value)}
+              />
+            </div>
+          </>
+        ) : null}
 
-          {resolution === 'credit' ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="creditAmount">Credit Amount</Label>
-                <Input
-                  id="creditAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={creditAmount}
-                  onChange={(event) => setCreditAmount(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="creditReason">Credit Note Reason</Label>
-                <Textarea
-                  id="creditReason"
-                  placeholder="Why are we issuing this credit note?"
-                  value={creditReason}
-                  onChange={(event) => setCreditReason(event.target.value)}
-                />
-              </div>
-              <div className="flex items-start gap-3 rounded-md border p-3">
-                <Checkbox
-                  id="applyNow"
-                  checked={applyNow}
-                  onCheckedChange={(checked) => setApplyNow(checked === true)}
-                />
-                <div className="space-y-1">
-                  <Label htmlFor="applyNow" className="text-sm font-medium">
-                    Apply to the source order immediately
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    When enabled, the issued credit note will be applied to the source order if it is eligible.
-                  </p>
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          {resolution === 'replacement' ? (
-            <div className="space-y-3 rounded-md border p-3">
-              <div>
-                <p className="text-sm font-medium">Replacement draft summary</p>
+        {resolution === 'credit' ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="creditAmount">Credit Amount</Label>
+              <Input
+                id="creditAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={creditAmount}
+                onChange={(event) => setCreditAmount(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="creditReason">Credit Note Reason</Label>
+              <Textarea
+                id="creditReason"
+                placeholder="Why are we issuing this credit note?"
+                value={creditReason}
+                onChange={(event) => setCreditReason(event.target.value)}
+              />
+            </div>
+            <div className="flex items-start gap-3 rounded-md border p-3">
+              <Checkbox
+                id="applyNow"
+                checked={applyNow}
+                onCheckedChange={(checked) => setApplyNow(checked === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="applyNow" className="text-sm font-medium">
+                  Apply to the source order immediately
+                </Label>
                 <p className="text-sm text-muted-foreground">
-                  This replacement order will be created as a zero-priced draft using the returned line items on{' '}
-                  {rma.rmaNumber}.
+                  When enabled, the issued credit note will be applied to the source order if it is eligible.
                 </p>
               </div>
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  id="confirmReplacement"
-                  checked={confirmReplacement}
-                  onCheckedChange={(checked) => setConfirmReplacement(checked === true)}
-                />
-                <Label htmlFor="confirmReplacement" className="text-sm font-medium">
-                  Confirm draft replacement order creation
-                </Label>
-              </div>
             </div>
-          ) : null}
+          </>
+        ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="resolutionNotes">Execution Notes</Label>
-            <Textarea
-              id="resolutionNotes"
-              placeholder="Capture any operator notes about the chosen remedy..."
-              value={resolutionNotes}
-              onChange={(event) => setResolutionNotes(event.target.value)}
+        {resolution === 'replacement' ? (
+          <div className="flex items-start gap-3 rounded-md border p-3">
+            <Checkbox
+              id="confirmReplacement"
+              checked={confirmReplacement}
+              onCheckedChange={(checked) => setConfirmReplacement(checked === true)}
             />
+            <div className="space-y-1">
+              <Label htmlFor="confirmReplacement" className="text-sm font-medium">
+                Create the replacement draft order now
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                The replacement order will be created as a zero-priced draft linked back to this RMA.
+              </p>
+            </div>
           </div>
+        ) : null}
+
+        <div className="space-y-2">
+          <Label htmlFor="resolutionNotes">Operator Notes</Label>
+          <Textarea
+            id="resolutionNotes"
+            placeholder="Optional notes about this remedy execution"
+            value={resolutionNotes}
+            onChange={(event) => setResolutionNotes(event.target.value)}
+          />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button onClick={handleProcess} disabled={isPending}>
-            {isPending ? 'Executing...' : 'Execute Remedy'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button onClick={handleProcess} disabled={isPending}>
+          {isPending ? 'Processing...' : 'Execute Remedy'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }

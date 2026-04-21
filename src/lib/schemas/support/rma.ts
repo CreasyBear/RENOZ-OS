@@ -200,7 +200,9 @@ export const processRmaSchema = z.discriminatedUnion('resolution', [
   }),
 ]);
 export type ProcessRmaInput = z.infer<typeof processRmaSchema>;
-type DistributiveOmit<T, K extends keyof any> = T extends unknown ? Omit<T, K> : never;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, Extract<K, keyof T>>
+  : never;
 export type ProcessRmaPayload = DistributiveOmit<ProcessRmaInput, 'rmaId'>;
 
 // ============================================================================
@@ -356,7 +358,7 @@ export interface RmaResponse {
   unitsRestored?: number;
 }
 
-export interface RmaProcessResult extends RmaResponse {}
+export type RmaProcessResult = RmaResponse;
 
 export interface ListRmasResponse {
   data: RmaResponse[];
