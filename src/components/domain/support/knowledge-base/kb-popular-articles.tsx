@@ -88,6 +88,8 @@ interface KbPopularArticlesProps {
   isLoading?: boolean;
   /** From route container (useKbArticles). */
   error?: unknown;
+  /** Localized degraded-state copy when stale data remains visible. */
+  warningMessage?: string;
 }
 
 export function KbPopularArticles({
@@ -97,6 +99,7 @@ export function KbPopularArticles({
   mostHelpful,
   isLoading,
   error,
+  warningMessage,
 }: KbPopularArticlesProps) {
   const hasError = !!error;
 
@@ -110,6 +113,9 @@ export function KbPopularArticles({
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
+          {warningMessage ? (
+            <p className="text-muted-foreground mb-3 text-xs">{warningMessage}</p>
+          ) : null}
           <Tabs defaultValue="viewed" className="w-full">
             <TabsList className="grid h-8 w-full grid-cols-2">
               <TabsTrigger value="viewed" className="text-xs">
@@ -180,6 +186,9 @@ export function KbPopularArticles({
         <CardDescription>Top articles by views</CardDescription>
       </CardHeader>
       <CardContent>
+        {warningMessage ? (
+          <p className="text-muted-foreground mb-3 text-xs">{warningMessage}</p>
+        ) : null}
         {isLoading ? (
           <ArticleListSkeleton />
         ) : hasError ? (

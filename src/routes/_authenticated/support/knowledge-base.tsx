@@ -204,6 +204,21 @@ function KnowledgeBasePage() {
   const suggestedArticles = rawSuggestedArticles.map(adjustFeedbackCounts);
   const suggestedIsLoading = hasSuggestionFilters ? suggestedLoading : popularViewedLoading;
   const suggestedErrorState = hasSuggestionFilters ? suggestedError : popularViewedError;
+  const popularArticlesError =
+    (popularViewedError && !popularViewedData ? popularViewedError : null) ??
+    (helpfulError && !helpfulData ? helpfulError : null);
+  const popularArticlesWarning =
+    (popularViewedError && popularViewedData) || (helpfulError && helpfulData)
+      ? 'Showing the most recent popular articles while refresh is unavailable.'
+      : undefined;
+  const suggestedArticlesError = suggestedErrorState && !suggestedData ? suggestedErrorState : null;
+  const suggestedArticlesWarning =
+    suggestedErrorState &&
+    (hasSuggestionFilters ? suggestedData : popularViewedData)
+      ? hasSuggestionFilters
+        ? 'Showing the most recent suggested articles while refresh is unavailable.'
+        : 'Showing the most recent article suggestions while refresh is unavailable.'
+      : undefined;
   const categoryTreeError = categoriesError && !categories ? categoriesError : null;
   const categoryTreeWarning = categoriesError && categories ? categoriesError : null;
   const articleListError = articlesError && !articlesData ? articlesError : null;
@@ -496,16 +511,15 @@ function KnowledgeBasePage() {
             mostViewed={popularViewedData?.data ?? []}
             mostHelpful={mostHelpful}
             isLoading={popularViewedLoading || helpfulLoading}
-            error={
-              (popularViewedError && !popularViewedData ? popularViewedError : null) ??
-              (helpfulError && !helpfulData ? helpfulError : null)
-            }
+            error={popularArticlesError}
+            warningMessage={popularArticlesWarning}
           />
 
           <KbSuggestedArticles
             articles={suggestedArticles}
             isLoading={suggestedIsLoading}
-            error={suggestedErrorState && !suggestedData ? suggestedErrorState : null}
+            error={suggestedArticlesError}
+            warningMessage={suggestedArticlesWarning}
             title="Suggested Articles"
             description={
               hasSuggestionFilters ? 'Articles matching your filters' : 'Most viewed articles'

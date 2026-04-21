@@ -72,6 +72,7 @@ export function WonLostDialog({
     enabled: open,
   });
   const reasons = useMemo(() => reasonsData?.reasons ?? [], [reasonsData?.reasons]);
+  const hasUsableReasons = reasons.length > 0;
   const reasonOptions = useMemo(
     () => reasons.map((reason) => ({ value: reason.id, label: reason.name })),
     [reasons]
@@ -141,7 +142,9 @@ export function WonLostDialog({
       submitLabel={isWon ? "Confirm Win" : "Confirm Loss"}
       loadingLabel={isWon ? "Confirming win..." : "Confirming loss..."}
       submitVariant={isWon ? "default" : "destructive"}
-      submitDisabled={isReasonsLoading || !!reasonsError || reasons.length === 0}
+      submitDisabled={
+        isReasonsLoading || (!hasUsableReasons && !!reasonsError) || reasons.length === 0
+      }
       size="sm"
       className="sm:max-w-[425px]"
       resetOnClose={false}

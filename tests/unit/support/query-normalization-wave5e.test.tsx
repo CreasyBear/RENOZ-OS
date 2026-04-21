@@ -1,7 +1,9 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { KbArticleResponse } from '@/lib/schemas/support/knowledge-base';
 
 const mockListWinLossReasons = vi.fn();
 const mockListIssueTemplates = vi.fn();
@@ -126,7 +128,7 @@ describe('support/settings query normalization wave 5e', () => {
       content: 'Steps',
       categoryId: null,
       tags: [],
-      status: 'published',
+      status: 'published' as const,
       publishedAt: null,
       viewCount: 0,
       helpfulCount: 0,
@@ -241,6 +243,69 @@ describe('support/settings query normalization wave 5e', () => {
     expect(screen.queryByText('No reasons available.')).not.toBeInTheDocument();
   });
 
+  it('keeps stale win/loss reasons usable when refresh fails', async () => {
+    vi.resetModules();
+    Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
+      configurable: true,
+      value: () => false,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+      configurable: true,
+      value: () => undefined,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'releasePointerCapture', {
+      configurable: true,
+      value: () => undefined,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: () => undefined,
+    });
+
+    vi.doMock('@/components/shared/format', () => ({
+      FormatAmount: ({ amount }: { amount: number }) => <span>${amount}</span>,
+    }));
+    vi.doMock('@/hooks/settings', () => ({
+      useWinLossReasons: () => ({
+        data: {
+          reasons: [
+            {
+              id: 'reason-1',
+              name: 'Competitive pricing',
+              type: 'loss',
+              isActive: true,
+              sortOrder: 0,
+            },
+          ],
+        },
+        isLoading: false,
+        error: new Error('Win/loss reasons are temporarily unavailable. Please refresh and try again.'),
+      }),
+    }));
+
+    const { WonLostDialog } = await import('@/components/domain/pipeline/won-lost-dialog');
+    const user = userEvent.setup();
+
+    render(
+      <WonLostDialog
+        open
+        type="lost"
+        opportunity={{ title: 'Enterprise Upgrade', value: 5000 }}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText('Showing the most recent reasons while refresh is unavailable.')
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Competitive pricing' }));
+
+    expect(screen.getByRole('button', { name: 'Confirm Loss' })).toBeEnabled();
+  });
+
   it('keeps stale issue templates visible when refresh fails', async () => {
     vi.resetModules();
 
@@ -314,5 +379,62 @@ describe('support/settings query normalization wave 5e', () => {
 
     expect(screen.getByText('Failed to load categories')).toBeInTheDocument();
     expect(screen.queryByText('No categories yet')).not.toBeInTheDocument();
+  });
+
+  it('shows degraded warnings in popular and suggested KB sidebars when stale data remains visible', async () => {
+    const article: KbArticleResponse = {
+      id: 'article-1',
+      organizationId: 'org-1',
+      title: 'Reset procedure',
+      slug: 'reset-procedure',
+      summary: 'Quick summary',
+      content: 'Steps',
+      categoryId: null,
+      tags: [],
+      status: 'published',
+      publishedAt: null,
+      viewCount: 42,
+      helpfulCount: 9,
+      notHelpfulCount: 1,
+      metaTitle: null,
+      metaDescription: null,
+      createdAt: new Date('2026-04-20T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-20T00:00:00.000Z'),
+      createdBy: null,
+      updatedBy: null,
+      category: null,
+      author: null,
+    };
+
+    const { KbPopularArticles } = await import(
+      '@/components/domain/support/knowledge-base/kb-popular-articles'
+    );
+    const { KbSuggestedArticles } = await import(
+      '@/components/domain/support/knowledge-base/kb-suggested-articles'
+    );
+
+    render(
+      <>
+        <KbPopularArticles
+          showTabs={false}
+          mostViewed={[article]}
+          mostHelpful={[article]}
+          warningMessage="Showing the most recent popular articles while refresh is unavailable."
+        />
+        <KbSuggestedArticles
+          articles={[article]}
+          warningMessage="Showing the most recent suggested articles while refresh is unavailable."
+          previewArticleById={{}}
+        />
+      </>
+    );
+
+    expect(
+      screen.getByText('Showing the most recent popular articles while refresh is unavailable.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Showing the most recent suggested articles while refresh is unavailable.')
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Reset procedure').length).toBeGreaterThan(0);
   });
 });
