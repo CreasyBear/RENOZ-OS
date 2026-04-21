@@ -51,6 +51,7 @@ import { Route as AuthenticatedCommunicationsIndexRouteImport } from './routes/_
 import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedActivitiesIndexRouteImport } from './routes/_authenticated/activities/index'
+import { Route as ApiOauthDashboardRouteImport } from './routes/api/oauth/dashboard'
 import { Route as AuthenticatedSupportKnowledgeBaseRouteImport } from './routes/_authenticated/support/knowledge-base'
 import { Route as AuthenticatedSupportIssuesBoardRouteImport } from './routes/_authenticated/support/issues-board'
 import { Route as AuthenticatedSupportDashboardRouteImport } from './routes/_authenticated/support/dashboard'
@@ -410,6 +411,11 @@ const AuthenticatedActivitiesIndexRoute =
     path: '/activities/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const ApiOauthDashboardRoute = ApiOauthDashboardRouteImport.update({
+  id: '/api/oauth/dashboard',
+  path: '/api/oauth/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSupportKnowledgeBaseRoute =
   AuthenticatedSupportKnowledgeBaseRouteImport.update({
     id: '/support/knowledge-base',
@@ -1248,6 +1254,7 @@ export interface FileRoutesByFullPath {
   '/support/dashboard': typeof AuthenticatedSupportDashboardRoute
   '/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
   '/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
+  '/api/oauth/dashboard': typeof ApiOauthDashboardRoute
   '/activities/': typeof AuthenticatedActivitiesIndexRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/approvals/': typeof AuthenticatedApprovalsIndexRoute
@@ -1416,6 +1423,7 @@ export interface FileRoutesByTo {
   '/support/dashboard': typeof AuthenticatedSupportDashboardRoute
   '/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
   '/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
+  '/api/oauth/dashboard': typeof ApiOauthDashboardRoute
   '/activities': typeof AuthenticatedActivitiesIndexRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/approvals': typeof AuthenticatedApprovalsIndexRoute
@@ -1587,6 +1595,7 @@ export interface FileRoutesById {
   '/_authenticated/support/dashboard': typeof AuthenticatedSupportDashboardRoute
   '/_authenticated/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
   '/_authenticated/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
+  '/api/oauth/dashboard': typeof ApiOauthDashboardRoute
   '/_authenticated/activities/': typeof AuthenticatedActivitiesIndexRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute
@@ -1758,6 +1767,7 @@ export interface FileRouteTypes {
     | '/support/dashboard'
     | '/support/issues-board'
     | '/support/knowledge-base'
+    | '/api/oauth/dashboard'
     | '/activities/'
     | '/admin/'
     | '/approvals/'
@@ -1926,6 +1936,7 @@ export interface FileRouteTypes {
     | '/support/dashboard'
     | '/support/issues-board'
     | '/support/knowledge-base'
+    | '/api/oauth/dashboard'
     | '/activities'
     | '/admin'
     | '/approvals'
@@ -2096,6 +2107,7 @@ export interface FileRouteTypes {
     | '/_authenticated/support/dashboard'
     | '/_authenticated/support/issues-board'
     | '/_authenticated/support/knowledge-base'
+    | '/api/oauth/dashboard'
     | '/_authenticated/activities/'
     | '/_authenticated/admin/'
     | '/_authenticated/approvals/'
@@ -2197,6 +2209,7 @@ export interface RootRouteChildren {
   FeedbackTokenRoute: typeof FeedbackTokenRoute
   PortalConfirmRoute: typeof PortalConfirmRoute
   PortalIndexRoute: typeof PortalIndexRoute
+  ApiOauthDashboardRoute: typeof ApiOauthDashboardRoute
   ApiAiCostBudgetRoute: typeof ApiAiCostBudgetRoute
   ApiOauthSyncConnectionIdRoute: typeof ApiOauthSyncConnectionIdRoute
   ApiTrackOpenEmailIdRoute: typeof ApiTrackOpenEmailIdRoute
@@ -2499,6 +2512,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/activities/'
       preLoaderRoute: typeof AuthenticatedActivitiesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/oauth/dashboard': {
+      id: '/api/oauth/dashboard'
+      path: '/api/oauth/dashboard'
+      fullPath: '/api/oauth/dashboard'
+      preLoaderRoute: typeof ApiOauthDashboardRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/support/knowledge-base': {
       id: '/_authenticated/support/knowledge-base'
@@ -3778,6 +3798,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackTokenRoute: FeedbackTokenRoute,
   PortalConfirmRoute: PortalConfirmRoute,
   PortalIndexRoute: PortalIndexRoute,
+  ApiOauthDashboardRoute: ApiOauthDashboardRoute,
   ApiAiCostBudgetRoute: ApiAiCostBudgetRoute,
   ApiOauthSyncConnectionIdRoute: ApiOauthSyncConnectionIdRoute,
   ApiTrackOpenEmailIdRoute: ApiTrackOpenEmailIdRoute,
