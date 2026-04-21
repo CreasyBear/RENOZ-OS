@@ -10,7 +10,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import {
+  resolveReadResult,
+} from '@/lib/read-path-policy';
 import {
   getWMSDashboard,
   getStockByCategory,
@@ -60,22 +62,22 @@ export function useWMSDashboard() {
     queryFn: async () => {
       inventoryLogger.debug('[useWMSDashboard] queryFn started');
       try {
-        const result = await getWMSDashboard({ data: {} });
-        inventoryLogger.debug('[useWMSDashboard] getWMSDashboard returned', {
-          status: result == null ? 'null/undefined' : 'ok',
-          totalValue: result?.totals?.totalValue,
-        });
-        if (result == null) {
-          throw new Error('WMS dashboard returned no data');
-        }
-        return result;
-      } catch (err) {
-        inventoryLogger.error('[useWMSDashboard] queryFn error', err);
-        throw normalizeReadQueryError(err, {
+        return await resolveReadResult(async () => {
+          const result = await getWMSDashboard({ data: {} });
+          inventoryLogger.debug('[useWMSDashboard] getWMSDashboard returned', {
+            status: result == null ? 'null/undefined' : 'ok',
+            totalValue: result?.totals?.totalValue,
+          });
+          return result;
+        }, {
+          message: 'WMS dashboard returned no data',
           contractType: 'always-shaped',
           fallbackMessage:
             'Inventory dashboard data is temporarily unavailable. Please refresh and try again.',
         });
+      } catch (err) {
+        inventoryLogger.error('[useWMSDashboard] queryFn error', err);
+        throw err;
       }
     },
     staleTime: 60 * 1000, // 1 minute
@@ -101,21 +103,13 @@ export function useWMSDashboard() {
 export function useStockByCategory() {
   return useQuery({
     queryKey: queryKeys.inventory.stockByCategory(),
-    queryFn: async () => {
-      try {
-        const result = await getStockByCategory();
-        if (result == null) {
-          throw new Error('Stock by category returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
-          contractType: 'always-shaped',
-          fallbackMessage:
-            'Stock-by-category data is temporarily unavailable. Please refresh and try again.',
-        });
-      }
-    },
+    queryFn: () =>
+      resolveReadResult(() => getStockByCategory(), {
+        message: 'Stock by category returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage:
+          'Stock-by-category data is temporarily unavailable. Please refresh and try again.',
+      }),
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -139,21 +133,13 @@ export function useStockByCategory() {
 export function useStockByLocation() {
   return useQuery({
     queryKey: queryKeys.inventory.stockByLocation(),
-    queryFn: async () => {
-      try {
-        const result = await getStockByLocation();
-        if (result == null) {
-          throw new Error('Stock by location returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
-          contractType: 'always-shaped',
-          fallbackMessage:
-            'Stock-by-location data is temporarily unavailable. Please refresh and try again.',
-        });
-      }
-    },
+    queryFn: () =>
+      resolveReadResult(() => getStockByLocation(), {
+        message: 'Stock by location returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage:
+          'Stock-by-location data is temporarily unavailable. Please refresh and try again.',
+      }),
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -180,23 +166,19 @@ export function useStockByLocation() {
 export function useRecentMovementsTimeline(limit = 10) {
   return useQuery({
     queryKey: queryKeys.inventory.recentMovementsTimeline(limit),
-    queryFn: async () => {
-      try {
-        const result = await getRecentMovementsTimeline({
-          data: { limit }
-        });
-        if (result == null) {
-          throw new Error('Recent inventory movements returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          getRecentMovementsTimeline({
+            data: { limit },
+          }),
+        {
+          message: 'Recent inventory movements returned no data',
           contractType: 'always-shaped',
           fallbackMessage:
             'Recent inventory movements are temporarily unavailable. Please refresh and try again.',
-        });
-      }
-    },
+        }
+      ),
     staleTime: 30 * 1000, // 30 seconds
   });
 }

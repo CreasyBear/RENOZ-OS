@@ -171,6 +171,33 @@ export function requireReadResult<T>(
   );
 }
 
+export async function resolveReadResult<T>(
+  load: () => Promise<T | null | undefined>,
+  options: {
+    message: string;
+    fallbackMessage: string;
+    contractType: ReadContractType;
+    notFoundMessage?: string;
+    code?: string;
+    statusCode?: number;
+  }
+): Promise<T> {
+  try {
+    const result = await load();
+    return requireReadResult(result, options);
+  } catch (error) {
+    if (isReadQueryError(error)) {
+      throw error;
+    }
+
+    throw normalizeReadQueryError(error, {
+      fallbackMessage: options.fallbackMessage,
+      contractType: options.contractType,
+      notFoundMessage: options.notFoundMessage,
+    });
+  }
+}
+
 export function isReadQueryError(error: unknown): error is ReadQueryError {
   return (
     error instanceof Error &&

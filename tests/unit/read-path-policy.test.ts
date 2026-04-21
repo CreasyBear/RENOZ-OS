@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyReadFailureKind,
   normalizeReadQueryError,
+  resolveReadResult,
 } from '@/lib/read-path-policy';
 
 describe('read-path-policy', () => {
@@ -46,5 +47,28 @@ describe('read-path-policy', () => {
 
     expect(error.failureKind).toBe('rate-limited');
     expect(error.code).toBe('RATE_LIMIT');
+  });
+
+  it('resolves read results through the shared null-sentinel bridge', async () => {
+    await expect(
+      resolveReadResult(async () => ({ items: [] as string[] }), {
+        message: 'Items returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage: 'Items are temporarily unavailable. Please refresh and try again.',
+      })
+    ).resolves.toEqual({ items: [] });
+
+    await expect(
+      resolveReadResult(async () => null, {
+        message: 'Item detail returned no data',
+        contractType: 'detail-not-found',
+        fallbackMessage: 'Item details are temporarily unavailable. Please refresh and try again.',
+        notFoundMessage: 'The requested item could not be found.',
+      })
+    ).rejects.toMatchObject({
+      failureKind: 'not-found',
+      contractType: 'detail-not-found',
+      message: 'The requested item could not be found.',
+    });
   });
 });

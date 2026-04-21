@@ -12,7 +12,9 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys, type SupplierFilters } from '@/lib/query-keys';
-import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import {
+  resolveReadResult,
+} from '@/lib/read-path-policy';
 import {
   listSuppliers,
   getSupplier,
@@ -52,20 +54,12 @@ export function useSuppliers(options: UseSuppliersOptions = {}) {
 
   return useQuery<ListSuppliersResult>({
     queryKey: queryKeys.suppliers.suppliersListFiltered(filters),
-    queryFn: async () => {
-      try {
-        const result = await listSuppliers({ data: filters as Record<string, unknown> });
-        if (result == null) {
-          throw new Error('Supplier list returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
-          contractType: 'always-shaped',
-          fallbackMessage: 'Supplier list is temporarily unavailable. Please refresh and try again.',
-        });
-      }
-    },
+    queryFn: () =>
+      resolveReadResult(() => listSuppliers({ data: filters as Record<string, unknown> }), {
+        message: 'Supplier list returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage: 'Supplier list is temporarily unavailable. Please refresh and try again.',
+      }),
     enabled,
     staleTime: 30 * 1000,
   });
@@ -114,22 +108,18 @@ export function usePriceLists(options: UsePriceListsOptions) {
       sortBy,
       sortOrder,
     }),
-    queryFn: async () => {
-      try {
-        const result = await listPriceLists({
-          data: { supplierId, productId, status, isPreferred, page, pageSize, sortBy, sortOrder },
-        });
-        if (result == null) {
-          throw new Error('Price lists returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          listPriceLists({
+            data: { supplierId, productId, status, isPreferred, page, pageSize, sortBy, sortOrder },
+          }),
+        {
+          message: 'Price lists returned no data',
           contractType: 'always-shaped',
           fallbackMessage: 'Supplier pricing is temporarily unavailable. Please refresh and try again.',
-        });
-      }
-    },
+        }
+      ),
     enabled: enabled && (!!supplierId || !!productId),
     staleTime: 60 * 1000,
   });
@@ -144,23 +134,19 @@ export function useSupplier(id: string, options: { enabled?: boolean } = {}) {
 
   return useQuery({
     queryKey: queryKeys.suppliers.supplierDetail(id),
-    queryFn: async () => {
-      try {
-        const result = await getSupplier({
-          data: { id },
-        });
-        if (result == null) {
-          throw new Error('Supplier detail returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          getSupplier({
+            data: { id },
+          }),
+        {
+          message: 'Supplier detail returned no data',
           contractType: 'detail-not-found',
           fallbackMessage: 'Supplier details are temporarily unavailable. Please refresh and try again.',
           notFoundMessage: 'The requested supplier could not be found.',
-        });
-      }
-    },
+        }
+      ),
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -171,23 +157,19 @@ export function useSupplierPerformance(id: string, options: { enabled?: boolean 
 
   return useQuery({
     queryKey: queryKeys.suppliers.supplierPerformance(id),
-    queryFn: async () => {
-      try {
-        const result = await getSupplierPerformance({
-          data: { supplierId: id },
-        });
-        if (result == null) {
-          throw new Error('Supplier performance returned no data');
-        }
-        return result;
-      } catch (error) {
-        throw normalizeReadQueryError(error, {
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          getSupplierPerformance({
+            data: { supplierId: id },
+          }),
+        {
+          message: 'Supplier performance returned no data',
           contractType: 'always-shaped',
           fallbackMessage:
             'Supplier performance metrics are temporarily unavailable. Please refresh and try again.',
-        });
-      }
-    },
+        }
+      ),
     enabled: enabled && !!id,
     staleTime: 5 * 60 * 1000,
   });

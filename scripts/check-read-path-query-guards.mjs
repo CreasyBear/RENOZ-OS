@@ -1,22 +1,157 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+/* global console, process */
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const baselinePath = path.resolve('docs/reliability/baselines/read-path-query-guards.txt');
 const shouldUpdateBaseline = process.argv.includes('--update-baseline');
 
-function getOffenderFiles() {
-  try {
-    const output = execSync(
-      "rg -l -P \"if \\(result == null\\)\\s*throw new Error\\(|throw new Error\\('Query returned no data'\\)|throw new Error\\(\\\"Query returned no data\\\"\\)|throw normalizeQueryError\\(\" src/hooks",
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
-    ).trim();
-    return output ? output.split('\n').sort() : [];
-  } catch (error) {
-    const output = String(error?.stdout ?? '').trim();
-    return output ? output.split('\n').sort() : [];
+const hooksRoot = path.resolve('src/hooks');
+const rawNullSentinelPattern =
+  /if\s*\(result == null\)\s*(?:\{\s*)?throw new Error\(|throw new Error\(['"]Query returned no data['"]\)|throw normalizeQueryError\(/;
+const queryFnStartPattern = /queryFn:\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*\{/g;
+
+function listHookFiles(dir) {
+  const files = [];
+
+  for (const entry of readdirSync(dir)) {
+    const fullPath = path.join(dir, entry);
+    const stats = statSync(fullPath);
+
+    if (stats.isDirectory()) {
+      files.push(...listHookFiles(fullPath));
+      continue;
+    }
+
+    if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry)) {
+      files.push(fullPath);
+    }
   }
+
+  return files;
+}
+
+function findMatchingBrace(source, openingBraceIndex) {
+  let depth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inTemplateString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let escaped = false;
+
+  for (let index = openingBraceIndex; index < source.length; index += 1) {
+    const char = source[index];
+    const nextChar = source[index + 1];
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (char === '*' && nextChar === '/') {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (!escaped && char === "'") {
+        inSingleQuote = false;
+      }
+      escaped = !escaped && char === '\\';
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (!escaped && char === '"') {
+        inDoubleQuote = false;
+      }
+      escaped = !escaped && char === '\\';
+      continue;
+    }
+
+    if (inTemplateString) {
+      if (!escaped && char === '`') {
+        inTemplateString = false;
+      }
+      escaped = !escaped && char === '\\';
+      continue;
+    }
+
+    escaped = false;
+
+    if (char === '/' && nextChar === '/') {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (char === "'") {
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (char === '`') {
+      inTemplateString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function fileHasRawReadPathSentinel(source) {
+  const matches = source.matchAll(queryFnStartPattern);
+
+  for (const match of matches) {
+    const blockStart = match.index + match[0].length - 1;
+    const blockEnd = findMatchingBrace(source, blockStart);
+    if (blockEnd === -1) {
+      continue;
+    }
+
+    const queryFnBody = source.slice(blockStart, blockEnd + 1);
+    if (rawNullSentinelPattern.test(queryFnBody)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getOffenderFiles() {
+  return listHookFiles(hooksRoot)
+    .filter((filePath) => fileHasRawReadPathSentinel(readFileSync(filePath, 'utf8')))
+    .map((filePath) => path.relative(process.cwd(), filePath))
+    .sort();
 }
 
 const offenderFiles = getOffenderFiles();
