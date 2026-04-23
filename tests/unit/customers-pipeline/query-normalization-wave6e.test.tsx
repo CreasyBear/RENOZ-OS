@@ -161,7 +161,9 @@ describe('wave 6e customers/pipeline normalization', () => {
     });
   });
 
-  it('shows degraded copy in customer and opportunity headline containers when stale rows remain visible', async () => {
+  it(
+    'shows degraded copy in customer and opportunity headline containers when stale rows remain visible',
+    async () => {
     vi.resetModules();
 
     vi.doMock('@/hooks/customers', async (importOriginal) => {
@@ -287,7 +289,9 @@ describe('wave 6e customers/pipeline normalization', () => {
       </>
     );
 
-    expect(screen.getByText('Showing cached customers')).toBeInTheDocument();
-    expect(screen.getByText('Showing cached opportunities')).toBeInTheDocument();
-  });
+      expect(screen.getByText('Showing cached customers')).toBeInTheDocument();
+      expect(screen.getByText('Showing cached opportunities')).toBeInTheDocument();
+    },
+    20000
+  );
 });

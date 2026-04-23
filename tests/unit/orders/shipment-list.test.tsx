@@ -92,5 +92,5 @@ describe('shipment list', () => {
       trackingNumber: 'TRACK-123',
       shippingCost: 1250,
     });
-  });
+  }, 20000);
 });

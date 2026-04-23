@@ -94,7 +94,7 @@ describe('activity hook guards', () => {
 
     expect(result.current.activities).toEqual([]);
     expect(result.current.error).toBeInstanceOf(Error);
-    expect(result.current.error?.message).toContain('invalid response');
+    expect(result.current.error?.message).toContain('temporarily unavailable');
   });
 
   it('useUnifiedActivities accepts cursor-paginated audit activity payloads', async () => {

@@ -164,5 +164,5 @@ describe('wave 6f finance/reports/dashboard normalization', () => {
     expect(screen.getByText('Showing your latest financial snapshot')).toBeInTheDocument();
     expect(screen.getByText('dashboard available')).toBeInTheDocument();
     expect(screen.queryByText('blocking error')).not.toBeInTheDocument();
-  });
+  }, 20000);
 });

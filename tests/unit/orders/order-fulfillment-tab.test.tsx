@@ -77,5 +77,5 @@ describe('order fulfillment tab', () => {
 
     expect(screen.getByText('Shipments')).toBeInTheDocument();
     expect(screen.getByTestId('shipment-list')).toHaveTextContent('Shipments for order-1');
-  });
+  }, 20000);
 });

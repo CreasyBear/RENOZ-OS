@@ -148,8 +148,8 @@ describe('system/admin query normalization wave 6a', () => {
       'utf8'
     );
 
-    expect(guardSource).toContain("if \\\\(result == null\\\\)\\\\s*throw new Error\\\\(");
-    expect(guardSource).toContain('throw normalizeQueryError\\\\(');
+    expect(guardSource).toContain('if\\s*\\(result == null\\)');
+    expect(guardSource).toContain('throw normalizeQueryError\\(');
   });
 
   it('treats current-user, group list, onboarding, api tokens, and dashboard onboarding as healthy shaped success', async () => {

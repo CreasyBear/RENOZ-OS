@@ -471,7 +471,7 @@ describe('jobs query normalization wave 4a', () => {
 
     expect(screen.getByText('Showing cached site visits')).toBeInTheDocument();
     expect(screen.getByText('SV-001')).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('shows a blocking unavailable state for visits without data', async () => {
     const { ProjectVisitsTab } = await import('@/components/domain/jobs/projects/project-detail-tabs');

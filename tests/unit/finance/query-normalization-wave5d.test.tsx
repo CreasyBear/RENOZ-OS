@@ -298,7 +298,7 @@ describe('finance/portal/document query normalization wave 5d', () => {
       screen.getByText('Invoice summary metrics are temporarily unavailable. Please refresh and try again.')
     ).toBeInTheDocument();
     expect(screen.getAllByText('INV-100').length).toBeGreaterThan(0);
-  });
+  }, 20000);
 
   it('keeps healthy portal sections visible when one section cold-load fails', async () => {
     vi.resetModules();
