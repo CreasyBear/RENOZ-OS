@@ -42,7 +42,7 @@ bun run release:verify
 ## Deploy Configuration
 
 - **Platform**: Vercel
-- **Base branch**: `main`
+- **Base branch**: `master`
 - **Build command**: `bun run build:vercel`
 - **Pre-merge local gate**: `bun run predeploy`
 - **Release verification**: `bun run release:verify`

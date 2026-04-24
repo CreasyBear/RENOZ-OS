@@ -70,7 +70,7 @@ bun run release:verify
 
 This repo is set up for a single production deployment model:
 
-- merge into `main`
+- merge into `master`
 - GitHub Actions runs the canonical checks
 - GitHub Actions deploys to Vercel via Vercel CLI
 - post-deploy verification runs via the production probe
