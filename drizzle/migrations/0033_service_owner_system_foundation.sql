@@ -92,6 +92,7 @@ ALTER TABLE "service_linkage_reviews" ADD CONSTRAINT "service_linkage_reviews_pr
 ALTER TABLE "service_linkage_reviews" ADD CONSTRAINT "service_linkage_reviews_commercial_customer_id_customers_id_fk" FOREIGN KEY ("commercial_customer_id") REFERENCES "public"."customers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "service_linkage_reviews" ADD CONSTRAINT "service_linkage_reviews_resolved_service_system_id_service_systems_id_fk" FOREIGN KEY ("resolved_service_system_id") REFERENCES "public"."service_systems"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "service_linkage_reviews" ADD CONSTRAINT "service_linkage_reviews_resolved_by_users_id_fk" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issues" ADD CONSTRAINT "issues_service_system_id_service_systems_id_fk" FOREIGN KEY ("service_system_id") REFERENCES "public"."service_systems"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_service_owners_org" ON "service_owners" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "idx_service_owners_org_name" ON "service_owners" USING btree ("organization_id","normalized_full_name");--> statement-breakpoint
 CREATE INDEX "idx_service_owners_org_email" ON "service_owners" USING btree ("organization_id","normalized_email");--> statement-breakpoint
