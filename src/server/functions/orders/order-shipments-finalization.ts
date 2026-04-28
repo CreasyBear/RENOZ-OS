@@ -1,6 +1,6 @@
 'use server'
 
-import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -25,7 +25,6 @@ import {
   findSerializedItemBySerial,
   linkSerializedItemToShipmentItem,
   releaseSerializedItemAllocation,
-  upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
 import {
   assertSerializedInventoryCostIntegrity,
@@ -39,9 +38,12 @@ import { generateTrackingUrl } from './order-shipments-shared';
 import type { OrderShipment } from './order-shipment-types';
 import { recomputeOrderFulfillmentStatus } from './order-fulfillment-status';
 import {
-  planInventoryConsumption,
   planInventoryRestoration,
 } from './order-shipment-inventory-plans';
+import {
+  planReservedInventoryConsumption,
+  readActiveReservationsForLineItems,
+} from './order-inventory-reservations';
 
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
 type ReopenShipmentInput = z.infer<typeof reopenShipmentSchema>;
@@ -110,6 +112,10 @@ export async function markShipmentAsShipped(
     );
 
     const lineItemIds = sortedItems.map((item) => item.orderLineItemId);
+    const activeReservationsByLineItem = await readActiveReservationsForLineItems(tx, {
+      organizationId: ctx.organizationId,
+      orderLineItemIds: lineItemIds,
+    });
     const canonicalAllocations =
       lineItemIds.length > 0
         ? await tx
@@ -352,30 +358,29 @@ export async function markShipmentAsShipped(
         continue;
       }
 
-      const inventoryRows = await tx
-        .select()
-        .from(inventory)
-        .where(
-          and(
-            eq(inventory.productId, lineItemWithProduct.productId),
-            eq(inventory.organizationId, ctx.organizationId),
-            isNull(inventory.serialNumber),
-            gt(inventory.quantityOnHand, 0)
-          )
-        )
-        .orderBy(asc(inventory.createdAt), asc(inventory.id))
-        .for('update');
-
-      const consumptionPlan = planInventoryConsumption(
-        inventoryRows,
+      const consumptionPlan = planReservedInventoryConsumption(
+        activeReservationsByLineItem.get(item.orderLineItemId) ?? [],
         Number(item.quantity),
         lineItemWithProduct.productName ?? `Line item ${item.orderLineItemId}`
       );
 
       for (const step of consumptionPlan) {
-        const inventoryItem = inventoryRows.find((row) => row.id === step.inventoryId);
+        const [inventoryItem] = await tx
+          .select()
+          .from(inventory)
+          .where(
+            and(
+              eq(inventory.id, step.inventoryId),
+              eq(inventory.organizationId, ctx.organizationId)
+            )
+          )
+          .for('update')
+          .limit(1);
+
         if (!inventoryItem) {
-          continue;
+          throw new ValidationError('Reserved inventory row not found', {
+            inventory: [`Inventory row ${step.inventoryId} is missing for "${lineItemWithProduct.productName}".`],
+          });
         }
 
         const movementCogs = await consumeLayersFIFO(tx, {
@@ -397,6 +402,7 @@ export async function markShipmentAsShipped(
           .set({
             quantityOnHand: sql`${inventory.quantityOnHand} - ${step.quantity}`,
             quantityAllocated: sql`greatest(${inventory.quantityAllocated} - ${step.quantity}, 0)`,
+            status: sql`CASE WHEN greatest(${inventory.quantityAllocated} - ${step.quantity}, 0) > 0 THEN 'allocated'::inventory_status ELSE 'available'::inventory_status END`,
             updatedBy: ctx.user.id,
           })
           .where(eq(inventory.id, inventoryItem.id));
@@ -424,22 +430,14 @@ export async function markShipmentAsShipped(
           referenceType: 'shipment',
           referenceId: updatedShipment.id,
           metadata: {
+            orderId: existing.orderId,
+            orderLineItemId: item.orderLineItemId,
             shipmentId: updatedShipment.id,
+            source: 'order_shipment',
           },
           notes: `Shipment ${updatedShipment.shipmentNumber}`,
           createdBy: ctx.user.id,
         });
-      }
-
-      const primaryInventoryId = consumptionPlan[0]?.inventoryId;
-      if (primaryInventoryId) {
-        await upsertSerializedItemForInventory(tx, {
-          organizationId: ctx.organizationId,
-          productId: lineItemWithProduct.productId,
-          inventoryId: primaryInventoryId,
-          serialNumber: `LOT-${item.id}`,
-          userId: ctx.user.id,
-        }).catch(() => undefined);
       }
     }
 
@@ -582,6 +580,7 @@ export async function reopenShipmentHandler({
             inventoryId: inventoryMovements.inventoryId,
             productId: inventoryMovements.productId,
             quantity: inventoryMovements.quantity,
+            metadata: inventoryMovements.metadata,
           })
           .from(inventoryMovements)
           .where(
@@ -594,6 +593,14 @@ export async function reopenShipmentHandler({
           )
           .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.id))
       : [];
+    const remainingMovementRowsByLineItem = new Map<
+      string,
+      Array<{
+        id: string;
+        inventoryId: string;
+        quantityRemaining: number;
+      }>
+    >();
     const remainingMovementRowsByProduct = new Map<
       string,
       Array<{
@@ -603,12 +610,20 @@ export async function reopenShipmentHandler({
       }>
     >();
     for (const movement of shippedInventoryMovements) {
-      const current = remainingMovementRowsByProduct.get(movement.productId) ?? [];
-      current.push({
+      const movementRow = {
         id: movement.id,
         inventoryId: movement.inventoryId,
         quantityRemaining: Math.abs(Number(movement.quantity ?? 0)),
-      });
+      };
+      const metadata = (movement.metadata ?? {}) as { orderLineItemId?: unknown };
+      if (typeof metadata.orderLineItemId === 'string' && metadata.orderLineItemId.length > 0) {
+        const current = remainingMovementRowsByLineItem.get(metadata.orderLineItemId) ?? [];
+        current.push({ ...movementRow });
+        remainingMovementRowsByLineItem.set(metadata.orderLineItemId, current);
+      }
+
+      const current = remainingMovementRowsByProduct.get(movement.productId) ?? [];
+      current.push(movementRow);
       remainingMovementRowsByProduct.set(movement.productId, current);
     }
 
@@ -626,8 +641,17 @@ export async function reopenShipmentHandler({
         .select({
           productId: orderLineItems.productId,
           productName: orderLineItems.description,
+          isSerialized: products.isSerialized,
         })
         .from(orderLineItems)
+        .leftJoin(
+          products,
+          and(
+            eq(orderLineItems.productId, products.id),
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt)
+          )
+        )
         .where(eq(orderLineItems.id, item.orderLineItemId))
         .limit(1);
 
@@ -636,7 +660,9 @@ export async function reopenShipmentHandler({
       }
 
       const movementRowsForProduct =
-        remainingMovementRowsByProduct.get(lineItemWithProduct.productId) ?? [];
+        remainingMovementRowsByLineItem.get(item.orderLineItemId) ??
+        remainingMovementRowsByProduct.get(lineItemWithProduct.productId) ??
+        [];
       const restorationPlan = planInventoryRestoration(
         movementRowsForProduct.map((movement) => ({
           id: movement.id,
@@ -687,9 +713,50 @@ export async function reopenShipmentHandler({
           totalCost: 0,
           referenceType: 'shipment',
           referenceId: existing.id,
+          metadata: {
+            orderId: existing.orderId,
+            orderLineItemId: item.orderLineItemId,
+            shipmentId: existing.id,
+            source: 'order_shipment_reopen',
+          },
           notes: `Shipment ${existing.shipmentNumber} reopened`,
           createdBy: ctx.user.id,
         });
+
+        if (!lineItemWithProduct.isSerialized) {
+          await tx
+            .update(inventory)
+            .set({
+              quantityAllocated: sql`${inventory.quantityAllocated} + ${step.quantity}`,
+              status: 'allocated',
+              updatedBy: ctx.user.id,
+            })
+            .where(eq(inventory.id, inventoryItem.id));
+
+          const previousAvailableAfterReturn =
+            Number(inventoryItem.quantityAvailable ?? 0) + Number(step.quantity);
+
+          await tx.insert(inventoryMovements).values({
+            organizationId: ctx.organizationId,
+            inventoryId: inventoryItem.id,
+            productId: inventoryItem.productId,
+            locationId: inventoryItem.locationId,
+            movementType: 'allocate',
+            quantity: -step.quantity,
+            previousQuantity: previousAvailableAfterReturn,
+            newQuantity: previousAvailableAfterReturn - step.quantity,
+            referenceType: 'order_line_item',
+            referenceId: item.orderLineItemId,
+            metadata: {
+              orderId: existing.orderId,
+              orderLineItemId: item.orderLineItemId,
+              shipmentId: existing.id,
+              source: 'order_shipment_reopen',
+            },
+            notes: `Shipment ${existing.shipmentNumber} reopened for correction`,
+            createdBy: ctx.user.id,
+          });
+        }
 
         const consumedMovement = movementRowsForProduct.find(
           (movement) => movement.id === step.movementId

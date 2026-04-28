@@ -88,6 +88,10 @@ export interface MovementMetadata {
   poNumber?: string;
   /** Shipment ID for fulfillment movements */
   shipmentId?: string;
+  /** Order line item ID for fulfillment reservations */
+  orderLineItemId?: string;
+  /** Internal workflow that wrote the movement */
+  source?: "order_picking" | "order_unpick" | "order_shipment" | "order_shipment_reopen";
   /** RMA ID for return movements */
   rmaId?: string;
   /** Manual receive reason (canonical inventory receive path) */
