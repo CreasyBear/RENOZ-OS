@@ -232,6 +232,27 @@
       "when": 1776314686746,
       "tag": "0035_rma_remedy_execution_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1777036800000,
+      "tag": "0036_scheduled_email_failure_trace",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1777040400000,
+      "tag": "0037_finance_projection_trace",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1777044000000,
+      "tag": "0038_campaign_recipients_customer_id",
+      "breakpoints": true
     }
   ]
 }

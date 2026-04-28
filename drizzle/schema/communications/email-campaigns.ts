@@ -26,7 +26,7 @@ import {
   standardRlsPolicies,
 } from "../_shared/patterns";
 import { users } from "../users/users";
-import { contacts } from "../customers/customers";
+import { contacts, customers } from "../customers/customers";
 import { organizations } from "../settings/organizations";
 
 // ============================================================================
@@ -201,6 +201,9 @@ export const campaignRecipients = pgTable(
     contactId: uuid("contact_id").references(() => contacts.id, {
       onDelete: "set null",
     }),
+    customerId: uuid("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
     email: text("email").notNull(),
     name: text("name"),
 
@@ -240,6 +243,7 @@ export const campaignRecipients = pgTable(
 
     // Contact lookup
     contactIdx: index("idx_campaign_recipients_contact").on(table.contactId),
+    customerIdx: index("idx_campaign_recipients_customer").on(table.customerId),
 
     // Email uniqueness within campaign (prevent duplicates)
     campaignEmailUnique: uniqueIndex(

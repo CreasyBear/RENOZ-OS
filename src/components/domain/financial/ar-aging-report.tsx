@@ -152,7 +152,8 @@ export const ARAgingReport = memo(function ARAgingReport({
         <div>
           <h2 className="text-2xl font-bold">AR Aging Report</h2>
           <p className="text-muted-foreground">
-            Total Outstanding: <FormatAmount amount={report.totals.totalOutstanding} />
+            Order due date/payment terms aging. Total Outstanding:{' '}
+            <FormatAmount amount={report.totals.totalOutstanding} />
           </p>
         </div>
         <div className="flex items-center gap-4">

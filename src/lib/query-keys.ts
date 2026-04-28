@@ -1602,8 +1602,8 @@ export const queryKeys = {
     xero: () => [...queryKeys.financial.all, 'xero'] as const,
     xeroStatus: (orderId: string) =>
       [...queryKeys.financial.xero(), 'status', orderId] as const,
-    xeroSyncs: (status?: string) =>
-      [...queryKeys.financial.xero(), 'syncs', status ?? ''] as const,
+    xeroSyncs: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.xero(), 'syncs', filters ?? {}] as const,
     xeroIntegration: () =>
       [...queryKeys.financial.xero(), 'integration'] as const,
     xeroPaymentEvents: () =>
@@ -1614,8 +1614,8 @@ export const queryKeys = {
       [...queryKeys.financial.xero(), 'contact-search', customerId, query] as const,
 
     // Statements
-    statements: (customerId?: string) =>
-      [...queryKeys.financial.all, 'statements', customerId ?? ''] as const,
+    statements: (customerId?: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'statements', customerId ?? '', filters ?? {}] as const,
     statement: (statementId: string) =>
       [...queryKeys.financial.all, 'statement', statementId] as const,
     statementHistory: (customerId: string, filters?: { page?: number; pageSize?: number; dateFrom?: string; dateTo?: string }) =>
@@ -1625,10 +1625,10 @@ export const queryKeys = {
     deferredBalance: () => [...queryKeys.financial.all, 'deferredBalance'] as const,
     outstandingInvoices: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.all, 'outstandingInvoices', filters ?? {}] as const,
-    recognitions: (state?: string) =>
-      [...queryKeys.financial.all, 'recognitions', state ?? ''] as const,
-    recognitionSummary: (dateFrom?: string, dateTo?: string) =>
-      [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? ''] as const,
+    recognitions: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'recognitions', filters ?? {}] as const,
+    recognitionSummary: (dateFrom?: string, dateTo?: string, groupBy?: string) =>
+      [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? '', groupBy ?? ''] as const,
     topCustomers: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.all, 'topCustomers', filters ?? {}] as const,
   },

@@ -12,7 +12,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useCallback } from "react";
-import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { RouteErrorFallback } from "@/components/layout";
 import { InvoiceListSkeleton } from "@/components/skeletons/invoices";
 import { InvoiceListContainer } from "@/components/domain/invoices";
 import { InvoiceActionButton } from "@/components/domain/invoices/invoice-action-button";
@@ -84,17 +84,7 @@ export const Route = createFileRoute("/_authenticated/financial/invoices/")({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Invoices"
-        description="Manage and track customer invoices"
-      />
-      <PageLayout.Content>
-        <InvoiceListSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <InvoiceListSkeleton />,
 });
 
 // ============================================================================
@@ -135,20 +125,22 @@ function InvoicesPage() {
   );
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Invoices"
-        description="Manage and track customer invoices"
-        actions={<InvoiceActionButton />}
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Invoices</h2>
+          <p className="text-sm text-muted-foreground">
+            Manage and track customer invoice balances.
+          </p>
+        </div>
+        <InvoiceActionButton />
+      </div>
+      <InvoiceListContainer
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        page={search.page}
+        onPageChange={handlePageChange}
       />
-      <PageLayout.Content>
-        <InvoiceListContainer
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          page={search.page}
-          onPageChange={handlePageChange}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    </div>
   );
 }

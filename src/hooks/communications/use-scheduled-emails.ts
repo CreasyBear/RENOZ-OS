@@ -30,7 +30,7 @@ import {
 // ============================================================================
 
 export interface UseScheduledEmailsOptions {
-  status?: 'pending' | 'sent' | 'cancelled';
+  status?: 'pending' | 'processing' | 'sent' | 'failed' | 'cancelled';
   customerId?: string;
   search?: string;
   limit?: number;
@@ -42,7 +42,13 @@ export function useScheduledEmails(options: UseScheduledEmailsOptions = {}) {
   const { status, customerId, search, limit = 50, offset = 0, enabled = true } = options;
 
   return useQuery({
-    queryKey: queryKeys.communications.scheduledEmailsList({ status, customerId, search }),
+    queryKey: queryKeys.communications.scheduledEmailsList({
+      status,
+      customerId,
+      search,
+      limit,
+      offset,
+    }),
     queryFn: async () => {
       try {
         return await getScheduledEmails({

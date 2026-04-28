@@ -69,12 +69,13 @@ interface CampaignsResponse {
 
 export function useCampaigns(options: UseCampaignsOptions = {}) {
   const { status, search, templateType, dateFrom, dateTo, limit = 50, offset = 0, enabled = true } = options;
+  const getCampaignsFn = useServerFn(getCampaigns);
 
   return useQuery<CampaignsResponse>({
     queryKey: queryKeys.communications.campaignsList({ status, search, templateType, dateFrom, dateTo, limit, offset }),
     queryFn: async () => {
       try {
-        return await getCampaigns({
+        return await getCampaignsFn({
           data: { status, search, templateType, dateFrom, dateTo, limit, offset },
         }) as CampaignsResponse;
       } catch (error) {
@@ -97,12 +98,13 @@ export interface UseCampaignOptions {
 
 export function useCampaign(options: UseCampaignOptions) {
   const { campaignId, enabled = true } = options;
+  const getCampaignByIdFn = useServerFn(getCampaignById);
 
   return useQuery<Campaign | null>({
     queryKey: queryKeys.communications.campaignDetail(campaignId),
     queryFn: async () => {
       try {
-        const result = await getCampaignById({ data: { id: campaignId } });
+        const result = await getCampaignByIdFn({ data: { id: campaignId } });
         return result && typeof result === 'object' && 'id' in result ? (result as Campaign) : null;
       } catch (error) {
         throw normalizeReadQueryError(error, {
@@ -127,12 +129,13 @@ export interface UseCampaignRecipientsOptions {
 
 export function useCampaignRecipients(options: UseCampaignRecipientsOptions) {
   const { campaignId, status, limit = 50, offset = 0, enabled = true } = options;
+  const getCampaignRecipientsFn = useServerFn(getCampaignRecipients);
 
   return useQuery({
-    queryKey: queryKeys.communications.campaignRecipients(campaignId, { status, limit }),
+    queryKey: queryKeys.communications.campaignRecipients(campaignId, { status, limit, offset }),
     queryFn: async () => {
       try {
-        return await getCampaignRecipients({ data: { campaignId, status, limit, offset } });
+        return await getCampaignRecipientsFn({ data: { campaignId, status, limit, offset } });
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
@@ -161,12 +164,13 @@ export interface UseCampaignPreviewOptions {
 
 export function useCampaignPreview(options: UseCampaignPreviewOptions) {
   const { recipientCriteria, sampleSize = 5, enabled = true } = options;
+  const previewCampaignRecipientsFn = useServerFn(previewCampaignRecipients);
 
   return useQuery<PreviewRecipientsResult>({
     queryKey: queryKeys.communications.campaignPreview(recipientCriteria),
     queryFn: async () => {
       try {
-        return await previewCampaignRecipients({
+        return await previewCampaignRecipientsFn({
           data: { recipientCriteria, sampleSize } 
         });
       } catch (error) {

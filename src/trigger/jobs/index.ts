@@ -134,6 +134,12 @@ export {
   type ProcessPaymentRemindersResult,
 } from "./process-payment-reminders";
 
+export {
+  processPaymentSchedulesTask,
+  processPaymentSchedulesJob,
+  type ProcessPaymentSchedulesResult,
+} from "./process-payment-schedules";
+
 // ============================================================================
 // XERO INTEGRATION
 // ============================================================================
@@ -279,6 +285,7 @@ import {
   processOverdueCallsTask,
 } from "./process-scheduled-calls";
 import { processPaymentRemindersTask } from "./process-payment-reminders";
+import { processPaymentSchedulesTask } from "./process-payment-schedules";
 import { syncXeroInvoiceTask, syncXeroContactTask } from "./sync-xero";
 import {
   processScheduledReportsTask,
@@ -333,6 +340,7 @@ export const tasks = [
   processOverdueCallsTask,
   // Payment Reminders
   processPaymentRemindersTask,
+  processPaymentSchedulesTask,
   // Xero
   syncXeroInvoiceTask,
   syncXeroContactTask,

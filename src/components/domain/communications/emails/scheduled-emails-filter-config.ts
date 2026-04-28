@@ -7,7 +7,7 @@
  * @see docs/design-system/FILTER-STANDARDS.md
  */
 
-import { Clock, Mail, XCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Clock, Loader2, Mail, XCircle, CheckCircle2 } from "lucide-react";
 import type { FilterBarConfig, FilterOption } from "@/components/shared/filters";
 import type { ScheduledEmailStatus } from "@/lib/schemas/communications";
 
@@ -34,7 +34,9 @@ export const DEFAULT_SCHEDULED_EMAILS_FILTERS: ScheduledEmailsFiltersState = {
 export const SCHEDULED_EMAIL_STATUS_OPTIONS: FilterOption<ScheduledEmailStatus | "all">[] = [
   { value: "all", label: "All Statuses", icon: Mail },
   { value: "pending", label: "Pending", icon: Clock },
+  { value: "processing", label: "Processing", icon: Loader2 },
   { value: "sent", label: "Sent", icon: CheckCircle2 },
+  { value: "failed", label: "Failed", icon: AlertCircle },
   { value: "cancelled", label: "Cancelled", icon: XCircle },
 ];
 
@@ -79,6 +81,12 @@ export const SCHEDULED_EMAILS_FILTER_CONFIG: FilterBarConfig<ScheduledEmailsFilt
       label: "Sent",
       icon: CheckCircle2,
       filters: { status: "sent" },
+    },
+    {
+      id: "failed",
+      label: "Failed",
+      icon: AlertCircle,
+      filters: { status: "failed" },
     },
     {
       id: "cancelled",

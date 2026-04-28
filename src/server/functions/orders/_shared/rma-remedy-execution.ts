@@ -404,7 +404,7 @@ async function createRefundArtifact({
     });
 
   await updateOrderPaymentStatus(
-    tx as Parameters<Parameters<typeof db.transaction>[0]>[0],
+    tx,
     rma.orderId!,
     ctx.organizationId,
     ctx.user.id
@@ -471,6 +471,15 @@ async function createCreditArtifact({
       id: creditNotes.id,
       label: creditNotes.creditNoteNumber,
     });
+
+  if (input.applyNow && rma.orderId) {
+    await updateOrderPaymentStatus(
+      tx,
+      rma.orderId,
+      ctx.organizationId,
+      ctx.user.id
+    );
+  }
 
   return { creditNote };
 }

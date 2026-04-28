@@ -418,7 +418,9 @@ export const emailStatusEnum = pgEnum("email_status", [
 
 export const scheduledEmailStatusEnum = pgEnum("scheduled_email_status", [
   "pending",
+  "processing",
   "sent",
+  "failed",
   "cancelled",
 ]);
 

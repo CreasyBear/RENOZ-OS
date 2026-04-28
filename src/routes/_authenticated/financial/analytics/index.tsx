@@ -10,12 +10,12 @@
  * Separated from landing page to follow DOMAIN-LANDING-STANDARDS.md pattern.
  *
  * @see docs/design-system/DOMAIN-LANDING-STANDARDS.md
- * @see src/routes/_authenticated/financial/financial-page.tsx (component)
+ * @see src/routes/_authenticated/financial/financial-landing-page.tsx (workbench)
  */
 
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense } from 'react';
-import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
 
 const FinancialAnalyticsPage = lazy(() => import('./financial-analytics-page'));
@@ -23,17 +23,7 @@ const FinancialAnalyticsPage = lazy(() => import('./financial-analytics-page'));
 export const Route = createFileRoute('/_authenticated/financial/analytics/')({
   component: () => (
     <Suspense
-      fallback={
-        <PageLayout variant="full-width">
-          <PageLayout.Header
-            title="Financial Analytics"
-            description="Revenue trends, KPIs, and financial insights"
-          />
-          <PageLayout.Content>
-            <FinancialDashboardSkeleton />
-          </PageLayout.Content>
-        </PageLayout>
-      }
+      fallback={<FinancialDashboardSkeleton />}
     >
       <FinancialAnalyticsPage />
     </Suspense>
@@ -41,15 +31,5 @@ export const Route = createFileRoute('/_authenticated/financial/analytics/')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Financial Analytics"
-        description="Revenue trends, KPIs, and financial insights"
-      />
-      <PageLayout.Content>
-        <FinancialDashboardSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialDashboardSkeleton />,
 });

@@ -746,7 +746,8 @@ export const listRecognitionsByState = createServerFn({ method: 'GET' })
     }
 
     // Run data query and count query in parallel
-    const [results, countResult] = await Promise.all([
+    const countConditions = conditions;
+    const [results, countResult, stateCountRows] = await Promise.all([
       db
         .select({
           id: revenueRecognition.id,
@@ -776,7 +777,25 @@ export const listRecognitionsByState = createServerFn({ method: 'GET' })
       db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(revenueRecognition)
-        .where(and(...conditions)),
+        .where(and(...countConditions)),
+      db
+        .select({
+          state: revenueRecognition.state,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(revenueRecognition)
+        .where(
+          and(
+            eq(revenueRecognition.organizationId, ctx.organizationId),
+            ...(dateFrom
+              ? [gte(revenueRecognition.recognitionDate, dateFrom.toISOString().split('T')[0])]
+              : []),
+            ...(dateTo
+              ? [lte(revenueRecognition.recognitionDate, dateTo.toISOString().split('T')[0])]
+              : [])
+          )
+        )
+        .groupBy(revenueRecognition.state),
     ]);
 
     return {
@@ -788,6 +807,7 @@ export const listRecognitionsByState = createServerFn({ method: 'GET' })
       total: countResult[0]?.count ?? 0,
       page,
       pageSize,
+      stateCounts: Object.fromEntries(stateCountRows.map((row) => [row.state, row.count])),
     };
   });
 

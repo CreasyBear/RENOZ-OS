@@ -10,9 +10,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, type TransactionExecutor } from "@/lib/db";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
-import { orderPayments, orders } from "drizzle/schema";
+import { orderPayments } from "drizzle/schema";
 import {
   insertOrderPaymentSchema,
   updateOrderPaymentSchema,
@@ -20,64 +20,27 @@ import {
 } from "@/lib/schemas/orders/order-payments";
 import { withAuth } from "@/lib/server/protected";
 import { NotFoundError, ValidationError } from "@/lib/server/errors";
+import { recalculateOrderFinancialProjection } from "@/server/functions/financial/_shared/order-financial-projection";
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
 /**
- * Recompute paidAmount from order_payments, then set balanceDue, paymentStatus, paidAt.
- * Call after order total changes (e.g. amendment applied) to keep payment fields in sync.
+ * @deprecated Use recalculateOrderFinancialProjection directly for new finance flows.
+ * Kept as a compatibility wrapper for existing order-domain callers.
  */
 export async function updateOrderPaymentStatus(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: TransactionExecutor,
   orderId: string,
   organizationId: string,
   userId: string
 ) {
-  const [summary] = await tx
-    .select({
-      netAmount: sql<number>`COALESCE(SUM(CASE WHEN ${orderPayments.isRefund} = true THEN -${orderPayments.amount} ELSE ${orderPayments.amount} END), 0)`,
-    })
-    .from(orderPayments)
-    .where(
-      and(
-        eq(orderPayments.orderId, orderId),
-        eq(orderPayments.organizationId, organizationId),
-        isNull(orderPayments.deletedAt)
-      )
-    );
-
-  const [order] = await tx
-    .select({
-      total: orders.total,
-      paidAt: orders.paidAt,
-    })
-    .from(orders)
-    .where(and(eq(orders.id, orderId), eq(orders.organizationId, organizationId)))
-    .limit(1);
-
-  if (!order) {
-    throw new NotFoundError("Order not found");
-  }
-
-  const paidAmount = Number(summary?.netAmount ?? 0);
-  const total = Number(order.total ?? 0);
-  const balanceDue = total - paidAmount;
-  const paymentStatus =
-    balanceDue <= 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
-
-  await tx
-    .update(orders)
-    .set({
-      paidAmount,
-      balanceDue,
-      paymentStatus,
-      paidAt: balanceDue <= 0 ? order.paidAt ?? new Date() : null,
-      updatedAt: new Date(),
-      updatedBy: userId,
-    })
-    .where(eq(orders.id, orderId));
+  return recalculateOrderFinancialProjection(tx, {
+    orderId,
+    organizationId,
+    userId,
+  });
 }
 
 // ============================================================================

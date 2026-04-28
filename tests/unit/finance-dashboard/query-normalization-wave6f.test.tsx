@@ -151,18 +151,17 @@ describe('wave 6f finance/reports/dashboard normalization', () => {
       useTopCustomersByRevenue: () => ({ data: { items: [] }, isLoading: false, error: null }),
       useOutstandingInvoices: () => ({ data: { items: [] }, isLoading: false, error: null }),
     }));
-    vi.doMock('@/components/domain/financial/financial-dashboard', () => ({
-      FinancialDashboard: ({ error }: { error?: Error }) => (
-        <div>{error ? 'blocking error' : 'dashboard available'}</div>
-      ),
+    vi.doMock('@/components/domain/financial/landing', () => ({
+      FinancialTriage: () => <div>triage available</div>,
+      FinancialCommandBar: () => <div>command bar available</div>,
     }));
     vi.doMock('@tanstack/react-router', () => ({ Link: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
-    const { default: FinancialPage } = await import('@/routes/_authenticated/financial/financial-page');
+    const { default: FinancialPage } = await import('@/routes/_authenticated/financial/financial-landing-page');
     render(<FinancialPage />);
 
-    expect(screen.getByText('Showing your latest financial snapshot')).toBeInTheDocument();
-    expect(screen.getByText('dashboard available')).toBeInTheDocument();
-    expect(screen.queryByText('blocking error')).not.toBeInTheDocument();
+    expect(screen.getByText('Work Financial Exceptions First')).toBeInTheDocument();
+    expect(screen.getByText('triage available')).toBeInTheDocument();
+    expect(screen.getByText('command bar available')).toBeInTheDocument();
   }, 20000);
 });

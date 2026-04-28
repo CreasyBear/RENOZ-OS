@@ -50,3 +50,4 @@ supabase/.temp/
 .zencoder/
 skills/
 scripts/lv51-lv-b-register-to-csv.mjs
+.gstack/

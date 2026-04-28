@@ -77,6 +77,8 @@ export function ScheduleEmailDialog({
   open,
   onOpenChange,
   initialData,
+  isLoadingInitialData,
+  initialDataError,
   defaultRecipient,
   defaultCustomerId,
   defaultTemplate,
@@ -229,9 +231,15 @@ export function ScheduleEmailDialog({
     scheduleEmailMutation,
   ]);
 
+  const isInitialDataBlocked = Boolean(isLoadingInitialData || initialDataError);
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
+
+      if (isInitialDataBlocked) {
+        return;
+      }
 
       // Basic validation
       if (!recipientEmail.trim()) {
@@ -274,6 +282,7 @@ export function ScheduleEmailDialog({
       recipientEmail,
       subject,
       scheduledAt,
+      isInitialDataBlocked,
       submitScheduledEmail,
       isEditing,
       onOpenChange,
@@ -313,6 +322,21 @@ export function ScheduleEmailDialog({
               </Alert>
             )}
 
+            {isLoadingInitialData ? (
+              <Alert>
+                <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                <AlertDescription className="inline">
+                  Loading scheduled email details...
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {initialDataError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{getUserFriendlyMessage(initialDataError)}</AlertDescription>
+              </Alert>
+            ) : null}
+
             {/* Recipient */}
             <div className="grid gap-2">
               <Label htmlFor="recipient-email">Recipient Email</Label>
@@ -323,7 +347,7 @@ export function ScheduleEmailDialog({
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 required
-                disabled={isSubmitting}
+                disabled={isSubmitting || isInitialDataBlocked}
                 aria-required="true"
               />
             </div>
@@ -335,7 +359,7 @@ export function ScheduleEmailDialog({
                 placeholder="John Doe"
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isInitialDataBlocked}
               />
             </div>
 
@@ -347,7 +371,7 @@ export function ScheduleEmailDialog({
               <Select
                 value={templateType}
                 onValueChange={(v) => setTemplateType(v as TemplateType)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isInitialDataBlocked}
               >
                 <SelectTrigger id="template-type">
                   <SelectValue placeholder="Select template" />
@@ -381,7 +405,7 @@ export function ScheduleEmailDialog({
                     setBodyOverride("");
                   }
                 }}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isInitialDataBlocked}
               >
                 <SelectTrigger id="saved-template">
                   <SelectValue placeholder="No saved template" />
@@ -416,7 +440,7 @@ export function ScheduleEmailDialog({
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 required
-                disabled={isSubmitting}
+                disabled={isSubmitting || isInitialDataBlocked}
                 aria-required="true"
               />
             </div>
@@ -430,7 +454,7 @@ export function ScheduleEmailDialog({
                   value={bodyOverride}
                   onChange={(e) => setBodyOverride(e.target.value)}
                   rows={4}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isInitialDataBlocked}
                 />
               </div>
             )}
@@ -478,7 +502,7 @@ export function ScheduleEmailDialog({
                     value={scheduledAt}
                     onChange={setScheduledAt}
                     minDate={new Date()}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isInitialDataBlocked}
                     aria-label="Select send date and time"
                   />
                 </div>
@@ -491,7 +515,7 @@ export function ScheduleEmailDialog({
                     id="timezone"
                     value={timezone}
                     onChange={setTimezone}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isInitialDataBlocked}
                     aria-label="Select timezone"
                   />
                 </div>
@@ -508,7 +532,7 @@ export function ScheduleEmailDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || isInitialDataBlocked}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

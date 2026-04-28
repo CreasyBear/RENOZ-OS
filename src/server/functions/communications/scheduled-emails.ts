@@ -38,7 +38,7 @@ import { NotFoundError, ConflictError } from '@/lib/server/errors'
 export const scheduleEmail = createServerFn({ method: 'POST' })
   .inputValidator(scheduleEmailSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
+    const ctx = await withAuth({ permission: PERMISSIONS.email.create })
 
     const [scheduled] = await db
       .insert(scheduledEmails)
@@ -57,6 +57,8 @@ export const scheduleEmail = createServerFn({ method: 'POST' })
         scheduledAt: data.scheduledAt,
         timezone: data.timezone,
         status: 'pending',
+        attemptCount: 0,
+        lastError: null,
       })
       .returning()
 
@@ -71,7 +73,7 @@ export const scheduleEmail = createServerFn({ method: 'POST' })
 export const getScheduledEmails = createServerFn({ method: 'GET' })
   .inputValidator(getScheduledEmailsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
+    const ctx = await withAuth({ permission: PERMISSIONS.email.read })
 
     const conditions = [eq(scheduledEmails.organizationId, ctx.organizationId)]
 
@@ -122,7 +124,7 @@ export const getScheduledEmails = createServerFn({ method: 'GET' })
 export const getScheduledEmailsCursor = createServerFn({ method: 'GET' })
   .inputValidator(getScheduledEmailsCursorSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
+    const ctx = await withAuth({ permission: PERMISSIONS.email.read })
 
     const { cursor, pageSize = 20, sortOrder = 'desc', status, customerId, search } = data
 
@@ -171,7 +173,7 @@ export const getScheduledEmailsCursor = createServerFn({ method: 'GET' })
 export const getScheduledEmailById = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getScheduledEmailByIdSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
+    const ctx = await withAuth({ permission: PERMISSIONS.email.read })
 
     const [email] = await db
       .select()
@@ -193,7 +195,7 @@ export const getScheduledEmailById = createServerFn({ method: 'GET' })
 export const updateScheduledEmail = createServerFn({ method: 'POST' })
   .inputValidator(updateScheduledEmailSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
+    const ctx = await withAuth({ permission: PERMISSIONS.email.update })
 
     // Check if scheduled email exists
     const [existing] = await db
@@ -228,6 +230,7 @@ export const updateScheduledEmail = createServerFn({ method: 'POST' })
         },
         scheduledAt: data.scheduledAt,
         timezone: data.timezone,
+        lastError: null,
       })
       .where(
         and(
@@ -251,7 +254,7 @@ export const updateScheduledEmail = createServerFn({ method: 'POST' })
 export const cancelScheduledEmail = createServerFn({ method: 'POST' })
   .inputValidator(cancelScheduledEmailSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
+    const ctx = await withAuth({ permission: PERMISSIONS.email.update })
 
     // Check if scheduled email exists
     const [existing] = await db
@@ -344,14 +347,24 @@ export async function getDueScheduledEmails(
 export async function markScheduledEmailAsSent(
   scheduledEmailId: string,
   emailHistoryId: string,
+  organizationId?: string,
 ): Promise<void> {
+  const conditions = [
+    eq(scheduledEmails.id, scheduledEmailId),
+    eq(scheduledEmails.status, 'processing'),
+  ];
+  if (organizationId) {
+    conditions.push(eq(scheduledEmails.organizationId, organizationId));
+  }
+
   await db
     .update(scheduledEmails)
     .set({
       status: 'sent',
       sentAt: new Date(),
       emailHistoryId,
+      lastError: null,
       updatedAt: new Date(),
     })
-    .where(eq(scheduledEmails.id, scheduledEmailId))
+    .where(and(...conditions))
 }

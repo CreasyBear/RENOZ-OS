@@ -11,14 +11,16 @@
 
 import { useState, useCallback } from 'react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FormSkeleton } from '@/components/skeletons/shared';
 import { PaymentPlansList } from '@/components/domain/financial/payment-plans-list';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PaymentScheduleResponse } from '@/lib/schemas';
 import {
   usePaymentSchedule,
   useCreatePaymentPlan,
   useRecordInstallmentPayment,
+  useOverdueInstallments,
 } from '@/hooks/financial';
 import { paymentPlansSearchSchema, type PaymentPlanType } from '@/lib/schemas';
 import { toast } from '@/lib/toast';
@@ -34,15 +36,9 @@ export const Route = createFileRoute('/_authenticated/financial/payment-plans')(
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Payment Plans"
-        description="Customer payment plans and installment tracking"
-      />
-      <PageLayout.Content>
-        <FormSkeleton sections={2} />
-      </PageLayout.Content>
-    </PageLayout>
+    <div className="space-y-4">
+      <FormSkeleton sections={2} />
+    </div>
   ),
 });
 
@@ -78,6 +74,11 @@ function PaymentPlansPage() {
 
   // Mutation: Record installment payment using centralized hook
   const recordPaymentMutation = useRecordInstallmentPayment();
+  const overdueInstallments = useOverdueInstallments({
+    limit: 12,
+    minDaysOverdue: 1,
+    enabled: !orderId,
+  });
 
   // Handler: Create payment plan with forward momentum
   const handleCreatePlan = useCallback(
@@ -126,6 +127,8 @@ function PaymentPlansPage() {
         {
           installmentId,
           paidAmount: amount,
+          paymentDate: new Date().toISOString().split('T')[0],
+          reference: paymentRef,
           paymentReference: paymentRef,
         },
         {
@@ -152,58 +155,95 @@ function PaymentPlansPage() {
   // Show placeholder if no orderId provided
   if (!orderId) {
     return (
-      <PageLayout variant="full-width">
-        <PageLayout.Header
-          title="Payment Plans"
-          description="Customer payment plans and installment tracking"
-        />
-        <PageLayout.Content>
-          <div className="text-muted-foreground py-8 text-center">
-            <p>Select an order to view its payment plan</p>
-            <p className="text-sm">
-              Payment plans are managed per order. Navigate from an order detail page to view or
-              create a payment plan.
-            </p>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Payment Plans</h2>
+          <p className="text-muted-foreground text-sm">
+            Overdue installments and active plan promises across finance.
+          </p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Overdue installments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {overdueInstallments.isLoading ? (
+              <FormSkeleton sections={1} />
+            ) : overdueInstallments.data?.items?.length ? (
+              <div className="divide-y">
+                {overdueInstallments.data.items.map((item) => {
+                  const remaining = Number(item.amount) - Number(item.paidAmount ?? 0);
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="font-medium">{item.customer?.name ?? 'Unknown customer'}</p>
+                        <p className="text-muted-foreground text-sm">
+                          {item.order?.orderNumber ?? 'Order'} · installment {item.installmentNo} · {item.daysOverdue} days overdue
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium">
+                          {new Intl.NumberFormat('en-AU', {
+                            style: 'currency',
+                            currency: 'AUD',
+                          }).format(remaining)}
+                        </span>
+                        <Link
+                          to="/financial/payment-plans"
+                          search={{
+                            orderId: item.orderId,
+                            orderTotal: Number(item.order?.total ?? 0),
+                          }}
+                          className="text-primary text-sm font-medium hover:underline"
+                        >
+                          Open plan
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-muted-foreground py-8 text-center">
+                <p>No overdue installments.</p>
+                <p className="text-sm">Payment plans are promises; paid installments create real ledger payments.</p>
+              </div>
+            )}
             <div className="mt-4">
               <Link
                 to="/orders"
                 className="inline-flex items-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-accent"
               >
-                Go to Orders
+                Find an order
               </Link>
             </div>
-          </div>
-        </PageLayout.Content>
-      </PageLayout>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Payment Plans"
-        description="Customer payment plans and installment tracking"
-      />
-      <PageLayout.Content>
-        <PaymentPlansList
-          orderId={orderId}
-          orderTotal={orderTotal ?? 0}
-          schedule={schedule}
-          isLoading={isLoading}
-          error={error}
-          onRetry={() => refetch()}
-          createDialogOpen={createDialogOpen}
-          onCreateDialogOpenChange={setCreateDialogOpen}
-          onCreatePlan={handleCreatePlan}
-          isCreatingPlan={createPlanMutation.isPending}
-          recordPaymentOpen={recordPaymentOpen}
-          onRecordPaymentOpenChange={setRecordPaymentOpen}
-          selectedInstallment={selectedInstallment}
-          onSelectInstallment={handleSelectInstallment}
-          onRecordPayment={handleRecordPayment}
-          isRecordingPayment={recordPaymentMutation.isPending}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    <PaymentPlansList
+      orderId={orderId}
+      orderTotal={orderTotal ?? 0}
+      schedule={schedule}
+      isLoading={isLoading}
+      error={error}
+      onRetry={() => refetch()}
+      createDialogOpen={createDialogOpen}
+      onCreateDialogOpenChange={setCreateDialogOpen}
+      onCreatePlan={handleCreatePlan}
+      isCreatingPlan={createPlanMutation.isPending}
+      recordPaymentOpen={recordPaymentOpen}
+      onRecordPaymentOpenChange={setRecordPaymentOpen}
+      selectedInstallment={selectedInstallment}
+      onSelectInstallment={handleSelectInstallment}
+      onRecordPayment={handleRecordPayment}
+      isRecordingPayment={recordPaymentMutation.isPending}
+    />
   );
 }

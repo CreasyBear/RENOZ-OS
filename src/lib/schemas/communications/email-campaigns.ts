@@ -225,6 +225,8 @@ export interface CampaignRecipient {
   email: string
   name: string | null
   contactId: string | null
+  customerId: string | null
+  customerName?: string | null
   status: 'pending' | 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed' | 'unsubscribed'
   sentAt: Date | null
   openedAt: Date | null

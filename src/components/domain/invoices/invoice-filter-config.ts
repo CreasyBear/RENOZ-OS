@@ -128,7 +128,7 @@ export const INVOICE_FILTER_CONFIG: FilterBarConfig<InvoiceFiltersState> = {
   labels: {
     status: "Invoice Status",
     customerId: "Customer",
-    dateRange: "Invoice Date",
+    dateRange: "Created Date",
     amountRange: "Invoice Amount",
   },
 };

@@ -481,6 +481,11 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.financial.create,
     PERMISSIONS.financial.update,
     PERMISSIONS.financial.delete,
+    // Email/communications
+    PERMISSIONS.email.read,
+    PERMISSIONS.email.create,
+    PERMISSIONS.email.update,
+    PERMISSIONS.email.delete,
     // Support
     PERMISSIONS.support.read,
     PERMISSIONS.support.create,
@@ -607,6 +612,11 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.financial.create,
     PERMISSIONS.financial.update,
     PERMISSIONS.financial.delete,
+    // Email/communications
+    PERMISSIONS.email.read,
+    PERMISSIONS.email.create,
+    PERMISSIONS.email.update,
+    PERMISSIONS.email.delete,
     // Support
     PERMISSIONS.support.read,
     PERMISSIONS.support.create,
@@ -679,6 +689,10 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.financial.read,
     PERMISSIONS.financial.create,
     PERMISSIONS.financial.update,
+    // Email/communications
+    PERMISSIONS.email.read,
+    PERMISSIONS.email.create,
+    PERMISSIONS.email.update,
     // Support (read + manage)
     PERMISSIONS.support.read,
     PERMISSIONS.support.create,
@@ -720,6 +734,10 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.dashboard.read,
     // Financial (read only - view payment schedules)
     PERMISSIONS.financial.read,
+    // Email/communications
+    PERMISSIONS.email.read,
+    PERMISSIONS.email.create,
+    PERMISSIONS.email.update,
     // Support (read only)
     PERMISSIONS.support.read,
   ],
@@ -755,6 +773,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.report.viewOperations,
     // Dashboard (read only)
     PERMISSIONS.dashboard.read,
+    // Email/communications
+    PERMISSIONS.email.read,
     // Warranty (read only - view claims related to operations)
     PERMISSIONS.warranty.read,
   ],
@@ -776,6 +796,10 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.read,
     // Dashboard (read only)
     PERMISSIONS.dashboard.read,
+    // Email/communications
+    PERMISSIONS.email.read,
+    PERMISSIONS.email.create,
+    PERMISSIONS.email.update,
     // Warranty (read + assign)
     PERMISSIONS.warranty.read,
     PERMISSIONS.warranty.assign,
@@ -799,6 +823,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.warranty.read,
     // Financial (read only)
     PERMISSIONS.financial.read,
+    // Email/communications (read only)
+    PERMISSIONS.email.read,
     // Support (read only)
     PERMISSIONS.support.read,
   ],

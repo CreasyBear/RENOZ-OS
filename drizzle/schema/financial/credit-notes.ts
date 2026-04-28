@@ -12,6 +12,7 @@ import {
   uuid,
   text,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { creditNoteStatusEnum } from "../_shared/enums";
@@ -99,6 +100,10 @@ export const creditNotes = pgTable(
     orgCustomerIdx: index("idx_credit_notes_org_customer").on(
       table.organizationId,
       table.customerId
+    ),
+    orgNumberUnique: uniqueIndex("idx_credit_notes_org_number_unique").on(
+      table.organizationId,
+      table.creditNoteNumber
     ),
 
     // Common queries

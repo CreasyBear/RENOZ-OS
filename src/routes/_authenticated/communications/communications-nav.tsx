@@ -2,7 +2,7 @@
  * Communications Navigation Component
  *
  * Tab navigation for communications domain sections.
- * Extracted from communications-layout.tsx for code splitting compliance.
+ * Rendered by the communications parent route for all child sections.
  */
 import { Link, useLocation } from "@tanstack/react-router";
 import { Mail, Phone, FileText, PenTool, Settings, History, Inbox } from "lucide-react";
@@ -68,12 +68,17 @@ const navItems = [
 
 export function CommunicationsNav() {
   const location = useLocation();
+  const sortedItems = [...navItems].sort((a, b) => b.to.length - a.to.length);
+  const activePath =
+    sortedItems.find((item) =>
+      location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+    )?.to ?? null;
 
   return (
     <nav className="border-b mb-6" aria-label="Communications sections">
       <div className="flex gap-1 -mb-px">
         {navItems.map((item) => {
-          const isActive = location.pathname.startsWith(item.to);
+          const isActive = activePath === item.to;
           const Icon = item.icon;
 
           return (

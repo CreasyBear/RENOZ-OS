@@ -17,6 +17,7 @@ import { db } from "@/lib/db";
 import {
   emailCampaigns,
   campaignRecipients,
+  contacts,
   emailHistory,
   type NewEmailHistory,
 } from "drizzle/schema";
@@ -162,8 +163,19 @@ export const sendCampaignTask = task({
 
       // Get next batch of pending recipients
       const recipients = await db
-        .select()
+        .select({
+          id: campaignRecipients.id,
+          organizationId: campaignRecipients.organizationId,
+          campaignId: campaignRecipients.campaignId,
+          contactId: campaignRecipients.contactId,
+          customerId: campaignRecipients.customerId,
+          email: campaignRecipients.email,
+          name: campaignRecipients.name,
+          recipientData: campaignRecipients.recipientData,
+          contactCustomerId: contacts.customerId,
+        })
         .from(campaignRecipients)
+        .leftJoin(contacts, eq(campaignRecipients.contactId, contacts.id))
         .where(
           and(
             eq(campaignRecipients.campaignId, campaignId),
@@ -225,9 +237,10 @@ export const sendCampaignTask = task({
         }
 
         try {
+          const recipientCustomerId = recipient.customerId ?? recipient.contactCustomerId;
           // INT-RES-007: Generate secure unsubscribe URL for this recipient
           const unsubscribeUrl = generateUnsubscribeUrl({
-            contactId: recipient.contactId || recipient.id, // Use contactId if available
+            contactId: recipient.contactId || recipientCustomerId || recipient.id,
             email: recipient.email,
             channel: "email",
             organizationId: campaign.organizationId,
@@ -259,7 +272,7 @@ export const sendCampaignTask = task({
               senderId: campaign.createdById,
               fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
               toAddress: recipient.email,
-              customerId: recipient.contactId, // Link to contact's customer if available
+              customerId: recipientCustomerId,
               subject: rendered.subject,
               bodyHtml: rendered.bodyHtml,
               bodyText: rendered.bodyText,
@@ -354,7 +367,7 @@ export const sendCampaignTask = task({
             emailId: emailRecord.id,
             organizationId: campaign.organizationId,
             userId: campaign.createdById,
-            customerId: recipient.contactId, // Link to contact's customer if available
+            customerId: recipientCustomerId,
             subject: rendered.subject,
             recipientEmail: recipient.email,
             recipientName: recipient.name,

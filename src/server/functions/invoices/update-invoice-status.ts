@@ -9,7 +9,7 @@
  * organizationId for multi-tenant isolation.
  *
  * @source invoice from orders table
- * @mutates orders.invoiceStatus, orders.paidAt, orders.paymentStatus
+ * @mutates orders.invoiceStatus only; payment fields are ledger projections
  *
  * @see src/lib/constants/invoice-status.ts for status transitions
  * @see docs/design-system/INVOICE-STANDARDS.md
@@ -53,7 +53,7 @@ export const updateInvoiceStatus = createServerFn({ method: 'POST' })
     const { organizationId } = ctx;
     const userId = ctx.user.id;
 
-    const { id, status: newStatus, paidAt, note } = data;
+    const { id, status: newStatus, note } = data;
 
     // Get current invoice state
     const [current] = await db
@@ -85,22 +85,19 @@ export const updateInvoiceStatus = createServerFn({ method: 'POST' })
       );
     }
 
-    // Require paidAt when marking as paid
-    if (newStatus === 'paid' && !paidAt) {
-      throw new ValidationError('Payment date is required when marking as paid');
+    if (newStatus === 'paid') {
+      throw new ValidationError(
+        'Paid invoices must be created by recording a real payment, refund, or credit note.'
+      );
     }
 
     // Build update data
     const now = new Date();
-    type PaymentStatus = "pending" | "partial" | "paid" | "refunded" | "overdue";
     const updateData: {
       invoiceStatus: InvoiceStatus;
       updatedAt: Date;
       updatedBy: string;
       invoiceSentAt?: Date;
-      paidAt?: Date;
-      balanceDue?: number;
-      paymentStatus?: PaymentStatus;
     } = {
       invoiceStatus: newStatus,
       updatedAt: now,
@@ -111,13 +108,6 @@ export const updateInvoiceStatus = createServerFn({ method: 'POST' })
     if (newStatus === 'unpaid' && currentStatus === 'draft') {
       // First time sending - mark as sent
       updateData.invoiceSentAt = now;
-    }
-
-    if (newStatus === 'paid' && paidAt) {
-      // Mark payment received
-      updateData.paidAt = paidAt;
-      updateData.balanceDue = 0;
-      updateData.paymentStatus = 'paid';
     }
 
     // Execute update with affected row check

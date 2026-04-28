@@ -13,7 +13,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { XeroSyncStatus } from '@/components/domain/financial/xero-sync-status';
 import type { InvoiceWithSyncStatus } from '@/lib/schemas';
@@ -43,17 +43,7 @@ export const Route = createFileRoute('/_authenticated/financial/xero-sync')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Xero Sync"
-        description="Invoice synchronization status and history"
-      />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 function XeroSyncStatusPage() {
@@ -138,42 +128,45 @@ function XeroSyncStatusPage() {
   }, [data?.invoices, search.customerId, search.issue]);
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header title="Xero Sync" description="Invoice synchronization status and history" />
-      <PageLayout.Content>
-        <XeroSyncStatus
-          invoices={invoices}
-          isLoading={isLoading}
-          error={error}
-          activeTab={status}
-          onTabChange={handleTabChange}
-          consoleView={consoleView}
-          onConsoleViewChange={handleConsoleViewChange}
-          onResync={handleResync}
-          resyncingId={resyncingId}
-          integration={integration}
-          paymentEvents={paymentEventsData?.items ?? []}
-          paymentEventsLoading={paymentEventsLoading}
-          selectedOrderId={search.orderId}
-          selectedInvoice={selectedInvoice ?? null}
-          selectedInvoiceLoading={selectedInvoiceLoading}
-          onSelectInvoice={(orderId) =>
-            updateSearch({
-              view: 'invoice_sync',
-              orderId: orderId ?? undefined,
-              eventId: undefined,
-            })
-          }
-          selectedPaymentEventId={search.eventId}
-          onSelectPaymentEvent={(eventId) =>
-            updateSearch({
-              view: 'payment_events',
-              eventId: eventId ?? undefined,
-              orderId: undefined,
-            })
-          }
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Xero Sync</h2>
+        <p className="text-sm text-muted-foreground">
+          Invoice synchronization status, payment events, and retry history.
+        </p>
+      </div>
+      <XeroSyncStatus
+        invoices={invoices}
+        isLoading={isLoading}
+        error={error}
+        activeTab={status}
+        onTabChange={handleTabChange}
+        consoleView={consoleView}
+        onConsoleViewChange={handleConsoleViewChange}
+        onResync={handleResync}
+        resyncingId={resyncingId}
+        integration={integration}
+        paymentEvents={paymentEventsData?.items ?? []}
+        paymentEventsLoading={paymentEventsLoading}
+        selectedOrderId={search.orderId}
+        selectedInvoice={selectedInvoice ?? null}
+        selectedInvoiceLoading={selectedInvoiceLoading}
+        onSelectInvoice={(orderId) =>
+          updateSearch({
+            view: 'invoice_sync',
+            orderId: orderId ?? undefined,
+            eventId: undefined,
+          })
+        }
+        selectedPaymentEventId={search.eventId}
+        onSelectPaymentEvent={(eventId) =>
+          updateSearch({
+            view: 'payment_events',
+            eventId: eventId ?? undefined,
+            orderId: undefined,
+          })
+        }
+      />
+    </div>
   );
 }

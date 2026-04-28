@@ -15,7 +15,7 @@ import {
   getDueScheduledEmails,
   markScheduledEmailAsSent,
 } from "@/lib/server/scheduled-emails";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   emailHistory,
@@ -95,6 +95,17 @@ export const processScheduledEmailsTask = schedules.task({
 
     // Process each email
     for (const scheduledEmail of dueEmails) {
+      await db
+        .update(scheduledEmails)
+        .set({
+          status: "processing",
+          attemptCount: sql`${scheduledEmails.attemptCount} + 1`,
+          lastAttemptAt: new Date(),
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(scheduledEmails.id, scheduledEmail.id));
+
       // INT-RES-004: Check if recipient is suppressed before sending
       const suppression = await isEmailSuppressedDirect(
         scheduledEmail.organizationId,
@@ -119,6 +130,7 @@ export const processScheduledEmailsTask = schedules.task({
             status: "cancelled",
             cancelledAt: new Date(),
             cancelReason: `Suppressed: ${suppression.reason}`,
+            lastError: null,
             updatedAt: new Date(),
           })
           .where(eq(scheduledEmails.id, scheduledEmail.id));
@@ -243,7 +255,11 @@ export const processScheduledEmailsTask = schedules.task({
           .where(eq(emailHistory.id, emailRecord.id));
 
         // Mark scheduled email as sent
-        await markScheduledEmailAsSent(scheduledEmail.id, emailRecord.id);
+        await markScheduledEmailAsSent(
+          scheduledEmail.id,
+          emailRecord.id,
+          scheduledEmail.organizationId
+        );
 
         // Create activity record for the email (COMMS-AUTO-001)
         await createEmailSentActivity({
@@ -263,10 +279,21 @@ export const processScheduledEmailsTask = schedules.task({
           await db
             .update(scheduledEmails)
             .set({
+              status: "failed",
               templateData: {
                 ...templateData,
                 validationError: error.message,
               },
+              lastError: error.message,
+              updatedAt: new Date(),
+            })
+            .where(eq(scheduledEmails.id, scheduledEmail.id));
+        } else {
+          await db
+            .update(scheduledEmails)
+            .set({
+              status: "failed",
+              lastError: error instanceof Error ? error.message : String(error),
               updatedAt: new Date(),
             })
             .where(eq(scheduledEmails.id, scheduledEmail.id));
