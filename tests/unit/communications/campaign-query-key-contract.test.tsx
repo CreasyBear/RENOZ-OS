@@ -17,4 +17,20 @@ describe('campaign query key contract', () => {
       })
     );
   });
+
+  it('includes preview sample size so different previews do not share cache entries', () => {
+    const recipientCriteria = { statuses: ['active'], tags: ['vip'] };
+
+    expect(
+      queryKeys.communications.campaignPreview({
+        recipientCriteria,
+        sampleSize: 5,
+      })
+    ).not.toEqual(
+      queryKeys.communications.campaignPreview({
+        recipientCriteria,
+        sampleSize: 25,
+      })
+    );
+  });
 });

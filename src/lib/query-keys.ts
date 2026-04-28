@@ -1410,8 +1410,8 @@ export const queryKeys = {
       [...queryKeys.communications.campaigns(), 'detail', id] as const,
     campaignRecipients: (campaignId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.communications.campaigns(), 'recipients', campaignId, filters ?? {}] as const,
-    campaignPreview: (criteria: unknown) =>
-      [...queryKeys.communications.campaigns(), 'preview', criteria] as const,
+    campaignPreview: (input: { recipientCriteria: unknown; sampleSize?: number }) =>
+      [...queryKeys.communications.campaigns(), 'preview', input] as const,
 
     // Templates
     templates: () => [...queryKeys.communications.all, 'templates'] as const,

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import type { SessionContext } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
 import { getEmailFrom, getEmailFromName, getResendApiKey } from '@/lib/email/config';
-import { getSampleTemplateData } from '@/lib/server/email-templates';
+import { getSampleTemplateData } from '@/lib/communications/template-utils';
 import { renderOutboundEmail } from '@/lib/server/outbound-email';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { logger } from '@/lib/logger';

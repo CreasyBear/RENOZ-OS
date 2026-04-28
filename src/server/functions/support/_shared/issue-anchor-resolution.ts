@@ -5,7 +5,10 @@ import { IssueAnchorConflictError } from '@/lib/server/errors';
 import {
   customers,
   issues,
+  orderLineItems,
+  orderLineSerialAllocations,
   orderShipments,
+  products,
   orders,
   returnAuthorizations,
   shipmentItemSerials,
@@ -98,6 +101,16 @@ export interface IssueRelatedContext {
   linkedWarranty: ResolvedWarrantySummary | null;
   linkedOrder: ResolvedOrderSummary | null;
   linkedShipment: ResolvedShipmentSummary | null;
+  relatedSerials: Array<{
+    serializedItemId: string | null;
+    serialNumber: string;
+    productName: string | null;
+    orderLineItemId: string | null;
+    orderLineDescription: string | null;
+    shipmentId: string | null;
+    shipmentNumber: string | null;
+    source: 'shipment' | 'allocation' | 'order_line';
+  }>;
   linkedRmas: Array<{
     id: string;
     rmaNumber: string;
@@ -401,6 +414,140 @@ async function loadShipmentSummary(
   return shipment ?? null;
 }
 
+async function loadRelatedSerialsForOrder(
+  organizationId: string,
+  orderId: string,
+  executor: TransactionExecutor = db
+): Promise<IssueRelatedContext['relatedSerials']> {
+  const [shipmentSerialRows, allocationSerialRows, orderLineRows] = await Promise.all([
+    executor
+      .select({
+        serializedItemId: serializedItems.id,
+        serialNumber: serializedItems.serialNumberRaw,
+        productName: products.name,
+        orderLineItemId: orderLineItems.id,
+        orderLineDescription: orderLineItems.description,
+        shipmentId: orderShipments.id,
+        shipmentNumber: orderShipments.shipmentNumber,
+      })
+      .from(shipmentItemSerials)
+      .innerJoin(
+        serializedItems,
+        eq(shipmentItemSerials.serializedItemId, serializedItems.id)
+      )
+      .innerJoin(shipmentItems, eq(shipmentItemSerials.shipmentItemId, shipmentItems.id))
+      .innerJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
+      .innerJoin(orderLineItems, eq(shipmentItems.orderLineItemId, orderLineItems.id))
+      .leftJoin(products, eq(serializedItems.productId, products.id))
+      .where(
+        and(
+          eq(shipmentItemSerials.organizationId, organizationId),
+          eq(orderShipments.organizationId, organizationId),
+          eq(orderShipments.orderId, orderId)
+        )
+      )
+      .orderBy(desc(shipmentItemSerials.shippedAt))
+      .limit(100),
+    executor
+      .select({
+        serializedItemId: serializedItems.id,
+        serialNumber: serializedItems.serialNumberRaw,
+        productName: products.name,
+        orderLineItemId: orderLineItems.id,
+        orderLineDescription: orderLineItems.description,
+      })
+      .from(orderLineSerialAllocations)
+      .innerJoin(
+        serializedItems,
+        eq(orderLineSerialAllocations.serializedItemId, serializedItems.id)
+      )
+      .innerJoin(
+        orderLineItems,
+        eq(orderLineSerialAllocations.orderLineItemId, orderLineItems.id)
+      )
+      .leftJoin(products, eq(serializedItems.productId, products.id))
+      .where(
+        and(
+          eq(orderLineSerialAllocations.organizationId, organizationId),
+          eq(orderLineSerialAllocations.isActive, true),
+          eq(orderLineItems.organizationId, organizationId),
+          eq(orderLineItems.orderId, orderId)
+        )
+      )
+      .orderBy(desc(orderLineSerialAllocations.allocatedAt))
+      .limit(100),
+    executor
+      .select({
+        orderLineItemId: orderLineItems.id,
+        orderLineDescription: orderLineItems.description,
+        productName: products.name,
+        allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
+      })
+      .from(orderLineItems)
+      .leftJoin(products, eq(orderLineItems.productId, products.id))
+      .where(
+        and(
+          eq(orderLineItems.organizationId, organizationId),
+          eq(orderLineItems.orderId, orderId)
+        )
+      )
+      .limit(100),
+  ]);
+
+  const bySerial = new Map<string, IssueRelatedContext['relatedSerials'][number]>();
+  const addSerial = (serial: IssueRelatedContext['relatedSerials'][number]) => {
+    const key = normalizeSerial(serial.serialNumber);
+    if (!key || bySerial.has(key)) return;
+    bySerial.set(key, serial);
+  };
+
+  for (const row of shipmentSerialRows) {
+    addSerial({
+      serializedItemId: row.serializedItemId,
+      serialNumber: row.serialNumber,
+      productName: row.productName,
+      orderLineItemId: row.orderLineItemId,
+      orderLineDescription: row.orderLineDescription,
+      shipmentId: row.shipmentId,
+      shipmentNumber: row.shipmentNumber,
+      source: 'shipment',
+    });
+  }
+
+  for (const row of allocationSerialRows) {
+    addSerial({
+      serializedItemId: row.serializedItemId,
+      serialNumber: row.serialNumber,
+      productName: row.productName,
+      orderLineItemId: row.orderLineItemId,
+      orderLineDescription: row.orderLineDescription,
+      shipmentId: null,
+      shipmentNumber: null,
+      source: 'allocation',
+    });
+  }
+
+  for (const row of orderLineRows) {
+    const serials = (row.allocatedSerialNumbers as string[] | null) ?? [];
+    for (const serialNumber of serials) {
+      const trimmed = serialNumber.trim();
+      if (!trimmed) continue;
+      addSerial({
+        serializedItemId: null,
+        serialNumber: trimmed,
+        productName: row.productName,
+        orderLineItemId: row.orderLineItemId,
+        orderLineDescription: row.orderLineDescription,
+        shipmentId: null,
+        shipmentNumber: null,
+        source: 'order_line',
+      });
+    }
+  }
+
+  return Array.from(bySerial.values());
+}
+
 async function loadSerializedItemResolution(
   organizationId: string,
   anchors: IssueAnchorValues,
@@ -415,8 +562,9 @@ async function loadSerializedItemResolution(
       .select({
         id: serializedItems.id,
         serialNumber: serializedItems.serialNumberRaw,
-        orderId: orderShipments.orderId,
+        shipmentOrderId: orderShipments.orderId,
         shipmentId: shipmentItems.shipmentId,
+        allocationOrderId: orderLineItems.orderId,
       })
       .from(serializedItems)
       .leftJoin(
@@ -425,12 +573,24 @@ async function loadSerializedItemResolution(
       )
       .leftJoin(shipmentItems, eq(shipmentItemSerials.shipmentItemId, shipmentItems.id))
       .leftJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
+      .leftJoin(
+        orderLineSerialAllocations,
+        and(
+          eq(serializedItems.id, orderLineSerialAllocations.serializedItemId),
+          eq(orderLineSerialAllocations.isActive, true)
+        )
+      )
+      .leftJoin(
+        orderLineItems,
+        eq(orderLineSerialAllocations.orderLineItemId, orderLineItems.id)
+      )
       .where(
         and(
           eq(serializedItems.id, anchors.serializedItemId),
           eq(serializedItems.organizationId, organizationId)
         )
       )
+      .orderBy(desc(shipmentItemSerials.shippedAt), desc(orderLineSerialAllocations.allocatedAt))
       .limit(1);
 
     if (serializedItem) {
@@ -439,7 +599,7 @@ async function loadSerializedItemResolution(
           id: serializedItem.id,
           serialNumber: serializedItem.serialNumber,
         },
-        orderId: serializedItem.orderId ?? null,
+        orderId: serializedItem.shipmentOrderId ?? serializedItem.allocationOrderId ?? null,
         shipmentId: serializedItem.shipmentId ?? null,
       };
     }
@@ -458,8 +618,9 @@ async function loadSerializedItemResolution(
     .select({
       id: serializedItems.id,
       serialNumber: serializedItems.serialNumberRaw,
-      orderId: orderShipments.orderId,
+      shipmentOrderId: orderShipments.orderId,
       shipmentId: shipmentItems.shipmentId,
+      allocationOrderId: orderLineItems.orderId,
     })
     .from(serializedItems)
     .leftJoin(
@@ -468,12 +629,24 @@ async function loadSerializedItemResolution(
     )
     .leftJoin(shipmentItems, eq(shipmentItemSerials.shipmentItemId, shipmentItems.id))
     .leftJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
+    .leftJoin(
+      orderLineSerialAllocations,
+      and(
+        eq(serializedItems.id, orderLineSerialAllocations.serializedItemId),
+        eq(orderLineSerialAllocations.isActive, true)
+      )
+    )
+    .leftJoin(
+      orderLineItems,
+      eq(orderLineSerialAllocations.orderLineItemId, orderLineItems.id)
+    )
     .where(
       and(
         eq(serializedItems.organizationId, organizationId),
         eq(serializedItems.serialNumberNormalized, normalizedSerial)
       )
     )
+    .orderBy(desc(shipmentItemSerials.shippedAt), desc(orderLineSerialAllocations.allocatedAt))
     .limit(1);
 
   if (!serializedItem) {
@@ -489,7 +662,7 @@ async function loadSerializedItemResolution(
       id: serializedItem.id,
       serialNumber: serializedItem.serialNumber,
     },
-    orderId: serializedItem.orderId ?? null,
+    orderId: serializedItem.shipmentOrderId ?? serializedItem.allocationOrderId ?? null,
     shipmentId: serializedItem.shipmentId ?? null,
   };
 }
@@ -1128,6 +1301,9 @@ export async function getIssueRelatedContext(params: {
 
   const linkedOrder = params.supportContext.order;
   const linkedShipment = params.supportContext.shipment;
+  const relatedSerials = linkedOrder?.id
+    ? await loadRelatedSerialsForOrder(params.organizationId, linkedOrder.id, executor)
+    : [];
 
   const linkedRmas = await executor
     .select({
@@ -1272,6 +1448,7 @@ export async function getIssueRelatedContext(params: {
     linkedWarranty,
     linkedOrder,
     linkedShipment,
+    relatedSerials,
     linkedRmas,
     sameServiceSystemIssues,
     sameSerializedItemIssues,

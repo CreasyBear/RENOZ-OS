@@ -127,6 +127,17 @@ function IssuesBoardPage() {
   const filters = fromUrlParams(search);
 
   // Fetch issues (URL params drive server-side triage filters)
+  const assignedToFilter =
+    filters.assignedTo === 'me'
+      ? ('me' as const)
+      : filters.assignedTo === 'unassigned'
+        ? ('unassigned' as const)
+        : undefined;
+  const assignedToUserId =
+    filters.assignedTo && filters.assignedTo !== 'me' && filters.assignedTo !== 'unassigned'
+      ? filters.assignedTo
+      : undefined;
+
   const { data, isLoading, error, refetch } = useIssuesWithSlaMetrics({
     status: filters.status.length > 0 ? filters.status : undefined,
     priority: filters.priority.length > 0 ? filters.priority : undefined,
@@ -134,7 +145,14 @@ function IssuesBoardPage() {
     search: search.search,
     slaStatus: search.slaStatus,
     escalated: search.escalated,
-    assignedToUserId: search.assignedToUserId,
+    nextActionType: filters.nextActionType ?? undefined,
+    rmaState: filters.rmaState,
+    serialState: filters.serialState,
+    warrantyState: filters.warrantyState,
+    orderState: filters.orderState,
+    serviceSystemState: filters.serviceSystemState,
+    assignedToFilter,
+    assignedToUserId,
     limit: search.pageSize,
     offset: (search.page - 1) * search.pageSize,
   });

@@ -1,619 +1,91 @@
 /**
- * Email Suppression Server Functions
+ * Email suppression ServerFn facade.
  *
- * Handles suppression list management for bounce, complaint, unsubscribe,
- * and manual suppression. Used by Resend webhook processing and campaign sends.
- *
- * @see INT-RES-003, INT-RES-004
+ * Public ServerFns own auth and schema validation only. Shared helpers own
+ * suppression reads, mutations, and bounce policy so jobs and provider flows
+ * never depend on ServerFn modules.
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { and, eq, ilike, isNull, sql, inArray, desc, asc, gte, count } from "drizzle-orm";
-import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from "@/lib/db/pagination";
-import { containsPattern } from "@/lib/db/utils";
-import { db } from "@/lib/db";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
-import { emailSuppression } from "drizzle/schema";
-import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { NotFoundError } from "@/lib/server/errors";
+import { withAuth } from "@/lib/server/protected";
 import {
-  suppressionListFiltersSchema,
-  suppressionListCursorSchema,
-  checkSuppressionSchema,
-  checkSuppressionBatchSchema,
   addSuppressionSchema,
+  checkSuppressionBatchSchema,
+  checkSuppressionSchema,
   removeSuppressionSchema,
-  suppressionRecordSchema,
-  type SuppressionListResult,
-  type CheckSuppressionResult,
+  suppressionListCursorSchema,
+  suppressionListFiltersSchema,
   type CheckSuppressionBatchResult,
+  type CheckSuppressionResult,
+  type SuppressionListResult,
   type SuppressionRecord,
 } from "@/lib/schemas/communications/email-suppression";
+import {
+  checkSuppressionBatchDirect,
+  isEmailSuppressedDirect,
+  readEmailSuppressionStatus,
+  readSuppressionBatchStatus,
+  readSuppressionList,
+  readSuppressionListCursor,
+} from "./_shared/suppression-read";
+import {
+  addSuppressionDirect,
+  addSuppressionRecord,
+  removeSuppressionRecord,
+} from "./_shared/suppression-mutations";
+import { trackSoftBounce } from "./_shared/suppression-policy";
 
-// ============================================================================
-// GET SUPPRESSION LIST
-// ============================================================================
-
-/**
- * Get paginated list of suppressed emails with optional filters.
- */
 export const getSuppressionList = createServerFn({ method: "GET" })
   .inputValidator(suppressionListFiltersSchema)
   .handler(async ({ data }): Promise<SuppressionListResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
-
-    const {
-      reason,
-      search,
-      includeDeleted = false,
-      page = 1,
-      pageSize = 20,
-      sortBy = "createdAt",
-      sortOrder = "desc",
-    } = data;
-
-    // Build conditions
-    const conditions = [eq(emailSuppression.organizationId, ctx.organizationId)];
-
-    // Exclude soft-deleted unless explicitly requested
-    if (!includeDeleted) {
-      conditions.push(isNull(emailSuppression.deletedAt));
-    }
-
-    // Filter by reason
-    if (reason) {
-      conditions.push(eq(emailSuppression.reason, reason));
-    }
-
-    // Search by email (use containsPattern for safe search)
-    if (search) {
-      conditions.push(ilike(emailSuppression.email, containsPattern(search)));
-    }
-
-    // Build order by
-    const orderByColumn =
-      sortBy === "email"
-        ? emailSuppression.email
-        : sortBy === "reason"
-          ? emailSuppression.reason
-          : emailSuppression.createdAt;
-
-    const orderByDirection = sortOrder === "asc" ? asc : desc;
-
-    // Count total matching records
-    const [countResult] = await db
-      .select({ count: count() })
-      .from(emailSuppression)
-      .where(and(...conditions));
-
-    const total = countResult?.count ?? 0;
-
-    // Fetch paginated results
-    const items = await db
-      .select()
-      .from(emailSuppression)
-      .where(and(...conditions))
-      .orderBy(orderByDirection(orderByColumn))
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
-
-    // Validate with Zod schema per SCHEMA-TRACE.md
-    const validatedItems: SuppressionRecord[] = items.map((item) =>
-      suppressionRecordSchema.parse(item)
-    );
-
-    return {
-      items: validatedItems,
-      total,
-      page,
-      pageSize,
-      hasMore: page * pageSize < total,
-    };
+    return readSuppressionList(ctx.organizationId, data);
   });
 
-/**
- * Get suppression list with cursor pagination (recommended for large datasets).
- * Uses createdAt + id for stable sort.
- */
 export const getSuppressionListCursor = createServerFn({ method: "GET" })
   .inputValidator(suppressionListCursorSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
-
-    const { cursor, pageSize = 20, sortOrder = "desc", reason, search, includeDeleted = false } = data;
-
-    const conditions = [eq(emailSuppression.organizationId, ctx.organizationId)];
-    if (!includeDeleted) conditions.push(isNull(emailSuppression.deletedAt));
-    if (reason) conditions.push(eq(emailSuppression.reason, reason));
-    if (search) conditions.push(ilike(emailSuppression.email, containsPattern(search)));
-
-    if (cursor) {
-      const cursorPosition = decodeCursor(cursor);
-      if (cursorPosition) {
-        conditions.push(buildCursorCondition(emailSuppression.createdAt, emailSuppression.id, cursorPosition, sortOrder));
-      }
-    }
-
-    const orderDir = sortOrder === "asc" ? asc : desc;
-    const items = await db
-      .select()
-      .from(emailSuppression)
-      .where(and(...conditions))
-      .orderBy(orderDir(emailSuppression.createdAt), orderDir(emailSuppression.id))
-      .limit(pageSize + 1);
-
-    const validatedItems: SuppressionRecord[] = items.map((item) => suppressionRecordSchema.parse(item));
-    return buildStandardCursorResponse(validatedItems, pageSize);
+    return readSuppressionListCursor(ctx.organizationId, data);
   });
 
-// ============================================================================
-// CHECK IF EMAIL IS SUPPRESSED
-// ============================================================================
-
-/**
- * Check if a single email is suppressed.
- * Returns suppression details if found.
- */
 export const isEmailSuppressed = createServerFn({ method: "GET" })
   .inputValidator(normalizeObjectInput(checkSuppressionSchema))
   .handler(async ({ data }): Promise<CheckSuppressionResult> => {
     const ctx = await withAuth();
-
-    const normalizedEmail = data.email.toLowerCase().trim();
-
-    // Check for active suppression in this organization
-    const [suppression] = await db
-      .select({
-        reason: emailSuppression.reason,
-        bounceType: emailSuppression.bounceType,
-        createdAt: emailSuppression.createdAt,
-      })
-      .from(emailSuppression)
-      .where(
-        and(
-          eq(emailSuppression.organizationId, ctx.organizationId),
-          eq(emailSuppression.email, normalizedEmail),
-          isNull(emailSuppression.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (suppression) {
-      return {
-        email: normalizedEmail,
-        isSuppressed: true,
-        reason: suppression.reason,
-        bounceType: suppression.bounceType,
-        suppressedAt: suppression.createdAt,
-      };
-    }
-
-    return {
-      email: normalizedEmail,
-      isSuppressed: false,
-      reason: null,
-      bounceType: null,
-      suppressedAt: null,
-    };
+    return readEmailSuppressionStatus(ctx.organizationId, data);
   });
 
-// ============================================================================
-// BATCH CHECK SUPPRESSION
-// ============================================================================
-
-/**
- * Check multiple emails for suppression status.
- * Optimized for campaign sends with up to 1000 emails per batch.
- */
 export const checkSuppressionBatch = createServerFn({ method: "POST" })
   .inputValidator(checkSuppressionBatchSchema)
   .handler(async ({ data }): Promise<CheckSuppressionBatchResult> => {
     const ctx = await withAuth();
-
-    // Normalize all emails
-    const normalizedEmails = data.emails.map((e) => e.toLowerCase().trim());
-
-    // Fetch all suppressions in one query
-    const suppressions = await db
-      .select({
-        email: emailSuppression.email,
-        reason: emailSuppression.reason,
-        bounceType: emailSuppression.bounceType,
-        createdAt: emailSuppression.createdAt,
-      })
-      .from(emailSuppression)
-      .where(
-        and(
-          eq(emailSuppression.organizationId, ctx.organizationId),
-          inArray(emailSuppression.email, normalizedEmails),
-          isNull(emailSuppression.deletedAt)
-        )
-      );
-
-    // Create lookup map for fast access
-    const suppressionMap = new Map(
-      suppressions.map((s) => [s.email, s])
-    );
-
-    // Build results for all emails
-    const results: CheckSuppressionResult[] = normalizedEmails.map((email) => {
-      const suppression = suppressionMap.get(email);
-      if (suppression) {
-        return {
-          email,
-          isSuppressed: true,
-          reason: suppression.reason,
-          bounceType: suppression.bounceType,
-          suppressedAt: suppression.createdAt,
-        };
-      }
-      return {
-        email,
-        isSuppressed: false,
-        reason: null,
-        bounceType: null,
-        suppressedAt: null,
-      };
-    });
-
-    return {
-      results,
-      suppressedCount: suppressions.length,
-      totalChecked: normalizedEmails.length,
-    };
+    return readSuppressionBatchStatus(ctx.organizationId, data);
   });
 
-// ============================================================================
-// ADD TO SUPPRESSION LIST
-// ============================================================================
-
-/**
- * Add an email to the suppression list.
- * Handles upsert to avoid duplicates.
- */
 export const addSuppression = createServerFn({ method: "POST" })
   .inputValidator(addSuppressionSchema)
   .handler(async ({ data }): Promise<SuppressionRecord> => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
-
-    const normalizedEmail = data.email.toLowerCase().trim();
-
-    // C26: Use INSERT ... ON CONFLICT DO NOTHING to avoid race condition
-    const [inserted] = await db
-      .insert(emailSuppression)
-      .values({
-        organizationId: ctx.organizationId,
-        email: normalizedEmail,
-        reason: data.reason,
-        bounceType: data.bounceType ?? null,
-        source: data.source ?? "manual",
-        resendEventId: data.resendEventId ?? null,
-        metadata: data.metadata ?? {},
-      })
-      .onConflictDoNothing()
-      .returning();
-
-    if (inserted) {
-      // New record was inserted
-      return suppressionRecordSchema.parse(inserted);
-    }
-
-    // Record already exists - fetch and return it
-    const [existing] = await db
-      .select()
-      .from(emailSuppression)
-      .where(
-        and(
-          eq(emailSuppression.organizationId, ctx.organizationId),
-          eq(emailSuppression.email, normalizedEmail),
-          isNull(emailSuppression.deletedAt)
-        )
-      )
-      .limit(1);
-
-    // Validate with Zod schema per SCHEMA-TRACE.md
-    return suppressionRecordSchema.parse(existing);
+    return addSuppressionRecord({ organizationId: ctx.organizationId, data });
   });
 
-// ============================================================================
-// REMOVE FROM SUPPRESSION LIST (SOFT DELETE)
-// ============================================================================
-
-/**
- * Remove an email from the suppression list via soft delete.
- * Preserves audit trail for compliance.
- */
 export const removeSuppression = createServerFn({ method: "POST" })
   .inputValidator(removeSuppressionSchema)
   .handler(async ({ data }): Promise<{ success: boolean }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
-
-    const [updated] = await db
-      .update(emailSuppression)
-      .set({
-        deletedAt: new Date(),
-        deletedBy: ctx.user.id,
-        deletedReason: data.reason ?? "Manual removal",
-      })
-      .where(
-        and(
-          eq(emailSuppression.id, data.id),
-          eq(emailSuppression.organizationId, ctx.organizationId),
-          isNull(emailSuppression.deletedAt)
-        )
-      )
-      .returning({ id: emailSuppression.id });
-
-    if (!updated) {
-      throw new NotFoundError("Suppression record not found or already removed", "email_suppression");
-    }
-
-    return { success: true };
+    return removeSuppressionRecord({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      data,
+    });
   });
 
-// ============================================================================
-// INTERNAL FUNCTIONS (for Trigger.dev jobs - no auth required)
-// ============================================================================
-
-/**
- * Internal function to add email to suppression list.
- * Used by webhook processing and other background jobs.
- * Does not require auth context.
- *
- * @see INT-RES-004
- */
-export async function addSuppressionDirect(params: {
-  organizationId: string;
-  email: string;
-  reason: "bounce" | "complaint" | "unsubscribe" | "manual";
-  bounceType?: "hard" | "soft" | null;
-  source?: "webhook" | "manual" | "import" | "api";
-  resendEventId?: string | null;
-  metadata?: Record<string, unknown>;
-}): Promise<{ id: string; isNew: boolean }> {
-  const normalizedEmail = params.email.toLowerCase().trim();
-
-  // C27: Use INSERT ... ON CONFLICT DO NOTHING to avoid race condition
-  const [inserted] = await db
-    .insert(emailSuppression)
-    .values({
-      organizationId: params.organizationId,
-      email: normalizedEmail,
-      reason: params.reason,
-      bounceType: params.bounceType ?? null,
-      source: params.source ?? "webhook",
-      resendEventId: params.resendEventId ?? null,
-      metadata: params.metadata ?? {},
-    })
-    .onConflictDoNothing()
-    .returning({ id: emailSuppression.id });
-
-  if (inserted) {
-    return { id: inserted.id, isNew: true };
-  }
-
-  // Record already exists - fetch its ID
-  const [existing] = await db
-    .select({ id: emailSuppression.id })
-    .from(emailSuppression)
-    .where(
-      and(
-        eq(emailSuppression.organizationId, params.organizationId),
-        eq(emailSuppression.email, normalizedEmail),
-        isNull(emailSuppression.deletedAt)
-      )
-    )
-    .limit(1);
-
-  return { id: existing?.id ?? '', isNew: false };
-}
-
-/**
- * Internal function to check suppression status for a single email.
- * Used by scheduled email processing.
- * Does not require auth context.
- *
- * @see INT-RES-004
- */
-export async function isEmailSuppressedDirect(
-  organizationId: string,
-  email: string
-): Promise<{
-  suppressed: boolean;
-  reason?: "bounce" | "complaint" | "unsubscribe" | "manual";
-  bounceType?: "hard" | "soft" | null;
-}> {
-  const normalizedEmail = email.toLowerCase().trim();
-
-  const [suppression] = await db
-    .select({
-      reason: emailSuppression.reason,
-      bounceType: emailSuppression.bounceType,
-    })
-    .from(emailSuppression)
-    .where(
-      and(
-        eq(emailSuppression.organizationId, organizationId),
-        eq(emailSuppression.email, normalizedEmail),
-        isNull(emailSuppression.deletedAt)
-      )
-    )
-    .limit(1);
-
-  if (suppression) {
-    return {
-      suppressed: true,
-      reason: suppression.reason,
-      bounceType: suppression.bounceType,
-    };
-  }
-
-  return { suppressed: false };
-}
-
-/**
- * Internal function to batch check suppression status.
- * Used by campaign sends for efficient batch filtering.
- * Does not require auth context.
- *
- * @see INT-RES-004
- */
-export async function checkSuppressionBatchDirect(
-  organizationId: string,
-  emails: string[]
-): Promise<
-  Array<{
-    email: string;
-    suppressed: boolean;
-    reason?: "bounce" | "complaint" | "unsubscribe" | "manual";
-  }>
-> {
-  if (emails.length === 0) {
-    return [];
-  }
-
-  const normalizedEmails = emails.map((e) => e.toLowerCase().trim());
-
-  // Fetch all suppressions in one query
-  const suppressions = await db
-    .select({
-      email: emailSuppression.email,
-      reason: emailSuppression.reason,
-    })
-    .from(emailSuppression)
-    .where(
-      and(
-        eq(emailSuppression.organizationId, organizationId),
-        inArray(emailSuppression.email, normalizedEmails),
-        isNull(emailSuppression.deletedAt)
-      )
-    );
-
-  // Create lookup map
-  const suppressionMap = new Map(suppressions.map((s) => [s.email, s.reason]));
-
-  // Build results
-  return normalizedEmails.map((email) => {
-    const reason = suppressionMap.get(email);
-    return {
-      email,
-      suppressed: !!reason,
-      reason: reason ?? undefined,
-    };
-  });
-}
-
-// ============================================================================
-// SOFT BOUNCE TRACKING (INT-RES-004)
-// ============================================================================
-
-/**
- * Soft bounce threshold for auto-suppression.
- * After this many soft bounces within SOFT_BOUNCE_WINDOW_DAYS, the email is suppressed.
- */
-const SOFT_BOUNCE_THRESHOLD = 3;
-
-/**
- * Time window (in days) to count soft bounces.
- * Only bounces within this window count toward the threshold.
- */
-const SOFT_BOUNCE_WINDOW_DAYS = 7;
-
-/**
- * Track a soft bounce occurrence.
- * - If no existing record: create one with bounceCount=1
- * - If existing record within window: increment bounceCount
- * - If bounceCount >= SOFT_BOUNCE_THRESHOLD: auto-suppress
- *
- * Returns the new bounce count and whether suppression was triggered.
- *
- * @see INT-RES-004
- */
-export async function trackSoftBounce(params: {
-  organizationId: string;
-  email: string;
-  resendEventId?: string | null;
-  metadata?: Record<string, unknown>;
-}): Promise<{
-  id: string;
-  bounceCount: number;
-  suppressed: boolean;
-  isNew: boolean;
-}> {
-  const normalizedEmail = params.email.toLowerCase().trim();
-  const windowStart = new Date();
-  windowStart.setDate(windowStart.getDate() - SOFT_BOUNCE_WINDOW_DAYS);
-
-  // Check for existing soft bounce record within the time window
-  const [existing] = await db
-    .select({
-      id: emailSuppression.id,
-      bounceCount: emailSuppression.bounceCount,
-      createdAt: emailSuppression.createdAt,
-    })
-    .from(emailSuppression)
-    .where(
-      and(
-        eq(emailSuppression.organizationId, params.organizationId),
-        eq(emailSuppression.email, normalizedEmail),
-        eq(emailSuppression.reason, "bounce"),
-        eq(emailSuppression.bounceType, "soft"),
-        isNull(emailSuppression.deletedAt),
-        gte(emailSuppression.createdAt, windowStart)
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    // C28: Use atomic SQL increment to avoid race conditions
-    const [updated] = await db
-      .update(emailSuppression)
-      .set({
-        bounceCount: sql`COALESCE(${emailSuppression.bounceCount}, 0) + 1`,
-        // Update resendEventId to the latest event
-        resendEventId: params.resendEventId ?? undefined,
-        // Merge new metadata with existing
-        // NOTE: JSONB merge operator (||) and COALESCE are PostgreSQL-specific
-        // Drizzle ORM doesn't provide a direct abstraction for JSONB merge operations
-        // This is acceptable raw SQL for PostgreSQL-specific JSONB operations
-        metadata: params.metadata
-          ? sql`COALESCE(${emailSuppression.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb`
-          : undefined,
-      })
-      .where(eq(emailSuppression.id, existing.id))
-      .returning({ bounceCount: emailSuppression.bounceCount });
-
-    const newBounceCount = updated?.bounceCount ?? (existing.bounceCount ?? 0) + 1;
-    const shouldSuppress = newBounceCount >= SOFT_BOUNCE_THRESHOLD;
-
-    return {
-      id: existing.id,
-      bounceCount: newBounceCount,
-      suppressed: shouldSuppress,
-      isNew: false,
-    };
-  }
-
-  // No existing record within window - create a new one
-  const [inserted] = await db
-    .insert(emailSuppression)
-    .values({
-      organizationId: params.organizationId,
-      email: normalizedEmail,
-      reason: "bounce",
-      bounceType: "soft",
-      bounceCount: 1,
-      source: "webhook",
-      resendEventId: params.resendEventId ?? null,
-      metadata: params.metadata ?? {},
-    })
-    .returning({ id: emailSuppression.id });
-
-  return {
-    id: inserted.id,
-    bounceCount: 1,
-    suppressed: false, // First bounce doesn't suppress
-    isNew: true,
-  };
-}
+export {
+  addSuppressionDirect,
+  checkSuppressionBatchDirect,
+  isEmailSuppressedDirect,
+  trackSoftBounce,
+};

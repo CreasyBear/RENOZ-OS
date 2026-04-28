@@ -655,6 +655,50 @@ function RelatedTab({
         </Card>
       )}
 
+      {relatedContext?.relatedSerials?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              Related Serials
+              <Badge variant="secondary" className="text-xs">
+                {relatedContext.relatedSerials.length}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Serials linked through the source order&apos;s shipment or allocation records.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {relatedContext.relatedSerials.map((serial) => (
+                <div
+                  key={`${serial.serialNumber}-${serial.orderLineItemId ?? 'line'}`}
+                  className="rounded-md border p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono font-medium">{serial.serialNumber}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {serial.source === 'shipment'
+                        ? 'Shipped'
+                        : serial.source === 'allocation'
+                          ? 'Allocated'
+                          : 'Order line'}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    {serial.productName ??
+                      serial.orderLineDescription ??
+                      'Serialized order item'}
+                    {serial.shipmentNumber ? ` · ${serial.shipmentNumber}` : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {supportContext?.serviceSystem && (
         <Card>
           <CardHeader>

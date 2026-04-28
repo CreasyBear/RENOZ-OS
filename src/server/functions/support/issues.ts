@@ -102,6 +102,22 @@ function applyOptionalEqualityFilter(
   }
 }
 
+function buildIssueSearchCondition(search: string, organizationId: string) {
+  const pattern = containsPattern(search);
+  return or(
+    ilike(issues.title, pattern),
+    ilike(issues.issueNumber, pattern),
+    sql`EXISTS (
+      SELECT 1
+      FROM ${customers}
+      WHERE ${customers.id} = ${issues.customerId}
+        AND ${customers.organizationId} = ${organizationId}
+        AND ${customers.deletedAt} IS NULL
+        AND ${customers.name} ILIKE ${pattern}
+    )`
+  )!;
+}
+
 function matchesRmaState(
   requestedState: IssueRmaState | undefined,
   actualState: 'ready' | 'blocked' | 'linked' | null
@@ -517,9 +533,7 @@ export const getIssues = createServerFn({ method: 'GET' })
       conditions.push(isNotNull(issues.escalatedAt));
     }
     if (data.search) {
-      conditions.push(
-        or(ilike(issues.title, containsPattern(data.search)), ilike(issues.issueNumber, containsPattern(data.search)))!
-      );
+      conditions.push(buildIssueSearchCondition(data.search, ctx.organizationId));
     }
 
     const needsRmaFiltering = !!data.rmaState && data.rmaState !== 'any';
@@ -595,9 +609,7 @@ export const getIssuesCursor = createServerFn({ method: 'GET' })
     }
     if (escalated === true) conditions.push(isNotNull(issues.escalatedAt));
     if (search) {
-      conditions.push(
-        or(ilike(issues.title, containsPattern(search)), ilike(issues.issueNumber, containsPattern(search)))!
-      );
+      conditions.push(buildIssueSearchCondition(search, ctx.organizationId));
     }
 
     const orderDir = sortOrder === 'asc' ? asc : desc;
@@ -1066,9 +1078,7 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
       conditions.push(isNotNull(issues.escalatedAt));
     }
     if (data.search) {
-      conditions.push(
-        or(ilike(issues.title, containsPattern(data.search)), ilike(issues.issueNumber, containsPattern(data.search)))!
-      );
+      conditions.push(buildIssueSearchCondition(data.search, ctx.organizationId));
     }
 
     // slaStatus filter: breached = only issues with breached SLA
@@ -1195,9 +1205,7 @@ export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
     }
     if (escalated === true) conditions.push(isNotNull(issues.escalatedAt));
     if (search) {
-      conditions.push(
-        or(ilike(issues.title, containsPattern(search)), ilike(issues.issueNumber, containsPattern(search)))!
-      );
+      conditions.push(buildIssueSearchCondition(search, ctx.organizationId));
     }
     if (slaStatus === 'breached') {
       conditions.push(

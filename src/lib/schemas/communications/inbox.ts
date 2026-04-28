@@ -92,7 +92,7 @@ export interface InboxEmailItem {
     source?: string;
     provider?: string;
     fromName?: string;
-    [key: string]: {} | undefined;
+    [key: string]: NonNullable<unknown> | undefined;
   } | null;
   customer?: {
     id: string;

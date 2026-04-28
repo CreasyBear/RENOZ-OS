@@ -167,7 +167,7 @@ export function useCampaignPreview(options: UseCampaignPreviewOptions) {
   const previewCampaignRecipientsFn = useServerFn(previewCampaignRecipients);
 
   return useQuery<PreviewRecipientsResult>({
-    queryKey: queryKeys.communications.campaignPreview(recipientCriteria),
+    queryKey: queryKeys.communications.campaignPreview({ recipientCriteria, sampleSize }),
     queryFn: async () => {
       try {
         return await previewCampaignRecipientsFn({

@@ -30,7 +30,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@/server/functions/communications/email-suppression", () => ({
+vi.mock("@/server/functions/communications/_shared/suppression-mutations", () => ({
   addSuppressionDirect: (...args: unknown[]) => mockAddSuppressionDirect(...args),
 }));
 

@@ -6,8 +6,8 @@
  *
  * @see src/server/functions/financial/ar-aging.ts
  * @see src/server/functions/financial/payment-schedules.ts
- * @see src/server/functions/financial/revenue-recognition.ts
- * @see src/server/functions/financial/xero-invoice-sync.ts
+ * @see src/server/functions/financial/_shared/revenue-recognition-read.ts
+ * @see src/server/functions/financial/_shared/xero-invoice-status-read.ts
  */
 
 import { describe, it, expect } from 'vitest';
@@ -20,8 +20,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FINANCIAL_FILES = [
   'src/server/functions/financial/_shared/ar-aging-read.ts',
   'src/server/functions/financial/_shared/payment-schedule-read.ts',
-  'src/server/functions/financial/revenue-recognition.ts',
-  'src/server/functions/financial/xero-invoice-sync.ts',
+  'src/server/functions/financial/_shared/revenue-recognition-read.ts',
+  'src/server/functions/financial/_shared/xero-invoice-status-read.ts',
 ];
 
 function getProjectRoot(): string {

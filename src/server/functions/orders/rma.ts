@@ -49,7 +49,10 @@ import {
   findSerializedItemBySerial,
   upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
-import { resolveIssueAnchors } from '@/server/functions/support/_shared/issue-anchor-resolution';
+import {
+  extractIssueAnchorValues,
+  resolveIssueAnchors,
+} from '@/server/functions/support/_shared/issue-anchor-resolution';
 import {
   ACTIVE_RMA_STATUSES,
   getIssueRemedyContext,
@@ -247,16 +250,10 @@ export const createRma = createServerFn({ method: 'POST' })
         throw new NotFoundError('Issue not found', 'issue');
       }
 
-      const anchorResolution = await resolveIssueAnchors(ctx.organizationId, {
-        warrantyId: issue.warrantyId,
-        warrantyEntitlementId: issue.warrantyEntitlementId,
-        orderId: issue.orderId,
-        shipmentId: issue.shipmentId,
-        productId: issue.productId,
-        serializedItemId: issue.serializedItemId,
-        serviceSystemId: issue.serviceSystemId,
-        serialNumber: issue.serialNumber,
-      });
+      const anchorResolution = await resolveIssueAnchors(
+        ctx.organizationId,
+        extractIssueAnchorValues(issue)
+      );
       const remedyContext = await getIssueRemedyContext({
         organizationId: ctx.organizationId,
         issue: {

@@ -1,8 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailSignatures, emailTemplates } from "../../../drizzle/schema";
-import { substituteTemplateVariables } from "@/lib/email/sanitize";
-import { getSampleTemplateData } from "@/lib/server/email-templates";
+import {
+  getSampleTemplateData,
+  substituteTemplateVariables,
+} from "@/lib/communications/template-utils";
 import { ServerError } from "@/lib/server/errors";
 import { z } from "zod";
 

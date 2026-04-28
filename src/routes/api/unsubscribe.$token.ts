@@ -19,7 +19,7 @@ import { db } from "@/lib/db";
 import { contacts, customerActivities } from "drizzle/schema";
 import { eq } from "drizzle-orm";
 import { verifyUnsubscribeToken as verifySecureToken } from "@/lib/server/unsubscribe-tokens";
-import { addSuppressionDirect } from "@/server/functions/communications/email-suppression";
+import { addSuppressionDirect } from "@/server/functions/communications/_shared/suppression-mutations";
 import {
   checkRateLimitSync,
   getClientIdentifier,

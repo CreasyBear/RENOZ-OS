@@ -1,11 +1,11 @@
 # TODOs
 
-## Phase 4: Revenue Recognition And Xero Invoice Sync Split
+## Phase 6: Optional Finance + Communications DB Smoke Hardening
 
-What: split `src/server/functions/financial/revenue-recognition.ts` and `src/server/functions/financial/xero-invoice-sync.ts` into thin ServerFn facades plus shared read/write/provider-sync helpers.
+What: add a small real-database smoke layer for the highest-risk helper flows that Phase 5 now covers with deterministic stateful unit tests: Xero payment application, scheduled-email claim/finalize, and campaign send partial-failure accounting.
 
-Why: these files still contain mixed auth, validation, database state changes, and Xero provider state machines. They were deliberately deferred from Finance Separation Phase 3 because they need behavior tests around provider state transitions, not just source-shape checks.
+Why: Phase 5 added behavior coverage without requiring `DATABASE_URL`. The remaining confidence gap is SQL/transaction fidelity for the few flows where mocked Drizzle chains cannot prove constraint behavior, row locks, or transaction rollback semantics.
 
-Context: preserve existing public ServerFn exports, Xero webhook/payment reconciliation re-exports, normalized query keys, and schema contracts. Add tests for disconnected Xero, missing revenue accounts, existing journal idempotency, retry threshold/manual override, sync readiness persistence, and invoice sync re-export compatibility.
+Context: preserve existing public ServerFn exports, compatibility shims, normalized query keys, and schema contracts. Keep this to a tiny integration-smoke lake with seeded rows and provider mocks; do not expand into a full test database harness unless repeated regressions justify it.
 
-Depends on: Finance Separation Phase 3 facade/helper boundary tests landing cleanly.
+Depends on: Phase 5 behavior hardening landing cleanly and a reliable local/CI test database strategy.

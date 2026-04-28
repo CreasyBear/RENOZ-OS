@@ -328,6 +328,16 @@ export interface IssueRelatedContext {
     id: string;
     shipmentNumber: string | null;
   } | null;
+  relatedSerials: Array<{
+    serializedItemId: string | null;
+    serialNumber: string;
+    productName: string | null;
+    orderLineItemId: string | null;
+    orderLineDescription: string | null;
+    shipmentId: string | null;
+    shipmentNumber: string | null;
+    source: 'shipment' | 'allocation' | 'order_line';
+  }>;
   linkedRmas: Array<{
     id: string;
     rmaNumber: string;

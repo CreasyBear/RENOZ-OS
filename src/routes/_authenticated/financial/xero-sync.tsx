@@ -10,7 +10,7 @@
  * @see _Initiation/_prd/2-domains/financial/financial.prd.json (DOM-FIN-005)
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { z } from 'zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
@@ -56,6 +56,9 @@ function XeroSyncStatusPage() {
 
   const { data, isLoading, error } = useXeroSyncs({
     status: status === 'all' ? undefined : status,
+    issue: search.issue,
+    customerId: search.customerId,
+    orderId: search.orderId,
     pageSize: 50,
   });
   const { data: integration } = useXeroIntegrationStatus();
@@ -111,21 +114,7 @@ function XeroSyncStatusPage() {
     [resyncMutation]
   );
 
-  const invoices: InvoiceWithSyncStatus[] = useMemo(() => {
-    const raw = data?.invoices ?? [];
-
-    return raw.filter((invoice) => {
-      if (search.issue && invoice.issue?.code !== search.issue) {
-        return false;
-      }
-
-      if (search.customerId && invoice.customerId !== search.customerId) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [data?.invoices, search.customerId, search.issue]);
+  const invoices: InvoiceWithSyncStatus[] = data?.invoices ?? [];
 
   return (
     <div className="space-y-4">

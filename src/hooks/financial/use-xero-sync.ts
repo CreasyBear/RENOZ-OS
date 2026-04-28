@@ -38,6 +38,9 @@ function rethrowFinancialReadError(
 export interface UseXeroSyncsOptions {
   status?: 'pending' | 'syncing' | 'synced' | 'error';
   errorsOnly?: boolean;
+  issue?: string;
+  customerId?: string;
+  orderId?: string;
   page?: number;
   pageSize?: number;
   enabled?: boolean;
@@ -51,6 +54,9 @@ export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
     queryKey: queryKeys.financial.xeroSyncs({
       status: params.status,
       errorsOnly: params.errorsOnly,
+      issue: params.issue,
+      customerId: params.customerId,
+      orderId: params.orderId,
       page: params.page ?? 1,
       pageSize: params.pageSize ?? 50,
     }),

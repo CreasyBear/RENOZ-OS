@@ -36,10 +36,8 @@ import {
   type ResendWebhookPayload,
   type ResendWebhookEventType,
 } from "@/routes/api/webhooks/resend";
-import {
-  addSuppressionDirect,
-  trackSoftBounce,
-} from "@/server/functions/communications/email-suppression";
+import { addSuppressionDirect } from "@/server/functions/communications/_shared/suppression-mutations";
+import { trackSoftBounce } from "@/server/functions/communications/_shared/suppression-policy";
 import {
   createEmailDeliveredActivity,
   createEmailOpenedActivity,

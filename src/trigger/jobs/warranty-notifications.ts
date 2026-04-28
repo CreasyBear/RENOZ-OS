@@ -24,7 +24,7 @@ import {
   type WarrantyClaimSubmittedPayload,
   type WarrantyClaimResolvedPayload,
 } from '../client';
-import { isEmailSuppressedDirect } from '@/server/functions/communications/email-suppression';
+import { isEmailSuppressedDirect } from '@/server/functions/communications/_shared/suppression-read';
 import { renderEmail, WarrantyExpiring } from '@/lib/email';
 import { buildDocumentViewUrl, getAppUrl } from '@/lib/documents/urls';
 

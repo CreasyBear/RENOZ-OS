@@ -20,9 +20,7 @@ import {
   type RenderPreviewResult,
   type SendTestEmailResult,
 } from "@/lib/schemas/communications/email-preview";
-import {
-  getSampleTemplateData,
-} from "@/lib/server/email-templates";
+import { getSampleTemplateData } from "@/lib/communications/template-utils";
 import { NotFoundError } from "@/lib/server/errors";
 import { getCustomerById } from "@/server/functions/customers/customers";
 import { logger } from "@/lib/logger";
