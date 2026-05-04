@@ -10,7 +10,13 @@ import {
 // INVENTORY COST LAYERS
 // ============================================================================
 
-export const costLayerReferenceTypeValues = ['purchase_order', 'adjustment', 'transfer', 'rma'] as const;
+export const costLayerReferenceTypeValues = [
+  'purchase_order',
+  'manual_receive',
+  'adjustment',
+  'transfer',
+  'rma',
+] as const;
 
 export const costLayerReferenceTypeSchema = z.enum(costLayerReferenceTypeValues);
 

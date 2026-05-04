@@ -5,9 +5,14 @@ import {
   inventoryCostLayerCapitalizations,
   inventoryCostLayers,
 } from 'drizzle/schema/inventory/inventory';
-
-type CostLayerReferenceType = 'transfer' | 'rma' | 'purchase_order' | 'adjustment';
 import { createInventoryFinanceError } from '@/lib/server/inventory-finance-mutation-contract';
+
+type CostLayerReferenceType =
+  | 'purchase_order'
+  | 'manual_receive'
+  | 'adjustment'
+  | 'transfer'
+  | 'rma';
 
 type DbTransaction = TransactionExecutor;
 
@@ -92,7 +97,7 @@ export async function moveLayersBetweenInventory(
     sourceInventoryId: string;
     destinationInventoryId: string;
     quantity: number;
-    referenceType: string;
+    referenceType: CostLayerReferenceType;
     referenceId?: string;
     receivedAt?: Date;
   }
@@ -121,7 +126,7 @@ export async function moveLayersBetweenInventory(
         quantityReceived: delta.quantity,
         quantityRemaining: delta.quantity,
         unitCost: String(delta.unitCost),
-        referenceType: params.referenceType as CostLayerReferenceType,
+        referenceType: params.referenceType,
         referenceId: params.referenceId,
       })
       .returning({ id: inventoryCostLayers.id });
@@ -182,7 +187,7 @@ export async function createReceiptLayersWithCostComponents(
     quantity: number;
     receivedAt: Date;
     unitCost: number;
-    referenceType: string;
+    referenceType: CostLayerReferenceType;
     referenceId?: string;
     purchaseOrderReceiptItemId?: string;
     currency: string;
@@ -208,10 +213,10 @@ export async function createReceiptLayersWithCostComponents(
       quantityReceived: params.quantity,
       quantityRemaining: params.quantity,
       unitCost: String(params.unitCost),
-    referenceType: params.referenceType as CostLayerReferenceType,
-    referenceId: params.referenceId,
-  })
-  .returning({ id: inventoryCostLayers.id });
+      referenceType: params.referenceType,
+      referenceId: params.referenceId,
+    })
+    .returning({ id: inventoryCostLayers.id });
 
   // Compatibility guard during migration rollout: skip insert if table not yet present.
   try {

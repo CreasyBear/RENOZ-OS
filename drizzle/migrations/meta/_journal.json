@@ -253,6 +253,13 @@
       "when": 1777044000000,
       "tag": "0038_campaign_recipients_customer_id",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1777939200000,
+      "tag": "0039_cost_layer_manual_receive_reference",
+      "breakpoints": true
     }
   ]
 }

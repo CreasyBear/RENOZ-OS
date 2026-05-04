@@ -590,6 +590,7 @@ export const qualityStatusEnum = pgEnum("quality_status", [
 
 export const costLayerReferenceTypeEnum = pgEnum("cost_layer_reference_type", [
   "purchase_order",
+  "manual_receive",
   "adjustment",
   "transfer",
   "rma",
