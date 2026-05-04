@@ -860,7 +860,7 @@ export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
           continue;
         }
 
-        await db
+        const deletedRows = await db
           .update(purchaseOrders)
           .set({
             deletedAt: new Date(),
@@ -869,9 +869,17 @@ export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
           .where(
             and(
               eq(purchaseOrders.id, id),
-              eq(purchaseOrders.organizationId, ctx.organizationId)
+              eq(purchaseOrders.organizationId, ctx.organizationId),
+              eq(purchaseOrders.status, 'draft'),
+              isNull(purchaseOrders.deletedAt)
             )
-          );
+          )
+          .returning({ id: purchaseOrders.id });
+
+        if (!deletedRows[0]) {
+          results.failed.push({ id, error: 'Purchase order not found or no longer in draft status' });
+          continue;
+        }
 
         results.deleted += 1;
       } catch (err) {

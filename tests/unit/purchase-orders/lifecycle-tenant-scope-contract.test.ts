@@ -62,14 +62,18 @@ describe('purchase order lifecycle tenant-scope contract', () => {
     }
   });
 
-  it('keeps bulk-delete lifecycle writes organization-scoped', () => {
+  it('keeps bulk-delete lifecycle writes scoped to organization and draft state', () => {
     const source = compact(read('src/server/functions/suppliers/purchase-orders.ts'));
     const writeBlock = firstPurchaseOrderWriteBlock(
       exportedFunctionBlock(source, 'bulkDeletePurchaseOrders')
     );
 
+    expect(writeBlock).toContain('eq(purchaseOrders.id,id)');
+    expect(writeBlock).toContain('eq(purchaseOrders.organizationId,ctx.organizationId)');
+    expect(writeBlock).toContain("eq(purchaseOrders.status,'draft')");
+    expect(writeBlock).toContain('isNull(purchaseOrders.deletedAt)');
     expect(writeBlock).toContain(
-      'where(and(eq(purchaseOrders.id,id),eq(purchaseOrders.organizationId,ctx.organizationId)))'
+      "where(and(eq(purchaseOrders.id,id),eq(purchaseOrders.organizationId,ctx.organizationId),eq(purchaseOrders.status,'draft'),isNull(purchaseOrders.deletedAt)))"
     );
     expect(writeBlock).not.toContain('.where(eq(purchaseOrders.id,id))');
   });
