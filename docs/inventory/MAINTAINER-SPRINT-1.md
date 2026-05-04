@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, and 10 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, and 11 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -1032,3 +1032,42 @@ Verification:
 Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
 
 Residual risk: direct legacy imports from `@/lib/schemas/inventory/inventory` are still supported by compatibility re-exports; future slices should migrate those callers to cleaner owners.
+
+### Issue 11: Inventory Schema Import Boundary
+
+Touched domains: inventory route schema imports, location page schema imports, root input normalization coverage, inventory schema exports.
+
+Workflow protected: inventory browser search validation -> location management schema contracts -> root input normalization sweep -> inventory schema owner/barrel boundary.
+
+Business value: inventory schema contracts are easier to find and safer to evolve because route and test callers no longer import the generic inventory schema monolith directly.
+
+Standards checked:
+
+- migrated inventory route callers from `@/lib/schemas/inventory/inventory` to the public `@/lib/schemas/inventory` barrel
+- kept extracted location schemas available through their owner/barrel path, not through direct compatibility exports from `inventory.ts`
+- removed the now-unused location compatibility re-exports from `src/lib/schemas/inventory/inventory.ts`
+- added a boundary guard that prevents the cleaned route/test callers from drifting back to the schema monolith
+- preserved inventory browser search parsing, location page types, and root normalization behavior
+
+Smells removed:
+
+- route/page callers reached through the direct inventory schema monolith even after location schema ownership was extracted
+- temporary location compatibility re-exports remained in `inventory.ts` after internal callers no longer needed them
+
+Deferred:
+
+- warehouse-location hierarchy schema extraction from `inventory.ts`
+- broader decomposition of count, valuation, forecasting, alert, dashboard, and warehouse-location schemas
+- a broader import-boundary policy for every legacy schema monolith across non-inventory domains
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/schema-import-boundaries.test.ts tests/unit/inventory/location-schema-ownership.test.ts tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/inventory.ts src/routes/_authenticated/inventory/browser.tsx src/routes/_authenticated/inventory/locations-page.tsx tests/unit/root-input-normalization-sweep.test.ts tests/unit/inventory/schema-import-boundaries.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/inventory.ts src/routes/_authenticated/inventory/browser.tsx src/routes/_authenticated/inventory/locations-page.tsx tests/unit/root-input-normalization-sweep.test.ts tests/unit/inventory/schema-import-boundaries.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this closes the residual schema-boundary risk from Issue 10 without broadening the inventory sprint.
+
+Residual risk: `src/lib/schemas/inventory/inventory.ts` remains large and still owns several unrelated schema families. This slice establishes a caller boundary, not full schema decomposition.
