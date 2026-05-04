@@ -146,4 +146,28 @@ describe('supplier price import row normalization', () => {
       status: 'active',
     });
   });
+
+  it('normalizes import control-field casing before schema validation', () => {
+    const headers = [
+      'Supplier Code',
+      'Product Name',
+      'Base Price',
+      'Currency',
+      'Discount Type',
+      'Status',
+    ];
+    const row = ['SUP005', 'RENOZ 500Ah Lithium Battery', '1050.00', ' aud ', ' Percentage ', ' Active '];
+    const rowData = buildPriceImportRowData(row, headers);
+
+    expect(rowData).toMatchObject({
+      currency: 'AUD',
+      discountType: 'percentage',
+      status: 'active',
+    });
+    expect(parsePriceImportRowData(rowData)).toMatchObject({
+      currency: 'AUD',
+      discountType: 'percentage',
+      status: 'active',
+    });
+  });
 });

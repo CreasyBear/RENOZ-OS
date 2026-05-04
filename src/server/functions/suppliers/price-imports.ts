@@ -377,8 +377,18 @@ function normalizeImportHeader(header: string): PriceImportColumnKey | null {
   return PRICE_IMPORT_HEADER_ALIASES[header.trim().toLowerCase().replace(/[^a-z0-9]/g, '')] ?? null;
 }
 
-function normalizeImportCell(value: string | undefined): string {
-  return value?.trim() ?? '';
+function normalizeImportCell(key: PriceImportColumnKey, value: string | undefined): string {
+  const normalized = value?.trim() ?? '';
+
+  if (key === 'currency') {
+    return normalized.toUpperCase();
+  }
+
+  if (key === 'discountType' || key === 'status') {
+    return normalized.toLowerCase();
+  }
+
+  return normalized;
 }
 
 function applyPriceImportRowDefaults(rowData: PriceImportRowData): PriceImportRowData {
@@ -400,14 +410,14 @@ export function buildPriceImportRowData(
     headers.forEach((header, index) => {
       const key = normalizeImportHeader(header);
       if (key) {
-        rowData[key] = normalizeImportCell(row[index]);
+        rowData[key] = normalizeImportCell(key, row[index]);
       }
     });
     return applyPriceImportRowDefaults(rowData);
   }
 
   PRICE_IMPORT_COLUMN_KEYS.forEach((key, index) => {
-    rowData[key] = normalizeImportCell(row[index]);
+    rowData[key] = normalizeImportCell(key, row[index]);
   });
 
   return applyPriceImportRowDefaults(rowData);
