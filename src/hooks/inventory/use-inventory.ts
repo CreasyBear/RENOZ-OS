@@ -250,7 +250,7 @@ export function useAdjustInventory() {
 
   return useMutation({
     mutationFn: (params: StockAdjustment) => adjustInventory({ data: params }),
-    onMutate: async (variables) => {
+    onMutate: async (_variables) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.inventory.lists() });
       await queryClient.cancelQueries({ queryKey: queryKeys.inventory.details() });
 
@@ -261,68 +261,9 @@ export function useAdjustInventory() {
         queryKey: queryKeys.inventory.details(),
       });
 
-      // Row-scoped adjustments (inventoryId present) can target serialized rows.
-      // Skip aggregate optimistic math and let refetch reconcile exact rows.
-      if (variables.inventoryId) {
-        return { previousLists, previousDetails };
-      }
-
-      queryClient.setQueriesData<InventoryListResult>(
-        { queryKey: queryKeys.inventory.lists() },
-        (old) => {
-          if (!old) return old;
-          const items = old.items.map((item) => {
-            if (
-              item.productId !== variables.productId ||
-              item.locationId !== variables.locationId
-            ) {
-              return item;
-            }
-            const quantityOnHand = (item.quantityOnHand ?? 0) + variables.adjustmentQty;
-            const quantityAvailable = (item.quantityAvailable ?? 0) + variables.adjustmentQty;
-            const totalValue =
-              item.unitCost !== null && item.unitCost !== undefined
-                ? quantityOnHand * Number(item.unitCost)
-                : item.totalValue;
-            return {
-              ...item,
-              quantityOnHand,
-              quantityAvailable,
-              totalValue,
-            };
-          });
-          return { ...old, items };
-        }
-      );
-
-      queryClient.setQueriesData<InventoryDetailResult>(
-        { queryKey: queryKeys.inventory.details() },
-        (old) => {
-          if (!old?.item) return old;
-          if (
-            old.item.productId !== variables.productId ||
-            old.item.locationId !== variables.locationId
-          ) {
-            return old;
-          }
-          const quantityOnHand = (old.item.quantityOnHand ?? 0) + variables.adjustmentQty;
-          const quantityAvailable = (old.item.quantityAvailable ?? 0) + variables.adjustmentQty;
-          const totalValue =
-            old.item.unitCost !== null && old.item.unitCost !== undefined
-              ? quantityOnHand * Number(old.item.unitCost)
-              : old.item.totalValue;
-          return {
-            ...old,
-            item: {
-              ...old.item,
-              quantityOnHand,
-              quantityAvailable,
-              totalValue,
-            },
-          };
-        }
-      );
-
+      // Adjustment writes are row-scoped on the server. Product/location-only
+      // payloads still mutate one locked row, so aggregate optimistic math can
+      // overpatch sibling lot/serial rows. Let refetch reconcile exact rows.
       return { previousLists, previousDetails };
     },
     onError: (error, _variables, context) => {
