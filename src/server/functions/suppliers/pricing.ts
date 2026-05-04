@@ -15,7 +15,7 @@ import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { containsPattern } from "@/lib/db/utils";
 import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   createPriceListSchema,
@@ -399,6 +399,7 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const { ids, updates } = data;
+    const uniqueIds = [...new Set(ids)];
 
     // Prepare update data
     const updateData: Record<string, unknown> = {
@@ -428,9 +429,15 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
       .select()
       .from(priceLists)
       .where(and(
-        inArray(priceLists.id, ids),
+        inArray(priceLists.id, uniqueIds),
         eq(priceLists.organizationId, ctx.organizationId)
       ));
+
+    if (currentPrices.length !== uniqueIds.length) {
+      throw new ValidationError(
+        'Some price records were not found or are unavailable for this organization. Refresh and try again.'
+      );
+    }
 
     // Calculate new effective prices
     const itemsToUpdate = currentPrices.map((price) => {
@@ -464,14 +471,22 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
           eq(priceLists.id, item.id),
           eq(priceLists.organizationId, ctx.organizationId)
         ))
+        .returning({ id: priceLists.id })
     );
 
-    await Promise.all(updatePromises);
+    const updateResults = await Promise.all(updatePromises);
+    const updatedCount = updateResults.filter((rows) => rows[0]).length;
+
+    if (updatedCount !== itemsToUpdate.length) {
+      throw new ValidationError(
+        'Some price records could not be updated. Refresh and try again.'
+      );
+    }
 
     return {
       success: true,
-      updatedCount: itemsToUpdate.length,
-      message: `Successfully updated ${itemsToUpdate.length} price records`,
+      updatedCount,
+      message: `Successfully updated ${updatedCount} price records`,
     };
   });
 
