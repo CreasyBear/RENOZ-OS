@@ -20,7 +20,6 @@ import { toast } from '../_shared/use-toast';
 import {
   listInventory,
   getInventoryItem,
-  transferInventory,
   listMovements,
   getInventoryDashboard,
   quickSearchInventory,
@@ -28,6 +27,7 @@ import {
 } from '@/server/functions/inventory/inventory';
 import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { receiveInventory } from '@/server/functions/inventory/receiving';
+import { transferInventory } from '@/server/functions/inventory/transfers';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
   InventoryListQuery,

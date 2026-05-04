@@ -36,7 +36,6 @@ vi.mock('@/server/functions/inventory', () => ({
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
-  transferInventory: vi.fn(),
   listMovements: (...args: unknown[]) => mockListMovements(...args),
   getInventoryDashboard: vi.fn().mockResolvedValue({}),
   quickSearchInventory: vi.fn().mockResolvedValue({ items: [] }),
@@ -49,6 +48,10 @@ vi.mock('@/server/functions/inventory/adjustments', () => ({
 
 vi.mock('@/server/functions/inventory/receiving', () => ({
   receiveInventory: vi.fn(),
+}));
+
+vi.mock('@/server/functions/inventory/transfers', () => ({
+  transferInventory: vi.fn(),
 }));
 
 vi.mock('@/server/functions/inventory/locations', () => ({

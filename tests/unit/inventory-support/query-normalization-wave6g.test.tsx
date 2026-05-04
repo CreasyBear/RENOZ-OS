@@ -27,7 +27,6 @@ vi.mock('@tanstack/react-start', async () => {
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: (...args: unknown[]) => mockListInventory(...args),
   getInventoryItem: (...args: unknown[]) => mockGetInventoryItem(...args),
-  transferInventory: vi.fn(),
   receiveInventory: vi.fn(),
   listMovements: vi.fn().mockResolvedValue({ items: [] }),
   getInventoryDashboard: vi.fn().mockResolvedValue({}),
@@ -37,6 +36,10 @@ vi.mock('@/server/functions/inventory/inventory', () => ({
 
 vi.mock('@/server/functions/inventory/adjustments', () => ({
   adjustInventory: vi.fn(),
+}));
+
+vi.mock('@/server/functions/inventory/transfers', () => ({
+  transferInventory: vi.fn(),
 }));
 
 vi.mock('@/server/functions/inventory/locations', () => ({

@@ -9,7 +9,6 @@ const mockReceiveInventory = vi.fn()
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
-  transferInventory: vi.fn(),
   listMovements: vi.fn(),
   getInventoryDashboard: vi.fn(),
   quickSearchInventory: vi.fn(),
@@ -22,6 +21,10 @@ vi.mock('@/server/functions/inventory/adjustments', () => ({
 
 vi.mock('@/server/functions/inventory/receiving', () => ({
   receiveInventory: (...args: unknown[]) => mockReceiveInventory(...args),
+}))
+
+vi.mock('@/server/functions/inventory/transfers', () => ({
+  transferInventory: vi.fn(),
 }))
 
 vi.mock('@/server/functions/inventory/locations', () => ({

@@ -30,9 +30,9 @@ import {
   movementTypeValues,
   isValidMovementType,
 } from '@/lib/schemas/inventory';
-import { transferInventory } from '@/server/functions/inventory/inventory';
 import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { receiveInventory } from '@/server/functions/inventory/receiving';
+import { transferInventory } from '@/server/functions/inventory/transfers';
 
 // ============================================================================
 // TYPES
