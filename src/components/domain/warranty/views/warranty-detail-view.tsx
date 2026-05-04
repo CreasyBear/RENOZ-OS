@@ -23,7 +23,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { StatusBadge, EntityHeader, MetricCard } from '@/components/shared';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import { getActivitiesFeedSearch } from '@/lib/activities';
@@ -46,6 +45,7 @@ import { ExtendWarrantyDialog } from '@/components/domain/warranty/dialogs/exten
 import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
+import { WarrantyCertificateStatusCard } from '@/components/domain/warranty/views/warranty-certificate-status-card';
 import { WarrantyClaimsHistoryCard } from '@/components/domain/warranty/views/warranty-claims-history-card';
 import { WarrantyLineageSections } from '@/components/domain/warranty/views/warranty-lineage-sections';
 import {
@@ -393,32 +393,12 @@ export function WarrantyDetailView({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Certificate</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p className="text-muted-foreground">
-            {certificateError
-              ? 'Certificate status is temporarily unavailable.'
-              : isCertificateLoading
-              ? 'Checking certificate status...'
-              : certificateStatus?.exists
-                ? 'Certificate available in the Actions menu.'
-                : 'No certificate generated yet.'}
-          </p>
-          {certificateError && onRetryCertificate && (
-            <Alert variant="destructive">
-              <AlertDescription className="flex items-center justify-between gap-4">
-                <span>{certificateError}</span>
-                <Button variant="outline" size="sm" onClick={onRetryCertificate}>
-                  Retry
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+      <WarrantyCertificateStatusCard
+        certificateStatus={certificateStatus}
+        isCertificateLoading={isCertificateLoading}
+        certificateError={certificateError}
+        onRetryCertificate={onRetryCertificate}
+      />
     </div>
   );
 
