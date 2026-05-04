@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive mutation error guidance standardized; remaining issues stay in the ledger.
+Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive and stock-count mutation error guidance standardized; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -434,40 +434,51 @@ Residual risk: the main inventory server file is now a 29-line compatibility bar
 
 ### Issue 4: Inventory Mutation Error Standard
 
-Touched domains: inventory hooks, manual receive mutation, warehouse stock-in operator feedback.
+Touched domains: inventory hooks, manual receive mutation, stock-count mutations, warehouse stock-in and cycle-count operator feedback.
 
-Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance.
+Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance; stock-count create/update/start/item/bulk/complete/cancel failure -> safe toast guidance -> count/inventory cache contracts preserved.
 
-Business value: warehouse operators should get actionable receive failure guidance instead of a generic "failed" toast when inventory integrity validation rejects a stock-in.
+Business value: warehouse operators should get actionable receive and stock-count failure guidance instead of raw database/server wording or generic "failed" toasts when inventory integrity validation rejects a stock operation.
 
 Standards checked:
 
+- extracted inventory mutation error parsing into `src/hooks/inventory/_mutation-errors.ts`
 - reused the existing inventory mutation error formatter for `useReceiveInventory`
+- reused the shared formatter across stock-count mutations
 - preserved optimistic rollback behavior for inventory list/detail caches
 - preserved receive success and cache invalidation behavior
+- preserved stock-count success and cache invalidation behavior
+- kept stock-count-specific completion guidance for cost-layer and serialized-unit integrity failures
+- added formatter unit coverage for validation guidance and raw-message suppression
 - added a regression test for validation-code guidance on receive failure
+- added stock-count hook regression coverage for raw create errors and completion integrity failures
 
 Smells removed:
 
+- duplicated inventory mutation error-shape parsing in `use-inventory.ts` and `use-stock-counts.ts`
 - generic `Failed to receive inventory` toast in `useReceiveInventory`
+- raw `error.message` stock-count mutation toasts
 - untested receive mutation failure messaging
+- untested stock-count mutation failure messaging
 
 Deferred:
 
-- raw `error.message` toasts in inventory stock counts, quality, locations, alerts, forecasting, valuation, and route/dialog surfaces
-- extracting the inventory mutation error formatter into a shared helper for all inventory mutation hooks
+- raw `error.message` toasts in inventory quality, locations, alerts, forecasting, valuation, and route/dialog surfaces
+- extending the shared formatter to serialized-item and product-inventory mutation helpers if their domain-specific code maps can be folded in cleanly
 
 Verification:
 
+- `./node_modules/.bin/vitest run tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-stock-counts.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-receive-inventory.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/inventory/_mutation-errors.ts src/hooks/inventory/use-inventory.ts src/hooks/inventory/use-stock-counts.ts tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-stock-counts.test.tsx`
 - `git diff --check`
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
 - `node scripts/check-read-path-query-guards.mjs`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
-Goal adaptation: no goal change; this is the first small operator-safe error-handling slice under Issue 4.
+Goal adaptation: no goal change; this keeps Issue 4 moving through small mutation-family slices.
 
-Residual risk: this slice standardizes manual receive only. The audit still shows raw or generic mutation errors across stock counts, quality inspections, locations, alerts, forecasting, valuation, and inventory UI routes/dialogs.
+Residual risk: this slice standardizes manual receive and stock-count mutations only. The audit still shows raw or generic mutation errors across quality inspections, locations, alerts, forecasting, valuation, and inventory UI routes/dialogs.
