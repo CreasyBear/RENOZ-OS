@@ -257,6 +257,25 @@ Out of scope:
 - changing adjustment or transfer behavior
 - decomposing dashboard/valuation/count schemas
 
+### 10. Inventory Location Schema Ownership
+
+Business value: warehouse location CRUD/list contracts should live with location workflow ownership instead of the generic inventory schema monolith.
+
+Evidence:
+
+- `src/server/functions/inventory/locations.ts` owns location management workflows.
+- `createLocationSchema`, `updateLocationSchema`, `locationListQuerySchema`, and `locationListCursorQuerySchema` still lived in `src/lib/schemas/inventory/inventory.ts`.
+
+Proposed slice:
+
+> Move location CRUD/list schemas into `src/lib/schemas/inventory/locations.ts` while preserving the public `@/lib/schemas/inventory` export surface.
+
+Out of scope:
+
+- moving warehouse-location hierarchy schemas
+- changing location defaults or filters
+- changing location server behavior
+
 ## Recommended First Implementation Slice
 
 Start with Issue 1: Manual Receive Cache Contract.
@@ -446,7 +465,7 @@ Verification:
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
 - `node scripts/check-read-path-query-guards.mjs`
-- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit` (default heap run exhausted Node memory before diagnostics)
 
 Goal adaptation: no goal change; the slice followed the product-owner goal by prioritizing architecture cleanliness inside a domain workflow.
 
