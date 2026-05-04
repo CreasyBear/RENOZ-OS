@@ -9,7 +9,7 @@
 
 **User capability:** Increase **quantity on hand** (and related valuation layers) for a product at a location, using one of several workflows that all feel like “receive” or “stock in” in the UI.
 
-**In scope:** Ad-hoc receiving (`receiveInventory`), PO goods receipt (`receiveGoods`, bulk wrapper), bulk product receive (`bulkReceiveStock`). AuthZ, canonical Zod contracts, transactions, cache behavior, and failure mapping at a high level per path.
+**In scope:** Ad-hoc receiving (`receiveInventory`), product-detail receive launch into ad-hoc receiving, PO goods receipt (`receiveGoods`), and the bulk PO receipt wrapper (`bulkReceiveGoods`). AuthZ, canonical Zod contracts, transactions, cache behavior, and failure mapping at a high level per path.
 
 **Out of scope:** **Stock adjustments** (`adjustInventory` — different narrative), **RMA receive** (`receiveRma` — returns path), serial lifecycle beyond receive rules, full line-by-line SQL inside `receiveGoods` (see server comment block in source).
 
@@ -34,18 +34,17 @@ Client cannot impersonate another org: queries always scoped by `ctx.organizatio
 |---|-------|-------------------|-----------------|------------------------|
 | A | **Ad-hoc receiving** | [`receiving-page.tsx`](../../src/routes/_authenticated/inventory/receiving-page.tsx) → [`ReceivingForm`](../../src/components/domain/inventory/receiving/receiving-form.tsx); mobile [`-receiving-page.tsx`](../../src/routes/_authenticated/mobile/-receiving-page.tsx); product detail launch via [`inventory-tab-container.tsx`](../../src/components/domain/products/tabs/inventory-tab-container.tsx) | `receiveInventory` — [`receiving.ts`](../../src/server/functions/inventory/receiving.ts) | `PERMISSIONS.inventory.receive` |
 | B | **PO goods receipt** | [`goods-receipt-dialog.tsx`](../../src/components/domain/purchase-orders/receive/goods-receipt-dialog.tsx) (and related PO UI) | `receiveGoods` — [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) | `PERMISSIONS.inventory.receive` |
-| C | **Bulk PO receipts** | Callers of bulk receive | `bulkReceiveGoods` — [`bulk-receive-goods.ts`](../../src/server/functions/suppliers/bulk-receive-goods.ts) | delegates per PO to `receiveGoods` |
-| D | **Bulk receive (products)** | Product inventory surfaces using batch API | `bulkReceiveStock` — [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) | `withAuth()` **only** — no explicit `PERMISSIONS.*` in handler (~L1254) |
+| C | **Bulk PO receipts** | Purchase-order list bulk receiving dialog | `bulkReceiveGoods` — [`bulk-receive-goods.ts`](../../src/server/functions/suppliers/bulk-receive-goods.ts) | `PERMISSIONS.inventory.receive`, then delegates each PO to `receiveGoods` |
 
 **Discovery:**
 
 ```bash
 rg -n "useReceiveInventory|receiveInventory\(" src/
 rg -n "useReceiveGoods|receiveGoods\(" src/
-rg -n "bulkReceiveStock|bulkReceiveGoods" src/
+rg -n "bulkReceiveGoods|receiveStock|recordMovement" src/
 ```
 
-**Friction:** English “Receive” / “stock in” may map to **different** APIs, preconditions (PO vs not), and permission posture (see path D).
+**Friction:** English “Receive” / “stock in” may map to **different** APIs and preconditions: non-PO stock-in uses `receiveInventory`; PO receipt uses `receiveGoods`; old product inventory wrappers delegate to canonical inventory functions and are not current UI entry points.
 
 ---
 
@@ -55,7 +54,7 @@ rg -n "bulkReceiveStock|bulkReceiveGoods" src/
 |------|-----------------|-------------------|
 | Ad-hoc | `receiveInventorySchema` | [`receiving.ts`](../../src/server/functions/inventory/receiving.ts) (passed to `.inputValidator`) |
 | PO receipt | `receiveGoodsSchema` | [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) |
-| Bulk products | Inline `z.object({ locationId, items, … })` | [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) ~L1238 |
+| Product receive wrapper | Inline `z.object({ productId, locationId, quantity, … })` | [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) delegates to `receiveInventory` |
 
 **Secondary (UI):** `receivingFormBaseSchema` + `superRefine` in [`receiving-form.tsx`](../../src/components/domain/inventory/receiving/receiving-form.tsx) — **duplicates** serialized rules (serial required, qty = 1) that the server enforces again.
 
@@ -91,9 +90,9 @@ sequenceDiagram
 
 High-level pipeline (see file header comment in [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) ~L100–108): receipt header → lines → movements (`purchase_in`) → cost layers → balance updates → PO line `quantityReceived` / pending → PO status → optional `product.costPrice` weighted average. **Single transaction** from handler entry.
 
-### C — `bulkReceiveStock`
+### C — product inventory wrappers
 
-Handler runs **one** `db.transaction` that batch-validates products, reads existing `inventory` rows for the shared `locationId`, then **bulk inserts/updates** inventory and builds movement rows in-process (separate code path from `receiveInventory` — not a thin wrapper).
+`receiveStock` and `recordMovement` preserve legacy product-inventory exports but route receive movements to `receiveInventory`, so the manual receive permission, validation, transaction, cost-layer, serialized-lineage, and cache contract stay canonical. `adjustStock` and `transferStock` similarly delegate to their inventory-domain endpoints.
 
 ---
 
@@ -103,7 +102,7 @@ Handler runs **one** `db.transaction` that batch-validates products, reads exist
 |------|---------------------------|-------------|
 | `receiveInventory` | `inventory`, movements, cost layers (per implementation in handler) | Single `db.transaction` |
 | `receiveGoods` | PO receipt + inventory + layers + PO lines + product cost | Single `db.transaction` |
-| `bulkReceiveStock` | Multiple products at one location | Single `db.transaction` |
+| `receiveStock` / receive `recordMovement` | Delegates to `receiveInventory` | Delegated transaction |
 
 Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/hooks/inventory/use-inventory.ts); PO list invalidation typically via callers of `useReceiveGoods` (trace separately if tightening).
 
@@ -135,7 +134,7 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 | Issue | Evidence | Risk |
 |-------|----------|------|
 | Duplicate serialized rules | UI `superRefine` + server checks | UX/server mismatch if one side changes |
-| Permission inconsistency | `bulkReceiveStock` uses `withAuth()` without `PERMISSIONS.inventory.receive` | Any authenticated user may bulk receive if route exposed |
+| Stale workflow memory | Prior trace referenced a product batch receive endpoint, but no live export or caller exists | Docs can train maintainers toward phantom APIs if not guarded |
 | “Stock in” vocabulary | Adjust vs receive vs RMA | Wrong operator training; wrong API for support |
 
 ---
@@ -143,6 +142,7 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 ## 9. Verification
 
 - **Tests:** Search `receiveInventory`, `receiveGoods`, `ReceivingForm` under `tests/`.
+- **Guard:** `tests/unit/inventory/stock-in-workflow-trace.test.ts` verifies the stock-in trace does not document a non-existent product bulk receive endpoint and that product receive wrappers delegate to canonical manual receiving.
 - **Gaps:** Contract test that UI serialized rules and server errors stay aligned; integration test for optimistic rollback on forced failure.
 
 ---
@@ -151,4 +151,4 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 
 - `adjustInventory` vs receive: when to use which (support doc).
 - `receiveRma` return-to-stock path.
-- `bulkReceiveStock` call sites vs ad-hoc receiving (product admin flows).
+- Product inventory wrappers vs direct inventory-domain endpoints, if any caller starts using them again.

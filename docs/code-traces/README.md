@@ -18,7 +18,7 @@ Traces use **`NN-slug.md`** prefixes so order stays stable in file listings and 
 | # | File | Workflow | Status |
 |---|------|----------|--------|
 | 01 | [01-customer-create.md](./01-customer-create.md) | New customer wizard → server create + related entities | **COMPLETE** (reference exemplar) |
-| 02 | [02-inventory-stock-in.md](./02-inventory-stock-in.md) | Multiple “stock in” paths (`receiveInventory`, `receiveGoods`, `bulkReceiveStock`) | **COMPLETE** |
+| 02 | [02-inventory-stock-in.md](./02-inventory-stock-in.md) | Multiple “stock in” paths (`receiveInventory`, `receiveGoods`, `bulkReceiveGoods`) | **COMPLETE** |
 | 03 | [03-order-create.md](./03-order-create.md) | Order creation wizard → `createOrder` + idempotency | **COMPLETE** |
 | 04 | [04-product-create.md](./04-product-create.md) | `/products/new` → `createProduct` | **COMPLETE** |
 | 05 | [05-supplier-create.md](./05-supplier-create.md) | Supplier create container → `createSupplier` | **COMPLETE** |

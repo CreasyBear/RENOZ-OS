@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, and 4 implemented; Issue 5 in progress with mobile/manual receive trace and mobile receive error feedback aligned; remaining issues stay in the ledger.
+Status: Issues 1, 2, 3, 4, and 5 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -48,7 +48,7 @@ Observed inventory paths:
 
 - `docs/inventory/README.md`: inventory valuation, serialized lineage, and operational invariants.
 - `docs/inventory/OPERATOR-STOCK-IN-WORKFLOWS.md`: operator distinction between Receive Inventory, Receive Goods, Adjust Stock, and Order Stock.
-- `docs/code-traces/02-inventory-stock-in.md`: current stock-in trace across manual receive, PO receive, and bulk receive.
+- `docs/code-traces/02-inventory-stock-in.md`: current stock-in trace across manual receive, product-detail receive launch, PO receive, and bulk PO receive.
 - `docs/code-traces/13-rma-receive-inventory.md`: RMA return-to-stock trace.
 - `docs/reliability/sql/finance-cost-layer-invariants.sql`: cost layer integrity.
 - `docs/reliability/sql/serialized-lineage-invariants.sql`: serialized lineage integrity.
@@ -72,7 +72,7 @@ Observed inventory paths:
 
 ### What Needs Revalidation
 
-- Whether `bulkReceiveStock` still has weaker permission posture than manual and PO receiving.
+- `bulkReceiveStock` is not a live export or caller path; stock-in trace drift was corrected and guarded.
 - Whether RMA receive still lands non-serialized returns in the first warehouse location.
 - Whether stock-in traces still match current implementation after cross-phase closeout.
 - Whether operator-facing receive, PO receive, mobile receive, and product-detail launch all preserve the same workflow distinction.
@@ -628,7 +628,7 @@ Residual risk: this slice standardizes inventory browser route, manual receive h
 
 ### Issue 5: Stock-In Workflow Clarity
 
-Touched domains: inventory receiving route, mobile receiving route, product detail inventory tab launch, PO receive-goods surfaces, inventory stock-in trace docs.
+Touched domains: inventory receiving route, mobile receiving route, product detail inventory tab launch, PO receive-goods surfaces, inventory stock-in trace docs, product-inventory wrapper trace guard.
 
 Workflow protected: product detail `Receive Inventory` -> `/inventory/receiving` with `source=product_detail` -> non-PO `receiveInventory`; mobile `Receive Inventory` -> non-PO barcode receipt -> `receiveInventory`; product detail `Order Stock` -> `/purchase-orders/create` with product context -> PO create; PO detail `Receive Goods` -> `receiveGoods` against PO pending quantities.
 
@@ -643,6 +643,7 @@ Standards checked:
 - verified PO detail uses `Receive Goods` wording and `receiveGoods` dialog for PO receipt
 - aligned mobile receive location and submit failures with the desktop receiving error helper
 - refreshed `docs/code-traces/02-inventory-stock-in.md` to point at extracted `receiving.ts` and the current manual receive cache contract
+- revalidated that `bulkReceiveStock` is not a live export or caller and corrected the trace to describe current product-inventory wrappers
 
 Smells removed:
 
@@ -650,24 +651,26 @@ Smells removed:
 - mobile receive location unavailable state rendered `locationsError.message`
 - stock-in trace still pointed at the old inventory server barrel for `receiveInventory`
 - stock-in trace under-described the current manual receive cache contract
+- stock-in trace documented a non-existent `bulkReceiveStock` product batch path
 
 Deferred:
 
 - duplicated serialized receive rules between form and server remain a future workflow-contract slice
-- `bulkReceiveStock` permission posture still needs revalidation before Issue 5 is closed
 - PO `receiveGoods` error messaging belongs to a purchase-order/procurement slice unless stock-in tracing finds operator-facing drift
 
 Verification:
 
 - `./node_modules/.bin/vitest run tests/unit/inventory/receiving-location-read-policy.test.tsx tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/use-receive-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory/stock-in-workflow-trace.test.ts`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/routes/_authenticated/mobile/-receiving-page.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx src/routes/_authenticated/inventory/receiving-error-messages.ts`
+- `./node_modules/.bin/eslint tests/unit/inventory/stock-in-workflow-trace.test.ts`
 - `git diff --check`
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
 - `node scripts/check-read-path-query-guards.mjs`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
-Goal adaptation: no goal change; this starts Issue 5 as a trace-first slice and patches only the mobile receive drift exposed by that trace.
+Goal adaptation: no goal change; this closes Issue 5 by using the trace as a living contract and correcting stale workflow memory instead of adding a broader receive refactor.
 
-Residual risk: Issue 5 is not closed. This slice verifies and hardens manual/mobile receive plus product-detail launch semantics, but PO receive-goods, bulk receive, and serialized rule parity still need deeper evidence before the stock-in workflow clarity issue can close.
+Residual risk: serialized rule parity remains deferred. PO receive-goods error copy stays in procurement scope unless a future operator QA pass finds stock-in confusion there.
