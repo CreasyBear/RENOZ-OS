@@ -7,6 +7,7 @@ on:
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  HAS_DATABASE_URL: ${{ secrets.DATABASE_URL != '' }}
 
 jobs:
   deploy:
@@ -37,13 +38,13 @@ jobs:
         run: bun run release:verify
 
       - name: Document schema gates
-        if: ${{ secrets.DATABASE_URL != '' }}
+        if: ${{ env.HAS_DATABASE_URL == 'true' }}
         run: bun run reliability:document-gates
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Document schema gates skipped
-        if: ${{ secrets.DATABASE_URL == '' }}
+        if: ${{ env.HAS_DATABASE_URL != 'true' }}
         run: echo "Skipping document schema gates because DATABASE_URL is not configured in GitHub Actions secrets."
 
       - name: Pull Vercel environment
