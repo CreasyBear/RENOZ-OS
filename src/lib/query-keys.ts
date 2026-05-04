@@ -1246,10 +1246,14 @@ export const queryKeys = {
       [...queryKeys.products.all, 'stockLevels', productId] as const,
     stockAlerts: (productId: string) =>
       [...queryKeys.products.all, 'stockAlerts', productId] as const,
+    movementsForProduct: (productId: string) =>
+      [...queryKeys.products.all, 'movements', productId] as const,
     movements: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.all, 'movements', productId, filters ?? {}] as const,
+      [...queryKeys.products.movementsForProduct(productId), filters ?? {}] as const,
+    movementsAggregatedForProduct: (productId: string) =>
+      [...queryKeys.products.all, 'movements', 'aggregated', productId] as const,
     movementsAggregated: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.all, 'movements', 'aggregated', productId, filters ?? {}] as const,
+      [...queryKeys.products.movementsAggregatedForProduct(productId), filters ?? {}] as const,
     locations: () => [...queryKeys.products.all, 'locations'] as const,
   },
 

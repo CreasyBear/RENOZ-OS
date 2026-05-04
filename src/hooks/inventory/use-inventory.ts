@@ -627,10 +627,10 @@ export function useReceiveInventory() {
         queryKey: queryKeys.products.stockAlerts(variables.productId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['products', 'movements', variables.productId],
+        queryKey: queryKeys.products.movementsForProduct(variables.productId),
       });
       queryClient.invalidateQueries({
-        queryKey: ['products', 'movements', 'aggregated', variables.productId],
+        queryKey: queryKeys.products.movementsAggregatedForProduct(variables.productId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
     },

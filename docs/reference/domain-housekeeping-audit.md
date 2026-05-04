@@ -7,6 +7,43 @@ This document is intentionally:
 - report-first, not remediation-first
 - cumulative, so each audited domain can be added without scattering point-in-time notes
 
+Important: older domain sections are historical audit snapshots, not automatically-current backlog. Treat each finding as a hypothesis until revalidated against the current branch. The quality ledger below is the current repo-owner read.
+
+## Repo Owner Quality Ledger
+
+### 2026-05-04 Baseline: `/goal` Picked Up
+
+**Operator stance:** Treat RenOz v3 as a production system owned by a meticulous repo SWE/operator. Passing gates is only tripwire evidence; it is not proof of quality. Closeout must include judgment about smell removed or deferred, ownership clarified, complexity reduced, failure modes handled, and whether future changes became easier.
+
+**Branch context:** `codex/cross-phase-closeout` is the right integration branch for this work; `master` is well behind. The large diff against `master` (`808 files changed`, `327949 insertions`, `22729 deletions`) is context, not an indictment of the branch. The repo-owner rule is that follow-up quality work on top of this branch should stay small and domain-sliced unless a cross-domain invariant genuinely requires a wider change.
+
+**Tripwire status:** Direct reliability guards pass:
+- `node scripts/check-route-casts.mjs`
+- `node scripts/check-pending-dialog-guards.mjs`
+- `node scripts/check-read-path-query-guards.mjs`
+
+**Quality smells surfaced by baseline scans:**
+- **Large-file concentration:** many core server and operator UI files exceed 1,300 lines, including inventory, pipeline, customers, orders RMA, warranty claims/detail, support issue detail, and support issue orchestration. The smell is not line count alone; it is routine-change risk around mixed concerns.
+- **Query-key drift:** scans still find inline or partially-derived query keys in runtime code. First cut applied in this baseline: product movement invalidation now uses named `queryKeys.products` prefix helpers instead of literal product movement arrays.
+- **Link composition residue:** `Button asChild` remains in several link-like surfaces. Some may be safe DOM children, but each one should be treated as an audit item because prior regressions came from `Button asChild` + route/custom link composition.
+- **Raw technical error surfacing:** direct `error.message` usage is widespread across routes, hooks, and components. The smell is uneven operator resilience: some surfaces normalize and guide recovery, while others leak internal phrasing or collapse to `Unknown error`.
+- **Reviewability drift:** the repo has strong docs, guards, and test packs, but quality evidence is scattered. Each domain slice needs a short closeout note that says what got easier to change, not only which commands passed.
+
+**Truthfulness correction:** most of the read-path/query-normalization work described later in this document has been remediated on `codex/cross-phase-closeout`. The direct read-path guard now passes, and a current scan no longer shows broad `Query returned no data` hook debt. Do not use the April 17 "initial audit complete" sections as an active work queue without revalidating them. Current live smells are more concentrated around repo landing, package-script reliability, large mixed-concern files, raw operator error surfacing, and a smaller set of query-key/link-composition residues.
+
+**Backlog priority from this baseline:**
+1. **Land the integration branch deliberately:** `origin/master` is an ancestor of `codex/cross-phase-closeout`; the merge shape is favorable. The repo-management task is to make `cross-phase-closeout` the new master line after readiness evidence, not to keep piling cleanup onto an unlanded integration branch.
+2. **Restore trust in the declared repo interface:** `bun run` currently fails locally with Bun's `CouldntReadCurrentDirectory` internal error, while direct underlying tools can run. This is a release-operator smell because the documented gates depend on package scripts.
+3. **Cross-phase reviewability stewarding:** keep follow-up work on `codex/cross-phase-closeout` small; split by domain or invariant, and avoid turning quality cleanup into another unreviewable surface.
+4. **Error/resilience standardization:** define and migrate high-traffic operator surfaces away from raw technical error display.
+5. **Support issue concentration:** split or better test the issue detail/server orchestration seams already identified below.
+6. **Orders/inventory fulfillment seams:** keep tightening reservation, movement, serialized stock, and product movement cache contracts.
+7. **Finance/communications DB smoke hardening:** preserve the existing TODO as a targeted integration-confidence slice once database strategy is stable.
+
+**Landing posture:** before updating `master`, finish or commit the current working tree, run readiness gates through the direct tool commands if `bun run` remains broken, then fast-forward `master` to `codex/cross-phase-closeout` and push. Do not rebase this branch or split it after the fact unless a P0 blocker appears; it is already the integration line.
+
+**Standing closeout requirement:** each future slice must name touched domains, standards checked, smells removed or deferred, quality evidence beyond gates, gates run or skipped with reasons, goal adaptations made or declined, and residual risk.
+
 ## Canonical Domain Inventory
 
 | Domain | Primary ownership paths | Public workflow surface | Overlap seams | Risk | Recommended tools |
