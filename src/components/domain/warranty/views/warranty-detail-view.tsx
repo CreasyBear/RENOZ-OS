@@ -7,22 +7,13 @@
  */
 
 import { useMemo, useState } from 'react';
-import { PanelRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { EntityHeader } from '@/components/shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
 import { WarrantyClaimFormDialog } from '@/components/domain/warranty/dialogs/warranty-claim-form-dialog';
 import { ClaimApprovalDialog } from '@/components/domain/warranty/dialogs/claim-approval-dialog';
 import { ExtendWarrantyDialog } from '@/components/domain/warranty/dialogs/extend-warranty-dialog';
 import { WarrantyActivityTabPanels } from '@/components/domain/warranty/views/warranty-activity-tab-panels';
+import { WarrantyDetailHeaderSection } from '@/components/domain/warranty/views/warranty-detail-header-section';
 import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
@@ -38,8 +29,7 @@ import {
   WarrantyServiceSystemCard,
 } from '@/components/domain/warranty/views/warranty-service-linkage';
 import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
-import { useWarrantyHeaderActions } from '@/hooks/warranty';
-import { getDaysUntilExpiry, getWarrantyStatusConfigForEntityHeader } from '@/lib/warranty';
+import { getDaysUntilExpiry } from '@/lib/warranty';
 
 // ============================================================================
 // TYPES
@@ -118,7 +108,6 @@ export function WarrantyDetailView({
   isTransferringOwnership = false,
 }: WarrantyDetailViewProps) {
   const [activeTab, setActiveTab] = useState('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const daysUntilExpiry = getDaysUntilExpiry(warranty.expiryDate);
   const canFileClaim = warranty.status === 'active' || warranty.status === 'expiring_soon';
   const approvalClaim = selectedClaimForApproval ?? null;
@@ -160,67 +149,26 @@ export function WarrantyDetailView({
     </div>
   );
 
-  // Build EntityHeader actions via shared hook
-  const { primaryAction, secondaryActions } = useWarrantyHeaderActions({
-    warrantyStatus: warranty.status,
-    isSubmittingClaim,
-    isSubmittingExtend,
-    isCertificateLoading,
-    certificateExists: certificateStatus?.exists,
-    isCertificateRegenerating,
-    isCertificateGenerating,
-    onClaimDialogOpen: () => onClaimDialogOpenChange(true),
-    onExtendDialogOpen: () => onExtendDialogOpenChange(true),
-    onDownloadCertificate,
-    onRegenerateCertificate,
-    onGenerateCertificate,
-  });
-
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <main className="min-w-0 space-y-6">
-        {/* Zone 1: Header */}
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 lg:hidden">
-            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0"
-                  aria-label="Toggle warranty sidebar"
-                >
-                  <PanelRight className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[320px]">
-                <SheetHeader>
-                  <SheetTitle>Warranty details</SheetTitle>
-                </SheetHeader>
-                <div className="mt-4 space-y-6">{sidebarContent}</div>
-              </SheetContent>
-            </Sheet>
-          </div>
-
-          <EntityHeader
-            name={`Warranty ${warranty.warrantyNumber}`}
-            subtitle={
-              <>
-                {warranty.productName ?? 'Unknown Product'} ·{' '}
-                {warranty.currentOwner?.fullName ??
-                  warranty.ownerRecord?.fullName ??
-                  warranty.customerName ??
-                  'Unknown Owner'}
-              </>
-            }
-            avatarFallback="W"
-            status={getWarrantyStatusConfigForEntityHeader(warranty.status)}
-            primaryAction={headerActionsInLayout ? undefined : primaryAction}
-            secondaryActions={headerActionsInLayout ? [] : secondaryActions}
-            onDelete={headerActionsInLayout ? undefined : onDelete}
-          />
-
-        </section>
+        <WarrantyDetailHeaderSection
+          warranty={warranty}
+          sidebarContent={sidebarContent}
+          headerActionsInLayout={headerActionsInLayout}
+          certificateStatus={certificateStatus}
+          isSubmittingClaim={isSubmittingClaim}
+          isSubmittingExtend={isSubmittingExtend}
+          isCertificateLoading={isCertificateLoading}
+          isCertificateRegenerating={isCertificateRegenerating}
+          isCertificateGenerating={isCertificateGenerating}
+          onClaimDialogOpenChange={onClaimDialogOpenChange}
+          onExtendDialogOpenChange={onExtendDialogOpenChange}
+          onDownloadCertificate={onDownloadCertificate}
+          onRegenerateCertificate={onRegenerateCertificate}
+          onGenerateCertificate={onGenerateCertificate}
+          onDelete={onDelete}
+        />
 
         <WarrantyCoverageSummary
           warranty={warranty}
