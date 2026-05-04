@@ -18,12 +18,10 @@ import {
   DollarSign,
   Battery,
   PanelRight,
-  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -41,10 +39,7 @@ import {
   getClaimStatusConfigForEntityHeader,
   resolutionTypeConfig,
 } from '@/lib/warranty/claims-utils';
-import {
-  useAlertDismissals,
-  generateAlertIdWithValue,
-} from '@/hooks/_shared/use-alert-dismissals';
+import { WarrantyClaimDetailAlertsSection } from '@/components/domain/warranty/views/warranty-claim-detail-alerts-section';
 
 // Import types from schemas per SCHEMA-TRACE.md
 import {
@@ -69,82 +64,6 @@ export function WarrantyClaimDetailView({
 }: WarrantyClaimDetailViewProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { dismiss, isAlertDismissed } = useAlertDismissals();
-
-  const alerts = useMemo(() => {
-    const items: Array<{
-      id: string;
-      tone: 'critical' | 'warning';
-      title: string;
-      description: string;
-      actionLabel: string;
-      onAction: () => void;
-    }> = [];
-
-    if (responseSla?.status === 'breached') {
-      items.push({
-        id: generateAlertIdWithValue(
-          'warranty_claim',
-          claim.id,
-          'response_sla_breached',
-          responseSla.label
-        ),
-        tone: 'critical',
-        title: 'Response SLA breached',
-        description: responseSla.label,
-        actionLabel: 'View SLA',
-        onAction: () => setActiveTab('sla'),
-      });
-    } else if (responseSla?.status === 'at_risk') {
-      items.push({
-        id: generateAlertIdWithValue(
-          'warranty_claim',
-          claim.id,
-          'response_sla_at_risk',
-          responseSla.label
-        ),
-        tone: 'warning',
-        title: 'Response SLA at risk',
-        description: responseSla.label,
-        actionLabel: 'View SLA',
-        onAction: () => setActiveTab('sla'),
-      });
-    }
-
-    if (resolutionSla?.status === 'breached') {
-      items.push({
-        id: generateAlertIdWithValue(
-          'warranty_claim',
-          claim.id,
-          'resolution_sla_breached',
-          resolutionSla.label
-        ),
-        tone: 'critical',
-        title: 'Resolution SLA breached',
-        description: resolutionSla.label,
-        actionLabel: 'View SLA',
-        onAction: () => setActiveTab('sla'),
-      });
-    } else if (resolutionSla?.status === 'at_risk') {
-      items.push({
-        id: generateAlertIdWithValue(
-          'warranty_claim',
-          claim.id,
-          'resolution_sla_at_risk',
-          resolutionSla.label
-        ),
-        tone: 'warning',
-        title: 'Resolution SLA at risk',
-        description: resolutionSla.label,
-        actionLabel: 'View SLA',
-        onAction: () => setActiveTab('sla'),
-      });
-    }
-
-    return items;
-  }, [claim.id, resolutionSla, responseSla]);
-
-  const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
   const actionTimeline = useMemo(() => {
     const events: Array<{ label: string; detail?: string; at?: string | Date | null }> = [
       { label: 'Claim submitted', at: claim.submittedAt },
@@ -355,36 +274,12 @@ export function WarrantyClaimDetailView({
           </div>
         </section>
 
-        {visibleAlerts.length > 0 && (
-          <section className="space-y-2">
-            {visibleAlerts.map((alert) => (
-              <Alert
-                key={alert.id}
-                variant={alert.tone === 'critical' ? 'destructive' : 'default'}
-              >
-                <AlertDescription className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">{alert.title}</div>
-                    <div className="text-sm text-muted-foreground">{alert.description}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={alert.onAction}>
-                      {alert.actionLabel}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Dismiss alert"
-                      onClick={() => dismiss(alert.id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            ))}
-          </section>
-        )}
+        <WarrantyClaimDetailAlertsSection
+          claimId={claim.id}
+          responseSla={responseSla}
+          resolutionSla={resolutionSla}
+          onViewSla={() => setActiveTab('sla')}
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start gap-2">
