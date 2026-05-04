@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
+import { formatInventoryMutationError } from './_mutation-errors';
 import {
   listStockCounts,
   getStockCount,
@@ -27,55 +28,6 @@ import {
   getCountHistory,
 } from '@/server/functions/inventory';
 import type { StockCount } from '@/lib/schemas/inventory';
-
-type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null;
-}
-
-function getErrorCode(error: unknown): string | null {
-  const candidates = [
-    (error as { errors?: { code?: string[] } })?.errors?.code?.[0],
-    (error as { data?: { errors?: { code?: string[] } } })?.data?.errors?.code?.[0],
-    (error as { cause?: { errors?: { code?: string[] } } })?.cause?.errors?.code?.[0],
-  ];
-  return candidates.find((value): value is string => typeof value === 'string') ?? null;
-}
-
-function getFieldError(error: unknown): string | null {
-  const buckets = [
-    (error as { errors?: Record<string, unknown> })?.errors,
-    (error as { data?: { errors?: Record<string, unknown> } })?.data?.errors,
-    (error as { cause?: { errors?: Record<string, unknown> } })?.cause?.errors,
-  ];
-  for (const bucket of buckets) {
-    if (!isRecord(bucket)) continue;
-    for (const [field, value] of Object.entries(bucket)) {
-      if (field === 'code') continue;
-      if (Array.isArray(value)) {
-        const first = value.find((entry) => typeof entry === 'string');
-        if (typeof first === 'string' && first.trim().length > 0) return first;
-      }
-      if (typeof value === 'string' && value.trim().length > 0) return value;
-    }
-  }
-  return null;
-}
-
-function mapStockCountError(error: Error): string {
-  const code = getErrorCode(error);
-  const fieldError = getFieldError(error);
-
-  if (code === 'insufficient_cost_layers') {
-    return fieldError ?? 'Count cannot complete because some rows have missing cost layers.';
-  }
-  if (code === 'serialized_unit_violation') {
-    return fieldError ?? 'Count cannot complete because serialized unit bounds were violated.';
-  }
-
-  return (fieldError ?? error.message) || 'Failed to complete stock count';
-}
 
 // ============================================================================
 // TYPES
@@ -250,8 +202,8 @@ export function useCreateStockCount() {
       toast.success('Stock count created');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountsAll() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create stock count');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to create stock count'));
     },
   });
 }
@@ -270,8 +222,8 @@ export function useUpdateStockCount() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(variables.id) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update stock count');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update stock count'));
     },
   });
 }
@@ -289,8 +241,8 @@ export function useStartStockCount() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(countId) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to start stock count');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to start stock count'));
     },
   });
 }
@@ -316,8 +268,8 @@ export function useUpdateStockCountItem() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(variables.countId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountItems(variables.countId) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update count item');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update count item'));
     },
   });
 }
@@ -341,8 +293,8 @@ export function useBulkUpdateCountItems() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(variables.countId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountItems(variables.countId) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update count items');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update count items'));
     },
   });
 }
@@ -382,8 +334,17 @@ export function useCompleteStockCount() {
       // Also invalidate inventory lists since quantities may have changed
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
     },
-    onError: (error: Error) => {
-      toast.error(mapStockCountError(error));
+    onError: (error: unknown) => {
+      toast.error(
+        formatInventoryMutationError(error, 'Failed to complete stock count', {
+          codeMessages: {
+            insufficient_cost_layers:
+              'Count cannot complete because some rows have missing cost layers.',
+            serialized_unit_violation:
+              'Count cannot complete because serialized unit bounds were violated.',
+          },
+        })
+      );
     },
   });
 }
@@ -401,8 +362,8 @@ export function useCancelStockCount() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(countId) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to cancel stock count');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to cancel stock count'));
     },
   });
 }

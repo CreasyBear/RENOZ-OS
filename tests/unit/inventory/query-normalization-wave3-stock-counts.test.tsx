@@ -14,6 +14,15 @@ const mockCompleteStockCount = vi.fn();
 const mockCancelStockCount = vi.fn();
 const mockGetCountVarianceAnalysis = vi.fn();
 const mockGetCountHistory = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
 
 vi.mock('@/server/functions/inventory', () => ({
   listStockCounts: (...args: unknown[]) => mockListStockCounts(...args),
@@ -190,5 +199,61 @@ describe('inventory stock counts query normalization wave 3', () => {
     expect(screen.getByText('COUNT-001')).toBeInTheDocument();
     expect(screen.queryByText('Stock counts are temporarily unavailable.')).not.toBeInTheDocument();
     expect(screen.queryByText('No stock counts found')).not.toBeInTheDocument();
+  });
+
+  it('uses safe mutation fallback copy instead of raw create errors', async () => {
+    mockCreateStockCount.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint stock_counts_pkey')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useCreateStockCount } = await import('@/hooks/inventory/use-stock-counts');
+
+    const { result } = renderHook(() => useCreateStockCount(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        countCode: 'COUNT-002',
+        countType: 'cycle',
+      })
+    ).rejects.toThrow('duplicate key value');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create stock count');
+  });
+
+  it('uses stock-count-specific guidance for completion integrity failures', async () => {
+    mockCompleteStockCount.mockRejectedValue({
+      data: {
+        errors: {
+          code: ['insufficient_cost_layers'],
+        },
+      },
+    });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useCompleteStockCount } = await import('@/hooks/inventory/use-stock-counts');
+
+    const { result } = renderHook(() => useCompleteStockCount(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        id: 'count-1',
+        applyAdjustments: true,
+      })
+    ).rejects.toMatchObject({
+      data: {
+        errors: {
+          code: ['insufficient_cost_layers'],
+        },
+      },
+    });
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Count cannot complete because some rows have missing cost layers.'
+    );
   });
 });
