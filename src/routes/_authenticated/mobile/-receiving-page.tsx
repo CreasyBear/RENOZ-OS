@@ -43,6 +43,10 @@ import { useLocations, useReceiveInventory } from "@/hooks/inventory";
 import { useProductSearch } from "@/hooks/products";
 import type { ProductSearchResult } from "@/lib/schemas/products";
 import { manualReceiptReasonValues } from "@/lib/schemas/inventory";
+import {
+  getReceiveSubmitError,
+  getReceivingLocationsErrorMessage,
+} from "@/routes/_authenticated/inventory/receiving-error-messages";
 
 interface ReceiveEntry {
   id?: string;
@@ -229,7 +233,7 @@ export default function MobileReceivingPage() {
       setNotes("");
     } catch (error: unknown) {
       logger.error("Failed to receive", error);
-      toast.error(error instanceof Error ? error.message : "Failed to receive inventory");
+      toast.error(getReceiveSubmitError(error) ?? "Failed to receive inventory");
     } finally {
       setIsSubmitting(false);
     }
@@ -314,7 +318,7 @@ export default function MobileReceivingPage() {
                           <p className="font-medium text-foreground">
                             Warehouse locations are temporarily unavailable.
                           </p>
-                          <p className="text-muted-foreground">{locationsError.message}</p>
+                          <p className="text-muted-foreground">{getReceivingLocationsErrorMessage(locationsError)}</p>
                         </div>
                         <Button type="button" variant="outline" onClick={() => void fetchLocations()}>
                           Retry Locations

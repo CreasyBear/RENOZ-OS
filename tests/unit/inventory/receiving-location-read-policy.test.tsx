@@ -204,9 +204,7 @@ describe('inventory receiving location read policy', () => {
     mockUseLocations.mockReturnValue({
       locations: [],
       isLoading: false,
-      locationsError: new Error(
-        'Warehouse locations are temporarily unavailable. Please refresh and try again.'
-      ),
+      locationsError: new Error('select from warehouse_locations violates row-level security policy'),
       fetchLocations: mockFetchLocations,
     });
     mockUseProductSearch.mockImplementation((query: string) => ({
