@@ -818,7 +818,13 @@ async function updateProductCostPrice(
       unitCost: inventoryCostLayers.unitCost,
     })
     .from(inventoryCostLayers)
-    .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+    .innerJoin(
+      inventory,
+      and(
+        eq(inventoryCostLayers.inventoryId, inventory.id),
+        eq(inventoryCostLayers.organizationId, organizationId)
+      )
+    )
     .where(
       and(
         eq(inventory.productId, productId),
@@ -839,5 +845,5 @@ async function updateProductCostPrice(
   await tx
     .update(products)
     .set({ costPrice: weightedAvgCost })
-    .where(eq(products.id, productId));
+    .where(and(eq(products.id, productId), eq(products.organizationId, organizationId)));
 }
