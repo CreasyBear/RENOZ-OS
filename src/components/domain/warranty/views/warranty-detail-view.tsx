@@ -9,10 +9,8 @@
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WarrantyClaimFormDialog } from '@/components/domain/warranty/dialogs/warranty-claim-form-dialog';
-import { ClaimApprovalDialog } from '@/components/domain/warranty/dialogs/claim-approval-dialog';
-import { ExtendWarrantyDialog } from '@/components/domain/warranty/dialogs/extend-warranty-dialog';
 import { WarrantyActivityTabPanels } from '@/components/domain/warranty/views/warranty-activity-tab-panels';
+import { WarrantyDetailDialogs } from '@/components/domain/warranty/views/warranty-detail-dialogs';
 import { WarrantyDetailHeaderSection } from '@/components/domain/warranty/views/warranty-detail-header-section';
 import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
@@ -267,78 +265,25 @@ export function WarrantyDetailView({
         {sidebarContent}
       </aside>
 
-      <WarrantyClaimFormDialog
-        open={isClaimDialogOpen}
-        onOpenChange={onClaimDialogOpenChange}
-        warranty={{
-          id: warranty.id,
-          warrantyNumber: warranty.warrantyNumber,
-          productName: warranty.productName ?? undefined,
-          commercialCustomerId: warranty.customerId,
-          commercialCustomerName: warranty.customerName ?? undefined,
-          ownerRecord: warranty.ownerRecord
-            ? {
-                fullName: warranty.ownerRecord.fullName,
-                email: warranty.ownerRecord.email,
-                phone: warranty.ownerRecord.phone,
-              }
-            : null,
-          status: warranty.status,
-          policyType: warranty.policyType ?? undefined,
-          currentCycleCount: warranty.currentCycleCount ?? undefined,
-          cycleLimit: warranty.cycleLimit ?? undefined,
-        }}
-        onSubmit={onSubmitClaim}
-        isSubmitting={isSubmittingClaim}
-        onSuccess={onClaimsSuccess}
-      />
-
-      {approvalClaim && (
-        <ClaimApprovalDialog
-          open={isApprovalDialogOpen}
-          onOpenChange={onApprovalDialogOpenChange}
-          claim={{
-            id: approvalClaim.id,
-            claimNumber: approvalClaim.claimNumber,
-            claimType: approvalClaim.claimType,
-            status: approvalClaim.status,
-            description: approvalClaim.description,
-            cost: approvalClaim.cost,
-            submittedAt: approvalClaim.submittedAt,
-            cycleCountAtClaim: approvalClaim.cycleCountAtClaim,
-            warranty: {
-              warrantyNumber: warranty.warrantyNumber,
-              productSerial: warranty.productSerial,
-            },
-            customer: {
-              name: approvalClaim.customer.name ?? 'Unknown Customer',
-            },
-            product: {
-              name: approvalClaim.product?.name ?? 'Unknown Product',
-            },
-          }}
-          onApprove={onApproveClaim}
-          onDeny={onDenyClaim}
-          onRequestInfo={onRequestInfoClaim}
-          isSubmitting={isSubmittingApproval}
-          onSuccess={onClaimsSuccess}
-        />
-      )}
-
-      <ExtendWarrantyDialog
-        open={isExtendDialogOpen}
-        onOpenChange={onExtendDialogOpenChange}
-        warranty={{
-          id: warranty.id,
-          warrantyNumber: warranty.warrantyNumber,
-          productName: warranty.productName ?? undefined,
-          customerName: warranty.customerName ?? undefined,
-          expiryDate: warranty.expiryDate,
-          status: warranty.status,
-        }}
-        onSubmit={onExtendWarranty}
-        isSubmitting={isSubmittingExtend}
-        onSuccess={onExtensionsSuccess}
+      <WarrantyDetailDialogs
+        warranty={warranty}
+        approvalClaim={approvalClaim}
+        isClaimDialogOpen={isClaimDialogOpen}
+        isApprovalDialogOpen={isApprovalDialogOpen}
+        isExtendDialogOpen={isExtendDialogOpen}
+        isSubmittingClaim={isSubmittingClaim}
+        isSubmittingApproval={isSubmittingApproval}
+        isSubmittingExtend={isSubmittingExtend}
+        onClaimDialogOpenChange={onClaimDialogOpenChange}
+        onApprovalDialogOpenChange={onApprovalDialogOpenChange}
+        onExtendDialogOpenChange={onExtendDialogOpenChange}
+        onSubmitClaim={onSubmitClaim}
+        onApproveClaim={onApproveClaim}
+        onDenyClaim={onDenyClaim}
+        onRequestInfoClaim={onRequestInfoClaim}
+        onExtendWarranty={onExtendWarranty}
+        onClaimsSuccess={onClaimsSuccess}
+        onExtensionsSuccess={onExtensionsSuccess}
       />
     </div>
   );
