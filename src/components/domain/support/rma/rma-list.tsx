@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table/data-table';
 import { CheckboxCell, DataTableColumnHeader } from '@/components/shared/data-table';
-import { RmaStatusBadge, RmaReasonBadge, RmaResolutionBadge } from './rma-status-badge';
+import { RmaStatusBadge, RmaReasonBadge } from './rma-status-badge';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -24,7 +24,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
@@ -45,14 +44,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  getRmaExecutionContextSummary,
-  getRmaExecutionStatusLabel,
   RMA_EXECUTION_STATUS_OPTIONS,
   RMA_LINKED_ISSUE_STATE_OPTIONS,
   RMA_REASON_OPTIONS,
   RMA_RESOLUTION_OPTIONS,
   RMA_STATUS_OPTIONS,
 } from './rma-options';
+import { RmaListContextCell, RmaListRemedyCell } from './rma-list-execution-cells';
 import type { RmaSortField, SortDirection } from './rma-sorting';
 
 interface RmaListProps {
@@ -202,38 +200,12 @@ export function RmaList({
       {
         id: 'resolution',
         header: 'Remedy',
-        cell: ({ row }) => (
-          <div className="flex flex-col gap-1">
-            {row.original.resolution ? (
-              <RmaResolutionBadge resolution={row.original.resolution} />
-            ) : (
-              <span className="text-muted-foreground text-sm">Not selected</span>
-            )}
-            <ExecutionBadge status={row.original.executionStatus} />
-          </div>
-        ),
+        cell: ({ row }) => <RmaListRemedyCell rma={row.original} />,
       },
       {
         id: 'context',
         header: 'Context',
-        cell: ({ row }) => {
-          const summary = getRmaExecutionContextSummary(row.original.execution, row.original.issueId);
-
-          return (
-            <div className="space-y-1 text-sm">
-              <div className="font-medium">{summary.title}</div>
-              {summary.detail ? (
-                <div className="text-muted-foreground line-clamp-2">{summary.detail}</div>
-              ) : null}
-              <div className="text-muted-foreground">
-                {row.original.orderId ? `Order ${row.original.orderId.slice(0, 8)}` : 'No order'}
-                {row.original.linkedIssueOpen !== null && row.original.linkedIssueOpen !== undefined
-                  ? ` · Issue ${row.original.linkedIssueOpen ? 'open' : 'closed'}`
-                  : ''}
-              </div>
-            </div>
-          );
-        },
+        cell: ({ row }) => <RmaListContextCell rma={row.original} />,
       },
       {
         accessorKey: 'createdAt',
@@ -458,10 +430,4 @@ export function RmaList({
       )}
     </div>
   );
-}
-
-function ExecutionBadge({ status }: { status: RmaExecutionStatus }) {
-  const variant = status === 'completed' ? 'default' : 'outline';
-
-  return <Badge variant={variant}>{getRmaExecutionStatusLabel(status)}</Badge>;
 }

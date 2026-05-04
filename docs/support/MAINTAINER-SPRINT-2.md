@@ -2,7 +2,7 @@
 
 This sprint follows Support Sprint 1's trace/schema/contract hardening into the operator-facing RMA recovery surfaces.
 
-Status: Issues 1 and 2 implemented.
+Status: Issues 1, 2, and 3 implemented.
 
 ## Business Value
 
@@ -108,6 +108,42 @@ Closeout criteria:
 - remedy artifact display remains owned by `RmaExecutionSummary`
 - focused tests, lint, typecheck, and support suite pass or skipped gates are recorded
 
+### 3. RMA List Execution Cells Boundary
+
+Business value: list rows are the operator's fastest way to spot blocked or completed recovery work. Remedy, execution state, source order, issue state, and artifact context should be reviewable without reading the full RMA list/table/filter component.
+
+Workflow invariant: RMA list -> row execution cell boundary -> remedy badge, execution badge, artifact/blocker/pending context, source order, linked issue state -> no filter, pagination, read-model, or mutation behavior change.
+
+Affected files:
+
+- `src/components/domain/support/rma/rma-list-execution-cells.tsx`
+- `src/components/domain/support/rma/rma-list.tsx`
+- `src/components/domain/support/rma/index.ts`
+- `tests/unit/support/rma-list-execution-cells.test.tsx`
+- `docs/support/MAINTAINER-SPRINT-2.md`
+
+Out of scope:
+
+- changing list filters, route search schemas, or pagination
+- changing `getRmaExecutionContextSummary`
+- changing RMA read-model hydration or server behavior
+- redesigning the RMA list
+- browser QA for the full list route
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/support/rma-list-execution-cells.test.tsx
+```
+
+Closeout criteria:
+
+- remedy/execution row rendering leaves `rma-list.tsx`
+- execution context row rendering leaves `rma-list.tsx`
+- blocked, completed-artifact, and pending row states have focused UI coverage
+- `rma-list.tsx` remains responsible for filters, table assembly, selection, pagination, loading/error/empty states
+- focused tests, lint, typecheck, and support suite pass or skipped gates are recorded
+
 ## Closeout Log
 
 ### Issue 1: RMA Execution Summary Boundary
@@ -185,3 +221,42 @@ Verification:
 Goal adaptation: no standing goal change. This continues the support/RMA operator UX sprint by clarifying which component owns source context versus remedy artifact truth.
 
 Residual risk: RMA list execution summaries may still need a pass for blocked/completed recovery clarity, but the RMA detail page now has a cleaner ownership split.
+
+### Issue 3: RMA List Execution Cells Boundary
+
+Touched domains: support/RMA list UI, RMA execution list context, support UI tests.
+
+Workflow protected: RMA list route/container -> `RmaList` presenter -> focused remedy/context cells -> execution summary helper -> blocked, pending, completed-artifact, source order, and linked issue row states.
+
+Business value: operators can scan RMA recovery state in the list without list/table/filter code owning all remedy and context rendering. Blocked, pending, and completed artifact states now have a focused review surface and targeted tests.
+
+Standards checked:
+
+- extracted `RmaListRemedyCell` for selected remedy and execution badge rendering
+- extracted `RmaListContextCell` for artifact/blocker/pending context plus source order and issue state
+- extracted `RmaExecutionBadge` from the list file into the same row-cell boundary
+- kept `RmaList` responsible for filters, table assembly, selection, pagination, loading/error/empty states, sorting, and row actions
+- kept `getRmaExecutionContextSummary`, read-model hydration, route search schemas, server behavior, and query/cache policy unchanged
+
+Smells removed:
+
+- `rma-list.tsx` directly owned remedy badge, execution badge, execution context, source order, and linked issue row rendering
+- blocked/completed/pending row states lacked focused component coverage
+- the RMA list mixed table orchestration with high-stakes recovery-state display
+
+Deferred:
+
+- no browser QA for the RMA list route; this is a focused presentational extraction with unit coverage
+- filter UX and route search behavior remain unchanged
+- broader `rma-list.tsx` table/filter size can be reviewed later if list workflows keep expanding
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-list-execution-cells.test.tsx`
+- `./node_modules/.bin/eslint src/components/domain/support/rma/rma-list.tsx src/components/domain/support/rma/rma-list-execution-cells.tsx src/components/domain/support/rma/index.ts tests/unit/support/rma-list-execution-cells.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/support`
+
+Goal adaptation: no standing goal change. This continues the support/RMA operator UX sprint by giving list recovery state the same focused ownership as detail execution state.
+
+Residual risk: Support Sprint 2 has now covered RMA detail execution, detail source context, and list execution visibility. The remaining obvious support debt is outside RMA recovery display: either close this sprint or move to the separate `issue-detail-view.tsx` monolith under a new issue/support sprint.

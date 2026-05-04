@@ -7,6 +7,7 @@ export { RmaDetailContainer } from './rma-detail-container';
 export { RmaDetailView } from './rma-detail-view';
 export { RmaExecutionSummary } from './rma-execution-summary';
 export { RmaList } from './rma-list';
+export { RmaListContextCell, RmaListRemedyCell } from './rma-list-execution-cells';
 export { RmasListContainer } from './rmas-list-container';
 export { RmaStatusBadge, RMA_STATUS_CONFIG } from './rma-status-badge';
 export { RmaWorkflowActions } from './rma-workflow-actions';
