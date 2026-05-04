@@ -14,6 +14,15 @@ export interface DashboardTopMovingItem {
 }
 
 /**
+ * Date group aggregation for movement trends
+ */
+export interface DateGroupAggregation {
+  unitsIn: number;
+  unitsOut: number;
+  count: number;
+}
+
+/**
  * WMS Dashboard stock by category
  */
 export const categoryStockSchema = z.object({

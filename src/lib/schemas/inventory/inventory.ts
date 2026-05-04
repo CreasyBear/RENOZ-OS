@@ -209,15 +209,6 @@ export interface ProductMovementAggregation {
   count: number;
 }
 
-/**
- * Date group aggregation for movement trends
- */
-export interface DateGroupAggregation {
-  unitsIn: number;
-  unitsOut: number;
-  count: number;
-}
-
 // ============================================================================
 // HOOK FILTER TYPES
 // ============================================================================
