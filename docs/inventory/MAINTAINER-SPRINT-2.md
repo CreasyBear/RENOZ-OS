@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issue 1 implemented.
+Status: Issues 1 and 2 implemented.
 
 ## Business Value
 
@@ -65,6 +65,41 @@ Closeout criteria:
 - focused movement tests pass
 - lint/typecheck evidence is recorded if code paths require it
 
+### 2. Location Attribute Schema Ownership
+
+Business value: warehouse location attribute contracts should live with location workflow ownership so default, negative-stock, description, and address behavior can change without touching the generic inventory schema file.
+
+Workflow invariant: location create/update server logic, location form/list reads, and receive-location availability must keep importing through the public inventory schema barrel while the source of truth moves to `src/lib/schemas/inventory/locations.ts`.
+
+Affected files:
+
+- `src/lib/schemas/inventory/locations.ts`
+- `src/lib/schemas/inventory/inventory.ts`
+- `src/lib/schemas/inventory/index.ts`
+- `src/server/functions/inventory/locations.ts`
+- `tests/unit/inventory/location-schema-ownership.test.ts`
+
+Out of scope:
+
+- changing location attribute values or persistence behavior
+- changing location hierarchy or warehouse-location schemas
+- changing receive-location read policy
+- extracting core inventory read/list schemas
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/location-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx
+```
+
+Closeout criteria:
+
+- `locationAttributesSchema` and `LocationAttributes` are exported from `locations.ts`
+- `inventory.ts` no longer owns location attribute schema/types
+- public `@/lib/schemas/inventory` imports remain compatible
+- location-focused tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Movement Response Schema Ownership
@@ -104,3 +139,42 @@ Verification:
 Goal adaptation: no standing goal change. Sprint 2 continues the domain-sliced maintainer model after Sprint 1 closeout and corrects Sprint 1's dashboard closeout wording so dashboard ownership no longer claims a movement-trend helper.
 
 Residual risk: this improves movement schema ownership only; it does not prove movement persistence, cost-layer math, serialized lineage, or analytics correctness beyond the existing focused and broad inventory tests.
+
+### Issue 2: Location Attribute Schema Ownership
+
+Touched domains: inventory schema contracts, location schemas, location server update attributes, receive-location read policy tests.
+
+Workflow protected: location create/update attributes -> location server persistence contract -> location list/form reads -> receiving location availability.
+
+Business value: location attribute contracts are easier to maintain because location-specific JSONB attribute shape now lives with the location schema owner instead of the generic inventory schema file.
+
+Standards checked:
+
+- moved `locationAttributesSchema` and `LocationAttributes` into `src/lib/schemas/inventory/locations.ts`
+- removed the location attribute schema/type from `src/lib/schemas/inventory/inventory.ts`
+- preserved public `@/lib/schemas/inventory` barrel compatibility, including explicit key-type re-export
+- updated the server comment that still pointed to `inventory.ts` as the attribute type owner
+- extended the location ownership guard to prevent location attributes from drifting back into `inventory.ts`
+
+Smells removed:
+
+- location attribute shape depended on `locationAddressSchema` but lived outside the location schema owner
+- location server documentation referenced the old generic inventory schema owner
+
+Deferred:
+
+- core inventory read/list schemas still live in `src/lib/schemas/inventory/inventory.ts`
+- location hierarchy and warehouse-location ownership remains separate and unchanged
+- database-backed location persistence integration coverage remains outside this schema-ownership slice
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/location-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/locations.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts src/server/functions/inventory/locations.ts tests/unit/inventory/location-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md src/lib/schemas/inventory/locations.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts src/server/functions/inventory/locations.ts tests/unit/inventory/location-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
+
+Residual risk: `inventory.ts` still owns core inventory read/list, quality, inventory item, adjustment, transfer, and receiving hook-facing misc types.
