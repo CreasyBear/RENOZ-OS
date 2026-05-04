@@ -17,6 +17,8 @@ If a doc does not help explain current operational behavior, evergreen engineeri
 
 ### Engineering reference
 
+- [reference/product-owner-goal.md](./reference/product-owner-goal.md)
+  Standing product-owner and repo-maintainer goal for architecture-clean domain sprints.
 - [reference/maintainer-sprint-process.md](./reference/maintainer-sprint-process.md)
   Repo-maintainer sprint process for triage, issue slicing, architecture, implementation, remediation, verification, and closeout.
 - [reference/repo-standards.md](./reference/repo-standards.md)

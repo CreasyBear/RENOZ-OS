@@ -13,6 +13,8 @@ RENOZ-V3 is a multi-tenant lithium-ion battery OEM operations platform for RENOZ
 
 Maintainer posture: treat the repo as a product-engineering system and strategic business asset, not a feature pile. Code quality is in service of making RENOZ Energy easier to sell, fulfill, support, warranty, recover, report, and improve. Work through the sprint process in `docs/reference/maintainer-sprint-process.md`: triage, raise a domain slice, architect, implement, remediate, verify, and close out with touched domains, business value protected, standards checked, smells removed/deferred, gates run/skipped, goal adaptations, and residual risk.
 
+Standing product-owner goal: use `docs/reference/product-owner-goal.md` when a session needs the repo-maintainer `/goal` posture.
+
 ## Commands
 
 ```bash

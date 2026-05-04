@@ -44,6 +44,7 @@ High-signal areas:
 Start here depending on your goal:
 
 - [docs/README.md](./docs/README.md): canonical docs index
+- [docs/reference/product-owner-goal.md](./docs/reference/product-owner-goal.md): standing product-owner and repo-maintainer goal
 - [docs/reference/maintainer-sprint-process.md](./docs/reference/maintainer-sprint-process.md): repo-maintainer sprint process and closeout model
 - [docs/reference/repo-standards.md](./docs/reference/repo-standards.md): repo conventions and architectural standards
 - [docs/reference/schema-trace.md](./docs/reference/schema-trace.md): data-flow and schema trace-through methodology
