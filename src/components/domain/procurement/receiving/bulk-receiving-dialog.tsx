@@ -9,7 +9,7 @@
  * @see src/components/shared/bulk-import-wizard.tsx (wizard pattern)
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Package, AlertTriangle, Check, Loader2, ChevronRight, ChevronLeft, Hash } from 'lucide-react';
 import {
@@ -87,19 +87,26 @@ export function BulkReceivingDialog({
   const [attemptTotal, setAttemptTotal] = useState(0);
   const [failureDetails, setFailureDetails] = useState<Array<{ poId: string; error: string }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const wasOpenRef = useRef(false);
 
-  // Reset state when dialog opens/closes
+  // Reset state only on the open transition so background PO refetches do not
+  // wipe in-progress selections or serial entry.
   useEffect(() => {
-    if (open) {
-      setStep('select');
-      setSelectedPOIds(new Set());
-      setSerialNumbers(new Map());
-      setProcessingProgress({ processed: 0, failed: 0 });
-      setAttemptTotal(0);
-      setFailureDetails([]);
-      setIsProcessing(false);
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
+    if (!justOpened) {
+      return;
     }
-  }, [open]);
+
+    setStep('select');
+    setSelectedPOIds(new Set(purchaseOrders.map((po) => po.id)));
+    setSerialNumbers(new Map());
+    setProcessingProgress({ processed: 0, failed: 0 });
+    setAttemptTotal(0);
+    setFailureDetails([]);
+    setIsProcessing(false);
+  }, [open, purchaseOrders]);
 
   // Check if any selected POs have serialized items
   const selectedPODetails = useMemo(() => {
