@@ -44,6 +44,7 @@ import type {
   UpdateSerializedItemInput,
 } from '@/lib/schemas/inventory';
 import { SerializedItemDetailSheet } from './serialized-item-detail-sheet';
+import { getSerializedItemsReadErrorMessage } from './serialized-item-error-messages';
 import { SerializedItemFormDialog } from './serialized-item-form-dialog';
 import { SerializedItemsListPresenter } from './serialized-items-list-presenter';
 
@@ -140,7 +141,7 @@ export function SerializedItemsListContainer({
     setDeletingItem(null);
   }, [deletingItem, deleteMutation]);
 
-  const errorMessage = serializedQuery.error instanceof Error ? serializedQuery.error.message : null;
+  const errorMessage = getSerializedItemsReadErrorMessage(serializedQuery.error);
   const hasSerializedItems = (serializedQuery.data?.items?.length ?? 0) > 0;
 
   useEffect(() => {

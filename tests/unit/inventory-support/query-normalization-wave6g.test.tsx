@@ -157,7 +157,7 @@ describe('wave 6g inventory/support normalization', () => {
     vi.doMock('@/hooks/inventory', () => ({
       useSerializedItems: () => ({
         data: { items: [{ id: 'serial-1', serialNumber: 'S-001' }], total: 1, pageSize: 25 },
-        error: new Error('Serialized items are temporarily unavailable. Please refresh and try again.'),
+        error: new Error('select from serialized_items violates row-level security policy'),
         isLoading: false,
         isFetching: false,
         refetch: vi.fn(),
@@ -182,6 +182,10 @@ describe('wave 6g inventory/support normalization', () => {
     render(<SerializedItemsListContainer />);
 
     expect(screen.getByText('Showing cached serialized items')).toBeInTheDocument();
+    expect(
+      screen.getByText('Serialized items are temporarily unavailable. Please refresh and try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('select from serialized_items violates row-level security policy')).not.toBeInTheDocument();
     expect(screen.getByText('serialized presenter')).toBeInTheDocument();
   });
 });
