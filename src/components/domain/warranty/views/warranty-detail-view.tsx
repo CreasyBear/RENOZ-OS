@@ -18,7 +18,6 @@ import {
   Plus,
   TicketIcon,
   PanelRight,
-  X,
   Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,6 +44,8 @@ import { WarrantyClaimFormDialog } from '@/components/domain/warranty/dialogs/wa
 import { ClaimApprovalDialog } from '@/components/domain/warranty/dialogs/claim-approval-dialog';
 import { ExtendWarrantyDialog } from '@/components/domain/warranty/dialogs/extend-warranty-dialog';
 import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
+import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
+import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
 import { WarrantyClaimsHistoryCard } from '@/components/domain/warranty/views/warranty-claims-history-card';
 import { WarrantyLineageSections } from '@/components/domain/warranty/views/warranty-lineage-sections';
 import {
@@ -52,7 +53,7 @@ import {
   WarrantyServiceSystemCard,
 } from '@/components/domain/warranty/views/warranty-service-linkage';
 import { getServiceLinkagePresentation } from '@/components/domain/warranty/views/warranty-service-linkage-utils';
-import { useAlertDismissals, generateAlertIdWithValue } from '@/hooks/_shared/use-alert-dismissals';
+import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
 import { useWarrantyHeaderActions } from '@/hooks/warranty';
 import { formatDateAustralian, getDaysUntilExpiry, getWarrantyStatusConfigForEntityHeader } from '@/lib/warranty';
 import { getSummaryMetricSubtitle } from '@/lib/metrics/metric-display';
@@ -176,65 +177,13 @@ export function WarrantyDetailView({
   }, [now, warranty.expiryDate, warranty.registrationDate]);
 
   const alerts = useMemo(() => {
-    const items: Array<{
-      id: string;
-      tone: 'critical' | 'warning' | 'info';
-      title: string;
-      description: string;
-      actionLabel?: string;
-      onAction?: () => void;
-    }> = [];
-
-    if (daysUntilExpiry <= 0 || warranty.status === 'expired') {
-      const daysSinceExpiry = Math.abs(daysUntilExpiry);
-      const canExtendExpired = daysSinceExpiry <= 90;
-      const daysLeftToExtend = canExtendExpired ? 90 - daysSinceExpiry : null;
-
-      items.push({
-        id: generateAlertIdWithValue('warranty', warranty.id, 'expired', daysSinceExpiry),
-        tone: 'critical',
-        title: 'Warranty expired',
-        description:
-          daysUntilExpiry === 0
-            ? 'Warranty expires today.'
-            : `Warranty expired ${daysSinceExpiry} day${daysSinceExpiry === 1 ? '' : 's'} ago.${
-                canExtendExpired && daysLeftToExtend !== null
-                  ? ` Can still be extended within the 90-day grace period (${daysLeftToExtend} days remaining).`
-                  : daysSinceExpiry > 90
-                  ? ' Cannot be extended (90-day grace period has passed).'
-                  : ''
-              }`,
-        actionLabel: canExtendExpired ? 'Extend warranty' : 'Review claims',
-        onAction: canExtendExpired
-          ? () => onExtendDialogOpenChange(true)
-          : () => setActiveTab('claims'),
-      });
-    }
-
-    if (daysUntilExpiry > 0 && daysUntilExpiry <= 30) {
-      items.push({
-        id: generateAlertIdWithValue('warranty', warranty.id, 'expiring_soon', daysUntilExpiry),
-        tone: 'warning',
-        title: 'Warranty expiring soon',
-        description: `Warranty expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}.`,
-        actionLabel: 'Extend warranty',
-        onAction: () => onExtendDialogOpenChange(true),
-      });
-    }
-
-    if (warranty.expiryAlertOptOut) {
-      items.push({
-        id: generateAlertIdWithValue('warranty', warranty.id, 'alerts_disabled', 1),
-        tone: 'info',
-        title: 'Expiry alerts disabled',
-        description: 'You will not receive expiry reminders for this warranty.',
-        actionLabel: 'Enable alerts',
-        onAction: () => onToggleOptOut(false),
-      });
-    }
-
-    return items;
-  }, [daysUntilExpiry, warranty.status, warranty.id, onExtendDialogOpenChange, onToggleOptOut, warranty.expiryAlertOptOut]);
+    return buildWarrantyAlerts({
+      warrantyId: warranty.id,
+      warrantyStatus: warranty.status,
+      daysUntilExpiry,
+      expiryAlertOptOut: warranty.expiryAlertOptOut,
+    });
+  }, [daysUntilExpiry, warranty.expiryAlertOptOut, warranty.id, warranty.status]);
 
   const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
 
@@ -596,38 +545,13 @@ export function WarrantyDetailView({
           <Progress value={coverageProgress} className="mt-3 h-2" />
         </section>
 
-        {visibleAlerts.length > 0 && (
-          <section className="space-y-2">
-            {visibleAlerts.map((alert) => (
-              <Alert
-                key={alert.id}
-                variant={alert.tone === 'critical' ? 'destructive' : 'default'}
-              >
-                <AlertDescription className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">{alert.title}</div>
-                    <div className="text-sm text-muted-foreground">{alert.description}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {alert.actionLabel && alert.onAction && (
-                      <Button variant="outline" size="sm" onClick={alert.onAction}>
-                        {alert.actionLabel}
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Dismiss alert"
-                      onClick={() => dismiss(alert.id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            ))}
-          </section>
-        )}
+        <WarrantyAlerts
+          alerts={visibleAlerts}
+          onDismiss={dismiss}
+          onExtendWarranty={() => onExtendDialogOpenChange(true)}
+          onReviewClaims={() => setActiveTab('claims')}
+          onEnableAlerts={() => onToggleOptOut(false)}
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start gap-2">
