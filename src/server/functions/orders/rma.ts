@@ -1016,7 +1016,7 @@ export const rejectRma = createServerFn({ method: 'POST' })
 export const bulkApproveRma = createServerFn({ method: 'POST' })
   .inputValidator(bulkApproveRmaSchema)
   .handler(async ({ data }): Promise<BulkRmaResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.support.update });
     const now = new Date().toISOString();
 
     const updated: string[] = [];

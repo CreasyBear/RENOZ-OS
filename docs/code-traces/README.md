@@ -36,6 +36,8 @@ Traces use **`NN-slug.md`** prefixes so order stays stable in file listings and 
 | 17 | [17-po-approval-escalate-delegate-bulk.md](./17-po-approval-escalate-delegate-bulk.md) | Escalate / delegate / revoke / bulk approve PO approvals | **COMPLETE** |
 | 18 | [18-rma-field-update.md](./18-rma-field-update.md) | `updateRma` — non-status field patches | **COMPLETE** |
 | 19 | [19-xero-order-invoice-sync.md](./19-xero-order-invoice-sync.md) | `syncInvoiceToXero` / `resyncInvoiceToXero` | **COMPLETE** |
+| 20 | [20-finance-communications-repair.md](./20-finance-communications-repair.md) | Finance and communications shell / projection repair trace | **COMPLETE** |
+| 21 | [21-rma-approval-workflow.md](./21-rma-approval-workflow.md) | `approveRma` / `bulkApproveRma` — requested → approved | **COMPLETE** |
 
 ## Related docs
 
