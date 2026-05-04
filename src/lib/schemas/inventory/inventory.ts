@@ -14,7 +14,6 @@ import {
   normalizeObjectInput,
 } from '../_shared/patterns';
 import type { FlexibleJson, JsonValue } from '../_shared/patterns';
-import { locationAddressSchema } from './locations';
 import type { LocationType } from './warehouse-locations';
 
 // ============================================================================
@@ -125,23 +124,6 @@ export type LocationParams = z.infer<typeof locationParamsSchema>;
 export const inventoryParamsSchema = idParamSchema;
 export type InventoryParams = z.infer<typeof inventoryParamsSchema>;
 
-// ============================================================================
-// LOCATION ATTRIBUTES
-// ============================================================================
-
-/** Attributes for warehouse locations (JSONB; may include isDefault, etc.) */
-export const locationAttributesSchema = z
-  .object({
-    isDefault: z.boolean().optional(),
-    allowNegative: z.boolean().optional(),
-    description: z.string().optional(),
-    address: locationAddressSchema.optional(),
-  })
-  .passthrough();
-
-export type LocationAttributes = z.infer<typeof locationAttributesSchema>;
-
-// ============================================================================
 // HOOK FILTER TYPES
 // ============================================================================
 

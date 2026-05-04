@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   createLocationSchema,
+  locationAttributesSchema,
   locationListCursorQuerySchema,
   locationListQuerySchema,
   updateLocationSchema,
@@ -23,10 +24,12 @@ describe('inventory location schema ownership', () => {
     expect(locationSchema).toContain('export const updateLocationSchema');
     expect(locationSchema).toContain('export const locationListQuerySchema');
     expect(locationSchema).toContain('export const locationListCursorQuerySchema');
+    expect(locationSchema).toContain('export const locationAttributesSchema');
     expect(inventorySchema).not.toContain('export const createLocationSchema');
     expect(inventorySchema).not.toContain('export const updateLocationSchema');
     expect(inventorySchema).not.toContain('export const locationListQuerySchema');
     expect(inventorySchema).not.toContain('export const locationListCursorQuerySchema');
+    expect(inventorySchema).not.toContain('export const locationAttributesSchema');
   });
 
   it('preserves the public inventory schema barrel for location callers', () => {
@@ -55,6 +58,19 @@ describe('inventory location schema ownership', () => {
     expect(locationListCursorQuerySchema.parse(undefined)).toMatchObject({
       pageSize: 20,
       sortOrder: 'desc',
+    });
+    expect(
+      locationAttributesSchema.parse({
+        isDefault: true,
+        allowNegative: false,
+        description: 'Receiving dock',
+        address: { city: 'Perth' },
+      })
+    ).toMatchObject({
+      isDefault: true,
+      allowNegative: false,
+      description: 'Receiving dock',
+      address: { city: 'Perth' },
     });
   });
 });

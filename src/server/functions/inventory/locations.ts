@@ -49,7 +49,7 @@ type WarehouseLocationRecord = typeof warehouseLocations.$inferSelect;
 
 /**
  * Cast attributes to schema-compatible type for TanStack Start serialization.
- * Types flow from schemas - attributes types are defined in lib/schemas/inventory/inventory.ts
+ * Types flow from schemas - attributes types are defined in lib/schemas/inventory/locations.ts.
  */
 function castAttributes(attributes: unknown): FlexibleJson | null {
   if (!attributes || typeof attributes !== 'object') return null;

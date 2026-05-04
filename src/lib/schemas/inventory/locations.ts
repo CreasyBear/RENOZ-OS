@@ -11,6 +11,18 @@ export const locationAddressSchema = addressSchema.partial();
 
 export type LocationAddress = z.infer<typeof locationAddressSchema>;
 
+/** Attributes for warehouse locations (JSONB; may include isDefault, etc.). */
+export const locationAttributesSchema = z
+  .object({
+    isDefault: z.boolean().optional(),
+    allowNegative: z.boolean().optional(),
+    description: z.string().optional(),
+    address: locationAddressSchema.optional(),
+  })
+  .passthrough();
+
+export type LocationAttributes = z.infer<typeof locationAttributesSchema>;
+
 export const createLocationSchema = z.object({
   code: z.string().min(1, 'Code is required').max(20),
   name: z.string().min(1, 'Name is required').max(255),

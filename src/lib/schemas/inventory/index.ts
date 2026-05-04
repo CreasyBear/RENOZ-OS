@@ -47,6 +47,7 @@ export type {
   UpdateLocation,
   LocationFilter,
   LocationListQuery,
+  LocationAttributes,
 } from './locations';
 
 export type {
