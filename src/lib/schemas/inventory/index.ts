@@ -6,6 +6,7 @@
 
 // --- Core Inventory Types ---
 export * from './inventory';
+export * from './movements';
 export * from './receiving';
 export * from './serialized-items';
 export * from './serialized-mutation-contract';
@@ -30,15 +31,18 @@ export type {
   Inventory,
   InventoryFilter,
   InventoryListQuery,
+  QualityRecord,
+  HookWarehouseLocation,
+  HookLocationHierarchy,
+} from './inventory';
+
+export type {
   Movement,
   MovementType,
   CreateMovement,
   MovementFilter,
   MovementListQuery,
-  QualityRecord,
-  HookWarehouseLocation,
-  HookLocationHierarchy,
-} from './inventory';
+} from './movements';
 
 export type {
   SerializedItem,

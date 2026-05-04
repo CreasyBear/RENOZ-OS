@@ -1,0 +1,65 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  createMovementSchema,
+  isValidMovementType,
+  movementTypeValues,
+  stockAdjustmentSchema,
+  stockTransferSchema,
+} from '@/lib/schemas/inventory';
+
+const root = process.cwd();
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8');
+}
+
+describe('inventory movement schema ownership', () => {
+  it('keeps movement schemas owned by the movement schema file', () => {
+    const movementSchema = read('src/lib/schemas/inventory/movements.ts');
+    const inventorySchema = read('src/lib/schemas/inventory/inventory.ts');
+
+    expect(movementSchema).toContain('export const movementTypeValues');
+    expect(movementSchema).toContain('export const createMovementSchema');
+    expect(movementSchema).toContain('export const stockAdjustmentSchema');
+    expect(movementSchema).toContain('export const stockTransferSchema');
+    expect(inventorySchema).not.toContain('export const movementTypeValues');
+    expect(inventorySchema).not.toContain('export const createMovementSchema');
+    expect(inventorySchema).not.toContain('export const stockAdjustmentSchema');
+    expect(inventorySchema).not.toContain('export const stockTransferSchema');
+  });
+
+  it('preserves the public inventory schema barrel for movement callers', () => {
+    expect(movementTypeValues).toContain('receive');
+    expect(isValidMovementType('adjust')).toBe(true);
+    expect(isValidMovementType('unknown')).toBe(false);
+    expect(
+      createMovementSchema.parse({
+        productId: '11111111-1111-4111-8111-111111111111',
+        locationId: '22222222-2222-4222-8222-222222222222',
+        movementType: 'receive',
+        quantity: 1,
+      })
+    ).toMatchObject({
+      movementType: 'receive',
+      metadata: {},
+    });
+    expect(
+      stockAdjustmentSchema.parse({
+        productId: '11111111-1111-4111-8111-111111111111',
+        locationId: '22222222-2222-4222-8222-222222222222',
+        adjustmentQty: -1,
+        reason: 'Cycle count variance',
+      })
+    ).toMatchObject({ adjustmentQty: -1 });
+    expect(
+      stockTransferSchema.parse({
+        productId: '11111111-1111-4111-8111-111111111111',
+        fromLocationId: '22222222-2222-4222-8222-222222222222',
+        toLocationId: '33333333-3333-4333-8333-333333333333',
+        quantity: 1,
+      })
+    ).toMatchObject({ quantity: 1 });
+  });
+});
