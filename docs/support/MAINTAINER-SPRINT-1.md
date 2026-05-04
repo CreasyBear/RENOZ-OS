@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to support-owned issue, RMA, warranty, and remedy workflows.
 
-Status: Issues 1, 2, 3, 4, and 5 implemented; remaining support/RMA/warranty risks stay in the ledger.
+Status: Closed after Issues 1, 2, 3, 4, and 5; remaining support/RMA/warranty risks move to a future sprint.
 
 ## Business Value
 
@@ -466,3 +466,59 @@ Verification:
 Goal adaptation: no standing goal change. This follows the support sprint posture by hardening the RMA remedy closeout contract without widening behavior.
 
 Residual risk: the new evidence is stronger than pure schema/source guards but still not a real database integration test. A future sprint should introduce or reuse a DB-backed harness before claiming full remedy execution protection across refund, credit, and replacement side effects.
+
+## Sprint Closeout Audit
+
+Completion audit:
+
+- Objective: make support/RMA/warranty recovery workflows more trustworthy by aligning stale maintainer traces with live code, clarifying RMA field ownership, enforcing approval permission parity, and strengthening remedy execution evidence for refund, credit, replacement, repair, no-action, and blocked states.
+- Deliverables checked: issue ledger, issue closeout logs, RMA code traces, source/trace guards, schema/state/read-model tests, transaction-boundary artifact tests, support unit suite evidence, typecheck evidence, and residual-risk notes.
+- Evidence inspected: `src/server/functions/orders/rma.ts`, `src/server/functions/orders/_shared/rma-remedy-execution.ts`, `src/server/functions/orders/_shared/rma-execution-state.ts`, `src/server/functions/orders/_shared/rma-read-model.ts`, `src/lib/schemas/support/rma.ts`, `docs/code-traces/14-rma-create.md`, `docs/code-traces/15-rma-process-resolution.md`, `docs/code-traces/18-rma-field-update.md`, `docs/code-traces/21-rma-approval-workflow.md`, and the support tests listed in each issue.
+
+Touched domains: support/RMA workflow ownership, RMA traces, RMA permissions, RMA update schema, RMA approval, remedy execution state, order refunds, financial credit notes, replacement order drafts, RMA read-model artifact projection.
+
+Workflow protected: support/order/warranty context -> RMA creation or approval -> RMA receive -> dedicated remedy execution -> local refund, credit, replacement, repair, no-action, or blocked state -> RMA execution summary and artifact projection.
+
+Business value protected: operators and maintainers can better trust that support recovery state means what it says. RMA creation/update/process/approval permission posture is documented and guarded, workflow-owned fields cannot be patched through the generic update path, bulk approval no longer weakens authority, and processed remedy state is tied to canonical local artifact evidence.
+
+Architecture standards checked:
+
+- domain ownership: support/RMA owns receipt, approval, and remedy workflow contracts while order/finance artifacts remain explicit adjacent-domain side effects
+- route/container boundary: UI route behavior was not changed; this sprint hardened server/schema/read-model/test contracts under existing surfaces
+- hook boundary: existing RMA mutation hooks stayed compatible while server/source contracts were guarded
+- server function boundary: `createRma`, `updateRma`, `approveRma`, `bulkApproveRma`, and `processRma` permission and workflow responsibilities are now trace-guarded
+- schema/database boundary: generic RMA update schema rejects receipt/remedy-owned fields; remedy artifact IDs on the RMA row remain canonical execution truth
+- query/cache contract: existing RMA mutation invalidation was not widened; bulk approval exact-cache identity remains a deferred cache precision question
+- tenant isolation: changed server behavior retained existing organization-scoped queries and authenticated permission checks
+- inventory/finance integrity: receive inventory behavior was not changed; refund, credit, and replacement side effects now have stronger local artifact contract evidence
+- UI honesty: blocked remedy execution keeps the RMA received with no fake artifact IDs, and completed execution summaries project only persisted artifact links
+
+Smells removed:
+
+- stale RMA traces claimed bare auth and metadata-only processing despite stronger live code
+- `updateRma` could mutate workflow-owned inspection and remedy fields in parallel with receipt/process workflows
+- bulk RMA approval previously had weaker permission posture than single approval
+- remedy evidence was spread across schema, dialog, read-model, and state helpers without focused artifact contract evidence
+- replacement remedy behavior lacked a focused guard for zero-priced draft order creation from returned lines
+
+Smells deferred:
+
+- no real DB-backed process integration harness exists for refund, credit, replacement, repair, no-action, blocked, or mixed bulk approval states
+- external payment/accounting settlement visibility remains outside the local artifact contract
+- optimistic locking for concurrent RMA header edits remains deferred
+- support issue closeout UI around blocked or completed remedy state needs future operator-surface QA
+- bulk approval still uses broad invalidation where exact updated-id cache updates may be possible
+
+Verification:
+
+- Issue 1 focused trace contract tests, lint, and diff check recorded above
+- Issue 2 focused field-boundary, trace, mutation-hook tests, lint, diff check, and typecheck recorded above
+- Issue 3 focused approval permission, trace, mutation-hook tests, lint, diff check, and typecheck recorded above
+- Issue 4 focused remedy evidence, execution state, read-model, dialog, trace tests, lint, diff check, and typecheck recorded above
+- Issue 5 focused transaction-boundary test, lint, full support suite, and typecheck recorded above
+
+Gates skipped: browser QA was skipped because this sprint hardened support/RMA server, schema, trace, read-model, and transaction-boundary contracts without changing UI behavior. True DB-backed integration coverage was not added because the repo currently uses unit/mocked transaction patterns and does not have a dedicated integration harness.
+
+Goal adaptations made or declined: no standing goal change. This sprint confirms support/RMA/warranty is a high-stakes recovery domain where artifact truth, workflow-owned fields, permission parity, and trace freshness need the same maintainer discipline as fulfillment and inventory.
+
+Residual risk: Support Sprint 1 is closed as a trace/schema/contract hardening sprint, not as complete support recovery certification. The next support sprint should either introduce DB-backed RMA remedy integration evidence or move to operator-facing blocked/completed remedy UX, depending on whether infrastructure or user friction is the larger constraint at that point.
