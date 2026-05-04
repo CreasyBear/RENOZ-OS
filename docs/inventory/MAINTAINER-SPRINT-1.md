@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive, stock-count, quality-inspection, and location mutation error guidance standardized; remaining issues stay in the ledger.
+Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive, stock-count, quality-inspection, location, and alert mutation error guidance standardized; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -434,11 +434,11 @@ Residual risk: the main inventory server file is now a 29-line compatibility bar
 
 ### Issue 4: Inventory Mutation Error Standard
 
-Touched domains: inventory hooks, inventory locations route, manual receive mutation, stock-count mutations, quality inspection mutation, warehouse location mutations, warehouse stock-in, cycle-count, inspection, and location-management operator feedback.
+Touched domains: inventory hooks, inventory locations route, inventory alerts route, manual receive mutation, stock-count mutations, quality inspection mutation, warehouse location mutations, alert-rule/triggered-alert mutations, warehouse stock-in, cycle-count, inspection, location-management, and inventory exception operator feedback.
 
-Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance; stock-count create/update/start/item/bulk/complete/cancel failure -> safe toast guidance -> count/inventory cache contracts preserved; quality inspection record failure -> safe toast guidance -> quality-history cache contract preserved; location create/update/delete failure -> safe toast guidance -> location cache contracts and form error rendering preserved.
+Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance; stock-count create/update/start/item/bulk/complete/cancel failure -> safe toast guidance -> count/inventory cache contracts preserved; quality inspection record failure -> safe toast guidance -> quality-history cache contract preserved; location create/update/delete failure -> safe toast guidance -> location cache contracts and form error rendering preserved; alert create/update/delete/toggle/acknowledge failure -> safe toast guidance -> alert-rule, triggered-alert, and analytics cache contracts preserved.
 
-Business value: warehouse operators should get actionable receive, stock-count, inspection, and location failure guidance instead of raw database/server wording or generic "failed" toasts when inventory integrity validation rejects an inventory operation.
+Business value: warehouse operators should get actionable receive, stock-count, inspection, location, and alert failure guidance instead of raw database/server wording or generic "failed" toasts when inventory integrity validation rejects an inventory operation.
 
 Standards checked:
 
@@ -447,18 +447,22 @@ Standards checked:
 - reused the shared formatter across stock-count mutations
 - reused the shared formatter for quality inspection creation
 - reused the shared formatter for composite and standalone warehouse location mutations
+- reused the shared formatter for alert rule and triggered alert mutations
 - preserved optimistic rollback behavior for inventory list/detail caches
 - preserved receive success and cache invalidation behavior
 - preserved stock-count success and cache invalidation behavior
 - preserved quality inspection success and cache invalidation behavior
 - preserved location success and cache invalidation behavior
 - kept locations form submit error rendering type-safe after mutation error narrowing
+- preserved alert success and cache invalidation behavior
+- kept alerts form submit error rendering type-safe after mutation error narrowing
 - kept stock-count-specific completion guidance for cost-layer and serialized-unit integrity failures
 - added formatter unit coverage for validation guidance and raw-message suppression
 - added a regression test for validation-code guidance on receive failure
 - added stock-count hook regression coverage for raw create errors and completion integrity failures
 - added quality hook regression coverage for raw inspection errors
 - added location hook regression coverage for raw composite and standalone location errors
+- added alert hook regression coverage for raw create and acknowledge errors
 
 Smells removed:
 
@@ -468,23 +472,28 @@ Smells removed:
 - raw `error.message` quality inspection mutation toast
 - raw `error.message` location mutation toasts
 - unsafe locations form access to mutation `error.message` on an untyped error object
+- raw `error.message` alert mutation toasts
+- unsafe alerts form access to mutation `error.message` on an untyped error object
 - untested receive mutation failure messaging
 - untested stock-count mutation failure messaging
 - untested quality inspection mutation failure messaging
 - untested location mutation failure messaging
+- untested alert mutation failure messaging
 
 Deferred:
 
-- raw `error.message` toasts in inventory alerts, forecasting, valuation, and route/dialog surfaces
+- raw `error.message` toasts in inventory forecasting, valuation, and route/dialog surfaces
 - extending the shared formatter to serialized-item and product-inventory mutation helpers if their domain-specific code maps can be folded in cleanly
 
 Verification:
 
+- `./node_modules/.bin/vitest run tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/query-normalization-wave3-quality.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-stock-counts.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/inventory/use-alerts.ts src/routes/_authenticated/inventory/alerts-page.tsx tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-locations.ts src/routes/_authenticated/inventory/locations-page.tsx tests/unit/inventory/query-normalization-wave3-locations.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-quality.ts tests/unit/inventory/query-normalization-wave3-quality.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-receive-inventory.test.tsx`
@@ -497,4 +506,4 @@ Verification:
 
 Goal adaptation: no goal change; this keeps Issue 4 moving through small mutation-family slices.
 
-Residual risk: this slice standardizes manual receive, stock-count, quality-inspection, and location mutations only. The audit still shows raw or generic mutation errors across alerts, forecasting, valuation, and inventory UI route/dialog surfaces.
+Residual risk: this slice standardizes manual receive, stock-count, quality-inspection, location, and alert mutations only. The audit still shows raw or generic mutation errors across forecasting, valuation, and inventory UI route/dialog surfaces.
