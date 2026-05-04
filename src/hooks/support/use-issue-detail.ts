@@ -13,7 +13,13 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useIssue, useUpdateIssue, useDeleteIssue, useEscalateIssue } from './use-issues';
+import {
+  useIssue,
+  useUpdateIssue,
+  useDeleteIssue,
+  useEscalateIssue,
+  useDeEscalateIssue,
+} from './use-issues';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { toast } from 'sonner';
 import type { IssueRelatedContext, IssueStatus } from '@/lib/schemas/support/issues';
@@ -23,6 +29,8 @@ import { trackSupportIssueTransition } from '@/lib/analytics';
 // ============================================================================
 // TYPES
 // ============================================================================
+
+export type EscalationDialogMode = 'escalate' | 'de_escalate';
 
 export interface IssueDetailActions {
   /** Navigate back to issues list */
@@ -90,6 +98,8 @@ export interface UseIssueDetailReturn {
   escalationDialogOpen: boolean;
   /** Set escalation dialog open state */
   setEscalationDialogOpen: (open: boolean) => void;
+  /** Whether the escalation dialog is escalating or de-escalating */
+  escalationDialogMode: EscalationDialogMode;
   /** Update mutation status */
   isUpdatePending: boolean;
   /** Delete mutation status */
@@ -98,6 +108,10 @@ export interface UseIssueDetailReturn {
   onEscalate: (reason: string, escalateToUserId?: string) => Promise<void>;
   /** Escalate mutation status */
   isEscalatePending: boolean;
+  /** De-escalate handler - call when user confirms de-escalation in dialog */
+  onDeEscalate: (reason: string, assignToUserId?: string) => Promise<void>;
+  /** De-escalate mutation status */
+  isDeEscalatePending: boolean;
 }
 
 // ============================================================================
@@ -113,6 +127,8 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
     toStatus: IssueStatus;
   } | null>(null);
   const [escalationDialogOpen, setEscalationDialogOpen] = useState(false);
+  const [escalationDialogMode, setEscalationDialogMode] =
+    useState<EscalationDialogMode>('escalate');
 
   // Fetch issue detail
   const { data: issue, isLoading, error, refetch } = useIssue({ issueId });
@@ -123,6 +139,7 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
   const updateMutation = useUpdateIssue();
   const deleteMutation = useDeleteIssue();
   const escalateMutation = useEscalateIssue();
+  const deEscalateMutation = useDeEscalateIssue();
 
   const relatedContext = useMemo(() => issue?.relatedContext ?? null, [issue?.relatedContext]);
   const customerContext = useMemo<CustomerContextData>(
@@ -149,6 +166,10 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
       },
       onStatusChange: (newStatus: IssueStatus) => {
         if (newStatus === 'escalated') {
+          setEscalationDialogMode('escalate');
+          setEscalationDialogOpen(true);
+        } else if (issue?.status === 'escalated' && newStatus === 'in_progress') {
+          setEscalationDialogMode('de_escalate');
           setEscalationDialogOpen(true);
         } else {
           setStatusDialog({
@@ -243,7 +264,17 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
         refetch();
       },
     }),
-    [navigate, issueId, issue, deleteMutation, confirm, refetch, statusDialog, updateMutation, setStatusDialog]
+    [
+      navigate,
+      issueId,
+      issue,
+      deleteMutation,
+      confirm,
+      refetch,
+      statusDialog,
+      updateMutation,
+      setStatusDialog,
+    ]
   );
 
   const onEscalate = useCallback(
@@ -277,6 +308,38 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
     [issueId, escalateMutation, navigate]
   );
 
+  const onDeEscalate = useCallback(
+    async (reason: string, assignToUserId?: string) => {
+      try {
+        await deEscalateMutation.mutateAsync({
+          issueId,
+          reason,
+          assignToUserId,
+        });
+        trackSupportIssueTransition({
+          name: 'support_issue_transition',
+          issueId,
+          fromStatus: 'escalated',
+          toStatus: 'in_progress',
+          action: 'de_escalate',
+          source: 'issue_detail',
+        });
+        setEscalationDialogOpen(false);
+        toast.success('Issue de-escalated', {
+          action: {
+            label: 'View',
+            onClick: () => navigate({ to: '/support/issues/$issueId', params: { issueId } }),
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to de-escalate';
+        toast.error(message);
+        throw err;
+      }
+    },
+    [issueId, deEscalateMutation, navigate]
+  );
+
   return {
     issue,
     isLoading,
@@ -291,9 +354,12 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
     setStatusDialog,
     escalationDialogOpen,
     setEscalationDialogOpen,
+    escalationDialogMode,
     isUpdatePending: updateMutation.isPending,
     isDeletePending: deleteMutation.isPending,
     onEscalate,
     isEscalatePending: escalateMutation.isPending,
+    onDeEscalate,
+    isDeEscalatePending: deEscalateMutation.isPending,
   };
 }

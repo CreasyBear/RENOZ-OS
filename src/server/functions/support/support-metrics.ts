@@ -8,7 +8,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, count, sql, gte, isNull, isNotNull } from 'drizzle-orm';
+import { eq, and, count, sql, gte, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -243,7 +243,7 @@ export const getSupportMetrics = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(issues.organizationId, ctx.organizationId),
-          isNotNull(issues.escalatedAt),
+          eq(issues.status, 'escalated'),
           isNull(issues.deletedAt)
         )
       );

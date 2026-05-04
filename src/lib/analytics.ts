@@ -28,6 +28,7 @@ export type SupportIssueTransitionEvent = {
     | 'start'
     | 'hold'
     | 'escalate'
+    | 'de_escalate'
     | 'resolve'
     | 'close'
     | 'delete'

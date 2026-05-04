@@ -47,10 +47,13 @@ export function IssueDetailContainer({
     setStatusDialog,
     escalationDialogOpen,
     setEscalationDialogOpen,
+    escalationDialogMode,
     isUpdatePending,
     isDeletePending,
     onEscalate,
     isEscalatePending,
+    onDeEscalate,
+    isDeEscalatePending,
   } = useIssueDetail(issueId);
 
   const { onLogActivity, loggerProps } = useEntityActivityLogging({
@@ -112,10 +115,13 @@ export function IssueDetailContainer({
         setStatusDialog={setStatusDialog}
         escalationDialogOpen={escalationDialogOpen}
         setEscalationDialogOpen={setEscalationDialogOpen}
+        escalationDialogMode={escalationDialogMode}
         isUpdatePending={isUpdatePending}
         isDeletePending={isDeletePending}
         onEscalate={onEscalate}
+        onDeEscalate={onDeEscalate}
         isEscalatePending={isEscalatePending}
+        isDeEscalatePending={isDeEscalatePending}
         onLogActivity={onLogActivity}
       />
 

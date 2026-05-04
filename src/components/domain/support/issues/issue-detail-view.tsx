@@ -22,6 +22,7 @@ import {
   Calendar,
   Tag,
   AlertTriangle,
+  ArrowDown,
   Trash2,
   MessageSquare,
   FileText,
@@ -63,7 +64,11 @@ import type {
   IssueDetail,
   IssueRelatedContext,
 } from '@/lib/schemas/support/issues';
-import type { CustomerContextData, IssueDetailActions } from '@/hooks/support';
+import type {
+  CustomerContextData,
+  EscalationDialogMode,
+  IssueDetailActions,
+} from '@/hooks/support';
 
 // ============================================================================
 // CONSTANTS
@@ -101,10 +106,13 @@ interface IssueDetailViewProps {
   setStatusDialog: (dialog: { open: boolean; toStatus: IssueStatus } | null) => void;
   escalationDialogOpen: boolean;
   setEscalationDialogOpen: (open: boolean) => void;
+  escalationDialogMode: EscalationDialogMode;
   isUpdatePending: boolean;
   isDeletePending: boolean;
   onEscalate: (reason: string, escalateToUserId?: string) => Promise<void>;
+  onDeEscalate: (reason: string, assignToUserId?: string) => Promise<void>;
   isEscalatePending: boolean;
+  isDeEscalatePending: boolean;
   /** Handler to open activity logging dialog */
   onLogActivity?: () => void;
 }
@@ -125,10 +133,13 @@ export function IssueDetailView({
   setStatusDialog,
   escalationDialogOpen,
   setEscalationDialogOpen,
+  escalationDialogMode,
   isUpdatePending,
   isDeletePending,
   onEscalate,
+  onDeEscalate,
   isEscalatePending,
+  isDeEscalatePending,
   onLogActivity,
 }: IssueDetailViewProps) {
   const slaStatus = issue.slaMetrics
@@ -170,6 +181,16 @@ export function IssueDetailView({
       onClick: actions.onBack,
       icon: <ChevronLeft className="h-4 w-4" aria-hidden="true" />,
     },
+    ...(issue.status === 'escalated'
+      ? [
+          {
+            label: 'De-escalate',
+            onClick: () => actions.onStatusChange('in_progress'),
+            icon: <ArrowDown className="h-4 w-4" aria-hidden="true" />,
+            disabled: isUpdatePending || isDeEscalatePending,
+          },
+        ]
+      : []),
     ...(issue.status !== 'on_hold' && !isResolvedOrClosed
       ? [
           {
@@ -214,7 +235,7 @@ export function IssueDetailView({
               </Badge>
               <Badge variant="outline">{TYPE_LABELS[issue.type]}</Badge>
               {slaStatus && <SlaBadge status={slaStatus} />}
-              {issue.escalatedAt && (
+              {issue.status === 'escalated' && (
                 <Badge variant="destructive" className="gap-1">
                   <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                   Escalated
@@ -290,7 +311,7 @@ export function IssueDetailView({
               rmaReadiness={issue.rmaReadiness}
               onStatusChange={actions.onStatusChange}
               onDelete={actions.onDelete}
-              isPending={isUpdatePending || isDeletePending}
+              isPending={isUpdatePending || isDeletePending || isDeEscalatePending}
             />
             <DetailsCard issue={issue} />
             {customerId && (
@@ -324,8 +345,10 @@ export function IssueDetailView({
       <EscalationDialog
         open={escalationDialogOpen}
         onOpenChange={setEscalationDialogOpen}
+        isEscalated={escalationDialogMode === 'de_escalate'}
         onEscalate={onEscalate}
-        isPending={isEscalatePending}
+        onDeEscalate={onDeEscalate}
+        isPending={isEscalatePending || isDeEscalatePending}
       />
     </div>
   );
@@ -357,7 +380,7 @@ function IssueAlerts({ issue }: { issue: IssueDetail }) {
     );
   }
 
-  if (issue.escalatedAt && !issue.escalationReason) {
+  if (issue.status === 'escalated' && issue.escalatedAt && !issue.escalationReason) {
     alerts.push(
       <div
         key="escalation"
@@ -926,10 +949,14 @@ function ActionsCard({
               <Button
                 variant="outline"
                 size="sm"
+                className="gap-2"
                 onClick={() => onStatusChange('in_progress')}
                 disabled={isPending}
               >
-                Start Working
+                {issue.status === 'escalated' ? (
+                  <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                ) : null}
+                {issue.status === 'escalated' ? 'De-escalate' : 'Start Working'}
               </Button>
             )}
             {issue.status !== 'on_hold' && (

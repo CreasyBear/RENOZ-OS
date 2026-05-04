@@ -7,7 +7,12 @@
 
 // Core issue management
 export * from './use-issues';
-export { useIssueDetail, type CustomerContextData, type IssueDetailActions } from './use-issue-detail';
+export {
+  useIssueDetail,
+  type CustomerContextData,
+  type EscalationDialogMode,
+  type IssueDetailActions,
+} from './use-issue-detail';
 
 // Other support features
 export * from './use-csat';

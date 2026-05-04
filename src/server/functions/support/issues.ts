@@ -530,7 +530,7 @@ export const getIssues = createServerFn({ method: 'GET' })
       if (userId) conditions.push(eq(issues.assignedToUserId, userId));
     }
     if (data.escalated === true) {
-      conditions.push(isNotNull(issues.escalatedAt));
+      conditions.push(eq(issues.status, 'escalated'));
     }
     if (data.search) {
       conditions.push(buildIssueSearchCondition(data.search, ctx.organizationId));
@@ -607,7 +607,7 @@ export const getIssuesCursor = createServerFn({ method: 'GET' })
       const userId = assignedToFilter === 'me' ? ctx.user.id : assignedToUserId;
       if (userId) conditions.push(eq(issues.assignedToUserId, userId));
     }
-    if (escalated === true) conditions.push(isNotNull(issues.escalatedAt));
+    if (escalated === true) conditions.push(eq(issues.status, 'escalated'));
     if (search) {
       conditions.push(buildIssueSearchCondition(search, ctx.organizationId));
     }
@@ -1075,7 +1075,7 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
       if (userId) conditions.push(eq(issues.assignedToUserId, userId));
     }
     if (data.escalated === true) {
-      conditions.push(isNotNull(issues.escalatedAt));
+      conditions.push(eq(issues.status, 'escalated'));
     }
     if (data.search) {
       conditions.push(buildIssueSearchCondition(data.search, ctx.organizationId));
@@ -1203,7 +1203,7 @@ export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
       const userId = assignedToFilter === 'me' ? ctx.user.id : assignedToUserId;
       if (userId) conditions.push(eq(issues.assignedToUserId, userId));
     }
-    if (escalated === true) conditions.push(isNotNull(issues.escalatedAt));
+    if (escalated === true) conditions.push(eq(issues.status, 'escalated'));
     if (search) {
       conditions.push(buildIssueSearchCondition(search, ctx.organizationId));
     }

@@ -52,12 +52,14 @@ interface ControlledEscalationDialogProps {
   /** Callback when open state changes */
   onOpenChange: (open: boolean) => void;
   /** Simplified escalation callback */
-  onEscalate: (reason: string) => void | Promise<void>;
+  onEscalate?: (reason: string) => void | Promise<void>;
+  /** Simplified de-escalation callback */
+  onDeEscalate?: (reason: string) => void | Promise<void>;
+  /** Controlled mode can reuse this dialog for de-escalation. */
+  isEscalated?: boolean;
   /** Whether the mutation is pending */
   isPending?: boolean;
   issueId?: never;
-  isEscalated?: never;
-  onDeEscalate?: never;
   trigger?: never;
   className?: string;
 }
@@ -85,19 +87,21 @@ export function EscalationDialog(props: EscalationDialogProps) {
   const isPending = isControlled ? props.isPending ?? false : isLoading;
 
   // Get mode-specific values (narrowed by type guard)
-  const isEscalated = isControlled ? false : props.isEscalated;
+  const isEscalated = isControlled ? props.isEscalated ?? false : props.isEscalated;
 
   const handleSubmit = async () => {
     if (!reason.trim()) return;
 
     if (isControlled) {
-      // Controlled mode - just call onEscalate and let parent handle state
+      // Controlled mode - call the parent workflow and let it handle state.
       try {
-        await props.onEscalate(reason);
+        const submit = isEscalated ? props.onDeEscalate : props.onEscalate;
+        if (!submit) return;
+        await submit(reason);
         setReason('');
       } catch (error) {
         logger.error('Escalation failed', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to escalate');
+        toast.error(error instanceof Error ? error.message : 'Failed to update escalation status');
       }
     } else {
       // Uncontrolled mode - manage loading state internally (props narrowed by isUncontrolled)
@@ -125,6 +129,9 @@ export function EscalationDialog(props: EscalationDialogProps) {
     : 'Mark this issue as escalated for priority handling.';
   const buttonLabel = isEscalated ? 'De-escalate' : 'Escalate';
   const Icon = isEscalated ? ArrowDown : AlertTriangle;
+  const canSubmit = isControlled
+    ? Boolean(isEscalated ? props.onDeEscalate : props.onEscalate)
+    : true;
 
   const uncontrolledProps = isUncontrolled(props) ? props : null;
   const trigger = uncontrolledProps?.trigger;
@@ -187,7 +194,7 @@ export function EscalationDialog(props: EscalationDialogProps) {
           <Button
             variant={isEscalated ? 'default' : 'destructive'}
             onClick={handleSubmit}
-            disabled={!reason.trim() || isPending}
+            disabled={!reason.trim() || isPending || !canSubmit}
           >
             {isPending ? 'Processing...' : buttonLabel}
           </Button>

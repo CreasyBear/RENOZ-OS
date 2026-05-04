@@ -22,7 +22,7 @@ import {
   deleteIssue,
   previewIssueIntake,
 } from '@/server/functions/support/issues';
-import { escalateIssue } from '@/server/functions/support/escalation';
+import { deEscalateIssue, escalateIssue } from '@/server/functions/support/escalation';
 import type {
   CreateIssueInput,
   UpdateIssueInput,
@@ -302,6 +302,12 @@ export interface EscalateIssueInput {
   escalateToUserId?: string;
 }
 
+export interface DeEscalateIssueInput {
+  issueId: string;
+  reason: string;
+  assignToUserId?: string;
+}
+
 /**
  * Manually escalate an issue.
  * @see src/server/functions/support/escalation.ts
@@ -311,6 +317,24 @@ export function useEscalateIssue() {
 
   return useMutation({
     mutationFn: (data: EscalateIssueInput) => escalateIssue({ data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.support.issueDetail(variables.issueId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
+    },
+  });
+}
+
+/**
+ * Return an escalated issue to normal in-progress workflow.
+ * @see src/server/functions/support/escalation.ts
+ */
+export function useDeEscalateIssue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: DeEscalateIssueInput) => deEscalateIssue({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.support.issueDetail(variables.issueId),
