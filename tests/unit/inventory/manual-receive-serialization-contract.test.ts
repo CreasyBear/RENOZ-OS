@@ -59,4 +59,14 @@ describe('manual receive serialization contract', () => {
     expect(form).toContain('disabled={!isSerializedProduct}');
     expect(form).toContain('form.setFieldValue("serialNumber", "")');
   });
+
+  it('keeps manual receipt reasons owned by the receiving schema file', () => {
+    const receivingSchema = read('src/lib/schemas/inventory/receiving.ts');
+    const inventorySchema = read('src/lib/schemas/inventory/inventory.ts');
+
+    expect(receivingSchema).toContain('export const manualReceiptReasonValues');
+    expect(receivingSchema).toContain('export const manualReceiptReasonSchema');
+    expect(inventorySchema).not.toContain('manualReceiptReasonValues');
+    expect(inventorySchema).not.toContain('manualReceiptReasonSchema');
+  });
 });

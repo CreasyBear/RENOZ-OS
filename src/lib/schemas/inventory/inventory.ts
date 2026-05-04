@@ -48,17 +48,6 @@ export const movementTypeSchema = z.enum(movementTypeValues);
 export const qualityStatusSchema = z.enum(qualityStatusValues);
 export type MovementType = z.infer<typeof movementTypeSchema>;
 
-export const manualReceiptReasonValues = [
-  'initial_stock',
-  'found_stock',
-  'sample_or_promo',
-  'non_supplier_inbound',
-  'other_exception',
-] as const;
-
-export const manualReceiptReasonSchema = z.enum(manualReceiptReasonValues);
-export type ManualReceiptReason = z.infer<typeof manualReceiptReasonSchema>;
-
 export function isValidMovementType(value: unknown): value is MovementType {
   return typeof value === 'string' && movementTypeValues.includes(value as MovementType);
 }

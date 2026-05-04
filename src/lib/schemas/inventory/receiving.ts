@@ -5,6 +5,19 @@
  * stock-in rules stay aligned without coupling either layer to the other.
  */
 
+import { z } from 'zod';
+
+export const manualReceiptReasonValues = [
+  'initial_stock',
+  'found_stock',
+  'sample_or_promo',
+  'non_supplier_inbound',
+  'other_exception',
+] as const;
+
+export const manualReceiptReasonSchema = z.enum(manualReceiptReasonValues);
+export type ManualReceiptReason = z.infer<typeof manualReceiptReasonSchema>;
+
 export const manualReceiveSerializationMessages = {
   serializedQuantity: 'Serialized products must be received one unit per serial.',
   serializedSerialRequired: 'Serial number is required for serialized products.',
