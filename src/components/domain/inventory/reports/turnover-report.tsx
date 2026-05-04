@@ -146,7 +146,7 @@ export const TurnoverReport = memo(function TurnoverReport({
     );
   }
 
-  const rating = getTurnoverRating(summary.turnoverRatio, summary.industryBenchmark);
+  const rating = getTurnoverRating(summary.annualizedTurnover, summary.industryBenchmark);
   const ratingConfig = RATING_CONFIG[rating];
 
   return (
@@ -158,25 +158,15 @@ export const TurnoverReport = memo(function TurnoverReport({
             <div className="flex items-center gap-2">
               <RefreshCw className="h-5 w-5 text-blue-600" aria-hidden="true" />
               <span className="text-sm font-medium text-muted-foreground">
-                Turnover Ratio
+                Period Turnover
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
               {formatRatio(summary.turnoverRatio)}x
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge
-                variant="outline"
-                className={cn(ratingConfig.color, ratingConfig.bgColor)}
-              >
-                {ratingConfig.label}
-              </Badge>
-              {summary.industryBenchmark && (
-                <span className="text-xs text-muted-foreground">
-                  vs {formatRatio(summary.industryBenchmark)}x benchmark
-                </span>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              COGS / average inventory for the selected period
+            </p>
           </CardContent>
         </Card>
 
@@ -202,15 +192,25 @@ export const TurnoverReport = memo(function TurnoverReport({
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-green-600" aria-hidden="true" />
               <span className="text-sm font-medium text-muted-foreground">
-                Annualized
+                Annualized Turnover
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
               {formatRatio(summary.annualizedTurnover)}x
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Projected annual turnover
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge
+                variant="outline"
+                className={cn(ratingConfig.color, ratingConfig.bgColor)}
+              >
+                {ratingConfig.label}
+              </Badge>
+              {summary.industryBenchmark && (
+                <span className="text-xs text-muted-foreground">
+                  vs {formatRatio(summary.industryBenchmark)}x benchmark
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 

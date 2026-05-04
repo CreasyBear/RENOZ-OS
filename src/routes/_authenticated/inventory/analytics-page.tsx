@@ -243,11 +243,16 @@ export default function AnalyticsPage() {
     const now = new Date();
     const periodDays = turnoverData.turnover?.periodDays ?? 90;
     const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    const cogsForPeriod = Number(turnoverData.turnover?.cogsForPeriod ?? 0) || 0;
+    const averageInventoryValue = Number(turnoverData.turnover?.averageInventoryValue ?? 0) || 0;
+    const periodTurnoverRatio =
+      averageInventoryValue > 0 ? cogsForPeriod / averageInventoryValue : 0;
+    const annualizedTurnover = Number(turnoverData.turnover?.turnoverRate ?? 0) || 0;
 
     return {
-      turnoverRatio: turnoverData.turnover?.turnoverRate ?? 0,
+      turnoverRatio: periodTurnoverRatio,
       averageDaysOnHand: turnoverData.turnover?.daysOnHand ?? 0,
-      annualizedTurnover: (turnoverData.turnover?.turnoverRate ?? 0) * 4,
+      annualizedTurnover,
       periodStart,
       periodEnd: now,
       industryBenchmark: 6,

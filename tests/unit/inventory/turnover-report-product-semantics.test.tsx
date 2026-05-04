@@ -9,6 +9,32 @@ vi.mock('@/hooks/use-org-format', () => ({
 }));
 
 describe('inventory turnover report product semantics', () => {
+  it('distinguishes period turnover from annualized turnover', () => {
+    render(
+      <TurnoverReport
+        summary={{
+          turnoverRatio: 1,
+          averageDaysOnHand: 91,
+          annualizedTurnover: 4,
+          periodStart: new Date('2026-01-01T00:00:00Z'),
+          periodEnd: new Date('2026-03-31T00:00:00Z'),
+          industryBenchmark: 6,
+        }}
+        byProduct={[]}
+      />
+    );
+
+    expect(screen.getByText('Period Turnover')).toBeInTheDocument();
+    expect(
+      screen.getByText('COGS / average inventory for the selected period')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Annualized Turnover')).toBeInTheDocument();
+    expect(screen.getByText('1.00x')).toBeInTheDocument();
+    expect(screen.getByText('4.00x')).toBeInTheDocument();
+    expect(screen.getByText('vs 6.00x benchmark')).toBeInTheDocument();
+    expect(screen.queryByText('16.00x')).not.toBeInTheDocument();
+  });
+
   it('labels product-level turnover data as products, not categories', () => {
     render(
       <TurnoverReport
