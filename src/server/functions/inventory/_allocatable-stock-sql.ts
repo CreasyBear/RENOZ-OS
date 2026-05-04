@@ -6,6 +6,10 @@ export function allocatableQuantitySumSql() {
   return sql<number>`COALESCE(SUM(CASE WHEN ${inventory.status} = 'available' THEN ${inventory.quantityAvailable} ELSE 0 END), 0)::numeric`;
 }
 
+export function allocatableQuantitySumForOrganizationSql(organizationId: string) {
+  return sql<number>`COALESCE(SUM(CASE WHEN ${inventory.organizationId} = ${organizationId} AND ${inventory.status} = 'available' THEN ${inventory.quantityAvailable} ELSE 0 END), 0)::numeric`;
+}
+
 function rawAllocatableQuantitySumSql(alias = 'i') {
   return sql.raw(
     `COALESCE(SUM(CASE WHEN ${alias}.status = 'available' THEN ${alias}.quantity_available ELSE 0 END), 0)`

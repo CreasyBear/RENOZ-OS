@@ -13,6 +13,8 @@ describe('allocatable stock aggregate contract', () => {
     const helper = read('src/server/functions/inventory/_allocatable-stock-sql.ts');
 
     expect(helper).toContain("CASE WHEN ${inventory.status} = 'available'");
+    expect(helper).toContain('allocatableQuantitySumForOrganizationSql');
+    expect(helper).toContain('${inventory.organizationId} = ${organizationId}');
     expect(helper).toContain('quantityAvailable');
     expect(helper).toContain('GROUP BY i.product_id');
     expect(helper).toContain("condition: 'low_stock' | 'out_of_stock'");

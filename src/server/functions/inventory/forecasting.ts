@@ -24,6 +24,10 @@ import {
   type ReorderRecommendation,
   type ListForecastsResult,
 } from '@/lib/schemas/inventory';
+import {
+  allocatableQuantitySumForOrganizationSql,
+  allocatableQuantitySumSql,
+} from './_allocatable-stock-sql';
 
 // ============================================================================
 // TYPES
@@ -151,7 +155,7 @@ export const getProductForecast = createServerFn({ method: 'GET' })
     const [currentStock] = await db
       .select({
         totalOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
-        totalAvailable: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::int`,
+        totalAvailable: allocatableQuantitySumSql(),
       })
       .from(inventory)
       .where(
@@ -475,7 +479,7 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
         productId: products.id,
         productSku: products.sku,
         productName: products.name,
-        currentStock: sql<number>`COALESCE(SUM(CASE WHEN ${inventory.organizationId} = ${ctx.organizationId} THEN ${inventory.quantityOnHand} ELSE 0 END), 0)::int`,
+        currentStock: allocatableQuantitySumForOrganizationSql(ctx.organizationId),
         reorderPoint: sql<number | null>`${latestForecasts.reorderPoint}::int`,
         safetyStock: sql<number | null>`${latestForecasts.safetyStock}::int`,
         recommendedQuantity: sql<number | null>`${latestForecasts.recommendedQuantity}::int`,
@@ -507,7 +511,7 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
             locationName: warehouseLocations.name,
             locationCode: warehouseLocations.locationCode,
             quantityOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
-            quantityAvailable: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::int`,
+            quantityAvailable: allocatableQuantitySumSql(),
           })
           .from(inventory)
           .leftJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
