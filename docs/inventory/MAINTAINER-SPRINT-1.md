@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, and 14 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, and 15 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes fourteen bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes fifteen bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, and valuation schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, valuation schema ownership, and forecasting schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -388,6 +388,7 @@ Sprint standards checked:
 - warehouse location hierarchy/list/create/update schemas now live with warehouse-location workflow ownership
 - stock count and stock count item schemas now live with stock-count workflow ownership
 - valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas now live with valuation workflow ownership
+- forecasting, reorder recommendation, and forecast list schemas now live with forecasting workflow ownership
 
 Sprint smells removed:
 
@@ -405,6 +406,7 @@ Sprint smells removed:
 - warehouse location schemas and hook/API response types lived in the generic inventory schema monolith
 - stock count schemas and stock count item schemas lived in the generic inventory schema monolith
 - valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas lived in the generic inventory schema monolith
+- forecasting schemas and reorder/list response types lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -1197,3 +1199,42 @@ Verification:
 Goal adaptation: no goal change; this is a finance-integrity schema-boundary cleanup under the inventory sprint architecture lens.
 
 Residual risk: valuation schema ownership is cleaner, but database-backed finance reconciliation invariants still need dedicated integration coverage.
+
+### Issue 15: Forecasting Schema Ownership
+
+Touched domains: inventory schema exports, forecasting schemas, reorder recommendation types, forecast list result types, forecasting server/hook/route consumers.
+
+Workflow protected: forecast list/create/bulk-update contracts -> forecasting server workflow -> forecasting hooks -> demand forecasting route and reorder recommendation UI.
+
+Business value: demand forecasting and reorder recommendation contracts now live with forecasting ownership instead of the generic inventory schema monolith, making procurement-trigger and stock-planning work easier to change safely.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/forecasting.ts` for forecast interval values, forecast create/update/list schemas, forecast params, reorder recommendation types, and forecast list result types
+- removed forecasting schema/type ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the forecasting owner through the public `@/lib/schemas/inventory` barrel
+- added a guard that prevents forecasting schema ownership from drifting back into `inventory.ts`
+- preserved public barrel parse behavior, forecast date/demand coercion, list pagination defaults, and forecast params parsing
+
+Smells removed:
+
+- forecasting schemas lived in the generic inventory schema monolith despite having dedicated forecasting server, hook, and route workflows
+- reorder recommendation and forecast list response types lived apart from the forecasting workflow owner
+
+Deferred:
+
+- DB-backed forecasting/reorder recommendation integration coverage beyond existing hook/query normalization tests
+- broader decomposition of alert and dashboard schemas
+- UI cleanup for demand forecasting and reorder recommendation flows
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/forecasting-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-forecasting.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/forecasting.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/forecasting-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/forecasting.ts tests/unit/inventory/forecasting-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a forecasting schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: forecasting schema ownership is cleaner, but alert and dashboard schema families remain in the generic inventory schema file.
