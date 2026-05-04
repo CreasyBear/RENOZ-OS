@@ -24,7 +24,6 @@ const mockUseReconcileInventoryFinance = vi.fn();
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: (...args: unknown[]) => mockListInventory(...args),
   getInventoryItem: (...args: unknown[]) => mockGetInventoryItem(...args),
-  listMovements: (...args: unknown[]) => mockListMovements(...args),
   getInventoryDashboard: (...args: unknown[]) => mockGetInventoryDashboard(...args),
   quickSearchInventory: (...args: unknown[]) => mockQuickSearchInventory(...args),
   getAvailableSerials: (...args: unknown[]) => mockGetAvailableSerials(...args),
@@ -44,6 +43,10 @@ vi.mock('@/server/functions/inventory/transfers', () => ({
 
 vi.mock('@/server/functions/inventory/locations', () => ({
   getLocationUtilization: (...args: unknown[]) => mockGetLocationUtilization(...args),
+}));
+
+vi.mock('@/server/functions/inventory/movements', () => ({
+  listMovements: (...args: unknown[]) => mockListMovements(...args),
 }));
 
 vi.mock('@/hooks/inventory', () => ({

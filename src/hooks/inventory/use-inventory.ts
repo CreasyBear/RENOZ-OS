@@ -20,12 +20,12 @@ import { toast } from '../_shared/use-toast';
 import {
   listInventory,
   getInventoryItem,
-  listMovements,
   getInventoryDashboard,
   quickSearchInventory,
   getAvailableSerials,
 } from '@/server/functions/inventory/inventory';
 import { adjustInventory } from '@/server/functions/inventory/adjustments';
+import { listMovements } from '@/server/functions/inventory/movements';
 import { receiveInventory } from '@/server/functions/inventory/receiving';
 import { transferInventory } from '@/server/functions/inventory/transfers';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';

@@ -36,7 +36,6 @@ vi.mock('@/server/functions/inventory', () => ({
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
-  listMovements: (...args: unknown[]) => mockListMovements(...args),
   getInventoryDashboard: vi.fn().mockResolvedValue({}),
   quickSearchInventory: vi.fn().mockResolvedValue({ items: [] }),
   getAvailableSerials: vi.fn().mockResolvedValue([]),
@@ -56,6 +55,10 @@ vi.mock('@/server/functions/inventory/transfers', () => ({
 
 vi.mock('@/server/functions/inventory/locations', () => ({
   getLocationUtilization: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('@/server/functions/inventory/movements', () => ({
+  listMovements: (...args: unknown[]) => mockListMovements(...args),
 }));
 
 function createWrapper(queryClient: QueryClient) {

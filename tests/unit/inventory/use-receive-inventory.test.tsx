@@ -9,7 +9,6 @@ const mockReceiveInventory = vi.fn()
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
-  listMovements: vi.fn(),
   getInventoryDashboard: vi.fn(),
   quickSearchInventory: vi.fn(),
   getAvailableSerials: vi.fn(),
@@ -29,6 +28,10 @@ vi.mock('@/server/functions/inventory/transfers', () => ({
 
 vi.mock('@/server/functions/inventory/locations', () => ({
   getLocationUtilization: vi.fn(),
+}))
+
+vi.mock('@/server/functions/inventory/movements', () => ({
+  listMovements: vi.fn(),
 }))
 
 function createWrapper(queryClient: QueryClient) {
