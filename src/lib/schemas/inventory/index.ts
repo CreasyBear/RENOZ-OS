@@ -10,6 +10,7 @@ export * from './locations';
 export * from './movements';
 export * from './receiving';
 export * from './stock-counts';
+export * from './valuation';
 export * from './serialized-items';
 export * from './serialized-mutation-contract';
 export * from './finance-mutation-contract';
