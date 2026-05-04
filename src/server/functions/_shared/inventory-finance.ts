@@ -67,7 +67,12 @@ export async function consumeLayersFIFO(
     await tx
       .update(inventoryCostLayers)
       .set({ quantityRemaining: after })
-      .where(eq(inventoryCostLayers.id, layer.id));
+      .where(
+        and(
+          eq(inventoryCostLayers.id, layer.id),
+          eq(inventoryCostLayers.organizationId, params.organizationId)
+        )
+      );
 
     layerDeltas.push({
       layerId: layer.id,
@@ -174,7 +179,9 @@ export async function recomputeInventoryValueFromLayers(
       ...(params.updateUnitCost !== false && { unitCost: weightedAverageCost }),
       ...(params.userId && { updatedBy: params.userId, updatedAt: new Date() }),
     })
-    .where(eq(inventory.id, params.inventoryId));
+    .where(
+      and(eq(inventory.id, params.inventoryId), eq(inventory.organizationId, params.organizationId))
+    );
 
   return { totalValue, weightedAverageCost, totalRemaining };
 }
