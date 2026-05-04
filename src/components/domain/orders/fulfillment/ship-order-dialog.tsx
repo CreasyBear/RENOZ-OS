@@ -14,15 +14,11 @@
 import { memo, useState, useCallback, useEffect, useRef, startTransition } from "react";
 import {
   Truck,
-  AlertCircle,
   AlertTriangle,
   Loader2,
-  MapPin,
-  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { toCents } from "@/lib/currency";
 import {
   Dialog,
   DialogContent,
@@ -31,25 +27,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createPendingDialogOpenChangeHandler } from "@/components/ui/dialog-pending-guards";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastSuccess, toastError } from "@/hooks";
 import {
@@ -59,18 +38,11 @@ import {
   useMarkShipped,
   useShipmentShippingCostAmendment,
 } from "@/hooks/orders";
-import { SerialNumbersList } from "../components/serial-numbers-list";
 import { ValidationError } from "@/lib/server/errors";
 import { ordersLogger } from "@/lib/logger";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
   FormDialog,
-  TextField,
-  TextareaField,
-  NumberField,
-  SelectField,
-  CheckboxField,
-  FormField,
   FormFieldDisplayProvider,
 } from "@/components/shared/forms";
 import { DEFAULT_COUNTRY } from "@/lib/country";
@@ -90,35 +62,16 @@ import {
 } from "./ship-order-item-selection";
 import { ShipOrderAddressSection } from "./ship-order-address";
 import { useShipOrderAddressWorkflow } from "./ship-order-address-workflow";
+import { ShipOrderCarrierSection } from "./ship-order-carrier";
+import { ShipOrderConfirmationStep } from "./ship-order-confirmation";
+import {
+  buildShipOrderSuccessToast,
+  getShipOrderCarrierLabel,
+  getShipOrderShippingCostCents,
+  resolveShipOrderCarrierValue,
+} from "./ship-order-carrier-workflow";
 import { ShipOrderItemsTable } from "./ship-order-items-table";
 
-const SELECT_PLACEHOLDER_VALUE = "__placeholder__";
-const CARRIERS = [
-  { value: "australia_post", label: "Australia Post" },
-  { value: "chemcouriers", label: "Chemcouriers" },
-  { value: "startrack", label: "StarTrack" },
-  { value: "tnt", label: "TNT" },
-  { value: "dhl", label: "DHL" },
-  { value: "fedex", label: "FedEx" },
-  { value: "sendle", label: "Sendle" },
-  { value: "aramex", label: "Aramex" },
-  { value: "toll", label: "Toll" },
-  { value: "couriers_please", label: "Couriers Please" },
-  { value: "other", label: "Other" },
-];
-const CARRIER_SERVICES: Record<string, readonly string[]> = {
-  australia_post: ["Express Post", "Parcel Post", "Express Courier"],
-  chemcouriers: ["Road", "Air", "Express"],
-  startrack: ["Express", "Premium", "Standard"],
-  tnt: ["Express", "Road Express", "Economy"],
-  dhl: ["Express Worldwide", "Express Easy"],
-  fedex: ["International Priority", "International Economy"],
-  sendle: ["Standard", "Express"],
-  aramex: ["Express", "Economy"],
-  toll: ["Priority", "IPEC"],
-  couriers_please: ["Standard", "Express"],
-  other: [],
-};
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -140,12 +93,6 @@ interface ShipmentWorkflowNotice {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-function resolveCarrierValue(values: Pick<ShipOrderFormData, "carrier" | "customCarrier">) {
-  return (
-    values.carrier === "other" ? values.customCarrier?.trim() : values.carrier?.trim()
-  ) ?? "";
-}
 
 function handleShipmentError(
   error: unknown,
@@ -253,7 +200,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           return;
         }
       }
-      if (values.shipNow && !resolveCarrierValue(values)) {
+      if (values.shipNow && !resolveShipOrderCarrierValue(values)) {
         toastError("Please select a carrier to mark as shipped");
         return;
       }
@@ -264,7 +211,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       await performCreateShipmentRef.current(values);
     },
   });
-  const resolvedCarrier = resolveCarrierValue(form.state.values);
+  const resolvedCarrier = resolveShipOrderCarrierValue(form.state.values);
   const shipOrderAddress = useShipOrderAddressWorkflow({
     form,
     order: orderData,
@@ -317,14 +264,8 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
           return;
         }
       }
-      const carrierToUse = resolveCarrierValue(values);
-      const shippingCostCents =
-        values.shippingCost != null &&
-        typeof values.shippingCost === "number" &&
-        Number.isFinite(values.shippingCost) &&
-        values.shippingCost >= 0
-          ? toCents(values.shippingCost)
-          : undefined;
+      const carrierToUse = resolveShipOrderCarrierValue(values);
+      const shippingCostCents = getShipOrderShippingCostCents(values);
 
       try {
         const shipment = await createShipmentMutation.mutateAsync({
@@ -410,30 +351,14 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         }
 
         const totalShipped = items.reduce((sum, i) => sum + i.selectedQty, 0);
-        const carrierLabel =
-          values.carrier === "other"
-            ? carrierToUse
-            : CARRIERS.find((c) => c.value === values.carrier)?.label ?? carrierToUse;
+        const successToast = buildShipOrderSuccessToast({
+          shipNow: values.shipNow,
+          totalShipped,
+          remainingUnfulfilled,
+          carrierLabel: getShipOrderCarrierLabel(values),
+        });
 
-        // Always close and show toast on success.
-        if (remainingUnfulfilled > 0) {
-          toastSuccess(
-            values.shipNow ? "Shipment shipped" : "Shipment created (pending)",
-            {
-              description: `${totalShipped} unit${totalShipped !== 1 ? "s" : ""} ${values.shipNow ? "shipped" : "created"}. ${remainingUnfulfilled} unit${remainingUnfulfilled !== 1 ? "s" : ""} remaining — reopen to ship again.`,
-            }
-          );
-        } else {
-          if (values.shipNow) {
-            toastSuccess("Shipment shipped", {
-              description: `${totalShipped} unit${totalShipped !== 1 ? "s" : ""} via ${carrierLabel || "carrier"}. Inventory updated.`,
-            });
-          } else {
-            toastSuccess("Shipment created (pending)", {
-              description: `${totalShipped} unit${totalShipped !== 1 ? "s" : ""} ready to ship. Mark as shipped from the Fulfillment tab.`,
-            });
-          }
-        }
+        toastSuccess(successToast.title, { description: successToast.description });
         setWorkflowNotice(null);
         onSuccess?.({
           shipmentId: shipment.id,
@@ -550,12 +475,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     setItemSelections(selectAllShipOrderItems);
   }, []);
 
-  const carrier = form.state.values.carrier ?? "";
-  const services = carrier ? (CARRIER_SERVICES[carrier] ?? []) : [];
-  const carrierLabel =
-    carrier === "other"
-      ? resolvedCarrier
-      : CARRIERS.find((c) => c.value === carrier)?.label ?? carrier;
+  const carrierLabel = getShipOrderCarrierLabel(form.state.values);
 
   const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleOpenChange);
 
@@ -722,298 +642,21 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
             <Separator />
 
-            {/* Carrier Details */}
-            <div className="space-y-4">
-              <Label className="text-base">Carrier Details</Label>
-
-              <div
-                className={cn(
-                  "grid gap-4",
-                  carrier === "other" ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2"
-                )}
-              >
-                <form.Field name="carrier">
-                  {(field) => (
-                    <FormField
-                      label="Carrier"
-                      name={field.name}
-                      error={
-                        field.state.meta.isTouched && field.state.meta.errors[0]
-                          ? String(field.state.meta.errors[0])
-                          : undefined
-                      }
-                    >
-                      <Select
-                        value={field.state.value || SELECT_PLACEHOLDER_VALUE}
-                        onValueChange={(v) => {
-                          if (v === SELECT_PLACEHOLDER_VALUE) return;
-                          field.handleChange(v);
-                          if (v !== "other") {
-                            form.setFieldValue("customCarrier", "");
-                          }
-                          form.setFieldValue("carrierService", "");
-                        }}
-                      >
-                        <SelectTrigger id="carrier">
-                          <SelectValue placeholder="Select carrier" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={SELECT_PLACEHOLDER_VALUE} disabled>
-                            Select carrier
-                          </SelectItem>
-                          {CARRIERS.map((c) => (
-                            <SelectItem key={c.value} value={c.value}>
-                              {c.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                  )}
-                </form.Field>
-                {carrier === "other" && (
-                  <form.Field name="customCarrier">
-                    {(field) => (
-                      <TextField
-                        field={field}
-                        label="Carrier Name"
-                        placeholder="Enter carrier name"
-                      />
-                    )}
-                  </form.Field>
-                )}
-                <form.Field name="carrierService">
-                  {(field) => (
-                    <SelectField
-                      field={field}
-                      label="Service"
-                      options={services.map((s) => ({ value: s, label: s }))}
-                      placeholder={carrier === "other" ? "No preset services" : "Select service"}
-                      disabled={!carrier || carrier === "other" || services.length === 0}
-                    />
-                  )}
-                </form.Field>
-              </div>
-
-              <form.Field name="trackingNumber">
-                {(field) => (
-                  <TextField
-                    field={field}
-                    label="Tracking Number"
-                    placeholder="Enter tracking number"
-                  />
-                )}
-              </form.Field>
-
-              <form.Field name="shippingCost">
-                {(field) => (
-                  <NumberField
-                    field={field}
-                    label="Actual Shipping Cost ($)"
-                    placeholder="0.00"
-                    min={0}
-                    step={0.01}
-                    description="Record the actual cost charged by the carrier (optional)"
-                  />
-                )}
-              </form.Field>
-
-              <form.Field name="notes">
-                {(field) => (
-                  <TextareaField
-                    field={field}
-                    label="Notes (Optional)"
-                    placeholder="Internal shipping notes..."
-                    rows={2}
-                  />
-                )}
-              </form.Field>
-            </div>
-
-            <Separator />
-
-            <form.Field name="shipNow">
-              {(field) => (
-                <CheckboxField
-                  field={field}
-                  label="Mark as shipped immediately"
-                  description="If unchecked, shipment will be created in pending status"
-                />
-              )}
-            </form.Field>
-
-            {form.state.values.shipNow && !resolvedCarrier && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Please select a carrier to mark as shipped
-                </AlertDescription>
-              </Alert>
-            )}
+            <ShipOrderCarrierSection form={form} resolvedCarrier={resolvedCarrier} />
             </FormFieldDisplayProvider>
           </div>
         ) : (
-          /* ============================================================
-             CONFIRMATION STEP
-             ============================================================ */
-          <div className="space-y-6">
-            {/* Partial Shipment Warning */}
-            {isPartialShipment && (
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Partial shipment.</strong> Shipping{" "}
-                  {totalQtyToShip} of {totalAvailableQty} available unit
-                  {totalAvailableQty !== 1 ? "s" : ""}. {remainingUnfulfilled}{" "}
-                  unit{remainingUnfulfilled !== 1 ? "s" : ""} will remain and
-                  can be shipped separately.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Items Summary */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-muted-foreground" />
-                <Label className="text-base">
-                  Items ({totalQtyToShip} unit
-                  {totalQtyToShip !== 1 ? "s" : ""})
-                </Label>
-              </div>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right w-24">Qty</TableHead>
-                      <TableHead className="w-40">Serials</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedItems.map((item) => (
-                      <TableRow key={item.lineItemId}>
-                        <TableCell>
-                          <p className="font-medium">{item.productName}</p>
-                          {item.sku && (
-                            <p className="text-xs text-muted-foreground">
-                              SKU: {item.sku}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {item.selectedQty}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {item.selectedSerials.length > 0 ? (
-                            <SerialNumbersList serials={item.selectedSerials} />
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-
-            {/* Address Summary */}
-            {hasAddressForDisplay && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-base">Ship To</Label>
-                  </div>
-                  <div className="rounded-lg border p-3 text-sm">
-                    {form.state.values.addressName && (
-                      <p className="font-medium">{form.state.values.addressName}</p>
-                    )}
-                    {form.state.values.addressStreet1 && (
-                      <p>{form.state.values.addressStreet1}</p>
-                    )}
-                    {form.state.values.addressStreet2 && (
-                      <p>{form.state.values.addressStreet2}</p>
-                    )}
-                    <p>
-                      {[
-                        form.state.values.addressCity,
-                        form.state.values.addressState,
-                        form.state.values.addressPostcode,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    </p>
-                    {form.state.values.addressCountry &&
-                      form.state.values.addressCountry !== "AU" && (
-                        <p>{form.state.values.addressCountry}</p>
-                      )}
-                    {form.state.values.addressPhone && (
-                      <p className="text-muted-foreground mt-1">
-                        {form.state.values.addressPhone}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Carrier Summary */}
-            {resolvedCarrier && (
-              <>
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Truck className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-base">Carrier</Label>
-                  </div>
-                  <div className="rounded-lg border p-3 text-sm space-y-1">
-                    <p className="font-medium">{carrierLabel}</p>
-                    {form.state.values.carrierService && (
-                      <p>Service: {form.state.values.carrierService}</p>
-                    )}
-                    {form.state.values.trackingNumber && (
-                      <p className="text-muted-foreground">
-                        Tracking: {form.state.values.trackingNumber}
-                      </p>
-                    )}
-                    {form.state.values.shippingCost != null &&
-                      typeof form.state.values.shippingCost === "number" &&
-                      form.state.values.shippingCost > 0 && (
-                        <p className="text-muted-foreground">
-                          Cost: $
-                          {form.state.values.shippingCost.toFixed(2)}
-                        </p>
-                      )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Status badge */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                Shipment will be created as:
-              </span>
-              <Badge
-                variant={
-                  form.state.values.shipNow ? "default" : "secondary"
-                }
-              >
-                {form.state.values.shipNow
-                  ? "Shipped (in transit)"
-                  : "Pending"}
-              </Badge>
-            </div>
-
-            {form.state.values.notes && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Notes:</span>{" "}
-                {form.state.values.notes}
-              </div>
-            )}
-          </div>
+          <ShipOrderConfirmationStep
+            values={form.state.values}
+            selectedItems={selectedItems}
+            totalQtyToShip={totalQtyToShip}
+            totalAvailableQty={totalAvailableQty}
+            remainingUnfulfilled={remainingUnfulfilled}
+            isPartialShipment={isPartialShipment}
+            hasAddressForDisplay={hasAddressForDisplay}
+            resolvedCarrier={resolvedCarrier}
+            carrierLabel={carrierLabel}
+          />
         )}
     </FormDialog>
   );

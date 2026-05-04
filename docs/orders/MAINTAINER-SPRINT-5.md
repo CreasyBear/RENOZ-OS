@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, and 9 implemented.
 
 ## Business Value
 
@@ -27,7 +27,7 @@ fulfillment route or order detail fulfillment tab
 - High-risk UI surfaces: `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx`, `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`, `src/components/domain/orders/fulfillment/shipment-list.tsx`, `src/components/domain/orders/fulfillment/pick-items-dialog.tsx`
 - Hooks: `src/hooks/orders/use-shipments.ts`, `src/hooks/orders/use-picking.ts`, `src/hooks/orders/order-mutation-client-errors.ts`
 - Cache policy: `src/hooks/orders/_fulfillment-cache.ts`
-- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`, `tests/unit/orders/shipment-shipping-cost-amendment.test.ts`, `tests/unit/orders/ship-order-address.test.ts`
+- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`, `tests/unit/orders/shipment-shipping-cost-amendment.test.ts`, `tests/unit/orders/ship-order-address.test.ts`, `tests/unit/orders/ship-order-carrier.test.ts`
 
 ## Triage Findings
 
@@ -338,6 +338,45 @@ Closeout criteria:
 - shipment address payload, addressSource, and customerAddressId helpers are explicit and tested
 - address section UI lives in a focused fulfillment component
 - focused tests cover option ordering, payload construction, source/customer ID resolution, and incomplete-address detection
+- focused tests, lint, typecheck, and full orders suite pass
+
+### 9. Ship Order Carrier and Confirmation Boundary
+
+Business value: carrier selection, shipping-cost normalization, success copy, and final shipment review are operator-facing fulfillment decisions. They should be reviewable without reading shipment creation, mark-shipped fallback recovery, address selection, item selection, and amendment orchestration in one dialog.
+
+Workflow invariant: ship order dialog -> carrier workflow boundary -> carrier/service/tracking/cost form fields -> shipment create and optional mark-shipped payload -> confirmation review boundary -> operator-safe final status and success copy.
+
+Affected files:
+
+- `src/components/domain/orders/fulfillment/ship-order-carrier-workflow.ts`
+- `src/components/domain/orders/fulfillment/ship-order-carrier.tsx`
+- `src/components/domain/orders/fulfillment/ship-order-confirmation.tsx`
+- `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`
+- `src/components/domain/orders/fulfillment/index.ts`
+- `tests/unit/orders/ship-order-carrier.test.ts`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing shipment create server behavior
+- changing mark-shipped mutation behavior
+- changing shipping cost amendment request/approval/apply behavior
+- changing item selection or address payload behavior
+- browser QA for the full ship-order dialog
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/ship-order-carrier.test.ts
+```
+
+Closeout criteria:
+
+- carrier constants, service lookup, carrier label resolution, and carrier value resolution leave `ship-order-dialog.tsx`
+- shipping-cost cents normalization and success toast copy are explicit and tested
+- carrier form rendering lives in a focused fulfillment component
+- final confirmation review rendering lives in a focused fulfillment component
+- `ship-order-dialog.tsx` remains responsible for the shipment mutation/recovery spine
 - focused tests, lint, typecheck, and full orders suite pass
 
 ## Closeout Log
@@ -663,3 +702,42 @@ Verification:
 Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by making the shipment address path explicit and tested while preserving create-shipment server/schema/cache behavior.
 
 Residual risk: `ship-order-dialog.tsx` is much smaller but still owns carrier field rendering, successful shipment toast selection, mark-shipped fallback notices, and final confirmation summary. Sprint 5 can close here or continue with a final carrier/confirmation extraction.
+
+### Issue 9: Ship Order Carrier and Confirmation Boundary
+
+Touched domains: orders fulfillment UI, ship-order carrier workflow, ship-order confirmation review, carrier helper tests.
+
+Workflow protected: ship order dialog -> item/address/carrier form state -> create shipment mutation -> optional mark-shipped mutation -> optional shipping-cost amendment -> final success, recovery notice, or operator-safe error state.
+
+Business value: operators still select carriers, enter tracking/cost details, review shipment contents, and receive the same success/recovery feedback. The carrier and confirmation surfaces are now isolated from shipment mutation and recovery orchestration, making fulfillment changes easier to review and safer to extend.
+
+Standards checked:
+
+- extracted `ship-order-carrier-workflow.ts` for carrier value resolution, service lookup, label derivation, shipping-cost cents normalization, and success-toast copy
+- extracted `ShipOrderCarrierSection` for carrier, service, tracking, shipping cost, notes, ship-now, and missing-carrier warning UI
+- extracted `ShipOrderConfirmationStep` for final item/address/carrier/status/notes review
+- kept `ShipOrderDialog` responsible for shipment creation, mark-shipped recovery, shipping-cost amendment orchestration, and cache-affecting mutation calls
+- kept server/schema/database/query-key behavior unchanged
+
+Smells removed:
+
+- `ship-order-dialog.tsx` directly owned carrier constants, service lookup, custom carrier reset behavior, shipping-cost cents normalization, success-toast selection, and confirmation rendering
+- final review UI was interleaved with mutation orchestration
+- carrier helper behavior lacked focused tests
+
+Deferred:
+
+- `ship-order-dialog.tsx` still owns the create-shipment callback, mark-shipped fallback notice, and shipping-cost amendment recovery because those are the mutation spine for this workflow
+- browser QA was skipped because this is a focused extraction with unit coverage and no server behavior change
+- further extraction should be considered only if shipment mutation orchestration itself becomes hard to change
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/ship-order-carrier.test.ts`
+- `./node_modules/.bin/eslint src/components/domain/orders/fulfillment/ship-order-dialog.tsx src/components/domain/orders/fulfillment/ship-order-carrier.tsx src/components/domain/orders/fulfillment/ship-order-carrier-workflow.ts src/components/domain/orders/fulfillment/ship-order-confirmation.tsx src/components/domain/orders/fulfillment/index.ts tests/unit/orders/ship-order-carrier.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+
+Goal adaptation: no standing goal change. This closes the remaining high-value ship-order UI extraction while preserving the route/container/hook/server/schema/cache spine.
+
+Residual risk: the dialog still carries the mutation orchestration and recovery flow, but that is now an explicit boundary rather than incidental UI bloat. Any next order sprint should move to a new high-risk workflow instead of splitting the dialog further by default.
