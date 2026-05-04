@@ -13,7 +13,6 @@
  *
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
-import { Link } from '@tanstack/react-router';
 import {
   ChevronLeft,
   User,
@@ -21,19 +20,15 @@ import {
   Tag,
   AlertTriangle,
   ArrowDown,
-  Trash2,
   MessageSquare,
   FileText,
   Package,
-  PackageSearch,
   Play,
   CheckCircle,
   Pause,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 
-import { Button, buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { EntityHeader } from '@/components/shared/detail-view/entity-header';
 import { ISSUE_STATUS_CONFIG } from './issue-status-config';
@@ -52,13 +47,11 @@ import {
   ISSUE_NEXT_ACTION_LABELS,
   ISSUE_RESOLUTION_CATEGORY_LABELS,
 } from './issue-options';
+import { IssueActionsCard } from './issue-actions-card';
 import { IssueCustomerContextSidebar } from './issue-customer-context-sidebar';
 import { IssueRelatedTab } from './issue-related-tab';
 import { IssueRemedyCard } from './issue-remedy-card';
-import {
-  getIssueDetailActionPolicy,
-  type IssueDetailActionPolicy,
-} from './issue-detail-action-policy';
+import { getIssueDetailActionPolicy } from './issue-detail-action-policy';
 import type {
   IssueStatus,
   IssuePriority,
@@ -313,8 +306,8 @@ export function IssueDetailView({
           </main>
 
           <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start z-10">
-            <ActionsCard
-              issue={issue}
+            <IssueActionsCard
+              issueId={issue.id}
               rmaReadiness={issue.rmaReadiness}
               actionPolicy={actionPolicy}
               onStatusChange={actions.onStatusChange}
@@ -518,128 +511,6 @@ function EscalationCard({
             <span className="text-muted-foreground">Reason: </span>
             {reason}
           </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActionsCard({
-  issue,
-  rmaReadiness,
-  actionPolicy,
-  onStatusChange,
-  onDelete,
-  isPending,
-}: {
-  issue: IssueDetail;
-  rmaReadiness?: IssueDetail['rmaReadiness'];
-  actionPolicy: IssueDetailActionPolicy;
-  onStatusChange: (status: IssueStatus) => void;
-  onDelete: () => void | Promise<void>;
-  isPending: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Actions</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {actionPolicy.showRmaSection && (
-          <>
-            {rmaReadiness?.state === 'ready' && rmaReadiness.sourceOrder ? (
-              <Link
-                to="/orders/$orderId"
-                params={{ orderId: rmaReadiness.sourceOrder.id }}
-                search={{ fromIssueId: issue.id }}
-                className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-2 w-full justify-center')}
-              >
-                <PackageSearch className="h-4 w-4" aria-hidden="true" />
-                Create RMA
-              </Link>
-            ) : (
-              <div className="space-y-2">
-                <Button size="sm" disabled className="w-full gap-2">
-                  <PackageSearch className="h-4 w-4" aria-hidden="true" />
-                  Create RMA
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  {rmaReadiness?.blockedReason ??
-                    'Resolve the source order before creating an RMA.'}
-                </p>
-              </div>
-            )}
-            <Separator className="my-2" />
-          </>
-        )}
-        {(actionPolicy.canStart ||
-          actionPolicy.canDeEscalate ||
-          actionPolicy.canHold ||
-          actionPolicy.canEscalate ||
-          actionPolicy.canResolve) && (
-          <>
-            {(actionPolicy.canStart || actionPolicy.canDeEscalate) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => onStatusChange('in_progress')}
-                disabled={isPending}
-              >
-                {actionPolicy.canDeEscalate ? (
-                  <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                ) : null}
-                {actionPolicy.canDeEscalate ? 'De-escalate' : 'Start Working'}
-              </Button>
-            )}
-            {actionPolicy.canHold && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onStatusChange('on_hold')}
-                disabled={isPending}
-              >
-                Put On Hold
-              </Button>
-            )}
-            {actionPolicy.canEscalate && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-600 hover:text-red-700"
-                onClick={() => onStatusChange('escalated')}
-                disabled={isPending}
-              >
-                Escalate
-              </Button>
-            )}
-            {actionPolicy.canResolve && (
-              <Button size="sm" onClick={() => onStatusChange('resolved')} disabled={isPending}>
-                Resolve
-              </Button>
-            )}
-          </>
-        )}
-        {actionPolicy.canClose && (
-          <Button size="sm" onClick={() => onStatusChange('closed')} disabled={isPending}>
-            Close Issue
-          </Button>
-        )}
-
-        {actionPolicy.canDelete && (
-          <>
-            <Separator className="my-2" />
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onDelete}
-              disabled={isPending}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              Delete Issue
-            </Button>
-          </>
         )}
       </CardContent>
     </Card>
