@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive hook/route, inventory browser route, stock adjustment/transfer dialogs, inventory-launched create-PO dialogs, alert list presenter, stock-count, quality-inspection, location, location route/import, alert hook/route, forecasting hook/route, valuation, finance-integrity, serialized-lineage mutation guidance, serialized list read feedback, and inventory item edit dialog submit feedback standardized; remaining issues stay in the ledger.
+Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive hook/route, inventory browser route, stock adjustment/transfer dialogs, product-inventory adjustment hook, inventory-launched create-PO dialogs, alert list presenter, stock-count, quality-inspection, location, location route/import, alert hook/route, forecasting hook/route, valuation, finance-integrity, serialized-lineage mutation guidance, serialized list read feedback, and inventory item edit dialog submit feedback standardized; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -434,11 +434,11 @@ Residual risk: the main inventory server file is now a 29-line compatibility bar
 
 ### Issue 4: Inventory Mutation Error Standard
 
-Touched domains: inventory hooks, inventory browser route, inventory receiving route, inventory locations route, inventory alerts route, inventory forecasting route, inventory item detail edit dialog, stock adjustment dialog, stock transfer dialog, alert list presenter, alert-launched create-PO dialog, recommendation-launched create-PO dialog, manual receive mutation, inventory list route errors, receive form/location route errors, stock adjustment/transfer submit errors, stock-count mutations, quality inspection mutation, warehouse location mutations, location form/import route errors, alert-rule/triggered-alert mutations, alert rule read presentation, alert route read/form errors, forecasting mutations, forecasting route read errors, inventory-to-procurement create-PO submit errors, valuation/cost-layer mutations, finance-integrity reconciliation mutation, serialized item create/update/delete/note mutations, serialized item list read feedback, product detail updates launched from inventory, warehouse stock-in, warehouse movement, cycle-count, inspection, location-management, inventory exception, demand-planning, procurement trigger, valuation, and serialized-lineage operator feedback.
+Touched domains: inventory hooks, product inventory hook, inventory browser route, inventory receiving route, inventory locations route, inventory alerts route, inventory forecasting route, inventory item detail edit dialog, stock adjustment dialog, stock transfer dialog, alert list presenter, alert-launched create-PO dialog, recommendation-launched create-PO dialog, manual receive mutation, inventory list route errors, receive form/location route errors, stock adjustment/transfer submit errors, product inventory adjustment errors, stock-count mutations, quality inspection mutation, warehouse location mutations, location form/import route errors, alert-rule/triggered-alert mutations, alert rule read presentation, alert route read/form errors, forecasting mutations, forecasting route read errors, inventory-to-procurement create-PO submit errors, valuation/cost-layer mutations, finance-integrity reconciliation mutation, serialized item create/update/delete/note mutations, serialized item list read feedback, product detail updates launched from inventory, warehouse stock-in, warehouse movement, cycle-count, inspection, location-management, inventory exception, demand-planning, procurement trigger, valuation, and serialized-lineage operator feedback.
 
-Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance; inventory browser list failure -> stable unavailable/degraded feedback -> cached inventory stays visible when present; receive route location failure -> stable unavailable feedback -> receive form blocked until a real warehouse location exists; receive route submit failure -> safe form feedback -> receive cache contract preserved by hook; stock adjustment failure -> stable dialog guidance -> inventory adjustment cache contract preserved by hook; stock transfer failure -> stable dialog guidance -> inventory transfer cache contract preserved by hook; low-stock alert/reorder recommendation -> create purchase order failure -> stable dialog guidance -> procurement trigger remains understandable without leaking purchase-order persistence errors; alert rule list failure -> stable unavailable feedback -> alert rule management avoids raw database or tenant-policy wording; stock-count create/update/start/item/bulk/complete/cancel failure -> safe toast guidance -> count/inventory cache contracts preserved; quality inspection record failure -> safe toast guidance -> quality-history cache contract preserved; location create/update/delete failure -> safe toast guidance -> location cache contracts and form error rendering preserved; location route save/import failure -> safe dialog/import feedback -> location hierarchy refresh contract preserved; alert create/update/delete/toggle/acknowledge failure -> safe toast guidance -> alert-rule, triggered-alert, and analytics cache contracts preserved; alert route read/form failure -> stable unavailable/dialog feedback -> active/rules/history alert panel states preserved; forecasting route recommendation/detail read failure -> stable unavailable feedback -> recommendation cards and selected forecast panel avoid raw server text; forecast save/bulk update failure -> safe toast guidance -> forecasting cache contracts preserved; cost-layer create failure -> safe toast guidance -> valuation cache contract preserved; manual COGS apply failure -> explicit shipment/RMA workflow guidance; finance reconciliation failure -> safe toast guidance -> valuation/list cache contracts preserved; serialized create/update/delete/note failure -> safe toast or serialized-state guidance -> serialized list/detail/available-serial cache contracts preserved; serialized list read failure -> stable degraded feedback -> cached serialized item rows stay visible without leaking database or tenant-policy wording; inventory item detail product update failure -> stable dialog guidance -> product detail edits launched from inventory avoid raw product/database messages.
+Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance; inventory browser list failure -> stable unavailable/degraded feedback -> cached inventory stays visible when present; receive route location failure -> stable unavailable feedback -> receive form blocked until a real warehouse location exists; receive route submit failure -> safe form feedback -> receive cache contract preserved by hook; stock adjustment failure -> stable dialog guidance -> inventory adjustment cache contract preserved by hook; product detail stock adjustment failure -> shared inventory formatter guidance -> product inventory, product detail, product stats, stock-alert, and movement cache contracts preserved by hook; stock transfer failure -> stable dialog guidance -> inventory transfer cache contract preserved by hook; low-stock alert/reorder recommendation -> create purchase order failure -> stable dialog guidance -> procurement trigger remains understandable without leaking purchase-order persistence errors; alert rule list failure -> stable unavailable feedback -> alert rule management avoids raw database or tenant-policy wording; stock-count create/update/start/item/bulk/complete/cancel failure -> safe toast guidance -> count/inventory cache contracts preserved; quality inspection record failure -> safe toast guidance -> quality-history cache contract preserved; location create/update/delete failure -> safe toast guidance -> location cache contracts and form error rendering preserved; location route save/import failure -> safe dialog/import feedback -> location hierarchy refresh contract preserved; alert create/update/delete/toggle/acknowledge failure -> safe toast guidance -> alert-rule, triggered-alert, and analytics cache contracts preserved; alert route read/form failure -> stable unavailable/dialog feedback -> active/rules/history alert panel states preserved; forecasting route recommendation/detail read failure -> stable unavailable feedback -> recommendation cards and selected forecast panel avoid raw server text; forecast save/bulk update failure -> safe toast guidance -> forecasting cache contracts preserved; cost-layer create failure -> safe toast guidance -> valuation cache contract preserved; manual COGS apply failure -> explicit shipment/RMA workflow guidance; finance reconciliation failure -> safe toast guidance -> valuation/list cache contracts preserved; serialized create/update/delete/note failure -> safe toast or serialized-state guidance -> serialized list/detail/available-serial cache contracts preserved; serialized list read failure -> stable degraded feedback -> cached serialized item rows stay visible without leaking database or tenant-policy wording; inventory item detail product update failure -> stable dialog guidance -> product detail edits launched from inventory avoid raw product/database messages.
 
-Business value: warehouse operators should get actionable inventory browser, receive, receive-location, stock adjustment, stock transfer, create-PO-from-alert/recommendation, stock-count, inspection, location, location-import, alert, alert-list, alert-panel, forecasting, forecasting-panel, valuation, finance-integrity, serialized list, serialized-lineage, and inventory item edit failure guidance instead of raw database/server wording or generic "failed" toasts when inventory integrity validation rejects an inventory operation or a read dependency degrades.
+Business value: warehouse operators should get actionable inventory browser, receive, receive-location, stock adjustment, product inventory adjustment, stock transfer, create-PO-from-alert/recommendation, stock-count, inspection, location, location-import, alert, alert-list, alert-panel, forecasting, forecasting-panel, valuation, finance-integrity, serialized list, serialized-lineage, and inventory item edit failure guidance instead of raw database/server wording or generic "failed" toasts when inventory integrity validation rejects an inventory operation or a read dependency degrades.
 
 Standards checked:
 
@@ -462,6 +462,7 @@ Standards checked:
 - added shared stock-action dialog submit error copy for adjustment and transfer flows
 - added shared inventory create-PO submit error copy for alert and recommendation procurement triggers
 - added component-scoped alert list read error copy shared by current list and presenter paths
+- folded product inventory adjustment errors into the shared inventory mutation formatter
 - preserved explicit operator guidance that manual COGS apply is disabled and must flow through shipment/RMA workflows
 - preserved optimistic rollback behavior for inventory list/detail caches
 - kept cached inventory browser rows visible with stable degraded copy when refetch fails
@@ -483,6 +484,7 @@ Standards checked:
 - kept cached serialized item rows visible with stable degraded copy when refetch fails
 - kept product detail edit submit errors inside the inventory item edit dialog on stable copy instead of arbitrary thrown messages
 - kept stock adjustment and transfer dialog submit errors on stable copy while preserving structured field guidance
+- kept product inventory adjustment toast errors on stable copy while preserving structured field guidance and serialized-state guidance
 - kept create-PO-from-alert and create-PO-from-recommendation submit errors on stable copy while preserving structured field guidance
 - kept alert list presenter read errors on stable copy instead of arbitrary thrown messages
 - kept stock-count-specific completion guidance for cost-layer and serialized-unit integrity failures
@@ -503,6 +505,7 @@ Standards checked:
 - added serialized list container regression coverage for raw read error suppression while stale rows remain visible
 - added inventory item edit dialog regression coverage for raw product update error suppression
 - added stock action helper regression coverage for raw adjustment/transfer error suppression and structured field guidance
+- added product inventory mutation helper regression coverage for raw adjustment error suppression, structured field guidance, and invalid serialized state guidance
 - added inventory create-PO helper regression coverage for raw purchase-order create error suppression and structured field guidance
 - added alert list presenter regression coverage for raw alert-rule read error suppression
 
@@ -534,6 +537,7 @@ Smells removed:
 - raw serialized list container read error rendering
 - raw inventory item edit dialog submit error rendering
 - raw stock adjustment dialog submit error rendering
+- raw product inventory adjustment hook fallback to arbitrary `error.message`
 - raw stock transfer dialog submit error rendering
 - raw create-PO-from-alert dialog submit error rendering
 - raw create-PO-from-recommendation dialog submit error rendering
@@ -554,17 +558,20 @@ Smells removed:
 - untested stale serialized list raw read failure messaging
 - untested inventory item edit dialog raw submit failure messaging
 - untested stock action dialog raw submit failure messaging
+- untested product inventory adjustment raw failure messaging
 - untested inventory-launched create-PO raw submit failure messaging
 - untested alert list presenter raw read failure messaging
 
 Deferred:
 
-- extending the shared formatter to product-inventory mutation helpers if their domain-specific code maps can be folded in cleanly
+- product-domain hooks outside product inventory still have raw product/pricing/image/bundle error messaging and should be handled in a product sprint, not hidden inside this inventory slice
 
 Verification:
 
 - `./node_modules/.bin/vitest run tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
 - `./node_modules/.bin/eslint src/components/domain/inventory/alerts/alert-list-error-messages.ts src/components/domain/inventory/alerts/alerts-list-presenter.tsx src/components/domain/inventory/alerts/alerts-list.tsx tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/products/product-inventory-mutation-errors.test.ts tests/unit/products/product-inventory-tab-container.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/products/use-product-inventory.ts src/hooks/products/product-inventory-error-messages.ts tests/unit/products/product-inventory-mutation-errors.test.ts tests/unit/products/product-inventory-tab-container.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/create-purchase-order-error-messages.test.ts tests/unit/inventory/inventory-mutation-errors.test.ts`
 - `./node_modules/.bin/eslint src/components/domain/inventory/create-purchase-order-error-messages.ts src/components/domain/inventory/forecasting/create-po-from-recommendation-dialog.tsx src/components/domain/inventory/alerts/create-po-from-alert-dialog.tsx tests/unit/inventory/create-purchase-order-error-messages.test.ts`
 - `./node_modules/.bin/vitest run tests/unit/inventory/stock-action-error-messages.test.ts tests/unit/inventory/inventory-mutation-errors.test.ts`
@@ -594,6 +601,7 @@ Verification:
 - `./node_modules/.bin/vitest run tests/unit/inventory/inventory-mutation-errors.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-stock-counts.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/products tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-forecasting.ts tests/unit/inventory/query-normalization-wave3-forecasting.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-alerts.ts src/routes/_authenticated/inventory/alerts-page.tsx tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
 - `./node_modules/.bin/eslint src/hooks/inventory/use-locations.ts src/routes/_authenticated/inventory/locations-page.tsx tests/unit/inventory/query-normalization-wave3-locations.test.tsx`
@@ -606,6 +614,6 @@ Verification:
 - `node scripts/check-read-path-query-guards.mjs`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
-Goal adaptation: no goal change; this keeps Issue 4 moving through small error-standard slices and treats alert rule presentation as part of the inventory monitoring workflow spine.
+Goal adaptation: no goal change; this keeps Issue 4 moving through small error-standard slices and treats product-detail inventory adjustment as part of the inventory stock correction workflow spine.
 
-Residual risk: this slice standardizes inventory browser route, manual receive hook/route, stock adjustment/transfer dialogs, inventory-launched create-PO dialogs, alert list presentation, stock-count, quality-inspection, location hook/route, alert hook/route, forecasting hook/route, valuation, finance-integrity, serialized list reads, inventory item edit dialog submit feedback, and serialized-lineage mutations only. Adjacent product-inventory and supplier/product hooks may still need their own domain-specific error mapping before broader consolidation.
+Residual risk: this slice standardizes inventory browser route, manual receive hook/route, stock adjustment/transfer dialogs, product inventory adjustment hook, inventory-launched create-PO dialogs, alert list presentation, stock-count, quality-inspection, location hook/route, alert hook/route, forecasting hook/route, valuation, finance-integrity, serialized list reads, inventory item edit dialog submit feedback, and serialized-lineage mutations only. The broader product domain still has raw product/pricing/image/bundle error messaging, but that belongs in a product-domain sprint unless it directly touches inventory workflow integrity.
