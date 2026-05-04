@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { ControlledFormDialog } from "@/components/shared/forms";
 import type { UpdateProduct } from "@/lib/schemas/products";
+import { getInventoryItemEditSubmitError } from "./inventory-item-edit-error-messages";
 
 // ============================================================================
 // TYPES
@@ -98,7 +99,7 @@ export function InventoryItemEditDialog({
         });
         onClose();
       } catch (error) {
-        setSubmitError(error instanceof Error ? error.message : "Failed to update item");
+        setSubmitError(getInventoryItemEditSubmitError(error));
       }
     },
   });
