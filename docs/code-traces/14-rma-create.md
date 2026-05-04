@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Series order:** 14 (see [README](./README.md))  
-**Last updated:** 2026-03-26  
+**Last updated:** 2026-05-04
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
@@ -27,7 +27,7 @@
 | `quantityReturned` | Client per line (Zod `int` ≥ 1, default 1) — **no** server check vs qty shipped/ordered in this handler |
 | Serialized `serialNumber` | Normalized; must appear in **`shipment_item_serials` ∩ shipments for order ∩ line** or `createSerializedMutationError` (`invalid_serial_state`) |
 
-**AuthZ:** `withAuth()` **only** — **no** `PERMISSIONS.*` ([13](./13-rma-receive-inventory.md) notes same pattern vs `inventory.receive` on receive).
+**AuthZ:** `withAuth({ permission: PERMISSIONS.support.create })` — aligned with support-owned RMA creation, while RMA receive remains inventory-owned via `PERMISSIONS.inventory.receive` ([13](./13-rma-receive-inventory.md)).
 
 ---
 
@@ -56,7 +56,7 @@ sequenceDiagram
 
   UI->>H: mutateAsync(CreateRmaInput)
   H->>S: POST RPC
-  S->>S: withAuth()
+  S->>S: withAuth(support.create)
   S->>S: load order; optional issue
   S->>TX: set_config org
   TX->>TX: next sequenceNumber; insert return_authorizations status requested
@@ -119,7 +119,6 @@ sequenceDiagram
 
 | Issue | Evidence | Risk |
 |-------|----------|------|
-| No explicit permission on create | `withAuth()` | Over-broad if route exposed |
 | Quantity vs fulfillment | No assert `quantityReturned` ≤ shipped qty | User can request return > shipped |
 | `createSerializedMutationError` returns `ValidationError` | Thrown like generic validation | Clients must parse `code` if present |
 | Dual approval paths | Simple PO approve (trace 10) vs multi-level (trace 16) — RMA is separate product surface | Confusion only if docs mix domains |
@@ -129,7 +128,8 @@ sequenceDiagram
 ## 9. Verification
 
 - Search `createRma`, `order-detail-container` under `tests/`.
-- **Gap:** Serial-not-shipped rejection; invalid line id batch; permission test when `PERMISSIONS.support.create` (or similar) is introduced.
+- **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies the trace and server stay aligned on `PERMISSIONS.support.create`.
+- **Gap:** Serial-not-shipped rejection; invalid line id batch; quantity-returned vs shipped quantity enforcement.
 
 ---
 

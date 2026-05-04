@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to support-owned issue, RMA, warranty, and remedy workflows.
 
-Status: triaged; no implementation slices closed yet.
+Status: Issue 1 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -235,3 +235,41 @@ Do not implement any issue until the slice has:
 6. closeout criteria.
 
 ## Closeout Log
+
+### Issue 1: RMA Trace Reality And Permission Contract
+
+Touched domains: RMA create trace, RMA process/remedy trace, RMA update trace, RMA workflow contract tests.
+
+Workflow protected: order/support context -> `createRma` with support-create permission -> RMA receive with inventory receive permission -> `processRma` with support-update permission -> local remedy artifact execution -> RMA execution state.
+
+Business value: maintainers can trust the RMA traces before changing support recovery behavior; the docs now reflect that creation and processing are permissioned and that processing executes local refund, credit, or replacement artifacts instead of merely writing labels.
+
+Standards checked:
+
+- refreshed `docs/code-traces/14-rma-create.md` to show `PERMISSIONS.support.create`
+- refreshed `docs/code-traces/15-rma-process-resolution.md` to show `PERMISSIONS.support.update` and `executeRmaRemedy`
+- refreshed `docs/code-traces/18-rma-field-update.md` to show `PERMISSIONS.support.update`
+- added a source/trace guard for RMA workflow permission and remedy execution ownership
+- left `updateRma` dual field ownership as Issue 2 instead of mixing behavior changes into a trace slice
+
+Smells removed:
+
+- stale bare-auth claims in RMA create/process/update traces
+- stale metadata-only remedy closeout claim in the RMA process trace
+- stale process trace implying refund, credit, and replacement side effects did not happen locally
+
+Deferred:
+
+- `updateRma` still accepts workflow-owned `inspectionNotes`, `resolution`, and `resolutionDetails`
+- bulk approve permission parity still needs revalidation
+- database-backed process integration by resolution type remains future coverage
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-workflow-trace-contract.test.ts`
+- `./node_modules/.bin/eslint tests/unit/support/rma-workflow-trace-contract.test.ts`
+- `git diff --check`
+
+Goal adaptation: no goal change; this starts the Support/RMA/Warranty sprint with a trace-first contract correction before behavior changes.
+
+Residual risk: this slice makes maintainer evidence match current code, but it does not prove remedy execution correctness against a real database or settle the `updateRma` field-boundary problem.

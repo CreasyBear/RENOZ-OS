@@ -2,16 +2,16 @@
 
 **Status:** COMPLETE  
 **Series order:** 15 (see [README](./README.md))  
-**Last updated:** 2026-03-26  
+**Last updated:** 2026-05-04
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
 
-**User capability:** Mark a **received** RMA as **processed** by recording a **resolution** enum (`refund`, `replacement`, `repair`, `credit`, `no_action`) and optional **resolution details** (refund amount, replacement order id, credit note id, notes). Server stamps `resolvedAt` / `resolvedBy`.
+**User capability:** Execute the selected remedy for a **received** RMA and close it only when the remedy artifact is created or confirmed. Refund creates a refund payment, credit creates a credit note, replacement creates a draft replacement order, and repair / no-action complete without a finance or replacement artifact.
 
 **In scope:** `processRma` ([`orders/rma.ts`](../../src/server/functions/orders/rma.ts)); `processRmaSchema` ([`lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts)); [`useProcessRma`](../../src/hooks/support/use-rma.ts); [`rma-detail-container.tsx`](../../src/components/domain/support/rma/rma-detail-container.tsx).
 
-**Out of scope:** Financial execution (no automatic refund transaction, Xero credit note creation, or replacement order spawn in this handler — fields are **persistence only** unless another job reads them).
+**Out of scope:** External accounting sync and payment-provider settlement. This handler creates local operational artifacts; downstream sync remains separate.
 
 ---
 
@@ -22,10 +22,11 @@
 | `rmaId` | Client UUID |
 | Preconditions | RMA must exist for org; `isValidRmaTransition(existing.status, 'processed')` — implementation requires **`received`** |
 | `resolution` | Client enum (`rmaResolutionSchema`) |
-| `resolutionDetails` | Optional; server **merges** `resolvedAt` (ISO now) and `resolvedBy` (user id), overwriting any client duplicates in the spread |
+| Remedy execution | Server calls `executeRmaRemedy` in the same transaction before completing the RMA |
+| `resolutionDetails` | Server-built execution details; linked artifact IDs on the RMA are the canonical proof of what executed |
 | Inventory | **No** further inventory mutation here — stock was adjusted at **receive** ([13](./13-rma-receive-inventory.md)) |
 
-**AuthZ:** `withAuth()` **without** explicit permission — same gap class as `createRma` ([14](./14-rma-create.md)) and contrast with `receiveRma`’s `inventory.receive`.
+**AuthZ:** `withAuth({ permission: PERMISSIONS.support.update })` — support-owned remedy execution after inventory-owned receive.
 
 ---
 
@@ -48,13 +49,14 @@ sequenceDiagram
 
   UI->>H: mutateAsync(ProcessRmaInput)
   H->>S: POST RPC
-  S->>S: withAuth()
+  S->>S: withAuth(support.update)
   S->>DB: select RMA by id + org
   alt wrong status
     S-->>UI: ValidationError (must be received)
   end
-  S->>DB: update return_authorizations processed + resolution + resolutionDetails JSON
-  S->>DB: select line items (projection)
+  S->>DB: tx + set_config org
+  S->>DB: executeRmaRemedy(refund / credit / replacement / repair / no_action)
+  S->>DB: update return_authorizations execution state + artifact ids
   S-->>H: RmaResponse (plain object)
   H->>H: setQueryData detail; invalidate list
 ```
@@ -71,20 +73,21 @@ sequenceDiagram
 | Resolution enum | `rmaResolutionSchema` | same ~L37 |
 | Details | `rmaResolutionDetailsSchema` | same ~L59 (`refundAmount`, `replacementOrderId`, `creditNoteId`, `notes`) |
 
-**Drift:** `rmaResolutionDetailsSchema` allows client `resolvedAt` / `resolvedBy`; handler overwrites via spread order (`...data.resolutionDetails` then server fields).
+`processRmaSchema` is now discriminated by resolution. Refund requires source payment + amount, credit requires amount + reason, replacement requires explicit confirmation, and repair/no-action need only notes.
 
 ---
 
 ## 5. Persistence & side effects
 
-| Column / field | Set |
-|----------------|-----|
-| `status` | `'processed'` |
-| `processedAt`, `processedBy` | Now string / user id |
-| `resolution` | Enum |
-| `resolutionDetails` | JSON blob with audit stamps |
+| Resolution | Local artifact / effect |
+|------------|-------------------------|
+| `refund` | Creates refund `order_payments` row linked to the source payment |
+| `credit` | Creates `credit_notes` row and optional application metadata |
+| `replacement` | Creates draft replacement order and line items |
+| `repair` | Completes execution without finance/replacement artifact |
+| `no_action` | Completes execution without finance/replacement artifact |
 
-No activity logger call in this handler (unlike some PO/Warranty paths) — verify product expectation.
+The RMA stores execution state, linked artifact IDs, `processedAt` / `processedBy`, and server-built `resolutionDetails`. If execution throws, `processRma` stores a blocked execution state and leaves the RMA in `received`.
 
 ---
 
@@ -94,6 +97,7 @@ No activity logger call in this handler (unlike some PO/Warranty paths) — veri
 |-----------|-------|--------------|
 | RMA not found | `NotFoundError` | Error toast |
 | Not `received` | `ValidationError` | Explicit message |
+| Remedy execution blocked | Blocked execution state; RMA remains `received` | UI can show blocked reason |
 | Zod reject | Validation | Form |
 
 ---
@@ -108,17 +112,17 @@ No activity logger call in this handler (unlike some PO/Warranty paths) — veri
 
 | Issue | Evidence | Risk |
 |-------|----------|------|
-| **Resolution is metadata-only** | No downstream trigger in this fn | Ops think “refund” ran money; it did not |
+| **Trace/implementation drift** | Old trace described label-only closeout | Guarded by `rma-workflow-trace-contract.test.ts` |
 | **Inconsistent mutation envelope** | `processRma` vs `receiveRma` serialized envelope | Client error handling must branch by endpoint |
-| **No permission** | Bare `withAuth()` | Anyone authenticated could process if UI reachable |
-| **UUID fields unverified** | `replacementOrderId` / `creditNoteId` not joined to real rows | Garbage FKs in JSON |
+| **External sync boundary** | Local credit/refund artifacts may still need accounting/payment sync | Operators need artifact status visibility |
 
 ---
 
 ## 9. Verification
 
 - Search `processRma`, `useProcessRma` under `tests/`.
-- **Gap:** Reject transition from `approved` (should fail); assert replacement order id optional integrity if product adds FK validation later.
+- **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies trace and server stay aligned on `PERMISSIONS.support.update` and `executeRmaRemedy`.
+- **Gap:** Database-backed process integration per resolution type; blocked execution UI state coverage beyond current dialog/state helpers.
 
 ---
 

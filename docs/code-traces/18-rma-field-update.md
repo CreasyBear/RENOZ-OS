@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Series order:** 18 (see [README](./README.md))  
-**Last updated:** 2026-03-26  
+**Last updated:** 2026-05-04
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
@@ -24,7 +24,7 @@
 | Patch payload | Only keys present in `updateRmaSchema` merged into `.set()` |
 | `updatedBy` | Always `ctx.user.id` (server) |
 
-**AuthZ:** `withAuth()` **without** `PERMISSIONS` — same class as `createRma` / `processRma` ([14](./14-rma-create.md), [15](./15-rma-process-resolution.md)).
+**AuthZ:** `withAuth({ permission: PERMISSIONS.support.update })` — aligned with support-owned non-workflow RMA edits and remedy processing.
 
 ---
 
@@ -45,7 +45,7 @@ sequenceDiagram
   participant DB as Postgres
 
   H->>S: POST { rmaId, ...updateRmaSchema fields }
-  S->>S: withAuth()
+  S->>S: withAuth(support.update)
   S->>DB: select RMA by id + org
   S->>DB: update return_authorizations set ...updateData, updatedBy
   S->>DB: select rma_line_items (projection)
@@ -84,7 +84,6 @@ sequenceDiagram
 | Issue | Risk |
 |-------|------|
 | Dual paths for resolution/inspection | `updateRma` vs `processRma` / `receiveRma` |
-| No permission | Over-broad access |
 | No optimistic locking | Concurrent patches last-write-wins |
 | **getRmaByNumber oddity** (separate) | `getRmaByNumber` input schema reuses `orderId` shape for `rmaNumber` — type smell in same file (~L637) |
 
@@ -93,6 +92,7 @@ sequenceDiagram
 ## 8. Verification
 
 - Search `updateRma`, `useUpdateRma` under `tests/`.
+- **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies the trace and server stay aligned on `PERMISSIONS.support.update`.
 - **Gap:** Forbid or document `resolution` on `updateRma` if `processRma` is canonical; contract test that `status` cannot be injected.
 
 ---
