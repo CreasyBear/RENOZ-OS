@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockUseOrderShipments = vi.fn();
@@ -11,6 +12,10 @@ const mockToastSuccess = vi.fn();
 
 vi.mock('resend', () => ({
   Resend: class MockResend {},
+}));
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children }: { children: ReactNode }) => <a href="#">{children}</a>,
 }));
 
 vi.mock('@/hooks/orders', () => ({
@@ -270,5 +275,74 @@ describe('shipment list', () => {
     });
 
     expect(mockToastError).toHaveBeenCalledWith('Unable to generate dispatch note.');
+  }, 20000);
+
+  it('renders shipment tracking, item serials, and delivery confirmation details', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    mockUseOrderShipments.mockReturnValue({
+      data: [
+        {
+          id: '5c646761-ef6c-45c8-a150-c41f8ab37708',
+          shipmentNumber: 'ORD-20260407-S01',
+          status: 'delivered',
+          carrier: 'DHL',
+          carrierService: 'Express',
+          trackingNumber: 'TRACK-123',
+          trackingUrl: 'https://example.test/track/TRACK-123',
+          shippingCost: null,
+          shippedAt: '2026-04-01T00:00:00.000Z',
+          estimatedDeliveryAt: '2026-04-04T00:00:00.000Z',
+          deliveredAt: '2026-04-03T00:00:00.000Z',
+          deliveryConfirmation: {
+            signedBy: 'Warehouse lead',
+            notes: 'Received at dock 2.',
+          },
+          trackingEvents: [
+            {
+              timestamp: '2026-04-02T08:30:00.000Z',
+              status: 'In transit',
+              description: 'Departed Perth depot.',
+              location: 'Perth',
+            },
+          ],
+          canGenerateDispatchNote: true,
+          dispatchNoteBlockedReason: null,
+          canGenerateDeliveryNote: true,
+          deliveryNoteBlockedReason: null,
+          items: [
+            {
+              id: 'item-1',
+              orderLineItemId: 'line-123456789',
+              quantity: 1,
+              serialNumbers: ['SN-001'],
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const { ShipmentList } = await import('@/components/domain/orders/fulfillment/shipment-list');
+
+    render(<ShipmentList orderId="order-1" />);
+
+    expect(screen.getByText('TRACK-123')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('1 item in this shipment'));
+    expect(screen.getByText('SN-001')).toBeInTheDocument();
+    expect(screen.getByText('Delivery Confirmed')).toBeInTheDocument();
+    expect(screen.getByText('Signed by: Warehouse lead')).toBeInTheDocument();
+    expect(screen.getByText('Received at dock 2.')).toBeInTheDocument();
+    expect(screen.getByText('Tracking History (1 events)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track' }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.test/track/TRACK-123',
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    openSpy.mockRestore();
   }, 20000);
 });

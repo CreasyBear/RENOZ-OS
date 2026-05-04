@@ -23,8 +23,10 @@ export { SerialPicker } from './serial-picker';
 // LISTS
 // ============================================================================
 export { ShipmentList } from './shipment-list';
+export { ShipmentCardDetails } from './shipment-card-details';
 export { ShipmentDocumentActions } from './shipment-document-actions';
 export { PendingShipmentCompletionDialog } from './pending-shipment-completion-dialog';
+export type { ShipmentCardDetailShipment, ShipmentCardDetailsProps } from './shipment-card-details';
 export type {
   ShipmentDocumentActionShipment,
   ShipmentDocumentActionsProps,

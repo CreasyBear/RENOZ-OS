@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, and 3 implemented.
+Status: Issues 1, 2, 3, and 4 implemented.
 
 ## Business Value
 
@@ -154,6 +154,42 @@ Closeout criteria:
 - focused tests pass
 - lint/typecheck evidence is recorded
 
+### 4. Shipment Card Detail Boundary
+
+Business value: shipment tracking, shipment items, serials, tracking history, and delivery confirmation are read-only fulfillment details that should be reviewable independently from shipment actions and mutation workflows.
+
+Workflow invariant: `ShipmentList` should orchestrate the list and action entry points, while a focused shipment detail component owns read-only shipment detail rendering and tracking-link behavior.
+
+Affected files:
+
+- `src/components/domain/orders/fulfillment/shipment-card-details.tsx`
+- `src/components/domain/orders/fulfillment/index.ts`
+- `src/components/domain/orders/fulfillment/shipment-list.tsx`
+- `tests/unit/orders/shipment-list.test.tsx`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing shipment read server functions
+- changing shipment action hooks
+- changing pending completion, document generation, or delivery confirmation mutation behavior
+- extracting the full shipment card shell
+- extracting fulfillment import or shipping-dialog behavior
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/shipment-list.test.tsx
+```
+
+Closeout criteria:
+
+- shipment tracking, dates, item serials, tracking history, and delivery confirmation rendering leave `shipment-list.tsx`
+- shipment card details live in a focused fulfillment component
+- shipment list tests cover tracking link, serial display, tracking history, and delivery confirmation rendering
+- focused tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Fulfillment Action Operator-Safe Errors
@@ -278,3 +314,45 @@ Verification:
 Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by turning another operator workflow inside `shipment-list.tsx` into an explicit hook/component boundary.
 
 Residual risk: the next Sprint 5 slice should either extract shipment tracking/item display from `shipment-list.tsx` or move to the higher-risk `fulfillment-dashboard.tsx` import workflow.
+
+### Issue 4: Shipment Card Detail Boundary
+
+Touched domains: orders fulfillment UI, shipment-list regression tests.
+
+Workflow protected: shipment list -> shipment card detail rendering -> tracking link, shipment dates, item serials, tracking history, and delivery confirmation details.
+
+Business value: operators still see the same shipment detail context, but shipment read-only display is now isolated from fulfillment actions. Future changes to tracking or item/serial presentation have a smaller review surface and lower risk of touching mutation flows.
+
+Standards checked:
+
+- extracted `ShipmentCardDetails` into the fulfillment component layer for read-only shipment detail rendering
+- kept shipment actions (`Mark Shipped`, document generation, confirm delivery) in the shipment-list orchestration layer
+- kept server reads, hooks, and cache policy unchanged
+- exported the detail component through the fulfillment index
+- added regression coverage for tracking link behavior, serial display, tracking history, and delivery confirmation
+
+Smells removed:
+
+- `shipment-list.tsx` mixed read-only detail rendering with action entry points and mutation workflow dialogs
+- tracking link behavior lived inline with mark-shipped and document action controls
+- item/serial display and tracking history made the shipment-list card harder to scan and review
+
+Deferred:
+
+- `shipment-list.tsx` still owns the shipment card shell and action entry points
+- `fulfillment-dashboard.tsx` still owns fulfillment import and dashboard presentation in one large file
+- `ship-order-dialog.tsx` remains a large workflow-heavy dialog
+- browser QA was skipped because this extraction is covered by focused component tests and does not alter server behavior
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/shipment-list.test.tsx`
+- `./node_modules/.bin/eslint src/components/domain/orders/fulfillment/shipment-card-details.tsx src/components/domain/orders/fulfillment/index.ts src/components/domain/orders/fulfillment/shipment-list.tsx tests/unit/orders/shipment-list.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/orders/order-client-contracts.test.ts tests/unit/orders/shipment-list.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+- `git diff --check -- docs/orders/MAINTAINER-SPRINT-5.md src/components/domain/orders/fulfillment/shipment-card-details.tsx src/components/domain/orders/fulfillment/index.ts src/components/domain/orders/fulfillment/shipment-list.tsx tests/unit/orders/shipment-list.test.tsx`
+
+Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by separating read-only shipment detail presentation from action workflows.
+
+Residual risk: `shipment-list.tsx` is now smaller, but the higher-leverage next Sprint 5 slice is likely the fulfillment import workflow inside `fulfillment-dashboard.tsx`, because that file still combines dashboard presentation, CSV parsing/import state, result download, and refresh behavior.
