@@ -136,9 +136,27 @@ export const getStockCount = createServerFn({ method: 'GET' })
         location: warehouseLocations,
       })
       .from(stockCountItems)
-      .leftJoin(inventory, eq(stockCountItems.inventoryId, inventory.id))
-      .leftJoin(products, eq(inventory.productId, products.id))
-      .leftJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
+      .leftJoin(
+        inventory,
+        and(
+          eq(stockCountItems.inventoryId, inventory.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        warehouseLocations,
+        and(
+          eq(inventory.locationId, warehouseLocations.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
+        )
+      )
       .where(eq(stockCountItems.stockCountId, data.id))
       .orderBy(asc(stockCountItems.createdAt));
 
@@ -154,7 +172,12 @@ export const getStockCount = createServerFn({ method: 'GET' })
       ? await db
           .select()
           .from(warehouseLocations)
-          .where(eq(warehouseLocations.id, count.locationId))
+          .where(
+            and(
+              eq(warehouseLocations.id, count.locationId),
+              eq(warehouseLocations.organizationId, ctx.organizationId)
+            )
+          )
           .limit(1)
           .then((r) => r[0] || null)
       : null;
@@ -293,6 +316,24 @@ export const updateStockCount = createServerFn({ method: 'POST' })
       }
     }
 
+    // Validate updated location if changing
+    if (data.locationId !== undefined) {
+      const [location] = await db
+        .select({ id: warehouseLocations.id })
+        .from(warehouseLocations)
+        .where(
+          and(
+            eq(warehouseLocations.id, data.locationId),
+            eq(warehouseLocations.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!location) {
+        throw new NotFoundError('Location not found', 'warehouseLocation');
+      }
+    }
+
     const [count] = await db
       .update(stockCounts)
       .set({
@@ -310,7 +351,7 @@ export const updateStockCount = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
         version: sql`${stockCounts.version} + 1`,
       })
-      .where(eq(stockCounts.id, id))
+      .where(and(eq(stockCounts.id, id), eq(stockCounts.organizationId, ctx.organizationId)))
       .returning();
 
     return { count };
@@ -382,7 +423,7 @@ export const startStockCount = createServerFn({ method: 'POST' })
           updatedBy: ctx.user.id,
           version: sql`${stockCounts.version} + 1`,
         })
-        .where(eq(stockCounts.id, data.id))
+        .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
         .returning();
 
       // Create count items
@@ -405,9 +446,27 @@ export const startStockCount = createServerFn({ method: 'POST' })
           location: warehouseLocations,
         })
         .from(stockCountItems)
-        .leftJoin(inventory, eq(stockCountItems.inventoryId, inventory.id))
-        .leftJoin(products, eq(inventory.productId, products.id))
-        .leftJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
+        .leftJoin(
+          inventory,
+          and(
+            eq(stockCountItems.inventoryId, inventory.id),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(
+          products,
+          and(
+            eq(inventory.productId, products.id),
+            eq(products.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(
+          warehouseLocations,
+          and(
+            eq(inventory.locationId, warehouseLocations.id),
+            eq(warehouseLocations.organizationId, ctx.organizationId)
+          )
+        )
         .where(eq(stockCountItems.stockCountId, data.id))
         .orderBy(asc(stockCountItems.createdAt));
 
@@ -481,7 +540,7 @@ export const updateStockCountItem = createServerFn({ method: 'POST' })
         countedAt: data.countedQuantity !== undefined ? new Date() : item.countedAt,
         updatedAt: new Date(),
       })
-      .where(eq(stockCountItems.id, itemId))
+      .where(and(eq(stockCountItems.id, itemId), eq(stockCountItems.stockCountId, countId)))
       .returning();
 
     return { item: updatedItem };
@@ -715,7 +774,9 @@ export const completeStockCount = createServerFn({ method: 'POST' })
                 updatedAt: new Date(),
                 updatedBy: ctx.user.id,
               })
-              .where(eq(inventory.id, inv.id));
+              .where(
+                and(eq(inventory.id, inv.id), eq(inventory.organizationId, ctx.organizationId))
+              );
 
             let movementUnitCost = Number(inv.unitCost ?? 0);
             let movementTotalCost = movementUnitCost * variance;
@@ -864,7 +925,12 @@ export const completeStockCount = createServerFn({ method: 'POST' })
                         updatedBy: ctx.user.id,
                         updatedAt: new Date(),
                       })
-                      .where(eq(serializedItems.id, serializedItem.id));
+                      .where(
+                        and(
+                          eq(serializedItems.id, serializedItem.id),
+                          eq(serializedItems.organizationId, ctx.organizationId)
+                        )
+                      );
                     await addSerializedItemEvent(tx, {
                       organizationId: ctx.organizationId,
                       serializedItemId: serializedItem.id,
@@ -918,7 +984,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
           updatedBy: ctx.user.id,
           version: sql`${stockCounts.version} + 1`,
         })
-        .where(eq(stockCounts.id, data.id))
+        .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
         .returning();
 
       return inventoryFinanceMutationSuccess(
@@ -978,7 +1044,7 @@ export const cancelStockCount = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
         version: sql`${stockCounts.version} + 1`,
       })
-      .where(eq(stockCounts.id, data.id))
+      .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
       .returning();
 
     return { count: cancelledCount, success: true };
@@ -1014,8 +1080,20 @@ export const getCountVarianceAnalysis = createServerFn({ method: 'GET' })
         product: products,
       })
       .from(stockCountItems)
-      .innerJoin(inventory, eq(stockCountItems.inventoryId, inventory.id))
-      .innerJoin(products, eq(inventory.productId, products.id))
+      .innerJoin(
+        inventory,
+        and(
+          eq(stockCountItems.inventoryId, inventory.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
+      .innerJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
       .where(eq(stockCountItems.stockCountId, data.id));
 
     // Calculate variance statistics
