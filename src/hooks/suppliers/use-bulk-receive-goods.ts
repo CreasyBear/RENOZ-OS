@@ -74,13 +74,26 @@ export function useBulkReceiveGoods() {
 
       return result;
     },
-    onSuccess: (data) => {
-      // Invalidate relevant queries
+    onSuccess: (data, variables) => {
+      const affectedPurchaseOrderIds = Array.from(
+        new Set([...variables.purchaseOrderIds, ...(data.affectedIds ?? [])])
+      );
+
+      // Invalidate relevant purchase-order queries.
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderStatusCounts() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersReceivingSummary() });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersPendingApprovals() });
-      
-      // Invalidate inventory queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
+
+      affectedPurchaseOrderIds.forEach((purchaseOrderId) => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderDetail(purchaseOrderId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderItems(purchaseOrderId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrderReceipts(purchaseOrderId) });
+      });
+
+      // Invalidate stock side-effect surfaces touched by receipt creation.
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
 
       toastSuccess(data.message);
       if (data.partialFailure?.message) {
