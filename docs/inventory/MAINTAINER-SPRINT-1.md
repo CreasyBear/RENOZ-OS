@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, and 3 implemented; inventory server functions now live behind focused ownership modules with `inventory.ts` retained as a compatibility barrel; remaining issues stay in the ledger.
+Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive mutation error guidance standardized; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -431,3 +431,43 @@ Verification:
 Goal adaptation: no goal change; this closes the original inventory server concentration through strict modularity without changing behavior.
 
 Residual risk: the main inventory server file is now a 29-line compatibility barrel, but legacy read consumers still import through that barrel and the inventory schema file remains concentrated. Issue 3 closes server-function concentration, not schema decomposition or mutation error standardization.
+
+### Issue 4: Inventory Mutation Error Standard
+
+Touched domains: inventory hooks, manual receive mutation, warehouse stock-in operator feedback.
+
+Workflow protected: manual non-PO stock-in failure -> optimistic cache rollback -> operator-facing recovery guidance.
+
+Business value: warehouse operators should get actionable receive failure guidance instead of a generic "failed" toast when inventory integrity validation rejects a stock-in.
+
+Standards checked:
+
+- reused the existing inventory mutation error formatter for `useReceiveInventory`
+- preserved optimistic rollback behavior for inventory list/detail caches
+- preserved receive success and cache invalidation behavior
+- added a regression test for validation-code guidance on receive failure
+
+Smells removed:
+
+- generic `Failed to receive inventory` toast in `useReceiveInventory`
+- untested receive mutation failure messaging
+
+Deferred:
+
+- raw `error.message` toasts in inventory stock counts, quality, locations, alerts, forecasting, valuation, and route/dialog surfaces
+- extracting the inventory mutation error formatter into a shared helper for all inventory mutation hooks
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-receive-inventory.test.tsx`
+- `git diff --check`
+- `node scripts/check-route-casts.mjs`
+- `node scripts/check-pending-dialog-guards.mjs`
+- `node scripts/check-read-path-query-guards.mjs`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is the first small operator-safe error-handling slice under Issue 4.
+
+Residual risk: this slice standardizes manual receive only. The audit still shows raw or generic mutation errors across stock counts, quality inspections, locations, alerts, forecasting, valuation, and inventory UI routes/dialogs.
