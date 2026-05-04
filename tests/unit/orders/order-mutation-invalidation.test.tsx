@@ -1,7 +1,7 @@
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/lib/query-keys'
 
 const mockUseServerFn = vi.fn((fn: unknown) => fn)
@@ -12,6 +12,8 @@ const mockGetOrderStatusOptions = vi.fn()
 const mockGetOrderWorkflowOptions = vi.fn()
 const mockUpdateShipmentStatus = vi.fn()
 const mockConfirmDelivery = vi.fn()
+const mockMarkShipped = vi.fn()
+const mockReopenShipment = vi.fn()
 
 vi.mock('@tanstack/react-start', () => ({
   useServerFn: (fn: unknown) => mockUseServerFn(fn),
@@ -32,8 +34,9 @@ vi.mock('@/server/functions/orders/order-shipments', () => ({
   updateShipmentStatus: (...args: unknown[]) => mockUpdateShipmentStatus(...args),
   getOrderShipments: vi.fn(),
   createShipment: vi.fn(),
-  markShipped: vi.fn(),
+  markShipped: (...args: unknown[]) => mockMarkShipped(...args),
   deleteShipment: vi.fn(),
+  reopenShipment: (...args: unknown[]) => mockReopenShipment(...args),
 }))
 
 function createWrapper(queryClient: QueryClient) {
@@ -45,6 +48,10 @@ function createWrapper(queryClient: QueryClient) {
 }
 
 describe('order mutation invalidation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('status updates invalidate finite and infinite order collections together', async () => {
     mockUpdateOrderStatus.mockResolvedValue({ success: true })
 
@@ -95,6 +102,99 @@ describe('order mutation invalidation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.infiniteLists(),
+    })
+  })
+
+  it('mark shipped refreshes fulfillment and inventory stock side-effect surfaces', async () => {
+    mockMarkShipped.mockResolvedValue({ id: 'shipment-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useMarkShipped } = await import('@/hooks/orders/use-shipments')
+
+    const { result } = renderHook(() => useMarkShipped(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: 'shipment-1',
+        idempotencyKey: 'idem-12345678',
+        carrier: 'DHL',
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.shipmentDetail('shipment-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.fulfillmentSummary(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.fulfillment.kanban(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.details(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.valuationAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availabilityAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    })
+  })
+
+  it('reopen shipment refreshes fulfillment and inventory stock side-effect surfaces', async () => {
+    mockReopenShipment.mockResolvedValue({ id: 'shipment-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useReopenShipment } = await import('@/hooks/orders/use-shipments')
+
+    const { result } = renderHook(() => useReopenShipment(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: 'shipment-1',
+        idempotencyKey: 'idem-87654321',
+        reason: 'Correction needed',
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.shipmentDetail('shipment-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.fulfillmentSummary(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
     })
   })
 })

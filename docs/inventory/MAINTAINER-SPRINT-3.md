@@ -412,3 +412,59 @@ Verification:
 Goal adaptation: no standing goal change. This is direct execution of the existing architecture-cleanliness posture: convert a proven behavior fix into a reusable domain boundary before starting the next workflow spine.
 
 Residual risk: the extracted helper is still hook-layer infrastructure. If stock mutation cache policy is needed by non-hook code later, it may belong under a broader inventory cache contract module outside `src/hooks`.
+
+## Sprint Closeout
+
+Completion audit:
+
+- Objective: make inventory stock-changing mutation behavior safer and easier to reason about for operators receiving, adjusting, and transferring lithium-ion battery stock.
+- Deliverables checked: issue ledger, issue closeout logs, code references, regression tests, focused gates, broad inventory gates, typecheck, and residual-risk notes.
+- Evidence inspected: `src/hooks/inventory/use-inventory.ts`, `src/hooks/inventory/_stock-mutation-cache.ts`, `tests/unit/inventory/use-receive-inventory.test.tsx`, `tests/unit/inventory/use-transfer-inventory.test.tsx`, `tests/unit/inventory/use-adjust-inventory.test.tsx`, and this sprint artifact.
+
+Touched domains: inventory receiving, inventory adjustments, inventory transfers, inventory list/detail cache policy, valuation cost-layer cache policy, serialized stock cache policy, product stock cache policy.
+
+Workflow protected: stock-changing mutation -> optimistic patch/rollback where safe -> transactional server write -> result-aware cache invalidation/refetch -> operator-visible inventory, warehouse, product, valuation, serialized, and movement views.
+
+Business value protected: operators should not see inflated sibling lots/serials during optimistic updates, stale stock dashboards after transfer/adjust, or hidden cache drift after receive/transfer/adjust. This improves trust in battery stock availability, warehouse truth, serialized picking, and inventory valuation.
+
+Architecture standards checked:
+
+- route/page behavior was not changed; this sprint stayed in the hook/cache contract layer
+- hooks now keep receive-specific optimistic patching local and shared stock invalidation in an inventory-owned helper
+- server transactions and tenant-scoped server functions were inspected but not changed
+- centralized query keys remain the only cache-key source
+- mutation result envelopes now drive exact inventory detail/cost-layer invalidation when identity is available
+- broad operational prefixes remain broad only where client-side result identity cannot safely narrow the filter space
+
+Tenant isolation and data-integrity implications: no server query or database write behavior was changed. Existing tenant-scoped transactional receive, transfer, and adjustment functions remain the authority. The client cache now follows those authoritative mutation results more closely.
+
+Query/cache contract checked: receive, transfer, and adjustment now share `invalidateInventoryStockMutationQueries`. Exact row identity invalidates `inventory.detail(id)` and `inventory.costLayersDetail(id)`. Operational summaries refresh through inventory, valuation, availability, serialized, WMS, movement, and product stock prefixes.
+
+Smells removed:
+
+- unsafe optimistic receive patches across sibling lot/serial rows
+- unsafe aggregate transfer optimistic patches for row-scoped transfers
+- unsafe aggregate adjustment optimistic patches for server row-scoped writes
+- per-hook stock mutation invalidation drift
+- shared cache-policy internals embedded in `use-inventory.ts`
+
+Smells deferred:
+
+- `use-inventory.ts` remains large and still mixes multiple inventory queries/mutations
+- stock-count commit cache behavior remains separate and should be reviewed through its own workflow spine
+- allocation/deallocation server functions exist, but no active frontend mutation path was found in routes, components, hooks, or tests
+- broad dashboard/WMS/valuation/availability/product prefixes trade precision for correctness until mutation results expose narrower filter-safe identities
+
+Verification:
+
+- Issue 1 focused receive tests, lint, broad inventory suite, and typecheck recorded above
+- Issue 2 focused transfer tests, lint, broad inventory suite, and typecheck recorded above
+- Issue 3 focused adjustment tests, lint, broad inventory suite, and typecheck recorded above
+- Issue 4 focused mutation cache tests, lint, allocation/deallocation frontend search, diff check, broad inventory suite, and typecheck recorded above
+- Issue 5 focused mutation tests, lint, broad inventory suite, typecheck, and diff check recorded above
+
+Gates skipped: browser QA was skipped because this sprint changed hook/cache policy and unit coverage directly exercises the affected mutation contracts. Server integration tests were not added because server transaction behavior was intentionally out of scope.
+
+Goal adaptation: no standing goal change. The sprint reinforced the active maintainer goal by converting cache behavior fixes into a reusable inventory-domain boundary.
+
+Residual risk: shipment finalization, stock counts, support/RMA inventory recovery, and order fulfillment remain cross-domain stock mutation surfaces that should be reviewed under their own sprint artifacts before adopting or adapting the new inventory cache helper.

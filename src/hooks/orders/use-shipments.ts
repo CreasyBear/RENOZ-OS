@@ -16,6 +16,10 @@ import {
   normalizeShipmentMutationError,
 } from './order-mutation-client-errors';
 import {
+  invalidateShipmentInventorySideEffectQueries,
+  invalidateShipmentMutationQueries,
+} from './_shipment-cache';
+import {
   listShipments,
   getShipment,
   confirmDelivery,
@@ -26,10 +30,6 @@ import {
   deleteShipment,
   reopenShipment,
 } from '@/server/functions/orders/order-shipments';
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 export interface UseShipmentsOptions {
   orderId?: string;
@@ -49,11 +49,6 @@ export interface UseShipmentsOptions {
 export interface UseShipmentOptions {
   shipmentId: string;
   enabled?: boolean;
-}
-
-function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
 }
 
 // ============================================================================
@@ -148,10 +143,11 @@ export function useConfirmDelivery() {
         throw normalizeShipmentMutationError(error, 'Unable to confirm delivery.');
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
-      invalidateOrderCollectionQueries(queryClient);
+    onSuccess: (_result, variables) => {
+      invalidateShipmentMutationQueries(queryClient, {
+        shipmentId: variables.id,
+        includeAllOrderDetails: true,
+      });
     },
   });
 }
@@ -173,10 +169,10 @@ export function useUpdateShipmentStatus() {
       }
     },
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
-      invalidateOrderCollectionQueries(queryClient);
+      invalidateShipmentMutationQueries(queryClient, {
+        shipmentId: variables.id,
+        includeAllOrderDetails: true,
+      });
     },
   });
 }
@@ -255,10 +251,9 @@ export function useCreateShipment() {
       }
     },
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      invalidateOrderCollectionQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(variables.orderId) });
+      invalidateShipmentMutationQueries(queryClient, {
+        orderId: variables.orderId,
+      });
     },
   });
 }
@@ -295,10 +290,11 @@ export function useMarkShipped() {
       }
     },
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
-      invalidateOrderCollectionQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
+      invalidateShipmentMutationQueries(queryClient, {
+        shipmentId: variables.id,
+        includeAllOrderDetails: true,
+      });
+      invalidateShipmentInventorySideEffectQueries(queryClient);
     },
   });
 }
@@ -324,11 +320,10 @@ export function useDeleteShipment() {
       }
     },
     onSuccess: (_result, variables) => {
-      // Invalidate both list and detail caches per STANDARDS.md
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables) });
-      invalidateOrderCollectionQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
+      invalidateShipmentMutationQueries(queryClient, {
+        shipmentId: variables,
+        includeAllOrderDetails: true,
+      });
     },
   });
 }
@@ -346,11 +341,11 @@ export function useReopenShipment() {
       }
     },
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
-      invalidateOrderCollectionQueries(queryClient);
+      invalidateShipmentMutationQueries(queryClient, {
+        shipmentId: variables.id,
+        includeAllOrderDetails: true,
+      });
+      invalidateShipmentInventorySideEffectQueries(queryClient);
     },
   });
 }
