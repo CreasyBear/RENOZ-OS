@@ -206,4 +206,24 @@ describe('purchase-order query normalization wave 3d', () => {
         'Product serialization requirements are temporarily unavailable. Please refresh and try again.',
     });
   });
+
+  it('deduplicates product serialization reads for repeated purchase-order lines', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useProductSerialization } = await import(
+      '@/hooks/purchase-orders/use-product-serialization'
+    );
+
+    const { result } = renderHook(
+      () => useProductSerialization(['product-1', 'product-1', 'product-1']),
+      {
+        wrapper: createWrapper(queryClient),
+      }
+    );
+
+    await waitFor(() => expect(result.current.serializationMap.get('product-1')).toBe(true));
+    expect(mockGetProduct).toHaveBeenCalledTimes(1);
+    expect(mockGetProduct).toHaveBeenCalledWith({
+      data: { id: 'product-1' },
+    });
+  });
 });

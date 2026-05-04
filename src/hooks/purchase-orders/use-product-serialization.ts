@@ -50,8 +50,12 @@ export function useProductSerialization(
   errors: ProductSerializationError[];
   refetchErroredProducts: () => void;
 } {
+  const uniqueProductIds = Array.from(
+    new Set(productIds.filter((productId) => productId.length > 0))
+  );
+
   const productQueries = useQueries({
-    queries: productIds.map((productId) => ({
+    queries: uniqueProductIds.map((productId) => ({
       queryKey: queryKeys.products.detail(productId),
       queryFn: async (): Promise<GetProductResponse> => {
         try {
@@ -73,7 +77,7 @@ export function useProductSerialization(
   // Create map of productId -> isSerialized
   const serializationMap = new Map<string, boolean>();
   productQueries.forEach((query, index) => {
-    const productId = productIds[index];
+    const productId = uniqueProductIds[index];
     if (productId && query.data?.product) {
       serializationMap.set(productId, query.data.product.isSerialized ?? false);
     }
@@ -83,7 +87,7 @@ export function useProductSerialization(
   const hasErrors = productQueries.some((query) => query.isError);
   const errors = productQueries
     .map((query, index) => ({
-      productId: productIds[index],
+      productId: uniqueProductIds[index],
       error: query.error,
     }))
     .filter((item): item is ProductSerializationError => Boolean(item.productId && item.error));
