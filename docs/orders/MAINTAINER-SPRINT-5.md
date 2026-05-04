@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, 3, 4, 5, and 6 implemented.
+Status: Issues 1, 2, 3, 4, 5, 6, and 7 implemented.
 
 ## Business Value
 
@@ -27,7 +27,7 @@ fulfillment route or order detail fulfillment tab
 - High-risk UI surfaces: `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx`, `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`, `src/components/domain/orders/fulfillment/shipment-list.tsx`, `src/components/domain/orders/fulfillment/pick-items-dialog.tsx`
 - Hooks: `src/hooks/orders/use-shipments.ts`, `src/hooks/orders/use-picking.ts`, `src/hooks/orders/order-mutation-client-errors.ts`
 - Cache policy: `src/hooks/orders/_fulfillment-cache.ts`
-- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`
+- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`, `tests/unit/orders/shipment-shipping-cost-amendment.test.ts`
 
 ## Triage Findings
 
@@ -263,6 +263,43 @@ Closeout criteria:
 - item selection table UI leaves `ship-order-dialog.tsx`
 - ship-order dialog remains responsible for shipment workflow orchestration and mutation side effects
 - focused tests cover pending-draft reservation exclusion, serialized selection bounds, partial confirmation summary, toggle, and select-all behavior
+- focused tests, lint, typecheck, and full orders suite pass
+
+### 7. Shipment Shipping Cost Amendment Boundary
+
+Business value: a shipment can be successfully created while the order-total shipping amendment fails. That recovery path must be explicit, operator-safe, and reviewable independently from shipment creation, mark-shipped, item selection, address handling, and confirmation UI.
+
+Workflow invariant: ship order dialog -> create shipment success -> shipping cost amendment hook -> request amendment -> approve amendment -> apply amendment -> order amendment/detail/list cache policy -> operator-safe synced or manual-recovery notice.
+
+Affected files:
+
+- `src/hooks/orders/use-shipment-shipping-cost-amendment.ts`
+- `src/hooks/orders/index.ts`
+- `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`
+- `tests/unit/orders/shipment-shipping-cost-amendment.test.ts`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing order amendment server behavior, approval policy, or cache invalidation
+- changing shipment create or mark-shipped mutation behavior
+- changing carrier, address, item selection, or confirmation-step behavior
+- changing successful shipment toast copy
+- browser QA for the full ship-order dialog
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/shipment-shipping-cost-amendment.test.ts
+```
+
+Closeout criteria:
+
+- shipping cost amendment request/approve/apply sequencing leaves `ship-order-dialog.tsx`
+- unknown amendment sync failures use operator-safe fallback text instead of raw implementation messages
+- useful conflict guidance remains available when the order amendment contract classifies it
+- ship-order dialog remains responsible for shipment workflow orchestration and recovery notice display
+- focused tests cover amendment request shape, request/approve/apply sequencing, unknown fallback copy, and conflict guidance
 - focused tests, lint, typecheck, and full orders suite pass
 
 ## Closeout Log
@@ -510,3 +547,42 @@ Verification:
 Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by making inventory-sensitive ship-order item selection explicit and tested while preserving the mutation/server/cache spine.
 
 Residual risk: the next high-value ship-order slices are address handling and shipping cost amendment orchestration. The latter is business-critical because shipment creation can succeed while order-total amendment sync fails.
+
+### Issue 7: Shipment Shipping Cost Amendment Boundary
+
+Touched domains: orders fulfillment UI, order amendment mutation sequencing, ship-order recovery copy, amendment sync regression tests.
+
+Workflow protected: ship order dialog -> shipment creation succeeds -> shipping cost amendment sync hook -> request/approve/apply amendment mutations -> existing amendment cache invalidation -> synced order totals or operator-safe manual-recovery notice.
+
+Business value: operators still get a created shipment even if order shipping amount sync fails, but the risky partial-success recovery path is now explicit and tested. Unknown amendment failures no longer feed raw implementation messages into the operator toast.
+
+Standards checked:
+
+- extracted `useShipmentShippingCostAmendment` into the orders hook layer to own shipping-change amendment request/approve/apply sequencing and pending state
+- extracted `syncShipmentShippingCostAmendment` and `buildShipmentShippingCostAmendmentRequest` as focused, testable amendment-contract helpers
+- reused `normalizeOrderMutationError` and `getClientErrorMessage` for operator-safe amendment sync error copy
+- kept amendment server functions and their existing query/cache invalidation policy unchanged
+- kept `ShipOrderDialog` responsible for shipment creation flow and recovery notice display
+
+Smells removed:
+
+- `ship-order-dialog.tsx` directly owned three amendment mutations and their sequencing
+- shipping cost amendment sync failure showed raw `err.message` in the operator-facing toast description
+- request/approve/apply amendment sequencing was not covered by a focused ship-order test
+
+Deferred:
+
+- `ship-order-dialog.tsx` still owns address selection, carrier fields, mark-shipped fallback notices, and confirmation summary
+- successful shipment toast copy remains in the dialog
+- browser QA was skipped because this slice is covered by focused unit tests and does not alter server behavior
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/shipment-shipping-cost-amendment.test.ts`
+- `./node_modules/.bin/eslint src/hooks/orders/use-shipment-shipping-cost-amendment.ts src/hooks/orders/index.ts src/components/domain/orders/fulfillment/ship-order-dialog.tsx tests/unit/orders/shipment-shipping-cost-amendment.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+
+Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by making a partial-success finance recovery path explicit while preserving the route/container/hook/server/cache spine.
+
+Residual risk: the remaining high-value ship-order extraction is address handling, which still combines address option derivation, field mutation, collapsible UI state, one-off override behavior, and save-to-order behavior inside `ship-order-dialog.tsx`.

@@ -20,6 +20,7 @@ export * from './use-picking';
 export * from './use-shipment-document-actions';
 export * from './use-pending-shipment-completion';
 export * from './use-fulfillment-import-workflow';
+export * from './use-shipment-shipping-cost-amendment';
 
 // Order Calculations (new)
 export {

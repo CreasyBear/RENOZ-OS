@@ -60,9 +60,7 @@ import {
   useOrderShipments,
   useCreateShipment,
   useMarkShipped,
-  useRequestAmendment,
-  useApproveAmendment,
-  useApplyAmendment,
+  useShipmentShippingCostAmendment,
   type OrderWithCustomer,
 } from "@/hooks/orders";
 import { AddressPicker, type AddressOption } from "@/components/shared";
@@ -290,9 +288,10 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const { data: shipments, isLoading: shipmentsLoading } = useOrderShipments(orderId, open);
   const createShipmentMutation = useCreateShipment();
   const markShippedMutation = useMarkShipped();
-  const requestAmendmentMutation = useRequestAmendment();
-  const approveAmendmentMutation = useApproveAmendment();
-  const applyAmendmentMutation = useApplyAmendment();
+  const {
+    syncShippingCost,
+    isPending: shippingCostAmendmentPending,
+  } = useShipmentShippingCostAmendment();
 
   const {
     selectedItems,
@@ -358,9 +357,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       if (
         createShipmentMutation.isPending ||
         markShippedMutation.isPending ||
-        requestAmendmentMutation.isPending ||
-        approveAmendmentMutation.isPending ||
-        applyAmendmentMutation.isPending
+        shippingCostAmendmentPending
       )
         return;
       setWorkflowNotice(null);
@@ -461,30 +458,22 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         if (shippingCostCents !== undefined) {
           const shippingCostDollars =
             typeof values.shippingCost === "number" ? values.shippingCost : 0;
-          try {
-            const amendment = await requestAmendmentMutation.mutateAsync({
-              orderId,
-              amendmentType: "shipping_change",
-              reason: "Shipping cost from shipment",
-              changes: {
-                type: "shipping_change",
-                description: "Shipping cost from shipment",
-                shippingAmount: shippingCostDollars,
-              },
-            });
-            await approveAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
-            await applyAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
-          } catch (err) {
+          const shippingCostSyncResult = await syncShippingCost({
+            orderId,
+            shippingAmount: shippingCostDollars,
+          });
+
+          if (!shippingCostSyncResult.ok) {
             ordersLogger.warn(
               "Shipment created but order shipping amount could not be updated",
-              { orderId, err }
+              { orderId, err: shippingCostSyncResult.error }
             );
             toastSuccess(values.shipNow ? "Shipment shipped" : "Shipment created", {
               description:
                 "The shipment itself succeeded, but shipping cost still needs to be synced to the order totals.",
             });
             toastError("Order shipping amount could not be updated", {
-              description: err instanceof Error ? err.message : "Create a shipping amendment manually.",
+              description: shippingCostSyncResult.message,
             });
             setWorkflowNotice({
               title: "Shipment created, shipping cost amendment failed",
@@ -543,9 +532,8 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       itemSelections,
       createShipmentMutation,
       markShippedMutation,
-      requestAmendmentMutation,
-      approveAmendmentMutation,
-      applyAmendmentMutation,
+      syncShippingCost,
+      shippingCostAmendmentPending,
       selectedAddress,
       saveShipmentAddressToOrder,
       onSuccess,
@@ -596,9 +584,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const isPending =
     createShipmentMutation.isPending ||
     markShippedMutation.isPending ||
-    requestAmendmentMutation.isPending ||
-    approveAmendmentMutation.isPending ||
-    applyAmendmentMutation.isPending;
+    shippingCostAmendmentPending;
 
   const handleAddressSelect = useCallback(
     (addr: AddressOption | null) => {
