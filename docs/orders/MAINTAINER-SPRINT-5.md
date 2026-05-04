@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, 3, and 4 implemented.
+Status: Issues 1, 2, 3, 4, and 5 implemented.
 
 ## Business Value
 
@@ -27,7 +27,7 @@ fulfillment route or order detail fulfillment tab
 - High-risk UI surfaces: `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx`, `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`, `src/components/domain/orders/fulfillment/shipment-list.tsx`, `src/components/domain/orders/fulfillment/pick-items-dialog.tsx`
 - Hooks: `src/hooks/orders/use-shipments.ts`, `src/hooks/orders/use-picking.ts`, `src/hooks/orders/order-mutation-client-errors.ts`
 - Cache policy: `src/hooks/orders/_fulfillment-cache.ts`
-- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`
+- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`
 
 ## Triage Findings
 
@@ -189,6 +189,45 @@ Closeout criteria:
 - shipment list tests cover tracking link, serial display, tracking history, and delivery confirmation rendering
 - focused tests pass
 - lint/typecheck evidence is recorded
+
+### 5. Fulfillment Import Workflow Boundary
+
+Business value: carrier or warehouse shipment CSV imports are operationally sensitive because they can mark shipments as shipped and move fulfillment state forward. Operators need upload, preview, dry-run, result, and download behavior that is reviewable without scanning the whole dashboard.
+
+Workflow invariant: fulfillment dashboard -> import dialog -> fulfillment import workflow hook -> import fulfillment mutation -> shipment import schema/server function -> fulfillment/shipment/order cache invalidation -> operator-facing preview, importing, complete, and result-download states.
+
+Affected files:
+
+- `src/hooks/orders/use-fulfillment-import-workflow.ts`
+- `src/hooks/orders/index.ts`
+- `src/components/domain/orders/fulfillment/fulfillment-import-dialog.tsx`
+- `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx`
+- `src/components/domain/orders/fulfillment/index.ts`
+- `tests/unit/orders/fulfillment-import-workflow.test.tsx`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing import server behavior or tenant isolation in `importFulfillmentShipmentsHandler`
+- changing shipment cache invalidation in `fulfillment-dashboard-container.tsx`
+- redesigning the dashboard queue tables, refresh behavior, or summary metrics
+- changing CSV validation copy for blank required cells
+- splitting `ship-order-dialog.tsx`
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/fulfillment-import-workflow.test.tsx
+```
+
+Closeout criteria:
+
+- CSV parsing and header mapping leave `fulfillment-dashboard.tsx`
+- import preview, dry-run, mutation, result CSV, success toast, and reset state live in an orders hook
+- import dialog UI lives in a focused fulfillment component
+- dashboard remains responsible for opening the import dialog and presenting fulfillment queues
+- focused import workflow tests cover parsing, result CSV escaping, and mutation payload behavior
+- focused tests, lint, typecheck, and full orders suite pass
 
 ## Closeout Log
 
@@ -356,3 +395,43 @@ Verification:
 Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by separating read-only shipment detail presentation from action workflows.
 
 Residual risk: `shipment-list.tsx` is now smaller, but the higher-leverage next Sprint 5 slice is likely the fulfillment import workflow inside `fulfillment-dashboard.tsx`, because that file still combines dashboard presentation, CSV parsing/import state, result download, and refresh behavior.
+
+### Issue 5: Fulfillment Import Workflow Boundary
+
+Touched domains: orders fulfillment UI, fulfillment import workflow hook, shipment import schema/client contract tests.
+
+Workflow protected: fulfillment dashboard -> import shipment dialog -> CSV parse/preview/dry-run/import/result workflow -> import fulfillment mutation -> shipment import server function -> fulfillment, shipment, and order cache invalidation from the container.
+
+Business value: shipment import remains available to operators, but the workflow is now isolated from dashboard presentation. Future changes to CSV parsing, carrier import validation, dry-run behavior, or result downloads can be reviewed without touching picking, shipping, shipment recovery, refresh, or summary metric rendering.
+
+Standards checked:
+
+- extracted `useFulfillmentImportWorkflow` into the orders hook layer for CSV parsing, preview state, valid-row selection, import mutation orchestration, result CSV generation, success toast, and reset behavior
+- extracted `FulfillmentImportDialog` into the fulfillment component layer for upload/dropzone, preview, dry-run toggle, importing, complete, and result-table UI
+- kept `fulfillment-dashboard.tsx` responsible for dashboard orchestration and opening the dialog
+- kept import server behavior, tenant isolation, and cache invalidation policy unchanged
+- added focused tests for parser/schema alignment, CSV result escaping, and mutation payload behavior
+
+Smells removed:
+
+- `fulfillment-dashboard.tsx` mixed CSV parsing, header mapping, import state, dry-run state, mutation handling, result CSV download, and dashboard rendering in one file
+- import result CSV construction was untested
+- the dashboard component carried file-input/drop handling and import-state reset behavior unrelated to queue presentation
+
+Deferred:
+
+- blank required CSV cells still surface the current schema type error wording because this slice preserved parser behavior
+- `fulfillment-dashboard.tsx` still owns picking, shipping, recovery queue tables, refresh behavior, and summary metrics
+- `ship-order-dialog.tsx` remains the largest fulfillment workflow dialog and is the next high-value modularity target
+- browser QA was skipped because this extraction is covered by focused component/unit tests and does not alter server behavior
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/fulfillment-import-workflow.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/orders/use-fulfillment-import-workflow.ts src/hooks/orders/index.ts src/components/domain/orders/fulfillment/fulfillment-import-dialog.tsx src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx src/components/domain/orders/fulfillment/index.ts tests/unit/orders/fulfillment-import-workflow.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+
+Goal adaptation: no standing goal change. This applies the goal's route -> container/page -> hook -> server/schema -> query/cache lens by turning the dashboard import path into an explicit workflow boundary while preserving existing server and cache contracts.
+
+Residual risk: Sprint 5 can either close here with fulfillment operator-safety and modularity gains, or continue into `ship-order-dialog.tsx`, which still combines shipment form state, stock/serial selection, side-effect orchestration, validation, and operator messages in one large workflow surface.

@@ -19,6 +19,7 @@ export * from './use-order-templates';
 export * from './use-picking';
 export * from './use-shipment-document-actions';
 export * from './use-pending-shipment-completion';
+export * from './use-fulfillment-import-workflow';
 
 // Order Calculations (new)
 export {

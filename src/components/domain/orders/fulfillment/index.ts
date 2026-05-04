@@ -26,12 +26,14 @@ export { ShipmentList } from './shipment-list';
 export { ShipmentCardDetails } from './shipment-card-details';
 export { ShipmentDocumentActions } from './shipment-document-actions';
 export { PendingShipmentCompletionDialog } from './pending-shipment-completion-dialog';
+export { FulfillmentImportDialog } from './fulfillment-import-dialog';
 export type { ShipmentCardDetailShipment, ShipmentCardDetailsProps } from './shipment-card-details';
 export type {
   ShipmentDocumentActionShipment,
   ShipmentDocumentActionsProps,
 } from './shipment-document-actions';
 export type { PendingShipmentCompletionDialogProps } from './pending-shipment-completion-dialog';
+export type { FulfillmentImportDialogProps } from './fulfillment-import-dialog';
 
 // ============================================================================
 // DASHBOARD - Container
