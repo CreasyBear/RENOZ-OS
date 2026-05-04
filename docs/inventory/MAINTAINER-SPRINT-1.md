@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: closed for the planned Issue 1-6 ledger; deferred risks are captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, and 7 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -200,6 +200,25 @@ Out of scope:
 
 - changing RMA receive until the trace is revalidated
 
+### 7. Manual Receive Serialized Rule Parity
+
+Business value: operators receiving serialized batteries should get the same validation guidance before submit that the server enforces inside the inventory transaction.
+
+Evidence:
+
+- `docs/code-traces/02-inventory-stock-in.md` calls out duplicated serialized receive rules between the form and server.
+- The receiving form allowed a serial number on non-serialized products even though `receiveInventory` rejects that payload.
+
+Proposed slice:
+
+> Centralize manual receive serialization validation and wire both the receiving form and server to the shared rule.
+
+Out of scope:
+
+- changing serialized lineage writes
+- redesigning the receiving form
+- changing PO receive serialization rules
+
 ## Recommended First Implementation Slice
 
 Start with Issue 1: Manual Receive Cache Contract.
@@ -282,13 +301,13 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes six bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes seven bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, and RMA receive. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, and manual receive serialization parity. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
-| Safe mutation/cache contracts | Issues 1, 2, 4, 5, and 6 record mutation invalidation, rollback, and read/error state contracts. |
+| Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
 | Tenant isolation checked | Server-function slices and traces verify `withAuth`, `ctx.organizationId`, and transaction-scoped RLS where touched. |
 | Transactional inventory/finance integrity checked | Receive, transfer, RMA receive, valuation, cost-layer, and finance-integrity paths were traced or guarded; database-backed integration remains deferred where noted. |
 | Serialized lineage continuity checked | Manual receive, transfer, serialized item mutations, stock-in trace, and RMA receive trace preserve serialized lineage expectations. |
@@ -305,6 +324,7 @@ Sprint standards checked:
 - stock-in workflow language now distinguishes non-PO receive, PO receive-goods, order-stock, and corrections
 - product receive wrappers cannot reintroduce a separate product bulk-receive path without failing the trace guard
 - RMA return-to-stock location selection is explicit and trace guarded
+- manual receive serialized/non-serialized rules now have one shared schema helper used by UI and server validation
 
 Sprint smells removed:
 
@@ -314,13 +334,14 @@ Sprint smells removed:
 - stale RMA trace claim that non-serialized returns silently use the first warehouse location
 - raw inventory-owned operator error rendering across receive, browser, stock actions, locations, alerts, forecasting, valuation, serialized list, and inventory item edit surfaces
 - under-described manual receive cache contract
+- duplicated manual receive serialized validation between form and server
+- non-serialized products could carry serial input through the receive form until server rejection
 
 Deferred backlog:
 
 - `src/lib/schemas/inventory/inventory.ts` remains large and should be decomposed by workflow schema ownership
 - legacy read consumers still import through the inventory compatibility barrel in places
 - database-backed integration coverage is still needed for receive/RMA quantity, movement, cost-layer, valuation, transition, and serialized-lineage invariants
-- duplicated serialized receive rules between UI and server need a dedicated parity contract
 - fixed `AUD` currency in RMA return cost layers remains a finance/inventory valuation slice
 - `createRma` permission asymmetry belongs to support-domain auth work
 - product-domain raw error handling outside inventory-owned surfaces belongs to a product sprint
@@ -329,6 +350,7 @@ Deferred backlog:
 Sprint verification evidence:
 
 - focused receive, serialized availability, stock-in, RMA receive, and inventory mutation-error tests recorded in issue closeouts
+- manual receive serialization parity contract recorded in Issue 7
 - broad inventory sweeps recorded in Issues 3, 4, and 5
 - support RMA receive location/dialog/mutation tests recorded in Issue 6
 - direct guards recorded where run: `check-route-casts`, `check-pending-dialog-guards`, `check-read-path-query-guards`, `git diff --check`
@@ -784,3 +806,47 @@ Verification:
 Goal adaptation: no goal change; this is another trace-first product-ownership slice where the correct action was to close stale risk, not expand implementation.
 
 Residual risk: the trace now matches the location contract, but this is still guarded mostly by source/interaction tests rather than a database-backed receive integration.
+
+### Issue 7: Manual Receive Serialized Rule Parity
+
+Touched domains: manual inventory receiving form, inventory receiving server function, inventory schema helpers, stock-in trace docs.
+
+Workflow protected: manual non-PO receive -> product selected -> serialized/non-serialized validation -> `useReceiveInventory` -> `receiveInventory` -> inventory movement/cost layer/serialized-lineage writes.
+
+Business value: receiving operators get immediate, consistent validation for serialized batteries instead of discovering server-only rejection after submit.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/receiving.ts` as the shared owner for manual receive serialization validation
+- receiving form and `receiveInventory` now call `getManualReceiveSerializationIssues`
+- non-serialized products clear and disable the serial-number field before submit
+- serialized products still force quantity to 1 and require a serial number
+- server still validates after loading the tenant-scoped product and before transaction writes
+- refreshed `docs/code-traces/02-inventory-stock-in.md` to remove duplicated serialized rule drift
+
+Smells removed:
+
+- duplicated manual receive serialized quantity/serial-required messages between UI and server
+- receiving form accepted serial numbers for non-serialized products even though the server rejects them
+- stock-in trace still listed serialized form/server parity as a gap
+
+Deferred:
+
+- database-backed receive integration for duplicate serial/state failure
+- PO receive serialized rule parity remains procurement scope
+- deeper inventory schema decomposition remains a future architecture slice
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/manual-receive-serialization-contract.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx tests/unit/inventory/receiving-page-context.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/receiving.ts src/lib/schemas/inventory/index.ts src/components/domain/inventory/receiving/receiving-form.tsx src/server/functions/inventory/receiving.ts tests/unit/inventory/manual-receive-serialization-contract.test.ts`
+- `git diff --check`
+- `node scripts/check-route-casts.mjs`
+- `node scripts/check-pending-dialog-guards.mjs`
+- `node scripts/check-read-path-query-guards.mjs`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this follows the existing sprint process by closing a small workflow-contract smell exposed by Issue 5.
+
+Residual risk: this aligns pre-submit and server validation for manual receive serialization, but it does not prove the DB transaction path for duplicate serial inventory rows. That remains a future integration or reliability slice.

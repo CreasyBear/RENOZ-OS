@@ -56,7 +56,7 @@ rg -n "bulkReceiveGoods|receiveStock|recordMovement" src/
 | PO receipt | `receiveGoodsSchema` | [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) |
 | Product receive wrapper | Inline `z.object({ productId, locationId, quantity, … })` | [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) delegates to `receiveInventory` |
 
-**Secondary (UI):** `receivingFormBaseSchema` + `superRefine` in [`receiving-form.tsx`](../../src/components/domain/inventory/receiving/receiving-form.tsx) — **duplicates** serialized rules (serial required, qty = 1) that the server enforces again.
+**Secondary (UI):** `receivingFormBaseSchema` + `superRefine` in [`receiving-form.tsx`](../../src/components/domain/inventory/receiving/receiving-form.tsx) uses the shared manual receive serialization helper in [`receiving.ts`](../../src/lib/schemas/inventory/receiving.ts), matching server receive validation.
 
 ---
 
@@ -133,7 +133,7 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 
 | Issue | Evidence | Risk |
 |-------|----------|------|
-| Duplicate serialized rules | UI `superRefine` + server checks | UX/server mismatch if one side changes |
+| Serialized rule contract | Shared helper feeds UI and server validation | Keep future serialized receive rule changes in `src/lib/schemas/inventory/receiving.ts` |
 | Stale workflow memory | Prior trace referenced a product batch receive endpoint, but no live export or caller exists | Docs can train maintainers toward phantom APIs if not guarded |
 | “Stock in” vocabulary | Adjust vs receive vs RMA | Wrong operator training; wrong API for support |
 
@@ -143,7 +143,8 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 
 - **Tests:** Search `receiveInventory`, `receiveGoods`, `ReceivingForm` under `tests/`.
 - **Guard:** `tests/unit/inventory/stock-in-workflow-trace.test.ts` verifies the stock-in trace does not document a non-existent product bulk receive endpoint and that product receive wrappers delegate to canonical manual receiving.
-- **Gaps:** Contract test that UI serialized rules and server errors stay aligned; integration test for optimistic rollback on forced failure.
+- **Guard:** `tests/unit/inventory/manual-receive-serialization-contract.test.ts` verifies manual receive serialization rules and shared helper usage.
+- **Gaps:** Integration test for optimistic rollback on forced failure.
 
 ---
 
