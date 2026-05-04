@@ -135,7 +135,7 @@ export function CreatePOFromRecommendationDialog({
         supplierId: "",
         quantity: recommendation.recommendedQuantity,
         unitPrice: 0,
-        notes: `Auto-generated from reorder recommendation. Current stock: ${recommendation.currentStock}, Recommended: ${recommendation.recommendedQuantity}`,
+        notes: `Auto-generated from reorder recommendation. Available stock: ${recommendation.currentStock}, Recommended: ${recommendation.recommendedQuantity}`,
       });
       startTransition(() => setError(null));
     }
@@ -203,7 +203,7 @@ export function CreatePOFromRecommendationDialog({
                 <span>{recommendation.productSku}</span>
               </div>
               <div className="flex justify-between">
-                <span>Current Stock:</span>
+                <span>Available Stock:</span>
                 <span>{recommendation.currentStock}</span>
               </div>
               <div className="flex justify-between">

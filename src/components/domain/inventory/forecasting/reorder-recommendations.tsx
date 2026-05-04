@@ -257,7 +257,7 @@ export const ReorderRecommendations = memo(function ReorderRecommendations({
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead>Urgency</TableHead>
-                <TableHead className="text-right">Current</TableHead>
+                <TableHead className="text-right">Available</TableHead>
                 <TableHead className="text-right">Reorder Point</TableHead>
                 <TableHead>Stock Level</TableHead>
                 <TableHead className="text-right">Days Left</TableHead>
@@ -269,12 +269,12 @@ export const ReorderRecommendations = memo(function ReorderRecommendations({
               {recommendations.map((rec) => {
                 const urgencyConfig = URGENCY_CONFIG[rec.urgency];
                 const UrgencyIcon = urgencyConfig.icon;
-                // Handle division by zero: if reorderPoint is 0, show 0% or handle appropriately
+                // Reorder decisions use allocatable available stock, not physical on-hand stock.
                 const stockPercentage = rec.reorderPoint > 0
                   ? Math.min(100, Math.round((rec.currentStock / rec.reorderPoint) * 100))
                   : rec.currentStock > 0
-                    ? 100 // If no reorder point but has stock, show 100%
-                    : 0; // If no stock and no reorder point, show 0%
+                    ? 100
+                    : 0;
 
                 return (
                   <TableRow key={rec.productId}>
