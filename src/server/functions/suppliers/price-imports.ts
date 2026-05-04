@@ -340,6 +340,12 @@ export const executePriceImport = createServerFn({ method: "POST" })
           persistedPrice = newPrice;
         }
 
+        if (!persistedPrice) {
+          throw new ValidationError(
+            `Price import row ${row.rowNumber} could not be saved. Refresh validation and try again.`
+          );
+        }
+
         // Create change request for audit trail
         if (data.approvalRequired) {
           const changeRequest = await createPriceChangeRequest({
