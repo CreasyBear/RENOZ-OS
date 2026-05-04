@@ -262,6 +262,10 @@ export const createPriceList = createServerFn({ method: "POST" })
         .returning();
     }
 
+    if (!result) {
+      throw new ValidationError("Supplier price list could not be saved. Refresh and try again.");
+    }
+
     return result;
   });
 
