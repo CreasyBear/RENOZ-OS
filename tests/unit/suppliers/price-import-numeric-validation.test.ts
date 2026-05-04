@@ -52,6 +52,21 @@ describe('supplier price import numeric validation', () => {
     ).toThrow(/Volume discounts are not supported in supplier price imports/);
   });
 
+  it('rejects percentage discounts over 100 before effective price calculation', () => {
+    expect(parsePriceImportRowData({ ...baseRow, discountType: 'percentage', discountValue: '100' })).toMatchObject({
+      discountType: 'percentage',
+      discountValue: 100,
+    });
+
+    expect(() =>
+      parsePriceImportRowData({
+        ...baseRow,
+        discountType: 'percentage',
+        discountValue: '100.01',
+      })
+    ).toThrow(/Percentage discount must be 100 or less/);
+  });
+
   it('rejects invalid numeric import fields before supplier/product resolution', () => {
     expect(() => parsePriceImportRowData({ ...baseRow, basePrice: 'not-a-price' })).toThrow(
       /Base price must be a valid number/

@@ -171,6 +171,14 @@ const priceImportRowSchema = z.object({
     });
   }
 
+  if (row.discountType === 'percentage' && row.discountValue > 100) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['discountValue'],
+      message: 'Percentage discount must be 100 or less',
+    });
+  }
+
   if (row.effectiveDate && row.expiryDate && row.expiryDate < row.effectiveDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
