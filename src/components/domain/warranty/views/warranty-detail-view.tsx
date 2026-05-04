@@ -7,16 +7,15 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WarrantyActivityTabPanels } from '@/components/domain/warranty/views/warranty-activity-tab-panels';
 import { WarrantyDetailDialogs } from '@/components/domain/warranty/views/warranty-detail-dialogs';
 import { WarrantyDetailHeaderSection } from '@/components/domain/warranty/views/warranty-detail-header-section';
-import { WarrantyDetailOverviewTab } from '@/components/domain/warranty/views/warranty-detail-overview-tab';
+import {
+  WarrantyDetailTabs,
+  type WarrantyDetailTabValue,
+} from '@/components/domain/warranty/views/warranty-detail-tabs';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
 import { WarrantyCertificateStatusCard } from '@/components/domain/warranty/views/warranty-certificate-status-card';
-import { WarrantyClaimsHistoryCard } from '@/components/domain/warranty/views/warranty-claims-history-card';
 import { WarrantyCoverageSummary } from '@/components/domain/warranty/views/warranty-coverage-summary';
 import { WarrantyNotificationSettingsCard } from '@/components/domain/warranty/views/warranty-notification-settings-card';
 import { WarrantySidebarSummaryCards } from '@/components/domain/warranty/views/warranty-sidebar-summary-cards';
@@ -102,9 +101,8 @@ export function WarrantyDetailView({
   onOpenTransferOwnership,
   isTransferringOwnership = false,
 }: WarrantyDetailViewProps) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState<WarrantyDetailTabValue>('overview');
   const daysUntilExpiry = getDaysUntilExpiry(warranty.expiryDate);
-  const canFileClaim = warranty.status === 'active' || warranty.status === 'expiring_soon';
   const approvalClaim = selectedClaimForApproval ?? null;
   const { dismiss, isAlertDismissed } = useAlertDismissals();
 
@@ -182,65 +180,34 @@ export function WarrantyDetailView({
           onEnableAlerts={() => onToggleOptOut(false)}
         />
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start gap-2">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="claims" className="gap-2">
-              Claims
-              {!isClaimsError ? (
-                <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
-                  {claims.length}
-                </Badge>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="warranty-activity">Warranty Activity</TabsTrigger>
-            <TabsTrigger value="system-history">System History</TabsTrigger>
-          </TabsList>
-
-          {activeTab === 'overview' && (
-            <TabsContent value="overview" className="mt-4">
-              <WarrantyDetailOverviewTab
-                warranty={warranty}
-                daysUntilExpiry={daysUntilExpiry}
-                extensions={extensions}
-                isExtensionsLoading={isExtensionsLoading}
-                isExtensionsError={isExtensionsError}
-                onRetryExtensions={onRetryExtensions}
-                onExtendDialogOpenChange={onExtendDialogOpenChange}
-              />
-            </TabsContent>
-          )}
-
-          {activeTab === 'claims' && (
-            <TabsContent value="claims" className="mt-4">
-              <WarrantyClaimsHistoryCard
-                claims={claims}
-                canFileClaim={canFileClaim}
-                isClaimsLoading={isClaimsLoading}
-                isClaimsError={isClaimsError}
-                pendingClaimAction={pendingClaimAction}
-                onClaimRowClick={onClaimRowClick}
-                onResolveClaimRow={onResolveClaimRow}
-                onReviewClaim={onReviewClaim}
-                onClaimDialogOpenChange={onClaimDialogOpenChange}
-                onRetryClaims={onRetryClaims}
-              />
-            </TabsContent>
-          )}
-
-          <WarrantyActivityTabPanels
-            activeTab={activeTab}
-            hasServiceSystem={!!warranty.serviceSystem}
-            activities={activities}
-            activitiesLoading={activitiesLoading}
-            activitiesError={activitiesError}
-            systemActivities={systemActivities}
-            systemActivitiesLoading={systemActivitiesLoading}
-            systemActivitiesError={systemActivitiesError}
-            onLogActivity={onLogActivity}
-            onScheduleFollowUp={onScheduleFollowUp}
-          />
-        </Tabs>
+        <WarrantyDetailTabs
+          activeTab={activeTab}
+          onActiveTabChange={setActiveTab}
+          warranty={warranty}
+          daysUntilExpiry={daysUntilExpiry}
+          claims={claims}
+          extensions={extensions}
+          isClaimsLoading={isClaimsLoading}
+          isClaimsError={isClaimsError}
+          isExtensionsLoading={isExtensionsLoading}
+          isExtensionsError={isExtensionsError}
+          pendingClaimAction={pendingClaimAction}
+          onClaimRowClick={onClaimRowClick}
+          onResolveClaimRow={onResolveClaimRow}
+          onReviewClaim={onReviewClaim}
+          onClaimDialogOpenChange={onClaimDialogOpenChange}
+          onRetryClaims={onRetryClaims}
+          onRetryExtensions={onRetryExtensions}
+          onExtendDialogOpenChange={onExtendDialogOpenChange}
+          activities={activities}
+          activitiesLoading={activitiesLoading}
+          activitiesError={activitiesError}
+          systemActivities={systemActivities}
+          systemActivitiesLoading={systemActivitiesLoading}
+          systemActivitiesError={systemActivitiesError}
+          onLogActivity={onLogActivity}
+          onScheduleFollowUp={onScheduleFollowUp}
+        />
       </main>
 
       <aside className="hidden lg:block sticky top-20 h-fit max-h-[calc(100vh-6rem)] overflow-y-auto">
