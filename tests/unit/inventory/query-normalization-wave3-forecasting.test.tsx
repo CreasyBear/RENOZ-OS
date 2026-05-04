@@ -5,15 +5,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockListForecasts = vi.fn();
 const mockGetProductForecast = vi.fn();
+const mockUpsertForecast = vi.fn();
+const mockBulkUpdateForecasts = vi.fn();
 const mockCalculateSafetyStock = vi.fn();
 const mockGetReorderRecommendations = vi.fn();
 const mockGetForecastAccuracy = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
 
 vi.mock('@/server/functions/inventory', () => ({
   listForecasts: (...args: unknown[]) => mockListForecasts(...args),
   getProductForecast: (...args: unknown[]) => mockGetProductForecast(...args),
-  upsertForecast: vi.fn(),
-  bulkUpdateForecasts: vi.fn(),
+  upsertForecast: (...args: unknown[]) => mockUpsertForecast(...args),
+  bulkUpdateForecasts: (...args: unknown[]) => mockBulkUpdateForecasts(...args),
   calculateSafetyStock: (...args: unknown[]) => mockCalculateSafetyStock(...args),
   getReorderRecommendations: (...args: unknown[]) => mockGetReorderRecommendations(...args),
   getForecastAccuracy: (...args: unknown[]) => mockGetForecastAccuracy(...args),
@@ -218,5 +229,55 @@ describe('inventory forecasting query normalization wave 3', () => {
       )
     ).toBeInTheDocument();
     expect(screen.queryByText('No forecast data available')).not.toBeInTheDocument();
+  });
+
+  it('uses safe mutation fallback copy instead of raw forecast save errors', async () => {
+    mockUpsertForecast.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint inventory_forecasts_unique_idx')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useUpsertForecast } = await import('@/hooks/inventory/use-forecasting');
+
+    const { result } = renderHook(() => useUpsertForecast(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        productId: '00000000-0000-4000-8000-000000000001',
+        forecastDate: new Date('2026-05-04T00:00:00.000Z'),
+        forecastPeriod: 'weekly',
+        demandQuantity: 10,
+      })
+    ).rejects.toThrow('inventory_forecasts_unique_idx');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to save forecast');
+  });
+
+  it('uses safe mutation fallback copy instead of raw bulk forecast errors', async () => {
+    mockBulkUpdateForecasts.mockRejectedValue(
+      new Error('insert into inventory_forecasts violates row-level security policy')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useBulkUpdateForecasts } = await import('@/hooks/inventory/use-forecasting');
+
+    const { result } = renderHook(() => useBulkUpdateForecasts(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync([
+        {
+          productId: '00000000-0000-4000-8000-000000000001',
+          forecastDate: new Date('2026-05-04T00:00:00.000Z'),
+          forecastPeriod: 'weekly',
+          demandQuantity: 10,
+        },
+      ])
+    ).rejects.toThrow('row-level security policy');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to update forecasts');
   });
 });

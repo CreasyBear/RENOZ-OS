@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
+import { formatInventoryMutationError } from './_mutation-errors';
 import {
   listForecasts,
   getProductForecast,
@@ -212,8 +213,8 @@ export function useUpsertForecast() {
         queryKey: queryKeys.inventory.productForecast(variables.productId, {}),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to save forecast');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to save forecast'));
     },
   });
 }
@@ -231,8 +232,8 @@ export function useBulkUpdateForecasts() {
       toast.success(`Updated ${result.updatedCount} forecasts, created ${result.createdCount}`);
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.forecastingAll() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update forecasts');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update forecasts'));
     },
   });
 }
