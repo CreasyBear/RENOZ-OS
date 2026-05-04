@@ -18,6 +18,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePurchaseOrder } from '@/hooks/suppliers';
 import { useProductSerialization } from '@/hooks/purchase-orders/use-product-serialization';
 
+const PRODUCT_SERIALIZATION_FALLBACK_MESSAGE =
+  'Product serialization requirements are temporarily unavailable. Please refresh and try again.';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -68,8 +75,22 @@ export function ReceivingDialogWrapper({
       .filter((id): id is string => id !== null);
   }, [poDetails]);
 
-  const { serializationMap, isLoading: isProductSerializationLoading } =
-    useProductSerialization(productIds, open && !!poId);
+  const {
+    serializationMap,
+    isLoading: isProductSerializationLoading,
+    hasErrors: hasProductSerializationErrors,
+    errors: productSerializationErrors = [],
+    refetchErroredProducts = () => {},
+  } = useProductSerialization(productIds, open && !!poId);
+
+  const productLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    poDetails?.items?.forEach((item) => {
+      if (!item.productId) return;
+      labels.set(item.productId, item.productName ?? item.productSku ?? item.productId);
+    });
+    return labels;
+  }, [poDetails]);
 
   // Transform PO items for GoodsReceiptDialog (using shared utility)
   // Filter to only items with pending quantities
@@ -125,6 +146,33 @@ export function ReceivingDialogWrapper({
             onRetry={() => {
               refetch();
             }}
+            retryLabel="Retry"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (hasProductSerializationErrors) {
+    const errorMessages = productSerializationErrors.map((errorItem) => {
+      const productLabel = productLabels.get(errorItem.productId) ?? errorItem.productId;
+      return `${productLabel}: ${getErrorMessage(
+        errorItem.error,
+        PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
+      )}`;
+    });
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
+        <div className="rounded-lg border bg-card p-6 shadow-lg max-w-md">
+          <ErrorState
+            title="Product serialization requirements could not be loaded"
+            message={
+              errorMessages.length > 0
+                ? errorMessages.join('; ')
+                : PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
+            }
+            onRetry={refetchErroredProducts}
             retryLabel="Retry"
           />
         </div>

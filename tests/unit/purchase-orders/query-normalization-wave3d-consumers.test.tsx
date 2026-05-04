@@ -10,6 +10,7 @@ const mockUseAllocatedCosts = vi.fn();
 const mockUseAddPurchaseOrderCost = vi.fn();
 const mockUseUpdatePurchaseOrderCost = vi.fn();
 const mockUseDeletePurchaseOrderCost = vi.fn();
+const mockUsePurchaseOrder = vi.fn();
 const mockUseBulkPurchaseOrders = vi.fn();
 const mockUseProductSerialization = vi.fn();
 
@@ -23,6 +24,7 @@ vi.mock('@/hooks', () => ({
 }));
 
 vi.mock('@/hooks/suppliers', () => ({
+  usePurchaseOrder: (...args: unknown[]) => mockUsePurchaseOrder(...args),
   usePurchaseOrderReceipts: (...args: unknown[]) => mockUsePurchaseOrderReceipts(...args),
   usePurchaseOrderCosts: (...args: unknown[]) => mockUsePurchaseOrderCosts(...args),
   useAllocatedCosts: (...args: unknown[]) => mockUseAllocatedCosts(...args),
@@ -171,6 +173,12 @@ vi.mock('@/components/domain/procurement/receiving/bulk-receiving-dialog', () =>
   }) => <div>{error ?? 'bulk-dialog-ready'}</div>,
 }));
 
+vi.mock('@/components/domain/purchase-orders/receive/goods-receipt-dialog', () => ({
+  GoodsReceiptDialog: ({ items }: { items: unknown[] }) => (
+    <div>goods-receipt-dialog:{items.length}</div>
+  ),
+}));
+
 describe('purchase-order consumer normalization wave 3d', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -206,6 +214,12 @@ describe('purchase-order consumer normalization wave 3d', () => {
     mockUseDeletePurchaseOrderCost.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn(),
+    });
+    mockUsePurchaseOrder.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
     });
     mockUseBulkPurchaseOrders.mockReturnValue({
       queries: [],
@@ -435,6 +449,77 @@ describe('purchase-order consumer normalization wave 3d', () => {
         'RENOZ LFP Module: Product serialization requirements are temporarily unavailable. Please refresh and try again.'
       )
     ).toBeInTheDocument();
+
+    screen.getByRole('button', { name: 'Retry' }).click();
+    expect(refetchErroredProducts).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks single purchase-order receiving when product serialization requirements cannot be loaded safely', async () => {
+    const refetchErroredProducts = vi.fn();
+    mockUsePurchaseOrder.mockReturnValueOnce({
+      data: {
+        id: 'po-1',
+        poNumber: 'PO-100',
+        items: [
+          {
+            id: 'po-item-1',
+            lineNumber: 1,
+            productId: 'product-1',
+            productName: 'RENOZ LFP Module',
+            productSku: 'LFP-100',
+            description: null,
+            quantity: 1,
+            unitOfMeasure: 'each',
+            unitPrice: 100,
+            discountPercent: null,
+            taxRate: null,
+            lineTotal: 100,
+            quantityReceived: 0,
+            quantityRejected: 0,
+            expectedDeliveryDate: null,
+            actualDeliveryDate: null,
+            notes: null,
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    mockUseProductSerialization.mockReturnValueOnce({
+      serializationMap: new Map(),
+      isLoading: false,
+      hasErrors: true,
+      errors: [
+        {
+          productId: 'product-1',
+          error: new Error(
+            'Product serialization requirements are temporarily unavailable. Please refresh and try again.'
+          ),
+        },
+      ],
+      refetchErroredProducts,
+    });
+
+    const { ReceivingDialogWrapper } = await import(
+      '@/components/domain/purchase-orders/receive/receiving-dialog-wrapper'
+    );
+
+    render(
+      <ReceivingDialogWrapper
+        open
+        onOpenChange={vi.fn()}
+        poId="po-1"
+      />
+    );
+
+    expect(screen.getByText('Product serialization requirements could not be loaded')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'RENOZ LFP Module: Product serialization requirements are temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText('goods-receipt-dialog:1')).not.toBeInTheDocument();
 
     screen.getByRole('button', { name: 'Retry' }).click();
     expect(refetchErroredProducts).toHaveBeenCalledTimes(1);
