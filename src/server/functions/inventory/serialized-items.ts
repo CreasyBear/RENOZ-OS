@@ -101,7 +101,13 @@ export const listSerializedItems = createServerFn({ method: 'GET' })
       const [totals] = await db
         .select({ value: count() })
         .from(serializedItems)
-        .leftJoin(products, eq(products.id, serializedItems.productId))
+        .leftJoin(
+          products,
+          and(
+            eq(products.id, serializedItems.productId),
+            eq(products.organizationId, ctx.organizationId)
+          )
+        )
         .where(where);
 
       const rows = await db
@@ -224,16 +230,40 @@ export const listSerializedItems = createServerFn({ method: 'GET' })
           updatedBy: serializedItems.updatedBy,
         })
         .from(serializedItems)
-        .leftJoin(products, eq(products.id, serializedItems.productId))
-        .leftJoin(inventory, eq(inventory.id, serializedItems.currentInventoryId))
-        .leftJoin(warehouseLocations, eq(warehouseLocations.id, inventory.locationId))
+        .leftJoin(
+          products,
+          and(
+            eq(products.id, serializedItems.productId),
+            eq(products.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(
+          inventory,
+          and(
+            eq(inventory.id, serializedItems.currentInventoryId),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(
+          warehouseLocations,
+          and(
+            eq(warehouseLocations.id, inventory.locationId),
+            eq(warehouseLocations.organizationId, ctx.organizationId)
+          )
+        )
         .leftJoin(
           purchaseOrderReceiptItems,
-          eq(purchaseOrderReceiptItems.id, serializedItems.sourceReceiptItemId)
+          and(
+            eq(purchaseOrderReceiptItems.id, serializedItems.sourceReceiptItemId),
+            eq(purchaseOrderReceiptItems.organizationId, ctx.organizationId)
+          )
         )
         .leftJoin(
           purchaseOrderReceipts,
-          eq(purchaseOrderReceipts.id, purchaseOrderReceiptItems.receiptId)
+          and(
+            eq(purchaseOrderReceipts.id, purchaseOrderReceiptItems.receiptId),
+            eq(purchaseOrderReceipts.organizationId, ctx.organizationId)
+          )
         )
         .where(where)
         .orderBy(desc(serializedItems.createdAt), asc(serializedItems.serialNumberNormalized))
@@ -380,16 +410,40 @@ export const getSerializedItem = createServerFn({ method: 'GET' })
           updatedBy: serializedItems.updatedBy,
         })
         .from(serializedItems)
-        .leftJoin(products, eq(products.id, serializedItems.productId))
-        .leftJoin(inventory, eq(inventory.id, serializedItems.currentInventoryId))
-        .leftJoin(warehouseLocations, eq(warehouseLocations.id, inventory.locationId))
+        .leftJoin(
+          products,
+          and(
+            eq(products.id, serializedItems.productId),
+            eq(products.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(
+          inventory,
+          and(
+            eq(inventory.id, serializedItems.currentInventoryId),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
+        .leftJoin(
+          warehouseLocations,
+          and(
+            eq(warehouseLocations.id, inventory.locationId),
+            eq(warehouseLocations.organizationId, ctx.organizationId)
+          )
+        )
         .leftJoin(
           purchaseOrderReceiptItems,
-          eq(purchaseOrderReceiptItems.id, serializedItems.sourceReceiptItemId)
+          and(
+            eq(purchaseOrderReceiptItems.id, serializedItems.sourceReceiptItemId),
+            eq(purchaseOrderReceiptItems.organizationId, ctx.organizationId)
+          )
         )
         .leftJoin(
           purchaseOrderReceipts,
-          eq(purchaseOrderReceipts.id, purchaseOrderReceiptItems.receiptId)
+          and(
+            eq(purchaseOrderReceipts.id, purchaseOrderReceiptItems.receiptId),
+            eq(purchaseOrderReceipts.organizationId, ctx.organizationId)
+          )
         )
         .where(
           and(
@@ -467,6 +521,18 @@ export const createSerializedItem = createServerFn({ method: 'POST' })
           );
         }
 
+        const [product] = await tx
+          .select({ id: products.id })
+          .from(products)
+          .where(
+            and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+          )
+          .limit(1);
+
+        if (!product) {
+          throw new NotFoundError('Product not found', 'product');
+        }
+
         if (data.currentInventoryId) {
           const [inventoryRow] = await tx
             .select({ id: inventory.id, productId: inventory.productId })
@@ -540,6 +606,7 @@ export const updateSerializedItem = createServerFn({ method: 'POST' })
         const [existing] = await tx
           .select({
             id: serializedItems.id,
+            productId: serializedItems.productId,
             serialNumberNormalized: serializedItems.serialNumberNormalized,
             status: serializedItems.status,
           })
@@ -581,6 +648,20 @@ export const updateSerializedItem = createServerFn({ method: 'POST' })
           }
         }
 
+        if (data.productId) {
+          const [product] = await tx
+            .select({ id: products.id })
+            .from(products)
+            .where(
+              and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+            )
+            .limit(1);
+
+          if (!product) {
+            throw new NotFoundError('Product not found', 'product');
+          }
+        }
+
         if (data.currentInventoryId) {
           const [inventoryRow] = await tx
             .select({ id: inventory.id, productId: inventory.productId })
@@ -599,7 +680,7 @@ export const updateSerializedItem = createServerFn({ method: 'POST' })
               'invalid_serial_state'
             );
           }
-          if (data.productId && inventoryRow.productId !== data.productId) {
+          if (inventoryRow.productId !== (data.productId ?? existing.productId)) {
             throw createSerializedStateError(
               'Inventory item product does not match selected product',
               'invalid_serial_state'
@@ -618,7 +699,12 @@ export const updateSerializedItem = createServerFn({ method: 'POST' })
             updatedBy: ctx.user.id,
             updatedAt: new Date(),
           })
-          .where(eq(serializedItems.id, data.id));
+          .where(
+            and(
+              eq(serializedItems.id, data.id),
+              eq(serializedItems.organizationId, ctx.organizationId)
+            )
+          );
 
         if (data.status === 'available') {
           await releaseSerializedItemAllocation(tx, {
@@ -720,8 +806,22 @@ export const deleteSerializedItem = createServerFn({ method: 'POST' })
           );
         }
 
-        await tx.delete(serializedItemEvents).where(eq(serializedItemEvents.serializedItemId, data.id));
-        await tx.delete(serializedItems).where(eq(serializedItems.id, data.id));
+        await tx
+          .delete(serializedItemEvents)
+          .where(
+            and(
+              eq(serializedItemEvents.serializedItemId, data.id),
+              eq(serializedItemEvents.organizationId, ctx.organizationId)
+            )
+          );
+        await tx
+          .delete(serializedItems)
+          .where(
+            and(
+              eq(serializedItems.id, data.id),
+              eq(serializedItems.organizationId, ctx.organizationId)
+            )
+          );
 
         return okMutationResult(`Serialized item ${existing.serial} deleted.`, {
           affectedIds: [data.id],
