@@ -23,6 +23,7 @@ import {
   TextareaField,
 } from "@/components/shared/forms";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getCreatePurchaseOrderSubmitError } from "../create-purchase-order-error-messages";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -96,9 +97,7 @@ export function CreatePOFromAlertDialog({
         onOpenChange(false);
         onSuccess?.();
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to create purchase order"
-        );
+        setError(getCreatePurchaseOrderSubmitError(err));
       }
     },
   });

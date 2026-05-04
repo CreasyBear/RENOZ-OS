@@ -27,6 +27,7 @@ import {
   NumberField,
   TextareaField,
 } from "@/components/shared/forms";
+import { getCreatePurchaseOrderSubmitError } from "../create-purchase-order-error-messages";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -123,9 +124,7 @@ export function CreatePOFromRecommendationDialog({
         onOpenChange(false);
         onSuccess?.();
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to create purchase order"
-        );
+        setError(getCreatePurchaseOrderSubmitError(err));
       }
     },
   });
