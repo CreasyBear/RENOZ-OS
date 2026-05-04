@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { toast } from "../_shared/use-toast";
+import { formatInventoryMutationError } from "./_mutation-errors";
 import {
   listQualityInspections,
   createQualityInspection,
@@ -65,8 +66,8 @@ export function useCreateQualityInspection() {
         queryKey: queryKeys.inventory.qualityInspections(variables.inventoryId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to record inspection");
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, "Failed to record inspection"));
     },
   });
 }

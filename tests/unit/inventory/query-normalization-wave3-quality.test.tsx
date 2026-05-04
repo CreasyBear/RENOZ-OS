@@ -6,6 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockListQualityInspections = vi.fn();
 const mockCreateQualityInspection = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -241,5 +250,29 @@ describe('inventory quality query normalization wave 3', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Quality History' }));
     expect(retry).toHaveBeenCalled();
+  });
+
+  it('uses safe mutation fallback copy instead of raw quality inspection errors', async () => {
+    mockCreateQualityInspection.mockRejectedValue(
+      new Error('insert or update on table quality_inspections violates foreign key constraint')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useCreateQualityInspection } = await import('@/hooks/inventory/use-quality');
+
+    const { result } = renderHook(() => useCreateQualityInspection(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        inventoryId: '00000000-0000-4000-8000-000000000001',
+        productId: '00000000-0000-4000-8000-000000000002',
+        inspectorName: 'Alex Inspector',
+        result: 'fail',
+      })
+    ).rejects.toThrow('quality_inspections');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to record inspection');
   });
 });
