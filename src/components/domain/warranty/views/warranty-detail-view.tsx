@@ -9,19 +9,14 @@
 import { useMemo, useState } from 'react';
 import { WarrantyDetailDialogs } from '@/components/domain/warranty/views/warranty-detail-dialogs';
 import { WarrantyDetailHeaderSection } from '@/components/domain/warranty/views/warranty-detail-header-section';
+import { WarrantyDetailSidebarContent } from '@/components/domain/warranty/views/warranty-detail-sidebar-content';
 import {
   WarrantyDetailTabs,
   type WarrantyDetailTabValue,
 } from '@/components/domain/warranty/views/warranty-detail-tabs';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
-import { WarrantyCertificateStatusCard } from '@/components/domain/warranty/views/warranty-certificate-status-card';
 import { WarrantyCoverageSummary } from '@/components/domain/warranty/views/warranty-coverage-summary';
-import { WarrantyNotificationSettingsCard } from '@/components/domain/warranty/views/warranty-notification-settings-card';
-import { WarrantySidebarSummaryCards } from '@/components/domain/warranty/views/warranty-sidebar-summary-cards';
-import {
-  WarrantyServiceSystemCard,
-} from '@/components/domain/warranty/views/warranty-service-linkage';
 import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
 import { getDaysUntilExpiry } from '@/lib/warranty';
 
@@ -118,28 +113,17 @@ export function WarrantyDetailView({
   const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
 
   const sidebarContent = (
-    <div className="space-y-6">
-      <WarrantySidebarSummaryCards warranty={warranty} />
-
-      <WarrantyServiceSystemCard
-        warranty={warranty}
-        onOpenTransferOwnership={onOpenTransferOwnership}
-        isTransferringOwnership={isTransferringOwnership}
-      />
-
-      <WarrantyNotificationSettingsCard
-        warranty={warranty}
-        isOptOutUpdating={isOptOutUpdating}
-        onToggleOptOut={onToggleOptOut}
-      />
-
-      <WarrantyCertificateStatusCard
-        certificateStatus={certificateStatus}
-        isCertificateLoading={isCertificateLoading}
-        certificateError={certificateError}
-        onRetryCertificate={onRetryCertificate}
-      />
-    </div>
+    <WarrantyDetailSidebarContent
+      warranty={warranty}
+      certificateStatus={certificateStatus}
+      isCertificateLoading={isCertificateLoading}
+      certificateError={certificateError}
+      isOptOutUpdating={isOptOutUpdating}
+      onToggleOptOut={onToggleOptOut}
+      onRetryCertificate={onRetryCertificate}
+      onOpenTransferOwnership={onOpenTransferOwnership}
+      isTransferringOwnership={isTransferringOwnership}
+    />
   );
 
   return (
