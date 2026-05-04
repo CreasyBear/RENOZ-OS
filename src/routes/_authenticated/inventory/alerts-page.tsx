@@ -363,7 +363,11 @@ export default function AlertsPage() {
             locations={locations}
             onSubmit={handleCreateAlert}
             onCancel={() => setShowCreateDialog(false)}
-            submitError={createAlertMutation.error?.message ?? null}
+            submitError={
+              createAlertMutation.error instanceof Error
+                ? createAlertMutation.error.message
+                : null
+            }
           />
         </DialogContent>
       </Dialog>
@@ -398,7 +402,11 @@ export default function AlertsPage() {
               }}
               onSubmit={handleEditAlert}
               onCancel={() => setEditingAlert(null)}
-              submitError={updateAlertMutation.error?.message ?? null}
+              submitError={
+                updateAlertMutation.error instanceof Error
+                  ? updateAlertMutation.error.message
+                  : null
+              }
             />
           )}
         </DialogContent>

@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
+import { formatInventoryMutationError } from './_mutation-errors';
 import {
   listAlerts,
   getAlert,
@@ -159,8 +160,8 @@ export function useCreateAlert() {
       toast.success('Alert rule created');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alertsAll() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create alert rule');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to create alert rule'));
     },
   });
 }
@@ -179,8 +180,8 @@ export function useUpdateAlert() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alertsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alert(variables.id) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update alert rule');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update alert rule'));
     },
   });
 }
@@ -197,8 +198,8 @@ export function useDeleteAlert() {
       toast.success('Alert rule deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alertsAll() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete alert rule');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to delete alert rule'));
     },
   });
 }
@@ -216,8 +217,8 @@ export function useAcknowledgeAlert() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.triggeredAlerts() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alertAnalytics() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to acknowledge alert');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to acknowledge alert'));
     },
   });
 }
@@ -236,8 +237,8 @@ export function useToggleAlertActive() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alertsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alert(variables.alertId) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update alert');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update alert'));
     },
   });
 }

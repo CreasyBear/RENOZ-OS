@@ -5,17 +5,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockListAlerts = vi.fn();
 const mockGetAlert = vi.fn();
+const mockCreateAlert = vi.fn();
+const mockUpdateAlert = vi.fn();
+const mockDeleteAlert = vi.fn();
 const mockGetTriggeredAlerts = vi.fn();
+const mockAcknowledgeAlert = vi.fn();
 const mockGetAlertAnalytics = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
 
 vi.mock('@/server/functions/inventory', () => ({
   listAlerts: (...args: unknown[]) => mockListAlerts(...args),
   getAlert: (...args: unknown[]) => mockGetAlert(...args),
-  createAlert: vi.fn(),
-  updateAlert: vi.fn(),
-  deleteAlert: vi.fn(),
+  createAlert: (...args: unknown[]) => mockCreateAlert(...args),
+  updateAlert: (...args: unknown[]) => mockUpdateAlert(...args),
+  deleteAlert: (...args: unknown[]) => mockDeleteAlert(...args),
   getTriggeredAlerts: (...args: unknown[]) => mockGetTriggeredAlerts(...args),
-  acknowledgeAlert: vi.fn(),
+  acknowledgeAlert: (...args: unknown[]) => mockAcknowledgeAlert(...args),
   getAlertAnalytics: (...args: unknown[]) => mockGetAlertAnalytics(...args),
 }));
 
@@ -167,5 +180,49 @@ describe('inventory alerts query normalization wave 3', () => {
       )
     ).toBeInTheDocument();
     expect(screen.queryByText('No Alert Rules')).not.toBeInTheDocument();
+  });
+
+  it('uses safe mutation fallback copy instead of raw alert create errors', async () => {
+    mockCreateAlert.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint inventory_alerts_rule_key')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useCreateAlert } = await import('@/hooks/inventory/use-alerts');
+
+    const { result } = renderHook(() => useCreateAlert(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        alertType: 'low_stock',
+        threshold: { minQuantity: 5 },
+        isActive: true,
+        notificationChannels: [],
+        escalationUsers: [],
+      })
+    ).rejects.toThrow('inventory_alerts_rule_key');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create alert rule');
+  });
+
+  it('uses safe mutation fallback copy instead of raw alert acknowledge errors', async () => {
+    mockAcknowledgeAlert.mockRejectedValue(
+      new Error('update on table triggered_inventory_alerts violates row-level security policy')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useAcknowledgeAlert } = await import('@/hooks/inventory/use-alerts');
+
+    const { result } = renderHook(() => useAcknowledgeAlert(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(result.current.mutateAsync('alert-1')).rejects.toThrow(
+      'row-level security policy'
+    );
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to acknowledge alert');
   });
 });
