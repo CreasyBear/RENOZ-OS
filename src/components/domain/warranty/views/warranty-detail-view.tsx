@@ -7,17 +7,10 @@
  */
 
 import { useMemo, useState } from 'react';
-import {
-  Clock,
-  Plus,
-  PanelRight,
-} from 'lucide-react';
+import { PanelRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { EntityHeader } from '@/components/shared';
-import { UnifiedActivityTimeline } from '@/components/shared/activity';
-import { getActivitiesFeedSearch } from '@/lib/activities';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Sheet,
@@ -29,6 +22,7 @@ import {
 import { WarrantyClaimFormDialog } from '@/components/domain/warranty/dialogs/warranty-claim-form-dialog';
 import { ClaimApprovalDialog } from '@/components/domain/warranty/dialogs/claim-approval-dialog';
 import { ExtendWarrantyDialog } from '@/components/domain/warranty/dialogs/extend-warranty-dialog';
+import { WarrantyActivityTabPanels } from '@/components/domain/warranty/views/warranty-activity-tab-panels';
 import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
@@ -306,67 +300,18 @@ export function WarrantyDetailView({
             </TabsContent>
           )}
 
-          {activeTab === 'warranty-activity' && (
-            <TabsContent value="warranty-activity" className="mt-4">
-              <div className="space-y-4">
-                {/* Action buttons */}
-                {(onLogActivity || onScheduleFollowUp) && (
-                  <div className="flex items-center justify-end gap-2">
-                    {onScheduleFollowUp && (
-                      <Button variant="outline" size="sm" onClick={onScheduleFollowUp}>
-                        <Clock className="h-4 w-4 mr-2" />
-                        Schedule Follow-up
-                      </Button>
-                    )}
-                    {onLogActivity && (
-                      <Button size="sm" onClick={onLogActivity}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Log Activity
-                      </Button>
-                    )}
-                  </div>
-                )}
-
-                <UnifiedActivityTimeline
-                  activities={activities}
-                  isLoading={activitiesLoading}
-                  hasError={!!activitiesError}
-                  error={activitiesError || undefined}
-                  title="Warranty Activity"
-                  description="Warranty-specific actions, notes, claims, and operator activity."
-                  showFilters={true}
-                  viewAllSearch={getActivitiesFeedSearch('warranty')}
-                  emptyMessage="No activity recorded yet"
-                  emptyDescription="Warranty activities will appear here when interactions occur."
-                />
-              </div>
-            </TabsContent>
-          )}
-
-          {activeTab === 'system-history' && (
-            <TabsContent value="system-history" className="mt-4">
-              {warranty.serviceSystem ? (
-                <UnifiedActivityTimeline
-                  activities={systemActivities}
-                  isLoading={systemActivitiesLoading}
-                  hasError={!!systemActivitiesError}
-                  error={systemActivitiesError || undefined}
-                  title="System History"
-                  description="Canonical service-system events such as linkage, ownership transfer, and backfill outcomes."
-                  showFilters={true}
-                  viewAllSearch={getActivitiesFeedSearch('service_system')}
-                  emptyMessage="No system history recorded yet"
-                  emptyDescription="System events will appear here as the installed-system record changes."
-                />
-              ) : (
-                <Card>
-                  <CardContent className="p-6 text-sm text-muted-foreground">
-                    No service system is linked yet, so there is no canonical system history to show.
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          )}
+          <WarrantyActivityTabPanels
+            activeTab={activeTab}
+            hasServiceSystem={!!warranty.serviceSystem}
+            activities={activities}
+            activitiesLoading={activitiesLoading}
+            activitiesError={activitiesError}
+            systemActivities={systemActivities}
+            systemActivitiesLoading={systemActivitiesLoading}
+            systemActivitiesError={systemActivitiesError}
+            onLogActivity={onLogActivity}
+            onScheduleFollowUp={onScheduleFollowUp}
+          />
         </Tabs>
       </main>
 
