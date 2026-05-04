@@ -8,12 +8,12 @@
  * @see src/lib/schemas/suppliers.ts
  */
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, ilike, desc, asc, sql, inArray } from "drizzle-orm";
+import { eq, and, ilike, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { containsPattern } from "@/lib/db/utils";
-import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
+import { priceLists, priceAgreements, suppliers } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -35,6 +35,27 @@ import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from 
 import { calculateEffectivePrice, findExistingPriceList, resolveProductIdentity } from "./price-resolution";
 
 type PriceDiscountType = 'percentage' | 'fixed' | 'volume' | 'none';
+
+async function assertSupplierBelongsToOrganization(params: {
+  supplierId: string;
+  organizationId: string;
+}) {
+  const [supplier] = await db
+    .select({ id: suppliers.id })
+    .from(suppliers)
+    .where(
+      and(
+        eq(suppliers.id, params.supplierId),
+        eq(suppliers.organizationId, params.organizationId),
+        isNull(suppliers.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!supplier) {
+    throw new NotFoundError("Supplier not found", "supplier");
+  }
+}
 
 // ============================================================================
 // PRICE LIST OPERATIONS
@@ -185,6 +206,11 @@ export const createPriceList = createServerFn({ method: "POST" })
   .inputValidator(createPriceListSchema)
   .handler(async ({ data }: { data: CreatePriceListInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
+
+    await assertSupplierBelongsToOrganization({
+      organizationId: ctx.organizationId,
+      supplierId: data.supplierId,
+    });
 
     const productResolution = await resolveProductIdentity({
       organizationId: ctx.organizationId,
@@ -625,6 +651,11 @@ export const createPriceAgreement = createServerFn({ method: "POST" })
   .inputValidator(createPriceAgreementSchema)
   .handler(async ({ data }: { data: CreatePriceAgreementInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
+
+    await assertSupplierBelongsToOrganization({
+      organizationId: ctx.organizationId,
+      supplierId: data.supplierId,
+    });
 
     const [result] = await db
       .insert(priceAgreements)
