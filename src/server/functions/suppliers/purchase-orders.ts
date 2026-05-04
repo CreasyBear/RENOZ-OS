@@ -1387,7 +1387,12 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
       const lastItem = await tx
         .select({ lineNumber: purchaseOrderItems.lineNumber })
         .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId))
+        .where(
+          and(
+            eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId),
+            eq(purchaseOrderItems.organizationId, ctx.organizationId)
+          )
+        )
         .orderBy(desc(purchaseOrderItems.lineNumber))
         .limit(1)
         .for('update');
@@ -1417,7 +1422,12 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
         .returning();
 
       // Update PO totals
-      await recalculatePurchaseOrderTotals(data.purchaseOrderId, ctx.user.id, tx);
+      await recalculatePurchaseOrderTotals(
+        data.purchaseOrderId,
+        ctx.organizationId,
+        ctx.user.id,
+        tx
+      );
 
       return item;
     });
@@ -1507,7 +1517,12 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
       }
 
       // Update PO totals within the same transaction
-      await recalculatePurchaseOrderTotals(item.purchaseOrderId, ctx.user.id, tx);
+      await recalculatePurchaseOrderTotals(
+        item.purchaseOrderId,
+        ctx.organizationId,
+        ctx.user.id,
+        tx
+      );
     });
 
     // Activity logging
@@ -1543,6 +1558,7 @@ type PoTotalsExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0] | ty
  */
 async function recalculatePurchaseOrderTotals(
   purchaseOrderId: string,
+  organizationId: string,
   userId: string,
   executor: PoTotalsExecutor = db
 ): Promise<void> {
@@ -1561,7 +1577,12 @@ async function recalculatePurchaseOrderTotals(
       totalAmount: sum(purchaseOrderItems.lineTotal),
     })
     .from(purchaseOrderItems)
-    .where(eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId));
+    .where(
+      and(
+        eq(purchaseOrderItems.purchaseOrderId, purchaseOrderId),
+        eq(purchaseOrderItems.organizationId, organizationId)
+      )
+    );
 
   await executor
     .update(purchaseOrders)
@@ -1572,5 +1593,10 @@ async function recalculatePurchaseOrderTotals(
       totalAmount: roundCurrency(Number(totals[0]?.totalAmount ?? 0)),
       updatedBy: userId,
     })
-    .where(eq(purchaseOrders.id, purchaseOrderId));
+    .where(
+      and(
+        eq(purchaseOrders.id, purchaseOrderId),
+        eq(purchaseOrders.organizationId, organizationId)
+      )
+    );
 }
