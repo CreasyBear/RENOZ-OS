@@ -2,7 +2,7 @@
 
 This sprint follows Sprint 2's schema-ownership closeout. The focus shifts from contract placement to stock-changing behavior that can mislead operators after mutations.
 
-Status: Issues 1 and 2 implemented.
+Status: Issues 1, 2, and 3 implemented.
 
 ## Business Value
 
@@ -102,6 +102,40 @@ Closeout criteria:
 - focused transfer tests pass
 - lint/typecheck evidence is recorded
 
+### 3. Adjustment Optimistic Patch Row Scope
+
+Business value: correcting stock for one product/location should not temporarily adjust every cached lot or serial row at that location while the server refetch is pending.
+
+Workflow invariant: `useAdjustInventory` must avoid aggregate optimistic math because the adjustment server mutates one specific inventory row when `inventoryId` is provided, or one locked matching row when only product/location is provided.
+
+Affected files:
+
+- `src/hooks/inventory/use-inventory.ts`
+- `tests/unit/inventory/use-adjust-inventory.test.tsx`
+- `docs/inventory/MAINTAINER-SPRINT-3.md`
+
+Out of scope:
+
+- changing adjustment server transaction behavior
+- changing adjustment schema validation
+- changing product-domain `useAdjustStock`
+- changing broad invalidation prefixes
+- changing adjustment dialog UI
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/stock-action-error-messages.test.ts
+```
+
+Closeout criteria:
+
+- unscoped product/location adjustments skip aggregate optimistic list/detail math
+- row-scoped adjustments with `inventoryId` continue to skip aggregate optimistic math
+- rollback and invalidation behavior remain unchanged
+- focused adjustment tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Receive Optimistic Patch Lot/Serial Scope
@@ -184,3 +218,43 @@ Verification:
 Goal adaptation: no standing goal change. Sprint 3 continues stock-changing cache integrity cleanup through bounded hook/cache behavior slices.
 
 Residual risk: adjustment and allocation optimistic patches still need targeted row-scope review; receive/transfer invalidation remains broad rather than result-aware.
+
+### Issue 3: Adjustment Optimistic Patch Row Scope
+
+Touched domains: inventory adjustment hook, inventory list/detail optimistic cache patching, stock action regression coverage.
+
+Workflow protected: `useAdjustInventory` mutation -> adjustment server row write -> rollback/invalidation -> operator-visible stock rows.
+
+Business value: correcting stock for one product/location no longer temporarily adjusts every cached lot or serial row at that location before the authoritative server refetch lands.
+
+Standards checked:
+
+- disabled aggregate optimistic list/detail math for inventory adjustments
+- product/location-only adjustments now wait for refetch because the server still mutates one locked matching row
+- row-scoped adjustments with `inventoryId` continue to avoid aggregate optimistic math
+- rollback and invalidation behavior remain unchanged
+- added adjustment regression coverage for unscoped and row-scoped payloads
+
+Smells removed:
+
+- unscoped adjustment optimistic patches could update sibling lot/serial rows even though the server adjusts one inventory row
+- adjustment optimistic behavior had no regression coverage for product/location sibling rows
+
+Deferred:
+
+- adjustment invalidation remains prefix-broad
+- adjustment server transaction behavior and schema validation are unchanged
+- product-domain `useAdjustStock` remains unchanged and already relies on invalidation rather than inventory-list optimistic math
+- allocation/deallocation optimistic and cache behavior still needs targeted review
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/stock-action-error-messages.test.ts`
+- `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-adjust-inventory.test.tsx`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-3.md src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-adjust-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 3 continues removing unsafe optimistic cache behavior from stock-changing flows.
+
+Residual risk: allocation/deallocation cache behavior still needs targeted review; receive, transfer, and adjustment invalidation remain broad rather than result-aware.
