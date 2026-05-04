@@ -707,6 +707,9 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new NotFoundError('Purchase order not found or update failed', 'purchaseOrder');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -779,6 +782,11 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
       )
       .returning({ id: purchaseOrders.id });
 
+    const deletedPo = result[0];
+    if (!deletedPo) {
+      throw new NotFoundError('Purchase order not found or deletion failed', 'purchaseOrder');
+    }
+
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
     logger.logAsync({
@@ -798,7 +806,7 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
       },
     });
 
-    return { success: true, id: result[0].id };
+    return { success: true, id: deletedPo.id };
   });
 
 /** Per-ID failure for bulk delete (PROC-001 / D5.5) */
