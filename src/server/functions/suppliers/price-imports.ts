@@ -279,6 +279,18 @@ type PriceImportValidationStatus = 'valid' | 'invalid';
 type PriceImportValidationResult = {
   status: PriceImportValidationStatus;
 };
+type PriceImportSummaryError = {
+  rowNumber: number;
+  errors: string[];
+};
+type PriceImportSummarySource = PriceImportValidationResult & {
+  rowNumber: number;
+  errors?: string[];
+  resolution?: {
+    status: PriceImportResolutionStatus;
+    message?: string;
+  };
+};
 
 export function getPriceImportValidationStatus(
   resolutionStatus: PriceImportResolutionStatus
@@ -296,6 +308,32 @@ export function countValidPriceImportRows(
   validationResults: readonly PriceImportValidationResult[]
 ): number {
   return validationResults.filter((result) => result.status === 'valid').length;
+}
+
+export function buildPriceImportSummary(
+  validationResults: readonly PriceImportSummarySource[],
+  limit = 10
+): { errors: PriceImportSummaryError[]; hasMoreErrors: boolean } {
+  const errors = validationResults.flatMap((result): PriceImportSummaryError[] => {
+    if (result.status !== 'invalid') {
+      return [];
+    }
+
+    if (result.errors?.length) {
+      return [{ rowNumber: result.rowNumber, errors: result.errors }];
+    }
+
+    if (result.resolution?.message) {
+      return [{ rowNumber: result.rowNumber, errors: [result.resolution.message] }];
+    }
+
+    return [{ rowNumber: result.rowNumber, errors: ['Price import row could not be resolved'] }];
+  });
+
+  return {
+    errors: errors.slice(0, limit),
+    hasMoreErrors: errors.length > limit,
+  };
 }
 
 // ============================================================================
@@ -452,10 +490,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
       validRows: countValidPriceImportRows(validationResults),
       invalidRows: countInvalidPriceImportRows(validationResults),
       validationResults,
-      summary: {
-        errors: errors.slice(0, 10), // Show first 10 errors
-        hasMoreErrors: errors.length > 10,
-      },
+      summary: buildPriceImportSummary(validationResults),
       resolvedRows: resolvedCandidateRows.filter((row) => row.resolution.status === 'resolved').length,
       duplicateRows: resolvedCandidateRows.filter((row) => row.resolution.status === 'duplicate_target').length,
     };

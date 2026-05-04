@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPriceImportSummary,
   countInvalidPriceImportRows,
   countValidPriceImportRows,
   getPriceImportValidationStatus,
@@ -34,5 +35,47 @@ describe('supplier price import preview summary', () => {
         { status: 'invalid' },
       ])
     ).toBe(2);
+  });
+
+  it('includes resolution failures in the preview summary error ledger', () => {
+    expect(
+      buildPriceImportSummary([
+        { rowNumber: 2, status: 'valid' },
+        {
+          rowNumber: 3,
+          status: 'invalid',
+          resolution: {
+            status: 'unresolved_supplier',
+            message: 'Supplier code "CELL404" was not found',
+          },
+        },
+        {
+          rowNumber: 4,
+          status: 'invalid',
+          errors: ['basePrice: Base price must be a valid number'],
+        },
+      ])
+    ).toEqual({
+      errors: [
+        { rowNumber: 3, errors: ['Supplier code "CELL404" was not found'] },
+        { rowNumber: 4, errors: ['basePrice: Base price must be a valid number'] },
+      ],
+      hasMoreErrors: false,
+    });
+  });
+
+  it('limits preview summary errors without dropping the overflow signal', () => {
+    const summary = buildPriceImportSummary(
+      [
+        { rowNumber: 2, status: 'invalid', errors: ['first'] },
+        { rowNumber: 3, status: 'invalid', errors: ['second'] },
+      ],
+      1
+    );
+
+    expect(summary).toEqual({
+      errors: [{ rowNumber: 2, errors: ['first'] }],
+      hasMoreErrors: true,
+    });
   });
 });
