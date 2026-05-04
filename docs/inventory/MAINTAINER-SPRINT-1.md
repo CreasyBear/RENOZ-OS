@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, and 15 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes fifteen bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes sixteen bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, valuation schema ownership, and forecasting schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, valuation schema ownership, forecasting schema ownership, and alert schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -389,6 +389,7 @@ Sprint standards checked:
 - stock count and stock count item schemas now live with stock-count workflow ownership
 - valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas now live with valuation workflow ownership
 - forecasting, reorder recommendation, and forecast list schemas now live with forecasting workflow ownership
+- alert rule, triggered alert, and alert list schemas now live with alert workflow ownership
 
 Sprint smells removed:
 
@@ -407,6 +408,7 @@ Sprint smells removed:
 - stock count schemas and stock count item schemas lived in the generic inventory schema monolith
 - valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas lived in the generic inventory schema monolith
 - forecasting schemas and reorder/list response types lived in the generic inventory schema monolith
+- alert schemas and alert list/triggered response types lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -1224,7 +1226,7 @@ Smells removed:
 Deferred:
 
 - DB-backed forecasting/reorder recommendation integration coverage beyond existing hook/query normalization tests
-- broader decomposition of alert and dashboard schemas
+- broader decomposition of dashboard schemas
 - UI cleanup for demand forecasting and reorder recommendation flows
 
 Verification:
@@ -1237,4 +1239,44 @@ Verification:
 
 Goal adaptation: no goal change; this is a forecasting schema-boundary cleanup under the inventory sprint architecture lens.
 
-Residual risk: forecasting schema ownership is cleaner, but alert and dashboard schema families remain in the generic inventory schema file.
+Residual risk: forecasting schema ownership is cleaner, but dashboard schema families remain in the generic inventory schema file.
+
+### Issue 16: Alert Schema Ownership
+
+Touched domains: inventory schema exports, alert rule schemas, triggered alert response types, alert list result types, inventory alert server/hook/route consumers.
+
+Workflow protected: alert list/create/update contracts -> alert server workflow -> alert hooks -> inventory alert rule and triggered alert UI states.
+
+Business value: alert-rule and triggered-alert contracts now live with alert ownership instead of the generic inventory schema monolith, making low-stock, expiry, slow-moving, and forecast-deviation alert work safer to change without weakening operator alert visibility.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/alerts.ts` for alert type values, threshold schema, create/update/list schemas, alert params, triggered alert types, alert list result types, and the client-safe inventory alert entity
+- removed alert schema/type ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the alert owner through the public `@/lib/schemas/inventory` barrel
+- added a guard that prevents alert schema ownership from drifting back into `inventory.ts`
+- preserved public barrel parse behavior, alert defaults, list pagination defaults, and alert params parsing
+
+Smells removed:
+
+- alert rule schemas lived in the generic inventory schema monolith despite having dedicated alert server, hook, and route workflows
+- triggered alert and list response types lived apart from the alert workflow owner
+- the client-safe `InventoryAlert` type remained in `inventory.ts` after its `AlertThreshold` dependency moved to alert ownership
+
+Deferred:
+
+- DB-backed alert rule/trigger integration coverage beyond existing hook/query normalization tests
+- broader decomposition of dashboard schemas
+- UI cleanup for alert rule and triggered alert panels
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/alert-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/alerts.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/alert-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/alerts.ts tests/unit/inventory/alert-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is an alert schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: alert schema ownership is cleaner, but dashboard schema families remain in the generic inventory schema file.
