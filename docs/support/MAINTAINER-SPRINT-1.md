@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to support-owned issue, RMA, warranty, and remedy workflows.
 
-Status: Issues 1, 2, 3, and 4 implemented; remaining support/RMA/warranty risks stay in the ledger.
+Status: Issues 1, 2, 3, 4, and 5 implemented; remaining support/RMA/warranty risks stay in the ledger.
 
 ## Business Value
 
@@ -170,6 +170,40 @@ Out of scope:
 
 - adding new remedy types
 - integrating external payment/accounting providers beyond existing code
+
+### 5. RMA Remedy Artifact Transaction Contract
+
+Business value: refund, credit, and replacement remedies are business-closeout actions. They should create or reuse canonical artifact links inside the remedy execution path so operators can trust that processed RMA state means a real local refund payment, credit note, or replacement draft exists.
+
+Workflow invariant: received RMA -> `processRma` support-update permission -> transaction-scoped `executeRmaRemedy` -> artifact-producing resolution branch -> canonical artifact ID returned to `buildCompletedRmaExecutionState` -> RMA read model projects artifact truth.
+
+Affected files:
+
+- `src/server/functions/orders/_shared/rma-remedy-execution.ts`
+- `tests/unit/support/rma-remedy-execution-transaction.test.ts`
+- `docs/support/MAINTAINER-SPRINT-1.md`
+
+Out of scope:
+
+- changing remedy execution server behavior
+- adding a real database integration harness
+- changing external payment/accounting settlement behavior
+- changing RMA receive, approval, or field update behavior
+- changing operator UI copy
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/support/rma-remedy-execution-transaction.test.ts
+```
+
+Closeout criteria:
+
+- refund remedy test proves a refund payment artifact is inserted and returned as canonical execution evidence
+- credit remedy test proves a credit note artifact is inserted and returned as canonical execution evidence
+- replacement remedy test proves a zero-priced replacement draft and line item are inserted and returned as canonical execution evidence
+- over-refund or blocked artifact setup does not insert fake artifact truth
+- focused tests, support tests, lint, typecheck, and diff check pass or skipped gates are recorded
 
 ## Recommended First Implementation Slice
 
@@ -393,3 +427,42 @@ Verification:
 Goal adaptation: no goal change; this closes the support sprint's trace/evidence remedy slice while leaving database integration as explicit residual risk.
 
 Residual risk: this proves schema/state/read-model contracts without a real database; refund, credit, and replacement artifact creation still need DB-backed integration coverage before treating remedy execution as fully protected.
+
+### Issue 5: RMA Remedy Artifact Transaction Contract
+
+Touched domains: support/RMA remedy execution, order payments/refunds, financial credit notes, replacement order drafts, RMA execution evidence tests.
+
+Workflow protected: received RMA -> `processRma` -> transaction-scoped `executeRmaRemedy` -> refund/credit/replacement artifact branch -> canonical artifact ID returned to completed RMA execution state -> read model can project artifact truth.
+
+Business value: maintainers now have focused evidence that artifact-producing remedies return real local artifact links from the remedy execution path. Refunds, credits, and replacements are less likely to regress into labels that mark an RMA processed without durable artifact evidence.
+
+Standards checked:
+
+- added a focused mocked-transaction test for refund remedy artifact creation and canonical `refundPaymentId`
+- added an over-refund guard proving blocked refund setup does not insert fake artifact truth
+- added a focused mocked-transaction test for credit note creation, applied-credit payment-status refresh, and canonical `creditNoteId`
+- added a focused mocked-transaction test for zero-priced replacement draft/line creation, search outbox enqueue, and canonical `replacementOrderId`
+- kept `executeRmaRemedy`, `processRma`, server schemas, database tables, and UI behavior unchanged
+
+Smells removed:
+
+- artifact-producing remedy execution had schema/read-model guards but no focused test that the transaction branch returns canonical artifact IDs after creating local artifacts
+- replacement remedy behavior lacked a focused guard that replacement orders stay zero-priced drafts with returned RMA line items
+- over-refund blocking relied on lower-level payment tests rather than direct RMA remedy artifact-path evidence
+
+Deferred:
+
+- true DB-backed process integration per resolution type remains deferred because the repo currently has only unit/mocked transaction patterns, not a dedicated integration harness
+- external payment/accounting settlement visibility remains outside the local artifact contract
+- support issue closeout UI coverage around blocked remedy execution remains a future operator-surface hardening slice
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-remedy-execution-transaction.test.ts`
+- `./node_modules/.bin/eslint tests/unit/support/rma-remedy-execution-transaction.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/support`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. This follows the support sprint posture by hardening the RMA remedy closeout contract without widening behavior.
+
+Residual risk: the new evidence is stronger than pure schema/source guards but still not a real database integration test. A future sprint should introduce or reuse a DB-backed harness before claiming full remedy execution protection across refund, credit, and replacement side effects.
