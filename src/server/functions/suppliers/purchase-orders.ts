@@ -767,7 +767,12 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
         deletedAt: new Date(),
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning({ id: purchaseOrders.id });
 
     // Activity logging
@@ -840,7 +845,12 @@ export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
             deletedAt: new Date(),
             updatedBy: ctx.user.id,
           })
-          .where(eq(purchaseOrders.id, id));
+          .where(
+            and(
+              eq(purchaseOrders.id, id),
+              eq(purchaseOrders.organizationId, ctx.organizationId)
+            )
+          );
 
         results.deleted += 1;
       } catch (err) {
@@ -892,7 +902,12 @@ export const submitForApproval = createServerFn({ method: 'POST' })
         status: 'pending_approval',
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
@@ -966,7 +981,12 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
         approvalNotes: data.notes,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
@@ -1038,7 +1058,12 @@ export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
         approvalNotes: `Rejected: ${data.reason}`,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
@@ -1112,7 +1137,12 @@ export const markAsOrdered = createServerFn({ method: 'POST' })
         supplierReference: data.supplierReference,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
@@ -1186,7 +1216,12 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
         closedReason: data.reason,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
@@ -1260,7 +1295,12 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
         closedReason: data.reason,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, data.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
