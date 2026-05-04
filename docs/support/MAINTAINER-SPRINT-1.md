@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to support-owned issue, RMA, warranty, and remedy workflows.
 
-Status: Issues 1, 2, and 3 implemented; remaining issues stay in the ledger.
+Status: Issues 1, 2, 3, and 4 implemented; remaining support/RMA/warranty risks stay in the ledger.
 
 ## Business Value
 
@@ -73,7 +73,7 @@ Observed support/RMA paths:
 - RMA trace freshness now has guards, but future behavior changes still need trace updates in the same slice.
 - `updateRmaSchema` now rejects `inspectionNotes`, `resolution`, and `resolutionDetails`, so receipt inspection and remedy resolution have dedicated workflow owners.
 - Bulk approval permission parity now has source and trace guards.
-- Remedy execution has high business stakes and spans support, orders, finance, inventory, and replacement workflows.
+- Remedy execution has high business stakes and spans support, orders, finance, inventory, and replacement workflows; schema/state evidence is guarded, while DB-backed side-effect integration remains deferred.
 - Warranty, issue, and RMA read paths are broad enough that stale traces can mislead future maintainers.
 
 ### What Needs Revalidation
@@ -81,7 +81,7 @@ Observed support/RMA paths:
 - Whether bulk approval should invalidate linked order details if order detail renders approval state.
 - Whether future direct `updateRma` callers need migration guidance for receipt inspection and remedy resolution edits.
 - Whether future RMA trace changes continue to match server behavior, mutation envelopes, cache invalidation, and remedy side effects.
-- Whether process-remedy execution has enough tests for refund, credit, replacement, repair, and blocked states.
+- Whether process-remedy execution needs DB-backed side-effect integration for refund, credit, replacement, repair, and blocked states.
 - Whether support issue closure clearly reflects RMA/remedy execution state for operators.
 
 ## Issue Ledger
@@ -159,7 +159,7 @@ Business value: refunds, credits, replacements, repairs, and no-action closeout 
 Evidence:
 
 - `processRma` calls `executeRmaRemedy`.
-- Tests exist for remedy dialog affordances and RMA execution state, but trace coverage is stale.
+- Tests now cover remedy dialog affordances, RMA execution state, read-model artifact projection, and resolution-specific schema/state evidence.
 - Remedy execution touches support, orders, finance, replacement, and issue state.
 
 Proposed slice:
@@ -354,3 +354,42 @@ Verification:
 Goal adaptation: no goal change; this is a small support workflow permission-parity slice under the existing sprint.
 
 Residual risk: permission parity is guarded, but there is still no DB-backed mixed-batch integration test and bulk approval still uses broad RMA detail invalidation rather than exact updated-id cache updates.
+
+### Issue 4: Remedy Execution Evidence
+
+Touched domains: RMA remedy process trace, remedy process schema, RMA execution state helpers, RMA execution read-model projection tests.
+
+Workflow protected: RMA received state -> `processRmaSchema` resolution-specific payload -> `processRma` support-update permission -> transactional `executeRmaRemedy` -> completed artifact link or blocked received-state execution.
+
+Business value: operators can distinguish real remedy execution from labels. Refund, credit, and replacement paths require the evidence needed to create local artifacts, while repair/no-action stay explicit no-artifact closeouts and blocked execution does not invent artifact truth.
+
+Standards checked:
+
+- refreshed `docs/code-traces/15-rma-process-resolution.md` with resolution-specific artifact evidence and canonical artifact-link ownership
+- added a guard for refund, credit, and replacement schema requirements
+- added a guard that repair and no-action remain explicit no-artifact remedies
+- added a guard that completed execution state projects artifact links through `buildRmaExecutionSummary`
+- added a guard that blocked execution keeps the RMA in `received` with no artifact IDs
+- left external payment/accounting sync and DB-backed artifact creation behavior unchanged
+
+Smells removed:
+
+- remedy evidence was spread across dialog/read-model/state tests without a single contract test tying resolution payloads to artifact truth
+- process trace did not explicitly state that artifact IDs on the RMA row are canonical proof of execution
+
+Deferred:
+
+- DB-backed process integration per resolution type
+- blocked execution UI coverage beyond current dialog/state helpers
+- external payment/accounting settlement visibility for locally created refund/credit artifacts
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-remedy-execution-evidence.test.ts tests/unit/support/rma-execution-state.test.ts tests/unit/support/rma-read-model.test.ts tests/unit/support/rma-execute-remedy-dialog.test.tsx tests/unit/support/rma-workflow-trace-contract.test.ts`
+- `./node_modules/.bin/eslint tests/unit/support/rma-remedy-execution-evidence.test.ts`
+- `git diff --check`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this closes the support sprint's trace/evidence remedy slice while leaving database integration as explicit residual risk.
+
+Residual risk: this proves schema/state/read-model contracts without a real database; refund, credit, and replacement artifact creation still need DB-backed integration coverage before treating remedy execution as fully protected.
