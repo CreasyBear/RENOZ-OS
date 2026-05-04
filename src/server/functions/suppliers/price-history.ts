@@ -381,7 +381,7 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
 
       // Apply the price change to the price list if applicable
       if (record.priceListId) {
-        await tx
+        const [updatedPrice] = await tx
           .update(supplierPriceLists)
           .set({
             price: record.newPrice,
@@ -394,7 +394,15 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
               eq(supplierPriceLists.id, record.priceListId),
               eq(supplierPriceLists.organizationId, ctx.organizationId)
             )
+          )
+          .returning({ id: supplierPriceLists.id });
+
+        if (!updatedPrice) {
+          throw new NotFoundError(
+            'Price list item not found for approved price change',
+            'priceList'
           );
+        }
       }
 
       // Mark the change as applied
@@ -413,6 +421,10 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
           )
         )
         .returning();
+
+      if (!applied) {
+        throw new ValidationError('Price change could not be marked as applied. Refresh and try again.');
+      }
 
       return applied;
     });

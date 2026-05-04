@@ -19,8 +19,15 @@ describe('supplier price change application tenant-scope contract', () => {
     expect(source).toContain(
       'update(supplierPriceLists).set({price:record.newPrice,effectivePrice:record.newPrice,lastUpdated:newDate(),updatedBy:ctx.user.id,}).where(and(eq(supplierPriceLists.id,record.priceListId),eq(supplierPriceLists.organizationId,ctx.organizationId)))'
     );
+    expect(source).toContain('returning({id:supplierPriceLists.id})');
+    expect(source).toContain(
+      "if(!updatedPrice){thrownewNotFoundError('Pricelistitemnotfoundforapprovedpricechange','priceList');}"
+    );
     expect(source).toContain(
       'update(priceChangeHistory).set({status:\'applied\',appliedBy:ctx.user.id,appliedAt:newDate(),}).where(and(eq(priceChangeHistory.id,data.id),eq(priceChangeHistory.organizationId,ctx.organizationId),eq(priceChangeHistory.status,\'approved\')))'
+    );
+    expect(source).toContain(
+      "if(!applied){thrownewValidationError('Pricechangecouldnotbemarkedasapplied.Refreshandtryagain.');}"
     );
     expect(source).not.toContain('.where(eq(priceChangeHistory.id,data.id))');
   });
