@@ -195,6 +195,55 @@ const PRICE_IMPORT_HEADER_ALIASES: Record<string, PriceImportColumnKey> = {
   status: 'status',
 };
 
+export const PRICE_IMPORT_TEMPLATE_HEADERS = [
+  'Supplier Code',
+  'Supplier Name',
+  'Product Name',
+  'Product SKU',
+  'Base Price',
+  'Currency',
+  'Discount Type',
+  'Discount Value',
+  'Min Order Qty',
+  'Max Order Qty',
+  'Effective Date',
+  'Expiry Date',
+  'Status',
+] as const;
+
+export const PRICE_IMPORT_TEMPLATE_SAMPLE_ROWS = [
+  [
+    'CELL001',
+    'Battery Cell Supply Co',
+    'RENOZ 100Ah Lithium Battery',
+    'RNZ-LFP-100',
+    '250.00',
+    'AUD',
+    'percentage',
+    '10',
+    '1',
+    '',
+    '2026-01-01',
+    '2026-12-31',
+    'active',
+  ],
+  [
+    'BMS002',
+    'Power Electronics Supply Co',
+    'RENOZ 200Ah Lithium Battery',
+    'RNZ-LFP-200',
+    '450.00',
+    'AUD',
+    'fixed',
+    '25.00',
+    '5',
+    '100',
+    '2026-01-01',
+    '2026-12-31',
+    'active',
+  ],
+] as const;
+
 // Agreement import schema for future bulk agreement imports
 export const agreementImportRowSchema = z.object({
   supplierCode: z.string().min(1),
@@ -510,54 +559,8 @@ export const executePriceImport = createServerFn({ method: "POST" })
  */
 export const getPriceImportTemplate = createServerFn({ method: "GET" })
   .handler(async () => {
-    const headers = [
-      'Supplier Code',
-      'Supplier Name',
-      'Product Name',
-      'Product SKU',
-      'Base Price',
-      'Currency',
-      'Discount Type',
-      'Discount Value',
-      'Min Order Qty',
-      'Max Order Qty',
-      'Effective Date',
-      'Expiry Date',
-      'Status',
-    ];
-
-    const sampleData = [
-      [
-        'SUP001',
-        'Office Depot',
-        'Office Chair',
-        'CHR-001',
-        '250.00',
-        'AUD',
-        'percentage',
-        '10',
-        '1',
-        '',
-        '2024-01-01',
-        '2024-12-31',
-        'active',
-      ],
-      [
-        'SUP002',
-        'TechCorp Solutions',
-        'Standing Desk',
-        'DSK-002',
-        '450.00',
-        'AUD',
-        'fixed',
-        '25.00',
-        '5',
-        '100',
-        '2024-01-01',
-        '2024-12-31',
-        'active',
-      ],
-    ];
+    const headers = [...PRICE_IMPORT_TEMPLATE_HEADERS];
+    const sampleData = PRICE_IMPORT_TEMPLATE_SAMPLE_ROWS.map((row) => [...row]);
 
     const csvContent = [headers, ...sampleData]
       .map(row => row.map(field => `"${field}"`).join(','))
