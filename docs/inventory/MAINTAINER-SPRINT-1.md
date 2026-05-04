@@ -1023,7 +1023,8 @@ Deferred:
 
 Verification:
 
-- `./node_modules/.bin/vitest run tests/unit/inventory/location-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory/location-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/lib/schemas/inventory/locations.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/location-schema-ownership.test.ts`
 - `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/locations.ts tests/unit/inventory/location-schema-ownership.test.ts`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
