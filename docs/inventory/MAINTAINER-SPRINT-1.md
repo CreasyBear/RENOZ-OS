@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, and 9 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -238,6 +238,25 @@ Out of scope:
 - changing receipt reason values or labels
 - changing receive behavior
 
+### 9. Inventory Movement Schema Ownership
+
+Business value: movement, adjustment, and transfer contracts should live with movement workflow ownership instead of the generic inventory schema monolith.
+
+Evidence:
+
+- `src/server/functions/inventory/movements.ts`, `adjustments.ts`, and `transfers.ts` already own separate server workflows.
+- `movementTypeValues`, `createMovementSchema`, `stockAdjustmentSchema`, and `stockTransferSchema` still lived in `src/lib/schemas/inventory/inventory.ts`.
+
+Proposed slice:
+
+> Move movement, adjustment, and transfer schemas into `src/lib/schemas/inventory/movements.ts` while preserving the public `@/lib/schemas/inventory` export surface.
+
+Out of scope:
+
+- changing movement values
+- changing adjustment or transfer behavior
+- decomposing dashboard/valuation/count schemas
+
 ## Recommended First Implementation Slice
 
 Start with Issue 1: Manual Receive Cache Contract.
@@ -320,10 +339,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes eight bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes nine bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, and manual receive schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, and movement schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -345,6 +364,7 @@ Sprint standards checked:
 - RMA return-to-stock location selection is explicit and trace guarded
 - manual receive serialized/non-serialized rules now have one shared schema helper used by UI and server validation
 - manual receipt reason schema ownership now lives with the receiving workflow schema helper
+- movement, stock adjustment, and transfer schemas now live with movement workflow ownership
 
 Sprint smells removed:
 
@@ -357,6 +377,7 @@ Sprint smells removed:
 - duplicated manual receive serialized validation between form and server
 - non-serialized products could carry serial input through the receive form until server rejection
 - manual receipt reason schema lived in the generic inventory schema monolith instead of the receiving schema owner
+- movement, adjustment, and transfer schemas lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -373,6 +394,7 @@ Sprint verification evidence:
 - focused receive, serialized availability, stock-in, RMA receive, and inventory mutation-error tests recorded in issue closeouts
 - manual receive serialization parity contract recorded in Issue 7
 - manual receive schema ownership extraction recorded in Issue 8
+- movement schema ownership extraction recorded in Issue 9
 - broad inventory sweeps recorded in Issues 3, 4, and 5
 - support RMA receive location/dialog/mutation tests recorded in Issue 6
 - direct guards recorded where run: `check-route-casts`, `check-pending-dialog-guards`, `check-read-path-query-guards`, `git diff --check`
@@ -909,3 +931,42 @@ Verification:
 Goal adaptation: no goal change; this is a small architecture-cleanliness slice under the existing inventory sprint.
 
 Residual risk: the main inventory schema file is still large; this only extracts the manual receive schema owner.
+
+### Issue 9: Inventory Movement Schema Ownership
+
+Touched domains: inventory schema exports, inventory movement schemas, stock adjustment schemas, stock transfer schemas, product inventory wrapper schema consumers.
+
+Workflow protected: product/inventory movement recording -> movement type validation -> stock adjustment/transfer validation -> inventory server workflow handlers.
+
+Business value: movement, adjustment, and transfer contracts are easier to reason about because their schemas now sit behind a dedicated movement schema owner that matches the extracted server workflow files.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/movements.ts` for movement type values, movement schemas, stock adjustment schema, and stock transfer schema
+- removed movement/adjustment/transfer schema ownership from `src/lib/schemas/inventory/inventory.ts`
+- preserved the public `@/lib/schemas/inventory` barrel export used by product inventory wrappers and inventory server functions
+- added a guard that prevents movement schema ownership from drifting back into `inventory.ts`
+- kept movement type values and adjustment/transfer parse behavior unchanged
+
+Smells removed:
+
+- movement type values and movement schemas lived in the generic inventory schema monolith
+- stock adjustment and transfer schemas lived apart from the extracted adjustment/transfer server workflow files
+
+Deferred:
+
+- broader `src/lib/schemas/inventory/inventory.ts` decomposition by location, count, valuation, forecasting, alert, and dashboard schemas
+- behavior changes to movement values, adjustment rules, or transfer rules
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/movement-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/stock-action-error-messages.test.ts tests/unit/inventory/use-receive-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory/movement-schema-ownership.test.ts`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/movements.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/movement-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/movements.ts tests/unit/inventory/movement-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: the main inventory schema file remains large; this slice only extracts movement, adjustment, and transfer contracts without changing workflow behavior.
