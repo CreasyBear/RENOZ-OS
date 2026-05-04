@@ -12,7 +12,7 @@ function readProjectFile(relativePath: string) {
 
 describe('query count/join parity regressions', () => {
   it('inventory search aggregates join products when shared filters search product columns', () => {
-    const source = readProjectFile('src/server/functions/inventory/inventory.ts');
+    const source = readProjectFile('src/server/functions/inventory/reads.ts');
 
     expect(source).toMatch(/ilike\(products\.name,\s*searchPattern\)/);
     expect(source).toMatch(/ilike\(products\.sku,\s*searchPattern\)/);
