@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to support-owned issue, RMA, warranty, and remedy workflows.
 
-Status: Issues 1 and 2 implemented; remaining issues stay in the ledger.
+Status: Issues 1, 2, and 3 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -54,6 +54,7 @@ Observed support/RMA paths:
 - `docs/code-traces/14-rma-create.md`: RMA create trace.
 - `docs/code-traces/15-rma-process-resolution.md`: RMA process/remedy trace.
 - `docs/code-traces/18-rma-field-update.md`: non-workflow RMA update trace.
+- `docs/code-traces/21-rma-approval-workflow.md`: single and bulk RMA approval trace.
 - `docs/inventory/MAINTAINER-SPRINT-1.md`: closed inventory/RMA return-to-stock evidence and deferred support risks.
 
 ## Triage Findings
@@ -62,6 +63,7 @@ Observed support/RMA paths:
 
 - RMA create now uses `PERMISSIONS.support.create` in live code.
 - RMA update and process now use `PERMISSIONS.support.update` in live code.
+- Single and bulk RMA approval now use `PERMISSIONS.support.update` in live code.
 - RMA receive uses `PERMISSIONS.inventory.receive` and the location contract is already trace guarded.
 - `processRma` now routes through `executeRmaRemedy` inside a transaction instead of merely storing metadata.
 - Existing tests cover RMA receive location selection, RMA receive dialog interaction, mutation invalidation, remedy execution dialog affordances, read-model shaping, support query normalization, issue anchors, and RMA execution state.
@@ -70,13 +72,13 @@ Observed support/RMA paths:
 
 - RMA trace freshness now has guards, but future behavior changes still need trace updates in the same slice.
 - `updateRmaSchema` now rejects `inspectionNotes`, `resolution`, and `resolutionDetails`, so receipt inspection and remedy resolution have dedicated workflow owners.
-- Bulk approve still needs permission posture revalidation against single approve.
+- Bulk approval permission parity now has source and trace guards.
 - Remedy execution has high business stakes and spans support, orders, finance, inventory, and replacement workflows.
 - Warranty, issue, and RMA read paths are broad enough that stale traces can mislead future maintainers.
 
 ### What Needs Revalidation
 
-- Whether `bulkApproveRma` should require the same `PERMISSIONS.support.update` contract as `approveRma`.
+- Whether bulk approval should invalidate linked order details if order detail renders approval state.
 - Whether future direct `updateRma` callers need migration guidance for receipt inspection and remedy resolution edits.
 - Whether future RMA trace changes continue to match server behavior, mutation envelopes, cache invalidation, and remedy side effects.
 - Whether process-remedy execution has enough tests for refund, credit, replacement, repair, and blocked states.
@@ -139,7 +141,7 @@ Business value: bulk operators should not be able to approve RMAs with weaker au
 Evidence:
 
 - `approveRma` uses `PERMISSIONS.support.update`.
-- `bulkApproveRma` needs revalidation in live code and trace coverage.
+- `bulkApproveRma` now uses `PERMISSIONS.support.update` and has trace coverage.
 
 Proposed slice:
 
@@ -261,7 +263,7 @@ Smells removed:
 Deferred:
 
 - future direct `updateRma` callers still need to use `receiveRma` or `processRma` for workflow-owned fields
-- bulk approve permission parity still needs revalidation
+- DB-backed bulk approval mixed-status coverage remains deferred to Issue 3/approval follow-up
 - database-backed process integration by resolution type remains future coverage
 
 Verification:
@@ -313,3 +315,42 @@ Verification:
 Goal adaptation: no goal change; this followed the support sprint rule by closing a small field-boundary smell before broader RMA approval/remedy work.
 
 Residual risk: the schema now protects workflow ownership, but it does not add optimistic locking or prove every future caller chooses the right workflow RPC for inspection and remedy edits.
+
+### Issue 3: RMA Bulk Approval Permission Parity
+
+Touched domains: RMA approval server functions, RMA approval trace, code-trace index, RMA approval permission tests.
+
+Workflow protected: RMA list selection or single detail action -> approval hook -> `approveRma` / `bulkApproveRma` -> support-update permission -> requested-to-approved transition -> RMA list/detail cache refresh.
+
+Business value: bulk operators can no longer approve RMAs with weaker authority than single-RMA approval, which protects support recovery decisions from bypassing role policy when operators work at list scale.
+
+Standards checked:
+
+- aligned `bulkApproveRma` with `approveRma` on `PERMISSIONS.support.update`
+- added `docs/code-traces/21-rma-approval-workflow.md` covering single and bulk approval trust boundary, sequence, contracts, persistence, cache policy, and drift
+- updated `docs/code-traces/README.md` so the new trace is discoverable
+- added a guard that checks single and bulk approval permission parity against the server source
+- guarded the approval trace permission/cache contract
+- left approval policy, role definitions, receive/process behavior, and bulk-list UI unchanged
+
+Smells removed:
+
+- `bulkApproveRma` previously used bare `withAuth()` while `approveRma` required `PERMISSIONS.support.update`
+- RMA approval workflow lacked an explicit trace despite being a state transition that unlocks inventory receipt
+
+Deferred:
+
+- DB-backed integration for mixed requested/non-requested bulk approval batches
+- possible order-detail cache invalidation for bulk approval if order detail surfaces approval state
+- broader role-policy review across other support bulk actions
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-approval-permission-contract.test.ts tests/unit/support/rma-workflow-trace-contract.test.ts tests/unit/support/use-rma-mutations.test.tsx`
+- `./node_modules/.bin/eslint src/server/functions/orders/rma.ts tests/unit/support/rma-approval-permission-contract.test.ts`
+- `git diff --check`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a small support workflow permission-parity slice under the existing sprint.
+
+Residual risk: permission parity is guarded, but there is still no DB-backed mixed-batch integration test and bulk approval still uses broad RMA detail invalidation rather than exact updated-id cache updates.
