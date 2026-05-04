@@ -10,18 +10,15 @@ import { useMemo, useState } from 'react';
 import {
   Clock,
   Plus,
-  TicketIcon,
   PanelRight,
-  Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { StatusBadge, EntityHeader, MetricCard } from '@/components/shared';
+import { StatusBadge, EntityHeader } from '@/components/shared';
 import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import { getActivitiesFeedSearch } from '@/lib/activities';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 import {
   Sheet,
   SheetContent,
@@ -38,6 +35,7 @@ import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-aler
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
 import { WarrantyCertificateStatusCard } from '@/components/domain/warranty/views/warranty-certificate-status-card';
 import { WarrantyClaimsHistoryCard } from '@/components/domain/warranty/views/warranty-claims-history-card';
+import { WarrantyCoverageSummary } from '@/components/domain/warranty/views/warranty-coverage-summary';
 import { WarrantyLineageSections } from '@/components/domain/warranty/views/warranty-lineage-sections';
 import { WarrantyNotificationSettingsCard } from '@/components/domain/warranty/views/warranty-notification-settings-card';
 import { WarrantySidebarSummaryCards } from '@/components/domain/warranty/views/warranty-sidebar-summary-cards';
@@ -49,7 +47,6 @@ import { getServiceLinkagePresentation } from '@/components/domain/warranty/view
 import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
 import { useWarrantyHeaderActions } from '@/hooks/warranty';
 import { formatDateAustralian, getDaysUntilExpiry, getWarrantyStatusConfigForEntityHeader } from '@/lib/warranty';
-import { getSummaryMetricSubtitle } from '@/lib/metrics/metric-display';
 
 // ============================================================================
 // TYPES
@@ -154,20 +151,11 @@ export function WarrantyDetailView({
 }: WarrantyDetailViewProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [now] = useState(() => Date.now());
   const daysUntilExpiry = getDaysUntilExpiry(warranty.expiryDate);
   const serviceLinkage = getServiceLinkagePresentation(warranty.serviceLinkageStatus);
   const canFileClaim = warranty.status === 'active' || warranty.status === 'expiring_soon';
   const approvalClaim = selectedClaimForApproval ?? null;
   const { dismiss, isAlertDismissed } = useAlertDismissals();
-
-  const coverageProgress = useMemo(() => {
-    const start = new Date(warranty.registrationDate).getTime();
-    const end = new Date(warranty.expiryDate).getTime();
-    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
-    const progress = ((now - start) / (end - start)) * 100;
-    return Math.min(100, Math.max(0, Math.round(progress)));
-  }, [now, warranty.expiryDate, warranty.registrationDate]);
 
   const alerts = useMemo(() => {
     return buildWarrantyAlerts({
@@ -265,68 +253,16 @@ export function WarrantyDetailView({
             onDelete={headerActionsInLayout ? undefined : onDelete}
           />
 
-          {/* Key Metrics - Using shared MetricCard (per METRIC-CARD-STANDARDS.md) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <MetricCard
-              variant="compact"
-              title="Days Left"
-              value={daysUntilExpiry > 0 ? `${daysUntilExpiry}d` : 'Expired'}
-              icon={Clock}
-              iconClassName={
-                daysUntilExpiry <= 0
-                  ? 'text-destructive'
-                  : daysUntilExpiry <= 30
-                  ? 'text-warning'
-                  : 'text-muted-foreground'
-              }
-              subtitle={daysUntilExpiry > 0 ? `Expires ${formatDate(warranty.expiryDate)}` : undefined}
-              alert={daysUntilExpiry <= 0 || daysUntilExpiry <= 30}
-            />
-            <MetricCard
-              variant="compact"
-              title="Claims"
-              value={claimSummaryState === 'ready' ? claimSummary?.totalClaims ?? 0 : '—'}
-              icon={TicketIcon}
-              iconClassName="text-muted-foreground"
-              isLoading={isClaimsLoading || isClaimSummaryLoading}
-              subtitle={getSummaryMetricSubtitle({
-                summaryState: claimSummaryState,
-                readySubtitle:
-                  claimSummaryState === 'ready' && (claimSummary?.pendingClaims ?? 0) > 0
-                    ? `${claimSummary?.pendingClaims ?? 0} pending`
-                    : undefined,
-                unavailableSubtitle: 'Claim summary unavailable',
-              })}
-            />
-            <MetricCard
-              variant="compact"
-              title="Covered Items"
-              value={warranty.items.length}
-              icon={Shield}
-              iconClassName="text-muted-foreground"
-            />
-          </div>
         </section>
 
-        {/* Zone 2: Progress Indicator */}
-        <section
-          className="rounded-lg border bg-background p-4"
-          role="progressbar"
-          aria-label={`Coverage progress: ${coverageProgress}%`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium">Coverage timeline</div>
-              <div className="text-xs text-muted-foreground">
-                Registered {formatDate(warranty.registrationDate)} · Expires {formatDate(warranty.expiryDate)}
-              </div>
-            </div>
-            <div className="text-sm font-medium">
-              {coverageProgress}% used
-            </div>
-          </div>
-          <Progress value={coverageProgress} className="mt-3 h-2" />
-        </section>
+        <WarrantyCoverageSummary
+          warranty={warranty}
+          daysUntilExpiry={daysUntilExpiry}
+          claimSummary={claimSummary}
+          claimSummaryState={claimSummaryState}
+          isClaimsLoading={isClaimsLoading}
+          isClaimSummaryLoading={isClaimSummaryLoading}
+        />
 
         <WarrantyAlerts
           alerts={visibleAlerts}
