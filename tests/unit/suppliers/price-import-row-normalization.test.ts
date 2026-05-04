@@ -70,6 +70,36 @@ describe('supplier price import row normalization', () => {
     });
   });
 
+  it('applies published defaults to blank optional template cells when headers are present', () => {
+    const headers = [
+      'Supplier Code',
+      'Product Name',
+      'Base Price',
+      'Currency',
+      'Discount Type',
+      'Discount Value',
+      'Status',
+    ];
+    const row = ['SUP004', 'RENOZ 400Ah Lithium Battery', '850.00', '', '', '', ''];
+    const rowData = buildPriceImportRowData(row, headers);
+
+    expect(rowData).toMatchObject({
+      supplierCode: 'SUP004',
+      productName: 'RENOZ 400Ah Lithium Battery',
+      basePrice: '850.00',
+      currency: 'AUD',
+      discountType: 'percentage',
+      discountValue: '0',
+      status: 'active',
+    });
+    expect(parsePriceImportRowData(rowData)).toMatchObject({
+      currency: 'AUD',
+      discountType: 'percentage',
+      discountValue: 0,
+      status: 'active',
+    });
+  });
+
   it('normalizes whitespace and CRLF artifacts from import cells before schema validation', () => {
     const headers = [
       'Supplier Code',

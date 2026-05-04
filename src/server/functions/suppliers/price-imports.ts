@@ -318,6 +318,15 @@ function normalizeImportCell(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
+function applyPriceImportRowDefaults(rowData: PriceImportRowData): PriceImportRowData {
+  if (!rowData.currency) rowData.currency = 'AUD';
+  if (!rowData.discountType) rowData.discountType = 'percentage';
+  if (!rowData.discountValue) rowData.discountValue = '0';
+  if (!rowData.status) rowData.status = 'active';
+
+  return rowData;
+}
+
 export function buildPriceImportRowData(
   row: string[],
   headers: string[] | null
@@ -331,19 +340,14 @@ export function buildPriceImportRowData(
         rowData[key] = normalizeImportCell(row[index]);
       }
     });
-    return rowData;
+    return applyPriceImportRowDefaults(rowData);
   }
 
   PRICE_IMPORT_COLUMN_KEYS.forEach((key, index) => {
     rowData[key] = normalizeImportCell(row[index]);
   });
 
-  if (!rowData.currency) rowData.currency = 'AUD';
-  if (!rowData.discountType) rowData.discountType = 'percentage';
-  if (!rowData.discountValue) rowData.discountValue = '0';
-  if (!rowData.status) rowData.status = 'active';
-
-  return rowData;
+  return applyPriceImportRowDefaults(rowData);
 }
 
 export function parsePriceImportRowData(rowData: Partial<PriceImportRowData>) {
