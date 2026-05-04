@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, and 17 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes sixteen bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes seventeen bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, valuation schema ownership, forecasting schema ownership, and alert schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, valuation schema ownership, forecasting schema ownership, alert schema ownership, and dashboard schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -390,6 +390,7 @@ Sprint standards checked:
 - valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas now live with valuation workflow ownership
 - forecasting, reorder recommendation, and forecast list schemas now live with forecasting workflow ownership
 - alert rule, triggered alert, and alert list schemas now live with alert workflow ownership
+- WMS dashboard aggregate schemas and dashboard helper types now live with dashboard workflow ownership
 
 Sprint smells removed:
 
@@ -409,10 +410,11 @@ Sprint smells removed:
 - valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas lived in the generic inventory schema monolith
 - forecasting schemas and reorder/list response types lived in the generic inventory schema monolith
 - alert schemas and alert list/triggered response types lived in the generic inventory schema monolith
+- WMS dashboard aggregate schemas and dashboard helper types lived in the generic inventory schema monolith
 
 Deferred backlog:
 
-- `src/lib/schemas/inventory/inventory.ts` remains large and should continue to be decomposed by workflow schema ownership
+- `src/lib/schemas/inventory/inventory.ts` still owns core inventory read/list, quality, movement response, and hook-facing misc types
 - legacy read consumers still import through the inventory compatibility barrel in places
 - database-backed integration coverage is still needed for receive/RMA quantity, movement, cost-layer, valuation, transition, and serialized-lineage invariants
 - fixed `AUD` currency in RMA return cost layers remains a finance/inventory valuation slice
@@ -1280,3 +1282,42 @@ Verification:
 Goal adaptation: no goal change; this is an alert schema-boundary cleanup under the inventory sprint architecture lens.
 
 Residual risk: alert schema ownership is cleaner, but dashboard schema families remain in the generic inventory schema file.
+
+### Issue 17: Dashboard Schema Ownership
+
+Touched domains: inventory schema exports, WMS dashboard aggregate schemas, dashboard helper types, WMS dashboard server/hook/UI consumers.
+
+Workflow protected: WMS aggregate reads -> WMS dashboard server functions -> dashboard hooks -> unified inventory dashboard panels and movement timeline.
+
+Business value: dashboard aggregate contracts now live with dashboard ownership instead of the generic inventory schema monolith, making warehouse visibility and stale/degraded dashboard states easier to reason about.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/dashboard.ts` for category/location stock schemas, recent movement schemas, dashboard comparison schema, WMS dashboard data schema, top-mover type, and movement trend aggregation type
+- removed dashboard schema/type ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the dashboard owner through the public `@/lib/schemas/inventory` barrel
+- added a guard that prevents dashboard schema ownership from drifting back into `inventory.ts`
+- preserved public barrel parse behavior for category stock, recent movement timeline items, dashboard comparison, and WMS dashboard data
+
+Smells removed:
+
+- WMS dashboard aggregate schemas lived in the generic inventory schema monolith despite dedicated WMS dashboard server and hook workflows
+- dashboard helper types for top movers and movement trends lived apart from dashboard ownership
+
+Deferred:
+
+- DB-backed dashboard aggregate integration coverage beyond existing hook/query normalization tests
+- UI cleanup for unified dashboard panels and activity timeline
+- remaining `inventory.ts` core/read/misc type decomposition if future behavior work needs it
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/dashboard-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-dashboard.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/dashboard.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/dashboard-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/dashboard.ts tests/unit/inventory/dashboard-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a dashboard schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: the original generic schema-family cleanup is substantially reduced, but `inventory.ts` still owns core inventory read/list, quality, movement response, and hook-facing misc types.
