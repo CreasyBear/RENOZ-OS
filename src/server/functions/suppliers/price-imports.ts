@@ -179,6 +179,18 @@ const priceImportRowSchema = z.object({
     });
   }
 
+  if (
+    row.minOrderQty !== undefined &&
+    row.maxOrderQty !== undefined &&
+    row.minOrderQty > row.maxOrderQty
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['maxOrderQty'],
+      message: 'Maximum order quantity must be greater than or equal to minimum order quantity',
+    });
+  }
+
   if (row.effectiveDate && row.expiryDate && row.expiryDate < row.effectiveDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

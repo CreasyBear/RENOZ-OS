@@ -67,6 +67,17 @@ describe('supplier price import numeric validation', () => {
     ).toThrow(/Percentage discount must be 100 or less/);
   });
 
+  it('rejects impossible quantity windows before supplier/product resolution', () => {
+    expect(parsePriceImportRowData({ ...baseRow, minOrderQty: '10', maxOrderQty: '10' })).toMatchObject({
+      minOrderQty: 10,
+      maxOrderQty: 10,
+    });
+
+    expect(() => parsePriceImportRowData({ ...baseRow, minOrderQty: '25', maxOrderQty: '10' })).toThrow(
+      /Maximum order quantity must be greater than or equal to minimum order quantity/
+    );
+  });
+
   it('rejects invalid numeric import fields before supplier/product resolution', () => {
     expect(() => parsePriceImportRowData({ ...baseRow, basePrice: 'not-a-price' })).toThrow(
       /Base price must be a valid number/
