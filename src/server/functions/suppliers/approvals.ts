@@ -175,7 +175,12 @@ async function approveApprovalRecord(params: {
       escalationReason: null,
       escalatedAt: null,
     })
-    .where(eq(purchaseOrderApprovals.id, params.approvalId))
+    .where(
+      and(
+        eq(purchaseOrderApprovals.id, params.approvalId),
+        eq(purchaseOrderApprovals.organizationId, params.organizationId)
+      )
+    )
     .returning();
 
   await checkAndUpdateFinalApprovalStatus(
@@ -732,7 +737,12 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
         escalationReason: null,
         escalatedAt: null,
       })
-      .where(eq(purchaseOrderApprovals.id, data.approvalId))
+      .where(
+        and(
+          eq(purchaseOrderApprovals.id, data.approvalId),
+          eq(purchaseOrderApprovals.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     // Update PO status back to draft
@@ -861,7 +871,12 @@ export const escalateApproval = createServerFn({ method: 'POST' })
         escalationReason: data.reason,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrderApprovals.id, data.approvalId))
+      .where(
+        and(
+          eq(purchaseOrderApprovals.id, data.approvalId),
+          eq(purchaseOrderApprovals.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return { approval: updatedApproval };
@@ -907,7 +922,12 @@ export const delegateApproval = createServerFn({ method: 'POST' })
         delegatedFrom: ctx.user.id,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrderApprovals.id, data.approvalId))
+      .where(
+        and(
+          eq(purchaseOrderApprovals.id, data.approvalId),
+          eq(purchaseOrderApprovals.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return { approval: updatedApproval };
@@ -962,7 +982,12 @@ export const revokeDelegation = createServerFn({ method: 'POST' })
         delegatedFrom: null,
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrderApprovals.id, data.approvalId))
+      .where(
+        and(
+          eq(purchaseOrderApprovals.id, data.approvalId),
+          eq(purchaseOrderApprovals.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return { approval: updatedApproval };
