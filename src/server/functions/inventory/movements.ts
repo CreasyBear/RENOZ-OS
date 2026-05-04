@@ -98,20 +98,34 @@ export const listMovements = createServerFn({ method: 'GET' })
         purchaseOrder: purchaseOrders,
       })
       .from(inventoryMovements)
-      .leftJoin(products, eq(inventoryMovements.productId, products.id))
-      .leftJoin(locations, eq(inventoryMovements.locationId, locations.id))
+      .leftJoin(
+        products,
+        and(
+          eq(inventoryMovements.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        locations,
+        and(
+          eq(inventoryMovements.locationId, locations.id),
+          eq(locations.organizationId, ctx.organizationId)
+        )
+      )
       .leftJoin(
         orders,
         and(
           eq(inventoryMovements.referenceType, 'order'),
-          eq(inventoryMovements.referenceId, orders.id)
+          eq(inventoryMovements.referenceId, orders.id),
+          eq(orders.organizationId, ctx.organizationId)
         )
       )
       .leftJoin(
         purchaseOrders,
         and(
           eq(inventoryMovements.referenceType, 'purchase_order'),
-          eq(inventoryMovements.referenceId, purchaseOrders.id)
+          eq(inventoryMovements.referenceId, purchaseOrders.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
         )
       )
       .where(and(...conditions))

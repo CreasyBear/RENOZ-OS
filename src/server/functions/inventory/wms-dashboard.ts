@@ -51,8 +51,20 @@ export const getStockByCategory = createServerFn({ method: 'GET' }).handler(asyn
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
     })
     .from(inventory)
-    .leftJoin(products, eq(inventory.productId, products.id))
-    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .leftJoin(
+      products,
+      and(
+        eq(inventory.productId, products.id),
+        eq(products.organizationId, ctx.organizationId)
+      )
+    )
+    .leftJoin(
+      categories,
+      and(
+        eq(products.categoryId, categories.id),
+        eq(categories.organizationId, ctx.organizationId)
+      )
+    )
     .where(eq(inventory.organizationId, ctx.organizationId))
     .groupBy(products.categoryId, categories.name)
     .orderBy(desc(sql`SUM(${inventory.totalValue})`));
@@ -94,7 +106,13 @@ export const getStockByLocation = createServerFn({ method: 'GET' }).handler(asyn
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
     })
     .from(inventory)
-    .innerJoin(locations, eq(inventory.locationId, locations.id))
+    .innerJoin(
+      locations,
+      and(
+        eq(inventory.locationId, locations.id),
+        eq(locations.organizationId, ctx.organizationId)
+      )
+    )
     .where(eq(inventory.organizationId, ctx.organizationId))
     .groupBy(locations.id, locations.name, locations.locationType)
     .orderBy(desc(sql`SUM(${inventory.totalValue})`));
@@ -139,8 +157,20 @@ export const getRecentMovementsTimeline = createServerFn({ method: 'GET' })
         locationCode: locations.locationCode,
       })
       .from(inventoryMovements)
-      .leftJoin(products, eq(inventoryMovements.productId, products.id))
-      .leftJoin(locations, eq(inventoryMovements.locationId, locations.id))
+      .leftJoin(
+        products,
+        and(
+          eq(inventoryMovements.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        locations,
+        and(
+          eq(inventoryMovements.locationId, locations.id),
+          eq(locations.organizationId, ctx.organizationId)
+        )
+      )
       .where(eq(inventoryMovements.organizationId, ctx.organizationId))
       .orderBy(desc(inventoryMovements.createdAt))
       .limit(data.limit);
@@ -332,8 +362,20 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
             totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
           })
           .from(inventory)
-          .leftJoin(products, eq(inventory.productId, products.id))
-          .leftJoin(categories, eq(products.categoryId, categories.id))
+          .leftJoin(
+            products,
+            and(
+              eq(inventory.productId, products.id),
+              eq(products.organizationId, ctx.organizationId)
+            )
+          )
+          .leftJoin(
+            categories,
+            and(
+              eq(products.categoryId, categories.id),
+              eq(categories.organizationId, ctx.organizationId)
+            )
+          )
           .where(eq(inventory.organizationId, ctx.organizationId))
           .groupBy(products.categoryId, categories.name)
           .orderBy(desc(sql`SUM(${inventory.totalValue})`)),
@@ -373,7 +415,13 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
             locationName: locations.name,
           })
           .from(inventoryMovements)
-          .leftJoin(products, eq(inventoryMovements.productId, products.id))
+          .leftJoin(
+            products,
+            and(
+              eq(inventoryMovements.productId, products.id),
+              eq(products.organizationId, ctx.organizationId)
+            )
+          )
           .leftJoin(
             locations,
             and(

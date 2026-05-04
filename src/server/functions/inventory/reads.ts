@@ -144,7 +144,14 @@ const _listInventory = cache(
       conditions.push(lte(inventory.totalValue, filters.maxValue));
     }
 
-    const productJoin = eq(inventory.productId, products.id);
+    const productJoin = and(
+      eq(inventory.productId, products.id),
+      eq(products.organizationId, organizationId)
+    )!;
+    const locationJoin = and(
+      eq(inventory.locationId, locations.id),
+      eq(locations.organizationId, organizationId)
+    )!;
 
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -186,7 +193,7 @@ const _listInventory = cache(
       })
       .from(inventory)
       .leftJoin(products, productJoin)
-      .leftJoin(locations, eq(inventory.locationId, locations.id))
+      .leftJoin(locations, locationJoin)
       .where(and(...conditions))
       .orderBy(orderDir(orderColumn))
       .limit(limit)
@@ -248,8 +255,20 @@ export const quickSearchInventory = createServerFn({ method: 'GET' })
         serialNumber: inventory.serialNumber,
       })
       .from(inventory)
-      .leftJoin(products, eq(inventory.productId, products.id))
-      .leftJoin(locations, eq(inventory.locationId, locations.id))
+      .leftJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        locations,
+        and(
+          eq(inventory.locationId, locations.id),
+          eq(locations.organizationId, ctx.organizationId)
+        )
+      )
       .where(
         and(
           eq(inventory.organizationId, ctx.organizationId),

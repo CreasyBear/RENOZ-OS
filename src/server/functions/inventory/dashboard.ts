@@ -90,7 +90,13 @@ export const getInventoryDashboard = createServerFn({ method: 'POST' }).handler(
       totalQuantity: sql<number>`SUM(ABS(${inventoryMovements.quantity}))::int`,
     })
     .from(inventoryMovements)
-    .leftJoin(products, eq(inventoryMovements.productId, products.id))
+    .leftJoin(
+      products,
+      and(
+        eq(inventoryMovements.productId, products.id),
+        eq(products.organizationId, ctx.organizationId)
+      )
+    )
     .where(
       and(
         eq(inventoryMovements.organizationId, ctx.organizationId),
