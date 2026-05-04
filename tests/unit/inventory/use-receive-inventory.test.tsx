@@ -1,10 +1,19 @@
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/lib/query-keys'
 
 const mockReceiveInventory = vi.fn()
+const mockToastError = vi.fn()
+const mockToastSuccess = vi.fn()
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}))
 
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
@@ -49,6 +58,10 @@ function createWrapper(queryClient: QueryClient) {
 }
 
 describe('useReceiveInventory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('refreshes inventory and related product detail queries after a manual receive', async () => {
     mockReceiveInventory.mockResolvedValue({
       item: { id: 'inventory-1' },
@@ -160,5 +173,40 @@ describe('useReceiveInventory', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.serializedAll(),
     })
+  })
+
+  it('surfaces receive validation guidance instead of a generic failure toast', async () => {
+    const receiveError = Object.assign(new Error('database constraint detail'), {
+      data: {
+        errors: {
+          code: ['insufficient_cost_layers'],
+          quantity: ['Cost layers are incomplete for this item. Reconcile layers and retry.'],
+        },
+      },
+    })
+    mockReceiveInventory.mockRejectedValue(receiveError)
+
+    const queryClient = new QueryClient()
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+
+    const { result } = renderHook(() => useReceiveInventory(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({
+          productId: 'product-1',
+          locationId: 'location-1',
+          quantity: 2,
+          unitCost: 19.95,
+          receiptReason: 'initial_stock',
+        })
+      ).rejects.toThrow('database constraint detail')
+    })
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Cost layers are incomplete for this item. Reconcile layers and retry.'
+    )
   })
 })

@@ -632,7 +632,7 @@ export function useReceiveInventory() {
 
       return { previousLists, previousDetails };
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (!context) return;
       context.previousLists.forEach(([key, data]) => {
         queryClient.setQueryData(key, data);
@@ -640,7 +640,7 @@ export function useReceiveInventory() {
       context.previousDetails.forEach(([key, data]) => {
         queryClient.setQueryData(key, data);
       });
-      toast.error('Failed to receive inventory');
+      toast.error(formatInventoryMutationError(error, 'Failed to receive inventory'));
     },
     onSuccess: () => {
       toast.success('Inventory received successfully');
