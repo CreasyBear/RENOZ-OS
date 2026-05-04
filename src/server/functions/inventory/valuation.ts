@@ -340,7 +340,7 @@ export const listCostLayers = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { page, pageSize, ...filters } = data;
     const limit = pageSize;
 
@@ -385,7 +385,7 @@ export const listCostLayers = createServerFn({ method: 'GET' })
 export const getInventoryCostLayers = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(z.object({ inventoryId: z.string().uuid() })))
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     // Verify inventory exists and belongs to org
     const [inv] = await db
@@ -486,7 +486,7 @@ export const createCostLayer = createServerFn({ method: 'POST' })
 export const getInventoryValuation = createServerFn({ method: 'GET' })
   .inputValidator(inventoryValuationQuerySchema)
   .handler(async ({ data }): Promise<InventoryValuationResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const invConditions = [eq(inventory.organizationId, ctx.organizationId)];
 
@@ -635,7 +635,7 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
 export const getInventoryFinanceIntegrity = createServerFn({ method: 'GET' })
   .inputValidator(inventoryFinanceIntegrityQuerySchema)
   .handler(async ({ data }): Promise<InventoryFinanceIntegritySummary> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     return getFinanceIntegritySummary(ctx.organizationId, data);
   });
 
@@ -782,7 +782,7 @@ export const reconcileInventoryFinanceIntegrity = createServerFn({ method: 'POST
 export const calculateCOGS = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(cogsCalculationSchema))
   .handler(async ({ data }): Promise<COGSResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     if (!data.simulate) {
       throw new ValidationError(
@@ -883,7 +883,7 @@ export const calculateCOGS = createServerFn({ method: 'GET' })
 export const getInventoryAging = createServerFn({ method: 'GET' })
   .inputValidator(inventoryAgingQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const conditions = [eq(inventoryCostLayers.organizationId, ctx.organizationId)];
 
@@ -1123,7 +1123,7 @@ function generateAgingRecommendations(
 export const getInventoryTurnover = createServerFn({ method: 'GET' })
   .inputValidator(inventoryTurnoverQuerySchema)
   .handler(async ({ data }): Promise<InventoryTurnoverResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const periodDays = data.period === '30d' ? 30 : data.period === '90d' ? 90 : 365;
 
