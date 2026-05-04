@@ -27,6 +27,7 @@ import type { InventoryItem } from "@/components/domain/inventory/view-modes";
 import { INVENTORY_STATUS_VALUES, QUALITY_STATUS_VALUES, type SearchParams } from "./browser";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getInventoryBrowserReadErrorMessage } from "./inventory-browser-error-messages";
 
 // ============================================================================
 // URL FILTER TRANSFORMERS
@@ -163,6 +164,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
     }));
   }, [inventoryData]);
   const hasInventoryData = inventoryItems.length > 0 || (inventoryData?.total ?? 0) > 0;
+  const inventoryErrorMessage = getInventoryBrowserReadErrorMessage(error);
 
   // Handle filter changes
   const handleFiltersChange = useCallback((newFilters: InventoryFiltersState) => {
@@ -258,11 +260,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
                   <AlertTitle>
                     {!hasInventoryData ? 'Unable to load inventory' : 'Showing cached inventory results'}
                   </AlertTitle>
-                  <AlertDescription>
-                    {error instanceof Error
-                      ? error.message
-                      : 'Inventory data is temporarily unavailable. Please refresh and try again.'}
-                  </AlertDescription>
+                  <AlertDescription>{inventoryErrorMessage}</AlertDescription>
                 </Alert>
               ) : null}
               <InventoryBrowser
