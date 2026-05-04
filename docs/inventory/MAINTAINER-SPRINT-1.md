@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, and 9 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, and 10 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes nine bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes ten bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, and movement schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, and location schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -384,6 +384,7 @@ Sprint standards checked:
 - manual receive serialized/non-serialized rules now have one shared schema helper used by UI and server validation
 - manual receipt reason schema ownership now lives with the receiving workflow schema helper
 - movement, stock adjustment, and transfer schemas now live with movement workflow ownership
+- location CRUD/list schemas now live with location workflow ownership
 
 Sprint smells removed:
 
@@ -397,6 +398,7 @@ Sprint smells removed:
 - non-serialized products could carry serial input through the receive form until server rejection
 - manual receipt reason schema lived in the generic inventory schema monolith instead of the receiving schema owner
 - movement, adjustment, and transfer schemas lived in the generic inventory schema monolith
+- location CRUD/list schemas lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -414,6 +416,7 @@ Sprint verification evidence:
 - manual receive serialization parity contract recorded in Issue 7
 - manual receive schema ownership extraction recorded in Issue 8
 - movement schema ownership extraction recorded in Issue 9
+- location schema ownership extraction recorded in Issue 10
 - broad inventory sweeps recorded in Issues 3, 4, and 5
 - support RMA receive location/dialog/mutation tests recorded in Issue 6
 - direct guards recorded where run: `check-route-casts`, `check-pending-dialog-guards`, `check-read-path-query-guards`, `git diff --check`
@@ -465,7 +468,7 @@ Verification:
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
 - `node scripts/check-read-path-query-guards.mjs`
-- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit` (default heap run exhausted Node memory before diagnostics)
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
 Goal adaptation: no goal change; the slice followed the product-owner goal by prioritizing architecture cleanliness inside a domain workflow.
 
@@ -984,8 +987,47 @@ Verification:
 - `./node_modules/.bin/vitest run tests/unit/inventory/movement-schema-ownership.test.ts`
 - `./node_modules/.bin/eslint src/lib/schemas/inventory/movements.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/movement-schema-ownership.test.ts`
 - `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/movements.ts tests/unit/inventory/movement-schema-ownership.test.ts`
-- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit` (default heap run exhausted Node memory before diagnostics)
 
 Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
 
 Residual risk: the main inventory schema file remains large; this slice only extracts movement, adjustment, and transfer contracts without changing workflow behavior.
+
+### Issue 10: Inventory Location Schema Ownership
+
+Touched domains: inventory schema exports, location CRUD/list schemas, location server schema consumers, product inventory location wrapper schema consumers.
+
+Workflow protected: location list/create/update request -> schema validation -> inventory location server functions -> location query/read contract.
+
+Business value: location management contracts are easier to reason about because CRUD/list schemas now sit behind a dedicated location schema owner that matches the extracted location server workflow file.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/locations.ts` for location address, create/update/output, filter, page-list, and cursor-list schemas
+- removed location CRUD/list schema ownership from `src/lib/schemas/inventory/inventory.ts`
+- preserved the public `@/lib/schemas/inventory` barrel export
+- preserved direct legacy imports from `@/lib/schemas/inventory/inventory` with re-exports while code migrates
+- added a guard that prevents location CRUD/list schema definitions from drifting back into `inventory.ts`
+- kept location defaults, filters, and normalization behavior unchanged
+
+Smells removed:
+
+- location CRUD/list schemas lived in the generic inventory schema monolith
+- location server workflow ownership was not mirrored in schema ownership
+
+Deferred:
+
+- warehouse-location hierarchy schema extraction
+- broader `src/lib/schemas/inventory/inventory.ts` decomposition by count, valuation, forecasting, alert, dashboard, and warehouse-location schemas
+- migration of legacy direct imports from `@/lib/schemas/inventory/inventory` to the inventory schema barrel or specific schema owner
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/location-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/locations.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/location-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/locations.ts tests/unit/inventory/location-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: direct legacy imports from `@/lib/schemas/inventory/inventory` are still supported by compatibility re-exports; future slices should migrate those callers to cleaner owners.
