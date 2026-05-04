@@ -26,6 +26,7 @@ import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 import { roundCurrency } from '@/lib/order-calculations';
+import { getPurchaseOrderScheduleDateError } from '@/lib/purchase-orders/schedule-dates';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   createPurchaseOrderSchema,
@@ -551,16 +552,15 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
     const totalAmount = roundCurrency(subtotal + taxAmount + shippingAmount - discountAmount);
 
     const orderDate = new Date().toISOString().split('T')[0];
-    if (data.requiredDate && data.requiredDate < orderDate) {
+    const createScheduleDateError = getPurchaseOrderScheduleDateError({
+      orderDate,
+      requiredDate: data.requiredDate,
+      expectedDeliveryDate: data.expectedDeliveryDate,
+    });
+    if (createScheduleDateError) {
       throw new ValidationError(
-        `Required date (${data.requiredDate}) cannot be before order date (${orderDate})`,
-        { requiredDate: ['Required date cannot be before order date'] }
-      );
-    }
-    if (data.expectedDeliveryDate && data.expectedDeliveryDate < orderDate) {
-      throw new ValidationError(
-        `Expected delivery date (${data.expectedDeliveryDate}) cannot be before order date (${orderDate})`,
-        { expectedDeliveryDate: ['Expected delivery date cannot be before order date'] }
+        createScheduleDateError.message,
+        createScheduleDateError.fieldErrors
       );
     }
 
@@ -681,6 +681,18 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
 
     if (existing.po.status !== 'draft') {
       throw new ValidationError('Can only update draft purchase orders');
+    }
+
+    const updateScheduleDateError = getPurchaseOrderScheduleDateError({
+      orderDate: existing.po.orderDate,
+      requiredDate: updateData.requiredDate,
+      expectedDeliveryDate: updateData.expectedDeliveryDate,
+    });
+    if (updateScheduleDateError) {
+      throw new ValidationError(
+        updateScheduleDateError.message,
+        updateScheduleDateError.fieldErrors
+      );
     }
 
     const updates: Record<string, unknown> = {
