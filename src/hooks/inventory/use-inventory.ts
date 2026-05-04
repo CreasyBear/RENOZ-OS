@@ -13,6 +13,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeSerial } from '@/lib/serials';
 import {
   resolveReadResult,
 } from '@/lib/read-path-policy';
@@ -48,6 +49,45 @@ export interface UseInventoryListOptions extends Partial<InventoryListQuery> {
 
 type InventoryListResult = Awaited<ReturnType<typeof listInventory>>;
 type InventoryDetailResult = Awaited<ReturnType<typeof getInventoryItem>>;
+
+interface ReceivePatchCandidate {
+  productId: string;
+  locationId: string;
+  lotNumber?: string | null;
+  serialNumber?: string | null;
+}
+
+function normalizeReceiveScopeValue(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeReceiveScopeSerial(value?: string | null): string | null {
+  const normalized = normalizeReceiveScopeValue(value);
+  return normalized ? normalizeSerial(normalized) : null;
+}
+
+function matchesReceiveInventoryScope(
+  item: ReceivePatchCandidate,
+  variables: ReceiveInventoryInput
+): boolean {
+  if (
+    item.productId !== variables.productId ||
+    item.locationId !== variables.locationId
+  ) {
+    return false;
+  }
+
+  const itemSerial = normalizeReceiveScopeSerial(item.serialNumber);
+  const receiveSerial = normalizeReceiveScopeSerial(variables.serialNumber);
+  if (itemSerial !== receiveSerial) {
+    return false;
+  }
+
+  const itemLot = normalizeReceiveScopeValue(item.lotNumber);
+  const receiveLot = normalizeReceiveScopeValue(variables.lotNumber);
+  return itemLot === receiveLot;
+}
 
 function invalidateReceiveInventoryQueries(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -488,10 +528,7 @@ export function useReceiveInventory() {
         (old) => {
           if (!old) return old;
           const items = old.items.map((item) => {
-            if (
-              item.productId !== variables.productId ||
-              item.locationId !== variables.locationId
-            ) {
+            if (!matchesReceiveInventoryScope(item, variables)) {
               return item;
             }
             const quantityOnHand = (item.quantityOnHand ?? 0) + variables.quantity;
@@ -510,10 +547,7 @@ export function useReceiveInventory() {
         { queryKey: queryKeys.inventory.details() },
         (old) => {
           if (!old?.item) return old;
-          if (
-            old.item.productId !== variables.productId ||
-            old.item.locationId !== variables.locationId
-          ) {
+          if (!matchesReceiveInventoryScope(old.item, variables)) {
             return old;
           }
           const quantityOnHand = (old.item.quantityOnHand ?? 0) + variables.quantity;

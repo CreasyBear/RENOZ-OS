@@ -57,6 +57,22 @@ function createWrapper(queryClient: QueryClient) {
   return Wrapper
 }
 
+function inventoryList(items: Array<Record<string, unknown>>) {
+  return {
+    items,
+    total: items.length,
+    page: 1,
+    limit: 20,
+    hasMore: false,
+    totals: {
+      totalValue: 0,
+      totalItems: items.length,
+      totalSkus: 1,
+      lowStockCount: 0,
+    },
+  }
+}
+
 describe('useReceiveInventory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -173,6 +189,185 @@ describe('useReceiveInventory', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.serializedAll(),
     })
+  })
+
+  it('optimistically patches only the matching lot row for manual receive', async () => {
+    mockReceiveInventory.mockResolvedValue({
+      item: { id: 'inventory-lot-a' },
+      movement: { id: 'movement-1' },
+      message: 'Inventory received successfully',
+    })
+
+    const queryClient = new QueryClient()
+    const listKey = queryKeys.inventory.list({ page: 1 })
+    queryClient.setQueryData(
+      listKey,
+      inventoryList([
+        {
+          id: 'inventory-lot-a',
+          productId: 'product-1',
+          locationId: 'location-1',
+          lotNumber: 'LOT-A',
+          serialNumber: null,
+          quantityOnHand: 3,
+          quantityAvailable: 3,
+          unitCost: 10,
+          totalValue: 30,
+        },
+        {
+          id: 'inventory-lot-b',
+          productId: 'product-1',
+          locationId: 'location-1',
+          lotNumber: 'LOT-B',
+          serialNumber: null,
+          quantityOnHand: 7,
+          quantityAvailable: 7,
+          unitCost: 10,
+          totalValue: 70,
+        },
+      ])
+    )
+
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { result } = renderHook(() => useReceiveInventory(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        productId: 'product-1',
+        locationId: 'location-1',
+        quantity: 2,
+        unitCost: 10,
+        receiptReason: 'initial_stock',
+        lotNumber: 'LOT-A',
+      })
+    })
+
+    const data = queryClient.getQueryData<ReturnType<typeof inventoryList>>(listKey)
+    expect(data?.items).toMatchObject([
+      { id: 'inventory-lot-a', quantityOnHand: 5, quantityAvailable: 5, totalValue: 50 },
+      { id: 'inventory-lot-b', quantityOnHand: 7, quantityAvailable: 7, totalValue: 70 },
+    ])
+  })
+
+  it('does not optimistically patch serialized rows for a no-serial receive', async () => {
+    mockReceiveInventory.mockResolvedValue({
+      item: { id: 'inventory-base' },
+      movement: { id: 'movement-1' },
+      message: 'Inventory received successfully',
+    })
+
+    const queryClient = new QueryClient()
+    const listKey = queryKeys.inventory.list({ page: 1 })
+    queryClient.setQueryData(
+      listKey,
+      inventoryList([
+        {
+          id: 'inventory-base',
+          productId: 'product-1',
+          locationId: 'location-1',
+          lotNumber: null,
+          serialNumber: null,
+          quantityOnHand: 3,
+          quantityAvailable: 3,
+          unitCost: 10,
+          totalValue: 30,
+        },
+        {
+          id: 'inventory-serial',
+          productId: 'product-1',
+          locationId: 'location-1',
+          lotNumber: null,
+          serialNumber: 'SN-001',
+          quantityOnHand: 1,
+          quantityAvailable: 1,
+          unitCost: 10,
+          totalValue: 10,
+        },
+      ])
+    )
+
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { result } = renderHook(() => useReceiveInventory(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        productId: 'product-1',
+        locationId: 'location-1',
+        quantity: 2,
+        unitCost: 10,
+        receiptReason: 'initial_stock',
+      })
+    })
+
+    const data = queryClient.getQueryData<ReturnType<typeof inventoryList>>(listKey)
+    expect(data?.items).toMatchObject([
+      { id: 'inventory-base', quantityOnHand: 5, quantityAvailable: 5, totalValue: 50 },
+      { id: 'inventory-serial', quantityOnHand: 1, quantityAvailable: 1, totalValue: 10 },
+    ])
+  })
+
+  it('optimistically patches only the matching normalized serial row', async () => {
+    mockReceiveInventory.mockResolvedValue({
+      item: { id: 'inventory-serial-1' },
+      movement: { id: 'movement-1' },
+      message: 'Inventory received successfully',
+    })
+
+    const queryClient = new QueryClient()
+    const listKey = queryKeys.inventory.list({ page: 1 })
+    queryClient.setQueryData(
+      listKey,
+      inventoryList([
+        {
+          id: 'inventory-serial-1',
+          productId: 'product-1',
+          locationId: 'location-1',
+          lotNumber: null,
+          serialNumber: 'SN-001',
+          quantityOnHand: 0,
+          quantityAvailable: 0,
+          unitCost: 10,
+          totalValue: 0,
+        },
+        {
+          id: 'inventory-serial-2',
+          productId: 'product-1',
+          locationId: 'location-1',
+          lotNumber: null,
+          serialNumber: 'SN-002',
+          quantityOnHand: 1,
+          quantityAvailable: 1,
+          unitCost: 10,
+          totalValue: 10,
+        },
+      ])
+    )
+
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { result } = renderHook(() => useReceiveInventory(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        productId: 'product-1',
+        locationId: 'location-1',
+        quantity: 1,
+        unitCost: 10,
+        receiptReason: 'initial_stock',
+        serialNumber: 'sn-001',
+      })
+    })
+
+    const data = queryClient.getQueryData<ReturnType<typeof inventoryList>>(listKey)
+    expect(data?.items).toMatchObject([
+      { id: 'inventory-serial-1', quantityOnHand: 1, quantityAvailable: 1, totalValue: 10 },
+      { id: 'inventory-serial-2', quantityOnHand: 1, quantityAvailable: 1, totalValue: 10 },
+    ])
   })
 
   it('surfaces receive validation guidance instead of a generic failure toast', async () => {
