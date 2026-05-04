@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildPriceImportRowData } from '@/server/functions/suppliers/price-imports';
+import {
+  buildPriceImportRowData,
+  parsePriceImportRowData,
+} from '@/server/functions/suppliers/price-imports';
 
 describe('supplier price import row normalization', () => {
   it('maps template headers to the price import schema field names', () => {
@@ -63,6 +66,53 @@ describe('supplier price import row normalization', () => {
       currency: 'AUD',
       discountType: 'percentage',
       discountValue: '0',
+      status: 'active',
+    });
+  });
+
+  it('normalizes whitespace and CRLF artifacts from import cells before schema validation', () => {
+    const headers = [
+      'Supplier Code',
+      'Supplier Name',
+      'Product Name',
+      'Product SKU',
+      'Base Price',
+      'Currency',
+      'Discount Type',
+      'Discount Value',
+      'Min Order Qty',
+      'Max Order Qty',
+      'Effective Date',
+      'Expiry Date',
+      'Status',
+    ];
+    const row = [
+      ' SUP003 ',
+      ' Battery Cell Supply Co ',
+      ' RENOZ 300Ah Lithium Battery ',
+      ' RNZ-300 ',
+      ' 650.00 ',
+      ' AUD ',
+      ' percentage ',
+      ' 5 ',
+      ' 1 ',
+      ' 25 ',
+      ' 2026-05-01 ',
+      ' 2026-12-31 ',
+      ' active\r',
+    ];
+
+    const rowData = buildPriceImportRowData(row, headers);
+
+    expect(parsePriceImportRowData(rowData)).toMatchObject({
+      supplierCode: 'SUP003',
+      supplierName: 'Battery Cell Supply Co',
+      productName: 'RENOZ 300Ah Lithium Battery',
+      productSku: 'RNZ-300',
+      currency: 'AUD',
+      discountType: 'percentage',
+      effectiveDate: '2026-05-01',
+      expiryDate: '2026-12-31',
       status: 'active',
     });
   });

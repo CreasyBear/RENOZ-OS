@@ -314,6 +314,10 @@ function normalizeImportHeader(header: string): PriceImportColumnKey | null {
   return PRICE_IMPORT_HEADER_ALIASES[header.trim().toLowerCase().replace(/[^a-z0-9]/g, '')] ?? null;
 }
 
+function normalizeImportCell(value: string | undefined): string {
+  return value?.trim() ?? '';
+}
+
 export function buildPriceImportRowData(
   row: string[],
   headers: string[] | null
@@ -324,14 +328,14 @@ export function buildPriceImportRowData(
     headers.forEach((header, index) => {
       const key = normalizeImportHeader(header);
       if (key) {
-        rowData[key] = row[index] || '';
+        rowData[key] = normalizeImportCell(row[index]);
       }
     });
     return rowData;
   }
 
   PRICE_IMPORT_COLUMN_KEYS.forEach((key, index) => {
-    rowData[key] = row[index] || '';
+    rowData[key] = normalizeImportCell(row[index]);
   });
 
   if (!rowData.currency) rowData.currency = 'AUD';
