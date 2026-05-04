@@ -130,7 +130,12 @@ vi.mock('@/components/ui/select', () => ({
 }));
 
 vi.mock('@/components/domain/inventory/receiving/receiving-form', () => ({
-  ReceivingForm: () => <div>Receiving Form Stub</div>,
+  ReceivingForm: ({ submitError }: { submitError?: string | null }) => (
+    <div>
+      <div>Receiving Form Stub</div>
+      {submitError ? <div>{submitError}</div> : null}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/domain/inventory/receiving/receiving-history', () => ({
@@ -239,6 +244,41 @@ describe('inventory receiving location read policy', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Locations' }));
     expect(mockFetchLocations).toHaveBeenCalled();
+  });
+
+  it('uses safe receive submit copy instead of raw receive mutation errors', async () => {
+    mockUseLocations.mockReturnValue({
+      locations: [{ id: 'loc-1', code: 'MAIN', name: 'Main Warehouse' }],
+      isLoading: false,
+      locationsError: null,
+      fetchLocations: mockFetchLocations,
+    });
+    mockUseReceiveInventory.mockReturnValue({
+      mutateAsync: vi.fn(),
+      error: new Error('insert into inventory_movements violates row-level security policy'),
+    });
+
+    const { default: ReceivingPage } = await import(
+      '@/routes/_authenticated/inventory/receiving-page'
+    );
+
+    render(<ReceivingPage />);
+
+    expect(screen.getByText('Receiving Form Stub')).toBeInTheDocument();
+    expect(screen.getByText('Failed to receive inventory')).toBeInTheDocument();
+    expect(screen.queryByText(/row-level security policy/i)).not.toBeInTheDocument();
+  });
+
+  it('uses stable location unavailable copy instead of raw location read errors', async () => {
+    const {
+      getReceivingLocationsErrorMessage,
+    } = await import('@/routes/_authenticated/inventory/receiving-error-messages');
+
+    expect(
+      getReceivingLocationsErrorMessage(
+        new Error('select from warehouse_locations violates row-level security policy')
+      )
+    ).toBe('Warehouse locations are temporarily unavailable. Please refresh and try again.');
   });
 
   it('shows an unavailable mobile location state instead of no locations configured', async () => {

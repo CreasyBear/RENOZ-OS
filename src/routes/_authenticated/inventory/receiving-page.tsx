@@ -28,6 +28,10 @@ import type { ProductWithInventory } from "@/lib/schemas/products";
 import type { HookWarehouseLocation } from "@/lib/schemas/inventory";
 import type { MovementWithRelations, ListMovementsResult } from "@/lib/schemas/inventory";
 import type { receiveInventory } from "@/server/functions/inventory/receiving";
+import {
+  getReceiveSubmitError,
+  getReceivingLocationsErrorMessage,
+} from "./receiving-error-messages";
 
 // ============================================================================
 // TYPES
@@ -190,6 +194,7 @@ export default function ReceivingPage() {
     ? `Record non-PO inbound stock for ${selectedProduct.sku ? `${selectedProduct.name} (${selectedProduct.sku})` : selectedProduct.name}`
     : "Record non-PO inbound stock and update inventory levels";
   const hasUnavailableLocations = !!locationsError && !isLoadingLocations && locations.length === 0;
+  const locationsErrorMessage = getReceivingLocationsErrorMessage(locationsError);
 
   return (
     <PageLayout variant="full-width">
@@ -266,7 +271,7 @@ export default function ReceivingPage() {
                     <TriangleAlert className="h-4 w-4" />
                     <AlertTitle>Warehouse locations are temporarily unavailable</AlertTitle>
                     <AlertDescription>
-                      {locationsError.message}
+                      {locationsErrorMessage}
                       <div className="mt-3">
                         <Button variant="outline" onClick={() => void fetchLocations()}>
                           Retry Locations
@@ -286,7 +291,7 @@ export default function ReceivingPage() {
                     defaultLocationId={defaultLocation?.id}
                     defaultProductId={search.productId}
                     lockProductSelection={hasProductContext && !!selectedProduct}
-                    submitError={receiveMutation.error?.message ?? null}
+                    submitError={getReceiveSubmitError(receiveMutation.error)}
                   />
                 )}
               </div>
