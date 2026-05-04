@@ -14,7 +14,10 @@ export const costLayerReferenceTypeValues = ['purchase_order', 'adjustment', 'tr
 
 export const costLayerReferenceTypeSchema = z.enum(costLayerReferenceTypeValues);
 
-export const createCostLayerSchema = z.object({
+const costLayerQuantityBoundsMessage =
+  'Quantity remaining cannot exceed quantity received';
+
+const createCostLayerBaseSchema = z.object({
   inventoryId: z.string().uuid('Inventory item is required'),
   receivedAt: z.coerce.date(),
   quantityReceived: z.number().int().positive(),
@@ -25,13 +28,26 @@ export const createCostLayerSchema = z.object({
   expiryDate: z.coerce.date().optional(),
 });
 
+export const createCostLayerSchema = createCostLayerBaseSchema.refine(
+  (data) => data.quantityRemaining <= data.quantityReceived,
+  {
+    path: ['quantityRemaining'],
+    message: costLayerQuantityBoundsMessage,
+  }
+);
+
 export type CreateCostLayer = z.infer<typeof createCostLayerSchema>;
 
-export const costLayerSchema = createCostLayerSchema.extend({
-  id: z.string().uuid(),
-  organizationId: z.string().uuid(),
-  createdAt: z.coerce.date(),
-});
+export const costLayerSchema = createCostLayerBaseSchema
+  .extend({
+    id: z.string().uuid(),
+    organizationId: z.string().uuid(),
+    createdAt: z.coerce.date(),
+  })
+  .refine((data) => data.quantityRemaining <= data.quantityReceived, {
+    path: ['quantityRemaining'],
+    message: costLayerQuantityBoundsMessage,
+  });
 
 export type CostLayer = z.infer<typeof costLayerSchema>;
 

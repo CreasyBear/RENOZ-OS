@@ -73,4 +73,27 @@ describe('inventory valuation schema ownership', () => {
       unitCost: 42.5,
     });
   });
+
+  it('rejects cost layers with remaining quantity above received quantity', () => {
+    const result = createCostLayerSchema.safeParse({
+      inventoryId: '00000000-0000-4000-8000-000000000001',
+      receivedAt: '2026-01-01T00:00:00.000Z',
+      quantityReceived: 3,
+      quantityRemaining: 4,
+      unitCost: '42.50',
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error('Expected invalid cost-layer quantity bounds');
+    }
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['quantityRemaining'],
+          message: 'Quantity remaining cannot exceed quantity received',
+        }),
+      ])
+    );
+  });
 });
