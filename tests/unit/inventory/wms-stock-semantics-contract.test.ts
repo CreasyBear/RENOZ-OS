@@ -13,6 +13,10 @@ describe('WMS stock semantics contract', () => {
     const schema = read('src/lib/schemas/inventory/dashboard.ts');
     const wms = read('src/server/functions/inventory/wms-dashboard.ts');
 
+    expect(schema).toContain('WMS_DASHBOARD_COMPARISON_UNITS');
+    expect(schema).toContain("totalValueChange: 'percentage'");
+    expect(schema).toContain("totalUnitsChange: 'percentage'");
+    expect(schema).toContain("alertsChange: 'count'");
     expect(schema).toContain('WMS_DASHBOARD_STOCK_SEMANTICS');
     expect(schema).toContain("totals: 'physical_on_hand'");
     expect(schema).toContain("breakdowns: 'physical_on_hand'");
@@ -20,15 +24,18 @@ describe('WMS stock semantics contract', () => {
     expect(schema).toContain("previousPeriodComparison: 'movement_reconstructed_quantity'");
     expect(wms).toContain("import { allocatableStockCountSql } from './_allocatable-stock-sql';");
     expect(wms).toContain('stockSemantics: WMS_DASHBOARD_STOCK_SEMANTICS');
+    expect(wms).toContain('comparisonUnits: WMS_DASHBOARD_COMPARISON_UNITS');
     expect(wms).toContain("allocatableStockCountSql(ctx.organizationId, 'low_stock')");
     expect(wms).toContain("allocatableStockCountSql(ctx.organizationId, 'out_of_stock')");
     expect(wms).toContain('Previous period alerts are movement-reconstructed quantity signals.');
   });
 
-  it('does not show alert trend deltas unless alert semantics are comparable', () => {
+  it('does not show alert trend deltas unless alert semantics and units are comparable', () => {
     const dashboard = read('src/components/domain/inventory/unified-inventory-dashboard.tsx');
 
     expect(dashboard).toContain('const alertsComparisonIsComparable');
+    expect(dashboard).toContain('const alertsChangeCanRenderAsTrend');
+    expect(dashboard).toContain("wmsData?.comparisonUnits?.alertsChange === 'percentage'");
     expect(dashboard).toContain(
       'wmsData?.stockSemantics?.currentAlerts === wmsData?.stockSemantics?.previousPeriodComparison'
     );

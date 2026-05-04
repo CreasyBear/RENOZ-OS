@@ -67,6 +67,31 @@ export const dashboardComparisonSchema = z.object({
 });
 export type DashboardComparison = z.infer<typeof dashboardComparisonSchema>;
 
+export const WMS_DASHBOARD_COMPARISON_UNITS = {
+  totalValueChange: 'percentage',
+  totalUnitsChange: 'percentage',
+  totalSkusChange: 'count',
+  alertsChange: 'count',
+  locationsChange: 'count',
+} as const;
+
+/**
+ * WMS Dashboard comparison units.
+ * `MetricCard` trend deltas render as percentages, so count deltas need an
+ * explicit unit contract before a UI passes them into trend rendering.
+ */
+export const wmsDashboardComparisonUnitsSchema = z.object({
+  totalValueChange: z.literal(WMS_DASHBOARD_COMPARISON_UNITS.totalValueChange),
+  totalUnitsChange: z.literal(WMS_DASHBOARD_COMPARISON_UNITS.totalUnitsChange),
+  totalSkusChange: z.literal(WMS_DASHBOARD_COMPARISON_UNITS.totalSkusChange),
+  alertsChange: z.union([
+    z.literal(WMS_DASHBOARD_COMPARISON_UNITS.alertsChange),
+    z.literal('percentage'),
+  ]),
+  locationsChange: z.literal(WMS_DASHBOARD_COMPARISON_UNITS.locationsChange),
+});
+export type WMSDashboardComparisonUnits = z.infer<typeof wmsDashboardComparisonUnitsSchema>;
+
 export const WMS_DASHBOARD_STOCK_SEMANTICS = {
   totals: 'physical_on_hand',
   breakdowns: 'physical_on_hand',
@@ -95,6 +120,7 @@ export type WMSDashboardStockSemantics = z.infer<typeof wmsDashboardStockSemanti
  */
 export const wmsDashboardDataSchema = z.object({
   stockSemantics: wmsDashboardStockSemanticsSchema,
+  comparisonUnits: wmsDashboardComparisonUnitsSchema,
   totals: z.object({
     totalValue: z.number().nonnegative(),
     totalUnits: z.number().int().nonnegative(),

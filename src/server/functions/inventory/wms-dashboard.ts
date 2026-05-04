@@ -15,10 +15,12 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   DEFAULT_LOW_STOCK_THRESHOLD,
+  WMS_DASHBOARD_COMPARISON_UNITS,
   WMS_DASHBOARD_STOCK_SEMANTICS,
   type CategoryStock,
   type LocationStock,
   type RecentMovement,
+  type WMSDashboardComparisonUnits,
 } from '@/lib/schemas/inventory';
 import { withAuth } from '@/lib/server/protected';
 import { inventoryLogger } from '@/lib/logger';
@@ -468,6 +470,7 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
 
       const result = {
         stockSemantics: WMS_DASHBOARD_STOCK_SEMANTICS,
+        comparisonUnits: WMS_DASHBOARD_COMPARISON_UNITS as WMSDashboardComparisonUnits,
         totals: {
           totalValue: currentTotalValue,
           totalUnits: currentTotalUnits,

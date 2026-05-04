@@ -349,14 +349,21 @@ describe('inventory dashboard query normalization wave 3', () => {
     expect(screen.getByText('On-Hand by Location')).toBeInTheDocument();
   });
 
-  it('does not trend allocatable alerts against movement-reconstructed history', async () => {
+  it('does not render count alert deltas through percentage metric trends', async () => {
     mockUseWMSDashboard.mockReturnValueOnce({
       data: {
         stockSemantics: {
           totals: 'physical_on_hand',
           breakdowns: 'physical_on_hand',
           currentAlerts: 'allocatable_available',
-          previousPeriodComparison: 'movement_reconstructed_quantity',
+          previousPeriodComparison: 'allocatable_available',
+        },
+        comparisonUnits: {
+          totalValueChange: 'percentage',
+          totalUnitsChange: 'percentage',
+          totalSkusChange: 'count',
+          alertsChange: 'count',
+          locationsChange: 'count',
         },
         totals: { totalValue: 1200, totalUnits: 45, totalSkus: 3 },
         comparison: {
