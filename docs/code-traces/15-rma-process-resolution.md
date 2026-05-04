@@ -81,13 +81,15 @@ sequenceDiagram
 
 | Resolution | Local artifact / effect |
 |------------|-------------------------|
-| `refund` | Creates refund `order_payments` row linked to the source payment |
-| `credit` | Creates `credit_notes` row and optional application metadata |
-| `replacement` | Creates draft replacement order and line items |
-| `repair` | Completes execution without finance/replacement artifact |
-| `no_action` | Completes execution without finance/replacement artifact |
+| `refund` | Requires source payment + amount; creates or reuses refund `order_payments` row linked to the source payment; stores `refundPaymentId` |
+| `credit` | Requires amount + reason; creates or reuses `credit_notes` row and optional application metadata; stores `creditNoteId` |
+| `replacement` | Requires explicit confirmation; creates or reuses draft replacement order and line items; stores `replacementOrderId` |
+| `repair` | Completes execution without finance/replacement artifact; stores completed execution state |
+| `no_action` | Completes execution without finance/replacement artifact; stores completed execution state |
 
 The RMA stores execution state, linked artifact IDs, `processedAt` / `processedBy`, and server-built `resolutionDetails`. If execution throws, `processRma` stores a blocked execution state and leaves the RMA in `received`.
+
+Artifact links on the RMA row are canonical. `resolutionDetails` can carry useful operator notes and legacy display values, but UI proof of execution should read `execution.refundPayment`, `execution.creditNote`, and `execution.replacementOrder` from the read model.
 
 ---
 
@@ -122,6 +124,7 @@ The RMA stores execution state, linked artifact IDs, `processedAt` / `processedB
 
 - Search `processRma`, `useProcessRma` under `tests/`.
 - **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies trace and server stay aligned on `PERMISSIONS.support.update` and `executeRmaRemedy`.
+- **Guard:** `tests/unit/support/rma-remedy-execution-evidence.test.ts` verifies resolution-specific payload requirements, no-artifact remedies, artifact-link projection, and blocked-state payloads.
 - **Gap:** Database-backed process integration per resolution type; blocked execution UI state coverage beyond current dialog/state helpers.
 
 ---
