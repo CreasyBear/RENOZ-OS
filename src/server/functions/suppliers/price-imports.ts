@@ -627,8 +627,6 @@ export const executePriceImport = createServerFn({ method: "POST" })
           status: row.data.status,
           isActive: row.data.status === 'active',
           lastUpdated: new Date(),
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
         };
 
         let persistedPrice;
@@ -637,6 +635,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
             .update(priceLists)
             .set({
               ...priceValues,
+              updatedBy: ctx.user.id,
               updatedAt: new Date(),
             })
             .where(
@@ -648,7 +647,14 @@ export const executePriceImport = createServerFn({ method: "POST" })
             .returning();
           persistedPrice = updatedPrice;
         } else {
-          const [newPrice] = await db.insert(priceLists).values(priceValues).returning();
+          const [newPrice] = await db
+            .insert(priceLists)
+            .values({
+              ...priceValues,
+              createdBy: ctx.user.id,
+              updatedBy: ctx.user.id,
+            })
+            .returning();
           persistedPrice = newPrice;
         }
 

@@ -233,8 +233,6 @@ export const createPriceList = createServerFn({ method: "POST" })
       isActive: true,
       lastUpdated: new Date(),
       notes: data.notes ?? null,
-      createdBy: ctx.user.id,
-      updatedBy: ctx.user.id,
     };
 
     let result;
@@ -243,6 +241,7 @@ export const createPriceList = createServerFn({ method: "POST" })
         .update(priceLists)
         .set({
           ...priceValues,
+          updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
         .where(
@@ -253,7 +252,14 @@ export const createPriceList = createServerFn({ method: "POST" })
         )
         .returning();
     } else {
-      [result] = await db.insert(priceLists).values(priceValues).returning();
+      [result] = await db
+        .insert(priceLists)
+        .values({
+          ...priceValues,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        })
+        .returning();
     }
 
     return result;
