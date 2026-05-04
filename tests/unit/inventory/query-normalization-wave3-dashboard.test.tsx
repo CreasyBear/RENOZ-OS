@@ -259,28 +259,37 @@ describe('inventory dashboard query normalization wave 3', () => {
   });
 
   it('treats WMS and dashboard reads as shaped success states', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { useWMSDashboard } = await import('@/hooks/inventory/use-wms-dashboard');
-    const { useInventoryDashboard } = await import('@/hooks/inventory/use-inventory');
+    const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { useWMSDashboard } = await import('@/hooks/inventory/use-wms-dashboard');
+      const { useInventoryDashboard } = await import('@/hooks/inventory/use-inventory');
 
-    const wms = renderHook(() => useWMSDashboard(), {
-      wrapper: createWrapper(queryClient),
-    });
-    const dashboard = renderHook(() => useInventoryDashboard(), {
-      wrapper: createWrapper(queryClient),
-    });
+      const wms = renderHook(() => useWMSDashboard(), {
+        wrapper: createWrapper(queryClient),
+      });
+      const dashboard = renderHook(() => useInventoryDashboard(), {
+        wrapper: createWrapper(queryClient),
+      });
 
-    await waitFor(() => expect(wms.result.current.isSuccess).toBe(true));
-    await waitFor(() => expect(dashboard.result.current.isSuccess).toBe(true));
+      await waitFor(() => expect(wms.result.current.isSuccess).toBe(true));
+      await waitFor(() => expect(dashboard.result.current.isSuccess).toBe(true));
 
-    expect(wms.result.current.data).toMatchObject({
-      totals: { totalValue: 0 },
-      stockByCategory: [],
-    });
-    expect(dashboard.result.current.data).toMatchObject({
-      metrics: { totalItems: 0 },
-      topMoving: [],
-    });
+      expect(wms.result.current.data).toMatchObject({
+        totals: { totalValue: 0 },
+        stockByCategory: [],
+      });
+      expect(dashboard.result.current.data).toMatchObject({
+        metrics: { totalItems: 0 },
+        topMoving: [],
+      });
+      expect(consoleDebugSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('[useInventoryDashboard] raw-result'),
+        expect.anything()
+      );
+    } finally {
+      consoleDebugSpy.mockRestore();
+    }
   });
 
   it('normalizes WMS failures as always-shaped system errors', async () => {

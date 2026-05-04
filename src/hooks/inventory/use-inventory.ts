@@ -568,25 +568,14 @@ export function useReceiveInventory() {
 // ============================================================================
 
 /**
- * Fetch inventory dashboard metrics and top movers
- */
-/**
  * Fetch inventory dashboard metrics and top movers.
- *
- * Uses direct server function call (no useServerFn) per backup pattern -
- * matches working implementation from renoz-v3 6.
- * Throws on undefined to satisfy React Query (queryFn must not return undefined).
  */
 export function useInventoryDashboard(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.dashboard(),
     queryFn: async () => {
       return resolveReadResult(async () => {
-        const result = await getInventoryDashboard();
-        if (import.meta.env.DEV) {
-          console.debug('[useInventoryDashboard] raw-result', result);
-        }
-        return result;
+        return getInventoryDashboard();
       }, {
         message: 'Inventory dashboard returned no data',
         contractType: 'always-shaped',
