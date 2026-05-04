@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, and 9 implemented.
+Status: Closed after Issues 1, 2, 3, 4, 5, 6, 7, 8, and 9.
 
 ## Business Value
 
@@ -741,3 +741,61 @@ Verification:
 Goal adaptation: no standing goal change. This closes the remaining high-value ship-order UI extraction while preserving the route/container/hook/server/schema/cache spine.
 
 Residual risk: the dialog still carries the mutation orchestration and recovery flow, but that is now an explicit boundary rather than incidental UI bloat. Any next order sprint should move to a new high-risk workflow instead of splitting the dialog further by default.
+
+## Sprint Closeout Audit
+
+Completion audit:
+
+- Objective: make fulfillment operator workflows safer and easier to reason about across picking, shipment actions, shipment documents, pending shipment completion, import/recovery, ship-order item selection, shipping-cost amendment recovery, shipment address selection, carrier entry, and final confirmation review.
+- Deliverables checked: issue ledger, issue closeout logs, focused tests, lint evidence, broad orders test evidence, typecheck evidence, and residual-risk notes.
+- Evidence inspected: `src/components/domain/orders/fulfillment/shipment-list.tsx`, `src/components/domain/orders/fulfillment/pick-items-dialog.tsx`, `src/components/domain/orders/fulfillment/shipment-document-actions.tsx`, `src/hooks/orders/use-shipment-document-actions.ts`, `src/hooks/orders/use-pending-shipment-completion.ts`, `src/components/domain/orders/fulfillment/shipment-card-details.tsx`, `src/components/domain/orders/fulfillment/fulfillment-import-dialog.tsx`, `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`, `src/components/domain/orders/fulfillment/ship-order-item-selection.ts`, `src/components/domain/orders/fulfillment/ship-order-address-workflow.ts`, `src/components/domain/orders/fulfillment/ship-order-carrier-workflow.ts`, `src/hooks/orders/use-shipment-shipping-cost-amendment.ts`, and the unit tests listed in each issue.
+
+Touched domains: orders fulfillment UI, shipment action hooks, shipment document actions, pending shipment completion, shipment import workflow, ship-order item/serial selection, address selection, carrier/review UI, order amendment recovery, order/shipment mutation error normalization.
+
+Workflow protected: fulfillment dashboard/order detail -> fulfillment action surface -> focused UI/hook boundary -> order or shipment mutation -> existing server/schema/database behavior -> centralized query/cache contracts -> operator-safe success, partial-success, blocked, retry, failed, empty, and review states.
+
+Business value protected: operators should have clearer fulfillment actions under pressure: picking errors do not leak raw implementation text, shipment document generation is isolated, pending shipment drafts can be recovered safely, shipment cards are easier to review, imports have their own workflow boundary, ship-order inventory/serial/address/carrier decisions are explicit, and partial shipment/shipping-cost recovery states are honest.
+
+Architecture standards checked:
+
+- domain ownership: fulfillment-specific UI, helpers, and hooks now own their workflow responsibilities instead of accumulating inside `shipment-list.tsx`, `fulfillment-dashboard.tsx`, or `ship-order-dialog.tsx`
+- route/container boundary: fulfillment route and order detail route behavior were not changed; this sprint worked below the route layer inside established fulfillment surfaces
+- hook boundary: document actions, pending shipment completion, and shipping-cost amendment recovery moved into orders-owned hooks where they coordinate mutations and operator feedback
+- server/schema/database boundary: shipment creation, picking, mark-shipped, document generation, import, amendment, address, and inventory side effects were intentionally preserved unless a slice explicitly noted otherwise
+- query/cache contract: Sprint 4's fulfillment cache contracts were preserved; this sprint did not introduce literal query keys or new cache invalidation policy
+- tenant isolation: no tenant-scoped server query or database write path was widened; changed surfaces continue to route through existing authenticated hooks/server functions
+- inventory/finance integrity: serialized item selection, pending-draft reservation exclusion, and shipping-cost amendment partial-success recovery now have clearer boundaries and focused tests
+- UI honesty: empty, reserved, failed, blocked, partial, pending, partial-success, and confirmation states are more explicit at the operator surface
+
+Smells removed:
+
+- high-traffic fulfillment actions leaked or reused inconsistent raw error text
+- shipment document actions, pending completion, card details, and import behavior were mixed into large presentation components
+- `ship-order-dialog.tsx` mixed item-selection reducers, address derivation, carrier constants, shipping-cost amendment sequencing, final review rendering, and mutation orchestration
+- shipping-cost amendment failure could look like an ordinary shipment failure instead of an honest partial-success recovery state
+- ship-order item, address, and carrier helper contracts lacked focused tests
+
+Smells deferred:
+
+- `ship-order-dialog.tsx` still owns create-shipment, optional mark-shipped, amendment recovery, and success/failure orchestration; this is now an explicit mutation spine rather than incidental UI bloat
+- browser QA for the full fulfillment workflow was skipped because these slices were focused structural/operator-safety changes with unit coverage and unchanged server behavior
+- database-backed integration coverage for full fulfillment workflows remains deferred to a future hardening sprint
+- support/RMA/warranty closeout, remedy database integration, and cross-domain recovery visibility remain outside this orders fulfillment sprint
+
+Verification:
+
+- Issue 1 focused operator-safe error tests, lint, full orders suite, and typecheck recorded above
+- Issue 2 focused shipment document tests, lint, full orders suite, and typecheck recorded above
+- Issue 3 focused pending shipment completion tests, lint, full orders suite, and typecheck recorded above
+- Issue 4 focused shipment card detail tests, lint, full orders suite, and typecheck recorded above
+- Issue 5 focused fulfillment import tests, lint, full orders suite, and typecheck recorded above
+- Issue 6 focused ship-order item selection tests, lint, full orders suite, and typecheck recorded above
+- Issue 7 focused shipping-cost amendment tests, lint, full orders suite, and typecheck recorded above
+- Issue 8 focused ship-order address tests, lint, full orders suite, and typecheck recorded above
+- Issue 9 focused ship-order carrier tests, lint, full orders suite, and typecheck recorded above
+
+Gates skipped: browser QA was skipped for each slice because the sprint was a domain-boundary, helper-contract, and operator-safety pass with unchanged server behavior. End-to-end fulfillment QA remains useful before a production release that changes business behavior.
+
+Goal adaptations made or declined: no standing goal change. Sprint 5 confirms the goal's product-owner posture should keep treating fulfillment as an operator-safety and architecture-cleanliness domain where UI boundaries, recovery states, mutation contracts, and cache behavior must be explicit.
+
+Residual risk: Sprint 5 closed the highest-value fulfillment UI modularity debt exposed after the Sprint 4 cache work, but it did not prove complete fulfillment behavior in a real browser or database-backed workflow. The next sprint should leave orders fulfillment and move to another high-risk business workflow, with support/RMA/warranty remedy closeout and database-backed recovery evidence as the strongest candidates.
