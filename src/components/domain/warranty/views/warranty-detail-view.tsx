@@ -12,18 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WarrantyActivityTabPanels } from '@/components/domain/warranty/views/warranty-activity-tab-panels';
 import { WarrantyDetailDialogs } from '@/components/domain/warranty/views/warranty-detail-dialogs';
 import { WarrantyDetailHeaderSection } from '@/components/domain/warranty/views/warranty-detail-header-section';
-import { WarrantyExtensionHistory } from '@/components/domain/warranty/views/warranty-extension-history';
+import { WarrantyDetailOverviewTab } from '@/components/domain/warranty/views/warranty-detail-overview-tab';
 import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
 import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
 import { WarrantyCertificateStatusCard } from '@/components/domain/warranty/views/warranty-certificate-status-card';
 import { WarrantyClaimsHistoryCard } from '@/components/domain/warranty/views/warranty-claims-history-card';
 import { WarrantyCoverageSummary } from '@/components/domain/warranty/views/warranty-coverage-summary';
-import { WarrantyLineageSections } from '@/components/domain/warranty/views/warranty-lineage-sections';
 import { WarrantyNotificationSettingsCard } from '@/components/domain/warranty/views/warranty-notification-settings-card';
-import { WarrantyQuickAnswerStrip } from '@/components/domain/warranty/views/warranty-quick-answer-strip';
 import { WarrantySidebarSummaryCards } from '@/components/domain/warranty/views/warranty-sidebar-summary-cards';
 import {
-  WarrantyServiceMissionControl,
   WarrantyServiceSystemCard,
 } from '@/components/domain/warranty/views/warranty-service-linkage';
 import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
@@ -202,30 +199,15 @@ export function WarrantyDetailView({
 
           {activeTab === 'overview' && (
             <TabsContent value="overview" className="mt-4">
-              <div className="space-y-6">
-                <WarrantyQuickAnswerStrip
-                  warranty={warranty}
-                  daysUntilExpiry={daysUntilExpiry}
-                />
-
-                <WarrantyServiceMissionControl warranty={warranty} />
-
-                <WarrantyLineageSections
-                  warranty={warranty}
-                  daysUntilExpiry={daysUntilExpiry}
-                />
-
-                <WarrantyExtensionHistory
-                  warrantyId={warranty.id}
-                  originalExpiryDate={warranty.expiryDate}
-                  onExtendClick={() => onExtendDialogOpenChange(true)}
-                  showExtendButton={false}
-                  extensions={extensions}
-                  isLoading={isExtensionsLoading}
-                  isError={isExtensionsError}
-                  onRetry={onRetryExtensions}
-                />
-              </div>
+              <WarrantyDetailOverviewTab
+                warranty={warranty}
+                daysUntilExpiry={daysUntilExpiry}
+                extensions={extensions}
+                isExtensionsLoading={isExtensionsLoading}
+                isExtensionsError={isExtensionsError}
+                onRetryExtensions={onRetryExtensions}
+                onExtendDialogOpenChange={onExtendDialogOpenChange}
+              />
             </TabsContent>
           )}
 
