@@ -22,17 +22,71 @@ import {
 // IMPORT VALIDATION
 // ============================================================================
 
+function parseNonNegativeDecimal(value: string, fieldName: string, ctx: z.RefinementCtx): number {
+  const normalized = value.replace(/[$,]/g, '').trim();
+  const parsed = Number.parseFloat(normalized);
+
+  if (!normalized || !Number.isFinite(parsed)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must be a valid number`,
+    });
+    return z.NEVER;
+  }
+
+  if (parsed < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must be 0 or greater`,
+    });
+    return z.NEVER;
+  }
+
+  return parsed;
+}
+
+function parseOptionalPositiveInteger(
+  value: string | undefined,
+  fieldName: string,
+  ctx: z.RefinementCtx
+): number | undefined {
+  const normalized = value?.trim() ?? '';
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (!/^\d+$/.test(normalized)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must be a whole number`,
+    });
+    return z.NEVER;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  if (parsed < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must be at least 1`,
+    });
+    return z.NEVER;
+  }
+
+  return parsed;
+}
+
 const priceImportRowSchema = z.object({
   supplierCode: z.string().min(1),
   supplierName: z.string().optional(),
   productName: z.string().min(1),
   productSku: z.string().optional(),
-  basePrice: z.string().transform(val => parseFloat(val.replace(/[$,]/g, ''))),
+  basePrice: z.string().transform((val, ctx) => parseNonNegativeDecimal(val, 'Base price', ctx)),
   currency: z.string().default('AUD'),
   discountType: z.enum(['percentage', 'fixed', 'volume']).default('percentage'),
-  discountValue: z.string().default('0').transform(val => parseFloat(val || '0')),
-  minOrderQty: z.string().optional().transform(val => val ? parseInt(val) : undefined),
-  maxOrderQty: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+  discountValue: z.string().default('0').transform((val, ctx) => parseNonNegativeDecimal(val || '0', 'Discount value', ctx)),
+  minOrderQty: z.string().optional().transform((val, ctx) => parseOptionalPositiveInteger(val, 'Minimum order quantity', ctx)),
+  maxOrderQty: z.string().optional().transform((val, ctx) => parseOptionalPositiveInteger(val, 'Maximum order quantity', ctx)),
   effectiveDate: z.string().optional(),
   expiryDate: z.string().optional(),
   status: z.enum(['active', 'inactive']).default('active'),
@@ -175,6 +229,10 @@ export function buildPriceImportRowData(
   return rowData;
 }
 
+export function parsePriceImportRowData(rowData: Partial<PriceImportRowData>) {
+  return priceImportRowSchema.parse(rowData);
+}
+
 // ============================================================================
 // IMPORT FUNCTIONS
 // ============================================================================
@@ -206,7 +264,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
         // Create object from headers or indexed columns (string values before schema parse)
         const rowData = buildPriceImportRowData(row, headers);
 
-        const validatedRow = priceImportRowSchema.parse(rowData);
+        const validatedRow = parsePriceImportRowData(rowData);
         const effectiveDate = validatedRow.effectiveDate ?? new Date().toISOString().split('T')[0];
         const resolution = await resolveImportRow({
           organizationId: ctx.organizationId,
