@@ -14,18 +14,13 @@
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
 import {
-  ChevronLeft,
   User,
   Calendar,
   Tag,
   AlertTriangle,
-  ArrowDown,
   MessageSquare,
   FileText,
   Package,
-  Play,
-  CheckCircle,
-  Pause,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 
@@ -49,6 +44,7 @@ import {
 } from './issue-options';
 import { IssueActionsCard } from './issue-actions-card';
 import { IssueCustomerContextSidebar } from './issue-customer-context-sidebar';
+import { getIssueHeaderActions } from './issue-header-actions';
 import { IssueRelatedTab } from './issue-related-tab';
 import { IssueRemedyCard } from './issue-remedy-card';
 import { getIssueDetailActionPolicy } from './issue-detail-action-policy';
@@ -155,68 +151,13 @@ export function IssueDetailView({
         issue.serialNumber
     ),
   });
-  const primaryAction =
-    actionPolicy.primaryAction === 'start'
-      ? {
-          label: 'Start Working',
-          onClick: () => actions.onStatusChange('in_progress'),
-          icon: <Play className="h-4 w-4" aria-hidden="true" />,
-          disabled: isUpdatePending,
-        }
-      : actionPolicy.primaryAction === 'resolve'
-        ? {
-            label: 'Resolve',
-            onClick: () => actions.onStatusChange('resolved'),
-            icon: <CheckCircle className="h-4 w-4" aria-hidden="true" />,
-            disabled: isUpdatePending,
-          }
-        : actionPolicy.primaryAction === 'close'
-          ? {
-              label: 'Close Issue',
-              onClick: () => actions.onStatusChange('closed'),
-              icon: <CheckCircle className="h-4 w-4" aria-hidden="true" />,
-              disabled: isUpdatePending,
-            }
-          : undefined;
-
-  const secondaryActions = [
-    {
-      label: 'Back to Issues',
-      onClick: actions.onBack,
-      icon: <ChevronLeft className="h-4 w-4" aria-hidden="true" />,
-    },
-    ...(actionPolicy.canDeEscalate
-      ? [
-          {
-            label: 'De-escalate',
-            onClick: () => actions.onStatusChange('in_progress'),
-            icon: <ArrowDown className="h-4 w-4" aria-hidden="true" />,
-            disabled: isUpdatePending || isDeEscalatePending,
-          },
-        ]
-      : []),
-    ...(actionPolicy.canHold
-      ? [
-          {
-            label: 'Put On Hold',
-            onClick: () => actions.onStatusChange('on_hold'),
-            icon: <Pause className="h-4 w-4" aria-hidden="true" />,
-            disabled: isUpdatePending,
-          },
-        ]
-      : []),
-    ...(actionPolicy.canEscalate
-      ? [
-          {
-            label: 'Escalate',
-            onClick: () => actions.onStatusChange('escalated'),
-            icon: <AlertTriangle className="h-4 w-4" aria-hidden="true" />,
-            disabled: isUpdatePending,
-            destructive: true,
-          },
-        ]
-      : []),
-  ];
+  const { primaryAction, secondaryActions } = getIssueHeaderActions({
+    actionPolicy,
+    onBack: actions.onBack,
+    onStatusChange: actions.onStatusChange,
+    isUpdatePending,
+    isDeEscalatePending,
+  });
 
   return (
     <div className="space-y-6">

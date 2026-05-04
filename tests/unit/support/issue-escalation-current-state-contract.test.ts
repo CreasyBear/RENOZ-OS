@@ -23,6 +23,7 @@ describe('issue escalation current-state contract', () => {
   it('routes issue detail de-escalation through the dedicated workflow', () => {
     const detailHook = read('src/hooks/support/use-issue-detail.ts');
     const detailView = read('src/components/domain/support/issues/issue-detail-view.tsx');
+    const headerActions = read('src/components/domain/support/issues/issue-header-actions.tsx');
 
     expect(detailHook).toContain('useDeEscalateIssue');
     expect(detailHook).toContain("issue?.status === 'escalated' && newStatus === 'in_progress'");
@@ -30,6 +31,8 @@ describe('issue escalation current-state contract', () => {
     expect(detailHook).toContain("action: 'de_escalate'");
 
     expect(detailView).toContain("isEscalated={escalationDialogMode === 'de_escalate'}");
-    expect(detailView).toContain('De-escalate');
+    expect(detailView).toContain('getIssueHeaderActions');
+    expect(headerActions).toContain('De-escalate');
+    expect(headerActions).toContain("onStatusChange('in_progress')");
   });
 });
