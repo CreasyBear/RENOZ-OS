@@ -39,4 +39,19 @@ describe('inventory location permission contract', () => {
     expect(source).toContain('eq(inventory.organizationId, ctx.organizationId)');
     expect(source).toContain('leftJoin(');
   });
+
+  it('keeps location mutation writes and hierarchy checks organization-scoped', () => {
+    const source = read('src/server/functions/inventory/locations.ts');
+
+    expect(source).toContain(
+      'where(and(eq(locations.id, id), eq(locations.organizationId, ctx.organizationId)))'
+    );
+    expect(source).toContain(
+      'where(and(eq(locations.id, data.id), eq(locations.organizationId, ctx.organizationId)))'
+    );
+    expect(source).toContain('WHERE parent_id = ${id}');
+    expect(source).toContain('AND organization_id = ${ctx.organizationId}');
+    expect(source).toContain('WHERE wl.organization_id = ${ctx.organizationId}');
+    expect(source).toContain('eq(warehouseLocations.organizationId, ctx.organizationId)');
+  });
 });

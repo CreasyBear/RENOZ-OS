@@ -403,7 +403,7 @@ export const updateLocation = createServerFn({ method: 'POST' })
       const [loc] = await tx
         .update(locations)
         .set(updateValues)
-        .where(eq(locations.id, id))
+        .where(and(eq(locations.id, id), eq(locations.organizationId, ctx.organizationId)))
         .returning();
 
       return [loc];
@@ -447,7 +447,9 @@ export const deleteLocation = createServerFn({ method: 'POST' })
       );
     }
 
-    await db.delete(locations).where(eq(locations.id, data.id));
+    await db
+      .delete(locations)
+      .where(and(eq(locations.id, data.id), eq(locations.organizationId, ctx.organizationId)));
 
     return { success: true };
   });
@@ -671,10 +673,15 @@ export const updateWarehouseLocation = createServerFn({ method: 'POST' })
       const descendants = await db.execute<{ id: string }>(
         sql`
           WITH RECURSIVE descendants AS (
-            SELECT id FROM warehouse_locations WHERE parent_id = ${id}
+            SELECT id
+            FROM warehouse_locations
+            WHERE parent_id = ${id}
+              AND organization_id = ${ctx.organizationId}
             UNION ALL
-            SELECT wl.id FROM warehouse_locations wl
+            SELECT wl.id
+            FROM warehouse_locations wl
             JOIN descendants d ON wl.parent_id = d.id
+            WHERE wl.organization_id = ${ctx.organizationId}
           )
           SELECT id FROM descendants WHERE id = ${data.parentId}
         `
@@ -695,7 +702,12 @@ export const updateWarehouseLocation = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
         version: sql`${warehouseLocations.version} + 1`,
       })
-      .where(eq(warehouseLocations.id, id))
+      .where(
+        and(
+          eq(warehouseLocations.id, id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return { location };
@@ -728,7 +740,12 @@ export const deleteWarehouseLocation = createServerFn({ method: 'POST' })
     const [childCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(warehouseLocations)
-      .where(eq(warehouseLocations.parentId, data.id));
+      .where(
+        and(
+          eq(warehouseLocations.parentId, data.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
+        )
+      );
 
     if ((childCount?.count ?? 0) > 0) {
       throw new ConflictError(
@@ -736,7 +753,14 @@ export const deleteWarehouseLocation = createServerFn({ method: 'POST' })
       );
     }
 
-    await db.delete(warehouseLocations).where(eq(warehouseLocations.id, data.id));
+    await db
+      .delete(warehouseLocations)
+      .where(
+        and(
+          eq(warehouseLocations.id, data.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
+        )
+      );
 
     return { success: true };
   });
