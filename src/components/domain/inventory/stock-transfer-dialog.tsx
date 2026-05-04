@@ -23,6 +23,7 @@ import {
 } from "@/lib/schemas/inventory/stock-transfer-form";
 import { Label } from "@/components/ui/label";
 import type { WarehouseLocation } from "@/hooks/inventory/use-locations";
+import { getStockTransferSubmitError } from "./stock-action-error-messages";
 
 // ============================================================================
 // TYPES
@@ -108,11 +109,7 @@ export function StockTransferDialog({
         form.reset();
         onClose();
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("Failed to transfer inventory");
-        }
+        setError(getStockTransferSubmitError(err));
       }
     },
     onSubmitInvalid: () => {

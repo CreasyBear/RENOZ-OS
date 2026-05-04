@@ -24,6 +24,7 @@ import {
   createStockAdjustmentFormSchema,
   type StockAdjustmentFormValues,
 } from "@/lib/schemas/inventory/stock-adjustment-form";
+import { getStockAdjustmentSubmitError } from "./stock-action-error-messages";
 
 // ============================================================================
 // TYPES
@@ -127,11 +128,7 @@ export function StockAdjustmentDialog({
         form.reset();
         onClose();
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("Failed to adjust inventory");
-        }
+        setError(getStockAdjustmentSubmitError(err));
       }
     },
     onSubmitInvalid: () => {
