@@ -15,7 +15,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
-import { INVENTORY_SORT_FIELDS } from "@/lib/schemas/inventory/inventory";
+import { INVENTORY_SORT_FIELDS } from "@/lib/schemas/inventory";
 
 // ============================================================================
 // LAZY LOADED PAGE COMPONENT

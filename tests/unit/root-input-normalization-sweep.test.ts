@@ -4,7 +4,7 @@ import { listSuppliersSchema } from '@/lib/schemas/suppliers';
 import {
   inventoryValuationQuerySchema,
   locationListQuerySchema,
-} from '@/lib/schemas/inventory/inventory';
+} from '@/lib/schemas/inventory';
 import {
   opportunityListQuerySchema,
   pipelineMetricsQuerySchema,

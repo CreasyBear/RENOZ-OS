@@ -16,24 +16,6 @@ import {
 import type { FlexibleJson, JsonValue } from '../_shared/patterns';
 import { locationAddressSchema } from './locations';
 
-export {
-  createLocationSchema,
-  locationFilterSchema,
-  locationListCursorQuerySchema,
-  locationListQuerySchema,
-  locationSchema,
-  updateLocationSchema,
-} from './locations';
-export type {
-  CreateLocation,
-  Location,
-  LocationAddress,
-  LocationFilter,
-  LocationListCursorQuery,
-  LocationListQuery,
-  UpdateLocation,
-} from './locations';
-
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
 // ============================================================================

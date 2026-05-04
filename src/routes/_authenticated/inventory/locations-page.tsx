@@ -32,8 +32,8 @@ import type {
   LocationDetailApiResult,
   CreateWarehouseLocationInput,
   UpdateWarehouseLocationInput,
-} from "@/lib/schemas/inventory/inventory";
-import { locationTypeSchema } from "@/lib/schemas/inventory/inventory";
+} from "@/lib/schemas/inventory";
+import { locationTypeSchema } from "@/lib/schemas/inventory";
 import {
   useLocationHierarchy,
   useLocationDetail,
