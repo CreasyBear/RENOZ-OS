@@ -18,6 +18,13 @@ import { isReadQueryError } from '@/lib/read-path-policy';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import type { BulkReceiptData, PODetailsWithSerials } from '@/lib/schemas/procurement/procurement-types';
 
+const PRODUCT_SERIALIZATION_FALLBACK_MESSAGE =
+  'Product serialization requirements are temporarily unavailable. Please refresh and try again.';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -87,7 +94,23 @@ export function BulkReceivingDialogContainer({
     serializationMap,
     isLoading: isProductLoading,
     hasErrors: hasProductErrors,
+    errors: productSerializationErrors = [],
+    refetchErroredProducts = () => {},
   } = useProductSerialization(productIds, open);
+
+  const productLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    poQueries.forEach((query) => {
+      query.data?.items?.forEach((item) => {
+        if (!item.productId) return;
+        labels.set(
+          item.productId,
+          item.productName ?? item.productSku ?? item.productId
+        );
+      });
+    });
+    return labels;
+  }, [poQueries]);
 
   // Build PO details with serialization info
   const poDetailsWithSerials = useMemo<PODetailsWithSerials[]>(() => {
@@ -147,22 +170,42 @@ export function BulkReceivingDialogContainer({
 
   // Show error state if any PO failed to load
   if (hasErrors && open) {
-    const errorMessages = poErrors
+    const poErrorMessages = poErrors
       .map((errorItem) => {
         const po = purchaseOrders.find((p) => p.id === errorItem.poId);
-        const error = errorItem.error instanceof Error ? errorItem.error.message : 'Unknown error';
+        const error = getErrorMessage(
+          errorItem.error,
+          'Purchase order details are temporarily unavailable. Please refresh and try again.'
+        );
         return po ? `${po.poNumber}: ${error}` : error;
       })
       .filter(Boolean);
 
-    const firstError = poErrors[0]?.error instanceof Error 
-      ? poErrors[0].error.message 
-      : 'Unknown error';
+    const productErrorMessages = productSerializationErrors
+      .map((errorItem) => {
+        const productLabel = productLabels.get(errorItem.productId) ?? errorItem.productId;
+        const error = getErrorMessage(
+          errorItem.error,
+          PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
+        );
+        return `${productLabel}: ${error}`;
+      })
+      .filter(Boolean);
+
+    const errorMessages = [...poErrorMessages, ...productErrorMessages];
+    const firstError = getErrorMessage(
+      poErrors[0]?.error ?? productSerializationErrors[0]?.error,
+      hasProductErrors
+        ? PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
+        : 'Purchase order details are temporarily unavailable. Please refresh and try again.'
+    );
     const missingPurchaseOrders = poErrors.filter(
       (errorItem) => isReadQueryError(errorItem.error) && errorItem.error.failureKind === 'not-found'
     );
     const title =
-      missingPurchaseOrders.length > 0 && missingPurchaseOrders.length === poErrors.length
+      hasProductErrors && !hasPOErrors
+        ? 'Product serialization requirements could not be loaded'
+        : missingPurchaseOrders.length > 0 && missingPurchaseOrders.length === poErrors.length
         ? 'Some purchase orders could not be found'
         : 'Failed to load purchase order details';
 
@@ -184,6 +227,7 @@ export function BulkReceivingDialogContainer({
                   query.refetch();
                 }
               });
+              refetchErroredProducts();
             }}
           />
         }

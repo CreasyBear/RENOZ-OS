@@ -149,13 +149,16 @@ vi.mock('@/components/shared/error-state', () => ({
   ErrorState: ({
     title,
     message,
+    onRetry,
   }: {
     title?: string;
     message: string;
+    onRetry?: () => void;
   }) => (
     <div>
       <div>{title}</div>
       <div>{message}</div>
+      {onRetry ? <button onClick={onRetry}>Retry</button> : null}
     </div>
   ),
 }));
@@ -214,6 +217,8 @@ describe('purchase-order consumer normalization wave 3d', () => {
       serializationMap: new Map(),
       isLoading: false,
       hasErrors: false,
+      errors: [],
+      refetchErroredProducts: vi.fn(),
     });
   });
 
@@ -366,5 +371,72 @@ describe('purchase-order consumer normalization wave 3d', () => {
 
     expect(screen.getByText('Some purchase orders could not be found')).toBeInTheDocument();
     expect(screen.getByText('PO-100: The requested purchase order could not be found.')).toBeInTheDocument();
+  });
+
+  it('blocks bulk receiving when product serialization requirements cannot be loaded safely', async () => {
+    const refetchErroredProducts = vi.fn();
+    mockUseBulkPurchaseOrders.mockReturnValueOnce({
+      queries: [
+        {
+          data: {
+            items: [
+              {
+                id: 'po-item-1',
+                productId: 'product-1',
+                productName: 'RENOZ LFP Module',
+                quantityPending: 1,
+              },
+            ],
+          },
+          isError: false,
+          refetch: vi.fn(),
+        },
+      ],
+      isLoading: false,
+      hasErrors: false,
+      errors: [],
+    });
+    mockUseProductSerialization.mockReturnValueOnce({
+      serializationMap: new Map(),
+      isLoading: false,
+      hasErrors: true,
+      errors: [
+        {
+          productId: 'product-1',
+          error: new Error(
+            'Product serialization requirements are temporarily unavailable. Please refresh and try again.'
+          ),
+        },
+      ],
+      refetchErroredProducts,
+    });
+
+    const { BulkReceivingDialogContainer } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog-container'
+    );
+
+    render(
+      <BulkReceivingDialogContainer
+        open
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-100',
+          } as never,
+        ]}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Product serialization requirements could not be loaded')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'RENOZ LFP Module: Product serialization requirements are temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBeInTheDocument();
+
+    screen.getByRole('button', { name: 'Retry' }).click();
+    expect(refetchErroredProducts).toHaveBeenCalledTimes(1);
   });
 });

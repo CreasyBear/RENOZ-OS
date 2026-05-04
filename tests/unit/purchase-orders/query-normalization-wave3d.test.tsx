@@ -11,6 +11,7 @@ const mockUpdatePurchaseOrderCost = vi.fn();
 const mockDeletePurchaseOrderCost = vi.fn();
 const mockCalculateAllocatedCosts = vi.fn();
 const mockGetPurchaseOrder = vi.fn();
+const mockGetProduct = vi.fn();
 
 vi.mock('@/server/functions/suppliers', () => ({
   listPurchaseOrderReceipts: (...args: unknown[]) => mockListPurchaseOrderReceipts(...args),
@@ -24,6 +25,10 @@ vi.mock('@/server/functions/suppliers', () => ({
 
 vi.mock('@/server/functions/suppliers/purchase-orders', () => ({
   getPurchaseOrder: (...args: unknown[]) => mockGetPurchaseOrder(...args),
+}));
+
+vi.mock('@/server/functions/products/products', () => ({
+  getProduct: (...args: unknown[]) => mockGetProduct(...args),
 }));
 
 function createWrapper(queryClient: QueryClient) {
@@ -58,6 +63,12 @@ describe('purchase-order query normalization wave 3d', () => {
       poNumber: 'PO-100',
       status: 'ordered',
       items: [],
+    });
+    mockGetProduct.mockResolvedValue({
+      product: {
+        id: 'product-1',
+        isSerialized: true,
+      },
     });
   });
 
@@ -167,6 +178,32 @@ describe('purchase-order query normalization wave 3d', () => {
       failureKind: 'not-found',
       contractType: 'detail-not-found',
       message: 'The requested purchase order could not be found.',
+    });
+  });
+
+  it('normalizes product serialization requirement failures for safe receiving', async () => {
+    mockGetProduct.mockRejectedValueOnce({
+      message: 'product read failed',
+      statusCode: 503,
+      code: 'INTERNAL_ERROR',
+    });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useProductSerialization } = await import(
+      '@/hooks/purchase-orders/use-product-serialization'
+    );
+
+    const { result } = renderHook(() => useProductSerialization(['product-1']), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current.hasErrors).toBe(true));
+    expect(result.current.errors).toHaveLength(1);
+    expect(result.current.errors[0]?.error).toMatchObject({
+      failureKind: 'system',
+      contractType: 'detail-not-found',
+      message:
+        'Product serialization requirements are temporarily unavailable. Please refresh and try again.',
     });
   });
 });

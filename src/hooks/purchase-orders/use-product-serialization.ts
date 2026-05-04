@@ -11,6 +11,7 @@
 import { useQueries } from '@tanstack/react-query';
 import { getProduct } from '@/server/functions/products/products';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type { GetProductResponse } from '@/lib/schemas/products';
 
 // ============================================================================
@@ -20,6 +21,11 @@ import type { GetProductResponse } from '@/lib/schemas/products';
 export interface ProductSerializationMap {
   get(productId: string): boolean | undefined;
   has(productId: string): boolean;
+}
+
+export interface ProductSerializationError {
+  productId: string;
+  error: Error;
 }
 
 // ============================================================================
@@ -41,11 +47,24 @@ export function useProductSerialization(
   serializationMap: ProductSerializationMap;
   isLoading: boolean;
   hasErrors: boolean;
+  errors: ProductSerializationError[];
+  refetchErroredProducts: () => void;
 } {
   const productQueries = useQueries({
     queries: productIds.map((productId) => ({
       queryKey: queryKeys.products.detail(productId),
-      queryFn: async (): Promise<GetProductResponse> => getProduct({ data: { id: productId } }),
+      queryFn: async (): Promise<GetProductResponse> => {
+        try {
+          return await getProduct({ data: { id: productId } });
+        } catch (error) {
+          throw normalizeReadQueryError(error, {
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Product serialization requirements are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'A product on this purchase order could not be found.',
+          });
+        }
+      },
       enabled: enabled && !!productId,
       staleTime: 60 * 1000,
     })),
@@ -62,10 +81,26 @@ export function useProductSerialization(
 
   const isLoading = productQueries.some((query) => query.isLoading);
   const hasErrors = productQueries.some((query) => query.isError);
+  const errors = productQueries
+    .map((query, index) => ({
+      productId: productIds[index],
+      error: query.error,
+    }))
+    .filter((item): item is ProductSerializationError => Boolean(item.productId && item.error));
+
+  const refetchErroredProducts = () => {
+    productQueries.forEach((query) => {
+      if (query.isError) {
+        query.refetch();
+      }
+    });
+  };
 
   return {
     serializationMap,
     isLoading,
     hasErrors,
+    errors,
+    refetchErroredProducts,
   };
 }
