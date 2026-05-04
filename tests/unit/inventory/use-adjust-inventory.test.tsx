@@ -179,4 +179,62 @@ describe('useAdjustInventory', () => {
       { id: 'inventory-row-a', quantityOnHand: 1, quantityAvailable: 1, totalValue: 10 },
     ])
   })
+
+  it('refreshes exact affected detail and operational stock surfaces after adjustment', async () => {
+    mockAdjustInventory.mockResolvedValue({
+      item: { id: 'inventory-row-a' },
+      affectedInventoryIds: ['inventory-row-a'],
+      movement: { id: 'movement-1' },
+      message: 'Inventory adjusted successfully',
+    })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { useAdjustInventory } = await import('@/hooks/inventory/use-inventory')
+    const { result } = renderHook(() => useAdjustInventory(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        inventoryId: 'inventory-row-a',
+        productId: 'product-1',
+        locationId: 'location-1',
+        adjustmentQty: -1,
+        reason: 'damaged',
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-row-a'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-row-a'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.details(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.dashboard(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.wmsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.valuationAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availabilityAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    })
+  })
 })

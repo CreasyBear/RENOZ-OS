@@ -57,6 +57,18 @@ interface ReceivePatchCandidate {
   serialNumber?: string | null;
 }
 
+interface InventoryMutationItemIdentity {
+  id?: string | null;
+  serialNumber?: string | null;
+}
+
+interface InventoryStockMutationResult {
+  affectedInventoryIds?: string[] | null;
+  item?: InventoryMutationItemIdentity | null;
+  sourceItem?: InventoryMutationItemIdentity | null;
+  destinationItem?: InventoryMutationItemIdentity | null;
+}
+
 function normalizeReceiveScopeValue(value?: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -89,41 +101,99 @@ function matchesReceiveInventoryScope(
   return itemLot === receiveLot;
 }
 
-function invalidateReceiveInventoryQueries(
+function collectAffectedInventoryIds(result?: InventoryStockMutationResult | null): string[] {
+  const ids = new Set<string>();
+
+  result?.affectedInventoryIds?.forEach((id) => {
+    if (id) ids.add(id);
+  });
+
+  [result?.item, result?.sourceItem, result?.destinationItem].forEach((item) => {
+    if (item?.id) ids.add(item.id);
+  });
+
+  return Array.from(ids);
+}
+
+function mutationResultTouchesSerializedInventory(
+  result?: InventoryStockMutationResult | null
+): boolean {
+  return [result?.item, result?.sourceItem, result?.destinationItem].some((item) =>
+    Boolean(normalizeReceiveScopeValue(item?.serialNumber))
+  );
+}
+
+function invalidateAffectedInventoryDetails(
   queryClient: ReturnType<typeof useQueryClient>,
-  variables: ReceiveInventoryInput
+  result?: InventoryStockMutationResult | null
+) {
+  const affectedInventoryIds = collectAffectedInventoryIds(result);
+
+  if (affectedInventoryIds.length === 0) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+    return;
+  }
+
+  affectedInventoryIds.forEach((inventoryId) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.detail(inventoryId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.costLayersDetail(inventoryId) });
+  });
+}
+
+function invalidateProductInventoryQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  productId: string
+) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.detail(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.inventory(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.inventoryStats(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.stockAlerts(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.movementsForProduct(productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.movementsAggregatedForProduct(productId),
+  });
+}
+
+function invalidateInventoryStockMutationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  {
+    productId,
+    result,
+    touchesSerializedInventory = false,
+    includeMovements = false,
+  }: {
+    productId: string;
+    result?: InventoryStockMutationResult | null;
+    touchesSerializedInventory?: boolean;
+    includeMovements?: boolean;
+  }
 ) {
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+  invalidateAffectedInventoryDetails(queryClient, result);
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availabilityAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
-  if (variables.serialNumber) {
+  if (includeMovements) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
+  }
+  if (touchesSerializedInventory || mutationResultTouchesSerializedInventory(result)) {
     queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
   }
 
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.detail(variables.productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.inventory(variables.productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.inventoryStats(variables.productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.stockAlerts(variables.productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.movementsForProduct(variables.productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.movementsAggregatedForProduct(variables.productId),
-  });
+  invalidateProductInventoryQueries(queryClient, productId);
 }
 
 /**
@@ -276,13 +346,13 @@ export function useAdjustInventory() {
       });
       toast.error(formatInventoryMutationError(error, 'Failed to adjust inventory'));
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       toast.success('Inventory adjusted successfully');
 
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        productId: variables.productId,
+        result: data,
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
@@ -376,13 +446,14 @@ export function useTransferInventory() {
       });
       toast.error(formatInventoryMutationError(error, 'Failed to transfer inventory'));
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       toast.success('Inventory transferred successfully');
 
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        productId: variables.productId,
+        result: data,
+        touchesSerializedInventory: (variables.serialNumbers?.length ?? 0) > 0,
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
@@ -519,8 +590,13 @@ export function useReceiveInventory() {
     onSuccess: () => {
       toast.success('Inventory received successfully');
     },
-    onSettled: (_data, _error, variables) => {
-      invalidateReceiveInventoryQueries(queryClient, variables);
+    onSettled: (data, _error, variables) => {
+      invalidateInventoryStockMutationQueries(queryClient, {
+        productId: variables.productId,
+        result: data,
+        touchesSerializedInventory: Boolean(variables.serialNumber),
+        includeMovements: true,
+      });
     },
   });
 }

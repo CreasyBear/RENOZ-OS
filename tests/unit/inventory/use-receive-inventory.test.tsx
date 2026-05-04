@@ -117,6 +117,12 @@ describe('useReceiveInventory', () => {
       queryKey: queryKeys.inventory.lists(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.details(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
