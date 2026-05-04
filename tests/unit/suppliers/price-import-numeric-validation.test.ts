@@ -32,6 +32,12 @@ describe('supplier price import numeric validation', () => {
     expect(() => parsePriceImportRowData({ ...baseRow, discountValue: 'ten' })).toThrow(
       /Discount value must be a valid number/
     );
+    expect(() => parsePriceImportRowData({ ...baseRow, basePrice: '12abc' })).toThrow(
+      /Base price must be a valid number/
+    );
+    expect(() => parsePriceImportRowData({ ...baseRow, discountValue: '10%' })).toThrow(
+      /Discount value must be a valid number/
+    );
     expect(() => parsePriceImportRowData({ ...baseRow, minOrderQty: '1.5' })).toThrow(
       /Minimum order quantity must be a whole number/
     );

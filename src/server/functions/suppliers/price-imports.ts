@@ -24,7 +24,7 @@ import {
 
 function parseNonNegativeDecimal(value: string, fieldName: string, ctx: z.RefinementCtx): number {
   const normalized = value.replace(/[$,]/g, '').trim();
-  const parsed = Number.parseFloat(normalized);
+  const parsed = Number(normalized);
 
   if (!normalized || !Number.isFinite(parsed)) {
     ctx.addIssue({
