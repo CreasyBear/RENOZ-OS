@@ -1272,9 +1272,10 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
     // 2. Calculate weighted average unit cost from receive movements up to that point
     // 3. Multiply quantity * average cost to get historical inventory value
     const previousPeriodDays = periodDays;
-    const previousPeriodStart = periodDays * 2;
-    const previousPeriodEnd = periodDays;
-    const previousPeriodEndDate = sql`NOW() - INTERVAL '1 day' * ${previousPeriodEnd}`;
+    const previousPeriodStartDaysAgo = periodDays * 2;
+    const previousPeriodEndDaysAgo = periodDays;
+    const previousPeriodStartDate = sql`NOW() - INTERVAL '1 day' * ${previousPeriodStartDaysAgo}`;
+    const previousPeriodEndDate = sql`NOW() - INTERVAL '1 day' * ${previousPeriodEndDaysAgo}`;
     const previousTurnoverByProduct = await db.execute<{
       productId: string;
       turnoverRate: number;
@@ -1288,8 +1289,8 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
           WHERE organization_id = ${ctx.organizationId}
             AND movement_type IN ('pick', 'ship')
             AND quantity < 0
-            AND created_at >= ${previousPeriodEndDate}
-            AND created_at < NOW() - INTERVAL '1 day' * ${previousPeriodStart}
+            AND created_at >= ${previousPeriodStartDate}
+            AND created_at < ${previousPeriodEndDate}
             ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
           GROUP BY product_id
         ),
@@ -1378,8 +1379,10 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
     const trendInterval = periodDays === 30 ? 7 : periodDays === 90 ? 30 : 90; // weeks for 30d, months for 90d, quarters for 365d
 
     for (let i = 3; i >= 0; i--) {
-      const periodStart = periodDays - (i + 1) * trendInterval;
-      const periodEnd = periodDays - i * trendInterval;
+      const trendWindowStartDaysAgo = (i + 1) * trendInterval;
+      const trendWindowEndDaysAgo = i * trendInterval;
+      const trendWindowStartDate = sql`NOW() - INTERVAL '1 day' * ${trendWindowStartDaysAgo}`;
+      const trendWindowEndDate = sql`NOW() - INTERVAL '1 day' * ${trendWindowEndDaysAgo}`;
 
       const trendCogsResult = await db.execute<{ cogs: number }>(
         sql`
@@ -1388,8 +1391,8 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
           WHERE organization_id = ${ctx.organizationId}
             AND movement_type IN ('pick', 'ship')
             AND quantity < 0
-            AND created_at >= NOW() - INTERVAL '1 day' * ${periodEnd}
-            AND created_at < NOW() - INTERVAL '1 day' * ${periodStart}
+            AND created_at >= ${trendWindowStartDate}
+            AND created_at < ${trendWindowEndDate}
             ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
         `
       );
