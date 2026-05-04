@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to support-owned issue, RMA, warranty, and remedy workflows.
 
-Status: Issue 1 implemented; remaining issues stay in the ledger.
+Status: Issues 1 and 2 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -68,8 +68,8 @@ Observed support/RMA paths:
 
 ### What Is Fragile
 
-- RMA traces 14, 15, and 18 still describe old bare-auth and metadata-only behavior.
-- `updateRmaSchema` still allows `inspectionNotes`, `resolution`, and `resolutionDetails`, creating two write paths beside `receiveRma` and `processRma`.
+- RMA trace freshness now has guards, but future behavior changes still need trace updates in the same slice.
+- `updateRmaSchema` now rejects `inspectionNotes`, `resolution`, and `resolutionDetails`, so receipt inspection and remedy resolution have dedicated workflow owners.
 - Bulk approve still needs permission posture revalidation against single approve.
 - Remedy execution has high business stakes and spans support, orders, finance, inventory, and replacement workflows.
 - Warranty, issue, and RMA read paths are broad enough that stale traces can mislead future maintainers.
@@ -77,8 +77,8 @@ Observed support/RMA paths:
 ### What Needs Revalidation
 
 - Whether `bulkApproveRma` should require the same `PERMISSIONS.support.update` contract as `approveRma`.
-- Whether `updateRma` should stop accepting `inspectionNotes`, `resolution`, and `resolutionDetails` once dedicated workflow RPCs own those fields.
-- Whether traces 14/15/18 match current server behavior, mutation envelopes, cache invalidation, and remedy side effects.
+- Whether future direct `updateRma` callers need migration guidance for receipt inspection and remedy resolution edits.
+- Whether future RMA trace changes continue to match server behavior, mutation envelopes, cache invalidation, and remedy side effects.
 - Whether process-remedy execution has enough tests for refund, credit, replacement, repair, and blocked states.
 - Whether support issue closure clearly reflects RMA/remedy execution state for operators.
 
@@ -260,7 +260,7 @@ Smells removed:
 
 Deferred:
 
-- `updateRma` still accepts workflow-owned `inspectionNotes`, `resolution`, and `resolutionDetails`
+- future direct `updateRma` callers still need to use `receiveRma` or `processRma` for workflow-owned fields
 - bulk approve permission parity still needs revalidation
 - database-backed process integration by resolution type remains future coverage
 
@@ -272,4 +272,44 @@ Verification:
 
 Goal adaptation: no goal change; this starts the Support/RMA/Warranty sprint with a trace-first contract correction before behavior changes.
 
-Residual risk: this slice makes maintainer evidence match current code, but it does not prove remedy execution correctness against a real database or settle the `updateRma` field-boundary problem.
+Residual risk: this slice makes maintainer evidence match current code, but it does not prove remedy execution correctness against a real database. Issue 2 settles the `updateRma` field-boundary problem separately.
+
+### Issue 2: RMA Field Update Boundary
+
+Touched domains: RMA support schema, RMA update trace, RMA workflow trace guard, RMA mutation contract tests.
+
+Workflow protected: general RMA header patch -> strict `updateRmaSchema` -> `updateRma` support-update permission -> RMA detail/list cache refresh, with inspection state reserved for `receiveRma` and remedy resolution reserved for `processRma`.
+
+Business value: operators and future maintainers no longer have two write paths for receipt inspection or remedy closeout state, reducing the chance that support recovery appears complete without the receipt/remedy workflow actually running.
+
+Standards checked:
+
+- made `updateRmaSchema` strict for general header fields only
+- documented workflow-owned update fields in `rmaWorkflowOwnedUpdateFieldValues`
+- rejected `inspectionNotes`, `resolution`, `resolutionDetails`, and `status` on general RMA updates
+- refreshed `docs/code-traces/18-rma-field-update.md` from drift warning to current contract
+- updated the RMA trace guard to keep update trace/schema ownership aligned
+- left status transitions, RMA line items, and remedy execution behavior unchanged
+
+Smells removed:
+
+- `updateRma` could previously mutate receipt inspection in parallel with `receiveRma`
+- `updateRma` could previously mutate remedy resolution details in parallel with `processRma`
+- the field update trace still described this dual-path drift as unresolved
+
+Deferred:
+
+- optimistic locking for concurrent RMA header edits
+- migration guidance if future direct `updateRma` callers need inspection or remedy state edits
+- database-backed remedy execution coverage by resolution type remains Issue 4
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-field-update-boundary.test.ts tests/unit/support/rma-workflow-trace-contract.test.ts tests/unit/support/use-rma-mutations.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/support/rma.ts tests/unit/support/rma-field-update-boundary.test.ts tests/unit/support/rma-workflow-trace-contract.test.ts`
+- `git diff --check`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this followed the support sprint rule by closing a small field-boundary smell before broader RMA approval/remedy work.
+
+Residual risk: the schema now protects workflow ownership, but it does not add optimistic locking or prove every future caller chooses the right workflow RPC for inspection and remedy edits.
