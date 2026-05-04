@@ -519,6 +519,10 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
+    if (!supplier) {
+      throw new NotFoundError('Supplier not found', 'supplier');
+    }
+
     // Calculate totals from items
     let subtotal = 0;
     let taxAmount = 0;
@@ -634,7 +638,7 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
       metadata: {
         poNumber: po.poNumber ?? undefined,
         supplierId: po.supplierId,
-        supplierName: supplier?.name,
+        supplierName: supplier.name,
         total: Number(po.totalAmount),
         lineItemCount: data.items.length,
         status: po.status,
