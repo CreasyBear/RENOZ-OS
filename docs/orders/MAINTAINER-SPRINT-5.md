@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1 and 2 implemented.
+Status: Issues 1, 2, and 3 implemented.
 
 ## Business Value
 
@@ -113,6 +113,47 @@ Closeout criteria:
 - focused tests pass
 - lint/typecheck evidence is recorded
 
+### 3. Pending Shipment Completion Boundary
+
+Business value: completing an existing pending shipment draft is a fulfillment recovery workflow that should be reviewable independently from shipment card rendering, tracking history, document generation, and delivery confirmation.
+
+Workflow invariant: pending shipment completion must keep its form state, validation, mark-shipped mutation, idempotency key generation, success/failure toasts, and pending-dialog guards in a focused hook/component boundary while `ShipmentList` remains responsible for listing shipments and opening the workflow.
+
+Affected files:
+
+- `src/hooks/orders/shipment-action-errors.ts`
+- `src/hooks/orders/use-pending-shipment-completion.ts`
+- `src/hooks/orders/use-shipment-document-actions.ts`
+- `src/hooks/orders/index.ts`
+- `src/components/domain/orders/fulfillment/pending-shipment-completion-dialog.tsx`
+- `src/components/domain/orders/fulfillment/index.ts`
+- `src/components/domain/orders/fulfillment/shipment-list.tsx`
+- `tests/unit/orders/shipment-list.test.tsx`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing mark-shipped server behavior
+- changing shipment cache invalidation
+- changing shipment document actions
+- splitting shipment tracking, item display, delivery confirmation, or card rendering
+- extracting fulfillment import or shipping-dialog behavior
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/shipment-list.test.tsx
+```
+
+Closeout criteria:
+
+- pending shipment completion form/mutation logic leaves `shipment-list.tsx`
+- pending shipment completion dialog UI lives in a focused fulfillment component
+- shipment action error fallback helper is shared outside document-specific hooks
+- existing mark-shipped dialog behavior remains covered by shipment-list tests
+- focused tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Fulfillment Action Operator-Safe Errors
@@ -195,3 +236,45 @@ Verification:
 Goal adaptation: no standing goal change. This applies the goal's modularity standard to an operator-facing fulfillment UI by extracting a workflow responsibility without changing behavior.
 
 Residual risk: the next Sprint 5 slice should continue reducing large-file risk, either by extracting pending shipment completion from `shipment-list.tsx` or by isolating the fulfillment import workflow from `fulfillment-dashboard.tsx`.
+
+### Issue 3: Pending Shipment Completion Boundary
+
+Touched domains: orders fulfillment UI, shipment mutation hook usage, shipment action error handling, shipment-list regression tests.
+
+Workflow protected: shipment list -> pending shipment completion dialog -> mark-shipped mutation -> shipment inventory/cache contract from Sprint 4 -> operator-safe success or fallback error toast.
+
+Business value: pending shipment drafts can still be completed from the shipment list, but the completion workflow is now isolated from shipment card rendering. This makes future changes to carrier/tracking/cost validation or completion copy smaller and safer.
+
+Standards checked:
+
+- extracted `usePendingShipmentCompletion` into the orders hook layer to own completion form state, validation, mark-shipped mutation, idempotency key creation, and success/error toasts
+- extracted `PendingShipmentCompletionDialog` into the fulfillment component layer to own dialog fields, pending guards, and completion controls
+- moved `getShipmentActionErrorMessage` into `shipment-action-errors.ts` so mark-shipped and document actions share an action-error contract without depending on each other
+- kept `ShipmentList` responsible for list/card orchestration and opening the completion workflow
+- kept mark-shipped server behavior and cache invalidation unchanged
+
+Smells removed:
+
+- `shipment-list.tsx` owned pending shipment form state, validation, mutation calls, idempotency key creation, pending-dialog guards, and dialog UI
+- mark-shipped error fallback depended on a document-action hook helper
+- shipment completion workflow was colocated with document actions, tracking history, item display, and delivery confirmation rendering
+
+Deferred:
+
+- `shipment-list.tsx` still owns tracking history, item display, delivery confirmation, and card layout
+- `fulfillment-dashboard.tsx` still owns fulfillment import and dashboard presentation in one large file
+- `ship-order-dialog.tsx` remains a large workflow-heavy dialog
+- browser QA was skipped because this extraction is covered by focused component tests and does not alter server behavior
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/shipment-list.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/orders/shipment-action-errors.ts src/hooks/orders/use-pending-shipment-completion.ts src/hooks/orders/use-shipment-document-actions.ts src/hooks/orders/index.ts src/components/domain/orders/fulfillment/pending-shipment-completion-dialog.tsx src/components/domain/orders/fulfillment/index.ts src/components/domain/orders/fulfillment/shipment-list.tsx tests/unit/orders/shipment-list.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/orders/order-client-contracts.test.ts tests/unit/orders/shipment-list.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+- `git diff --check -- docs/orders/MAINTAINER-SPRINT-5.md src/hooks/orders/shipment-action-errors.ts src/hooks/orders/use-pending-shipment-completion.ts src/hooks/orders/use-shipment-document-actions.ts src/hooks/orders/index.ts src/components/domain/orders/fulfillment/pending-shipment-completion-dialog.tsx src/components/domain/orders/fulfillment/index.ts src/components/domain/orders/fulfillment/shipment-list.tsx tests/unit/orders/shipment-list.test.tsx`
+
+Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by turning another operator workflow inside `shipment-list.tsx` into an explicit hook/component boundary.
+
+Residual risk: the next Sprint 5 slice should either extract shipment tracking/item display from `shipment-list.tsx` or move to the higher-risk `fulfillment-dashboard.tsx` import workflow.

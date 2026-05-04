@@ -6,7 +6,7 @@
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-SHIPPING-UI)
  */
 
-import { memo, useMemo, useState } from "react";
+import { memo } from "react";
 import {
   Package,
   Truck,
@@ -16,7 +16,6 @@ import {
   MapPin,
   ExternalLink,
   RotateCcw,
-  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -29,20 +28,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  createPendingDialogInteractionGuards,
-  createPendingDialogOpenChangeHandler,
-} from "@/components/ui/dialog-pending-guards";
 import {
   Accordion,
   AccordionContent,
@@ -55,16 +40,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { fromCents, toCents } from "@/lib/currency";
 import { cn } from "@/lib/utils";
-import { useMarkShipped, useOrderShipments } from "@/hooks/orders";
-import { toastError, toastSuccess } from "@/hooks";
-import {
-  getShipmentActionErrorMessage,
-  useShipmentDocumentActions,
-} from "@/hooks/orders/use-shipment-document-actions";
+import { useOrderShipments } from "@/hooks/orders";
+import { usePendingShipmentCompletion } from "@/hooks/orders/use-pending-shipment-completion";
+import { useShipmentDocumentActions } from "@/hooks/orders/use-shipment-document-actions";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
 import { SerialNumbersList } from "../components/serial-numbers-list";
+import { PendingShipmentCompletionDialog } from "./pending-shipment-completion-dialog";
 import { ShipmentDocumentActions } from "./shipment-document-actions";
 
 // ============================================================================
@@ -75,13 +57,6 @@ export interface ShipmentListProps {
   orderId: string;
   onConfirmDelivery?: (shipmentId: string) => void;
   className?: string;
-}
-
-interface PendingShipmentCompletionForm {
-  carrier: string;
-  carrierService: string;
-  trackingNumber: string;
-  shippingCost: string;
 }
 
 // ============================================================================
@@ -138,82 +113,8 @@ export const ShipmentList = memo(function ShipmentList({
   className,
 }: ShipmentListProps) {
   const { data: shipments, isLoading, error } = useOrderShipments(orderId);
-  const markShippedMutation = useMarkShipped();
   const shipmentDocumentActions = useShipmentDocumentActions();
-  const [pendingShipmentId, setPendingShipmentId] = useState<string | null>(null);
-  const [completionForm, setCompletionForm] = useState<PendingShipmentCompletionForm>({
-    carrier: "",
-    carrierService: "",
-    trackingNumber: "",
-    shippingCost: "",
-  });
-  const pendingShipment = useMemo(
-    () => shipments?.find((shipment) => shipment.id === pendingShipmentId) ?? null,
-    [pendingShipmentId, shipments]
-  );
-  const pendingInteractionGuards = createPendingDialogInteractionGuards(
-    markShippedMutation.isPending
-  );
-  const handlePendingShipmentDialogOpenChange = createPendingDialogOpenChangeHandler(
-    markShippedMutation.isPending,
-    (nextOpen) => {
-      if (!nextOpen) {
-        closePendingShipmentCompletion();
-      }
-    }
-  );
-
-  const openPendingShipmentCompletion = (shipment: NonNullable<typeof shipments>[number]) => {
-    setPendingShipmentId(shipment.id);
-    setCompletionForm({
-      carrier: shipment.carrier ?? "",
-      carrierService: shipment.carrierService ?? "",
-      trackingNumber: shipment.trackingNumber ?? "",
-      shippingCost:
-        shipment.shippingCost != null ? fromCents(shipment.shippingCost).toFixed(2) : "",
-    });
-  };
-
-  const closePendingShipmentCompletion = () => {
-    if (markShippedMutation.isPending) return;
-    setPendingShipmentId(null);
-  };
-
-  const handlePendingShipmentCompletion = async () => {
-    if (!pendingShipment) return;
-
-    const carrier = completionForm.carrier.trim();
-    if (!carrier) {
-      toastError("Enter a carrier before marking the shipment as shipped.");
-      return;
-    }
-
-    let shippingCost: number | undefined;
-    const shippingCostValue = completionForm.shippingCost.trim();
-    if (shippingCostValue) {
-      const parsed = Number(shippingCostValue);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        toastError("Enter a valid shipping cost.");
-        return;
-      }
-      shippingCost = toCents(parsed);
-    }
-
-    try {
-      await markShippedMutation.mutateAsync({
-        id: pendingShipment.id,
-        idempotencyKey: `shipment-mark-shipped:${pendingShipment.id}:${Date.now()}`,
-        carrier,
-        carrierService: completionForm.carrierService.trim() || undefined,
-        trackingNumber: completionForm.trackingNumber.trim() || undefined,
-        shippingCost,
-      });
-      toastSuccess(`Shipment ${pendingShipment.shipmentNumber} marked as shipped.`);
-      setPendingShipmentId(null);
-    } catch (error) {
-      toastError(getShipmentActionErrorMessage(error, "Unable to mark shipment as shipped."));
-    }
-  };
+  const pendingShipmentCompletion = usePendingShipmentCompletion(shipments);
 
   if (isLoading) {
     return (
@@ -333,7 +234,7 @@ export const ShipmentList = memo(function ShipmentList({
                 {shipment.status === "pending" ? (
                   <Button
                     size="sm"
-                    onClick={() => openPendingShipmentCompletion(shipment)}
+                    onClick={() => pendingShipmentCompletion.open(shipment)}
                   >
                     <Truck className="h-4 w-4 mr-2" />
                     Mark Shipped
@@ -487,125 +388,14 @@ export const ShipmentList = memo(function ShipmentList({
       })}
       </div>
 
-      <Dialog
-        open={!!pendingShipment}
-        onOpenChange={handlePendingShipmentDialogOpenChange}
-      >
-        <DialogContent
-          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
-          onInteractOutside={pendingInteractionGuards.onInteractOutside}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {pendingShipment
-                ? `Complete ${pendingShipment.shipmentNumber}`
-                : "Complete shipment"}
-            </DialogTitle>
-            <DialogDescription>
-              Finalize this pending shipment draft without creating a new shipment.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="pending-shipment-carrier">Carrier</Label>
-              <Input
-                id="pending-shipment-carrier"
-                value={completionForm.carrier}
-                onChange={(event) =>
-                  setCompletionForm((current) => ({
-                    ...current,
-                    carrier: event.target.value,
-                  }))
-                }
-                placeholder="Enter carrier name"
-                disabled={markShippedMutation.isPending}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="pending-shipment-service">Service</Label>
-                <Input
-                  id="pending-shipment-service"
-                  value={completionForm.carrierService}
-                  onChange={(event) =>
-                    setCompletionForm((current) => ({
-                      ...current,
-                      carrierService: event.target.value,
-                    }))
-                  }
-                  placeholder="Optional service"
-                  disabled={markShippedMutation.isPending}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="pending-shipment-tracking">Tracking Number</Label>
-                <Input
-                  id="pending-shipment-tracking"
-                  value={completionForm.trackingNumber}
-                  onChange={(event) =>
-                    setCompletionForm((current) => ({
-                      ...current,
-                      trackingNumber: event.target.value,
-                    }))
-                  }
-                  placeholder="Optional tracking number"
-                  disabled={markShippedMutation.isPending}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pending-shipment-cost">Actual Shipping Cost ($)</Label>
-              <Input
-                id="pending-shipment-cost"
-                type="number"
-                min="0"
-                step="0.01"
-                value={completionForm.shippingCost}
-                onChange={(event) =>
-                  setCompletionForm((current) => ({
-                    ...current,
-                    shippingCost: event.target.value,
-                  }))
-                }
-                placeholder="0.00"
-                disabled={markShippedMutation.isPending}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closePendingShipmentCompletion}
-              disabled={markShippedMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handlePendingShipmentCompletion}
-              disabled={markShippedMutation.isPending}
-            >
-              {markShippedMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Marking Shipped...
-                </>
-              ) : (
-                <>
-                  <Truck className="h-4 w-4 mr-2" />
-                  Mark Shipped
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PendingShipmentCompletionDialog
+        shipment={pendingShipmentCompletion.pendingShipment}
+        form={pendingShipmentCompletion.form}
+        isPending={pendingShipmentCompletion.isPending}
+        onClose={pendingShipmentCompletion.close}
+        onSubmit={pendingShipmentCompletion.submit}
+        onFormChange={pendingShipmentCompletion.updateForm}
+      />
     </>
   );
 });

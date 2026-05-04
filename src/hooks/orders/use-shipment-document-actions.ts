@@ -4,17 +4,7 @@ import {
   useGenerateShipmentPackingSlip,
 } from '@/hooks/documents';
 import { toastError, toastSuccess } from '@/hooks';
-import {
-  getClientErrorMessage,
-  normalizeShipmentMutationError,
-} from './order-mutation-client-errors';
-
-export function getShipmentActionErrorMessage(error: unknown, fallbackMessage: string): string {
-  return getClientErrorMessage(
-    normalizeShipmentMutationError(error, fallbackMessage),
-    fallbackMessage
-  );
-}
+import { getShipmentActionErrorMessage } from './shipment-action-errors';
 
 export interface UseShipmentDocumentActionsResult {
   generatePackingSlip: (shipmentId: string) => Promise<void>;

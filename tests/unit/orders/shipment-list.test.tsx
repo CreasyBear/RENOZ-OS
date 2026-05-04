@@ -15,6 +15,9 @@ vi.mock('resend', () => ({
 
 vi.mock('@/hooks/orders', () => ({
   useOrderShipments: (...args: unknown[]) => mockUseOrderShipments(...args),
+}));
+
+vi.mock('@/hooks/orders/use-shipments', () => ({
   useMarkShipped: () => ({
     mutateAsync: mockMarkShippedMutateAsync,
     isPending: false,

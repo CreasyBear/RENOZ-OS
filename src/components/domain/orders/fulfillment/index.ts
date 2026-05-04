@@ -24,10 +24,12 @@ export { SerialPicker } from './serial-picker';
 // ============================================================================
 export { ShipmentList } from './shipment-list';
 export { ShipmentDocumentActions } from './shipment-document-actions';
+export { PendingShipmentCompletionDialog } from './pending-shipment-completion-dialog';
 export type {
   ShipmentDocumentActionShipment,
   ShipmentDocumentActionsProps,
 } from './shipment-document-actions';
+export type { PendingShipmentCompletionDialogProps } from './pending-shipment-completion-dialog';
 
 // ============================================================================
 // DASHBOARD - Container
