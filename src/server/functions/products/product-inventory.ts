@@ -29,6 +29,7 @@ import {
   inventoryStatusValues,
   movementTypeValues,
   isValidMovementType,
+  receiveStockSchema,
 } from '@/lib/schemas/inventory';
 import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { receiveInventory } from '@/server/functions/inventory/receiving';
@@ -596,17 +597,7 @@ export const recordMovement = createServerFn({ method: 'POST' })
  * Receive stock into a location.
  */
 export const receiveStock = createServerFn({ method: 'POST' })
-  .inputValidator(
-    z.object({
-      productId: z.string().uuid(),
-      locationId: z.string().uuid(),
-      quantity: z.number().positive('Quantity must be positive'),
-      unitCost: z.number().min(0).optional(),
-      referenceType: z.string().optional(),
-      referenceId: z.string().uuid().optional(),
-      notes: z.string().optional(),
-    })
-  )
+  .inputValidator(receiveStockSchema)
   .handler(async ({ data }) => {
     return receiveInventory({
       data: {

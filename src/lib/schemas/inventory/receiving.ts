@@ -80,6 +80,24 @@ export const receiveInventorySchema = z.object({
 
 export type ReceiveInventoryInput = z.infer<typeof receiveInventorySchema>;
 
+/**
+ * Product-domain receiveStock wrapper input.
+ *
+ * This wrapper delegates to receiveInventory and keeps its legacy optional unitCost
+ * surface while the canonical receiveInventory schema enforces final stock-in rules.
+ */
+export const receiveStockSchema = z.object({
+  productId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  quantity: z.number().positive('Quantity must be positive'),
+  unitCost: z.number().min(0).optional(),
+  referenceType: z.string().optional(),
+  referenceId: z.string().uuid().optional(),
+  notes: z.string().optional(),
+});
+
+export type ReceiveStockInput = z.infer<typeof receiveStockSchema>;
+
 export function getManualReceiveSerializationIssues({
   isSerialized,
   quantity,
