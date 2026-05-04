@@ -19,6 +19,9 @@ export const serializedMutationResultSchema = z.object({
   message: z.string(),
   transition: workflowTransitionSchema.optional(),
   affectedIds: z.array(z.string().uuid()).optional(),
+  affectedInventoryIds: z.array(z.string().uuid()).optional(),
+  affectedProductIds: z.array(z.string().uuid()).optional(),
+  touchesSerializedInventory: z.boolean().optional(),
   errorsById: z.record(z.string(), z.string()).optional(),
   partialFailure: serializedMutationPartialFailureSchema.optional(),
 });

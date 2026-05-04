@@ -42,6 +42,20 @@ describe('RMA receive location contract', () => {
     expect(server).toContain('locationId: data.locationId');
   });
 
+  it('returns inventory mutation identity for post-receive cache policy', () => {
+    const server = read('src/server/functions/orders/rma.ts');
+
+    expect(server).toContain('const affectedInventoryIds = new Set<string>();');
+    expect(server).toContain('const affectedProductIds = new Set<string>();');
+    expect(server).toContain('let touchesSerializedInventory = false;');
+    expect(server).toContain('affectedProductIds.add(productId);');
+    expect(server).toContain('affectedInventoryIds.add(invRow.id);');
+    expect(server).toContain('affectedInventoryIds.add(invId);');
+    expect(server).toContain('affectedInventoryIds: result.affectedInventoryIds');
+    expect(server).toContain('affectedProductIds: result.affectedProductIds');
+    expect(server).toContain('touchesSerializedInventory: result.touchesSerializedInventory');
+  });
+
   it('keeps the RMA receive trace aligned with explicit location selection', () => {
     const trace = read('docs/code-traces/13-rma-receive-inventory.md');
 

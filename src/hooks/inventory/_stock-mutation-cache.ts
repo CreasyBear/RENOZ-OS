@@ -8,16 +8,23 @@ interface InventoryMutationItemIdentity {
 
 export interface InventoryStockMutationResult {
   affectedInventoryIds?: string[] | null;
+  affectedProductIds?: string[] | null;
+  touchesSerializedInventory?: boolean | null;
   item?: InventoryMutationItemIdentity | null;
   sourceItem?: InventoryMutationItemIdentity | null;
   destinationItem?: InventoryMutationItemIdentity | null;
 }
 
 export interface InvalidateInventoryStockMutationOptions {
-  productId: string;
+  productId?: string;
+  productIds?: string[] | null;
   result?: InventoryStockMutationResult | null;
   touchesSerializedInventory?: boolean;
   includeMovements?: boolean;
+}
+
+function uniqueIds(ids: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
 }
 
 function hasText(value?: string | null): boolean {
@@ -25,17 +32,36 @@ function hasText(value?: string | null): boolean {
 }
 
 function collectAffectedInventoryIds(result?: InventoryStockMutationResult | null): string[] {
-  const ids = new Set<string>();
+  return uniqueIds([
+    ...(result?.affectedInventoryIds ?? []),
+    result?.item?.id,
+    result?.sourceItem?.id,
+    result?.destinationItem?.id,
+  ]);
+}
 
-  result?.affectedInventoryIds?.forEach((id) => {
-    if (id) ids.add(id);
-  });
+function collectAffectedProductIds({
+  productId,
+  productIds,
+  result,
+}: Pick<InvalidateInventoryStockMutationOptions, 'productId' | 'productIds' | 'result'>): string[] {
+  return uniqueIds([
+    productId,
+    ...(productIds ?? []),
+    ...(result?.affectedProductIds ?? []),
+  ]);
+}
 
-  [result?.item, result?.sourceItem, result?.destinationItem].forEach((item) => {
-    if (item?.id) ids.add(item.id);
-  });
+function hasKnownAffectedInventoryIdentity(
+  result?: InventoryStockMutationResult | null
+): boolean {
+  return Array.isArray(result?.affectedInventoryIds);
+}
 
-  return Array.from(ids);
+function hasKnownAffectedProductIdentity(
+  result?: InventoryStockMutationResult | null
+): boolean {
+  return Array.isArray(result?.affectedProductIds);
 }
 
 function mutationResultTouchesSerializedInventory(
@@ -53,7 +79,9 @@ function invalidateAffectedInventoryDetails(
   const affectedInventoryIds = collectAffectedInventoryIds(result);
 
   if (affectedInventoryIds.length === 0) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+    if (!hasKnownAffectedInventoryIdentity(result)) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+    }
     return;
   }
 
@@ -63,24 +91,38 @@ function invalidateAffectedInventoryDetails(
   });
 }
 
-function invalidateProductInventoryQueries(queryClient: QueryClient, productId: string) {
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.detail(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.inventory(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.inventoryStats(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.stockAlerts(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.movementsForProduct(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.movementsAggregatedForProduct(productId),
+function invalidateProductInventoryQueries(
+  queryClient: QueryClient,
+  options: Pick<InvalidateInventoryStockMutationOptions, 'productId' | 'productIds' | 'result'>
+) {
+  const affectedProductIds = collectAffectedProductIds(options);
+
+  if (affectedProductIds.length === 0) {
+    if (!hasKnownAffectedProductIdentity(options.result)) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    }
+    return;
+  }
+
+  affectedProductIds.forEach((productId) => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.products.detail(productId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.products.inventory(productId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.products.inventoryStats(productId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.products.stockAlerts(productId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.products.movementsForProduct(productId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.products.movementsAggregatedForProduct(productId),
+    });
   });
 }
 
@@ -88,6 +130,7 @@ export function invalidateInventoryStockMutationQueries(
   queryClient: QueryClient,
   {
     productId,
+    productIds,
     result,
     touchesSerializedInventory = false,
     includeMovements = false,
@@ -104,9 +147,13 @@ export function invalidateInventoryStockMutationQueries(
   if (includeMovements) {
     queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
   }
-  if (touchesSerializedInventory || mutationResultTouchesSerializedInventory(result)) {
+  if (
+    touchesSerializedInventory ||
+    result?.touchesSerializedInventory ||
+    mutationResultTouchesSerializedInventory(result)
+  ) {
     queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
   }
 
-  invalidateProductInventoryQueries(queryClient, productId);
+  invalidateProductInventoryQueries(queryClient, { productId, productIds, result });
 }

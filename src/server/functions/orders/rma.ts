@@ -1089,7 +1089,11 @@ export const receiveRma = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
     const now = new Date().toISOString();
 
-    const response = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
+      const affectedInventoryIds = new Set<string>();
+      const affectedProductIds = new Set<string>();
+      let touchesSerializedInventory = false;
+
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
@@ -1212,10 +1216,12 @@ export const receiveRma = createServerFn({ method: 'POST' })
         const unitCost = Number(costPrice ?? 0);
 
         if (!productId) continue;
+        affectedProductIds.add(productId);
 
         unitsRestored += qty;
 
         if (isSerialized) {
+          touchesSerializedInventory = true;
           const serialNumber = rmaLineItem.serialNumber ? normalizeSerial(rmaLineItem.serialNumber) : null;
           if (!serialNumber?.trim()) {
             throw new ValidationError(
@@ -1261,6 +1267,7 @@ export const receiveRma = createServerFn({ method: 'POST' })
               updatedBy: ctx.user.id,
             })
             .where(eq(inventory.id, invRow.id));
+          affectedInventoryIds.add(invRow.id);
 
           const [movement] = await tx
             .insert(inventoryMovements)
@@ -1425,6 +1432,7 @@ export const receiveRma = createServerFn({ method: 'POST' })
             invLocationId = locationId;
             prevQty = 0;
           }
+          affectedInventoryIds.add(invId);
 
           const newQty = prevQty + qty;
 
@@ -1519,11 +1527,19 @@ export const receiveRma = createServerFn({ method: 'POST' })
         profile: 'summary',
       });
       response.unitsRestored = unitsRestored;
-      return response;
+      return {
+        response,
+        affectedInventoryIds: Array.from(affectedInventoryIds),
+        affectedProductIds: Array.from(affectedProductIds),
+        touchesSerializedInventory,
+      };
     });
 
-    return serializedMutationSuccess(response, `RMA ${response.rmaNumber} received.`, {
-      affectedIds: [response.id],
+    return serializedMutationSuccess(result.response, `RMA ${result.response.rmaNumber} received.`, {
+      affectedIds: [result.response.id],
+      affectedInventoryIds: result.affectedInventoryIds,
+      affectedProductIds: result.affectedProductIds,
+      touchesSerializedInventory: result.touchesSerializedInventory,
     });
   });
 

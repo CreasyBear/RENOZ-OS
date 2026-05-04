@@ -30,6 +30,7 @@ import {
   bulkApproveRma,
   bulkReceiveRma,
 } from '@/server/functions/orders/rma';
+import { invalidateInventoryStockMutationQueries } from '@/hooks/inventory/_stock-mutation-cache';
 import type {
   ListRmasInput,
   CreateRmaInput,
@@ -296,8 +297,10 @@ export function useReceiveRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
-      // Inventory restored; invalidate so lists, details, movements, dashboard refresh
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        result,
+        includeMovements: true,
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
     },
   });
@@ -330,7 +333,10 @@ export function useBulkReceiveRma() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmaDetails() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        includeMovements: true,
+        touchesSerializedInventory: true,
+      });
     },
   });
 }

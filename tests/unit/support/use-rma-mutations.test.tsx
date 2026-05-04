@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const createRmaMock = vi.fn();
 const receiveRmaMock = vi.fn();
@@ -71,10 +72,14 @@ describe('useRma mutations hardening', () => {
       id: 'rma-1',
       orderId: 'order-1',
       unitsRestored: 2,
+      affectedInventoryIds: ['inventory-return-1'],
+      affectedProductIds: ['product-return-1'],
+      touchesSerializedInventory: false,
     });
 
     const queryClient = new QueryClient();
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
     const { useReceiveRma } = await import('@/hooks/support/use-rma');
     const { result } = renderHook(() => useReceiveRma(), {
       wrapper: createWrapper(queryClient),
@@ -87,11 +92,51 @@ describe('useRma mutations hardening', () => {
       });
     });
 
+    expect(setQueryDataSpy).toHaveBeenCalledWith(
+      queryKeys.support.rmaDetail('rma-1'),
+      expect.objectContaining({ id: 'rma-1' })
+    );
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['inventory'],
+      queryKey: queryKeys.inventory.lists(),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['orders', 'detail', 'order-1'],
+      queryKey: queryKeys.inventory.detail('inventory-return-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-return-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.details(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.valuationAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availabilityAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-return-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.movementsForProduct('product-return-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
     });
   });
 
