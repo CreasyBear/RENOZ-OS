@@ -2,7 +2,7 @@
 
 This sprint follows RMA recovery UI ownership into the broader support issue workflow. The aim is to remove operator-facing support debt where workflow state, action affordances, and dashboard/list truth can drift.
 
-Status: Issues 1, 2, and 3 implemented.
+Status: Closed after Issues 1, 2, and 3.
 
 ## Business Value
 
@@ -138,3 +138,55 @@ Closeout:
 - Gates skipped: browser QA skipped because this is action policy/affordance cleanup with focused tests, not a visual redesign.
 - Goal adaptation: no standing goal change. This continues the maintainer goal by extracting workflow policy before further component splitting.
 - Residual risk: the next support cleanup should extract related context/customer sidebar rendering from `issue-detail-view.tsx`, now that workflow action policy is protected.
+
+## Sprint Closeout Audit
+
+Completion audit:
+
+- Objective: make support issue escalation state and issue-detail workflow affordances consistent, auditable, and easier to reason about.
+- Deliverables checked: Sprint 3 issue ledger, escalation/de-escalation hook and dialog changes, issue list/metrics current-state filters, generic status transition guard, board routing, action policy extraction, focused tests, targeted lint, typecheck, and support suite evidence.
+- Evidence inspected: `src/hooks/support/use-issue-detail.ts`, `src/hooks/support/use-issues.ts`, `src/components/domain/support/escalation/escalation-dialog.tsx`, `src/components/domain/support/issues/issue-detail-container.tsx`, `src/components/domain/support/issues/issue-detail-view.tsx`, `src/components/domain/support/issues/issue-detail-action-policy.ts`, `src/routes/_authenticated/support/issues-board.tsx`, `src/server/functions/support/issues.ts`, `src/server/functions/support/support-metrics.ts`, `src/lib/support/issue-status-transitions.ts`, and the Sprint 3 support tests.
+
+Touched domains: support issue detail UI, support board workflow routing, support escalation dialog, support issue hooks, support issue server functions, support metrics, support transition helpers, support UI/contract tests.
+
+Workflow protected: issue board/detail/list/dashboard -> route/container -> hook/action policy -> `updateIssue` / `escalateIssue` / `deEscalateIssue` -> `issues.status`, escalation metadata, `escalation_history` -> support query keys/cache invalidation -> current escalation filters, counts, badges, and operator actions.
+
+Business value protected: escalated support work is now auditable and operator-safe. Operators are steered into reason-capturing escalation/de-escalation flows, stale historical escalation timestamps no longer define current queues, and issue detail actions no longer advertise transitions that the server rejects.
+
+Architecture standards checked:
+
+- domain ownership: escalation state, issue status transition policy, and issue detail action policy are now support-domain contracts
+- route/container boundary: issue detail container passes hook-owned dialog state; board route redirects workflow-owned drag/drop transitions to detail instead of owning escalation mutation semantics
+- hook/server boundary: `useEscalateIssue` / `useDeEscalateIssue` own escalation cache invalidation; `updateIssue` rejects generic escalation boundary crossings
+- schema/database boundary: no schema/database changes; existing org-scoped issue and escalation tables remain the source of truth
+- query/cache contract: dedicated escalation mutations invalidate issue detail and issue list families; blocked generic transitions do not mutate caches
+- tenant isolation: all new server guard behavior runs after the existing org-scoped issue lookup and before mutation
+- UI honesty: current badges, filters, metrics, detail header actions, and sidebar actions now follow the same current-state and action-policy contracts
+
+Smells removed:
+
+- `escalatedAt` used as current queue truth instead of `status === 'escalated'`
+- issue detail de-escalation path routed through generic issue update
+- board drag/drop escalation/de-escalation skipped reason/history capture
+- generic `updateIssue` accepted workflow-owned escalation status transitions
+- issue detail header/sidebar duplicated action availability rules and exposed actions that contradicted server policy
+
+Smells deferred:
+
+- `issue-detail-view.tsx` remains large because related context, customer context, and sidebar rendering still live in the same file
+- board de-escalation routes to detail instead of opening a board-local de-escalation dialog
+- DB-backed escalation/de-escalation integration tests remain deferred to a broader server harness slice
+- browser QA was skipped and should be used before a visual redesign or release pass over support issue detail
+
+Verification:
+
+- Issue 1 focused tests, targeted lint, typecheck, and support suite evidence recorded above
+- Issue 2 focused transition contract test, targeted lint, typecheck, and support suite evidence recorded above
+- Issue 3 focused action policy test, targeted lint, typecheck, and support suite evidence recorded above
+- Final full support suite after Issue 3: 30 files / 131 tests passed
+
+Gates skipped: browser QA skipped for Sprint 3 because the work changed workflow routing, guards, and affordance policy without visual layout redesign. DB-backed integration tests skipped because current support unit harness covers pure/presentation contracts but not a full transactional issue workflow.
+
+Goal adaptations made or declined: no standing goal change. Sprint 3 reinforces the maintainer goal by converting a discovered UI smell into hook, server, route, policy, and test boundaries.
+
+Residual risk: the next support sprint should extract related context/customer sidebar rendering from `issue-detail-view.tsx` or add DB-backed escalation/de-escalation workflow tests. Do not keep adding issue-detail behavior until the remaining monolith is split around related context ownership.
