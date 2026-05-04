@@ -53,6 +53,12 @@ const PICK_UNPICK_ALLOWED_STATUSES: OrderStatus[] = [
   'shipped',
 ];
 
+interface PickingMutationAffectedInventory {
+  affectedInventoryIds: string[];
+  affectedProductIds: string[];
+  touchesSerializedInventory: boolean;
+}
+
 /**
  * Pick items from an order.
  *
@@ -160,6 +166,10 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
         canonicalLineSerials.set(allocation.lineItemId, existing);
       }
 
+      const affectedInventoryIds = new Set<string>();
+      const affectedProductIds = new Set<string>();
+      let touchesSerializedInventory = false;
+
       // Collect all existing serial numbers in the order to validate uniqueness
       const existingSerials = new Set<string>();
       for (const { lineItem } of allLineItems) {
@@ -247,6 +257,9 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
 
         const { lineItem, product } = lineItemData;
         const isSerialized = product?.isSerialized ?? false;
+        if (pickItem.qtyPicked > 0 && lineItem.productId) {
+          affectedProductIds.add(lineItem.productId);
+        }
 
         const currentPicked = Number(lineItem.qtyPicked) || 0;
         const orderedQty = Number(lineItem.quantity);
@@ -330,6 +343,9 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
                 serialNumbers: [`Serial number '${serialNumber}' is already allocated`],
               });
             }
+
+            affectedInventoryIds.add(inventoryRecord.id);
+            touchesSerializedInventory = true;
           }
         }
 
@@ -340,7 +356,7 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
             });
           }
 
-          await reserveNonSerializedPickInventory(tx, {
+          const reservationPlan = await reserveNonSerializedPickInventory(tx, {
             organizationId: ctx.organizationId,
             orderId: data.orderId,
             orderLineItemId: pickItem.lineItemId,
@@ -349,6 +365,7 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
             quantity: pickItem.qtyPicked,
             userId: ctx.user.id,
           });
+          reservationPlan.forEach((step) => affectedInventoryIds.add(step.inventoryId));
         }
 
         // Merge serial numbers (use trimmed serials for storage)
@@ -397,6 +414,10 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
               .then((rows) => rows[0]);
 
             if (!inventoryRecord) continue;
+
+            affectedInventoryIds.add(inventoryRecord.id);
+            affectedProductIds.add(lineItem.productId);
+            touchesSerializedInventory = true;
 
             const serializedItemId =
               (await findSerializedItemBySerial(tx, ctx.organizationId, serialNumber, {
@@ -473,7 +494,13 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
       return {
         lineItems: updatedLineItems,
         orderStatus: newOrderStatus,
-      };
+        affectedInventoryIds: Array.from(affectedInventoryIds),
+        affectedProductIds: Array.from(affectedProductIds),
+        touchesSerializedInventory,
+      } satisfies {
+        lineItems: typeof updatedLineItems;
+        orderStatus: OrderStatus;
+      } & PickingMutationAffectedInventory;
     });
 
     return result;
@@ -569,6 +596,7 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
               lineItemId: orderLineSerialAllocations.orderLineItemId,
               serializedItemId: orderLineSerialAllocations.serializedItemId,
               serialNumber: serializedItems.serialNumberNormalized,
+              currentInventoryId: serializedItems.currentInventoryId,
             })
             .from(orderLineSerialAllocations)
             .innerJoin(
@@ -584,12 +612,23 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
             )
         : [];
 
-      const canonicalLineSerials = new Map<string, { serializedItemId: string; serialNumber: string }[]>();
+      const canonicalLineSerials = new Map<
+        string,
+        { serializedItemId: string; serialNumber: string; currentInventoryId: string | null }[]
+      >();
       for (const alloc of canonicalAllocations) {
         const existing = canonicalLineSerials.get(alloc.lineItemId) ?? [];
-        existing.push({ serializedItemId: alloc.serializedItemId, serialNumber: normalizeSerial(alloc.serialNumber) });
+        existing.push({
+          serializedItemId: alloc.serializedItemId,
+          serialNumber: normalizeSerial(alloc.serialNumber),
+          currentInventoryId: alloc.currentInventoryId,
+        });
         canonicalLineSerials.set(alloc.lineItemId, existing);
       }
+
+      const affectedInventoryIds = new Set<string>();
+      const affectedProductIds = new Set<string>();
+      let touchesSerializedInventory = false;
 
       const updatedLineItems = [];
       for (const unpickItem of data.items) {
@@ -602,6 +641,9 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
 
         const { lineItem, product } = lineItemData;
         const isSerialized = product?.isSerialized ?? false;
+        if (unpickItem.qtyToUnpick > 0 && lineItem.productId) {
+          affectedProductIds.add(lineItem.productId);
+        }
         const currentPicked = Number(lineItem.qtyPicked) || 0;
         const currentShipped = Number(lineItem.qtyShipped) || 0;
         const pendingReserved =
@@ -625,7 +667,7 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
             });
           }
 
-          await releaseNonSerializedPickInventory(tx, {
+          const releasePlan = await releaseNonSerializedPickInventory(tx, {
             organizationId: ctx.organizationId,
             orderId: data.orderId,
             orderLineItemId: unpickItem.lineItemId,
@@ -634,6 +676,7 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
             quantity: unpickItem.qtyToUnpick,
             userId: ctx.user.id,
           });
+          releasePlan.forEach((step) => affectedInventoryIds.add(step.inventoryId));
         }
 
         const itemAllocationsRaw = canonicalLineSerials.get(unpickItem.lineItemId);
@@ -643,6 +686,7 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
             : ((lineItem.allocatedSerialNumbers as string[] | null) ?? []).map((sn) => ({
                 serializedItemId: '',
                 serialNumber: normalizeSerial(sn),
+                currentInventoryId: null,
               }));
 
         let serialsToRelease: string[];
@@ -701,10 +745,15 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
         }
 
         for (const sn of serialsToRelease) {
-          let serializedItemId = itemAllocations.find((a) => a.serialNumber === sn)?.serializedItemId;
+          const currentAllocation = itemAllocations.find((a) => a.serialNumber === sn);
+          let serializedItemId = currentAllocation?.serializedItemId;
+          let currentInventoryId = currentAllocation?.currentInventoryId ?? null;
           if (!serializedItemId && lineItem.productId) {
             const [si] = await tx
-              .select({ id: serializedItems.id })
+              .select({
+                id: serializedItems.id,
+                currentInventoryId: serializedItems.currentInventoryId,
+              })
               .from(serializedItems)
               .where(
                 and(
@@ -715,8 +764,13 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
               )
               .limit(1);
             serializedItemId = si?.id;
+            currentInventoryId = si?.currentInventoryId ?? null;
+          }
+          if (currentInventoryId) {
+            affectedInventoryIds.add(currentInventoryId);
           }
           if (serializedItemId) {
+            touchesSerializedInventory = true;
             await releaseSerializedItemAllocation(tx, {
               organizationId: ctx.organizationId,
               serializedItemId,
@@ -787,7 +841,13 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
       return {
         lineItems: updatedLineItems,
         orderStatus: newOrderStatus,
-      };
+        affectedInventoryIds: Array.from(affectedInventoryIds),
+        affectedProductIds: Array.from(affectedProductIds),
+        touchesSerializedInventory,
+      } satisfies {
+        lineItems: typeof updatedLineItems;
+        orderStatus: OrderStatus;
+      } & PickingMutationAffectedInventory;
     });
 
     return result;

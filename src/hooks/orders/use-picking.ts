@@ -21,8 +21,8 @@ export function usePickOrderItems() {
 
   return useMutation({
     mutationFn: (data: PickOrderItems) => pickOrderItems({ data }),
-    onSuccess: (_result, variables) => {
-      invalidatePickingMutationQueries(queryClient, variables.orderId);
+    onSuccess: (result, variables) => {
+      invalidatePickingMutationQueries(queryClient, variables.orderId, result);
     },
   });
 }
@@ -36,8 +36,8 @@ export function useUnpickOrderItems() {
 
   return useMutation({
     mutationFn: (data: UnpickOrderItems) => unpickOrderItems({ data }),
-    onSuccess: (_result, variables) => {
-      invalidatePickingMutationQueries(queryClient, variables.orderId);
+    onSuccess: (result, variables) => {
+      invalidatePickingMutationQueries(queryClient, variables.orderId, result);
     },
   });
 }

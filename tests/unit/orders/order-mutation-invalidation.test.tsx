@@ -209,6 +209,9 @@ describe('order mutation invalidation', () => {
     mockPickOrderItems.mockResolvedValue({
       lineItems: [],
       orderStatus: 'picking',
+      affectedInventoryIds: ['inventory-1'],
+      affectedProductIds: ['product-1'],
+      touchesSerializedInventory: true,
     })
 
     const queryClient = new QueryClient()
@@ -242,6 +245,12 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.inventory.lists(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.details(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
@@ -254,6 +263,12 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.inventory.serializedAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventoryStats('product-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
     })
   })
@@ -262,6 +277,9 @@ describe('order mutation invalidation', () => {
     mockUnpickOrderItems.mockResolvedValue({
       lineItems: [],
       orderStatus: 'confirmed',
+      affectedInventoryIds: ['inventory-2'],
+      affectedProductIds: ['product-2'],
+      touchesSerializedInventory: false,
     })
 
     const queryClient = new QueryClient()
@@ -289,9 +307,18 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.inventory.movementsAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.inventory.availableSerialsAll(),
+      queryKey: queryKeys.inventory.detail('inventory-2'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-2'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
     })
   })
