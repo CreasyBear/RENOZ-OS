@@ -36,12 +36,15 @@ vi.mock('@/server/functions/inventory', () => ({
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
-  adjustInventory: vi.fn(),
   transferInventory: vi.fn(),
   listMovements: (...args: unknown[]) => mockListMovements(...args),
   getInventoryDashboard: vi.fn().mockResolvedValue({}),
   quickSearchInventory: vi.fn().mockResolvedValue({ items: [] }),
   getAvailableSerials: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('@/server/functions/inventory/adjustments', () => ({
+  adjustInventory: vi.fn(),
 }));
 
 vi.mock('@/server/functions/inventory/receiving', () => ({

@@ -20,13 +20,13 @@ import { toast } from '../_shared/use-toast';
 import {
   listInventory,
   getInventoryItem,
-  adjustInventory,
   transferInventory,
   listMovements,
   getInventoryDashboard,
   quickSearchInventory,
   getAvailableSerials,
 } from '@/server/functions/inventory/inventory';
+import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { receiveInventory } from '@/server/functions/inventory/receiving';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {

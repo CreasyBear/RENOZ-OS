@@ -368,6 +368,7 @@ Standards checked:
 - kept existing public server-function imports unchanged
 - preserved the existing `@/server/functions/inventory/inventory` import path via re-export
 - moved direct `receiveInventory` consumers to the receiving module
+- moved direct `adjustInventory` consumers to the adjustment module
 
 Smells removed:
 
@@ -375,10 +376,10 @@ Smells removed:
 - manual receive server function and schema from `src/server/functions/inventory/inventory.ts`
 - stock adjustment server function from `src/server/functions/inventory/inventory.ts`
 - direct receive workflow imports from the monolithic inventory server module
+- direct adjustment workflow imports from the monolithic inventory server module
 
 Deferred:
 
-- moving direct `adjustInventory` consumers to the adjustment module
 - extracting transfer, allocation, and WMS/dashboard workflows
 - extracting inventory schema sections
 
@@ -387,6 +388,7 @@ Verification:
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
 Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
