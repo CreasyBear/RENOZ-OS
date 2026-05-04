@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, and 11 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes ten bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes twelve bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, and location schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, and warehouse-location schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -385,6 +385,7 @@ Sprint standards checked:
 - manual receipt reason schema ownership now lives with the receiving workflow schema helper
 - movement, stock adjustment, and transfer schemas now live with movement workflow ownership
 - location CRUD/list schemas now live with location workflow ownership
+- warehouse location hierarchy/list/create/update schemas now live with warehouse-location workflow ownership
 
 Sprint smells removed:
 
@@ -399,6 +400,7 @@ Sprint smells removed:
 - manual receipt reason schema lived in the generic inventory schema monolith instead of the receiving schema owner
 - movement, adjustment, and transfer schemas lived in the generic inventory schema monolith
 - location CRUD/list schemas lived in the generic inventory schema monolith
+- warehouse location schemas and hook/API response types lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -1071,3 +1073,44 @@ Verification:
 Goal adaptation: no goal change; this closes the residual schema-boundary risk from Issue 10 without broadening the inventory sprint.
 
 Residual risk: `src/lib/schemas/inventory/inventory.ts` remains large and still owns several unrelated schema families. This slice establishes a caller boundary, not full schema decomposition.
+
+### Issue 12: Warehouse Location Schema Ownership
+
+Touched domains: inventory schema exports, warehouse location schemas, warehouse location hook/API response types, inventory location route and server schema consumers.
+
+Workflow protected: warehouse location list/create/update/hierarchy contracts -> inventory location server workflow -> location management UI and receiving/count consumers.
+
+Business value: warehouse location contracts now live with warehouse-location ownership instead of the generic inventory schema monolith, making location hierarchy and receiving-bin behavior easier to reason about before future warehouse work.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/warehouse-locations.ts` for warehouse location type values, list/create/update schemas, API response types, hook-facing types, and hierarchy result types
+- removed warehouse location schema/type ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the warehouse-location owner through the public `@/lib/schemas/inventory` barrel
+- moved `HookWarehouseLocation` and `HookLocationHierarchy` convenience exports to the warehouse-location owner
+- added a guard that prevents warehouse location schema ownership from drifting back into `inventory.ts`
+- kept public barrel parse behavior and defaults unchanged
+
+Smells removed:
+
+- warehouse location CRUD/list schemas lived in the generic inventory schema monolith
+- hook/API response types for warehouse locations lived apart from the server workflow owner
+- Issue 10/11 still deferred warehouse-location hierarchy extraction; this resolves that deferred schema ownership smell
+
+Deferred:
+
+- broader decomposition of count, valuation, forecasting, alert, and dashboard schemas
+- behavior changes to warehouse hierarchy, capacity, pickable/receivable defaults, or import flows
+- route/component UI cleanup for warehouse location management
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/warehouse-location-schema-ownership.test.ts tests/unit/inventory/location-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-locations.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/warehouse-locations.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/warehouse-location-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/warehouse-locations.ts tests/unit/inventory/warehouse-location-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: `src/lib/schemas/inventory/inventory.ts` remains large and still owns count, valuation, forecasting, alert, and dashboard schema families.
