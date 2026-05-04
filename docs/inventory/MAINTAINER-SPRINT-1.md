@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, and 13 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes twelve bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes thirteen bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, and warehouse-location schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, and stock-count schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -386,6 +386,7 @@ Sprint standards checked:
 - movement, stock adjustment, and transfer schemas now live with movement workflow ownership
 - location CRUD/list schemas now live with location workflow ownership
 - warehouse location hierarchy/list/create/update schemas now live with warehouse-location workflow ownership
+- stock count and stock count item schemas now live with stock-count workflow ownership
 
 Sprint smells removed:
 
@@ -401,6 +402,7 @@ Sprint smells removed:
 - movement, adjustment, and transfer schemas lived in the generic inventory schema monolith
 - location CRUD/list schemas lived in the generic inventory schema monolith
 - warehouse location schemas and hook/API response types lived in the generic inventory schema monolith
+- stock count schemas and stock count item schemas lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -1114,3 +1116,42 @@ Verification:
 Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
 
 Residual risk: `src/lib/schemas/inventory/inventory.ts` remains large and still owns count, valuation, forecasting, alert, and dashboard schema families.
+
+### Issue 13: Stock Count Schema Ownership
+
+Touched domains: inventory schema exports, stock count schemas, stock count item schemas, stock count route/server consumers.
+
+Workflow protected: stock count list/create/update/item update contracts -> stock count server workflow -> count route and mutation/error handling.
+
+Business value: cycle count and inventory reconciliation contracts now live with stock-count ownership instead of the generic inventory schema monolith, making count workflow changes safer before deeper inventory integrity work.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/stock-counts.ts` for stock count status/type values, count schemas, count item schemas, relation-facing count item type, and params
+- removed stock count schema ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the stock-count owner through the public `@/lib/schemas/inventory` barrel
+- added a guard that prevents stock count schema ownership from drifting back into `inventory.ts`
+- preserved public barrel parse behavior, defaults, pagination normalization, and item update parsing
+
+Smells removed:
+
+- stock count schemas lived in the generic inventory schema monolith despite stock counts having dedicated server and hook workflows
+- stock count item schemas and relation-facing item types lived apart from count workflow ownership
+
+Deferred:
+
+- DB-backed stock count workflow integrity coverage
+- broader decomposition of valuation, forecasting, alert, and dashboard schemas
+- UI cleanup for count creation/review flows
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/stock-count-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-stock-counts.test.tsx tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/stock-counts.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/stock-count-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/stock-counts.ts tests/unit/inventory/stock-count-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: stock count schema ownership is cleaner, but count workflow correctness still depends on server/database behavior covered by future integration tests.
