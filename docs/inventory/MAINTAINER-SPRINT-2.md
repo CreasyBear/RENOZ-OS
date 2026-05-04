@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1, 2, 3, and 4 implemented.
+Status: Issues 1, 2, 3, 4, and 5 implemented.
 
 ## Business Value
 
@@ -169,6 +169,45 @@ Closeout criteria:
 - focused quality tests pass
 - lint/typecheck evidence is recorded
 
+### 5. Inventory Read Schema Ownership
+
+Business value: inventory browser, quick search, and item detail read contracts should live with the read workflow they protect so operators can trust stock visibility while future list/search/detail changes do not require editing the generic inventory entity schema or server-inline validators.
+
+Workflow invariant: inventory list/search/detail route and hooks, inventory read server functions, public inventory schema imports, and inventory query-key/cache contracts must continue to share one read-owned validation and response contract.
+
+Affected files:
+
+- `src/lib/schemas/inventory/reads.ts`
+- `src/lib/schemas/inventory/inventory.ts`
+- `src/lib/schemas/inventory/index.ts`
+- `src/server/functions/inventory/reads.ts`
+- `tests/unit/inventory/read-schema-ownership.test.ts`
+
+Out of scope:
+
+- changing inventory list/search/detail database behavior
+- changing inventory browser UI behavior
+- changing query-key key shapes or cache invalidation behavior
+- changing product/location relation mapping
+- changing the physical inventory entity schema
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/read-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory-support/query-normalization-wave6g.test.tsx
+```
+
+Closeout criteria:
+
+- inventory list/filter/sort schemas are exported from `reads.ts`
+- inventory search/detail input validators are exported from `reads.ts`
+- inventory read response and hook-facing types are exported from `reads.ts`
+- `inventory.ts` retains base stock-level entity/enums and no longer owns read/list/search/detail contracts
+- inventory read server functions import validators from the schema owner instead of declaring inline schemas
+- public `@/lib/schemas/inventory` imports remain compatible
+- focused read-path tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Movement Response Schema Ownership
@@ -324,4 +363,45 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
 
-Residual risk: `inventory.ts` still owns core inventory read/list and inventory item hook-facing misc types.
+Residual risk: later Sprint 2 work moved read/list ownership out of `inventory.ts`; remaining current residual risk is tracked in the latest closeout.
+
+### Issue 5: Inventory Read Schema Ownership
+
+Touched domains: inventory schema contracts, inventory read server validators, inventory browser route search validation, inventory list/search/detail hooks, inventory availability consumers.
+
+Workflow protected: inventory browser/search/detail route -> inventory hooks -> list/search/detail server functions -> read-owned validators and response types -> inventory query-key/cache consumers.
+
+Business value: stock visibility contracts are easier to maintain because list filters, sort fields, quick search input, detail params, and read response shapes now live with the inventory read workflow instead of being split between the generic inventory entity schema and server-inline validators.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/reads.ts` for list/filter/sort validators, quick search validator, detail params, hook-facing read filters, and read response types
+- left `src/lib/schemas/inventory/inventory.ts` focused on base stock-level entity/enums/default threshold
+- exported the read owner through the public `@/lib/schemas/inventory` barrel
+- moved quick search and detail server validators out of `src/server/functions/inventory/reads.ts`
+- added a guard that prevents read/list/search/detail contracts from drifting back into `inventory.ts` or server-inline zod declarations
+
+Smells removed:
+
+- inventory list/search/detail contracts lived in a generic catch-all schema file despite a dedicated read server module
+- quick search and detail validators were declared inline in the server read function module
+- `inventory.ts` file header still claimed location and movement ownership after those concerns had been extracted
+
+Deferred:
+
+- inventory database read behavior, relation mapping, and UI behavior are unchanged
+- query-key cache key shapes are unchanged
+- `src/lib/query-keys.ts` still has an independently declared `InventoryFilters` type that does not fully mirror `InventoryListQuery`
+- the live receive mutation input remains local to `use-inventory.ts`
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/read-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/reads.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts src/server/functions/inventory/reads.ts tests/unit/inventory/read-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md src/lib/schemas/inventory/reads.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts src/server/functions/inventory/reads.ts tests/unit/inventory/read-schema-ownership.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 2 continues narrowing ownership and cache-contract risk before behavior work.
+
+Residual risk: query-key filter typing remains a separate cache-contract owner from the read schema; receiving mutation input ownership remains a later receiving hook/server-contract cleanup.
