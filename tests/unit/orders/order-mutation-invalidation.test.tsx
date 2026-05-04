@@ -14,6 +14,8 @@ const mockUpdateShipmentStatus = vi.fn()
 const mockConfirmDelivery = vi.fn()
 const mockMarkShipped = vi.fn()
 const mockReopenShipment = vi.fn()
+const mockPickOrderItems = vi.fn()
+const mockUnpickOrderItems = vi.fn()
 
 vi.mock('@tanstack/react-start', () => ({
   useServerFn: (fn: unknown) => mockUseServerFn(fn),
@@ -37,6 +39,11 @@ vi.mock('@/server/functions/orders/order-shipments', () => ({
   markShipped: (...args: unknown[]) => mockMarkShipped(...args),
   deleteShipment: vi.fn(),
   reopenShipment: (...args: unknown[]) => mockReopenShipment(...args),
+}))
+
+vi.mock('@/server/functions/orders/order-picking', () => ({
+  pickOrderItems: (...args: unknown[]) => mockPickOrderItems(...args),
+  unpickOrderItems: (...args: unknown[]) => mockUnpickOrderItems(...args),
 }))
 
 function createWrapper(queryClient: QueryClient) {
@@ -192,6 +199,97 @@ describe('order mutation invalidation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.serializedAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    })
+  })
+
+  it('picking refreshes fulfillment and inventory reservation surfaces', async () => {
+    mockPickOrderItems.mockResolvedValue({
+      lineItems: [],
+      orderStatus: 'picking',
+    })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { usePickOrderItems } = await import('@/hooks/orders/use-picking')
+
+    const { result } = renderHook(() => usePickOrderItems(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId: 'order-1',
+        items: [{ lineItemId: 'line-1', qtyPicked: 1 }],
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.withCustomer('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.fulfillmentSummary(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.fulfillment.kanban(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availabilityAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    })
+  })
+
+  it('unpicking refreshes fulfillment and inventory reservation surfaces', async () => {
+    mockUnpickOrderItems.mockResolvedValue({
+      lineItems: [],
+      orderStatus: 'confirmed',
+    })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useUnpickOrderItems } = await import('@/hooks/orders/use-picking')
+
+    const { result } = renderHook(() => useUnpickOrderItems(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId: 'order-1',
+        items: [{ lineItemId: 'line-1', qtyToUnpick: 1 }],
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.fulfillmentSummary(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,

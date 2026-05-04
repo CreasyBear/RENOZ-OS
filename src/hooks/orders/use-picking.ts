@@ -5,21 +5,12 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/query-keys';
 import {
   pickOrderItems,
   unpickOrderItems,
 } from '@/server/functions/orders/order-picking';
 import type { PickOrderItems, UnpickOrderItems } from '@/lib/schemas/orders/picking';
-
-function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.orders.lists(),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.orders.infiniteLists(),
-  });
-}
+import { invalidatePickingMutationQueries } from './_fulfillment-cache';
 
 /**
  * Mutation hook for picking order items.
@@ -31,20 +22,7 @@ export function usePickOrderItems() {
   return useMutation({
     mutationFn: (data: PickOrderItems) => pickOrderItems({ data }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.withCustomer(variables.orderId),
-      });
-      invalidateOrderCollectionQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.fulfillment.lists(),
-      });
-      // Serial availability changes when picking — SerialPicker (useAvailableSerials) must refresh
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.inventory.availableSerialsAll(),
-      });
+      invalidatePickingMutationQueries(queryClient, variables.orderId);
     },
   });
 }
@@ -59,20 +37,7 @@ export function useUnpickOrderItems() {
   return useMutation({
     mutationFn: (data: UnpickOrderItems) => unpickOrderItems({ data }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.withCustomer(variables.orderId),
-      });
-      invalidateOrderCollectionQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.fulfillment.lists(),
-      });
-      // Released serials become available — SerialPicker (useAvailableSerials) must refresh
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.inventory.availableSerialsAll(),
-      });
+      invalidatePickingMutationQueries(queryClient, variables.orderId);
     },
   });
 }

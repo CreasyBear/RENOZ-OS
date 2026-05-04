@@ -2,7 +2,7 @@
 
 Sprint 4 moves from inventory-owned stock mutations into the orders/fulfillment seam where shipments consume, restore, reserve, and expose battery stock.
 
-Status: Issue 1 implemented.
+Status: Issues 1 and 2 implemented.
 
 ## Business Value
 
@@ -76,6 +76,42 @@ Closeout criteria:
 - focused order mutation invalidation tests pass
 - lint/typecheck evidence is recorded
 
+### 2. Picking Allocation Cache Contract
+
+Business value: picking or unpicking batteries changes inventory reservations, serialized allocations, fulfillment stage readiness, and product stock availability. Operators should not see stale fulfillment queues, stock availability, or serial picker state after a pick/unpick transaction.
+
+Workflow invariant: picking and unpicking hooks must refresh the order, fulfillment, inventory reservation, serialized, and product stock surfaces affected by `pickOrderItems`/`unpickOrderItems` server transactions.
+
+Affected files:
+
+- `src/hooks/orders/use-picking.ts`
+- `src/hooks/orders/_fulfillment-cache.ts`
+- `src/hooks/orders/use-shipments.ts`
+- `tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `docs/orders/MAINTAINER-SPRINT-4.md`
+
+Out of scope:
+
+- changing picking or unpicking server transaction behavior
+- changing picking dialog UI
+- changing mobile picking UI
+- changing draft shipment creation/deletion behavior, which was audited and already depends on order/shipment invalidation
+- invalidating valuation caches for pick/unpick reservation movements, because allocation changes availability and reservation state rather than stock value
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/order-mutation-invalidation.test.tsx
+```
+
+Closeout criteria:
+
+- order/fulfillment cache helpers are promoted from shipment-specific naming into a fulfillment cache module
+- pick and unpick hooks refresh order detail, order collections, fulfillment surfaces, inventory reservation surfaces, serialized surfaces, and product stock surfaces
+- shipment finalization cache behavior remains covered after helper promotion
+- focused order mutation invalidation tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Shipment Finalization Inventory Cache Contract
@@ -88,7 +124,7 @@ Business value: operators marking batteries shipped or reopening shipments for c
 
 Standards checked:
 
-- added an orders-owned shipment cache helper in `src/hooks/orders/_shipment-cache.ts`
+- added an orders-owned shipment cache helper, later promoted to `src/hooks/orders/_fulfillment-cache.ts` in Issue 2
 - kept cache keys centralized through `queryKeys`
 - moved repeated shipment/order/fulfillment invalidation out of `use-shipments.ts`
 - mark-shipped success now refreshes inventory, valuation, availability, available serials, serialized stock, movement, WMS/dashboard, and broad product surfaces
@@ -119,3 +155,45 @@ Verification:
 Goal adaptation: no standing goal change. Sprint 4 applies the same maintainer pattern to the next highest-risk workflow seam: orders fulfillment as an inventory/serialized/finance integration hub.
 
 Residual risk: shipment cache invalidation remains broad until the server returns affected inventory/product identities. The next Sprint 4 slice should review draft shipment reservation availability or order picking allocation caches, not large UI refactors.
+
+### Issue 2: Picking Allocation Cache Contract
+
+Touched domains: orders picking hooks, fulfillment cache policy, inventory reservation cache policy, serialized allocation cache policy, product stock cache policy.
+
+Workflow protected: fulfillment/order picking UI -> `usePickOrderItems`/`useUnpickOrderItems` -> picking server transaction -> inventory reservation and serialized allocation writes -> order, fulfillment, inventory, serialized, and product cache refresh.
+
+Business value: after an operator picks or unpicks battery stock, fulfillment queues, order detail, product inventory, available serials, and warehouse availability no longer depend on stale cached state.
+
+Standards checked:
+
+- promoted the hook cache helper to `src/hooks/orders/_fulfillment-cache.ts` so fulfillment cache policy is not shipment-only
+- kept query keys centralized through `queryKeys`
+- added `invalidatePickingMutationQueries` for pick/unpick cache policy
+- pick/unpick now refresh order detail, order collections, fulfillment list/summary/kanban, inventory list/detail/low-stock/dashboard/WMS/movement/availability/available-serials, serialized stock, and product stock prefixes
+- shipment finalization continues to refresh valuation because shipping/reopen changes stock value; picking allocation intentionally does not invalidate valuation
+
+Smells removed:
+
+- `use-picking.ts` had a local order collection helper and hand-written invalidation separate from shipment fulfillment cache policy
+- pick/unpick did not refresh fulfillment summary or kanban surfaces even though order status/stage can change
+- pick/unpick only refreshed available serials, not broader inventory reservation, movement, availability, or product stock surfaces affected by allocation/deallocation
+- the cache helper introduced for shipments was named too narrowly for fulfillment-domain reuse
+
+Deferred:
+
+- draft shipment create/delete behavior was audited but not changed; the order/shipment invalidation from Issue 1 already refreshes the reservation source used by shipment availability calculations
+- server result schemas still do not expose affected inventory/product IDs, so pick/unpick invalidation remains broad
+- mobile picking browser QA was skipped because the slice is hook/cache contract behavior covered directly by unit tests
+- large fulfillment UI files remain unchanged
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/orders/use-shipments.ts src/hooks/orders/use-picking.ts src/hooks/orders/_fulfillment-cache.ts tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `git diff --check -- docs/orders/MAINTAINER-SPRINT-4.md src/hooks/orders/use-shipments.ts src/hooks/orders/use-picking.ts src/hooks/orders/_fulfillment-cache.ts src/hooks/orders/_shipment-cache.ts tests/unit/orders/order-mutation-invalidation.test.tsx`
+
+Goal adaptation: no standing goal change. This continues Sprint 4 by tightening the orders/fulfillment inventory-truth seam through a bounded hook/cache contract slice.
+
+Residual risk: pick/unpick cache invalidation remains broad until the server exposes affected inventory rows or product IDs. A later slice should decide whether order picking mutations should return a result envelope similar to inventory stock mutations.

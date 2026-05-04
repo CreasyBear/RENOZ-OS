@@ -18,7 +18,7 @@ import {
 import {
   invalidateShipmentInventorySideEffectQueries,
   invalidateShipmentMutationQueries,
-} from './_shipment-cache';
+} from './_fulfillment-cache';
 import {
   listShipments,
   getShipment,

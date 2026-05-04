@@ -13,6 +13,11 @@ export function invalidateOrderCollectionQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
 }
 
+export function invalidateOrderDetailQueries(queryClient: QueryClient, orderId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
+}
+
 export function invalidateFulfillmentSurfaces(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
   queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillmentSummary() });
@@ -35,8 +40,7 @@ export function invalidateShipmentMutationQueries(
   }
 
   if (orderId) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
+    invalidateOrderDetailQueries(queryClient, orderId);
   }
   if (includeAllOrderDetails) {
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
@@ -60,4 +64,24 @@ export function invalidateShipmentInventorySideEffectQueries(queryClient: QueryC
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+}
+
+export function invalidatePickingInventoryReservationQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availabilityAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+}
+
+export function invalidatePickingMutationQueries(queryClient: QueryClient, orderId: string) {
+  invalidateOrderDetailQueries(queryClient, orderId);
+  invalidateOrderCollectionQueries(queryClient);
+  invalidateFulfillmentSurfaces(queryClient);
+  invalidatePickingInventoryReservationQueries(queryClient);
 }
