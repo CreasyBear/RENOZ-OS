@@ -29,6 +29,7 @@
 import type { CustomerSortField } from '@/components/domain/customers/customer-sorting';
 import type { OrderSortField } from '@/components/domain/orders/order-sorting';
 import type { AuditLogsFilters } from '@/lib/schemas/users';
+import type { InventoryListQuery, QuickSearchInventoryInput } from '@/lib/schemas/inventory';
 import type { ReportType } from '@/lib/schemas/reports/report-favorites';
 import type { InvoiceSortField } from '@/lib/schemas/invoices/invoice-filters';
 import type { OpportunitySortField } from '@/lib/schemas/pipeline/pipeline';
@@ -45,6 +46,7 @@ type CsatSortField = NonNullable<ListFeedbackInput['sortBy']>;
 type IssueTemplateSortField = NonNullable<ListIssueTemplatesInput['sortBy']>;
 type RmaSortField = NonNullable<ListRmasInput['sortBy']>;
 type WarrantySortField = NonNullable<WarrantyListFilters['sortBy']>;
+type InventorySearchOptions = Pick<Partial<QuickSearchInventoryInput>, 'limit'>;
 
 // ============================================================================
 // FILTER TYPES
@@ -105,15 +107,7 @@ export interface JobFilters {
   limit?: number
 }
 
-export interface InventoryFilters {
-  search?: string
-  category?: string
-  status?: string | string[]
-  lowStock?: boolean
-  page?: number
-  pageSize?: number
-  cursor?: string
-}
+export type InventoryFilters = Partial<InventoryListQuery>
 
 export interface ContactFilters {
   customerId?: string
@@ -742,7 +736,7 @@ export const queryKeys = {
     details: () => [...queryKeys.inventory.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.inventory.details(), id] as const,
     lowStock: () => [...queryKeys.inventory.all, 'lowStock'] as const,
-    search: (query: string, options?: { limit?: number }) =>
+    search: (query: string, options?: InventorySearchOptions) =>
       [...queryKeys.inventory.all, 'search', query, options ?? {}] as const,
     items: (filters?: { organizationId?: string }) =>
       [...queryKeys.inventory.all, 'items', filters ?? {}] as const,
